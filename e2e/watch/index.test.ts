@@ -67,7 +67,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
         'vmThreads',
         '--pool.maxWorkers',
         '2',
-        '--pool.vmMemoryLimit',
+        '--pool.memoryLimit',
         '256MB',
         '--disableConsoleIntercept',
       ],

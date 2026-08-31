@@ -4,7 +4,7 @@ export default defineConfig({
   pool: {
     type: 'vmThreads',
     maxWorkers: 1,
-    vmMemoryLimit: '256MB',
+    memoryLimit: '256MB',
   },
   output: {
     bundleDependencies: true,

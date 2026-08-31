@@ -67,26 +67,26 @@ export const parseWorkers = (
  * numbers in (0, 1] are percentages of machine memory, larger numbers are
  * bytes, and strings may use %, KB/KiB, MB/MiB, or GB/GiB suffixes.
  */
-export const parseVmMemoryLimit = (
-  vmMemoryLimit: number | string,
+export const parseMemoryLimit = (
+  memoryLimit: number | string,
   totalMemory: number = os.totalmem(),
 ): number => {
-  if (typeof vmMemoryLimit === 'number') {
-    if (vmMemoryLimit > 0 && vmMemoryLimit <= 1) {
-      return Math.floor(vmMemoryLimit * totalMemory);
+  if (typeof memoryLimit === 'number') {
+    if (memoryLimit > 0 && memoryLimit <= 1) {
+      return Math.floor(memoryLimit * totalMemory);
     }
-    if (vmMemoryLimit > 1) {
-      return Math.floor(vmMemoryLimit);
+    if (memoryLimit > 1) {
+      return Math.floor(memoryLimit);
     }
-    throw new Error('pool.vmMemoryLimit must be greater than 0');
+    throw new Error('pool.memoryLimit must be greater than 0');
   }
 
-  const value = vmMemoryLimit.trim().toLowerCase();
+  const value = memoryLimit.trim().toLowerCase();
   const match = value.match(
     /^([0-9]+(?:\.[0-9]+)?)\s*(%|k|kb|kib|m|mb|mib|g|gb|gib)?$/,
   );
   if (!match) {
-    throw new Error(`Invalid pool.vmMemoryLimit: ${vmMemoryLimit}`);
+    throw new Error(`Invalid pool.memoryLimit: ${memoryLimit}`);
   }
 
   const amount = Number(match[1]);
@@ -109,7 +109,7 @@ export const parseVmMemoryLimit = (
                   : 1;
   const resolved = Math.floor(amount * multiplier);
   if (resolved <= 0) {
-    throw new Error('pool.vmMemoryLimit must be greater than 0');
+    throw new Error('pool.memoryLimit must be greater than 0');
   }
   return resolved;
 };

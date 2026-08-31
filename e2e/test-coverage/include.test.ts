@@ -27,7 +27,7 @@ for (const provider of coverageProviders) {
           configByProvider[provider],
           '--pool',
           'vmThreads',
-          '--pool.vmMemoryLimit',
+          '--pool.memoryLimit',
           '256MB',
           '--coverage.reportsDirectory',
           reportsDirectory,

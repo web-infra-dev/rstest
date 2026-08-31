@@ -186,7 +186,9 @@ export const finalizeDynamicImport = async ({
 
   if (modulePath.endsWith('.json')) {
     // `await import(jsonPath)` should return `{ default: jsonExports, ...jsonExports }`.
-    const importedModule = await import(modulePath, { with: attributes });
+    const importedModule = await import(modulePath, {
+      with: { type: 'json', ...attributes },
+    });
 
     return returnModule
       ? asModule(

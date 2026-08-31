@@ -23,7 +23,7 @@ describe('coverage istanbul-specific behavior', () => {
         'vmThreads',
         '--pool.maxWorkers',
         '1',
-        '--pool.vmMemoryLimit',
+        '--pool.memoryLimit',
         '256MB',
         '--coverage.reporters',
         'text-summary',

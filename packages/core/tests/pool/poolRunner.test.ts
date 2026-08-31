@@ -350,7 +350,7 @@ describe('PoolRunner VM worker memory limit', () => {
   it('marks a runner for recycling after a worker reports heap over the limit', async () => {
     const runner = new PoolRunner(new MemoryReportingWorker(), {
       environmentKey: 'jsdom',
-      vmMemoryLimit: 100,
+      memoryLimit: 100,
       workerId: 1,
     });
 

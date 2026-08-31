@@ -74,7 +74,7 @@ for (const provider of coverageProviders) {
             'rstest.sourcemap.config.ts',
             '--pool',
             pool,
-            ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
+            ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
             '--coverage.provider',
             provider,
             '--coverage.reportsDirectory',

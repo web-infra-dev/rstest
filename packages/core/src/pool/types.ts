@@ -18,7 +18,7 @@ export type PoolOptions = {
   minWorkers: number;
   isolate: boolean;
   /** Recycle a VM worker after it reports this much heap usage, when set. */
-  vmMemoryLimit?: number;
+  memoryLimit?: number;
   env?: Record<string, string>;
   execArgv?: string[];
   /**

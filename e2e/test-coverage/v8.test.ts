@@ -27,7 +27,7 @@ describe('coverage v8-specific behavior', () => {
           enableConfig,
           '--pool',
           pool,
-          ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
+          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
           '--coverage.reporters',
           'text-summary',
           '--coverage.reporters',

@@ -19,9 +19,10 @@ export type RstestPoolOptions = {
   maxWorkers?: number | string;
   /**
    * Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled.
+   * Currently supported only by `vmThreads`.
    * @default undefined (equal share of system memory for vmThreads)
    */
-  vmMemoryLimit?: number | string;
+  memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };
@@ -41,7 +42,7 @@ const defaultPool = {
 };
 ```
 
-- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.vmMemoryLimit <limit>`, `--pool.execArgv <arg>`
+- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.memoryLimit <limit>`, `--pool.execArgv <arg>`
 
 Options of pool used to run tests in.
 
@@ -69,7 +70,7 @@ The [`isolate`](/config/test/isolate) option has no effect on `vmThreads`. Passi
 
 The VM context does not isolate worker-level state. Changes to `process.env`, signal handlers, native addons, and other state outside the VM context may persist when the same worker runs another file. Node.js compatibility globals including `Buffer`, `ArrayBuffer`, and `Uint8Array` use the worker-realm constructors, so mutating those constructors also persists between files. Node.js does not support `process.chdir()` inside any worker thread, so neither `threads` nor `vmThreads` can run tests or setup files that call it. VM contexts also have cross-realm identity, so values created in one file may not pass `instanceof` checks against constructors from another file.
 
-Each `vmThreads` worker also keeps a bounded cache of immutable bundle bytes, source maps, external source text, resolution results, and V8 compilation data between files. After the first file, unchanged assets are referenced from that worker instead of being transferred again, and unchanged modules can skip part of the resolution, parse, and compile work. These entries share one cache budget: at most 64 MiB or one quarter of the worker's `vmMemoryLimit`, whichever is smaller. Rstest disables V8's unbounded isolate-wide compilation cache for these workers; the bounded cache supplies the reusable compilation resources instead. The cache is cleared on rebuild or worker recycle. Evaluated module instances, context-bound scripts, and setup execution state are not cached across VM contexts.
+Each `vmThreads` worker also keeps a bounded cache of immutable bundle bytes, source maps, external source text, resolution results, and V8 compilation data between files. After the first file, unchanged assets are referenced from that worker instead of being transferred again, and unchanged modules can skip part of the resolution, parse, and compile work. These entries share one cache budget: at most 64 MiB or one quarter of the worker's `memoryLimit`, whichever is smaller. Rstest disables V8's unbounded isolate-wide compilation cache for these workers; the bounded cache supplies the reusable compilation resources instead. The cache is cleared on rebuild or worker recycle. Evaluated module instances, context-bound scripts, and setup execution state are not cached across VM contexts.
 
 External JavaScript ES modules, CommonJS modules, JSON modules, and WebAssembly modules execute inside the file VM. JavaScript, JSON, and base64 WebAssembly `data:` URLs are also supported. On Node.js 24.9 or later, CommonJS modules can synchronously `require()` ES modules that do not use top-level await; the complete dependency graph remains in the file VM. An async graph throws `ERR_REQUIRE_ASYNC_MODULE`, matching Node.js. Earlier Node.js versions reject `require()` of an ES module in `vmThreads`; use dynamic `import()` instead. Bundle external files with other extensions, such as TypeScript source or custom loaders, before running them in `vmThreads`.
 
@@ -102,7 +103,7 @@ Stick with `forks` when:
 
 <ApiMeta addedVersion="0.11.11" />
 
-`pool.vmMemoryLimit` applies to `vmThreads`. It is checked against the worker's V8 `heapUsed` after each file; a worker over the limit is recycled before another file is assigned to it. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker receives an equal share of system memory.
+`pool.memoryLimit` currently applies only to `vmThreads`. It is checked against the worker's V8 `heapUsed` after each file; a worker over the limit is recycled before another file is assigned to it. Passing it to `forks` or `threads` is currently ignored. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker receives an equal share of system memory.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -123,7 +124,7 @@ npx rstest --pool.maxWorkers 1
 For `vmThreads`, you can set the worker recycling threshold from the CLI:
 
 ```bash
-npx rstest --pool vmThreads --pool.vmMemoryLimit 256MB
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
 Common values:

@@ -190,8 +190,8 @@ const poolOptionDefinitions: OptionDefinition[] = [
     'Maximum number or percentage of workers (e.g. 4 or 50%)',
   ],
   [
-    '--pool.vmMemoryLimit <limit>',
-    'Memory limit for VM workers before recycling (e.g. 256MB or 50%)',
+    '--pool.memoryLimit <limit>',
+    'Memory limit for vmThreads workers before recycling (e.g. 256MB or 50%); currently only supported by vmThreads',
   ],
   [
     '--pool.execArgv <arg>',

@@ -19,9 +19,10 @@ export type RstestPoolOptions = {
   maxWorkers?: number | string;
   /**
    * 在 VM worker 超过该内存上限后回收，支持字节数、百分比和单位字符串。
+   * 当前仅由 `vmThreads` 支持。
    * @default undefined（vmThreads 平均分配系统内存）
    */
-  vmMemoryLimit?: number | string;
+  memoryLimit?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
   execArgv?: string[];
 };
@@ -41,7 +42,7 @@ const defaultPool = {
 };
 ```
 
-- **CLI：** `--pool <type>`、`--pool.type <type>`、`--pool.maxWorkers <value>`、`--pool.vmMemoryLimit <limit>`、`--pool.execArgv <arg>`
+- **CLI：** `--pool <type>`、`--pool.type <type>`、`--pool.maxWorkers <value>`、`--pool.memoryLimit <limit>`、`--pool.execArgv <arg>`
 
 用于运行测试的线程池的选项。
 
@@ -69,7 +70,7 @@ Rstest 支持三种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js，`Buffer`、`ArrayBuffer` 和 `Uint8Array` 等 global 使用 worker realm 的 constructor，因此直接修改这些 constructor 也会跨文件保留。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
 
-每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `vmMemoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
+每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
 
 External JavaScript ES module、CommonJS module、JSON module 和 WebAssembly module 会在当前文件的 VM 中执行，同时支持 JavaScript、JSON 和 base64 WebAssembly `data:` URL。在 Node.js 24.9 及以上版本中，CommonJS module 可以同步 `require()` 不包含 top-level await 的 ES module，完整依赖图仍在当前文件的 VM 中执行；异步依赖图会与 Node.js 一致抛出 `ERR_REQUIRE_ASYNC_MODULE`。更低版本的 Node.js 会在 `vmThreads` 中拒绝 `require()` ES module，此时请改用动态 `import()`。TypeScript 源码、自定义 loader 等其他扩展名的 external 文件需要先 bundle，再通过 `vmThreads` 运行。
 
@@ -102,7 +103,7 @@ External JavaScript ES module、CommonJS module、JSON module 和 WebAssembly mo
 
 <ApiMeta addedVersion="0.11.11" />
 
-`pool.vmMemoryLimit` 仅作用于 `vmThreads`。每个文件运行结束后，Rstest 会读取 worker 的 V8 `heapUsed`；超过上限的 worker 会在接收下一个文件前回收。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认获得系统内存的等额份额。
+`pool.memoryLimit` 当前仅作用于 `vmThreads`。每个文件运行结束后，Rstest 会读取 worker 的 V8 `heapUsed`；超过上限的 worker 会在接收下一个文件前回收。传给 `forks` 或 `threads` 时当前会被忽略。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认获得系统内存的等额份额。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -123,7 +124,7 @@ npx rstest --pool.maxWorkers 1
 对于 `vmThreads`，也可以通过 CLI 设置 worker 回收阈值：
 
 ```bash
-npx rstest --pool vmThreads --pool.vmMemoryLimit 256MB
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
 常见取值：

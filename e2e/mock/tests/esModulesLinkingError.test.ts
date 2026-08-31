@@ -16,7 +16,7 @@ describe('test EsModulesLinkingError', () => {
           'run',
           '--pool',
           pool,
-          ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
+          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
         ],
         options: {
           nodeOptions: {
