@@ -11,9 +11,10 @@ describe('parseExternalDataUri', () => {
   });
 
   it('accepts base64 JavaScript data URLs', () => {
+    const encoded = Buffer.from('export default 1').toString('base64');
     expect(
-      parseExternalDataUri('data:TEXT/JAVASCRIPT;BASE64,Y29uc3QgdmFsdWUgPSAx'),
-    ).toEqual({ code: 'const value = 1', mime: 'text/javascript' });
+      parseExternalDataUri(`data:TEXT/JAVASCRIPT;BASE64,${encoded}`),
+    ).toEqual({ code: 'export default 1', mime: 'text/javascript' });
   });
 
   it('accepts data URL parameters supported by Node', () => {
