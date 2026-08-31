@@ -100,13 +100,13 @@ Stick with `forks` when:
 - You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
 - You need strict process-level isolation. Use `forks`; `vmThreads` deliberately shares the worker thread's process state.
 
-## Control file-level parallelism
+## Configure worker concurrency and memory
 
-`pool.maxWorkers` controls how many test files can run at the same time. Use it when tests compete for the same database, port, fixture directory, or other external resource.
+### `pool.maxWorkers`
 
-<ApiMeta addedVersion="0.11.11" />
+Controls how many test files can run at the same time. Use it when tests compete for the same database, port, fixture directory, or other external resource.
 
-`pool.memoryLimit` currently applies only to `vmThreads`. It is checked against the worker's V8 `heapUsed` after each file; a worker over the limit is recycled before another file is assigned to it. Passing it to `forks` or `threads` is currently ignored. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker receives an equal share of system memory.
+The default is computed from the CPU count and the command mode. You can provide a positive integer or a percentage of the available CPU count.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -118,16 +118,10 @@ export default defineConfig({
 });
 ```
 
-You can also pass the same value from the CLI:
+You can also pass the value from the CLI:
 
 ```bash
 npx rstest --pool.maxWorkers 1
-```
-
-For `vmThreads`, you can set the worker recycling threshold from the CLI:
-
-```bash
-npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
 Common values:
@@ -137,6 +131,32 @@ Common values:
 - A fixed number such as `4`: cap resource usage to a known safe level regardless of machine size.
 
 `maxWorkers` is about file-level parallelism. It does not limit `test.concurrent` cases inside a single test file — use [`maxConcurrency`](/config/test/max-concurrency) for that.
+
+### `pool.memoryLimit`
+
+<ApiMeta addedVersion="0.11.11" />
+
+Sets the V8 heap threshold for recycling a `vmThreads` worker. After a test file finishes, Rstest reads the worker's `heapUsed`; if it reaches the threshold, the worker is recycled before another file is assigned to it. This is a worker-recycling threshold, not a hard process RSS or OOM limit.
+
+This option currently applies only to `vmThreads`. It is ignored by `forks` and `threads`. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `KB`, `KiB`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker uses an equal share of system memory (`system memory / maxWorkers`).
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'vmThreads',
+    maxWorkers: 4,
+    memoryLimit: '256MB',
+  },
+});
+```
+
+You can also set it from the CLI:
+
+```bash
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
+```
 
 ## Pass Node.js flags to workers
 

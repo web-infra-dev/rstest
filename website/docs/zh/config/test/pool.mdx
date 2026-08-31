@@ -99,13 +99,13 @@ External JavaScript ES module、CommonJS module、JSON module 和 WebAssembly mo
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
 - 需要严格的进程级隔离。此时应使用 `forks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
 
-## 控制文件级并行度
+## 配置 worker 并行度和内存
 
-`pool.maxWorkers` 控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
+### `pool.maxWorkers`
 
-<ApiMeta addedVersion="0.11.11" />
+控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
 
-`pool.memoryLimit` 当前仅作用于 `vmThreads`。每个文件运行结束后，Rstest 会读取 worker 的 V8 `heapUsed`；超过上限的 worker 会在接收下一个文件前回收。传给 `forks` 或 `threads` 时当前会被忽略。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认获得系统内存的等额份额。
+默认值会根据 CPU 数量和运行模式自动计算。你可以传入正整数，或传入可用 CPU 数量的百分比。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -117,16 +117,10 @@ export default defineConfig({
 });
 ```
 
-也可以通过 CLI 传入相同配置：
+也可以通过 CLI 传入该配置：
 
 ```bash
 npx rstest --pool.maxWorkers 1
-```
-
-对于 `vmThreads`，也可以通过 CLI 设置 worker 回收阈值：
-
-```bash
-npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
 常见取值：
@@ -136,6 +130,32 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 - 固定数字，如 `4`：无论机器规模如何，都把资源占用限制在已知安全的范围内。
 
 `maxWorkers` 控制的是文件级并行度。它不会限制单个测试文件内的 `test.concurrent` 用例；如需限制这类用例，请使用 [`maxConcurrency`](/config/test/max-concurrency)。
+
+### `pool.memoryLimit`
+
+<ApiMeta addedVersion="0.11.11" />
+
+设置 `vmThreads` worker 的 V8 heap 回收阈值。每个测试文件运行结束后，Rstest 会读取 worker 的 `heapUsed`；达到阈值时，会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 或 OOM 的硬上限。
+
+该配置当前仅作用于 `vmThreads`，传给 `forks` 或 `threads` 时会被忽略。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`KB`、`KiB`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认使用等额的系统内存（`系统内存 / maxWorkers`）。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'vmThreads',
+    maxWorkers: 4,
+    memoryLimit: '256MB',
+  },
+});
+```
+
+也可以通过 CLI 设置：
+
+```bash
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
+```
 
 ## 向 worker 传递 Node.js flags
 
