@@ -12,7 +12,7 @@ Rstest is built on Rsbuild and Rspack, so you can import CSS files and CSS Modul
 
 In Node.js tests, Rstest does not emit CSS by default:
 
-- Regular CSS, Less, and Sass files do not produce style assets, which avoids unnecessary style processing.
+- Regular CSS files do not produce style assets. When the corresponding plugin is enabled, Less and Sass files still run through preprocessing so syntax and compilation errors are reported, but no style assets are emitted.
 - CSS Modules are still processed and export class name mappings for component tests.
 
 For example, the following imports work without additional CSS configuration:
@@ -95,18 +95,19 @@ If a test only needs to read properties such as `styles.button` and does not car
 Use `NormalModuleReplacementPlugin` to replace CSS Modules files:
 
 ```ts title="rstest.config.ts"
-import { rspack } from '@rspack/core';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   tools: {
-    rspack: {
-      plugins: [
+    rspack(config, { rspack }) {
+      config.plugins.push(
         new rspack.NormalModuleReplacementPlugin(
           /\.module\.(css|less|sass|scss)$/,
-          'identity-obj-proxy',
+          (resource) => {
+            resource.request = 'identity-obj-proxy';
+          },
         ),
-      ],
+      );
     },
   },
 });

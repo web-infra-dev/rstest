@@ -12,7 +12,7 @@ Rstest 基于 Rsbuild 和 Rspack 构建，因此可以直接导入 CSS 文件和
 
 在 Node.js 测试中，Rstest 默认不输出 CSS：
 
-- 普通 CSS、Less 或 Sass 文件不会生成样式产物，避免执行不必要的样式处理。
+- 普通 CSS 文件不会生成样式产物。启用对应 plugin 后，Less 和 Sass 文件仍会执行预处理，以便发现语法和编译错误，但不会生成样式产物。
 - CSS Modules 仍会被处理，并导出 class name 映射，供组件测试使用。
 
 例如，下面的代码可以直接在测试中导入：
@@ -95,18 +95,19 @@ Rstest 的默认 CSS Modules 处理会尽量保持与 Rsbuild 构建结果一致
 然后通过 `NormalModuleReplacementPlugin` 替换 CSS Modules 文件：
 
 ```ts title="rstest.config.ts"
-import { rspack } from '@rspack/core';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   tools: {
-    rspack: {
-      plugins: [
+    rspack(config, { rspack }) {
+      config.plugins.push(
         new rspack.NormalModuleReplacementPlugin(
           /\.module\.(css|less|sass|scss)$/,
-          'identity-obj-proxy',
+          (resource) => {
+            resource.request = 'identity-obj-proxy';
+          },
         ),
-      ],
+      );
     },
   },
 });
