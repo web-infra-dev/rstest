@@ -247,7 +247,7 @@ const installVmNodeGlobals = (
       createVmFunction(
         vmContext,
         `(hostStructuredClone) => {
-        const rehome = (value, seen) => {
+        const restoreValue = (value, seen) => {
           if (value === null || typeof value !== 'object' || seen.has(value)) {
             return value;
           }
@@ -259,13 +259,13 @@ const installVmNodeGlobals = (
           } else if (tag === '[object Map]') {
             Object.setPrototypeOf(value, Map.prototype);
             for (const [key, entry] of value) {
-              rehome(key, seen);
-              rehome(entry, seen);
+              restoreValue(key, seen);
+              restoreValue(entry, seen);
             }
           } else if (tag === '[object Set]') {
             Object.setPrototypeOf(value, Set.prototype);
             for (const entry of value) {
-              rehome(entry, seen);
+              restoreValue(entry, seen);
             }
           } else if (tag === '[object Date]') {
             Object.setPrototypeOf(value, Date.prototype);
@@ -293,14 +293,14 @@ const installVmNodeGlobals = (
           for (const key of Reflect.ownKeys(value)) {
             const descriptor = Object.getOwnPropertyDescriptor(value, key);
             if (descriptor && 'value' in descriptor) {
-              rehome(descriptor.value, seen);
+              restoreValue(descriptor.value, seen);
             }
           }
           return value;
         };
 
         return (value, options) =>
-          rehome(hostStructuredClone(value, options), new WeakSet());
+          restoreValue(hostStructuredClone(value, options), new WeakSet());
         }`,
         globalThis.structuredClone,
       ),
