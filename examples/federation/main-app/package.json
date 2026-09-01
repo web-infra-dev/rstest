@@ -21,7 +21,7 @@
     "@rstest/browser": "workspace:*",
     "@rstest/core": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "concurrently": "8.2.2",
     "kill-port": "^2.0.1",
     "playwright": "^1.62.1",
