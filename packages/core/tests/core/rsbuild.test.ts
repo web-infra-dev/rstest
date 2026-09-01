@@ -1097,6 +1097,56 @@ describe('prepareRsbuild', () => {
     expect(configs[0]!.output?.chunkFormat).toBeUndefined();
   });
 
+  it('should preserve an explicit externalsType in vmThreads', async () => {
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      outputModule: false,
+      normalizedConfig: {
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {
+          rspack: {
+            externalsType: 'commonjs',
+          },
+        },
+        pool: { type: 'vmThreads' },
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'vmThreads' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFileState: createSetupFileState(),
+    });
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.externalsType).toBe('commonjs');
+  });
+
   it('should not allow modifyRstestConfig to switch browser mode', async () => {
     const modifyBrowserModePlugin: RsbuildPlugin = {
       name: 'modify-rstest-browser-mode',

@@ -1083,12 +1083,14 @@ export const runInPool = async (
       };
     } finally {
       try {
-        const workerCleanupError = await cleanupWorkerFixtureScope();
-        if (workerCleanupError && collectResult) {
-          collectResult.errors = [
-            ...collectResult.errors,
-            ...(await formatTestError(workerCleanupError)),
-          ];
+        if (isolate || isVmPool) {
+          const workerCleanupError = await cleanupWorkerFixtureScope();
+          if (workerCleanupError && collectResult) {
+            collectResult.errors = [
+              ...collectResult.errors,
+              ...(await formatTestError(workerCleanupError)),
+            ];
+          }
         }
       } finally {
         await teardown();

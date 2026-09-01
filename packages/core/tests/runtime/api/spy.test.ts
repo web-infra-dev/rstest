@@ -17,8 +17,13 @@ describe('initSpy fn()', () => {
       '(value) => value instanceof Function',
       context,
     ) as (value: unknown) => boolean;
+    const isVmObject = runInNewContext(
+      '(value) => value instanceof Object',
+      context,
+    ) as (value: unknown) => boolean;
 
     expect(isVmFunction(mock)).toBe(true);
+    expect(isVmObject(new mock())).toBe(true);
   });
 
   it('creates resolved and rejected values in the supplied VM realm', async () => {

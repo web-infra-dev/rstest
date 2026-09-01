@@ -304,7 +304,8 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
             // with an explicit external type keep their own semantics.
             if (
               context.normalizedConfig.pool.type === 'vmThreads' &&
-              !outputModule
+              !outputModule &&
+              config.externalsType === undefined
             ) {
               config.externalsType = 'import';
             }

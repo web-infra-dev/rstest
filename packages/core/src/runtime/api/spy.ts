@@ -109,7 +109,13 @@ export const initSpy = (
       configurable: true,
       value: spyFn.length,
     });
-    if (spyFn.prototype) {
+    // A bare tinyspy mock gets a host-realm default prototype. Keep the
+    // wrapper's VM-realm prototype unless the original spy carries a custom
+    // prototype that must be preserved for constructor mocks.
+    if (
+      spyFn.prototype &&
+      Object.getPrototypeOf(spyFn.prototype) !== Object.prototype
+    ) {
       realmSpy.prototype = spyFn.prototype;
     }
     return realmSpy;
