@@ -8,6 +8,7 @@ import {
   isBuiltin,
   Module,
 } from 'node:module';
+import { dirname as nativeDirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { dirname, extname } from 'pathe';
@@ -218,7 +219,7 @@ const staticInitializeImportMeta = (
   if (identifier.startsWith('file:')) {
     const filePath = getFilePath(identifier);
     meta.filename = filePath;
-    meta.dirname = dirname(filePath);
+    meta.dirname = nativeDirname(filePath);
   }
   meta.resolve = (specifier: string, parent?: string | URL) =>
     getContextExecutor(module).resolve(
@@ -233,33 +234,51 @@ const stripCommonJsPrefix = (source: string): string =>
 const getNodeModulePaths = (filePath: string): string[] =>
   createNativeRequire(filePath).resolve.paths('__rstest_module_lookup__') ?? [];
 
-const createRequireEsmError = (filePath: string): NodeJS.ErrnoException => {
-  const error: NodeJS.ErrnoException = new Error(
-    `require() of ES Module ${filePath} is not supported in the vmThreads pool. Use dynamic import() instead.`,
-  );
-  error.code = 'ERR_REQUIRE_ESM';
+const createVmError = (
+  context: vm.Context,
+  message: string,
+  code: string,
+): NodeJS.ErrnoException => {
+  const ErrorConstructor = vm.runInContext('Error', context) as new (
+    message?: string,
+  ) => Error;
+  const error = new ErrorConstructor(message) as NodeJS.ErrnoException;
+  error.code = code;
   return error;
+};
+
+const createRequireEsmError = (
+  context: vm.Context,
+  filePath: string,
+): NodeJS.ErrnoException => {
+  return createVmError(
+    context,
+    `require() of ES Module ${filePath} is not supported in the vmThreads pool. Use dynamic import() instead.`,
+    'ERR_REQUIRE_ESM',
+  );
 };
 
 const createRequireAsyncModuleError = (
+  context: vm.Context,
   identifier: string,
   detail: string,
 ): NodeJS.ErrnoException => {
-  const error: NodeJS.ErrnoException = new Error(
+  return createVmError(
+    context,
     `require() cannot be used to load ES Module ${identifier}: ${detail}. Use import() instead.`,
+    'ERR_REQUIRE_ASYNC_MODULE',
   );
-  error.code = 'ERR_REQUIRE_ASYNC_MODULE';
-  return error;
 };
 
 const createConcurrentRequireError = (
+  context: vm.Context,
   identifier: string,
 ): NodeJS.ErrnoException => {
-  const error: NodeJS.ErrnoException = new Error(
+  return createVmError(
+    context,
     `Cannot require() ES Module ${identifier} synchronously because it is currently being loaded by import().`,
+    'ERR_REQUIRE_ESM',
   );
-  error.code = 'ERR_REQUIRE_ESM';
-  return error;
 };
 
 const isSyntaxError = (error: unknown): boolean =>
@@ -405,20 +424,21 @@ class VmExternalModules {
     const resolved = resolveRequire(nativeRequire, specifier);
     switch (getModuleFormat(resolved, 'require')) {
       case 'data':
-        throw createRequireEsmError(resolved);
+        throw createRequireEsmError(this.context, resolved);
       case 'commonjs':
         return this.loadCommonJs(resolved, parentModule);
       case 'json':
         return this.loadJson(resolved, parentModule);
       case 'module':
         if (!supportsSyncEsmEvaluate) {
-          throw createRequireEsmError(resolved);
+          throw createRequireEsmError(this.context, resolved);
         }
         return this.requireEsm(resolved);
       case 'native':
         return nativeRequire(resolved);
       case 'wasm':
         throw createRequireAsyncModuleError(
+          this.context,
           resolved,
           'WebAssembly modules cannot be loaded synchronously',
         );
@@ -844,6 +864,7 @@ class VmExternalModules {
         const { code, mime } = parseDataUri(identifier);
         if (mime === 'application/wasm') {
           throw createRequireAsyncModuleError(
+            this.context,
             identifier,
             'WebAssembly modules cannot be loaded synchronously',
           );
@@ -896,6 +917,7 @@ class VmExternalModules {
       }
       case 'wasm':
         throw createRequireAsyncModuleError(
+          this.context,
           identifier,
           'WebAssembly modules cannot be loaded synchronously',
         );
@@ -1072,7 +1094,7 @@ class VmExternalModules {
 
   private requireEsm(filePath: string, forceEsmSource = false): unknown {
     if (!supportsSyncEsmEvaluate) {
-      throw createRequireEsmError(filePath);
+      throw createRequireEsmError(this.context, filePath);
     }
     const identifier = pathToFileURL(filePath).href;
     const module = this.requireEsModuleSync(identifier, forceEsmSource);
@@ -1150,6 +1172,7 @@ class VmExternalModules {
       const module = this.createEsmModule(identifier, disposition.code);
       if (module.hasTopLevelAwait()) {
         throw createRequireAsyncModuleError(
+          this.context,
           identifier,
           'the module uses top-level await',
         );
@@ -1188,6 +1211,7 @@ class VmExternalModules {
     root.module.instantiate();
     if (moduleHasAsyncGraph(root.module)) {
       throw createRequireAsyncModuleError(
+        this.context,
         rootIdentifier,
         'its dependency graph uses top-level await',
       );
@@ -1222,10 +1246,11 @@ class VmExternalModules {
       throw module.error;
     }
     if (module.status !== 'evaluated') {
-      throw createConcurrentRequireError(identifier);
+      throw createConcurrentRequireError(this.context, identifier);
     }
     if (moduleHasAsyncGraph(module)) {
       throw createRequireAsyncModuleError(
+        this.context,
         identifier,
         'the module uses top-level await',
       );

@@ -95,7 +95,20 @@ export const initSpy = (
         const value = descriptor.value;
         descriptor.value = (...args: unknown[]) => {
           const result = Reflect.apply(value, spyFn, args);
-          return result === spyFn ? realmSpy : result;
+          if (result === spyFn) {
+            return realmSpy;
+          }
+          if (
+            key === 'withImplementation' &&
+            result !== null &&
+            (typeof result === 'object' || typeof result === 'function') &&
+            typeof Reflect.get(result, 'then') === 'function'
+          ) {
+            return getRealmPromise()
+              .resolve(result)
+              .then((resolved) => (resolved === spyFn ? realmSpy : resolved));
+          }
+          return result;
         };
       }
       Object.defineProperty(realmSpy, key, descriptor);

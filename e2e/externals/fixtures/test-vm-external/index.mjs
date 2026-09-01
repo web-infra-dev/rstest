@@ -56,12 +56,19 @@ export const verifyNodeGlobals = async () => {
   const response = await pendingResponse;
   const clonedBlob = structuredClone(new Blob(['blob']));
   const clonedTypeError = structuredClone(new TypeError('type-error'));
+  const clonedError = structuredClone(
+    new Error('outer', { cause: { value: 1 } }),
+  );
+  const clonedTypedArray = structuredClone(new Uint8Array([1]));
   return {
     blobSize: clonedBlob.size,
     blobText: await clonedBlob.text(),
     clonedBlob: clonedBlob instanceof Blob,
     clonedTypeError: clonedTypeError instanceof TypeError,
     clonedTypeErrorName: clonedTypeError.name,
+    clonedErrorCause: clonedError.cause instanceof Object,
+    clonedTypedArray: clonedTypedArray instanceof Uint8Array,
+    clonedTypedArrayBuffer: clonedTypedArray.buffer instanceof ArrayBuffer,
     fetchPromise: pendingResponse instanceof Promise,
     responseText: await response.text(),
     structuredCloneObject: structuredClone({}) instanceof Object,

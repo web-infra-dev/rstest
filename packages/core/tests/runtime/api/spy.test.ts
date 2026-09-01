@@ -278,6 +278,22 @@ describe('initSpy withImplementation', () => {
     expect(spy()).toBe('once');
     expect(spy()).toBe('original');
   });
+
+  it('returns the VM mock after an asynchronous withImplementation callback', async () => {
+    const context = runInNewContext('globalThis', {}) as Record<string, any>;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const spy = fn(() => 'original');
+
+    const result = spy.withImplementation(
+      () => 'temporary',
+      () => runInNewContext('Promise.resolve()', context),
+    );
+
+    expect(await result).toBe(spy);
+  });
 });
 
 describe('initSpy spyOn', () => {

@@ -76,9 +76,7 @@ export const createRstestRuntime = async (
       import(/* webpackChunkName: "snapshot" */ './snapshot'),
     ]);
 
-  if (workerState.runtimeConfig.chaiConfig) {
-    setupChaiConfig(workerState.runtimeConfig.chaiConfig);
-  }
+  setupChaiConfig(workerState.runtimeConfig.chaiConfig);
 
   // The runner consumes this file's snapshot client for `setup`/`finish`; the
   // build-once snapshot plugin resolves it through the context at assert time.

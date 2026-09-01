@@ -51,8 +51,13 @@ import { createExpectPoll } from './poll';
 
 export { assert } from 'chai';
 
-export function setupChaiConfig(config: ChaiConfig): void {
-  Object.assign(chaiConfig, config);
+const defaultChaiConfig: ChaiConfig = {
+  showDiff: chaiConfig.showDiff,
+  truncateThreshold: chaiConfig.truncateThreshold,
+};
+
+export function setupChaiConfig(config: ChaiConfig = {}): void {
+  Object.assign(chaiConfig, defaultChaiConfig, config);
 }
 
 const EXPECT_BOOKKEEPING_STATE = {

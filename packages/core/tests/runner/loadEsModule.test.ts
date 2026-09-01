@@ -675,6 +675,28 @@ describe('loadEsModule', () => {
     }
   });
 
+  it('should create synchronous require errors in the VM realm', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const asyncModulePath = fixturePath(
+      'vm-external/module-semantics/async-dependency.mjs',
+    );
+    let error: unknown;
+
+    try {
+      executor.require(asyncModulePath, __filename);
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeTruthy();
+    const isVmError = vm.runInContext(
+      '(value) => value instanceof Error',
+      vmContext,
+    ) as (value: unknown) => boolean;
+    expect(isVmError(error)).toBe(true);
+  });
+
   it('should await concurrent dynamic imports of the same async module', async () => {
     const vmContext = vm.createContext({});
     const executor = getVmExternalModules(vmContext);

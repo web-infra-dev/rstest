@@ -284,10 +284,14 @@ const installVmNodeGlobals = (
           } else if (tag === '[object ArrayBuffer]') {
             Object.setPrototypeOf(value, ArrayBuffer.prototype);
           } else if (tag === '[object DataView]') {
+            restoreValue(value.buffer, seen);
             Object.setPrototypeOf(value, DataView.prototype);
           } else {
             const constructorName = tag.slice(8, -1);
             const constructor = globalThis[constructorName];
+            if (ArrayBuffer.isView(value)) {
+              restoreValue(value.buffer, seen);
+            }
             if (typeof constructor === 'function' && constructor.prototype) {
               Object.setPrototypeOf(value, constructor.prototype);
             } else {
@@ -300,7 +304,9 @@ const installVmNodeGlobals = (
             }
           }
 
-          for (const key of Object.keys(value)) {
+          const keys =
+            tag === '[object Error]' ? Reflect.ownKeys(value) : Object.keys(value);
+          for (const key of keys) {
             const descriptor = Object.getOwnPropertyDescriptor(value, key);
             if (descriptor && 'value' in descriptor) {
               restoreValue(descriptor.value, seen);

@@ -1,8 +1,9 @@
 import { GLOBAL_EXPECT } from '@vitest/expect';
-import { util } from 'chai';
+import { config as chaiConfig, util } from 'chai';
 import {
   createExpect,
   createFileExpect,
+  setupChaiConfig,
 } from '../../../src/runtime/api/expect';
 import {
   type FileContext,
@@ -30,6 +31,14 @@ const frameworkExpect = globalThis[GLOBAL_EXPECT];
 afterEach(() => {
   // @ts-expect-error symbol index
   globalThis[GLOBAL_EXPECT] = frameworkExpect;
+});
+
+it('resets omitted Chai options before applying the next project config', () => {
+  setupChaiConfig({ showDiff: false, truncateThreshold: 0 });
+  setupChaiConfig({ showDiff: true });
+
+  expect(chaiConfig.showDiff).toBe(true);
+  expect(chaiConfig.truncateThreshold).toBe(40);
 });
 
 /**
