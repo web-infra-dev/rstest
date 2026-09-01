@@ -98,7 +98,11 @@ function collectPrototypeMethods(
   const methods: Key[] = [];
   let current = proto;
 
-  while (current && current !== constructors.Object.prototype) {
+  while (
+    current &&
+    current !== constructors.Object.prototype &&
+    current !== Object.prototype
+  ) {
     for (const key of [
       ...Object.getOwnPropertyNames(current),
       ...Object.getOwnPropertySymbols(current),
@@ -144,6 +148,11 @@ function getEnumerableProperties(
     constructors.Array.prototype,
     constructors.Map.prototype,
     constructors.RegExp.prototype,
+    Object.prototype,
+    Function.prototype,
+    Array.prototype,
+    Map.prototype,
+    RegExp.prototype,
   ];
 
   let current = obj;

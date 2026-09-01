@@ -1,5 +1,12 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { parseExternalDataUri } from '../../../../src/runtime/worker/vm/externalModuleCache';
+import { withTempDir } from '../../../helpers/tempDir';
+import {
+  getExternalModuleFormat,
+  parseExternalDataUri,
+} from '../../../../src/runtime/worker/vm/externalModuleCache';
 
 // cspell:ignore Xhwb
 
@@ -53,5 +60,15 @@ describe('parseExternalDataUri', () => {
     expect(
       parseExternalDataUri('data:text/javascript,export%20default%201#v1'),
     ).toEqual({ code: 'export default 1', mime: 'text/javascript' });
+  });
+});
+
+it('accepts a BOM-prefixed package.json when resolving JavaScript format', async () => {
+  await withTempDir('rstest-vm-package-', (directory) => {
+    writeFileSync(join(directory, 'package.json'), '\uFEFF{"type":"module"}');
+
+    expect(
+      getExternalModuleFormat(pathToFileURL(join(directory, 'value.js')).href),
+    ).toBe('module');
   });
 });

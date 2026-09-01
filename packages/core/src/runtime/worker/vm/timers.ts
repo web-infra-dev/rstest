@@ -7,6 +7,12 @@ export const VM_TIMER_EXPORTS = [
   'clearImmediate',
 ] as const;
 
+export const VM_PROMISE_TIMER_EXPORTS = [
+  'setTimeout',
+  'setImmediate',
+  'scheduler',
+] as const;
+
 const vmTimerExports = new Set<string>(VM_TIMER_EXPORTS);
 
 export const createVmTimersLoader = (
@@ -28,6 +34,70 @@ export const createVmTimersLoader = (
         return Reflect.get(target, property, receiver);
       },
     });
+    return timersProxy;
+  };
+};
+
+export const createVmTimersPromisesLoader = (
+  runtimeGlobal: Record<PropertyKey, unknown>,
+): ((timersModule: Record<PropertyKey, unknown>) => unknown) => {
+  let timersProxy: unknown;
+  let schedulerProxy: unknown;
+  const wrappedMethods = new WeakMap<object, Map<PropertyKey, unknown>>();
+
+  return (timersModule) => {
+    const PromiseConstructor = runtimeGlobal.Promise as PromiseConstructor;
+    const promiseResolve = PromiseConstructor.resolve.bind(PromiseConstructor);
+    const wrapPromiseMethod = (
+      target: Record<PropertyKey, unknown>,
+      name: PropertyKey,
+    ): unknown => {
+      const method = target[name];
+      if (typeof method !== 'function') {
+        return method;
+      }
+      let methods = wrappedMethods.get(target);
+      if (!methods) {
+        methods = new Map();
+        wrappedMethods.set(target, methods);
+      }
+      const cached = methods.get(name);
+      if (cached) {
+        return cached;
+      }
+      const wrapped = (...args: unknown[]) =>
+        promiseResolve(Reflect.apply(method, target, args));
+      methods.set(name, wrapped);
+      return wrapped;
+    };
+
+    if (!timersProxy) {
+      const scheduler = timersModule.scheduler;
+      if (scheduler && typeof scheduler === 'object') {
+        schedulerProxy = new Proxy(scheduler, {
+          get(target, property, receiver) {
+            if (property === 'wait' || property === 'yield') {
+              return wrapPromiseMethod(
+                target as Record<PropertyKey, unknown>,
+                property,
+              );
+            }
+            return Reflect.get(target, property, receiver);
+          },
+        });
+      }
+      timersProxy = new Proxy(timersModule, {
+        get(target, property, receiver) {
+          if (property === 'setTimeout' || property === 'setImmediate') {
+            return wrapPromiseMethod(target, property);
+          }
+          if (property === 'scheduler' && schedulerProxy) {
+            return schedulerProxy;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+    }
     return timersProxy;
   };
 };

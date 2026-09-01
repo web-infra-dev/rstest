@@ -29,6 +29,7 @@ import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
+import { installTimerTracking, type NodeTimerPrimitives } from './env/utils';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { loadCachedAssets, workerAssetCache } from './vm/assetCache';
@@ -423,6 +424,17 @@ const prepareVmRuntimeRealm = async (
     vmContext,
   ) as VmRuntimeGlobal;
   installVmNodeGlobals(runtimeGlobal, vmContext);
+  if (testEnvironment.name === 'node') {
+    const nodeTimers: NodeTimerPrimitives = {
+      clearInterval: globalThis.clearInterval,
+      clearTimeout: globalThis.clearTimeout,
+      setInterval: globalThis.setInterval,
+      setTimeout: globalThis.setTimeout,
+    };
+    cleanupFns.push(
+      installTimerTracking(runtimeGlobal, nodeTimers, { scope: 'file' }),
+    );
+  }
   return {
     initialKeys: captureVmContextKeys(vmContext),
     runtimeGlobal,

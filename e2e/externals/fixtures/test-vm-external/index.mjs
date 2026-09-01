@@ -5,6 +5,7 @@ import helper from './helper.cjs';
 import nonEnumerableModule from './non-enumerable.cjs';
 import metadata from './data.json' with { type: 'json' };
 import requiredEsm from './require-esm.cjs';
+import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
 import { verifyBuiltinSync } from './builtin-sync.mjs';
 import { value as dataValue } from 'data:text/javascript,export%20const%20value%20=%20%22data-js%22';
 import { value as javascriptDataValue } from 'data:application/javascript;charset=UTF-8,export%20const%20value%20=%20%22application-data-js%22';
@@ -67,4 +68,15 @@ export const verifyNodeGlobals = async () => {
     structuredCloneNestedObject:
       structuredClone({ nested: {} }).nested instanceof Object,
   };
+};
+
+export const createTimerPromise = () =>
+  require('node:timers/promises').setTimeout(0, 'timer');
+
+export const createStaticTimerPromise = () =>
+  setTimeoutPromise(0, 'static-timer');
+
+export const importedImportMetaMain = {
+  supported: Object.hasOwn(import.meta, 'main'),
+  value: import.meta.main,
 };

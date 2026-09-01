@@ -64,6 +64,10 @@ const sourceCache = workerCache.namespace<ExternalSourceCacheEntry>(
   'external-source',
   ({ source }) => Buffer.byteLength(source),
 );
+
+export const stripJsonBom = (source: string): string =>
+  source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+
 const packageTypeCache = workerCache.namespace<PackageType>(
   'external-package-type',
   () => 0,
@@ -114,9 +118,9 @@ const resolvePackageType = (filePath: string): PackageType => {
     visited.push(directory);
     const packageJsonPath = join(directory, 'package.json');
     if (existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(readExternalSource(packageJsonPath)) as {
-        type?: unknown;
-      };
+      const packageJson = JSON.parse(
+        stripJsonBom(readExternalSource(packageJsonPath)),
+      ) as { type?: unknown };
       const type: PackageType =
         packageJson.type === 'module'
           ? 'module'

@@ -16,7 +16,12 @@ import {
   getOrCreateSyntheticModule,
   interopModule,
 } from '../interop';
-import { createVmTimersLoader, VM_TIMER_EXPORTS } from './timers';
+import {
+  createVmTimersLoader,
+  createVmTimersPromisesLoader,
+  VM_PROMISE_TIMER_EXPORTS,
+  VM_TIMER_EXPORTS,
+} from './timers';
 import {
   clearExternalModuleCache,
   getCommonJsCompilationCache,
@@ -29,6 +34,7 @@ import {
   resolveExternalSpecifier,
   setCommonJsCompilationCache,
   setEsmCompilationCache,
+  stripJsonBom,
 } from './externalModuleCache';
 type EsmLinkOperation = {
   promise: Promise<vm.Module>;
@@ -202,6 +208,13 @@ const staticInitializeImportMeta = (
 ): void => {
   const { identifier } = module;
   meta.url = identifier;
+  if (Object.hasOwn(import.meta, 'main')) {
+    Object.defineProperty(meta, 'main', {
+      configurable: true,
+      enumerable: true,
+      value: false,
+    });
+  }
   if (identifier.startsWith('file:')) {
     const filePath = getFilePath(identifier);
     meta.filename = filePath;
@@ -271,9 +284,6 @@ const getImportAttributes = (
   return importAttributes as Record<string, string>;
 };
 
-const stripJsonBom = (source: string): string =>
-  source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
-
 const createImportAttributeError = (
   code:
     | 'ERR_IMPORT_ATTRIBUTE_MISSING'
@@ -314,6 +324,9 @@ class VmExternalModules {
   private readonly esmSyntaxFallbackFiles = new Set<string>();
   private readonly jsonCache = new Map<string, CommonJsModule>();
   private readonly loadVmTimers: ReturnType<typeof createVmTimersLoader>;
+  private readonly loadVmTimersPromises: ReturnType<
+    typeof createVmTimersPromisesLoader
+  >;
   private readonly parseJson: (source: string) => unknown;
   private readonly requireCache: NodeJS.Require['cache'];
   private readonly scripts = new Set<vm.Script>();
@@ -335,6 +348,9 @@ class VmExternalModules {
 
   constructor(private readonly context: vm.Context) {
     this.loadVmTimers = createVmTimersLoader(
+      vm.runInContext('globalThis', context) as Record<PropertyKey, unknown>,
+    );
+    this.loadVmTimersPromises = createVmTimersPromisesLoader(
       vm.runInContext('globalThis', context) as Record<PropertyKey, unknown>,
     );
     this.parseJson = vm.runInContext('JSON.parse', context) as (
@@ -508,9 +524,15 @@ class VmExternalModules {
         return this.loadEsm(resolvedId);
       case 'commonjs': {
         const filePath = getFilePath(resolvedId);
+        const exports = this.loadCommonJs(filePath, undefined, () =>
+          this.loadEsm(resolvedId),
+        );
+        if (exports instanceof Promise) {
+          return exports;
+        }
         return this.getCommonJsSyntheticModule(
           resolvedId,
-          this.loadCommonJs(filePath),
+          exports,
           interopDefault,
           this.getCommonJsExportNames(filePath),
         );
@@ -916,6 +938,7 @@ class VmExternalModules {
   private loadCommonJs(
     filePath: string,
     parentModule?: CommonJsModule,
+    onCompileSyntaxError?: (error: unknown) => unknown,
   ): unknown {
     if (this.esmSyntaxFallbackFiles.has(filePath)) {
       return this.requireEsm(filePath);
@@ -984,6 +1007,15 @@ class VmExternalModules {
             throw esmError;
           }
         }
+      }
+      if (
+        onCompileSyntaxError &&
+        !supportsSyncEsmEvaluate &&
+        extname(filePath) === '.js' &&
+        isAmbiguousJavaScriptModule(filePath) &&
+        isSyntaxError(error)
+      ) {
+        return onCompileSyntaxError(error);
       }
       throw error;
     }
@@ -1309,6 +1341,11 @@ class VmExternalModules {
         nativeRequire(specifier) as Record<PropertyKey, unknown>,
       );
     }
+    if (normalized === 'timers/promises') {
+      return this.loadVmTimersPromises(
+        nativeRequire(specifier) as Record<PropertyKey, unknown>,
+      );
+    }
     if (normalized !== 'module') {
       return nativeRequire(specifier);
     }
@@ -1373,13 +1410,15 @@ class VmExternalModules {
     const overrides = new Set<string>();
     let exports: Record<string, unknown>;
     let defaultExport = imported.default;
-    if (normalized === 'timers') {
+    if (normalized === 'timers' || normalized === 'timers/promises') {
       const timers = this.loadBuiltin(resolvedId) as Record<
         PropertyKey,
         unknown
       >;
       exports = { ...imported, default: timers };
-      for (const name of VM_TIMER_EXPORTS) {
+      const overriddenExports =
+        normalized === 'timers' ? VM_TIMER_EXPORTS : VM_PROMISE_TIMER_EXPORTS;
+      for (const name of overriddenExports) {
         exports[name] = timers[name];
         overrides.add(name);
       }

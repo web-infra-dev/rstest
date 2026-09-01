@@ -210,6 +210,39 @@ describe('mockObject automock', () => {
 });
 
 describe('mockObject autospy', () => {
+  it('does not mock host built-in methods through a foreign prototype chain', () => {
+    const context = runInNewContext('globalThis', {}) as Record<string, any>;
+    const { createMockInstance } = initSpy(
+      () => '',
+      () => context,
+    );
+    class HostClass {
+      method(): string {
+        return 'value';
+      }
+    }
+    const result = mockObject(
+      {
+        createMockInstance,
+        globalConstructors: {
+          Object: context.Object,
+          Function: context.Function,
+          Array: context.Array,
+          Map: context.Map,
+          RegExp: context.RegExp,
+        },
+        type: 'autospy',
+      },
+      { HostClass },
+      runInNewContext('Object.create(Object.prototype)', context),
+    );
+
+    const instance = new result.HostClass();
+    expect(Object.prototype.hasOwnProperty.call(instance, 'toString')).toBe(
+      false,
+    );
+  });
+
   it('wraps functions preserving the original implementation', () => {
     const { run, isMockFunction } = make('autospy');
     const result = run({ doThing: (x: number) => x + 1 });

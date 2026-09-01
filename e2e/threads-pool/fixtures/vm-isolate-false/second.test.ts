@@ -1,5 +1,5 @@
 import { threadId } from 'node:worker_threads';
-import { expect } from '@rstest/core';
+import { expect, it } from '@rstest/core';
 import { getCount, increment } from './shared';
 import { workerTest } from './workerFixture';
 
@@ -27,4 +27,8 @@ workerTest('isolates the second file', ({ workerValue }) => {
   increment();
   expect(getCount()).toBe(1);
   console.log(`VM_THREAD_ID:${threadId}`);
+});
+
+it('runs after the previous VM context has been disposed', async () => {
+  await new Promise((resolve) => setTimeout(resolve, 100));
 });

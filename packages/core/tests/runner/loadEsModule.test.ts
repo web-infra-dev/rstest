@@ -748,6 +748,28 @@ describe('loadEsModule', () => {
     );
   });
 
+  it('should not reinterpret a runtime SyntaxError from ambiguous CommonJS', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/ambiguous/runtime-syntax-error.js',
+    );
+
+    await expect(
+      loadModule({
+        codeContent: [
+          `import ${JSON.stringify(externalPath)};`,
+          'export default true;',
+        ].join('\n'),
+        distPath: '/virtual/dist/runtime-syntax-error.mjs',
+        testPath: __filename,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: true,
+        vmContext,
+      }),
+    ).rejects.toThrow('runtime syntax error');
+  });
+
   it('should select module-sync only when synchronous VM ESM is supported', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath('bare-parent/bare-parent-pkg/index.mjs');

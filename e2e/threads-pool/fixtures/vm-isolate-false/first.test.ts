@@ -1,5 +1,5 @@
 import { threadId } from 'node:worker_threads';
-import { expect, rs } from '@rstest/core';
+import { expect, it, rs } from '@rstest/core';
 import { getCount, increment } from './shared';
 import { workerTest } from './workerFixture';
 
@@ -33,4 +33,10 @@ workerTest('isolates the first file', ({ workerValue }) => {
   increment();
   expect(getCount()).toBe(1);
   console.log(`VM_THREAD_ID:${threadId}`);
+});
+
+it('does not leave timers attached to the disposed VM context', () => {
+  setTimeout(() => {
+    throw new Error('stale VM timer');
+  }, 50);
 });
