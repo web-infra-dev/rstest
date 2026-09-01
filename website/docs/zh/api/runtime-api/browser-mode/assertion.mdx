@@ -49,11 +49,11 @@ expect.element(locator: Locator): BrowserElementExpect
 
 断言超时按以下规则决定：
 
-1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高
+1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高，包括 `0`。使用 Playwright 时，显式传入的 `0` 会原样交给 provider，表示不设置 matcher 自身的超时。
 2. **配置的轮询超时**：未传 matcher timeout 时，断言使用 `expect.poll.timeout`。Node Mode 默认值为 `1000ms`，Browser Mode 默认值为 `5000ms`。
-3. **当前测试的剩余时间**：断言超时会受当前测试剩余时间限制，因此不会超过测试本身。Browser Mode 测试的默认 `testTimeout` 为 `15000ms`。
+3. **当前测试或 hook 的剩余时间**：隐式断言超时会受当前 test 或 hook 的 deadline 限制，因此不会超过当前作用域。Browser Mode 测试的默认 `testTimeout` 为 `15000ms`。
 
-也就是说，未传 matcher timeout 时，实际断言超时取 `expect.poll.timeout` 与当前测试剩余时间中较小的值。Browser Mode 的 `5000ms` 默认值可以给异步 UI 更新更充足的时间，同时不会让错误断言等待完整的 `testTimeout`。
+也就是说，未传 matcher timeout 时，实际断言超时取 `expect.poll.timeout` 与当前 test 或 hook 剩余时间中较小的值。Browser Mode 的 `5000ms` 默认值可以给异步 UI 更新更充足的时间，同时不会让错误断言等待完整的 `testTimeout`。显式传入的 matcher timeout 不参与这个计算，但外层 test 或 hook 的超时仍然可以结束断言。
 
 对于 `test.concurrent`，如果断言需要使用该测试自己的剩余时间，请使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）。共享的文件级 `expect` 无法可靠识别并发测试，因此会使用配置的轮询超时。
 
