@@ -96,6 +96,11 @@ type BuiltinModuleRecord = {
   overrides: Set<string>;
 };
 
+type WebAssemblyCacheEntry = {
+  module: Promise<vm.SyntheticModule>;
+  loading: Promise<vm.SyntheticModule>;
+};
+
 // `hasAsyncGraph` ships with the complete synchronous graph API that Node
 // itself uses for require(esm): moduleRequests, linkRequests and instantiate.
 const supportsSyncEsmEvaluate =
@@ -304,15 +309,14 @@ const getImportAttributes = (
 };
 
 const createImportAttributeError = (
+  context: vm.Context,
   code:
     | 'ERR_IMPORT_ATTRIBUTE_MISSING'
     | 'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE'
     | 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
   message: string,
 ): NodeJS.ErrnoException => {
-  const error: NodeJS.ErrnoException = new Error(message);
-  error.code = code;
-  return error;
+  return createVmError(context, message, code);
 };
 
 const moduleHasAsyncGraph = (module: vm.Module): boolean =>
@@ -349,10 +353,7 @@ class VmExternalModules {
   private readonly parseJson: (source: string) => unknown;
   private readonly requireCache: NodeJS.Require['cache'];
   private readonly scripts = new Set<vm.Script>();
-  private readonly webAssemblyCache = new Map<
-    string,
-    Promise<vm.SyntheticModule>
-  >();
+  private readonly webAssemblyCache = new Map<string, WebAssemblyCacheEntry>();
   private readonly commonJsExportNames = new Map<
     string,
     CommonJsExportMetadata
@@ -535,11 +536,12 @@ class VmExternalModules {
   private async getModule(
     resolvedId: string,
     interopDefault: boolean,
+    loadingWebAssemblyIds?: ReadonlySet<string>,
   ): Promise<vm.Module> {
     const format = getModuleFormat(resolvedId);
     switch (format) {
       case 'data':
-        return this.loadDataModule(resolvedId);
+        return this.loadDataModule(resolvedId, loadingWebAssemblyIds);
       case 'module':
         return this.loadEsm(resolvedId);
       case 'commonjs': {
@@ -571,6 +573,7 @@ class VmExternalModules {
         return this.loadWebAssemblyModule(
           resolvedId,
           readFileSync(getFilePath(resolvedId)),
+          loadingWebAssemblyIds,
         );
       case 'unsupported':
         throw createUnsupportedFormatError(getFilePath(resolvedId));
@@ -600,12 +603,14 @@ class VmExternalModules {
     if (format === 'json') {
       if (type === undefined) {
         throw createImportAttributeError(
+          this.context,
           'ERR_IMPORT_ATTRIBUTE_MISSING',
           `Module "${resolvedId}" needs an import attribute of "type: json"`,
         );
       }
       if (type !== 'json') {
         throw createImportAttributeError(
+          this.context,
           'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
           `Import attribute "type" with value "${type}" is not supported in ${resolvedId}`,
         );
@@ -613,6 +618,7 @@ class VmExternalModules {
       const unsupported = attributeNames.find((name) => name !== 'type');
       if (unsupported) {
         throw createImportAttributeError(
+          this.context,
           'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
           `Import attribute "${unsupported}" with value "${attributes[unsupported]}" is not supported in ${resolvedId}`,
         );
@@ -622,6 +628,7 @@ class VmExternalModules {
 
     if (type === 'json') {
       throw createImportAttributeError(
+        this.context,
         'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE',
         'Module "' + resolvedId + '" is not of type "json"',
       );
@@ -630,6 +637,7 @@ class VmExternalModules {
     if (attributeNames.length > 0) {
       const unsupported = attributeNames[0]!;
       throw createImportAttributeError(
+        this.context,
         'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
         `Import attribute "${unsupported}" with value "${attributes[unsupported]}" is not supported in ${resolvedId}`,
       );
@@ -717,14 +725,15 @@ class VmExternalModules {
           })();
 
     const names = new Set(metadata.names);
+    const moduleRequire = this.createRequire(filePath);
     for (const reexport of metadata.reexports) {
       let resolvedId: string;
       try {
-        resolvedId = this.resolve(reexport, filePath);
+        resolvedId = moduleRequire.resolve(reexport);
       } catch {
         continue;
       }
-      if (getModuleFormat(resolvedId) !== 'commonjs') {
+      if (getModuleFormat(resolvedId, 'require') !== 'commonjs') {
         continue;
       }
       for (const name of this.getCommonJsExportNamesFrom(
@@ -771,10 +780,17 @@ class VmExternalModules {
     return this.parseJson(stripJsonBom(source));
   }
 
-  private async loadDataModule(identifier: string): Promise<vm.Module> {
+  private async loadDataModule(
+    identifier: string,
+    loadingWebAssemblyIds?: ReadonlySet<string>,
+  ): Promise<vm.Module> {
     const { code, mime } = parseDataUri(identifier);
     if (mime === 'application/wasm') {
-      return this.loadWebAssemblyModule(identifier, code);
+      return this.loadWebAssemblyModule(
+        identifier,
+        code,
+        loadingWebAssemblyIds,
+      );
     }
     if (mime === 'application/json') {
       return this.getJsonSyntheticModule(
@@ -795,44 +811,29 @@ class VmExternalModules {
   private async loadWebAssemblyModule(
     identifier: string,
     source: Uint8Array,
+    loadingWebAssemblyIds: ReadonlySet<string> = new Set(),
   ): Promise<vm.SyntheticModule> {
     const cached = this.webAssemblyCache.get(identifier);
     if (cached) {
-      return cached;
+      return loadingWebAssemblyIds.has(identifier)
+        ? cached.module
+        : cached.loading;
     }
 
+    let resolveModule!: (module: vm.SyntheticModule) => void;
+    let rejectModule!: (reason?: unknown) => void;
+    const module = new Promise<vm.SyntheticModule>((resolve, reject) => {
+      resolveModule = resolve;
+      rejectModule = reject;
+    });
+    void module.catch(() => undefined);
     const loading = (async () => {
       const webAssembly = vm.runInContext(
         'WebAssembly',
         this.context,
       ) as typeof WebAssembly;
       const compiled = await webAssembly.compile(Buffer.from(source));
-      const imports = webAssembly.Module.imports(compiled);
-      const dependencies = new Map<string, vm.Module>();
-      for (const { module: specifier } of imports) {
-        if (!dependencies.has(specifier)) {
-          dependencies.set(
-            specifier,
-            await this.getModule(
-              this.resolve(specifier, identifier),
-              this.interopDefault,
-            ),
-          );
-        }
-      }
-
       const importObject: WebAssembly.Imports = {};
-      for (const { module: specifier, name } of imports) {
-        const dependency = dependencies.get(specifier)!;
-        await this.linkModule(dependency, this.interopDefault);
-        if (dependency.status !== 'evaluated') {
-          await this.evaluateModule(dependency);
-        }
-        const namespace = dependency.namespace as Record<string, unknown>;
-        const moduleImports = (importObject[specifier] ??= {});
-        moduleImports[name] = namespace[name] as WebAssembly.ImportValue;
-      }
-
       const syntheticModule = new vm.SyntheticModule(
         webAssembly.Module.exports(compiled).map(({ name }) => name),
         () => {
@@ -843,13 +844,50 @@ class VmExternalModules {
         },
         { context: this.context, identifier },
       );
+      resolveModule(syntheticModule);
+      const nextLoadingWebAssemblyIds = new Set(loadingWebAssemblyIds);
+      nextLoadingWebAssemblyIds.add(identifier);
+      const imports = webAssembly.Module.imports(compiled);
+      const dependencies = new Map<string, vm.Module>();
+      for (const { module: specifier } of imports) {
+        if (!dependencies.has(specifier)) {
+          dependencies.set(
+            specifier,
+            await this.getModule(
+              this.resolve(specifier, identifier),
+              this.interopDefault,
+              nextLoadingWebAssemblyIds,
+            ),
+          );
+        }
+      }
+
+      for (const { module: specifier, name } of imports) {
+        const dependency = dependencies.get(specifier)!;
+        await this.linkModule(
+          dependency,
+          this.interopDefault,
+          nextLoadingWebAssemblyIds,
+        );
+        if (dependency.status !== 'evaluated') {
+          await this.evaluateModule(dependency);
+        }
+        const namespace = dependency.namespace as Record<string, unknown>;
+        const moduleImports = (importObject[specifier] ??= {});
+        moduleImports[name] = namespace[name] as WebAssembly.ImportValue;
+      }
+
       return syntheticModule;
     })();
-    this.webAssemblyCache.set(identifier, loading);
+    const entry = { module, loading };
+    this.webAssemblyCache.set(identifier, entry);
     try {
       return await loading;
     } catch (error) {
-      this.webAssemblyCache.delete(identifier);
+      rejectModule(error);
+      if (this.webAssemblyCache.get(identifier) === entry) {
+        this.webAssemblyCache.delete(identifier);
+      }
       throw error;
     }
   }
@@ -1056,7 +1094,7 @@ class VmExternalModules {
         moduleRequire,
         module,
         filePath,
-        dirname(filePath),
+        nativeDirname(filePath),
       );
       module.loaded = true;
       if (shouldCacheCompilation) {
@@ -1309,6 +1347,7 @@ class VmExternalModules {
   private async linkModule(
     module: vm.Module,
     interopDefault: boolean,
+    loadingWebAssemblyIds?: ReadonlySet<string>,
   ): Promise<void> {
     const existingOperation = this.esmLinkOperations.get(module.identifier);
     if (existingOperation) {
@@ -1326,7 +1365,11 @@ class VmExternalModules {
             resolvedId,
             extra.attributes as unknown as ExternalImportAttributes,
           );
-          const dependency = await this.getModule(resolvedId, interopDefault);
+          const dependency = await this.getModule(
+            resolvedId,
+            interopDefault,
+            loadingWebAssemblyIds,
+          );
           if (
             dependency.status === 'unlinked' ||
             dependency.status === 'linking'
@@ -1461,6 +1504,17 @@ class VmExternalModules {
       overrides.add('createRequire');
       overrides.add('syncBuiltinESMExports');
       defaultExport = moduleBuiltin;
+    } else if (normalized === 'process') {
+      const runtimeProcess = vm.runInContext(
+        'globalThis.process',
+        this.context,
+      ) as Record<string, unknown>;
+      exports = { ...imported, default: runtimeProcess };
+      for (const name of ['exit', 'kill']) {
+        exports[name] = runtimeProcess[name];
+        overrides.add(name);
+      }
+      defaultExport = runtimeProcess;
     } else {
       exports = imported;
     }

@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -348,7 +354,9 @@ describe('loadEsModule', () => {
   });
 
   it('should preserve WebAssembly imports when loading an external module', async () => {
-    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'rstest-vm-wasm-'));
+    const temporaryDirectory = realpathSync(
+      mkdtempSync(join(tmpdir(), 'rstest-vm-wasm-')),
+    );
     const wasmPath = join(temporaryDirectory, 'value.wasm');
     const context = vm.createContext({});
     const wasm = Buffer.from([
@@ -369,6 +377,98 @@ describe('loadEsModule', () => {
           'export default run(2);',
         ].join('\n'),
         distPath: '/virtual/dist/external-wasm.mjs',
+        testPath: __filename,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: true,
+        vmContext: context,
+      });
+
+      expect(mod.default).toBe(3);
+    } finally {
+      disposeVmExternalModules(context);
+      rmSync(temporaryDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it('should resolve CommonJS reexports with require conditions', async () => {
+    const temporaryDirectory = mkdtempSync(
+      join(tmpdir(), 'rstest-vm-conditional-reexport-'),
+    );
+    const packageDirectory = join(
+      temporaryDirectory,
+      'node_modules',
+      'conditional-package',
+    );
+    const wrapperPath = join(temporaryDirectory, 'wrapper.cjs');
+    const context = vm.createContext({});
+
+    try {
+      mkdirSync(packageDirectory, { recursive: true });
+      writeFileSync(
+        join(packageDirectory, 'package.json'),
+        JSON.stringify({
+          name: 'conditional-package',
+          exports: {
+            import: './import.mjs',
+            require: './require.cjs',
+          },
+        }),
+      );
+      writeFileSync(
+        join(packageDirectory, 'import.mjs'),
+        'export const importOnly = true;\n',
+      );
+      writeFileSync(
+        join(packageDirectory, 'require.cjs'),
+        'exports.requireOnly = true;\n',
+      );
+      writeFileSync(
+        wrapperPath,
+        "module.exports = require('conditional-package');\n",
+      );
+
+      const mod = await loadModule({
+        codeContent: `import { requireOnly } from ${JSON.stringify(wrapperPath)}; export default requireOnly;`,
+        distPath: '/virtual/dist/conditional-reexport.mjs',
+        testPath: __filename,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: false,
+        vmContext: context,
+      });
+
+      expect(mod.default).toBe(true);
+    } finally {
+      disposeVmExternalModules(context);
+      rmSync(temporaryDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it('should avoid deadlocking cyclic WebAssembly graphs', async () => {
+    const temporaryDirectory = realpathSync(
+      mkdtempSync(join(tmpdir(), 'rstest-vm-wasm-')),
+    );
+    const wasmPath = join(temporaryDirectory, 'value.wasm');
+    const context = vm.createContext({});
+    const wasm = Buffer.from([
+      0, 97, 115, 109, 1, 0, 0, 0, 1, 6, 1, 96, 1, 127, 1, 127, 2, 17, 1, 9, 46,
+      47, 101, 110, 118, 46, 109, 106, 115, 3, 97, 100, 100, 0, 0, 3, 2, 1, 0,
+      7, 7, 1, 3, 114, 117, 110, 0, 1, 10, 8, 1, 6, 0, 32, 0, 16, 0, 11,
+    ]);
+
+    try {
+      writeFileSync(wasmPath, wasm);
+      writeFileSync(
+        join(temporaryDirectory, 'env.mjs'),
+        "void import('./value.wasm');\nexport const add = (value) => value + 1;\n",
+      );
+      const mod = await loadModule({
+        codeContent: [
+          `import { run } from ${JSON.stringify(wasmPath)};`,
+          'export default run(2);',
+        ].join('\n'),
+        distPath: '/virtual/dist/cyclic-external-wasm.mjs',
         testPath: __filename,
         rstestContext: {},
         assetFiles: {},

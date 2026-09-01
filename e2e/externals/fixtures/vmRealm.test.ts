@@ -7,8 +7,11 @@ const {
   createTimerPromise,
   createStaticTimerPromise,
   inspectRealm,
+  inspectCommonJsPaths,
   importedImportMetaMain,
+  verifyImportAttributeErrorRealm,
   verifyNodeGlobals,
+  verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
 
@@ -39,6 +42,12 @@ it('executes external modules in the test VM realm', async () => {
   expect(await verifyUnsupportedImportAttribute()).toBe(
     'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
   );
+  expect(await verifyImportAttributeErrorRealm()).toBe(true);
+  expect(verifyProcessGuards()).toEqual({
+    killGuarded: true,
+    exitGuarded: true,
+  });
+  expect(inspectCommonJsPaths().dirname).toBe(inspectCommonJsPaths().expected);
   const timerPromise = createTimerPromise();
   expect(timerPromise).toBeInstanceOf(Promise);
   await expect(timerPromise).resolves.toBe('timer');

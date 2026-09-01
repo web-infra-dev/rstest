@@ -6,6 +6,7 @@ import nonEnumerableModule from './non-enumerable.cjs';
 import metadata from './data.json' with { type: 'json' };
 import requiredEsm from './require-esm.cjs';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
+import { exit as processExit, kill as processKill } from 'node:process';
 import { verifyBuiltinSync } from './builtin-sync.mjs';
 import { value as dataValue } from 'data:text/javascript,export%20const%20value%20=%20%22data-js%22';
 import { value as javascriptDataValue } from 'data:application/javascript;charset=UTF-8,export%20const%20value%20=%20%22application-data-js%22';
@@ -15,6 +16,8 @@ import { exp as callExternalWasm } from './external.wasm';
 
 const require = createRequire(import.meta.url);
 const requiredMetadata = require('./data.json');
+
+const commonJsPaths = require('./path-helper.cjs');
 
 export const inspectRealm = (value) => ({
   commonJs: helper.isPlainObject(value),
@@ -50,6 +53,40 @@ export const verifyUnsupportedImportAttribute = async () => {
     return error?.code;
   }
 };
+
+export const verifyImportAttributeErrorRealm = async () => {
+  try {
+    await import('./data.json');
+    return false;
+  } catch (error) {
+    return error instanceof Error;
+  }
+};
+
+export const verifyProcessGuards = () => {
+  let killGuarded = false;
+  let exitGuarded = false;
+  try {
+    processKill(process.pid, 'SIGTERM');
+  } catch (error) {
+    killGuarded = error?.message?.startsWith(
+      'process.kill unexpectedly called',
+    );
+  }
+  try {
+    processExit(1);
+  } catch (error) {
+    exitGuarded = error?.message?.startsWith(
+      'process.exit unexpectedly called',
+    );
+  }
+  return { killGuarded, exitGuarded };
+};
+
+export const inspectCommonJsPaths = () => ({
+  dirname: commonJsPaths.dirname,
+  expected: path.dirname(commonJsPaths.filename),
+});
 
 export const verifyNodeGlobals = async () => {
   const pendingResponse = fetch('data:text/plain,vm');
