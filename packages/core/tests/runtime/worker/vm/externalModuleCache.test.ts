@@ -17,6 +17,17 @@ describe('parseExternalDataUri', () => {
     ).toEqual({ code: 'export default 1', mime: 'text/javascript' });
   });
 
+  it('does not treat non-terminal base64 parameters as an encoding marker', () => {
+    expect(
+      parseExternalDataUri(
+        'data:text/javascript;base64;charset=UTF-8,export%20default%201',
+      ),
+    ).toEqual({
+      code: 'export default 1',
+      mime: 'text/javascript',
+    });
+  });
+
   it('accepts data URL parameters supported by Node', () => {
     expect(
       parseExternalDataUri(

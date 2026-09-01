@@ -516,6 +516,14 @@ describe('loadEsModule', () => {
       );
       expect(namedOnly).toMatchObject({ value: 'named-only' });
       expect(namedOnly).not.toHaveProperty('__esModule');
+
+      const liveNamespace = executor.require(
+        fixturePath('vm-external/module-semantics/counter.mjs'),
+        __filename,
+      ) as { count: number; increment: () => void };
+      expect(liveNamespace.count).toBe(0);
+      liveNamespace.increment();
+      expect(liveNamespace.count).toBe(1);
     }
   });
 
@@ -601,6 +609,29 @@ describe('loadEsModule', () => {
       }
       expect(requireError).toMatchObject({ code: 'ERR_REQUIRE_ASYNC_MODULE' });
     }
+  });
+
+  it('should await concurrent dynamic imports of the same async module', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/async-throws.mjs',
+    );
+
+    const results = await Promise.allSettled([
+      executor.import(externalPath, true, false),
+      executor.import(externalPath, true, false),
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({
+      reason: { message: 'async module failed' },
+      status: 'rejected',
+    });
+    expect(results[1]).toMatchObject({
+      reason: { message: 'async module failed' },
+      status: 'rejected',
+    });
   });
 
   it('should honor the module.exports ESM interop export', async () => {

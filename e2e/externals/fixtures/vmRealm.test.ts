@@ -27,6 +27,7 @@ it('executes external modules in the test VM realm', async () => {
     timers: true,
     builtinSync: true,
     wasm: 42,
+    wasmFunction: true,
   });
   expect(await verifyUnsupportedImportAttribute()).toBe(
     'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',

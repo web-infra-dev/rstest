@@ -37,6 +37,7 @@ export const inspectRealm = (value) => ({
     setTimeout === globalThis.setTimeout,
   builtinSync: verifyBuiltinSync(),
   wasm: callExternalWasm(),
+  wasmFunction: callExternalWasm instanceof Function,
 });
 
 export const verifyUnsupportedImportAttribute = async () => {

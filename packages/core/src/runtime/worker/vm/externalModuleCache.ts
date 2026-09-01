@@ -185,7 +185,7 @@ export const parseExternalDataUri = (identifier: string): ParsedDataUri => {
     .split(';')
     .filter(Boolean)
     .map((parameter) => parameter.toLowerCase());
-  const isBase64 = encodings.includes('base64');
+  const isBase64 = encodings.at(-1) === 'base64';
   if (mime === 'application/wasm') {
     if (!isBase64) {
       throw new Error(

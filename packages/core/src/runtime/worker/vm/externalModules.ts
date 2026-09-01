@@ -302,6 +302,7 @@ class VmExternalModules {
     string,
     Record<PropertyKey, unknown>
   >();
+  private readonly moduleEvaluationCache = new Map<string, Promise<void>>();
   private readonly esmLinkOperations = new Map<string, EsmLinkOperation>();
   private readonly esmSyntaxFallbackFiles = new Set<string>();
   private readonly jsonCache = new Map<string, CommonJsModule>();
@@ -418,8 +419,8 @@ class VmExternalModules {
     if (returnModule) {
       return module;
     }
-    if (module.status !== 'evaluated' && module.status !== 'evaluating') {
-      await module.evaluate();
+    if (module.status !== 'evaluated') {
+      await this.evaluateModule(module);
     }
     return module.namespace;
   }
@@ -460,17 +461,31 @@ class VmExternalModules {
       this.interopDefault,
       importAttributes,
     );
-    if (imported.status !== 'evaluated' && imported.status !== 'evaluating') {
-      await imported.evaluate();
+    if (imported.status !== 'evaluated') {
+      await this.evaluateModule(imported);
     }
     return imported;
   }
 
   dispose(): void {
+    this.moduleEvaluationCache.clear();
     for (const script of this.scripts) {
       scriptExecutors.delete(script);
     }
     this.scripts.clear();
+  }
+
+  private evaluateModule(module: vm.Module): Promise<void> {
+    if (module.status === 'evaluated') {
+      return Promise.resolve();
+    }
+    const cached = this.moduleEvaluationCache.get(module.identifier);
+    if (cached) {
+      return cached;
+    }
+    const evaluation = module.evaluate();
+    this.moduleEvaluationCache.set(module.identifier, evaluation);
+    return evaluation;
   }
 
   private async getModule(
@@ -715,8 +730,12 @@ class VmExternalModules {
     }
 
     const loading = (async () => {
-      const compiled = await WebAssembly.compile(Buffer.from(source));
-      const imports = WebAssembly.Module.imports(compiled);
+      const webAssembly = vm.runInContext(
+        'WebAssembly',
+        this.context,
+      ) as typeof WebAssembly;
+      const compiled = await webAssembly.compile(Buffer.from(source));
+      const imports = webAssembly.Module.imports(compiled);
       const dependencies = new Map<string, vm.Module>();
       for (const { module: specifier } of imports) {
         if (!dependencies.has(specifier)) {
@@ -734,11 +753,8 @@ class VmExternalModules {
       for (const { module: specifier, name } of imports) {
         const dependency = dependencies.get(specifier)!;
         await this.linkModule(dependency, this.interopDefault);
-        if (
-          dependency.status !== 'evaluated' &&
-          dependency.status !== 'evaluating'
-        ) {
-          await dependency.evaluate();
+        if (dependency.status !== 'evaluated') {
+          await this.evaluateModule(dependency);
         }
         const namespace = dependency.namespace as Record<string, unknown>;
         const moduleImports = (importObject[specifier] ??= {});
@@ -746,10 +762,10 @@ class VmExternalModules {
       }
 
       const syntheticModule = new vm.SyntheticModule(
-        WebAssembly.Module.exports(compiled).map(({ name }) => name),
+        webAssembly.Module.exports(compiled).map(({ name }) => name),
         () => {
-          const instance = new WebAssembly.Instance(compiled, importObject);
-          for (const { name } of WebAssembly.Module.exports(compiled)) {
+          const instance = new webAssembly.Instance(compiled, importObject);
+          for (const { name } of webAssembly.Module.exports(compiled)) {
             syntheticModule.setExport(name, instance.exports[name]);
           }
         },
@@ -1011,11 +1027,11 @@ class VmExternalModules {
     }
     const namespace = Object.create(null) as Record<PropertyKey, unknown>;
     for (const key of Reflect.ownKeys(module.namespace)) {
-      Object.defineProperty(
-        namespace,
-        key,
-        Object.getOwnPropertyDescriptor(module.namespace, key)!,
-      );
+      Object.defineProperty(namespace, key, {
+        configurable: false,
+        enumerable: true,
+        get: () => Reflect.get(module.namespace, key),
+      });
     }
     if (
       Reflect.has(namespace, 'default') &&
@@ -1124,7 +1140,7 @@ class VmExternalModules {
     // Once the graph has no TLA, V8 settles evaluate() before it returns. The
     // promise still needs a rejection handler while the synchronous status and
     // original evaluation error are read below.
-    void root.module.evaluate().catch(() => undefined);
+    void this.evaluateModule(root.module).catch(() => undefined);
     if (root.module.status === 'errored') {
       throw root.module.error;
     }
