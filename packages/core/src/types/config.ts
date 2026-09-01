@@ -487,7 +487,7 @@ export interface RstestConfig {
 
   /**
    * Timeout of a test in milliseconds.
-   * @default 5000
+   * @default 5000 (15000 in Browser Mode)
    */
   testTimeout?: number;
 

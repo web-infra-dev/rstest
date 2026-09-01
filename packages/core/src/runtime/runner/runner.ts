@@ -419,6 +419,8 @@ export class TestRunner {
         }
       }
 
+      test.startTime = undefined;
+
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
         .concat(cleanups);
