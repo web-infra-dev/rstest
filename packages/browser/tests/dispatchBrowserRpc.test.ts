@@ -114,6 +114,24 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     });
   });
 
+  it('normalizes zero expect timeouts for Playwright', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toBeVisible',
+        timeout: 0,
+      }),
+      timeoutFallbackMs: 900,
+    });
+
+    expect(fakeLocator.expectCalls[0]?.options).toEqual({
+      isNot: false,
+      timeout: 1,
+    });
+  });
+
   it('rejects unsupported expect matchers', async () => {
     const fakeLocator = new FakeLocator();
     await expect(

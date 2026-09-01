@@ -30,7 +30,7 @@ const createElementExpect = (
       method,
       args,
       isNot,
-      timeout: timeout ?? Math.max(getDefaultTimeout(), 1),
+      timeout: timeout ?? getDefaultTimeout(),
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
   };
 
