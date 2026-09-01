@@ -45,6 +45,7 @@ import type {
   TestCase,
   WorkerState,
 } from '../../types';
+import { DEFAULT_EXPECT_POLL_TIMEOUT } from '../../utils/constants';
 import { toNativePath } from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import { getRealNow } from '../util';
@@ -194,8 +195,9 @@ export function createExpect({
     const currentTest = getCurrentTest();
     const testTimeout = currentTest?.timeout;
     const pollTimeout =
-      getWorkerState().runtimeConfig.expect?.poll?.timeout ?? 1000;
-    const timeout =
+      getWorkerState().runtimeConfig.expect?.poll?.timeout ??
+      DEFAULT_EXPECT_POLL_TIMEOUT;
+    const remainingTestTimeout =
       currentTest?.startTime !== undefined &&
       typeof testTimeout === 'number' &&
       testTimeout > 0 &&
@@ -206,7 +208,11 @@ export function createExpect({
               ELEMENT_EXPECT_TIMEOUT_BUFFER,
             1,
           )
-        : pollTimeout;
+        : undefined;
+    const timeout =
+      remainingTestTimeout === undefined
+        ? pollTimeout
+        : Math.min(pollTimeout, remainingTestTimeout);
     const assertion = elementExpectHandler(locator, { timeout });
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);

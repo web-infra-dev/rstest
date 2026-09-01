@@ -38,8 +38,25 @@ describe('rstest context', () => {
     );
 
     expect(browserContext.normalizedConfig.testTimeout).toBe(15000);
+    expect(browserContext.normalizedConfig.expect.poll.timeout).toBe(5000);
     expect(nodeContext.normalizedConfig.testTimeout).toBe(5000);
+    expect(nodeContext.normalizedConfig.expect.poll.timeout).toBe(1000);
     expect(explicitContext.normalizedConfig.testTimeout).toBe(2000);
+    expect(explicitContext.normalizedConfig.expect.poll.timeout).toBe(5000);
+
+    const explicitPollContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [],
+      },
+      {
+        browser: { enabled: true, provider: 'playwright' },
+        expect: { poll: { timeout: 2000 } },
+      },
+    );
+
+    expect(explicitPollContext.normalizedConfig.expect.poll.timeout).toBe(2000);
   });
 
   it('should generate rstest context correctly', async () => {

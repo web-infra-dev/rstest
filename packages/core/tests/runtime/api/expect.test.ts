@@ -121,7 +121,7 @@ describe('expect.element timeout', () => {
     registerElementExpect(() => undefined);
   });
 
-  it('passes the remaining test timeout to the browser adapter', () => {
+  it('caps the element timeout at the remaining test timeout', () => {
     let timeout: number | undefined;
     const startTime = Date.now() - 200;
     const localExpect = createExpect({
@@ -148,7 +148,7 @@ describe('expect.element timeout', () => {
     const localExpect = createExpect({
       getWorkerState: () =>
         ({
-          runtimeConfig: { expect: { poll: { timeout: 1000 } } },
+          runtimeConfig: { expect: { poll: { timeout: 5000 } } },
         }) as WorkerState,
       getCurrentTest: () =>
         ({ timeout: 0, startTime: Date.now() }) as unknown as TestCase,
@@ -160,6 +160,29 @@ describe('expect.element timeout', () => {
 
     (localExpect as typeof localExpect & ElementExpect).element('locator');
 
-    expect(timeout).toBe(1000);
+    expect(timeout).toBe(5000);
+  });
+
+  it('caps the element timeout at the configured poll timeout', () => {
+    let timeout: number | undefined;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 5000 } } },
+        }) as WorkerState,
+      getCurrentTest: () =>
+        ({
+          timeout: 10000,
+          startTime: Date.now() - 200,
+        }) as unknown as TestCase,
+    });
+    registerElementExpect((_locator, options) => {
+      timeout = options.timeout;
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBe(5000);
   });
 });

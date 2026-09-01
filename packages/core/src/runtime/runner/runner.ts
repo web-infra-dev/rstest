@@ -167,6 +167,8 @@ export class TestRunner {
 
       let result: TestResult | undefined;
 
+      test.startTime = undefined;
+
       // `onTestFinished` / `onTestFailed` are registered from inside the test
       // body, so each retry / repeat would otherwise stack new handlers on
       // top of leftovers from prior attempts and rerun them. Snapshot the
@@ -334,6 +336,7 @@ export class TestRunner {
       }
 
       if (!result) {
+        test.startTime = RealDate.now();
         const runTest = test.fn
           ? wrapTimeout({
               name: 'test',
@@ -672,7 +675,6 @@ export class TestRunner {
           },
           async () => {
             const start = RealDate.now();
-            test.startTime = start;
             // Per-test override wins over config.retry. `retry` (the runtime
             // config) is the suite-wide default.
             const retryBudget = sanitizeAttemptCount(test.retry ?? retry);

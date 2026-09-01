@@ -34,6 +34,7 @@ describe('browser mode - error handling', () => {
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
     expect(output).toContain('Expect "to.have.text"');
+    expect(output).toContain('with timeout 5000ms');
     expect(output).not.toMatch(/timed out in 500ms/i);
   });
 

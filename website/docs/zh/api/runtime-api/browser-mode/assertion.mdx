@@ -47,22 +47,26 @@ expect.element(locator: Locator): BrowserElementExpect
 
 ### 超时优先级
 
-断言的超时按以下优先级决定：
+断言超时按以下规则决定：
 
 1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高
-2. **当前测试的剩余时间**：未传 matcher timeout 时，断言使用当前测试剩余的时间。Browser Mode 测试的默认 `testTimeout` 为 15000ms。
-3. **`expect.poll.timeout`**：当通过 `testTimeout: 0` 禁用当前测试超时时，使用该配置作为有限的 fallback。
+2. **配置的轮询超时**：未传 matcher timeout 时，断言使用 `expect.poll.timeout`。Node Mode 默认值为 `1000ms`，Browser Mode 默认值为 `5000ms`。
+3. **当前测试的剩余时间**：断言超时会受当前测试剩余时间限制，因此不会超过测试本身。Browser Mode 测试的默认 `testTimeout` 为 `15000ms`。
+
+也就是说，未传 matcher timeout 时，实际断言超时取 `expect.poll.timeout` 与当前测试剩余时间中较小的值。Browser Mode 的 `5000ms` 默认值可以给异步 UI 更新更充足的时间，同时不会让错误断言等待完整的 `testTimeout`。
 
 断言超时与 Browser RPC transport timeout 独立。测试执行期间，browser 和 snapshot RPC 请求不会额外增加超时；framework setup 和文件清理 RPC 使用独立的 30 秒 watchdog。
 
 ```ts
-// 使用当前测试的剩余时间（Browser Mode 默认 testTimeout 为 15000ms）
+// 使用 Browser Mode 的 expect.poll.timeout 默认值（5000ms），
+// 同时受当前测试剩余时间限制
 await expect.element(page.getByText('Done')).toBeVisible();
 
 // 覆盖为更长的超时
 await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
 
-// 禁用测试超时后，element 断言仍使用有限的轮询超时（默认 1000ms）
+// 禁用测试超时后，element 断言使用配置的轮询超时
+// （Browser Mode 默认 5000ms）
 ```
 
 ### 失败输出

@@ -56,7 +56,7 @@ export type ExpectPollConfig = {
   interval?: number;
   /**
    * Polling timeout in milliseconds.
-   * @default 1000
+   * @default 1000 (5000 in Browser Mode)
    */
   timeout?: number;
 };

@@ -19,6 +19,7 @@ import {
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  DEFAULT_EXPECT_POLL_TIMEOUT,
   DEFAULT_TEST_TIMEOUT,
   formatRootStr,
   getOutputDistPathRoot,
@@ -286,7 +287,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   expect: {
     poll: {
       interval: 50,
-      timeout: 1000,
+      timeout: DEFAULT_EXPECT_POLL_TIMEOUT,
     },
   },
   env: {},

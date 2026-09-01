@@ -47,23 +47,26 @@ Assertion behavior in `expect.element` depends on the provider. With the Playwri
 
 ### Timeout priority
 
-The assertion timeout is determined by the following priority:
+The assertion timeout is determined by the following rules:
 
 1. **Per-assertion timeout**: The `timeout` parameter passed directly to the matcher, highest priority
-2. **Remaining test timeout**: When no matcher timeout is provided, the assertion uses the remaining time of the current test. Browser Mode tests default to 15000ms.
-3. **`expect.poll.timeout`**: Used as the fallback when the current test timeout is disabled with `testTimeout: 0`.
+2. **Configured poll timeout**: When no matcher timeout is provided, the assertion uses `expect.poll.timeout`. Its default is `1000ms` in Node Mode and `5000ms` in Browser Mode.
+3. **Remaining test timeout**: The assertion timeout is capped by the remaining time of the current test, so it cannot outlive the test. Browser Mode tests default to `15000ms`.
+
+In other words, with no per-assertion override, the effective timeout is the smaller of `expect.poll.timeout` and the remaining test timeout. The Browser Mode `5000ms` default gives asynchronous UI updates more time without making a failed assertion wait for the full `testTimeout`.
 
 Assertion timeout is independent from the browser RPC transport timeout. During test execution, browser and snapshot RPC requests do not add another timeout. Framework setup and file-cleanup RPCs use a separate 30-second watchdog.
 
 ```ts
-// Uses the remaining time of the current test (default 15000ms in Browser Mode)
+// Uses the Browser Mode expect.poll.timeout default (5000ms),
+// capped by the remaining time of the current test
 await expect.element(page.getByText('Done')).toBeVisible();
 
 // Override with a longer timeout
 await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
 
-// With testTimeout: 0, element assertions still use a finite poll timeout
-// (1000ms by default).
+// With testTimeout: 0, element assertions use the configured poll timeout
+// (5000ms by default in Browser Mode).
 ```
 
 ### Failure output

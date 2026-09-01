@@ -28,6 +28,7 @@ import type {
 } from '../types';
 import {
   castArray,
+  DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT,
   DEFAULT_BROWSER_TEST_TIMEOUT,
   ENV,
   getAbsolutePath,
@@ -70,14 +71,20 @@ const resolveOutputModule = (config: OutputModuleConfig): boolean =>
     ? false
     : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');
 
-const applyBrowserTestTimeout = <
-  Config extends Pick<NormalizedConfig, 'browser' | 'testTimeout'>,
+const applyBrowserDefaults = <
+  Config extends Pick<NormalizedConfig, 'browser' | 'testTimeout' | 'expect'>,
 >(
   config: Config,
   userConfig: RstestConfig,
 ): Config => {
-  if (config.browser.enabled && userConfig.testTimeout === undefined) {
+  if (!config.browser.enabled) {
+    return config;
+  }
+  if (userConfig.testTimeout === undefined) {
     config.testTimeout = DEFAULT_BROWSER_TEST_TIMEOUT;
+  }
+  if (userConfig.expect?.poll?.timeout === undefined) {
+    config.expect.poll.timeout = DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT;
   }
   return config;
 };
@@ -163,7 +170,7 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = applyBrowserTestTimeout(
+    const rstestConfig = applyBrowserDefaults(
       withDefaultConfig(
         resolveBuildCacheDependencyPaths(
           {
@@ -198,7 +205,7 @@ export class Rstest implements RstestContext {
             project.config,
             project.configFilePath ?? configFilePath,
           );
-          const config = applyBrowserTestTimeout(
+          const config = applyBrowserDefaults(
             withDefaultConfig(projectUserConfig) as NormalizedProjectConfig,
             projectUserConfig,
           );
