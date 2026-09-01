@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
 import { parseExternalDataUri } from '../../../../src/runtime/worker/vm/externalModuleCache';
 
+// cspell:ignore Xhwb
+
 describe('parseExternalDataUri', () => {
   it('accepts Node JavaScript MIME aliases and case-insensitive parameters', () => {
     expect(
@@ -26,6 +28,14 @@ describe('parseExternalDataUri', () => {
       code: 'export default 1',
       mime: 'text/javascript',
     });
+  });
+
+  it('rejects malformed base64 data URLs', () => {
+    expect(() =>
+      parseExternalDataUri(
+        'data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQgMQ==!',
+      ),
+    ).toThrow(expect.objectContaining({ code: 'ERR_INVALID_URL' }));
   });
 
   it('accepts data URL parameters supported by Node', () => {

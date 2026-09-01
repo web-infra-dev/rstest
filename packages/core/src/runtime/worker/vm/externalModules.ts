@@ -41,7 +41,10 @@ type SyncSourceTextModule = vm.SourceTextModule & {
   hasTopLevelAwait: () => boolean;
   instantiate: () => void;
   linkRequests: (modules: readonly vm.Module[]) => void;
-  readonly moduleRequests: readonly { specifier: string }[];
+  readonly moduleRequests: readonly {
+    specifier: string;
+    attributes?: Record<string, string | undefined>;
+  }[];
 };
 
 type SyncModuleEntry =
@@ -268,6 +271,9 @@ const getImportAttributes = (
   return importAttributes as Record<string, string>;
 };
 
+const stripJsonBom = (source: string): string =>
+  source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+
 const createImportAttributeError = (
   code:
     | 'ERR_IMPORT_ATTRIBUTE_MISSING'
@@ -302,6 +308,7 @@ class VmExternalModules {
     string,
     Record<PropertyKey, unknown>
   >();
+  private readonly esmJsonCache = new Map<string, unknown>();
   private readonly moduleEvaluationCache = new Map<string, Promise<void>>();
   private readonly esmLinkOperations = new Map<string, EsmLinkOperation>();
   private readonly esmSyntaxFallbackFiles = new Set<string>();
@@ -468,6 +475,7 @@ class VmExternalModules {
   }
 
   dispose(): void {
+    this.esmJsonCache.clear();
     this.moduleEvaluationCache.clear();
     for (const script of this.scripts) {
       scriptExecutors.delete(script);
@@ -508,10 +516,7 @@ class VmExternalModules {
         );
       }
       case 'json':
-        return this.getJsonSyntheticModule(
-          resolvedId,
-          this.loadJson(getFilePath(resolvedId)),
-        );
+        return this.getJsonModule(resolvedId);
       case 'native':
         if (
           !isBuiltin(resolvedId.replace(/^node:/, '')) &&
@@ -702,13 +707,38 @@ class VmExternalModules {
     );
   }
 
+  private getJsonModule(resolvedId: string): vm.SyntheticModule {
+    const identifier = resolvedId.startsWith('file:')
+      ? resolvedId
+      : pathToFileURL(resolvedId).href;
+    const cached = this.esmJsonCache.get(identifier);
+    if (cached !== undefined || this.esmJsonCache.has(identifier)) {
+      return this.getJsonSyntheticModule(identifier, cached);
+    }
+
+    const url = new URL(identifier);
+    const value =
+      url?.search || url?.hash
+        ? this.parseJsonSource(readSource(getFilePath(identifier)))
+        : this.loadJson(getFilePath(identifier));
+    this.esmJsonCache.set(identifier, value);
+    return this.getJsonSyntheticModule(identifier, value);
+  }
+
+  private parseJsonSource(source: string): unknown {
+    return this.parseJson(stripJsonBom(source));
+  }
+
   private async loadDataModule(identifier: string): Promise<vm.Module> {
     const { code, mime } = parseDataUri(identifier);
     if (mime === 'application/wasm') {
       return this.loadWebAssemblyModule(identifier, code);
     }
     if (mime === 'application/json') {
-      return this.getJsonSyntheticModule(identifier, this.parseJson(code));
+      return this.getJsonSyntheticModule(
+        identifier,
+        this.parseJsonSource(code),
+      );
     }
 
     const cached = this.esmCache.get(identifier);
@@ -801,7 +831,7 @@ class VmExternalModules {
             kind: 'ready',
             module: this.getJsonSyntheticModule(
               identifier,
-              this.parseJson(code),
+              this.parseJsonSource(code),
             ),
           };
         }
@@ -827,13 +857,9 @@ class VmExternalModules {
             };
       }
       case 'json': {
-        const jsonPath = getFilePath(identifier);
         return {
           kind: 'ready',
-          module: this.getJsonSyntheticModule(
-            identifier,
-            this.loadJson(jsonPath),
-          ),
+          module: this.getJsonModule(identifier),
         };
       }
       case 'native': {
@@ -999,7 +1025,7 @@ class VmExternalModules {
       return requireCacheEntry.exports;
     }
     const module = new Module(filePath, parentModule) as CommonJsModule;
-    module.exports = this.parseJson(readSource(filePath));
+    module.exports = this.parseJsonSource(readSource(filePath));
     module.filename = filePath;
     module.id = filePath;
     module.loaded = true;
@@ -1096,8 +1122,12 @@ class VmExternalModules {
           'the module uses top-level await',
         );
       }
-      const dependencies = module.moduleRequests.map(({ specifier }) =>
-        this.resolve(specifier, identifier),
+      const dependencies = module.moduleRequests.map(
+        ({ specifier, attributes }) => {
+          const resolved = this.resolve(specifier, identifier);
+          this.validateImportAttributes(resolved, attributes);
+          return resolved;
+        },
       );
       scratch.set(identifier, { commit: true, dependencies, module });
       for (const dependency of dependencies) {

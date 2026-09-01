@@ -28,6 +28,7 @@ export const inspectRealm = (value) => ({
     json: dataJson.value,
   },
   importedJson: metadata.label,
+  jsonSameObject: metadata === requiredMetadata,
   nonEnumerableValue: nonEnumerableModule.value,
   plainDefault: { default: helper.default, named: helper.named },
   requiredEsm,

@@ -30,6 +30,31 @@ export type ParsedDataUri =
 const importMetaResolve = import.meta.resolve?.bind(import.meta);
 const dataUriPattern =
   /^data:(?<mime>text\/javascript|application\/javascript|application\/json|application\/wasm)(?<parameters>(?:;[^,]*)*),(?<code>.*)$/i;
+const base64Pattern =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+const createInvalidDataUrlError = (
+  identifier: string,
+): NodeJS.ErrnoException => {
+  const error: NodeJS.ErrnoException = new Error(`Invalid URL: ${identifier}`);
+  error.code = 'ERR_INVALID_URL';
+  return error;
+};
+
+const decodeExternalBase64 = (code: string, identifier: string): Buffer => {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(code);
+  } catch {
+    throw createInvalidDataUrlError(identifier);
+  }
+  const normalized = decoded.replace(/[ \t\n\r\f]/g, '');
+  if (!base64Pattern.test(normalized)) {
+    throw createInvalidDataUrlError(identifier);
+  }
+  return Buffer.from(normalized, 'base64');
+};
+
 type ExternalSourceCacheEntry = {
   mtimeNs: bigint;
   size: bigint;
@@ -194,12 +219,15 @@ export const parseExternalDataUri = (identifier: string): ParsedDataUri => {
           : 'WebAssembly data URLs require base64 encoding',
       );
     }
-    return { code: Buffer.from(code, 'base64'), mime: 'application/wasm' };
+    return {
+      code: decodeExternalBase64(code, identifier),
+      mime: 'application/wasm',
+    };
   }
 
   return {
     code: isBase64
-      ? Buffer.from(code, 'base64').toString()
+      ? decodeExternalBase64(code, identifier).toString()
       : decodeURIComponent(code),
     mime: mime === 'application/json' ? 'application/json' : 'text/javascript',
   };

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { asModule } from '../../src/runtime/worker/interop';
 import {
@@ -409,6 +409,70 @@ describe('loadEsModule', () => {
         codeContent: `import value from ${JSON.stringify(jsonUrl)} with { type: 'javascript' }; export default value;`,
       }),
     ).rejects.toMatchObject({ code: 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED' });
+  });
+
+  it('should enforce import attributes in synchronous ESM graphs', () => {
+    if (!('hasAsyncGraph' in vm.SourceTextModule.prototype)) {
+      return;
+    }
+
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    expect(() =>
+      executor.require(
+        fixturePath(
+          'vm-external/module-semantics/sync-json-missing-attribute.mjs',
+        ),
+        __filename,
+      ),
+    ).toThrow(
+      expect.objectContaining({ code: 'ERR_IMPORT_ATTRIBUTE_MISSING' }),
+    );
+  });
+
+  it('should isolate JSON ESM modules by URL and accept a BOM', async () => {
+    const temporaryDirectory = mkdtempSync(
+      join(tmpdir(), 'rstest-vm-json-module-'),
+    );
+    const jsonPath = join(temporaryDirectory, 'data.json');
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+
+    try {
+      writeFileSync(jsonPath, '\uFEFF{"value":0}\n');
+      const jsonUrl = pathToFileURL(jsonPath).href;
+      const first = (await executor.import(`${jsonUrl}?one`, true, false, {
+        type: 'json',
+      })) as {
+        default: { value: number };
+      };
+      const second = (await executor.import(`${jsonUrl}?two`, true, false, {
+        type: 'json',
+      })) as {
+        default: { value: number };
+      };
+      const noQuery = (await executor.import(jsonUrl, true, false, {
+        type: 'json',
+      })) as {
+        default: { value: number };
+      };
+      const required = executor.require(jsonPath, __filename) as {
+        value: number;
+      };
+
+      expect(first.default).not.toBe(second.default);
+      expect(first.default.value).toBe(0);
+      expect(second.default.value).toBe(0);
+      expect(noQuery.default.value).toBe(0);
+      expect(required.value).toBe(0);
+      first.default.value = 1;
+      expect(second.default.value).toBe(0);
+      expect(noQuery.default.value).toBe(0);
+      expect(required.value).toBe(0);
+    } finally {
+      disposeVmExternalModules(vmContext);
+      rmSync(temporaryDirectory, { force: true, recursive: true });
+    }
   });
 
   it('should refresh cached external source after the file changes', async () => {
