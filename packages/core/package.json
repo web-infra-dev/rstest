@@ -75,7 +75,7 @@
   },
   "devDependencies": {
     "@antfu/install-pkg": "^1.1.0",
-    "@babel/code-frame": "^7.29.7",
+    "@babel/code-frame": "^8.0.0",
     "@clack/prompts": "^1.7.0",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.59.0",
