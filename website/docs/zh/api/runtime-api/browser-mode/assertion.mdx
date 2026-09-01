@@ -55,6 +55,8 @@ expect.element(locator: Locator): BrowserElementExpect
 
 也就是说，未传 matcher timeout 时，实际断言超时取 `expect.poll.timeout` 与当前测试剩余时间中较小的值。Browser Mode 的 `5000ms` 默认值可以给异步 UI 更新更充足的时间，同时不会让错误断言等待完整的 `testTimeout`。
 
+对于 `test.concurrent`，如果断言需要使用该测试自己的剩余时间，请使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）。共享的文件级 `expect` 无法可靠识别并发测试，因此会使用配置的轮询超时。
+
 断言超时与 Browser RPC transport timeout 独立。测试执行期间，browser 和 snapshot RPC 请求不会额外增加超时；framework setup 和文件清理 RPC 使用独立的 30 秒 watchdog。
 
 ```ts

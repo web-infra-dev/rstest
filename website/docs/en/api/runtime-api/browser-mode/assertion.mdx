@@ -55,6 +55,8 @@ The assertion timeout is determined by the following rules:
 
 In other words, with no per-assertion override, the effective timeout is the smaller of `expect.poll.timeout` and the remaining test timeout. The Browser Mode `5000ms` default gives asynchronous UI updates more time without making a failed assertion wait for the full `testTimeout`.
 
+For `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) when the assertion must use that test's remaining deadline. The shared file-level `expect` uses the configured poll timeout because it cannot identify a concurrent test reliably.
+
 Assertion timeout is independent from the browser RPC transport timeout. During test execution, browser and snapshot RPC requests do not add another timeout. Framework setup and file-cleanup RPCs use a separate 30-second watchdog.
 
 ```ts

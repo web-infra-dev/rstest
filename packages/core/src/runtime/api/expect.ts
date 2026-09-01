@@ -202,12 +202,15 @@ export function createExpect({
       typeof testTimeout === 'number' &&
       testTimeout > 0 &&
       Number.isFinite(testTimeout)
-        ? Math.max(
-            testTimeout -
-              (getRealNow() - currentTest.startTime) -
-              ELEMENT_EXPECT_TIMEOUT_BUFFER,
-            1,
-          )
+        ? (() => {
+            const remaining =
+              testTimeout - (getRealNow() - currentTest.startTime);
+            const timeoutBuffer =
+              remaining > ELEMENT_EXPECT_TIMEOUT_BUFFER * 2
+                ? ELEMENT_EXPECT_TIMEOUT_BUFFER
+                : 0;
+            return Math.max(remaining - timeoutBuffer, 1);
+          })()
         : undefined;
     const timeout =
       remainingTestTimeout === undefined
@@ -280,7 +283,13 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
   if (!fileExpect) {
     fileExpect = createExpect({
       getWorkerState: getContextWorkerState,
-      getCurrentTest: () => fileContext().testRunner.getCurrentTest(),
+      getCurrentTest: () => {
+        const currentTest = fileContext().testRunner.getCurrentTest();
+        // The file-level expect is shared, so the runner's current-test pointer
+        // is not reliable while concurrent tests are interleaved. Those tests
+        // use their context-bound expect for test-specific deadlines.
+        return currentTest?.concurrent ? undefined : currentTest;
+      },
       snapshotPlugin,
     });
     // The slot the runner and `@vitest/expect` internals read; assigned once —

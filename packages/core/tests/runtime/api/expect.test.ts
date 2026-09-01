@@ -12,17 +12,24 @@ import {
 import type { TestCase, WorkerState } from '../../../src/types';
 import { toNativePath } from '../../../src/utils/helper';
 
-const fakeTest = (name: string) => ({ name }) as unknown as TestCase;
+const fakeTest = (name: string, concurrent = false) =>
+  ({ name, concurrent }) as unknown as TestCase;
 type ElementExpect = {
   element: (locator: unknown) => unknown;
 };
 
 // Publish a fake running file: the singleton resolves the current test and
 // worker state through this context at call time, as production does.
-const publishFile = (testPath: string, currentTestName: string) => {
+const publishFile = (
+  testPath: string,
+  currentTestName: string,
+  concurrent = false,
+) => {
   setFileContext({
     workerState: { testPath, runtimeConfig: {} } as WorkerState,
-    testRunner: { getCurrentTest: () => fakeTest(currentTestName) },
+    testRunner: {
+      getCurrentTest: () => fakeTest(currentTestName, concurrent),
+    },
   } as FileContext);
 };
 
@@ -34,6 +41,7 @@ const frameworkExpect = globalThis[GLOBAL_EXPECT];
 afterEach(() => {
   // @ts-expect-error symbol index
   globalThis[GLOBAL_EXPECT] = frameworkExpect;
+  registerElementExpect(() => undefined);
 });
 
 /**
@@ -114,6 +122,20 @@ describe('file-level expect singleton (isolate: false)', () => {
     // The file singleton's state is untouched by the local expect.
     expect(fileExpect.getState().assertionCalls).toBe(0);
   });
+
+  it('does not use the shared test deadline for concurrent tests', () => {
+    let timeout: number | undefined;
+    publishFile('/f2', 't2', true);
+    const fileExpect = createFileExpect(() => {});
+    registerElementExpect((_locator, options) => {
+      timeout = options.timeout;
+      return {};
+    });
+
+    (fileExpect as typeof fileExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBe(1000);
+  });
 });
 
 describe('expect.element timeout', () => {
@@ -184,5 +206,48 @@ describe('expect.element timeout', () => {
     (localExpect as typeof localExpect & ElementExpect).element('locator');
 
     expect(timeout).toBe(5000);
+  });
+
+  it('uses the poll timeout when no test context is available', () => {
+    let timeout: number | undefined;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 5000 } } },
+        }) as WorkerState,
+      getCurrentTest: () => undefined,
+    });
+    registerElementExpect((_locator, options) => {
+      timeout = options.timeout;
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBe(5000);
+  });
+
+  it('keeps short test timeouts usable', () => {
+    let timeout: number | undefined;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 5000 } } },
+        }) as WorkerState,
+      getCurrentTest: () =>
+        ({
+          timeout: 100,
+          startTime: Date.now(),
+        }) as unknown as TestCase,
+    });
+    registerElementExpect((_locator, options) => {
+      timeout = options.timeout;
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBeGreaterThan(1);
+    expect(timeout).toBeLessThanOrEqual(100);
   });
 });
