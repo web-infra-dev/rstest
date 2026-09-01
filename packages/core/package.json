@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.11.10",
+  "version": "0.11.11",
   "description": "The Rsbuild-based test tool.",
   "keywords": [
     "rstest",
@@ -101,9 +101,9 @@
     "chai": "^6.2.2",
     "chokidar": "^5.0.0",
     "deepmerge": "^4.3.1",
-    "happy-dom": "^20.11.6",
+    "happy-dom": "^20.12.0",
     "jsdom": "^29.1.1",
-    "memfs": "^4.68.1",
+    "memfs": "^4.68.2",
     "package-manager-detector": "^1.8.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",

@@ -1,4 +1,12 @@
-import { defineConfig, defineInlineProject, defineProject } from '@rstest/core';
+import {
+  defineConfig,
+  defineInlineProject,
+  defineProject,
+  type RstestConfig,
+  type RstestConfigAsyncFn,
+  type RstestConfigExport,
+  type RstestConfigSyncFn,
+} from '@rstest/core';
 
 export const inlineNodeProject = defineInlineProject({
   name: 'runtime-utils-node',
@@ -88,9 +96,35 @@ export const exportedConfigFactory = defineConfig(() => ({
   testEnvironment: 'node',
 }));
 
+export const exportedSyncConfig: RstestConfigSyncFn = defineConfig(() => ({
+  testEnvironment: 'node',
+}));
+
 export const exportedAsyncConfigFactory = defineConfig(async () => ({
   testEnvironment: 'jsdom',
 }));
+
+export const exportedAsyncConfig: RstestConfigAsyncFn = defineConfig(
+  async () => ({
+    testEnvironment: 'jsdom',
+  }),
+);
+
+export const exportedObjectConfig: RstestConfig = defineConfig({
+  testEnvironment: 'jsdom',
+});
+
+export const exportedExplicitConfig: RstestConfigSyncFn =
+  defineConfig<RstestConfig>(() => ({
+    testEnvironment: 'node',
+  }));
+
+export const exportedAnyConfig: RstestConfigSyncFn = defineConfig(() =>
+  JSON.parse('{}'),
+);
+
+declare const dynamicConfig: RstestConfigExport;
+defineConfig(dynamicConfig);
 
 // @ts-expect-error unknown config property
 defineConfig({ testEnvironment: 'node', testEnvironmnt: 'node' });
