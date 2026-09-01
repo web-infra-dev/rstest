@@ -99,7 +99,7 @@ export const getGlobalExpect = (): RstestExpect =>
 
 type ElementExpectHandler = (
   locator: unknown,
-  options: { timeout: number },
+  options: { getTimeout: () => number },
 ) => unknown;
 
 let elementExpectHandler: ElementExpectHandler | undefined;
@@ -130,6 +130,7 @@ use(JestAsymmetricMatchers);
 
 export function createExpect({
   getCurrentTest,
+  getElementTest,
   getWorkerState,
   snapshotPlugin,
 }: {
@@ -141,6 +142,7 @@ export function createExpect({
    */
   getWorkerState: () => WorkerState;
   getCurrentTest: () => TestCase | undefined;
+  getElementTest?: () => TestCase | undefined;
   snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
   if (snapshotPlugin) {
@@ -192,31 +194,32 @@ export function createExpect({
       );
     }
 
-    const currentTest = getCurrentTest();
-    const testTimeout = currentTest?.timeout;
-    const pollTimeout =
-      getWorkerState().runtimeConfig.expect?.poll?.timeout ??
-      DEFAULT_EXPECT_POLL_TIMEOUT;
-    const remainingTestTimeout =
-      currentTest?.startTime !== undefined &&
-      typeof testTimeout === 'number' &&
-      testTimeout > 0 &&
-      Number.isFinite(testTimeout)
-        ? (() => {
-            const remaining =
-              testTimeout - (getRealNow() - currentTest.startTime);
-            const timeoutBuffer =
-              remaining > ELEMENT_EXPECT_TIMEOUT_BUFFER * 2
-                ? ELEMENT_EXPECT_TIMEOUT_BUFFER
-                : 0;
-            return Math.max(remaining - timeoutBuffer, 1);
-          })()
-        : undefined;
-    const timeout =
-      remainingTestTimeout === undefined
+    const getTimeout = (): number => {
+      const currentTest = getElementTest ? getElementTest() : getCurrentTest();
+      const testTimeout = currentTest?.timeout;
+      const pollTimeout =
+        getWorkerState().runtimeConfig.expect?.poll?.timeout ??
+        DEFAULT_EXPECT_POLL_TIMEOUT;
+      const remainingTestTimeout =
+        currentTest?.startTime !== undefined &&
+        typeof testTimeout === 'number' &&
+        testTimeout > 0 &&
+        Number.isFinite(testTimeout)
+          ? (() => {
+              const remaining =
+                testTimeout - (getRealNow() - currentTest.startTime);
+              const timeoutBuffer = Math.min(
+                ELEMENT_EXPECT_TIMEOUT_BUFFER,
+                Math.max(Math.floor(remaining / 2), 0),
+              );
+              return Math.max(remaining - timeoutBuffer, 1);
+            })()
+          : undefined;
+      return remainingTestTimeout === undefined
         ? pollTimeout
         : Math.min(pollTimeout, remainingTestTimeout);
-    const assertion = elementExpectHandler(locator, { timeout });
+    };
+    const assertion = elementExpectHandler(locator, { getTimeout });
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     return assertion;
@@ -283,7 +286,8 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
   if (!fileExpect) {
     fileExpect = createExpect({
       getWorkerState: getContextWorkerState,
-      getCurrentTest: () => {
+      getCurrentTest: () => fileContext().testRunner.getCurrentTest(),
+      getElementTest: () => {
         const currentTest = fileContext().testRunner.getCurrentTest();
         // The file-level expect is shared, so the runner's current-test pointer
         // is not reliable while concurrent tests are interleaved. Those tests

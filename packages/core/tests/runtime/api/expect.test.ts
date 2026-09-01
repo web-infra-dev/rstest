@@ -128,7 +128,7 @@ describe('file-level expect singleton (isolate: false)', () => {
     publishFile('/f2', 't2', true);
     const fileExpect = createFileExpect(() => {});
     registerElementExpect((_locator, options) => {
-      timeout = options.timeout;
+      timeout = options.getTimeout();
       return {};
     });
 
@@ -155,7 +155,7 @@ describe('expect.element timeout', () => {
         ({ timeout: 1000, startTime }) as unknown as TestCase,
     });
     registerElementExpect((_locator, options) => {
-      timeout = options.timeout;
+      timeout = options.getTimeout();
       return {};
     });
 
@@ -176,7 +176,7 @@ describe('expect.element timeout', () => {
         ({ timeout: 0, startTime: Date.now() }) as unknown as TestCase,
     });
     registerElementExpect((_locator, options) => {
-      timeout = options.timeout;
+      timeout = options.getTimeout();
       return {};
     });
 
@@ -199,7 +199,7 @@ describe('expect.element timeout', () => {
         }) as unknown as TestCase,
     });
     registerElementExpect((_locator, options) => {
-      timeout = options.timeout;
+      timeout = options.getTimeout();
       return {};
     });
 
@@ -218,7 +218,7 @@ describe('expect.element timeout', () => {
       getCurrentTest: () => undefined,
     });
     registerElementExpect((_locator, options) => {
-      timeout = options.timeout;
+      timeout = options.getTimeout();
       return {};
     });
 
@@ -241,7 +241,7 @@ describe('expect.element timeout', () => {
         }) as unknown as TestCase,
     });
     registerElementExpect((_locator, options) => {
-      timeout = options.timeout;
+      timeout = options.getTimeout();
       return {};
     });
 
@@ -249,5 +249,33 @@ describe('expect.element timeout', () => {
 
     expect(timeout).toBeGreaterThan(1);
     expect(timeout).toBeLessThanOrEqual(100);
+  });
+
+  it('resolves the timeout when the matcher starts', () => {
+    let getTimeout: (() => number) | undefined;
+    const currentTest = {
+      timeout: 1000,
+      startTime: Date.now() - 200,
+    } as unknown as TestCase;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 5000 } } },
+        }) as WorkerState,
+      getCurrentTest: () => currentTest,
+    });
+    registerElementExpect((_locator, options) => {
+      getTimeout = options.getTimeout;
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+    currentTest.startTime = Date.now() - 900;
+
+    expect(getTimeout).toBeDefined();
+    if (!getTimeout) {
+      throw new Error('element timeout resolver was not captured');
+    }
+    expect(getTimeout()).toBeLessThan(200);
   });
 });

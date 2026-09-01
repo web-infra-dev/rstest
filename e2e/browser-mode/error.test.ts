@@ -85,6 +85,19 @@ describe('browser mode - error handling', () => {
     );
   });
 
+  it('keeps a zero poll timeout finite in Browser Mode', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: [
+        '-c',
+        'rstest.zeroPoll.config.mts',
+        'tests/elementAssertionTimeout.test.ts',
+      ],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain('with timeout 1ms');
+  });
+
   it('reports hook fixtures missing from browser tests', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('error', {
       args: ['tests/hookFixtureMismatch.test.ts'],
