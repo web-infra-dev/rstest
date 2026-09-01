@@ -3,6 +3,7 @@ import { util } from 'chai';
 import {
   createExpect,
   createFileExpect,
+  registerElementExpect,
 } from '../../../src/runtime/api/expect';
 import {
   type FileContext,
@@ -12,6 +13,9 @@ import type { TestCase, WorkerState } from '../../../src/types';
 import { toNativePath } from '../../../src/utils/helper';
 
 const fakeTest = (name: string) => ({ name }) as unknown as TestCase;
+type ElementExpect = {
+  element: (locator: unknown) => unknown;
+};
 
 // Publish a fake running file: the singleton resolves the current test and
 // worker state through this context at call time, as production does.
@@ -109,5 +113,53 @@ describe('file-level expect singleton (isolate: false)', () => {
     expect(localExpect.getState().assertionCalls).toBe(3);
     // The file singleton's state is untouched by the local expect.
     expect(fileExpect.getState().assertionCalls).toBe(0);
+  });
+});
+
+describe('expect.element timeout', () => {
+  afterEach(() => {
+    registerElementExpect(() => undefined);
+  });
+
+  it('passes the remaining test timeout to the browser adapter', () => {
+    let timeout: number | undefined;
+    const startTime = Date.now() - 200;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 1000 } } },
+        }) as WorkerState,
+      getCurrentTest: () =>
+        ({ timeout: 1000, startTime }) as unknown as TestCase,
+    });
+    registerElementExpect((_locator, options) => {
+      timeout = options.timeout;
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBeGreaterThan(500);
+    expect(timeout).toBeLessThanOrEqual(850);
+  });
+
+  it('uses the poll timeout when the test timeout is disabled', () => {
+    let timeout: number | undefined;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 1000 } } },
+        }) as WorkerState,
+      getCurrentTest: () =>
+        ({ timeout: 0, startTime: Date.now() }) as unknown as TestCase,
+    });
+    registerElementExpect((_locator, options) => {
+      timeout = options.timeout;
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBe(1000);
   });
 });

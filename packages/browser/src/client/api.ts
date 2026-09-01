@@ -17,6 +17,7 @@ const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
 const createElementExpect = (
   locator: Locator,
   isNot: boolean,
+  defaultTimeout: number,
 ): BrowserElementExpect => {
   const callExpect = async (
     method: string,
@@ -29,7 +30,7 @@ const createElementExpect = (
       method,
       args,
       isNot,
-      timeout,
+      timeout: timeout ?? defaultTimeout,
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
   };
 
@@ -143,20 +144,23 @@ const createElementExpect = (
     configurable: false,
     enumerable: false,
     get() {
-      return createElementExpect(locator, !isNot);
+      return createElementExpect(locator, !isNot, defaultTimeout);
     },
   });
   return withNot;
 };
 
-const element = (locator: unknown): BrowserElementExpect => {
+const element = (
+  locator: unknown,
+  options: { timeout: number },
+): BrowserElementExpect => {
   if (!isLocator(locator)) {
     throw new TypeError(
       'expect.element() expects a Locator returned from @rstest/browser page.getBy* APIs.',
     );
   }
 
-  return createElementExpect(locator, false);
+  return createElementExpect(locator, false, options.timeout);
 };
 
 registerElementExpect(element);

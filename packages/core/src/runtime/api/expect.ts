@@ -47,6 +47,7 @@ import type {
 } from '../../types';
 import { toNativePath } from '../../utils/helper';
 import { fileContext } from '../fileContext';
+import { getRealNow } from '../util';
 import { createExpectPoll } from './poll';
 
 export { assert } from 'chai';
@@ -95,13 +96,18 @@ type GlobalWithExpect = typeof globalThis & {
 export const getGlobalExpect = (): RstestExpect =>
   (globalThis as GlobalWithExpect)[GLOBAL_EXPECT];
 
-type ElementExpectHandler = (locator: unknown) => unknown;
+type ElementExpectHandler = (
+  locator: unknown,
+  options: { timeout: number },
+) => unknown;
 
 let elementExpectHandler: ElementExpectHandler | undefined;
 
 export const registerElementExpect = (handler: ElementExpectHandler): void => {
   elementExpectHandler = handler;
 };
+
+const ELEMENT_EXPECT_TIMEOUT_BUFFER = 100;
 
 // Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
 const ReturnedAlias: ChaiPlugin = (chai, utils) => {
@@ -185,7 +191,23 @@ export function createExpect({
       );
     }
 
-    const assertion = elementExpectHandler(locator);
+    const currentTest = getCurrentTest();
+    const testTimeout = currentTest?.timeout;
+    const pollTimeout =
+      getWorkerState().runtimeConfig.expect?.poll?.timeout ?? 1000;
+    const timeout =
+      currentTest?.startTime !== undefined &&
+      typeof testTimeout === 'number' &&
+      testTimeout > 0 &&
+      Number.isFinite(testTimeout)
+        ? Math.max(
+            testTimeout -
+              (getRealNow() - currentTest.startTime) -
+              ELEMENT_EXPECT_TIMEOUT_BUFFER,
+            1,
+          )
+        : pollTimeout;
+    const assertion = elementExpectHandler(locator, { timeout });
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     return assertion;

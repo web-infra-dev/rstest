@@ -672,6 +672,7 @@ export class TestRunner {
           },
           async () => {
             const start = RealDate.now();
+            test.startTime = start;
             // Per-test override wins over config.retry. `retry` (the runtime
             // config) is the suite-wide default.
             const retryBudget = sanitizeAttemptCount(test.retry ?? retry);

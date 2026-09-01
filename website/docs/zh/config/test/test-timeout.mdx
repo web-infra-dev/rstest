@@ -5,7 +5,7 @@ description: 测试的默认超时时间（以毫秒为单位）。设置为 0 �
 # testTimeout
 
 - **类型：** `number`
-- **默认值：** `5_000`
+- **默认值：** `5_000`（Browser Mode 下为 `15_000`）
 - **CLI：** `--testTimeout=5000`
 
 测试的默认超时时间（以毫秒为单位）。设置为 `0` 禁用超时。
@@ -35,4 +35,4 @@ Rstest 会根据以下优先级顺序确定测试超时时间：
 2. 测试文件中通过 [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig) 配置的超时时间
 3. CLI 中的 `--testTimeout` 选项
 4. 配置文件中的 `testTimeout` 选项
-5. 默认值 `5000` 毫秒
+5. 默认值 `5000` 毫秒（Browser Mode 下为 `15000` 毫秒）

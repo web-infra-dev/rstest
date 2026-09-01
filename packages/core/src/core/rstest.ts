@@ -28,6 +28,7 @@ import type {
 } from '../types';
 import {
   castArray,
+  DEFAULT_BROWSER_TEST_TIMEOUT,
   ENV,
   getAbsolutePath,
   logger,
@@ -68,6 +69,18 @@ const resolveOutputModule = (config: OutputModuleConfig): boolean =>
   config.federation
     ? false
     : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');
+
+const applyBrowserTestTimeout = <
+  Config extends Pick<NormalizedConfig, 'browser' | 'testTimeout'>,
+>(
+  config: Config,
+  userConfig: RstestConfig,
+): Config => {
+  if (config.browser.enabled && userConfig.testTimeout === undefined) {
+    config.testTimeout = DEFAULT_BROWSER_TEST_TIMEOUT;
+  }
+  return config;
+};
 
 type Options = {
   cwd: string;
@@ -150,14 +163,17 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(
-      resolveBuildCacheDependencyPaths(
-        {
-          ...userConfig,
-          root: rootPath,
-        },
-        configFilePath,
+    const rstestConfig = applyBrowserTestTimeout(
+      withDefaultConfig(
+        resolveBuildCacheDependencyPaths(
+          {
+            ...userConfig,
+            root: rootPath,
+          },
+          configFilePath,
+        ),
       ),
+      userConfig,
     );
 
     if (command === 'watch' && rstestConfig.shard) {
@@ -178,12 +194,14 @@ export class Rstest implements RstestContext {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
 
           // TODO: support extend projects config
-          const config = withDefaultConfig(
-            resolveBuildCacheDependencyPaths(
-              project.config,
-              project.configFilePath ?? configFilePath,
-            ),
-          ) as NormalizedProjectConfig;
+          const projectUserConfig = resolveBuildCacheDependencyPaths(
+            project.config,
+            project.configFilePath ?? configFilePath,
+          );
+          const config = applyBrowserTestTimeout(
+            withDefaultConfig(projectUserConfig) as NormalizedProjectConfig,
+            projectUserConfig,
+          );
           // some configs are global only
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;

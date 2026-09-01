@@ -50,16 +50,19 @@ expect.element(locator: Locator): BrowserElementExpect
 断言的超时按以下优先级决定：
 
 1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高
-2. **全局 `testTimeout` 配置**：来自 `rstest.config.ts` 中的 `testTimeout`（默认 5000ms）
+2. **当前测试的剩余时间**：未传 matcher timeout 时，断言使用当前测试剩余的时间。Browser Mode 测试的默认 `testTimeout` 为 15000ms。
+3. **`expect.poll.timeout`**：当通过 `testTimeout: 0` 禁用当前测试超时时，使用该配置作为有限的 fallback。
 
 断言超时与 Browser RPC transport timeout 独立。测试执行期间，browser 和 snapshot RPC 请求不会额外增加超时；framework setup 和文件清理 RPC 使用独立的 30 秒 watchdog。
 
 ```ts
-// 使用全局 testTimeout（默认 5000ms）
+// 使用当前测试的剩余时间（Browser Mode 默认 testTimeout 为 15000ms）
 await expect.element(page.getByText('Done')).toBeVisible();
 
 // 覆盖为更长的超时
 await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
+
+// 禁用测试超时后，element 断言仍使用有限的轮询超时（默认 1000ms）
 ```
 
 ### 失败输出

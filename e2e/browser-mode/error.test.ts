@@ -26,6 +26,17 @@ describe('browser mode - error handling', () => {
     expect(cli.exec.exitCode).not.toBe(0);
   });
 
+  it('reports an expect.element mismatch before the test timeout', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/elementAssertionTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toMatch(/timed out in 500ms/i);
+  });
+
   it('should exit non-zero via core when the browser fails to launch', async () => {
     // A bad executablePath makes the provider launch throw. The host returns a
     // fatal outcome (`results: []`, `errors: [launchError]`) that core's
