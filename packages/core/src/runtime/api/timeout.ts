@@ -7,16 +7,18 @@ export const getRemainingTestTimeout = (
   test: TestCase,
   timeoutBuffer: number,
 ): number | undefined => {
+  const timeout = test.activeTimeout ?? test.timeout;
+  const startTime = test.activeTimeoutStartTime ?? test.startTime;
   if (
-    test.startTime === undefined ||
-    typeof test.timeout !== 'number' ||
-    test.timeout <= 0 ||
-    !Number.isFinite(test.timeout)
+    startTime === undefined ||
+    typeof timeout !== 'number' ||
+    timeout <= 0 ||
+    !Number.isFinite(timeout)
   ) {
     return undefined;
   }
 
-  const remaining = test.timeout - (getRealNow() - test.startTime);
+  const remaining = timeout - (getRealNow() - startTime);
   const buffer = Math.min(
     timeoutBuffer,
     Math.max(Math.floor(remaining / 2), 0),

@@ -182,6 +182,7 @@ export function createExpect({
   expect.poll = createExpectPoll(
     expect,
     () => getWorkerState().runtimeConfig.expect.poll,
+    () => (getElementTest ? getElementTest() : getCurrentTest()),
   );
 
   const element = (locator: unknown): unknown => {

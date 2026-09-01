@@ -3,7 +3,7 @@ import { afterEach, expect, test } from '@rstest/core';
 
 afterEach(async () => {
   await expect.element(page.getByLabel('teardown-count')).toHaveText('6');
-});
+}, 2000);
 
 test('clears the body deadline before teardown', async () => {
   const count = document.createElement('div');

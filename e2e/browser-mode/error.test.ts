@@ -44,7 +44,9 @@ describe('browser mode - error handling', () => {
     });
 
     await expectExecFailed();
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain('with timeout 5000ms');
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('afterEach hook timed out in 2000ms');
   });
 
   it('should exit non-zero via core when the browser fails to launch', async () => {

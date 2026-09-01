@@ -44,6 +44,7 @@ import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  getWrappedTimeout,
   inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
@@ -82,6 +83,28 @@ export class TestRunner {
   >();
 
   constructor(private readonly taskContext: TaskContext) {}
+
+  private async runWithActiveTimeout<T>(
+    test: TestCase,
+    fn: (...args: any[]) => any,
+    callback: () => T | Promise<T>,
+  ): Promise<T> {
+    const timeout = getWrappedTimeout(fn);
+    if (timeout === undefined) {
+      return callback();
+    }
+
+    const previousTimeout = test.activeTimeout;
+    const previousStartTime = test.activeTimeoutStartTime;
+    test.activeTimeout = timeout;
+    test.activeTimeoutStartTime = RealDate.now();
+    try {
+      return await callback();
+    } finally {
+      test.activeTimeout = previousTimeout;
+      test.activeTimeoutStartTime = previousStartTime;
+    }
+  }
 
   async cleanupFileFixtures(
     result?: TestFileResult,
@@ -244,13 +267,15 @@ export class TestRunner {
         };
         let hookExecution: ReturnType<typeof runHook> | undefined;
         try {
-          return await runWithTimeout(
-            fn,
-            (callback) => {
-              hookExecution = runHook(callback);
-              return hookExecution;
-            },
-            (error) => this.abortContextSignal(test.context, error),
+          return await this.runWithActiveTimeout(test, fn, () =>
+            runWithTimeout(
+              fn,
+              (callback) => {
+                hookExecution = runHook(callback);
+                return hookExecution;
+              },
+              (error) => this.abortContextSignal(test.context, error),
+            ),
           );
         } catch (error) {
           const cancellation =
@@ -445,7 +470,7 @@ export class TestRunner {
 
       for (const fn of fixtureCleanups) {
         try {
-          await fn();
+          await this.runWithActiveTimeout(test, fn, fn);
         } catch (error) {
           result.status = 'fail';
           result.errors ??= [];
@@ -456,7 +481,7 @@ export class TestRunner {
 
       for (const fn of [...test.onFinished]) {
         try {
-          await fn(test.context);
+          await this.runWithActiveTimeout(test, fn, () => fn(test.context));
         } catch (error) {
           result.status = 'fail';
           result.errors ??= [];
@@ -472,7 +497,7 @@ export class TestRunner {
       if (result.status === 'fail') {
         for (const fn of [...test.onFailed].reverse()) {
           try {
-            await fn(test.context);
+            await this.runWithActiveTimeout(test, fn, () => fn(test.context));
           } catch (error) {
             result.errors ??= [];
             result.errors.push(...(await formatTestError(error)));

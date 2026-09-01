@@ -66,6 +66,10 @@ export type TestCase = TestCaseInfo & {
   concurrent?: boolean;
   /** @internal True when the case is nested in a concurrently running suite. */
   inConcurrentScope?: boolean;
+  /** @internal Active hook deadline, when an assertion runs in a hook. */
+  activeTimeout?: number;
+  /** @internal Start time for the active hook deadline. */
+  activeTimeoutStartTime?: number;
   sequential?: boolean;
   inTestEach?: boolean;
   context: TestContext;
