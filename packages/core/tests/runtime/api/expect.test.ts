@@ -9,6 +9,7 @@ import {
   type FileContext,
   setFileContext,
 } from '../../../src/runtime/fileContext';
+import { setRealTimers } from '../../../src/runtime/util';
 import type { TestCase, WorkerState } from '../../../src/types';
 import { toNativePath } from '../../../src/utils/helper';
 
@@ -277,5 +278,33 @@ describe('expect.element timeout', () => {
       throw new Error('element timeout resolver was not captured');
     }
     expect(getTimeout()).toBeLessThan(200);
+  });
+
+  it('caps an implicit poll timeout at the remaining test timeout', async () => {
+    setRealTimers();
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 5000 } } },
+        }) as WorkerState,
+      getCurrentTest: () =>
+        ({
+          timeout: 1000,
+          startTime: Date.now() - 1000,
+        }) as unknown as TestCase,
+    });
+
+    let error: unknown;
+    try {
+      await localExpect
+        .poll(() => {
+          throw new Error('not ready');
+        })
+        .toBe(true);
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toHaveProperty('message', 'Matcher did not succeed in 1ms');
   });
 });

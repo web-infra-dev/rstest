@@ -77,8 +77,10 @@ const callExpect = async (
   return null;
 };
 
-const normalizePlaywrightTimeout = (timeout: number): number =>
-  Math.max(timeout, 1);
+const normalizePlaywrightTimeout = (
+  timeout: number,
+  isExplicit: boolean,
+): number => (isExplicit ? timeout : Math.max(timeout, 1));
 
 const assertSerializedText = (
   value: unknown,
@@ -372,7 +374,7 @@ export async function dispatchPlaywrightBrowserRpc({
       locator,
       request,
       !!request.isNot,
-      normalizePlaywrightTimeout(timeout),
+      normalizePlaywrightTimeout(timeout, request.timeoutIsExplicit === true),
     );
   }
 

@@ -64,6 +64,8 @@ export type TestCase = TestCaseInfo & {
   each?: boolean;
   fixtures?: NormalizedFixtures;
   concurrent?: boolean;
+  /** @internal True when the case is nested in a concurrently running suite. */
+  inConcurrentScope?: boolean;
   sequential?: boolean;
   inTestEach?: boolean;
   context: TestContext;
@@ -132,6 +134,8 @@ export type TestSuite = TestSuiteInfo & {
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
+  /** @internal True when the suite is nested in a concurrently running suite. */
+  inConcurrentScope?: boolean;
   sequential?: boolean;
   /**
    * Suite-level `TestOptions` passed to `describe(name, options, fn)`. Applied

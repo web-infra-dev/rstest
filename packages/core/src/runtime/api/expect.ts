@@ -48,8 +48,8 @@ import type {
 import { DEFAULT_EXPECT_POLL_TIMEOUT } from '../../utils/constants';
 import { toNativePath } from '../../utils/helper';
 import { fileContext } from '../fileContext';
-import { getRealNow } from '../util';
 import { createExpectPoll } from './poll';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
@@ -107,8 +107,6 @@ let elementExpectHandler: ElementExpectHandler | undefined;
 export const registerElementExpect = (handler: ElementExpectHandler): void => {
   elementExpectHandler = handler;
 };
-
-const ELEMENT_EXPECT_TIMEOUT_BUFFER = 100;
 
 // Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
 const ReturnedAlias: ChaiPlugin = (chai, utils) => {
@@ -196,25 +194,12 @@ export function createExpect({
 
     const getTimeout = (): number => {
       const currentTest = getElementTest ? getElementTest() : getCurrentTest();
-      const testTimeout = currentTest?.timeout;
       const pollTimeout =
         getWorkerState().runtimeConfig.expect?.poll?.timeout ??
         DEFAULT_EXPECT_POLL_TIMEOUT;
-      const remainingTestTimeout =
-        currentTest?.startTime !== undefined &&
-        typeof testTimeout === 'number' &&
-        testTimeout > 0 &&
-        Number.isFinite(testTimeout)
-          ? (() => {
-              const remaining =
-                testTimeout - (getRealNow() - currentTest.startTime);
-              const timeoutBuffer = Math.min(
-                ELEMENT_EXPECT_TIMEOUT_BUFFER,
-                Math.max(Math.floor(remaining / 2), 0),
-              );
-              return Math.max(remaining - timeoutBuffer, 1);
-            })()
-          : undefined;
+      const remainingTestTimeout = currentTest
+        ? getRemainingTestTimeout(currentTest, TEST_TIMEOUT_BUFFER)
+        : undefined;
       return remainingTestTimeout === undefined
         ? pollTimeout
         : Math.min(pollTimeout, remainingTestTimeout);
@@ -292,7 +277,9 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
         // The file-level expect is shared, so the runner's current-test pointer
         // is not reliable while concurrent tests are interleaved. Those tests
         // use their context-bound expect for test-specific deadlines.
-        return currentTest?.concurrent ? undefined : currentTest;
+        return currentTest?.concurrent || currentTest?.inConcurrentScope
+          ? undefined
+          : currentTest;
       },
       snapshotPlugin,
     });

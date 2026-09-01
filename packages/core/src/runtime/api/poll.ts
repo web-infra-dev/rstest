@@ -21,6 +21,7 @@ import { Assertion as ChaiAssertion, util } from 'chai';
 import type { RstestExpect, RuntimeConfig, TestCase } from '../../types';
 import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getRealTimers } from '../util';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 // these matchers are not supported because they don't make sense with poll
 const unsupported = [
@@ -50,11 +51,7 @@ export function createExpectPoll(
 ): RstestExpect['poll'] {
   return function poll(fn, options = {}) {
     const defaults = getPollConfig();
-    const {
-      interval = defaults.interval,
-      timeout = defaults.timeout,
-      message,
-    } = options;
+    const { interval = defaults.interval, message } = options;
     // @ts-expect-error private poll access
     const assertion = expect(null, message).withContext({
       poll: true,
@@ -65,6 +62,12 @@ export function createExpectPoll(
     if (!test) {
       throw new Error('expect.poll() must be called inside a test');
     }
+    const timeout =
+      options.timeout ??
+      Math.min(
+        defaults.timeout,
+        getRemainingTestTimeout(test, TEST_TIMEOUT_BUFFER) ?? defaults.timeout,
+      );
     const proxy: any = new Proxy(assertion, {
       get(target, key, receiver) {
         const assertionFunction = Reflect.get(target, key, receiver);

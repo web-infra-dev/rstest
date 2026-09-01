@@ -31,6 +31,7 @@ const createElementExpect = (
       args,
       isNot,
       timeout: timeout ?? getDefaultTimeout(),
+      timeoutIsExplicit: timeout !== undefined,
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
   };
 
