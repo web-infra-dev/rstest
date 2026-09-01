@@ -106,7 +106,7 @@ export const setupVM = async (
 }> => {
   const happyDOM = await loadHappyDOM(dependency);
   const win = createHappyDOMWindow(happyDOM, options, undefined);
-  const vmContext = createContext(win as unknown as object);
+  const vmContext = createContext({});
   const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
   const nodeTimers: NodeTimerPrimitives = {
     clearInterval: globalThis.clearInterval,
@@ -118,6 +118,10 @@ export const setupVM = async (
     win.URL as unknown as typeof URL,
     context,
   );
+  const cleanupGlobal = installGlobal(vmGlobal, win, {
+    additionalKeys: ['Request', 'Response', 'MessagePort', 'fetch', 'URL'],
+    preserveExistingKeys: true,
+  });
   const cleanupTimers = installTimerTracking(vmGlobal, nodeTimers, context);
   const cleanupHandler = addDefaultErrorHandler(vmGlobal as unknown as Window);
 
@@ -127,6 +131,7 @@ export const setupVM = async (
       cleanupHandler();
       cleanupTimers();
       cleanupObjectURLs();
+      cleanupGlobal();
       await closeHappyDOMWindow(win);
     },
   };

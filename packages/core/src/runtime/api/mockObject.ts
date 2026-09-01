@@ -296,10 +296,16 @@ export function mockObject<T extends Record<Key, any>>(
     if (Array.isArray(value)) {
       if (!isSpyMode) {
         // automock mode: return empty array
-        return [];
+        return new globalConstructors.Array();
       }
       // autospy mode: process array elements recursively
-      return value.map((item) => processValue(item));
+      const result = new globalConstructors.Array(value.length);
+      for (let index = 0; index < value.length; index++) {
+        if (index in value) {
+          result[index] = processValue(value[index]);
+        }
+      }
+      return result;
     }
 
     // Handle plain objects

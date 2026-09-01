@@ -15,11 +15,15 @@ function getWindowKeys(
   global: any,
   win: any,
   additionalKeys: string[] = [],
+  preserveExistingKeys = false,
 ): Set<string> {
   const keysArray = [...additionalKeys, ...KEYS];
 
   return new Set(
     keysArray.concat(Object.getOwnPropertyNames(win)).filter((k) => {
+      if (preserveExistingKeys && k in global) {
+        return false;
+      }
       if (SKIP_KEYS.includes(k)) {
         return false;
       }
@@ -118,10 +122,16 @@ export function installGlobal(
      */
     bindFunctions?: boolean;
     additionalKeys?: string[];
+    preserveExistingKeys?: boolean;
   } = {},
 ): () => void {
-  const { bindFunctions = true } = options || {};
-  const keys = getWindowKeys(global, win, options.additionalKeys);
+  const { bindFunctions = true, preserveExistingKeys = false } = options || {};
+  const keys = getWindowKeys(
+    global,
+    win,
+    options.additionalKeys,
+    preserveExistingKeys,
+  );
 
   const originals = new Map<string | symbol, PropertyDescriptor>();
 

@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from '@rstest/core';
 import { mockObject } from '../../../src/runtime/api/mockObject';
 import { initSpy } from '../../../src/runtime/api/spy';
@@ -25,7 +26,39 @@ const make = (type: 'automock' | 'autospy') => {
 describe('mockObject automock', () => {
   it('empties arrays', () => {
     const { run } = make('automock');
-    expect(run({ list: [1, 2, 3] }).list).toEqual([]);
+    const result = run({ list: [1, 2, 3] }).list;
+    expect(result).toEqual([]);
+    expect(result).toBeInstanceOf(Array);
+  });
+
+  it('creates auto-mocked arrays in the supplied realm', () => {
+    const context = runInNewContext('globalThis', {}) as Record<string, any>;
+    const { createMockInstance } = initSpy(
+      () => '',
+      () => context,
+    );
+    const source = runInNewContext('({ list: [1, 2] })', context);
+    const result = mockObject(
+      {
+        createMockInstance,
+        globalConstructors: {
+          Object: context.Object,
+          Function: context.Function,
+          Array: context.Array,
+          Map: context.Map,
+          RegExp: context.RegExp,
+        },
+        type: 'automock',
+      },
+      source,
+      runInNewContext('Object.create(Object.prototype)', context),
+    );
+    const isVmArray = runInNewContext(
+      '(value) => value instanceof Array',
+      context,
+    ) as (value: unknown) => boolean;
+
+    expect(isVmArray(result.list)).toBe(true);
   });
 
   it('makes getters return undefined', () => {

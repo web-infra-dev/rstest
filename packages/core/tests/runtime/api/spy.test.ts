@@ -21,6 +21,29 @@ describe('initSpy fn()', () => {
     expect(isVmFunction(mock)).toBe(true);
   });
 
+  it('creates resolved and rejected values in the supplied VM realm', async () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const isVmPromise = runInNewContext(
+      '(value) => value instanceof Promise',
+      context,
+    ) as (value: unknown) => boolean;
+
+    const resolved = fn().mockResolvedValue('value')();
+    expect(isVmPromise(resolved)).toBe(true);
+    await expect(resolved).resolves.toBe('value');
+
+    const rejected = fn().mockRejectedValue('error')();
+    expect(isVmPromise(rejected)).toBe(true);
+    await expect(rejected).rejects.toBe('error');
+  });
+
   it('installs and reuses the VM-realm spy for a spied method', () => {
     const context = runInNewContext('globalThis', {}) as Record<
       string,

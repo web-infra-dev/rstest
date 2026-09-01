@@ -50,6 +50,14 @@ export const initSpy = (
   const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
   const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
 
+  const getRealmPromise = (): PromiseConstructor => {
+    const promise = getRuntimeGlobal().Promise;
+    if (typeof promise !== 'function') {
+      throw new TypeError('The runtime global does not provide Promise.');
+    }
+    return promise as PromiseConstructor;
+  };
+
   const projectMocks = (): Set<WeakRef<MockInstance>> => {
     const key = getProjectKey();
     const set = mocksByProject.get(key) ?? new Set<WeakRef<MockInstance>>();
@@ -259,19 +267,23 @@ export const initSpy = (
     };
 
     spyFn.mockResolvedValue = (value) => {
-      return spyFn.mockImplementation((() => Promise.resolve(value)) as T);
+      return spyFn.mockImplementation((() =>
+        getRealmPromise().resolve(value)) as T);
     };
 
     spyFn.mockResolvedValueOnce = (value) => {
-      return spyFn.mockImplementationOnce((() => Promise.resolve(value)) as T);
+      return spyFn.mockImplementationOnce((() =>
+        getRealmPromise().resolve(value)) as T);
     };
 
     spyFn.mockRejectedValue = (value) => {
-      return spyFn.mockImplementation((() => Promise.reject(value)) as T);
+      return spyFn.mockImplementation((() =>
+        getRealmPromise().reject(value)) as T);
     };
 
     spyFn.mockRejectedValueOnce = (value) => {
-      return spyFn.mockImplementationOnce((() => Promise.reject(value)) as T);
+      return spyFn.mockImplementationOnce((() =>
+        getRealmPromise().reject(value)) as T);
     };
 
     spyFn.mockReturnThis = () => {
@@ -379,6 +391,7 @@ export const initSpy = (
     }
 
     const realmSpy = wrapRealmMock(spyFn);
+    realmSpies.set(spyFn, realmSpy);
     realmSpies.set(realmSpy, realmSpy);
     projectMocks().add(new WeakRef(realmSpy));
     if (realmSpy !== spyFn) {
