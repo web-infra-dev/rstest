@@ -10,7 +10,7 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "vue": "^3.5.41"
+    "vue": "^3.5.42"
   },
   "devDependencies": {
     "@rsbuild/core": "~2.2.0",
@@ -18,10 +18,10 @@
     "@rsbuild/plugin-vue": "^2.0.1",
     "@rsbuild/plugin-vue-jsx": "^2.0.1",
     "@rstest/core": "workspace:*",
-    "@vue/compiler-dom": "^3.5.41",
-    "@vue/server-renderer": "^3.5.41",
-    "@vue/test-utils": "^2.4.11",
-    "happy-dom": "^20.11.6",
+    "@vue/compiler-dom": "^3.5.42",
+    "@vue/server-renderer": "^3.5.42",
+    "@vue/test-utils": "^2.5.0",
+    "happy-dom": "^20.12.0",
     "typescript": "^6.0.3"
   }
 }

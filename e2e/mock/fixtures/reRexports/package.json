@@ -5,7 +5,7 @@
   "devDependencies": {
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "workspace:*",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",
