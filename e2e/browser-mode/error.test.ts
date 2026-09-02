@@ -48,6 +48,7 @@ describe('browser mode - error handling', () => {
     expect(output).toContain('Expect "to.have.text"');
     expect(output).not.toContain('beforeAll hook timed out in 2000ms');
     expect(output).not.toContain('afterAll hook timed out in 2000ms');
+    expect(output).not.toContain('fixture setup timed out in 2000ms');
   });
 
   it('resets the element timeout before teardown hooks', async () => {

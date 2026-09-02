@@ -668,7 +668,9 @@ export class TestRunner {
                     fn,
                     () => fn(suiteContext),
                   );
-                  if (cleanupFn) cleanups.push(cleanupFn);
+                  if (cleanupFn) {
+                    cleanups.push(inheritTimeout(fn, cleanupFn));
+                  }
                 }
               } catch (error) {
                 hasBeforeAllError = true;
@@ -1071,8 +1073,8 @@ export class TestRunner {
     return createFixtureResolver(test, context, fixtureCleanups, {
       fileFixtureManager: this.fileFixtureManager,
       workerFixtureManager,
-      runNamedFixtureSetup: (setup, onTimeout) =>
-        wrapTimeout({
+      runNamedFixtureSetup: (setup, onTimeout) => {
+        const wrappedSetup = wrapTimeout({
           name: 'fixture setup',
           fn: setup,
           timeout: test.timeout,
@@ -1081,7 +1083,11 @@ export class TestRunner {
             onTimeout();
           },
           stackTraceError: test.stackTraceError,
-        })(),
+        });
+        return this.runWithActiveTimeout(test, wrappedSetup, () =>
+          wrappedSetup(),
+        );
+      },
       wrapNamedFixtureCleanup: (cleanup) =>
         wrapTimeout({
           name: 'fixture cleanup',
