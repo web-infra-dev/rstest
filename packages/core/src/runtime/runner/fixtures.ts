@@ -528,6 +528,7 @@ export const createFixtureResolver = (
       if (mode === 'return') {
         let registeredCleanup: (() => Promise<void>) | undefined;
         let cleanupPromise: Promise<void> | undefined;
+        let cleanupExecutionPromise: Promise<void> | undefined;
         let resolveCancellationCleanup: (() => void) | undefined;
         let rejectCancellationCleanup: ((error: unknown) => void) | undefined;
         const cancellationCleanup = new Promise<void>((resolve, reject) => {
@@ -549,9 +550,11 @@ export const createFixtureResolver = (
               cleanups.splice(cleanupIndex, 1);
             }
           }
-          const cleanup = registeredCleanup();
-          cleanup.catch(() => undefined);
-          return cleanup;
+          if (!cleanupExecutionPromise) {
+            cleanupExecutionPromise = registeredCleanup();
+            cleanupExecutionPromise.catch(() => undefined);
+          }
+          return cleanupExecutionPromise;
         };
         const trackCancellationCleanup = () => {
           const cleanup = runRegisteredCleanup();

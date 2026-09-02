@@ -7,10 +7,10 @@ import type { TaskContext } from './taskContext';
 export const createBrowserTaskContext = (): TaskContext => {
   let fallback: CurrentTaskInfo | undefined;
   let exclusiveQueue: Promise<void> = Promise.resolve();
-  let exclusiveOwner: object | undefined;
+  let exclusiveTask: CurrentTaskInfo | undefined;
 
   return {
-    getCurrent: () => fallback,
+    getCurrent: () => exclusiveTask ?? fallback,
     run: async (task, fn) => {
       const previous = fallback;
       fallback = task;
@@ -20,22 +20,18 @@ export const createBrowserTaskContext = (): TaskContext => {
         fallback = previous;
       }
     },
-    runExclusive: async (token, fn) => {
-      if (exclusiveOwner === token) {
-        return fn();
-      }
-
+    runExclusive: async (task, fn) => {
       const previous = exclusiveQueue;
       let release!: () => void;
       exclusiveQueue = new Promise<void>((resolve) => {
         release = resolve;
       });
       await previous;
-      exclusiveOwner = token;
+      exclusiveTask = task;
       try {
         return await fn();
       } finally {
-        exclusiveOwner = undefined;
+        exclusiveTask = undefined;
         release();
       }
     },

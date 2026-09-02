@@ -544,7 +544,6 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
-      suiteExecution?: object,
     ): Promise<TestResult[]> => {
       const tests = [...allTest];
       const results: TestResult[] = [];
@@ -562,11 +561,9 @@ export class TestRunner {
           const result = await Promise.all(
             cases.map((test) => {
               if (test.type === 'suite') {
-                return runTest(test, parentHooks, suiteExecution);
+                return runTest(test, parentHooks);
               }
-              return limitMaxConcurrency(() =>
-                runTest(test, parentHooks, suiteExecution),
-              );
+              return limitMaxConcurrency(() => runTest(test, parentHooks));
             }),
           );
           results.push(...result);
@@ -574,7 +571,7 @@ export class TestRunner {
           continue;
         }
 
-        const result = await runTest(suite, parentHooks, suiteExecution);
+        const result = await runTest(suite, parentHooks);
         results.push(result);
       }
       return results;
@@ -586,7 +583,6 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
-      parentSuiteExecution?: object,
     ): Promise<TestResult> => {
       let result: TestResult = {
         testId: test.testId,
@@ -606,7 +602,6 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
-        const suiteExecution = parentSuiteExecution ?? {};
         const suiteTask = {
           taskId: test.testId,
           taskName: test.name,
@@ -617,6 +612,19 @@ export class TestRunner {
         const runSuite = () =>
           this.taskContext.run(suiteTask, async () => {
             const start = RealDate.now();
+
+            const shouldRunSuiteExclusively =
+              test.concurrent === true || test.inConcurrentScope === true;
+            const runSuiteHook = <T>(
+              callback: () => T | Promise<T>,
+            ): Promise<T> => {
+              const run = () => this.taskContext.run(suiteTask, callback);
+              return Promise.resolve(
+                shouldRunSuiteExclusively && this.taskContext.runExclusive
+                  ? this.taskContext.runExclusive(suiteTask, run)
+                  : run(),
+              );
+            };
 
             hooks.onTestSuiteStart?.({
               parentNames: test.parentNames,
@@ -668,10 +676,8 @@ export class TestRunner {
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await this.runWithActiveTimeout(
-                    test,
-                    fn,
-                    () => fn(suiteContext),
+                  const cleanupFn = await runSuiteHook(() =>
+                    this.runWithActiveTimeout(test, fn, () => fn(suiteContext)),
                   );
                   if (cleanupFn) {
                     cleanups.push(inheritTimeout(fn, cleanupFn));
@@ -687,18 +693,14 @@ export class TestRunner {
               markAllTestAsSkipped(test.tests);
             }
 
-            const results = await runTests(
-              test.tests,
-              {
-                beforeEachListeners: parentHooks.beforeEachListeners.concat(
-                  test.beforeEachListeners || [],
-                ),
-                afterEachListeners: parentHooks.afterEachListeners.concat(
-                  test.afterEachListeners || [],
-                ),
-              },
-              suiteExecution,
-            );
+            const results = await runTests(test.tests, {
+              beforeEachListeners: parentHooks.beforeEachListeners.concat(
+                test.beforeEachListeners || [],
+              ),
+              afterEachListeners: parentHooks.afterEachListeners.concat(
+                test.afterEachListeners || [],
+              ),
+            });
 
             const afterAllFns = [...(test.afterAllListeners || [])]
               .reverse()
@@ -707,8 +709,8 @@ export class TestRunner {
             if (shouldRunSuiteHooks && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await this.runWithActiveTimeout(test, fn, () =>
-                    fn(suiteContext),
+                  await runSuiteHook(() =>
+                    this.runWithActiveTimeout(test, fn, () => fn(suiteContext)),
                   );
                 }
               } catch (error) {
@@ -724,12 +726,7 @@ export class TestRunner {
 
             return result;
           });
-        const shouldRunSuiteExclusively =
-          test.concurrent === true || test.inConcurrentScope === true;
-        result = await (shouldRunSuiteExclusively &&
-        this.taskContext.runExclusive
-          ? this.taskContext.runExclusive(suiteExecution, runSuite)
-          : runSuite());
+        result = await runSuite();
 
         errors.push(...(result.errors || []));
       } else {
