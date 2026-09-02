@@ -3,6 +3,10 @@ import { RstestDiagnostics } from './diagnostics';
 import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
 import { runningWorkers } from './master';
+import {
+  createMigrationNotice,
+  rstackEditorTakesOver,
+} from './migrationNotice';
 import { Project, WorkspaceManager } from './project';
 import { disposeTerminal } from './terminal';
 import { RstestFileCoverage } from './testRunReporter';
@@ -16,8 +20,13 @@ import {
 } from './testTree';
 
 export async function activate(context: vscode.ExtensionContext) {
-  const rstest = new Rstest(context);
-  return rstest;
+  context.subscriptions.push(logger);
+  const standingDown = rstackEditorTakesOver();
+  createMigrationNotice(context, standingDown);
+  if (standingDown) {
+    return;
+  }
+  return new Rstest(context);
 }
 
 export function deactivate() {
@@ -47,7 +56,6 @@ class Rstest {
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
     context.subscriptions.push(this.ctrl);
     context.subscriptions.push(this.diagnostics);
-    context.subscriptions.push(logger);
 
     this.startScanWorkspaces();
     this.setupTestController();

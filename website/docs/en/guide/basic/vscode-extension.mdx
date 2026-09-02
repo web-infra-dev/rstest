@@ -4,6 +4,18 @@ description: The Rstest VS Code extension keeps your project’s tests in sync i
 
 # VS Code extension
 
+:::tip Migrate to Rstack Editor
+
+New editor features now land in [Rstack Editor](https://github.com/rstackjs/rstack-editor), a single extension covering the whole Rstack toolchain: Rstest testing, Rslint linting, and `rs fmt` formatting. The standalone `rstack.rstest` extension is retired and receives no new features, though it stays published and keeps working while the transition is underway.
+
+We recommend switching now:
+
+1. Install the [Rstack](https://marketplace.visualstudio.com/items?itemName=rstack.rstack) extension from the VS Code Marketplace, or from the [Open VSX Registry](https://open-vsx.org/extension/rstack/rstack) for Cursor, Trae, VSCodium, and other VS Code forks.
+2. Disable or uninstall `rstack.rstest` so only one copy of Rstest runs.
+3. Re-enter your settings under the `rstack.rstest.*` keys and re-bind any keybindings to the new `rstack.rstest.*` command ids. Settings are not migrated automatically. See the [migration notes](https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions) for details.
+
+:::
+
 The Rstest VS Code extension keeps your project’s tests in sync inside the editor so you can browse, run, and debug them in VS Code.
 
 <img

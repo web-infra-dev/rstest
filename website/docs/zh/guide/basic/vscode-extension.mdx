@@ -4,6 +4,18 @@ description: Rstest VS Code 扩展能够在编辑器内同步项目测试，让�
 
 # VS Code 扩展
 
+:::tip 迁移到 Rstack Editor
+
+新的编辑器功能现在都在 [Rstack Editor](https://github.com/rstackjs/rstack-editor) 中开发。它是一个覆盖整个 Rstack 工具链的扩展，同时提供 Rstest 测试、Rslint 检查和 `rs fmt` 格式化。独立的 `rstack.rstest` 扩展已停止新功能开发，在过渡期间仍会保持发布并可正常使用。
+
+建议现在就切换：
+
+1. 从 VS Code Marketplace 安装 [Rstack](https://marketplace.visualstudio.com/items?itemName=rstack.rstack) 扩展；Cursor、Trae、VSCodium 等 VS Code 衍生编辑器可从 [Open VSX Registry](https://open-vsx.org/extension/rstack/rstack) 安装。
+2. 禁用或卸载 `rstack.rstest`，避免同时运行两份 Rstest。
+3. 在 `rstack.rstest.*` 下重新填写你的配置，并把快捷键重新绑定到新的 `rstack.rstest.*` 命令 id。配置不会自动迁移，详见[迁移说明](https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions)。
+
+:::
+
 Rstest VS Code 扩展能够在编辑器内同步项目测试，让你在 VS Code 中浏览、运行和调试测试。
 
 <img

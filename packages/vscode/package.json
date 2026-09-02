@@ -62,6 +62,11 @@
         "title": "Run in Terminal",
         "category": "Rstest",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "rstest.openRstackExtension",
+        "title": "Migrate to Rstack Editor",
+        "category": "Rstest"
       }
     ],
     "configuration": {
