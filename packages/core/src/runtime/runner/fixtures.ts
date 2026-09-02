@@ -7,7 +7,6 @@ import type {
   TestContext,
 } from '../../types';
 import { takeWorkerCleanups } from './workerCleanup';
-import { inheritWrappedTimeout } from './timeoutMetadata';
 import { isObject } from '../../utils/helper';
 
 export { registerWorkerCleanup } from './workerCleanup';
@@ -528,7 +527,6 @@ export const createFixtureResolver = (
 
       if (mode === 'return') {
         let registeredCleanup: (() => Promise<void>) | undefined;
-        let cleanupPromise: Promise<void> | undefined;
         let cleanupExecutionPromise: Promise<void> | undefined;
         let resolveCancellationCleanup: (() => void) | undefined;
         let rejectCancellationCleanup: ((error: unknown) => void) | undefined;
@@ -586,27 +584,22 @@ export const createFixtureResolver = (
             );
           }
           cleanupRegistered = true;
-          const timeoutWrappedCleanup = wrapNamedFixtureCleanup(async () => {
-            if (!cleanupPromise) {
-              notifyTeardownStarted();
-              cleanupPromise = Promise.resolve().then(cleanup);
-              cleanupPromise.catch(() => undefined);
+          const cleanupOperation = async () => {
+            notifyTeardownStarted();
+            await cleanup();
+          };
+          const timeoutWrappedCleanup =
+            wrapNamedFixtureCleanup(cleanupOperation);
+          registeredCleanup = () => {
+            if (!cleanupExecutionPromise) {
+              cleanupExecutionPromise = timeoutWrappedCleanup();
+              cleanupExecutionPromise.catch(() => undefined);
             }
-            return cleanupPromise;
-          });
-          registeredCleanup = inheritWrappedTimeout(
-            timeoutWrappedCleanup,
-            () => {
-              if (!cleanupExecutionPromise) {
-                cleanupExecutionPromise = timeoutWrappedCleanup();
-                cleanupExecutionPromise.catch(() => undefined);
-              }
-              return cleanupExecutionPromise;
-            },
-          );
+            return cleanupExecutionPromise;
+          };
           if (cancelledFixtures.has(name)) {
             if (setupTimedOut) {
-              if (!resolveLateCleanup(registeredCleanup)) {
+              if (!resolveLateCleanup(cleanupOperation)) {
                 runRegisteredCleanup(false);
               }
             } else {

@@ -79,6 +79,21 @@ describe('browser mode - error handling', () => {
     await expectExecSuccess();
   });
 
+  it('activates the cleanup deadline during fixture cancellation', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/fixtureCancellationCleanupTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('fixture setup timed out in 1000ms');
+    expect(output).toContain(
+      'cancellation cleanup reached after element assertion',
+    );
+    expect(output).not.toContain('Expect "to.have.text"');
+    expect(output).not.toContain('fixture cleanup timed out in 1000ms');
+  });
+
   it('should exit non-zero via core when the browser fails to launch', async () => {
     // A bad executablePath makes the provider launch throw. The host returns a
     // fatal outcome (`results: []`, `errors: [launchError]`) that core's

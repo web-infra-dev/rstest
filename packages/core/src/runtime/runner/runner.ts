@@ -45,6 +45,7 @@ import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  getWrappedTimeout,
   inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
@@ -52,7 +53,6 @@ import {
   sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
-import { getWrappedTimeout } from './timeoutMetadata';
 
 const RealDate = Date;
 const RealAbortController = AbortController;
@@ -1088,14 +1088,20 @@ export class TestRunner {
           wrappedSetup(),
         );
       },
-      wrapNamedFixtureCleanup: (cleanup) =>
-        wrapTimeout({
+      wrapNamedFixtureCleanup: (cleanup) => {
+        let timeoutWrappedCleanup: () => Promise<void>;
+        timeoutWrappedCleanup = wrapTimeout({
           name: 'fixture cleanup',
-          fn: cleanup,
+          // Cancellation can start cleanup before the normal cleanup loop, so
+          // the wrapper itself must expose its deadline to assertions.
+          fn: () =>
+            this.runWithActiveTimeout(test, timeoutWrappedCleanup, cleanup),
           timeout: test.timeout,
           onTimeout: (error) => this.abortContextSignal(context, error),
           stackTraceError: test.stackTraceError,
-        }),
+        });
+        return timeoutWrappedCleanup;
+      },
     });
   }
 
