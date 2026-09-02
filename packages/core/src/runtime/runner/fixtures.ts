@@ -549,7 +549,9 @@ export const createFixtureResolver = (
               cleanups.splice(cleanupIndex, 1);
             }
           }
-          return registeredCleanup();
+          const cleanup = registeredCleanup();
+          cleanup.catch(() => undefined);
+          return cleanup;
         };
         const trackCancellationCleanup = () => {
           const cleanup = runRegisteredCleanup();
@@ -584,17 +586,14 @@ export const createFixtureResolver = (
             );
           }
           cleanupRegistered = true;
-          const wrappedCleanup = wrapNamedFixtureCleanup(async () => {
-            await cleanup();
-          });
-          registeredCleanup = () => {
+          registeredCleanup = wrapNamedFixtureCleanup(async () => {
             if (!cleanupPromise) {
               notifyTeardownStarted();
-              cleanupPromise = Promise.resolve().then(wrappedCleanup);
+              cleanupPromise = Promise.resolve().then(cleanup);
               cleanupPromise.catch(() => undefined);
             }
             return cleanupPromise;
-          };
+          });
           if (cancelledFixtures.has(name)) {
             if (setupTimedOut) {
               if (!resolveLateCleanup(registeredCleanup)) {

@@ -544,6 +544,7 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
+      suiteExecution?: object,
     ): Promise<TestResult[]> => {
       const tests = [...allTest];
       const results: TestResult[] = [];
@@ -561,9 +562,11 @@ export class TestRunner {
           const result = await Promise.all(
             cases.map((test) => {
               if (test.type === 'suite') {
-                return runTest(test, parentHooks);
+                return runTest(test, parentHooks, suiteExecution);
               }
-              return limitMaxConcurrency(() => runTest(test, parentHooks));
+              return limitMaxConcurrency(() =>
+                runTest(test, parentHooks, suiteExecution),
+              );
             }),
           );
           results.push(...result);
@@ -571,7 +574,7 @@ export class TestRunner {
           continue;
         }
 
-        const result = await runTest(suite, parentHooks);
+        const result = await runTest(suite, parentHooks, suiteExecution);
         results.push(result);
       }
       return results;
@@ -583,6 +586,7 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
+      parentSuiteExecution?: object,
     ): Promise<TestResult> => {
       let result: TestResult = {
         testId: test.testId,
@@ -602,6 +606,7 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
+        const suiteExecution = parentSuiteExecution ?? {};
         const suiteTask = {
           taskId: test.testId,
           taskName: test.name,
@@ -682,14 +687,18 @@ export class TestRunner {
               markAllTestAsSkipped(test.tests);
             }
 
-            const results = await runTests(test.tests, {
-              beforeEachListeners: parentHooks.beforeEachListeners.concat(
-                test.beforeEachListeners || [],
-              ),
-              afterEachListeners: parentHooks.afterEachListeners.concat(
-                test.afterEachListeners || [],
-              ),
-            });
+            const results = await runTests(
+              test.tests,
+              {
+                beforeEachListeners: parentHooks.beforeEachListeners.concat(
+                  test.beforeEachListeners || [],
+                ),
+                afterEachListeners: parentHooks.afterEachListeners.concat(
+                  test.afterEachListeners || [],
+                ),
+              },
+              suiteExecution,
+            );
 
             const afterAllFns = [...(test.afterAllListeners || [])]
               .reverse()
@@ -715,8 +724,11 @@ export class TestRunner {
 
             return result;
           });
-        result = await (test.concurrent && this.taskContext.runExclusive
-          ? this.taskContext.runExclusive(runSuite)
+        const shouldRunSuiteExclusively =
+          test.concurrent === true || test.inConcurrentScope === true;
+        result = await (shouldRunSuiteExclusively &&
+        this.taskContext.runExclusive
+          ? this.taskContext.runExclusive(suiteExecution, runSuite)
           : runSuite());
 
         errors.push(...(result.errors || []));

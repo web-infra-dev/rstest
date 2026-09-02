@@ -7,7 +7,9 @@ test('reports the element assertion before the test timeout', async () => {
   count.textContent = '5';
   document.body.appendChild(count);
 
-  await expect.element(page.getByLabel('count')).toHaveText('6');
+  await expect
+    .element(page.getByLabel('count', { exact: true }))
+    .toHaveText('6');
 }, 500);
 
 test('uses the Browser Mode poll timeout by default', async () => {
@@ -33,6 +35,31 @@ fixtureTest(
   'runs fixture setup',
   ({ fixtureValue }) => {
     expect(fixtureValue).toBe('value');
+  },
+  2000,
+);
+
+const cleanupFixtureTest = test.extend(
+  'cleanupFixtureValue',
+  async (_context, { onCleanup }) => {
+    onCleanup(async () => {
+      const count = document.createElement('div');
+      count.setAttribute('aria-label', 'fixture-cleanup-count');
+      count.textContent = '5';
+      document.body.appendChild(count);
+
+      await expect
+        .element(page.getByLabel('fixture-cleanup-count'))
+        .toHaveText('6');
+    });
+    return 'value';
+  },
+);
+
+cleanupFixtureTest(
+  'runs fixture cleanup',
+  ({ cleanupFixtureValue }) => {
+    expect(cleanupFixtureValue).toBe('value');
   },
   2000,
 );
@@ -118,4 +145,10 @@ describe.concurrent('concurrent suite hook with a short deadline', () => {
   }, 1000);
 
   test('runs the short concurrent suite hook', () => {});
+});
+
+describe.concurrent('concurrent suite with a nested suite', () => {
+  describe('nested suite', () => {
+    test('runs the nested test', () => {});
+  });
 });

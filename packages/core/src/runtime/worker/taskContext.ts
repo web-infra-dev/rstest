@@ -7,8 +7,9 @@ export interface TaskContext {
   /**
    * Run a task exclusively when the platform cannot preserve async context.
    * Node's AsyncLocalStorage makes this a no-op; browser mode uses it for
-   * concurrent suite lifecycles so an awaited hook cannot inherit a sibling.
+   * concurrent suite flows so an awaited hook cannot inherit a sibling. The
+   * token makes nested suites reentrant within the same flow.
    */
-  runExclusive?<T>(fn: () => T | Promise<T>): T | Promise<T>;
+  runExclusive?<T>(token: object, fn: () => T | Promise<T>): T | Promise<T>;
   setFallback(task: CurrentTaskInfo | undefined): void;
 }
