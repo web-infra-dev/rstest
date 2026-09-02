@@ -104,49 +104,6 @@ describe('suite cleanup assertion timeout', () => {
   test('runs the suite cleanup', () => {});
 });
 
-describe.concurrent('concurrent suite hook assertion timeout', () => {
-  beforeAll(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const count = document.createElement('div');
-    count.setAttribute('aria-label', 'concurrent-before-all-count');
-    count.textContent = '5';
-    document.body.appendChild(count);
-
-    await expect
-      .element(page.getByLabel('concurrent-before-all-count'))
-      .toHaveText('6');
-  }, 2000);
-
-  afterAll(async () => {
-    const count = document.createElement('div');
-    count.setAttribute('aria-label', 'concurrent-after-all-count');
-    count.textContent = '5';
-    document.body.appendChild(count);
-
-    await expect
-      .element(page.getByLabel('concurrent-after-all-count'))
-      .toHaveText('6');
-  }, 2000);
-
-  test('runs concurrent suite hooks', () => {});
-});
-
-describe.concurrent('concurrent suite hook with a short deadline', () => {
-  beforeAll(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const count = document.createElement('div');
-    count.setAttribute('aria-label', 'concurrent-short-before-all-count');
-    count.textContent = '5';
-    document.body.appendChild(count);
-
-    await expect
-      .element(page.getByLabel('concurrent-short-before-all-count'))
-      .toHaveText('6');
-  }, 1000);
-
-  test('runs the short concurrent suite hook', () => {});
-});
-
 describe.concurrent('concurrent suite with a nested suite', () => {
   describe('nested suite', () => {
     test('runs the nested test', () => {});

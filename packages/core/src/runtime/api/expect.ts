@@ -283,14 +283,12 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
       getElementTest: () => {
         const { testRunner } = fileContext();
         const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
-        if (activeTimeoutContext?.type === 'suite') {
-          return activeTimeoutContext;
-        }
         const currentTest = testRunner.getCurrentTest();
         const timeoutContext = activeTimeoutContext ?? currentTest;
         // The file-level expect is shared, so the runner's current-test pointer
-        // is not reliable while concurrent tests or suites are interleaved.
-        // Those tasks use their context-bound expect for test-specific deadlines.
+        // and browser task context are not reliable while concurrent flows are
+        // interleaved. Tests use context.expect when they need their deadline;
+        // concurrent suite hooks fall back to the configured poll timeout.
         return timeoutContext?.concurrent || timeoutContext?.inConcurrentScope
           ? undefined
           : timeoutContext;

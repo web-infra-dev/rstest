@@ -1,20 +1,23 @@
+import type { TestCase, TestSuite } from '../../types';
 import { getRealNow } from '../util';
 
 export const TEST_TIMEOUT_BUFFER = 100;
 
-export type TestTimeoutContext = {
-  timeout?: number;
-  startTime?: number;
-  activeTimeout?: number;
-  activeTimeoutStartTime?: number;
-};
+type TestTimeoutContext =
+  | Pick<
+      TestCase,
+      'activeTimeout' | 'activeTimeoutStartTime' | 'startTime' | 'timeout'
+    >
+  | Pick<TestSuite, 'activeTimeout' | 'activeTimeoutStartTime' | 'timeout'>;
 
 export const getRemainingTestTimeout = (
   test: TestTimeoutContext,
   timeoutBuffer: number,
 ): number | undefined => {
   const timeout = test.activeTimeout ?? test.timeout;
-  const startTime = test.activeTimeoutStartTime ?? test.startTime;
+  const startTime =
+    test.activeTimeoutStartTime ??
+    ('startTime' in test ? test.startTime : undefined);
   if (
     startTime === undefined ||
     typeof timeout !== 'number' ||

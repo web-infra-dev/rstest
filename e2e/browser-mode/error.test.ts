@@ -63,6 +63,22 @@ describe('browser mode - error handling', () => {
     expect(output).not.toContain('afterEach hook timed out in 2000ms');
   });
 
+  it('keeps concurrent suite hooks concurrent', async () => {
+    const { expectExecSuccess } = await runBrowserCli('error', {
+      args: ['tests/concurrentSuiteHooks.test.ts'],
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('does not leak a concurrent suite hook deadline into a sibling test', async () => {
+    const { expectExecSuccess } = await runBrowserCli('error', {
+      args: ['tests/concurrentElementAssertionContext.test.ts'],
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should exit non-zero via core when the browser fails to launch', async () => {
     // A bad executablePath makes the provider launch throw. The host returns a
     // fatal outcome (`results: []`, `errors: [launchError]`) that core's

@@ -10,6 +10,13 @@ import type { ConsoleStreamType, MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 
+type ActiveTimeoutContext = {
+  /** @internal Active hook or fixture deadline. */
+  activeTimeout?: number;
+  /** @internal Start time for the active hook or fixture deadline. */
+  activeTimeoutStartTime?: number;
+};
+
 export type TaskMetaValue =
   | string
   | number
@@ -66,10 +73,6 @@ export type TestCase = TestCaseInfo & {
   concurrent?: boolean;
   /** @internal True when the case is nested in a concurrently running suite. */
   inConcurrentScope?: boolean;
-  /** @internal Active hook deadline, when an assertion runs in a hook. */
-  activeTimeout?: number;
-  /** @internal Start time for the active hook deadline. */
-  activeTimeoutStartTime?: number;
   sequential?: boolean;
   inTestEach?: boolean;
   context: TestContext;
@@ -98,7 +101,7 @@ export type TestCase = TestCaseInfo & {
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;
-};
+} & ActiveTimeoutContext;
 
 export interface SuiteContext {
   filepath: TestPath;
@@ -140,10 +143,6 @@ export type TestSuite = TestSuiteInfo & {
   concurrent?: boolean;
   /** @internal True when the suite is nested in a concurrently running suite. */
   inConcurrentScope?: boolean;
-  /** @internal Active hook deadline, when an assertion runs in a suite hook. */
-  activeTimeout?: number;
-  /** @internal Start time for the active suite hook deadline. */
-  activeTimeoutStartTime?: number;
   sequential?: boolean;
   /**
    * Suite-level `TestOptions` passed to `describe(name, options, fn)`. Applied
@@ -160,7 +159,7 @@ export type TestSuite = TestSuiteInfo & {
   beforeAllListeners?: BeforeAllListener[];
   afterEachListeners?: AfterEachListener[];
   beforeEachListeners?: BeforeEachListener[];
-};
+} & ActiveTimeoutContext;
 
 export type TestSuiteListeners = keyof Pick<
   TestSuite,

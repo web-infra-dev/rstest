@@ -7,6 +7,7 @@ import type {
   TestContext,
 } from '../../types';
 import { takeWorkerCleanups } from './workerCleanup';
+import { inheritWrappedTimeout } from './timeoutMetadata';
 import { isObject } from '../../utils/helper';
 
 export { registerWorkerCleanup } from './workerCleanup';
@@ -550,11 +551,7 @@ export const createFixtureResolver = (
               cleanups.splice(cleanupIndex, 1);
             }
           }
-          if (!cleanupExecutionPromise) {
-            cleanupExecutionPromise = registeredCleanup();
-            cleanupExecutionPromise.catch(() => undefined);
-          }
-          return cleanupExecutionPromise;
+          return registeredCleanup();
         };
         const trackCancellationCleanup = () => {
           const cleanup = runRegisteredCleanup();
@@ -589,7 +586,7 @@ export const createFixtureResolver = (
             );
           }
           cleanupRegistered = true;
-          registeredCleanup = wrapNamedFixtureCleanup(async () => {
+          const timeoutWrappedCleanup = wrapNamedFixtureCleanup(async () => {
             if (!cleanupPromise) {
               notifyTeardownStarted();
               cleanupPromise = Promise.resolve().then(cleanup);
@@ -597,6 +594,16 @@ export const createFixtureResolver = (
             }
             return cleanupPromise;
           });
+          registeredCleanup = inheritWrappedTimeout(
+            timeoutWrappedCleanup,
+            () => {
+              if (!cleanupExecutionPromise) {
+                cleanupExecutionPromise = timeoutWrappedCleanup();
+                cleanupExecutionPromise.catch(() => undefined);
+              }
+              return cleanupExecutionPromise;
+            },
+          );
           if (cancelledFixtures.has(name)) {
             if (setupTimedOut) {
               if (!resolveLateCleanup(registeredCleanup)) {

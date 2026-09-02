@@ -45,7 +45,6 @@ import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
-  getWrappedTimeout,
   inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
@@ -53,6 +52,7 @@ import {
   sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
+import { getWrappedTimeout } from './timeoutMetadata';
 
 const RealDate = Date;
 const RealAbortController = AbortController;
@@ -613,19 +613,6 @@ export class TestRunner {
           this.taskContext.run(suiteTask, async () => {
             const start = RealDate.now();
 
-            const shouldRunSuiteExclusively =
-              test.concurrent === true || test.inConcurrentScope === true;
-            const runSuiteHook = <T>(
-              callback: () => T | Promise<T>,
-            ): Promise<T> => {
-              const run = () => this.taskContext.run(suiteTask, callback);
-              return Promise.resolve(
-                shouldRunSuiteExclusively && this.taskContext.runExclusive
-                  ? this.taskContext.runExclusive(suiteTask, run)
-                  : run(),
-              );
-            };
-
             hooks.onTestSuiteStart?.({
               parentNames: test.parentNames,
               name: test.name,
@@ -676,8 +663,10 @@ export class TestRunner {
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await runSuiteHook(() =>
-                    this.runWithActiveTimeout(test, fn, () => fn(suiteContext)),
+                  const cleanupFn = await this.runWithActiveTimeout(
+                    test,
+                    fn,
+                    () => fn(suiteContext),
                   );
                   if (cleanupFn) {
                     cleanups.push(inheritTimeout(fn, cleanupFn));
@@ -709,8 +698,8 @@ export class TestRunner {
             if (shouldRunSuiteHooks && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await runSuiteHook(() =>
-                    this.runWithActiveTimeout(test, fn, () => fn(suiteContext)),
+                  await this.runWithActiveTimeout(test, fn, () =>
+                    fn(suiteContext),
                   );
                 }
               } catch (error) {

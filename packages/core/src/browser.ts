@@ -113,7 +113,6 @@ export type { ResolveWorkerCountOptions } from './utils/workers';
 // Constants
 export {
   BROWSER_PROVIDERS,
-  DEFAULT_BROWSER_TEST_TIMEOUT,
   DEFAULT_TEST_TIMEOUT,
   FIXTURE_CLEANUP_TIMEOUT_MS,
   resolveProjectBuildCache,

@@ -719,6 +719,47 @@ describe('createFixtureResolver', () => {
     await expect(cleanups[0]!()).rejects.toBe(cleanupError);
   });
 
+  it('reuses cleanup execution started by a timed-out setup', async () => {
+    const setupError = new Error('fixture setup timed out');
+    let finishCleanup: (() => void) | undefined;
+    let cleanupWrapperCalls = 0;
+    const fixtures = normalizeNamedFixture(
+      'value',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(
+          () =>
+            new Promise<void>((resolve) => {
+              finishCleanup = resolve;
+            }),
+        );
+        return new Promise<never>(() => {});
+      },
+    );
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups, {
+      runNamedFixtureSetup: async (setup, onTimeout) => {
+        void setup();
+        await Promise.resolve();
+        onTimeout();
+        throw setupError;
+      },
+      wrapNamedFixtureCleanup: (cleanup) => async () => {
+        cleanupWrapperCalls++;
+        await cleanup();
+      },
+    });
+
+    await expect(
+      resolver.resolveTestFixtures(({ value }: any) => value),
+    ).rejects.toBe(setupError);
+    expect(cleanupWrapperCalls).toBe(1);
+
+    const queuedCleanup = cleanups[0]!();
+    expect(cleanupWrapperCalls).toBe(1);
+    finishCleanup?.();
+    await expect(queuedCleanup).resolves.toBeUndefined();
+  });
+
   it('does not parse callbacks when the test has no fixtures', async () => {
     const resolver = createFixtureResolver({} as any, {});
 

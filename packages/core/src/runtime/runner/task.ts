@@ -11,6 +11,7 @@ import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
 import { setFixtureCallbackSource } from './fixtures';
+import { setWrappedTimeout } from './timeoutMetadata';
 
 /**
  * Coerce a user-supplied retry/repeats count into a non-negative integer.
@@ -306,10 +307,6 @@ const timeoutOptions = new WeakMap<
   TimeoutOptions<(...args: any[]) => any>
 >();
 
-export const getWrappedTimeout = (
-  fn: (...args: any[]) => any,
-): number | undefined => timeoutOptions.get(fn)?.timeout;
-
 export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,
@@ -358,6 +355,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
     getAssertionCalls,
     stackTraceError,
   });
+  setWrappedTimeout(wrapped, timeout);
   setFixtureCallbackSource(wrapped, fn);
 
   return wrapped as T;
