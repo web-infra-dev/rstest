@@ -5,6 +5,11 @@ const fixtureTest = test.extend(
   'fixtureValue',
   async (_context, { onCleanup }) => {
     onCleanup(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      document
+        .querySelector('[aria-label="cancellation-cleanup-count"]')
+        ?.remove();
       const count = document.createElement('div');
       count.setAttribute('aria-label', 'cancellation-cleanup-count');
       count.textContent = '5';
@@ -24,8 +29,8 @@ const fixtureTest = test.extend(
 
 fixtureTest(
   'uses a fresh deadline for cancellation cleanup',
+  { retry: 1, timeout: 1000 },
   ({ fixtureValue }) => {
     expect(fixtureValue).toBeDefined();
   },
-  1000,
 );

@@ -57,6 +57,17 @@ import {
 const RealDate = Date;
 const RealAbortController = AbortController;
 
+// Cancellation can start cleanup before setup unwinds. Linked frames let the
+// later phase skip an expired predecessor instead of restoring its deadline.
+type ActiveTimeoutFrame = {
+  active: boolean;
+  previousTestFrame?: ActiveTimeoutFrame;
+  previousTaskFrame?: ActiveTimeoutFrame;
+  startTime: number;
+  task: TestCase | TestSuite;
+  timeout: number;
+};
+
 /**
  * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
  * runner is safe when bundled into the web-target browser runtime, where
@@ -78,9 +89,13 @@ export class TestRunner {
   private workerState: WorkerState | undefined;
   private readonly fileFixtureManager = new FileFixtureManager();
   private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
+  private readonly activeTimeoutFrames = new WeakMap<
+    TestCase | TestSuite,
+    ActiveTimeoutFrame
+  >();
   private readonly activeTimeoutContexts = new Map<
     string,
-    TestCase | TestSuite
+    ActiveTimeoutFrame
   >();
   private readonly abortControllers = new WeakMap<
     TestContext,
@@ -99,25 +114,49 @@ export class TestRunner {
       return callback();
     }
 
-    const previousTimeout = test.activeTimeout;
-    const previousStartTime = test.activeTimeoutStartTime;
     const taskId = this.taskContext.getCurrent()?.taskId;
-    const previousContext = taskId
-      ? this.activeTimeoutContexts.get(taskId)
-      : undefined;
+    const frame: ActiveTimeoutFrame = {
+      active: true,
+      previousTestFrame: this.activeTimeoutFrames.get(test),
+      previousTaskFrame: taskId
+        ? this.activeTimeoutContexts.get(taskId)
+        : undefined,
+      startTime: RealDate.now(),
+      task: test,
+      timeout,
+    };
+    this.activeTimeoutFrames.set(test, frame);
     test.activeTimeout = timeout;
-    test.activeTimeoutStartTime = RealDate.now();
+    test.activeTimeoutStartTime = frame.startTime;
     if (taskId) {
-      this.activeTimeoutContexts.set(taskId, test);
+      this.activeTimeoutContexts.set(taskId, frame);
     }
     try {
       return await callback();
     } finally {
-      test.activeTimeout = previousTimeout;
-      test.activeTimeoutStartTime = previousStartTime;
-      if (taskId) {
-        if (previousContext) {
-          this.activeTimeoutContexts.set(taskId, previousContext);
+      frame.active = false;
+      if (this.activeTimeoutFrames.get(test) === frame) {
+        let previousFrame = frame.previousTestFrame;
+        while (previousFrame && !previousFrame.active) {
+          previousFrame = previousFrame.previousTestFrame;
+        }
+        if (previousFrame) {
+          this.activeTimeoutFrames.set(test, previousFrame);
+          test.activeTimeout = previousFrame.timeout;
+          test.activeTimeoutStartTime = previousFrame.startTime;
+        } else {
+          this.activeTimeoutFrames.delete(test);
+          test.activeTimeout = undefined;
+          test.activeTimeoutStartTime = undefined;
+        }
+      }
+      if (taskId && this.activeTimeoutContexts.get(taskId) === frame) {
+        let previousFrame = frame.previousTaskFrame;
+        while (previousFrame && !previousFrame.active) {
+          previousFrame = previousFrame.previousTaskFrame;
+        }
+        if (previousFrame) {
+          this.activeTimeoutContexts.set(taskId, previousFrame);
         } else {
           this.activeTimeoutContexts.delete(taskId);
         }
@@ -902,7 +941,7 @@ export class TestRunner {
 
   getCurrentTimeoutContext(): TestCase | TestSuite | undefined {
     const taskId = this.taskContext.getCurrent()?.taskId;
-    return taskId ? this.activeTimeoutContexts.get(taskId) : undefined;
+    return taskId ? this.activeTimeoutContexts.get(taskId)?.task : undefined;
   }
 
   private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {
@@ -1089,18 +1128,19 @@ export class TestRunner {
         );
       },
       wrapNamedFixtureCleanup: (cleanup) => {
-        let timeoutWrappedCleanup: () => Promise<void>;
-        timeoutWrappedCleanup = wrapTimeout({
+        const timeoutWrappedCleanup = wrapTimeout({
           name: 'fixture cleanup',
-          // Cancellation can start cleanup before the normal cleanup loop, so
-          // the wrapper itself must expose its deadline to assertions.
-          fn: () =>
-            this.runWithActiveTimeout(test, timeoutWrappedCleanup, cleanup),
+          fn: cleanup,
           timeout: test.timeout,
           onTimeout: (error) => this.abortContextSignal(context, error),
           stackTraceError: test.stackTraceError,
         });
-        return timeoutWrappedCleanup;
+        return () =>
+          this.runWithActiveTimeout(
+            test,
+            timeoutWrappedCleanup,
+            timeoutWrappedCleanup,
+          );
       },
     });
   }
