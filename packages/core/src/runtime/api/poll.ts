@@ -21,6 +21,7 @@ import { Assertion as ChaiAssertion, util } from 'chai';
 import type { RstestExpect, RuntimeConfig, TestCase } from '../../types';
 import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getRealTimers } from '../util';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 // these matchers are not supported because they don't make sense with poll
 const unsupported = [
@@ -47,14 +48,10 @@ const unsupported = [
 export function createExpectPoll(
   expect: RstestExpect,
   getPollConfig: () => RuntimeConfig['expect']['poll'],
+  getTestForTimeout: () => TestCase | undefined,
 ): RstestExpect['poll'] {
   return function poll(fn, options = {}) {
-    const defaults = getPollConfig();
-    const {
-      interval = defaults.interval,
-      timeout = defaults.timeout,
-      message,
-    } = options;
+    const { message } = options;
     // @ts-expect-error private poll access
     const assertion = expect(null, message).withContext({
       poll: true,
@@ -65,6 +62,19 @@ export function createExpectPoll(
     if (!test) {
       throw new Error('expect.poll() must be called inside a test');
     }
+    const getTimeout = (): number => {
+      if (options.timeout !== undefined) {
+        return options.timeout;
+      }
+      const defaults = getPollConfig();
+      const timeoutTest = getTestForTimeout();
+      return Math.min(
+        defaults.timeout,
+        (timeoutTest &&
+          getRemainingTestTimeout(timeoutTest, TEST_TIMEOUT_BUFFER)) ??
+          defaults.timeout,
+      );
+    };
     const proxy: any = new Proxy(assertion, {
       get(target, key, receiver) {
         const assertionFunction = Reflect.get(target, key, receiver);
@@ -89,6 +99,8 @@ export function createExpectPoll(
           const STACK_TRACE_ERROR = new Error(SYNTHETIC_STACK_ERROR_MESSAGE);
           const promise = () =>
             new Promise<void>((resolve, reject) => {
+              const timeout = getTimeout();
+              const interval = options.interval ?? getPollConfig().interval;
               let intervalId: any;
               let lastError: any;
               // TODO: use timeout manager

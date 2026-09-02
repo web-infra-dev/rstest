@@ -28,6 +28,8 @@ import type {
 } from '../types';
 import {
   castArray,
+  DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT,
+  DEFAULT_BROWSER_TEST_TIMEOUT,
   ENV,
   getAbsolutePath,
   logger,
@@ -68,6 +70,24 @@ const resolveOutputModule = (config: OutputModuleConfig): boolean =>
   config.federation
     ? false
     : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');
+
+const applyBrowserDefaults = <
+  Config extends Pick<NormalizedConfig, 'browser' | 'testTimeout' | 'expect'>,
+>(
+  config: Config,
+  userConfig: RstestConfig,
+): Config => {
+  if (!config.browser.enabled) {
+    return config;
+  }
+  if (userConfig.testTimeout === undefined) {
+    config.testTimeout = DEFAULT_BROWSER_TEST_TIMEOUT;
+  }
+  if (userConfig.expect?.poll?.timeout === undefined) {
+    config.expect.poll.timeout = DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT;
+  }
+  return config;
+};
 
 type Options = {
   cwd: string;
@@ -150,14 +170,17 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(
-      resolveBuildCacheDependencyPaths(
-        {
-          ...userConfig,
-          root: rootPath,
-        },
-        configFilePath,
+    const rstestConfig = applyBrowserDefaults(
+      withDefaultConfig(
+        resolveBuildCacheDependencyPaths(
+          {
+            ...userConfig,
+            root: rootPath,
+          },
+          configFilePath,
+        ),
       ),
+      userConfig,
     );
 
     if (command === 'watch' && rstestConfig.shard) {
@@ -178,12 +201,14 @@ export class Rstest implements RstestContext {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
 
           // TODO: support extend projects config
-          const config = withDefaultConfig(
-            resolveBuildCacheDependencyPaths(
-              project.config,
-              project.configFilePath ?? configFilePath,
-            ),
-          ) as NormalizedProjectConfig;
+          const projectUserConfig = resolveBuildCacheDependencyPaths(
+            project.config,
+            project.configFilePath ?? configFilePath,
+          );
+          const config = applyBrowserDefaults(
+            withDefaultConfig(projectUserConfig) as NormalizedProjectConfig,
+            projectUserConfig,
+          );
           // some configs are global only
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;

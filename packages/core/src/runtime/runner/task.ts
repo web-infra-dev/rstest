@@ -306,6 +306,10 @@ const timeoutOptions = new WeakMap<
   TimeoutOptions<(...args: any[]) => any>
 >();
 
+export const getWrappedTimeout = (
+  fn: (...args: any[]) => any,
+): number | undefined => timeoutOptions.get(fn)?.timeout;
+
 export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,

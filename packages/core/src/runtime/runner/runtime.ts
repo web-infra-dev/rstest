@@ -321,6 +321,10 @@ export class RunnerRuntime {
         test.concurrent = true;
       }
 
+      if (current.concurrent || current.inConcurrentScope) {
+        test.inConcurrentScope = true;
+      }
+
       if (current.sequential && test.concurrent !== true) {
         test.sequential = true;
       }

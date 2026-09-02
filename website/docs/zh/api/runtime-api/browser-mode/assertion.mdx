@@ -47,19 +47,28 @@ expect.element(locator: Locator): BrowserElementExpect
 
 ### 超时优先级
 
-断言的超时按以下优先级决定：
+断言超时按以下规则决定：
 
-1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高
-2. **全局 `testTimeout` 配置**：来自 `rstest.config.ts` 中的 `testTimeout`（默认 5000ms）
+1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高，包括 `0`。使用 Playwright 时，显式传入的 `0` 会原样交给 provider，表示不设置 matcher 自身的超时。
+2. **配置的轮询超时**：未传 matcher timeout 时，断言使用 `expect.poll.timeout`。Node Mode 默认值为 `1000ms`，Browser Mode 默认值为 `5000ms`。
+3. **当前测试或 hook 的剩余时间**：在非并发流程中，隐式断言超时会受当前 test 或 hook 的 deadline 限制，因此不会超过当前作用域。Browser Mode 测试的默认 `testTimeout` 为 `15000ms`。
+
+在非并发流程中，未传 matcher timeout 时，实际断言超时取 `expect.poll.timeout` 与当前 test 或 hook 剩余时间中较小的值。Browser Mode 的 `5000ms` 默认值可以给异步 UI 更新更充足的时间，同时不会让错误断言等待完整的 `testTimeout`。显式传入的 matcher timeout 不参与这个计算，但外层 test 或 hook 的超时仍然可以结束断言。
+
+对于 `test.concurrent`，如果断言需要使用该测试自己的剩余时间，请使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）。Browser 无法可靠识别并发异步流程，因此共享的文件级 `expect` 会使用配置的轮询超时。`describe.concurrent` 内的 hook 也有相同限制：其中的断言使用轮询超时，但外层 hook timeout 仍然可以提前结束断言。
 
 断言超时与 Browser RPC transport timeout 独立。测试执行期间，browser 和 snapshot RPC 请求不会额外增加超时；framework setup 和文件清理 RPC 使用独立的 30 秒 watchdog。
 
 ```ts
-// 使用全局 testTimeout（默认 5000ms）
+// 使用 Browser Mode 的 expect.poll.timeout 默认值（5000ms），
+// 同时受当前测试剩余时间限制
 await expect.element(page.getByText('Done')).toBeVisible();
 
 // 覆盖为更长的超时
 await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
+
+// 禁用测试超时后，element 断言使用配置的轮询超时
+// （Browser Mode 默认 5000ms）
 ```
 
 ### 失败输出

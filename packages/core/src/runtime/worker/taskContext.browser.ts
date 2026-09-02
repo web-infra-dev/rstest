@@ -2,7 +2,7 @@ import type { CurrentTaskInfo } from '../../types';
 import type { TaskContext } from './taskContext';
 
 // Browser fallback: single slot. Browsers lack AsyncLocalStorage, so concurrent
-// tasks may mis-attribute — callers must layer a hook-driven mechanism for that.
+// tasks may mis-attribute — callers must not use it for task-specific behavior.
 export const createBrowserTaskContext = (): TaskContext => {
   let fallback: CurrentTaskInfo | undefined;
 
