@@ -660,22 +660,27 @@ export const createFixtureResolver = (
         await new Promise<void>((fixtureResolve, fixtureReject) => {
           let useDone: (() => void) | undefined;
           let blockSettled = false;
+          let useCalled = false;
+          let block: Promise<void>;
+          const timeoutWrappedCleanup = wrapNamedFixtureCleanup(async () => {
+            useDone?.();
+            await block;
+          });
           cancelFixtureSetups.set(name, () => {
             if (blockSettled) {
               fixtureResolve();
             }
           });
-          const block = Promise.resolve().then(() =>
+          block = Promise.resolve().then(() =>
             fixtureValue(context, async (value: any) => {
+              useCalled = true;
               if (cancelledFixtures.has(name)) {
                 cancelledFixtureTeardownStarts.get(name)?.();
+                timeoutWrappedCleanup().then(fixtureResolve, fixtureReject);
                 return;
               }
               setFixtureContextValue(context, name, value);
-              cleanups.unshift(() => {
-                useDone?.();
-                return block;
-              });
+              cleanups.unshift(timeoutWrappedCleanup);
               fixtureResolve();
               return new Promise<void>((useFnResolve) => {
                 useDone = useFnResolve;
@@ -684,7 +689,7 @@ export const createFixtureResolver = (
           );
           block.then(() => {
             blockSettled = true;
-            if (cancelledFixtures.has(name)) {
+            if (cancelledFixtures.has(name) && !useCalled) {
               fixtureResolve();
             }
           }, fixtureReject);

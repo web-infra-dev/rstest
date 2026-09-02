@@ -489,7 +489,7 @@ export class TestRunner {
 
       for (const fn of fixtureCleanups) {
         try {
-          await this.runWithActiveTimeout(test, fn, fn);
+          await fn();
         } catch (error) {
           result.status = 'fail';
           result.errors ??= [];

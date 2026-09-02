@@ -94,6 +94,17 @@ describe('browser mode - error handling', () => {
     expect(output).not.toContain('fixture cleanup timed out in 1000ms');
   });
 
+  it('caps use-style fixture cleanup assertions', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/useStyleFixtureCleanupTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('fixture cleanup timed out in 1000ms');
+  });
+
   it('should exit non-zero via core when the browser fails to launch', async () => {
     // A bad executablePath makes the provider launch throw. The host returns a
     // fatal outcome (`results: []`, `errors: [launchError]`) that core's
