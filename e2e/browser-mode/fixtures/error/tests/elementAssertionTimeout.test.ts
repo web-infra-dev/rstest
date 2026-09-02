@@ -79,6 +79,7 @@ describe('suite cleanup assertion timeout', () => {
 
 describe.concurrent('concurrent suite hook assertion timeout', () => {
   beforeAll(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
     const count = document.createElement('div');
     count.setAttribute('aria-label', 'concurrent-before-all-count');
     count.textContent = '5';
@@ -101,4 +102,20 @@ describe.concurrent('concurrent suite hook assertion timeout', () => {
   }, 2000);
 
   test('runs concurrent suite hooks', () => {});
+});
+
+describe.concurrent('concurrent suite hook with a short deadline', () => {
+  beforeAll(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const count = document.createElement('div');
+    count.setAttribute('aria-label', 'concurrent-short-before-all-count');
+    count.textContent = '5';
+    document.body.appendChild(count);
+
+    await expect
+      .element(page.getByLabel('concurrent-short-before-all-count'))
+      .toHaveText('6');
+  }, 1000);
+
+  test('runs the short concurrent suite hook', () => {});
 });

@@ -602,15 +602,15 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
-        result = await this.taskContext.run(
-          {
-            taskId: test.testId,
-            taskName: test.name,
-            taskParentNames: test.parentNames,
-            taskType: 'suite',
-            testPath,
-          },
-          async () => {
+        const suiteTask = {
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'suite' as const,
+          testPath,
+        };
+        const runSuite = () =>
+          this.taskContext.run(suiteTask, async () => {
             const start = RealDate.now();
 
             hooks.onTestSuiteStart?.({
@@ -714,8 +714,10 @@ export class TestRunner {
             hooks.onTestSuiteResult?.(result);
 
             return result;
-          },
-        );
+          });
+        result = await (test.concurrent && this.taskContext.runExclusive
+          ? this.taskContext.runExclusive(runSuite)
+          : runSuite());
 
         errors.push(...(result.errors || []));
       } else {
