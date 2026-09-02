@@ -8,11 +8,11 @@ import { PackageManagerTabs } from '@theme';
 
 Rstest 既可以通过 Rsbuild 工具链处理样式，也可以在测试不关心样式时替换样式导入。请根据测试目标选择配置：
 
-| 测试目标                                 | 推荐方案                                  |
-| ---------------------------------------- | ----------------------------------------- |
-| 只测组件逻辑，不检查样式                 | [替换样式导入](#在逻辑测试中替换样式)     |
-| 检查 CSS Modules class name 或预处理结果 | [在 Node.js 测试中处理样式](#nodejs-测试) |
-| 检查 computed styles、布局或视觉效果     | [使用 Browser Mode](#browser-mode)        |
+| 测试目标                                            | 推荐方案                                  |
+| --------------------------------------------------- | ----------------------------------------- |
+| 只测组件逻辑，不检查样式                            | [替换样式导入](#在逻辑测试中替换样式)     |
+| 使用 CSS Modules class name，或检查预处理器能否编译 | [在 Node.js 测试中处理样式](#nodejs-测试) |
+| 检查 computed styles、布局或视觉效果                | [使用 Browser Mode](#browser-mode)        |
 
 ## 在测试中处理样式
 
@@ -131,7 +131,7 @@ export default defineConfig({
 
       config.plugins.push(
         new rspack.NormalModuleReplacementPlugin(
-          /\.(css|less|sass|scss)$/,
+          /\.(css|less|sass|scss)(?:\?.*)?$/,
           (resource) => {
             resource.request = 'identity-obj-proxy';
           },

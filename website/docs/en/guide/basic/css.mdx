@@ -8,11 +8,11 @@ import { PackageManagerTabs } from '@theme';
 
 Rstest can either process styles with the Rsbuild toolchain or replace style imports when a test does not depend on them. Choose the setup based on what the test needs to verify:
 
-| Test goal                                            | Recommended setup                                       |
-| ---------------------------------------------------- | ------------------------------------------------------- |
-| Test component logic without checking styles         | [Replace style imports](#replace-styles-in-logic-tests) |
-| Check CSS Modules class names or preprocessor output | [Process styles in Node.js tests](#nodejs-tests)        |
-| Check computed styles, layout, or visual behavior    | [Use Browser Mode](#browser-mode)                       |
+| Test goal                                                      | Recommended setup                                       |
+| -------------------------------------------------------------- | ------------------------------------------------------- |
+| Test component logic without checking styles                   | [Replace style imports](#replace-styles-in-logic-tests) |
+| Use CSS Modules class names or verify preprocessor compilation | [Process styles in Node.js tests](#nodejs-tests)        |
+| Check computed styles, layout, or visual behavior              | [Use Browser Mode](#browser-mode)                       |
 
 ## Process styles in tests
 
@@ -131,7 +131,7 @@ export default defineConfig({
 
       config.plugins.push(
         new rspack.NormalModuleReplacementPlugin(
-          /\.(css|less|sass|scss)$/,
+          /\.(css|less|sass|scss)(?:\?.*)?$/,
           (resource) => {
             resource.request = 'identity-obj-proxy';
           },
