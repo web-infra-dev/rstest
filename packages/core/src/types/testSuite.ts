@@ -140,6 +140,10 @@ export type TestSuite = TestSuiteInfo & {
   concurrent?: boolean;
   /** @internal True when the suite is nested in a concurrently running suite. */
   inConcurrentScope?: boolean;
+  /** @internal Active hook deadline, when an assertion runs in a suite hook. */
+  activeTimeout?: number;
+  /** @internal Start time for the active suite hook deadline. */
+  activeTimeoutStartTime?: number;
   sequential?: boolean;
   /**
    * Suite-level `TestOptions` passed to `describe(name, options, fn)`. Applied

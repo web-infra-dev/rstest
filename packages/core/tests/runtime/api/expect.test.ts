@@ -30,6 +30,7 @@ const publishFile = (
     workerState: { testPath, runtimeConfig: {} } as WorkerState,
     testRunner: {
       getCurrentTest: () => fakeTest(currentTestName, concurrent),
+      getCurrentTimeoutContext: () => undefined,
     },
   } as FileContext);
 };

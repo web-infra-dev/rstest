@@ -43,6 +43,7 @@ import type {
   MatcherState,
   RstestExpect,
   TestCase,
+  TestSuite,
   WorkerState,
 } from '../../types';
 import { DEFAULT_EXPECT_POLL_TIMEOUT } from '../../utils/constants';
@@ -140,7 +141,7 @@ export function createExpect({
    */
   getWorkerState: () => WorkerState;
   getCurrentTest: () => TestCase | undefined;
-  getElementTest?: () => TestCase | undefined;
+  getElementTest?: () => TestCase | TestSuite | undefined;
   snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
   if (snapshotPlugin) {
@@ -182,7 +183,13 @@ export function createExpect({
   expect.poll = createExpectPoll(
     expect,
     () => getWorkerState().runtimeConfig.expect.poll,
-    () => (getElementTest ? getElementTest() : getCurrentTest()),
+    () => {
+      if (getElementTest) {
+        const timeoutContext = getElementTest();
+        return timeoutContext?.type === 'case' ? timeoutContext : undefined;
+      }
+      return getCurrentTest();
+    },
   );
 
   const element = (locator: unknown): unknown => {
@@ -274,13 +281,16 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
       getWorkerState: getContextWorkerState,
       getCurrentTest: () => fileContext().testRunner.getCurrentTest(),
       getElementTest: () => {
-        const currentTest = fileContext().testRunner.getCurrentTest();
+        const { testRunner } = fileContext();
+        const currentTest = testRunner.getCurrentTest();
+        const timeoutContext =
+          testRunner.getCurrentTimeoutContext() ?? currentTest;
         // The file-level expect is shared, so the runner's current-test pointer
-        // is not reliable while concurrent tests are interleaved. Those tests
-        // use their context-bound expect for test-specific deadlines.
-        return currentTest?.concurrent || currentTest?.inConcurrentScope
+        // is not reliable while concurrent tests or suites are interleaved.
+        // Those tasks use their context-bound expect for test-specific deadlines.
+        return timeoutContext?.concurrent || timeoutContext?.inConcurrentScope
           ? undefined
-          : currentTest;
+          : timeoutContext;
       },
       snapshotPlugin,
     });

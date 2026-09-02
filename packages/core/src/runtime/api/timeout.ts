@@ -1,10 +1,16 @@
-import type { TestCase } from '../../types';
 import { getRealNow } from '../util';
 
 export const TEST_TIMEOUT_BUFFER = 100;
 
+export type TestTimeoutContext = {
+  timeout?: number;
+  startTime?: number;
+  activeTimeout?: number;
+  activeTimeoutStartTime?: number;
+};
+
 export const getRemainingTestTimeout = (
-  test: TestCase,
+  test: TestTimeoutContext,
   timeoutBuffer: number,
 ): number | undefined => {
   const timeout = test.activeTimeout ?? test.timeout;

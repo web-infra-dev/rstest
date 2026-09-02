@@ -21,6 +21,7 @@ import type {
   TestFileResult,
   TestResult,
   TestResultStatus,
+  TestSuite,
   WorkerState,
 } from '../../types';
 import {
@@ -77,6 +78,10 @@ export class TestRunner {
   private workerState: WorkerState | undefined;
   private readonly fileFixtureManager = new FileFixtureManager();
   private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
+  private readonly activeTimeoutContexts = new Map<
+    string,
+    TestCase | TestSuite
+  >();
   private readonly abortControllers = new WeakMap<
     TestContext,
     AbortController
@@ -85,7 +90,7 @@ export class TestRunner {
   constructor(private readonly taskContext: TaskContext) {}
 
   private async runWithActiveTimeout<T>(
-    test: TestCase,
+    test: TestCase | TestSuite,
     fn: (...args: any[]) => any,
     callback: () => T | Promise<T>,
   ): Promise<T> {
@@ -96,13 +101,27 @@ export class TestRunner {
 
     const previousTimeout = test.activeTimeout;
     const previousStartTime = test.activeTimeoutStartTime;
+    const taskId = this.taskContext.getCurrent()?.taskId;
+    const previousContext = taskId
+      ? this.activeTimeoutContexts.get(taskId)
+      : undefined;
     test.activeTimeout = timeout;
     test.activeTimeoutStartTime = RealDate.now();
+    if (taskId) {
+      this.activeTimeoutContexts.set(taskId, test);
+    }
     try {
       return await callback();
     } finally {
       test.activeTimeout = previousTimeout;
       test.activeTimeoutStartTime = previousStartTime;
+      if (taskId) {
+        if (previousContext) {
+          this.activeTimeoutContexts.set(taskId, previousContext);
+        } else {
+          this.activeTimeoutContexts.delete(taskId);
+        }
+      }
     }
   }
 
@@ -644,7 +663,11 @@ export class TestRunner {
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await fn(suiteContext);
+                  const cleanupFn = await this.runWithActiveTimeout(
+                    test,
+                    fn,
+                    () => fn(suiteContext),
+                  );
                   if (cleanupFn) cleanups.push(cleanupFn);
                 }
               } catch (error) {
@@ -673,7 +696,9 @@ export class TestRunner {
             if (shouldRunSuiteHooks && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await fn(suiteContext);
+                  await this.runWithActiveTimeout(test, fn, () =>
+                    fn(suiteContext),
+                  );
                 }
               } catch (error) {
                 result.errors?.push(...(await formatTestError(error)));
@@ -871,6 +896,11 @@ export class TestRunner {
 
   getCurrentTest(): TestCase | undefined {
     return this._test;
+  }
+
+  getCurrentTimeoutContext(): TestCase | TestSuite | undefined {
+    const taskId = this.taskContext.getCurrent()?.taskId;
+    return taskId ? this.activeTimeoutContexts.get(taskId) : undefined;
   }
 
   private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {

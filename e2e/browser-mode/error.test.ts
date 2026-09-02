@@ -38,6 +38,18 @@ describe('browser mode - error handling', () => {
     expect(output).not.toMatch(/timed out in 500ms/i);
   });
 
+  it('reports suite hook element mismatches before hook timeouts', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/elementAssertionTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('beforeAll hook timed out in 2000ms');
+    expect(output).not.toContain('afterAll hook timed out in 2000ms');
+  });
+
   it('resets the element timeout before teardown hooks', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('error', {
       args: ['tests/teardownElementAssertionTimeout.test.ts'],
