@@ -1005,6 +1005,98 @@ describe('prepareRsbuild', () => {
     expect(project.outputModule).toBe(false);
   });
 
+  it('should force require-based chunk loading for federation projects', async () => {
+    // Stand-in for @module-federation/rstest >= 2.9.0's node preset: it
+    // appends a `tools.rspack` patcher via a post-ordered
+    // `modifyEnvironmentConfig` merge — running after rstest's own
+    // `tools.rspack` — that sets `target: 'async-node'` AND explicitly
+    // writes `output.chunkLoading = 'async-node'` (earlier versions only
+    // set the target). rstest cannot win that battle at config level, so
+    // it enforces `require` through a compiler-level plugin whose `apply`
+    // runs after every config hook.
+    const asyncNodeTargetPlugin: RsbuildPlugin = {
+      name: 'federation-like-async-node-target',
+      setup(api) {
+        api.modifyEnvironmentConfig({
+          order: 'post',
+          handler: (config, { mergeEnvironmentConfig }) =>
+            mergeEnvironmentConfig(config, {
+              tools: {
+                rspack: (rspackConfig) => {
+                  rspackConfig.target = 'async-node';
+                  rspackConfig.output ??= {};
+                  rspackConfig.output.chunkLoading = 'async-node';
+                },
+              },
+            }),
+        });
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      outputModule: false,
+      normalizedConfig: {
+        federation: true,
+        plugins: [asyncNodeTargetPlugin],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFileState: createSetupFileState(),
+    });
+
+    const configs = await rsbuildInstance.initConfigs();
+
+    expect(configs[0]!.target).toBe('async-node');
+    // The adversarial post hook won the config-level battle, as the real
+    // federation plugin does...
+    expect(configs[0]!.output?.chunkLoading).toBe('async-node');
+    // ...so the enforcement lives in a compiler-level plugin: its `apply`
+    // runs after every config hook and re-asserts `require`.
+    const enforcementPlugin = configs[0]!.plugins?.find(
+      (plugin) =>
+        plugin &&
+        typeof plugin === 'object' &&
+        'name' in plugin &&
+        plugin.name === 'RstestFederationRequireChunkLoading',
+    );
+    expect(enforcementPlugin).toBeDefined();
+    const compiler = { options: { output: { chunkLoading: 'async-node' } } };
+    (enforcementPlugin as { apply: (c: unknown) => void }).apply(compiler);
+    expect(compiler.options.output.chunkLoading).toBe('require');
+    // `chunkFormat` is deliberately left to rspack's target derivation
+    // (`'commonjs'` for node targets); the federation e2e suite is the
+    // behavioral pin for the emitted chunk format.
+    expect(configs[0]!.output?.chunkFormat).toBeUndefined();
+  });
+
   it('should not allow modifyRstestConfig to switch browser mode', async () => {
     const modifyBrowserModePlugin: RsbuildPlugin = {
       name: 'modify-rstest-browser-mode',

@@ -831,10 +831,11 @@ const defaultPlaywrightFixture = async (
   const configuredPlaywright = rs.getConfig().playwright as
     PlaywrightOptions | undefined;
   await use(
-    structuredClone({
-      browserName: DEFAULT_BROWSER_NAME,
+    {
       ...configuredPlaywright,
-    }),
+      browserName:
+        configuredPlaywright?.browserName ?? DEFAULT_BROWSER_NAME,
+    },
   );
 };
 

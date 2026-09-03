@@ -16,6 +16,10 @@ suite('Editor / Test Explorer UX commands', () => {
     // openOutput just reveals the channel — it must not throw.
     await vscode.commands.executeCommand('rstest.openOutput');
 
+    // openRstackExtension only opens the Extensions view search — it must
+    // not throw or need network access.
+    await vscode.commands.executeCommand('rstest.openRstackExtension');
+
     const fileItem = await waitFor(() =>
       getTestItemByLabels(controller.items, ['test', 'progress.test.ts']),
     );

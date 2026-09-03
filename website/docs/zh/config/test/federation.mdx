@@ -21,7 +21,7 @@ Rstest 在单个 worker 运行时中执行测试产物，以保证模块 mock �
 - 为外部化的动态导入提供 `globalThis` 兜底实现，使通过 `vm`/`eval` 执行的 federation 运行时 chunk 仍能使用 Node 原生动态导入加载模块。
 - 防止 Module Federation 的占位 chunk 处理器（`consumes` / `remotes`）在 federation 运行时初始化前抛出异常。
 - 阻止 federation 运行时插件替换 Rstest 的 chunk 加载处理器，否则 chunk 会在测试运行时之外执行并丢失 mock。
-- 面向 Node 的 federation 运行会使用 Rstest 的 CommonJS worker loader，并可从内存构建产物中提供虚拟 async-node chunks。
+- 面向 Node 的 federation 运行会使用 Rstest 的 CommonJS worker loader；Rstest 会将 `output.chunkLoading` 强制为 `'require'`，使 async chunks 通过 Rstest 的模块加载器从内存构建产物中加载，而不经过文件系统。
 
 import { Tab, Tabs } from '@theme';
 

@@ -382,7 +382,8 @@ const buildRstestUtilities = async (): Promise<{
         restoreMocks,
         maxConcurrency,
         retry,
-        playwright,
+        playwright:
+          playwright === undefined ? undefined : structuredClone(playwright),
       };
     },
 

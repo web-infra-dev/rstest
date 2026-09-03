@@ -198,6 +198,18 @@ const formatTemplate = (template: string, values: any[]): string => {
   });
 };
 
+/**
+ * The callback arguments for each row of an `each` table. Whether rows are
+ * spread is decided by the whole table, as Jest and Vitest do: only when every
+ * row is an array, so an array row of a mixed table reaches the callback as the
+ * array itself. `Array.from` densifies a sparse table, so a hole becomes one
+ * `undefined` argument instead of a failed spread.
+ */
+export const resolveEachArgs = (cases: readonly unknown[]): unknown[][] => {
+  const rows = Array.from(cases);
+  return rows.every(Array.isArray) ? rows : rows.map((row) => [row]);
+};
+
 export const formatName = (
   template: string,
   param: any[] | Record<string, any>,

@@ -29,14 +29,39 @@ it('should set the federation flag during global setup', () => {
   expect(process.env.RSTEST_E2E_FEDERATION_IN_SETUP).toBe('true');
 });
 
-it('should preserve emitted binary assets in the virtual file system', () => {
+declare const __webpack_require__: any;
+
+it('should load async chunks through the require chunk handler from memory', async () => {
+  // Federation forces `output.chunkLoading: 'require'`; a dynamic import of a
+  // local module produces a real js async chunk that only the generated
+  // `f.require` handler can install (`f.readFileVm` is not generated, and the
+  // federation `remotes`/`consumes` handlers ignore plain js chunks). Wrapping
+  // `__webpack_require__.e` proves the import went through the chunk-ensure
+  // machinery instead of being inlined, so a silent fallback to fs-based
+  // loading fails this test on every platform.
+  expect(__webpack_require__.f.readFileVm).toBeUndefined();
+  expect(typeof __webpack_require__.f.require).toBe('function');
+
+  const ensuredChunks: unknown[] = [];
+  const originalEnsure = __webpack_require__.e;
+  __webpack_require__.e = function (chunkId: unknown) {
+    ensuredChunks.push(chunkId);
+    return originalEnsure.call(this, chunkId);
+  };
+  try {
+    const mod = await import('./lazy-target');
+    expect(mod.answer).toBe(42);
+  } finally {
+    __webpack_require__.e = originalEnsure;
+  }
+  expect(ensuredChunks.length).toBeGreaterThan(0);
+});
+
+it('should preserve emitted binary assets on disk with writeToDisk', () => {
   const fs = require('node:fs');
   const emittedImagePath = resolve(__dirname, 'dist/.rstest-temp', imagePath);
   expect(fs.existsSync(emittedImagePath)).toBe(true);
 
-  fs.readFileSync(emittedImagePath, 'utf8');
-  const mutatedContent = fs.readFileSync(emittedImagePath);
-  mutatedContent[0] = 0;
   const content = fs.readFileSync(emittedImagePath);
   const sourceContent = fs.readFileSync(
     resolve(

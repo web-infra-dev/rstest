@@ -28,6 +28,8 @@ import type {
 } from '../types';
 import {
   castArray,
+  DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT,
+  DEFAULT_BROWSER_TEST_TIMEOUT,
   ENV,
   getAbsolutePath,
   logger,
@@ -69,6 +71,24 @@ const resolveOutputModule = (config: OutputModuleConfig): boolean =>
     ? false
     : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');
 
+const applyBrowserDefaults = <
+  Config extends Pick<NormalizedConfig, 'browser' | 'testTimeout' | 'expect'>,
+>(
+  config: Config,
+  userConfig: RstestConfig,
+): Config => {
+  if (!config.browser.enabled) {
+    return config;
+  }
+  if (userConfig.testTimeout === undefined) {
+    config.testTimeout = DEFAULT_BROWSER_TEST_TIMEOUT;
+  }
+  if (userConfig.expect?.poll?.timeout === undefined) {
+    config.expect.poll.timeout = DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT;
+  }
+  return config;
+};
+
 type Options = {
   cwd: string;
   command: RstestCommand;
@@ -108,6 +128,7 @@ export class Rstest implements RstestContext {
     results: [],
     testResults: [],
   };
+  private reporterResultIndex = new Map<string, number>();
   public stateManager: TestStateManager = new TestStateManager();
 
   public testState: RstestTestState = {
@@ -149,14 +170,17 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(
-      resolveBuildCacheDependencyPaths(
-        {
-          ...userConfig,
-          root: rootPath,
-        },
-        configFilePath,
+    const rstestConfig = applyBrowserDefaults(
+      withDefaultConfig(
+        resolveBuildCacheDependencyPaths(
+          {
+            ...userConfig,
+            root: rootPath,
+          },
+          configFilePath,
+        ),
       ),
+      userConfig,
     );
 
     if (command === 'watch' && rstestConfig.shard) {
@@ -177,12 +201,14 @@ export class Rstest implements RstestContext {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
 
           // TODO: support extend projects config
-          const config = withDefaultConfig(
-            resolveBuildCacheDependencyPaths(
-              project.config,
-              project.configFilePath ?? configFilePath,
-            ),
-          ) as NormalizedProjectConfig;
+          const projectUserConfig = resolveBuildCacheDependencyPaths(
+            project.config,
+            project.configFilePath ?? configFilePath,
+          );
+          const config = applyBrowserDefaults(
+            withDefaultConfig(projectUserConfig) as NormalizedProjectConfig,
+            projectUserConfig,
+          );
           if (
             rstestConfig.playwright !== undefined ||
             config.playwright !== undefined
@@ -305,12 +331,14 @@ export class Rstest implements RstestContext {
   ): void {
     // Update or add results
     results.forEach((item) => {
-      const existingIndex = this.reporterResults.results.findIndex(
-        (r) => r.testPath === item.testPath,
-      );
-      if (existingIndex !== -1) {
+      const existingIndex = this.reporterResultIndex.get(item.testPath);
+      if (existingIndex !== undefined) {
         this.reporterResults.results[existingIndex] = item;
       } else {
+        this.reporterResultIndex.set(
+          item.testPath,
+          this.reporterResults.results.length,
+        );
         this.reporterResults.results.push(item);
       }
     });
@@ -342,6 +370,10 @@ export class Rstest implements RstestContext {
     const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
       a.testPath.localeCompare(b.testPath);
     this.reporterResults.results.sort(byTestPath);
+    this.reporterResultIndex.clear();
+    this.reporterResults.results.forEach((result, index) => {
+      this.reporterResultIndex.set(result.testPath, index);
+    });
     this.reporterResults.testResults.sort(byTestPath);
   }
 }

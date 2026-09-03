@@ -86,6 +86,32 @@ describe('RunnerRuntime', () => {
     ).toEqual(['test - 1 - 1']);
   });
 
+  it('tracks concurrent suite scope for sequential children', async () => {
+    const instance = createApi();
+
+    runtimeAPI.describe.concurrent('concurrent suite', () => {
+      runtimeAPI.it.sequential('sequential child', () => {});
+      runtimeAPI.describe.sequential('sequential nested suite', () => {
+        runtimeAPI.it('nested child', () => {});
+      });
+    });
+
+    const [suite] = await instance.getTests();
+    const concurrentSuite = suite as TestSuite;
+    const [sequentialChild, nestedSuite] = concurrentSuite.tests;
+
+    if (!nestedSuite) {
+      throw new Error('expected the nested sequential suite to be collected');
+    }
+
+    expect((sequentialChild as TestCase).concurrent).toBeUndefined();
+    expect((sequentialChild as TestCase).inConcurrentScope).toBe(true);
+    expect(nestedSuite.inConcurrentScope).toBe(true);
+    expect(
+      ((nestedSuite as TestSuite).tests[0] as TestCase).inConcurrentScope,
+    ).toBe(true);
+  });
+
   it('should add test correctly when describe fn undefined', async () => {
     const instance = createPublishedRuntimeAPI({
       testPath: __filename,

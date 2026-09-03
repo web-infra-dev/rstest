@@ -306,6 +306,10 @@ const timeoutOptions = new WeakMap<
   TimeoutOptions<(...args: any[]) => any>
 >();
 
+export const getWrappedTimeout = (
+  fn: (...args: any[]) => any,
+): number | undefined => timeoutOptions.get(fn)?.timeout;
+
 export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,
@@ -401,13 +405,24 @@ export function limitConcurrency(
   ...args: Args
 ) => Promise<T> {
   let running = 0;
-  const queue: (() => void)[] = [];
+  const queue: Array<(() => void) | undefined> = [];
+  let queueIndex = 0;
 
   const runNext = () => {
-    if (queue.length > 0 && running < concurrency) {
+    if (queueIndex < queue.length && running < concurrency) {
       running++;
-      const next = queue.shift()!;
+      const next = queue[queueIndex]!;
+      queue[queueIndex] = undefined;
+      queueIndex++;
       next();
+
+      if (queueIndex === queue.length) {
+        queue.length = 0;
+        queueIndex = 0;
+      } else if (queueIndex > 1024 && queueIndex * 2 > queue.length) {
+        queue.splice(0, queueIndex);
+        queueIndex = 0;
+      }
     }
   };
 

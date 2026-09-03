@@ -1,5 +1,13 @@
 # Rstest VS Code extension
 
+> [!IMPORTANT]
+>
+> **This extension is retired. Migrate to the [Rstack](https://github.com/rstackjs/rstack-editor) extension.**
+>
+> New editor features land in the unified [Rstack](https://marketplace.visualstudio.com/items?itemName=rstack.rstack) extension (`rstack.rstack`), which covers testing, linting and formatting in one install. It is also available on the [Open VSX Registry](https://open-vsx.org/extension/rstack/rstack) for Cursor, Trae, VSCodium and other VS Code forks. This standalone extension stays published and keeps working while the transition is underway, but receives no new features.
+>
+> To switch: install `rstack.rstack`, disable or uninstall `rstack.rstest` so only one copy of Rstest runs, then re-enter your settings under the `rstack.rstest.*` keys. Settings are not migrated automatically — see the [migration notes](https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions).
+
 Rstest is a VS Code extension that discovers, displays, and runs tests in your workspace. It builds a rich Test Explorer tree from your test files and keeps it up to date as files change.
 
 ## Features

@@ -135,8 +135,12 @@ test.todo('should implement this test');
 - **类型：**
 
 ```ts
-test.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+// Every row is an array: the row is spread into the arguments
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+test.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 对提供的数组中的每一项运行相同的测试逻辑。
@@ -199,6 +203,15 @@ test.each([
 // 此时将返回：
 // adds 1 + 2 to equal 3
 // adds 2 + 2 to equal 4
+```
+
+只有当表格的每一行都是数组时，行才会展开成测试函数的多个参数。只要有一行不是数组，每一行都会整体作为单个参数传入，混合表中的数组行会原样传给测试函数：
+
+```ts
+test.each([null, 42, ['a']])('rejects %o', (value) => {
+  // The third case receives ['a'], not 'a'.
+  expect(isValid(value)).toBe(false);
+});
 ```
 
 你也可以使用 `$` 前缀访问对象属性：

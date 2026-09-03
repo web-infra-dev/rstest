@@ -24,8 +24,13 @@ describe('rstest utilities per-file reset', () => {
   it('returns project playwright config', async () => {
     const playwright = { contextOptions: { locale: 'en-US' } };
     const rs = await createUtilities({ playwright });
+    const config = rs.getConfig();
 
-    expect(rs.getConfig().playwright).toBe(playwright);
+    expect(config.playwright).toEqual(playwright);
+    expect(config.playwright).not.toBe(playwright);
+
+    config.playwright!.contextOptions = { locale: 'zh-CN' };
+    expect(rs.getConfig().playwright).toEqual(playwright);
   });
 });
 
