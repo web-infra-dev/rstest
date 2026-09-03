@@ -3,6 +3,20 @@ import type { PoolOptions, PoolTask } from '../types';
 import { ForksPoolWorker } from './forksPoolWorker';
 import { ThreadsPoolWorker } from './threadsPoolWorker';
 
+export const composeSpawnEnv = (task: PoolTask): Record<string, string> => {
+  const env: Record<string, string> = { NODE_ENV: 'test' };
+
+  for (const [key, value] of Object.entries(
+    task.options.context.runtimeConfig.env,
+  )) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+
+  return env;
+};
+
 export function createPoolWorker(
   task: PoolTask,
   options: PoolOptions,
@@ -13,7 +27,7 @@ export function createPoolWorker(
       return new ForksPoolWorker({
         name: `forks-${workerId}`,
         filename: options.workerEntry,
-        env: options.env,
+        env: composeSpawnEnv(task),
         execArgv: options.execArgv,
         forwardStdio: options.forwardStdio,
       });
@@ -22,7 +36,7 @@ export function createPoolWorker(
       return new ThreadsPoolWorker({
         name: `threads-${workerId}`,
         filename: options.workerEntry,
-        env: options.env,
+        env: composeSpawnEnv(task),
         execArgv: options.execArgv,
         forwardStdio: options.forwardStdio,
       });

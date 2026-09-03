@@ -2,6 +2,7 @@ import { describe, expect, it } from '@rstest/core';
 import {
   getForceColorEnv,
   hasUserColorEnv,
+  pickColorEnv,
   resolveTaskColorEnv,
 } from '../../src/utils/logger';
 
@@ -9,7 +10,22 @@ describe('hasUserColorEnv', () => {
   it('detects defined FORCE_COLOR and NO_COLOR values', () => {
     expect(hasUserColorEnv({})).toBe(false);
     expect(hasUserColorEnv({ FORCE_COLOR: '' })).toBe(true);
-    expect(hasUserColorEnv({}, { NO_COLOR: '1' })).toBe(true);
+    expect(hasUserColorEnv({ NO_COLOR: '1' })).toBe(true);
+  });
+});
+
+describe('pickColorEnv', () => {
+  it('keeps only defined color env values', () => {
+    expect(
+      pickColorEnv({ FORCE_COLOR: '1', NO_COLOR: '', OTHER_ENV: 'value' }),
+    ).toEqual({ FORCE_COLOR: '1', NO_COLOR: '' });
+    expect(
+      pickColorEnv({
+        FORCE_COLOR: undefined,
+        NO_COLOR: undefined,
+        OTHER_ENV: 'value',
+      }),
+    ).toEqual({});
   });
 });
 

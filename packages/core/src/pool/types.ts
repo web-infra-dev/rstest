@@ -16,7 +16,6 @@ export type PoolOptions = {
   maxWorkers: number;
   minWorkers: number;
   isolate: boolean;
-  env?: Record<string, string>;
   execArgv?: string[];
   /**
    * Whether to forward worker stdio to the host process. Defaults to `true`

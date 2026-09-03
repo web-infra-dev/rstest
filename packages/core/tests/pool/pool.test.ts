@@ -1,6 +1,7 @@
 import { resolve } from 'pathe';
 import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
+import { composeSpawnEnv } from '../../src/pool/workers';
 import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 
@@ -45,10 +46,32 @@ const createTask = (
   worker: 'forks',
   type,
   options: {
+    context: { runtimeConfig: { env: {} } },
     environmentKey,
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
+});
+
+describe('composeSpawnEnv', () => {
+  it('uses the task env and omits undefined values', () => {
+    const task = createTask('run', {
+      context: {
+        runtimeConfig: {
+          env: {
+            NODE_ENV: 'production',
+            CUSTOM_ENV: 'value',
+            REMOVED_ENV: undefined,
+          },
+        },
+      },
+    });
+
+    expect(composeSpawnEnv(task)).toEqual({
+      NODE_ENV: 'production',
+      CUSTOM_ENV: 'value',
+    });
+  });
 });
 
 // ── basic run ───────────────────────────────────────────────────────────────

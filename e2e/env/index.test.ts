@@ -85,8 +85,19 @@ describe('test environment variables', () => {
       ['run', 'configNoColor.test.ts', '--pool', 'threads'],
     ],
     ['forks', 'config-color-projects', ['run', '--pool', 'forks']],
+    ['threads', 'config-color-projects', ['run', '--pool', 'threads']],
+    [
+      'forks',
+      'config-color-projects',
+      ['run', '--pool', 'forks', '--isolate=false', '--pool.maxWorkers', '1'],
+    ],
+    [
+      'threads',
+      'config-color-projects',
+      ['run', '--pool', 'threads', '--isolate=false', '--pool.maxWorkers', '1'],
+    ],
   ] satisfies [string, string, string[]][])(
-    'should preserve configured color env in the %s pool (%s)',
+    'should preserve configured color env in the %s pool (%s, case %#)',
     async (_pool, fixtureDir, args) => {
       const { expectExecSuccess } = await runRstestCli({
         command: 'rstest',

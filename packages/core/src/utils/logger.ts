@@ -31,6 +31,7 @@ export const isDebug = (): boolean => {
 };
 
 type ColorEnvSource = Readonly<Record<string, string | undefined>>;
+type ColorEnv = Partial<Record<'FORCE_COLOR' | 'NO_COLOR', string>>;
 
 interface ForceColorEnvOptions {
   userSetColorEnv?: boolean;
@@ -38,10 +39,19 @@ interface ForceColorEnvOptions {
   isColorSupported?: boolean;
 }
 
-export const hasUserColorEnv = (...envs: ColorEnvSource[]): boolean =>
-  envs.some(
-    (env) => env.FORCE_COLOR !== undefined || env.NO_COLOR !== undefined,
-  );
+export const hasUserColorEnv = (env: ColorEnvSource): boolean =>
+  env.FORCE_COLOR !== undefined || env.NO_COLOR !== undefined;
+
+export const pickColorEnv = (env: ColorEnvSource): ColorEnv => {
+  const colorEnv: ColorEnv = {};
+  if (env.FORCE_COLOR !== undefined) {
+    colorEnv.FORCE_COLOR = env.FORCE_COLOR;
+  }
+  if (env.NO_COLOR !== undefined) {
+    colorEnv.NO_COLOR = env.NO_COLOR;
+  }
+  return colorEnv;
+};
 
 /**
  * Determine color env vars (`FORCE_COLOR` / `NO_COLOR`) to inject into
@@ -92,12 +102,12 @@ export function getForceColorEnv(options?: ForceColorEnvOptions): {
 }
 
 /**
- * Task-time color env for a project. Always states both keys: an `undefined`
- * value makes the worker's `setupEnv` delete a spawn-time default so a project
- * `env` can retract it (#1767). The pool's spawn env only seeds import-time
- * color detection (#1081); this is the authority at task time.
- * Bun forks drop `undefined` through JSON IPC, which only matters when
- * `isolate: false` reuses a worker across projects with differing preferences.
+ * Task-time color env for a project. A worker is spawned from the creating
+ * task's env and reusable workers are color-env-affine, so import-time color
+ * detection matches the project. Both keys are still stated so `setupEnv` can
+ * retract stale values within a matched worker as a safeguard. Bun forks may
+ * drop `undefined` through JSON IPC, but reuse affinity makes those omitted
+ * markers irrelevant to import-time detection.
  */
 export const resolveTaskColorEnv = (
   resolvedEnv: ColorEnvSource,
