@@ -1,5 +1,5 @@
 ---
-description: Project-level default options for the @rstest/playwright fixtures.
+description: Default options for the @rstest/playwright fixtures.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 playwright?: Record<string, unknown>;
 ```
 
-Set default options for the `playwright` fixture provided by [@rstest/playwright](/guide/advanced/playwright) in the current project.
+Set default options for the `playwright` fixture provided by [@rstest/playwright](/guide/advanced/playwright). A root config is shared by all projects, while a project's `playwright` config overrides it.
 
 Use `satisfies PlaywrightOptions` to get the concrete Playwright type from the integration package:
 
@@ -60,7 +60,5 @@ test('uses the overridden viewport', async ({ page }) => {
 ```
 
 The override replaces the project-level `playwright` value instead of merging with it. Include every project option that the test should keep.
-
-The options are available in Node workers through `rs.getConfig().playwright`. They must be serializable across the worker transport. Use `test.extend` for functions, class instances, dynamic retry-dependent values, or test-specific overrides.
 
 When a test overrides the `playwright` fixture with `test.extend`, the fixture override takes precedence over this project configuration.

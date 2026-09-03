@@ -227,7 +227,7 @@ String text assertions normalize whitespace. Each Playwright-style assertion ret
 
 ## Configure playwright options
 
-Set project-level Playwright defaults in `rstest.config.ts`. Use `satisfies PlaywrightOptions` to keep type checking and autocomplete:
+Set Playwright defaults in `rstest.config.ts`. Use `satisfies PlaywrightOptions` to keep type checking and autocomplete:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

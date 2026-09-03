@@ -105,6 +105,50 @@ describe('rstest context', () => {
     }
   });
 
+  it('propagates root playwright config and merges project overrides', () => {
+    const rstestContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [
+          { config: { root: join(rootPath, 'a'), name: 'a' } },
+          {
+            config: {
+              root: join(rootPath, 'b'),
+              name: 'b',
+              playwright: {
+                contextOptions: {
+                  viewport: { height: 555 },
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        playwright: {
+          browserName: 'chromium',
+          contextOptions: {
+            viewport: { width: 777, height: 444 },
+          },
+        },
+      },
+    );
+
+    expect(rstestContext.projects[0]!.normalizedConfig.playwright).toEqual({
+      browserName: 'chromium',
+      contextOptions: {
+        viewport: { width: 777, height: 444 },
+      },
+    });
+    expect(rstestContext.projects[1]!.normalizedConfig.playwright).toEqual({
+      browserName: 'chromium',
+      contextOptions: {
+        viewport: { width: 777, height: 555 },
+      },
+    });
+  });
+
   it('preserves the silent value of each project', () => {
     const rstestContext = new Rstest(
       {

@@ -117,7 +117,7 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.12.0" />
 
-可以在 `rstest.config.ts` 中设置当前 project 的 Playwright 默认选项。使用 `satisfies PlaywrightOptions` 可以保留类型检查和自动补全：
+可以在 `rstest.config.ts` 中设置 Playwright 默认选项。根配置会作为所有 project 的默认值，project 中的 `playwright` 配置会覆盖根配置。使用 `satisfies PlaywrightOptions` 可以保留类型检查和自动补全：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

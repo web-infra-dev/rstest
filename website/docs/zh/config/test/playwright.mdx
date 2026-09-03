@@ -1,5 +1,5 @@
 ---
-description: 当前 project 的 @rstest/playwright fixture 默认选项配置。
+description: @rstest/playwright fixture 的默认选项配置。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 playwright?: Record<string, unknown>;
 ```
 
-在当前 project 中设置 [@rstest/playwright](/guide/advanced/playwright) 提供的 `playwright` fixture 默认选项。
+设置 [@rstest/playwright](/guide/advanced/playwright) 提供的 `playwright` fixture 默认选项。根配置会作为所有 project 的默认值，project 中的 `playwright` 配置会覆盖根配置。
 
 使用 `satisfies PlaywrightOptions` 可以从 integration package 获取具体的 Playwright 类型：
 
@@ -60,7 +60,5 @@ test('uses the overridden viewport', async ({ page }) => {
 ```
 
 覆盖 `playwright` fixture 会替换当前 project 配置，而不是与其合并。如果需要保留 project 配置中的选项，请在覆盖值中一并写出。
-
-这些选项会通过 `rs.getConfig().playwright` 提供给 Node worker。配置值必须可以通过 worker transport 传递。对于函数、class instance、依赖动态 retry 值的配置或测试级覆盖，请使用 `test.extend`。
 
 测试通过 `test.extend` 覆盖 `playwright` fixture 时，fixture 覆盖值的优先级高于当前 project 配置。

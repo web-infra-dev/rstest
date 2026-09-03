@@ -830,7 +830,12 @@ const defaultPlaywrightFixture = async (
   // Core keeps provider options opaque; this is the provider-owned decoding boundary.
   const configuredPlaywright = rs.getConfig().playwright as
     PlaywrightOptions | undefined;
-  await use(configuredPlaywright ?? { browserName: DEFAULT_BROWSER_NAME });
+  await use(
+    structuredClone({
+      browserName: DEFAULT_BROWSER_NAME,
+      ...configuredPlaywright,
+    }),
+  );
 };
 
 const cleanupBrowserFixture = [

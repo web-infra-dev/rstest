@@ -156,9 +156,10 @@ export const resolveExtends = async (
  * Deep-merge plain data: recurse into plain objects, replace everything else
  * (arrays, functions, class instances) with the later value.
  *
- * For `browser.providerOptions` — an opaque provider payload that must NOT use
- * `mergeRsbuildConfig`, whose function-chaining / array-concat would corrupt
- * callable options (`launch.logger.log`) or append `launch.args`.
+ * For opaque provider payloads such as `browser.providerOptions` and
+ * `playwright` — values must NOT use `mergeRsbuildConfig`, whose
+ * function-chaining / array-concat would corrupt callable options
+ * (`launch.logger.log`) or append `launch.args`.
  */
 export const plainDeepMerge = <T>(base: T, override: T): T =>
   deepmerge(base ?? {}, override ?? {}, {
