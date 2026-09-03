@@ -45,7 +45,6 @@ fixtures-test-*/
 .rstest-reports/
 .rstest-playwright/
 .rslib/
-**/.rstack/declarations/
 !packages/core/src/coverage
 !packages/core/tests/coverage
 tests-dist/
