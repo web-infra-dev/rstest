@@ -65,7 +65,7 @@
       },
       {
         "command": "rstest.openRstackExtension",
-        "title": "Migrate to Rstack Editor",
+        "title": "Migrate to Rstack",
         "category": "Rstest"
       }
     ],

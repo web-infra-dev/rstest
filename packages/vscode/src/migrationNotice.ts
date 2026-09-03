@@ -8,11 +8,11 @@ const MIGRATION_NOTES_URL =
   'https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions';
 
 /**
- * Rstack Editor bundles the same Rstest integration as this extension. When
+ * The Rstack extension bundles the same Rstest integration as this extension. When
  * it is installed, enabled, and has its Rstest stack switched on, this
  * extension must stand down so only one Test Explorer controller runs.
  * `extensions.getExtension` only sees enabled extensions, so a disabled
- * Rstack Editor does not count.
+ * Rstack extension does not count.
  */
 export function rstackEditorTakesOver(): boolean {
   return (
@@ -33,7 +33,7 @@ const NOTICES: Record<
       [
         '**The standalone Rstest extension is retired.**',
         '',
-        `New editor features land in the unified **Rstack** extension (\`${RSTACK_EXTENSION_ID}\`), which covers Rstest, Rslint and \`rs fmt\`. Click to open it in the Extensions view.`,
+        `New editor features land in the unified **Rstack** extension (\`${RSTACK_EXTENSION_ID}\`), which covers testing, linting and formatting. Click to open it in the Extensions view.`,
         '',
         `Settings move from \`rstest.*\` to \`rstack.rstest.*\` and are not migrated automatically — see the [migration notes](${MIGRATION_NOTES_URL}).`,
       ].join('\n'),
@@ -44,7 +44,7 @@ const NOTICES: Record<
     text: '$(sparkle-filled) Rstest: off',
     tooltip: new vscode.MarkdownString(
       [
-        `**Rstack Editor (\`${RSTACK_EXTENSION_ID}\`) is running Rstest, so this extension is inactive.**`,
+        `**Rstack (\`${RSTACK_EXTENSION_ID}\`) is running Rstest, so this extension is inactive.**`,
         '',
         'Click to open this extension in the Extensions view and uninstall it.',
       ].join('\n'),
@@ -55,7 +55,7 @@ const NOTICES: Record<
     text: '$(sparkle-filled) Rstest: reload window',
     tooltip: new vscode.MarkdownString(
       [
-        `**Rstack Editor (\`${RSTACK_EXTENSION_ID}\`) changed after this window started.**`,
+        `**Rstack (\`${RSTACK_EXTENSION_ID}\`) changed after this window started.**`,
         '',
         'Click to reload the window so exactly one copy of Rstest runs.',
       ].join('\n'),
@@ -65,10 +65,11 @@ const NOTICES: Record<
 };
 
 /**
- * Non-modal status bar reminder that this extension is superseded by Rstack
- * Editor. `standingDown` is the decision `activate` made; a live controller
- * cannot be torn down (or created) afterwards, so whenever Rstack Editor's
- * state no longer matches that decision the notice asks for a reload.
+ * Non-modal status bar reminder that this extension is superseded by the
+ * Rstack extension. `standingDown` is the decision `activate` made; a live
+ * controller cannot be torn down (or created) afterwards, so whenever the
+ * Rstack extension's state no longer matches that decision the notice asks
+ * for a reload.
  */
 export function createMigrationNotice(
   context: vscode.ExtensionContext,
@@ -89,7 +90,7 @@ export function createMigrationNotice(
     'rstest.migrationNotice',
     vscode.StatusBarAlignment.Right,
   );
-  item.name = 'Rstest: Migrate to Rstack Editor';
+  item.name = 'Rstest: Migrate to Rstack';
   item.backgroundColor = new vscode.ThemeColor(
     'statusBarItem.warningBackground',
   );

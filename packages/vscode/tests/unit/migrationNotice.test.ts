@@ -28,16 +28,16 @@ describe('rstackEditorTakesOver', () => {
     }
   });
 
-  it('keeps this extension active without Rstack Editor', () => {
+  it('keeps this extension active without the Rstack extension', () => {
     expect(rstackEditorTakesOver()).toBe(false);
   });
 
-  it('stands down when Rstack Editor is enabled', () => {
+  it('stands down when the Rstack extension is enabled', () => {
     installed = new Set(['rstack.rstack']);
     expect(rstackEditorTakesOver()).toBe(true);
   });
 
-  it('stays active when Rstack Editor has its Rstest stack switched off', () => {
+  it('stays active when the Rstack extension has its Rstest stack switched off', () => {
     installed = new Set(['rstack.rstack']);
     settings['rstack.rstest.enable'] = false;
     expect(rstackEditorTakesOver()).toBe(false);
