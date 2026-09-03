@@ -119,6 +119,7 @@ export class GlobalSetupWorker {
         ],
         env: {
           NODE_ENV: 'test',
+          // Config env is test-worker scoped; globalSetup uses host color env.
           ...getForceColorEnv(),
           ...process.env,
         } as NodeJS.ProcessEnv,

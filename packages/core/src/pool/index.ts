@@ -19,6 +19,7 @@ import {
   color,
   getFileTaskId,
   getForceColorEnv,
+  hasUserColorEnv,
   isDeno,
   logger,
   needFlagExperimentalDetectModule,
@@ -30,6 +31,7 @@ import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
+import { isNodeProject } from '../core/isBrowserProject';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
 import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import {
@@ -388,6 +390,11 @@ export const createPool = async ({
   // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
   const minWorkers = Math.min(maxWorkers, recommendCount);
 
+  const nodeProjectEnvs = context.projects
+    .filter(isNodeProject)
+    .map((project) => project.normalizedConfig.env);
+  const userSetColorEnv = hasUserColorEnv(process.env, ...nodeProjectEnvs);
+
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
     isolate,
@@ -398,9 +405,12 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
+    // If any project states a color preference, spawn without a color default.
+    // projectRuntimeConfig re-adds it per task for projects that state none,
+    // preserving colored worker output from #1081 while respecting #1767.
     env: {
       NODE_ENV: 'test',
-      ...getForceColorEnv(),
+      ...getForceColorEnv({ userSetColorEnv }),
       ...process.env,
     } as Record<string, string>,
     memoryGate: selectMemoryGate(workerKind),
