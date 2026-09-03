@@ -35,7 +35,7 @@ export default defineConfig({
 });
 ```
 
-Only JSON- or structured-clone-serializable values can be passed through the worker transport. Functions such as `launchOptions.logger`, class instances, and values that depend on the current test or retry context are not supported; use `test.extend` for these cases.
+Only JSON- or structured-clone-serializable values can be passed through the worker transport. Functions such as `launchOptions.logger`, class instances, direct `Buffer` values in client certificates, and values that depend on the current test or retry context are not supported. Use `certPath`/`keyPath`/`pfxPath` or `test.extend` instead.
 
 ## Override with test.extend
 

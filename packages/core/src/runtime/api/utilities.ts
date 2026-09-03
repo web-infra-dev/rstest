@@ -8,7 +8,6 @@ import type {
   Truthy,
 } from '../../types';
 import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
-import { isPlainObject } from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import { getRealTimers } from '../util';
 import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
@@ -17,35 +16,6 @@ import { initSpy } from './spy';
 
 const DEFAULT_WAIT_TIMEOUT = 1000;
 const DEFAULT_WAIT_INTERVAL = 50;
-
-type BufferConstructor = {
-  isBuffer: (value: unknown) => value is Uint8Array;
-  from: (value: Uint8Array) => Uint8Array;
-};
-
-const clonePlaywrightConfig = <T>(value: T): T => {
-  const buffer = (
-    globalThis as typeof globalThis & { Buffer?: BufferConstructor }
-  ).Buffer;
-  if (buffer?.isBuffer(value)) {
-    return buffer.from(value) as T;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(clonePlaywrightConfig) as T;
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        clonePlaywrightConfig(item),
-      ]),
-    ) as T;
-  }
-
-  return value && typeof value === 'object' ? structuredClone(value) : value;
-};
 
 const getRealSetTimeout = () =>
   getRealTimers().setTimeout ?? globalThis.setTimeout.bind(globalThis);
@@ -413,9 +383,7 @@ const buildRstestUtilities = async (): Promise<{
         maxConcurrency,
         retry,
         playwright:
-          playwright === undefined
-            ? undefined
-            : clonePlaywrightConfig(playwright),
+          playwright === undefined ? undefined : structuredClone(playwright),
       };
     },
 

@@ -35,7 +35,7 @@ export default defineConfig({
 });
 ```
 
-只有支持 JSON 或 structured clone 的值才能通过 worker transport 传递。函数（例如 `launchOptions.logger`）、class instance，以及依赖当前测试或 retry 上下文动态计算的值不支持通过配置传入，这些场景请使用 `test.extend`。
+只有支持 JSON 或 structured clone 的值才能通过 worker transport 传递。函数（例如 `launchOptions.logger`）、class instance、client certificate 中直接传入的 `Buffer`，以及依赖当前测试或 retry 上下文动态计算的值不支持通过配置传入，请改用 `certPath`/`keyPath`/`pfxPath` 或 `test.extend`。
 
 ## 使用 test.extend 覆盖
 

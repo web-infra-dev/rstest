@@ -242,7 +242,7 @@ export default defineConfig({
 });
 ```
 
-The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. Use `test.extend` for functions, class instances, or test-specific overrides:
+The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. For client certificates, use `certPath`/`keyPath`/`pfxPath` instead of direct `Buffer` values. Use `test.extend` for functions, class instances, or test-specific overrides:
 
 ```ts
 import { expect, test } from '@rstest/playwright';

@@ -132,7 +132,7 @@ export default defineConfig({
 });
 ```
 
-The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. If multiple test files need a different shared set of options, define a shared module that overrides the fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
+The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. For client certificates, use `certPath`/`keyPath`/`pfxPath` instead of direct `Buffer` values. If multiple test files need a different shared set of options, define a shared module that overrides the fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';

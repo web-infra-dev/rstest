@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import {
   copyFile,
   mkdir,
@@ -211,45 +210,6 @@ const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
 const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
 const TEST_EACH_CONTEXT_PARAM = '__rstestPlaywrightContext';
-
-type SerializedBuffer = {
-  type: 'Buffer';
-  data: number[];
-};
-
-const isSerializedBuffer = (value: unknown): value is SerializedBuffer => {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  return (
-    'type' in value &&
-    value.type === 'Buffer' &&
-    'data' in value &&
-    Array.isArray(value.data) &&
-    value.data.every((item) => typeof item === 'number')
-  );
-};
-
-const rehydrateBuffer = <T>(value: T): T => {
-  if (value instanceof Uint8Array && !Buffer.isBuffer(value)) {
-    return Buffer.from(value) as T;
-  }
-  if (isSerializedBuffer(value)) {
-    return Buffer.from(value.data) as T;
-  }
-  return value;
-};
-
-const rehydrateClientCertificates = (
-  clientCertificates: NonNullable<BrowserContextOptions['clientCertificates']>,
-) =>
-  clientCertificates.map((certificate) => ({
-    ...certificate,
-    cert: rehydrateBuffer(certificate.cert),
-    key: rehydrateBuffer(certificate.key),
-    pfx: rehydrateBuffer(certificate.pfx),
-  }));
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -867,21 +827,11 @@ const defaultPlaywrightFixture = async (
   _context: TestContext,
   use: (options: PlaywrightOptions) => Promise<void>,
 ) => {
-  // Core keeps provider options opaque; this is the provider-owned decoding boundary.
   const configuredPlaywright = rs.getConfig().playwright as
     PlaywrightOptions | undefined;
-  const clientCertificates =
-    configuredPlaywright?.contextOptions?.clientCertificates;
   await use({
     ...configuredPlaywright,
     browserName: configuredPlaywright?.browserName ?? DEFAULT_BROWSER_NAME,
-    contextOptions:
-      clientCertificates === undefined
-        ? configuredPlaywright?.contextOptions
-        : {
-            ...configuredPlaywright?.contextOptions,
-            clientCertificates: rehydrateClientCertificates(clientCertificates),
-          },
   });
 };
 
@@ -1119,15 +1069,8 @@ const playwrightFixtures = {
     }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (request: APIRequestContext) => Promise<void>,
   ) => {
-    const requestOptions = playwright.requestOptions;
-    const clientCertificates = requestOptions?.clientCertificates;
     const request = await playwrightRequest.newContext(
-      clientCertificates === undefined
-        ? requestOptions
-        : {
-            ...requestOptions,
-            clientCertificates: rehydrateClientCertificates(clientCertificates),
-          },
+      playwright.requestOptions,
     );
     let released = false;
 

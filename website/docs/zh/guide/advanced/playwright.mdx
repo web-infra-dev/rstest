@@ -132,7 +132,7 @@ export default defineConfig({
 });
 ```
 
-该配置会应用到当前 project 的默认 `playwright` fixture。配置值必须可以通过 worker transport 传递。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
+该配置会应用到当前 project 的默认 `playwright` fixture。配置值必须可以通过 worker transport 传递。配置 client certificate 时请使用 `certPath`/`keyPath`/`pfxPath`，不要直接传入 `Buffer`。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';
