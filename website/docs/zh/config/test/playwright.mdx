@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 playwright?: Record<string, unknown>;
 ```
 
-设置 [@rstest/playwright](/guide/advanced/playwright) 提供的 `playwright` fixture 默认选项。根配置会作为所有 project 的默认值，project 中的 `playwright` 配置会覆盖根配置。
+设置 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 提供的 `playwright` fixture 默认选项。根配置会作为所有 project 的默认值，project 中的 `playwright` 配置会覆盖根配置。
 
 使用 `satisfies PlaywrightOptions` 可以从 integration package 获取具体的 Playwright 类型：
 

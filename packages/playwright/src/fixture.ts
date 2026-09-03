@@ -212,9 +212,31 @@ const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
 const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
 const TEST_EACH_CONTEXT_PARAM = '__rstestPlaywrightContext';
 
+type SerializedBuffer = {
+  type: 'Buffer';
+  data: number[];
+};
+
+const isSerializedBuffer = (value: unknown): value is SerializedBuffer => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  return (
+    'type' in value &&
+    value.type === 'Buffer' &&
+    'data' in value &&
+    Array.isArray(value.data) &&
+    value.data.every((item) => typeof item === 'number')
+  );
+};
+
 const rehydrateBuffer = <T>(value: T): T => {
   if (value instanceof Uint8Array && !Buffer.isBuffer(value)) {
     return Buffer.from(value) as T;
+  }
+  if (isSerializedBuffer(value)) {
+    return Buffer.from(value.data) as T;
   }
   return value;
 };

@@ -11,7 +11,10 @@ export default defineConfig({
         {
           origin: 'https://example.com',
           cert: Buffer.from('certificate'),
-          key: Buffer.from('key'),
+          key: {
+            type: 'Buffer',
+            data: [107, 101, 121],
+          },
         },
       ],
     },
