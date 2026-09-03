@@ -53,6 +53,15 @@ export const pickColorEnv = (env: ColorEnvSource): ColorEnv => {
   return colorEnv;
 };
 
+export const omitColorEnv = (
+  env: ColorEnvSource,
+): Record<string, string | undefined> => {
+  const remainingEnv = { ...env };
+  delete remainingEnv.FORCE_COLOR;
+  delete remainingEnv.NO_COLOR;
+  return remainingEnv;
+};
+
 /**
  * Determine color env vars (`FORCE_COLOR` / `NO_COLOR`) to inject into
  * worker and child processes (e.g. globalSetup, pool workers).

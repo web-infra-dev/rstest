@@ -54,23 +54,52 @@ const createTask = (
 });
 
 describe('composeSpawnEnv', () => {
-  it('uses the task env and omits undefined values', () => {
-    const task = createTask('run', {
-      context: {
-        runtimeConfig: {
-          env: {
-            NODE_ENV: 'production',
-            CUSTOM_ENV: 'value',
-            REMOVED_ENV: undefined,
+  it('combines the host env with only the task color env', () => {
+    const envKeys = [
+      'NODE_ENV',
+      'FORCE_COLOR',
+      'NO_COLOR',
+      'RSTEST_HOST_ONLY_ENV',
+      'RSTEST_PROJECT_ONLY_ENV',
+    ] as const;
+    const previousEnv = Object.fromEntries(
+      envKeys.map((key) => [key, process.env[key]]),
+    );
+
+    try {
+      process.env.NODE_ENV = 'host';
+      process.env.FORCE_COLOR = '0';
+      process.env.NO_COLOR = '1';
+      process.env.RSTEST_HOST_ONLY_ENV = 'host-value';
+
+      const task = createTask('run', {
+        context: {
+          runtimeConfig: {
+            env: {
+              NODE_ENV: 'project',
+              FORCE_COLOR: '1',
+              NO_COLOR: undefined,
+              RSTEST_PROJECT_ONLY_ENV: 'project-value',
+            },
           },
         },
-      },
-    });
+      });
+      const spawnEnv = composeSpawnEnv(task);
 
-    expect(composeSpawnEnv(task)).toEqual({
-      NODE_ENV: 'production',
-      CUSTOM_ENV: 'value',
-    });
+      expect(spawnEnv.NODE_ENV).toBe('host');
+      expect(spawnEnv.RSTEST_HOST_ONLY_ENV).toBe('host-value');
+      expect(spawnEnv.RSTEST_PROJECT_ONLY_ENV).toBeUndefined();
+      expect(spawnEnv.FORCE_COLOR).toBe('1');
+      expect(spawnEnv.NO_COLOR).toBeUndefined();
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   });
 });
 

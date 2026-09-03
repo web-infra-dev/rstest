@@ -115,6 +115,24 @@ describe('test environment variables', () => {
     },
   );
 
+  it.each(['forks', 'threads'] as const)(
+    'should keep project NODE_OPTIONS task-scoped in the %s pool',
+    async (pool) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'taskScopedNodeOptions.test.ts', '--pool', pool],
+        unsetEnv: ['NODE_OPTIONS'],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures', 'config-node-options'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+    },
+  );
+
   it('should propagate color env correctly without user overrides', async ({
     onTestFinished,
   }) => {
