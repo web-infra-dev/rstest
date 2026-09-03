@@ -16,7 +16,7 @@
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "2.9.0",
     "@module-federation/rstest": "2.9.0",
-    "@rsbuild/core": "~2.2.0",
+    "@rsbuild/core": "~2.2.2",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/browser": "workspace:*",
     "@rstest/core": "workspace:*",
