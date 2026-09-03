@@ -270,7 +270,7 @@
   ],
   "devDependencies": {
     "@rsbuild/core": "~2.2.2",
-    "@rslib/core": "1.0.0-rc.2",
+    "@rslib/core": "1.0.0",
     "@rstest/core": "workspace:*",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
