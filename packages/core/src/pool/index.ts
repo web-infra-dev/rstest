@@ -18,10 +18,10 @@ import type {
 import {
   color,
   getFileTaskId,
-  getForceColorEnv,
   isDeno,
   logger,
   needFlagExperimentalDetectModule,
+  pickColorEnv,
   toError,
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
@@ -184,10 +184,13 @@ const buildTask = async ({
         // environment under `isolate: false`. Accepted as too narrow to guard;
         // if it ever matters, fall back to a project-scoped key when the config
         // is not JSON-representable instead of trying to serialize those values.
-        environmentKey: getEnvironmentKey(
-          runtimeConfig.testEnvironment,
-          testEnvironmentModule,
-        ),
+        environmentKey: [
+          getEnvironmentKey(
+            runtimeConfig.testEnvironment,
+            testEnvironmentModule,
+          ),
+          JSON.stringify(pickColorEnv(runtimeConfig.env)),
+        ].join('\0'),
         context: {
           outputModule: project.outputModule,
           taskId: index + 1,
@@ -398,11 +401,6 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    env: {
-      NODE_ENV: 'test',
-      ...getForceColorEnv(),
-      ...process.env,
-    } as Record<string, string>,
     memoryGate: selectMemoryGate(workerKind),
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(

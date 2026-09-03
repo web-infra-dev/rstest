@@ -35,6 +35,7 @@
     "memfs": "^4.68.2",
     "path-serializer": "0.7.0",
     "pathe": "^2.0.3",
+    "picocolors": "^1.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "redux": "^5.0.1",
