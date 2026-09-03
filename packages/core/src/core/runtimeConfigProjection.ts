@@ -3,6 +3,7 @@ import type {
   ProjectContext,
   RuntimeConfig,
 } from '../types';
+import { resolveTaskColorEnv } from '../utils/logger';
 
 type EnvSource = Record<string, string | undefined>;
 
@@ -69,7 +70,7 @@ export function projectRuntimeConfig(
     coverage,
     snapshotFormat,
     expect,
-    env,
+    env: projectEnv,
     logHeapUsage,
     detectAsyncLeaks,
     bail,
@@ -119,12 +120,15 @@ export function projectRuntimeConfig(
         NODE_ENV: process.env.NODE_ENV,
         RSTEST: 'true',
         ...options.envOverlay,
-        ...env,
+        ...projectEnv,
       },
     } satisfies BrowserRuntimeConfig;
   }
 
+  // Read env at projection time so a globalSetup-modified `process.env`
+  // (or an explicit snapshot) is captured correctly.
   const envSource = options.env ?? process.env;
+  const resolvedEnv = { ...envSource, ...projectEnv };
 
   return {
     ...shared,
@@ -135,10 +139,8 @@ export function projectRuntimeConfig(
     detectAsyncLeaks,
     playwright,
     env: {
-      // Read env at projection time so a globalSetup-modified `process.env`
-      // (or an explicit snapshot) is captured correctly.
-      ...envSource,
-      ...env,
+      ...resolveTaskColorEnv(resolvedEnv),
+      ...resolvedEnv,
     },
   } satisfies RuntimeConfig;
 }
