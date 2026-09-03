@@ -32,6 +32,23 @@ describe('rstest utilities per-file reset', () => {
     config.playwright!.contextOptions = { locale: 'zh-CN' };
     expect(rs.getConfig().playwright).toEqual(playwright);
   });
+
+  it('preserves Buffer values when cloning project playwright config', async () => {
+    const certificate = Buffer.from('certificate');
+    const playwright = {
+      contextOptions: {
+        clientCertificates: [{ cert: certificate }],
+      },
+    };
+    const rs = await createUtilities({ playwright });
+    const config = rs.getConfig();
+    const [clonedCertificate] = (config.playwright as typeof playwright)
+      .contextOptions.clientCertificates;
+
+    expect(Buffer.isBuffer(clonedCertificate?.cert)).toBe(true);
+    expect(clonedCertificate?.cert).toEqual(certificate);
+    expect(clonedCertificate?.cert).not.toBe(certificate);
+  });
 });
 
 describe('rstest utilities wait APIs', () => {
