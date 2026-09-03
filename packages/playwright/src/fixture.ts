@@ -28,6 +28,7 @@ import {
   describe as rstestDescribe,
   expect as rstestExpect,
   registerWorkerCleanup,
+  rs,
   test as base,
 } from '@rstest/core';
 import type {
@@ -826,7 +827,10 @@ const defaultPlaywrightFixture = async (
   _context: TestContext,
   use: (options: PlaywrightOptions) => Promise<void>,
 ) => {
-  await use({ browserName: DEFAULT_BROWSER_NAME });
+  // Core keeps provider options opaque; this is the provider-owned decoding boundary.
+  const configuredPlaywright = rs.getConfig().playwright as
+    PlaywrightOptions | undefined;
+  await use(configuredPlaywright ?? { browserName: DEFAULT_BROWSER_NAME });
 };
 
 const cleanupBrowserFixture = [

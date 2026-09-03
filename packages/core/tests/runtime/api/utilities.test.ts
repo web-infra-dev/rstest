@@ -20,6 +20,13 @@ describe('rstest utilities per-file reset', () => {
     second();
     expect(second.mock.invocationCallOrder).toEqual([1]);
   });
+
+  it('returns project playwright config', async () => {
+    const playwright = { contextOptions: { locale: 'en-US' } };
+    const rs = await createUtilities({ playwright });
+
+    expect(rs.getConfig().playwright).toBe(playwright);
+  });
 });
 
 describe('rstest utilities wait APIs', () => {

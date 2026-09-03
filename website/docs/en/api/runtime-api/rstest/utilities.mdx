@@ -189,15 +189,30 @@ Resets the runtime configuration that was changed using [`rs.setConfig`](#rssetc
 
 - **Alias:** `rstest.getConfig`
 
-- **Type:** `() => RuntimeConfig`
+- **Type:**
 
-Retrieves the current runtime configuration for the test file. Useful for inspecting or logging the current settings.
+```ts
+type RuntimeConfig = {
+  testTimeout?: number;
+  hookTimeout?: number;
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
+  maxConcurrency?: number;
+  retry?: number;
+  playwright?: Record<string, unknown>;
+};
+
+type GetConfig = () => RuntimeConfig;
+```
+
+Retrieves the current runtime configuration for the test file. The `playwright` value contains the project-level options passed to the default fixture from `@rstest/playwright`.
 
 **Example:**
 
 ```ts
 const config = rs.getConfig();
-console.log(config);
+console.log(config.playwright);
 ```
 
 ## rs.waitFor

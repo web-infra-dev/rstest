@@ -227,7 +227,22 @@ String text assertions normalize whitespace. Each Playwright-style assertion ret
 
 ## Configure playwright options
 
-Global `playwright` configuration is not supported yet. Override the `playwright` fixture when a test file needs custom Playwright options:
+Set project-level Playwright defaults in `rstest.config.ts`. Use `satisfies PlaywrightOptions` to keep type checking and autocomplete:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export default defineConfig({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 1440, height: 900 },
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. Use `test.extend` for functions, class instances, or test-specific overrides:
 
 ```ts
 import { expect, test } from '@rstest/playwright';

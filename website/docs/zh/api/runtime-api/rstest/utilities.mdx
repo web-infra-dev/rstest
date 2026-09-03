@@ -189,15 +189,30 @@ rs.resetConfig(); // 恢复默认配置
 
 - **别名：** `rstest.getConfig`
 
-- **类型：** `() => RuntimeConfig`
+- **类型：**
 
-获取当前测试文件的运行时配置。
+```ts
+type RuntimeConfig = {
+  testTimeout?: number;
+  hookTimeout?: number;
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
+  maxConcurrency?: number;
+  retry?: number;
+  playwright?: Record<string, unknown>;
+};
+
+type GetConfig = () => RuntimeConfig;
+```
+
+获取当前测试文件的运行时配置。`playwright` 值包含传给 `@rstest/playwright` 默认 fixture 的当前 project 配置。
 
 **示例：**
 
 ```ts
 const config = rs.getConfig();
-console.log(config);
+console.log(config.playwright);
 ```
 
 ## rs.waitFor

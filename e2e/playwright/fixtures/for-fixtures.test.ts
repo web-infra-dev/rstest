@@ -1,4 +1,5 @@
 import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
 
 const test = base.extend<{
   fixtureValue: string;
@@ -9,6 +10,31 @@ const test = base.extend<{
     await use('unexpected fixture value');
     throw new Error('shadowed fixture should not run');
   },
+});
+
+test('uses project Playwright config', ({ playwright }) => {
+  expect(playwright.contextOptions?.viewport).toEqual({
+    width: 777,
+    height: 555,
+  });
+  console.log('RSTEST_PLAYWRIGHT_CONFIG_OK');
+});
+
+const overrideTest = base.extend({
+  playwright: {
+    browserName: 'chromium',
+    contextOptions: {
+      viewport: { width: 888, height: 666 },
+    },
+  } satisfies PlaywrightOptions,
+});
+
+overrideTest('keeps runtime fixture overrides working', ({ playwright }) => {
+  expect(playwright.contextOptions?.viewport).toEqual({
+    width: 888,
+    height: 666,
+  });
+  console.log('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
 });
 
 test.for([{ expected: 'fixture value' }])(

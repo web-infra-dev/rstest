@@ -5,7 +5,9 @@ import {
 } from '../../../src/runtime/fileContext';
 import type { WorkerState } from '../../../src/types';
 
-export function createWorkerState(): WorkerState {
+export function createWorkerState(
+  runtimeConfig: Partial<WorkerState['runtimeConfig']> = {},
+): WorkerState {
   return {
     runtimeConfig: {
       testTimeout: 1_000,
@@ -15,6 +17,7 @@ export function createWorkerState(): WorkerState {
       restoreMocks: false,
       maxConcurrency: 5,
       retry: 0,
+      ...runtimeConfig,
     },
   } as WorkerState;
 }
@@ -24,7 +27,11 @@ export function createWorkerState(): WorkerState {
  * file context at call time; publish a fresh one per construction, as
  * `createRunner` does in production.
  */
-export const createUtilities = async () => {
-  setFileContext({ workerState: createWorkerState() } as FileContext);
+export const createUtilities = async (
+  runtimeConfig: Partial<WorkerState['runtimeConfig']> = {},
+) => {
+  setFileContext({
+    workerState: createWorkerState(runtimeConfig),
+  } as FileContext);
   return createRstestUtilities();
 };

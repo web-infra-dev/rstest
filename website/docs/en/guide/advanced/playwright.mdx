@@ -73,7 +73,7 @@ pnpm exec playwright install chromium
 
 ## Basic usage
 
-Import `test` and `expect` from `@rstest/playwright` instead of `@rstest/core`:
+Import `test` from `@rstest/playwright`. If you use Playwright-specific assertions such as `toHaveTitle` or `toHaveText`, import `expect` from `@rstest/playwright` as well. This `expect` adds assertions for `Page` and `Locator`; it does not replace the global Rstest `expect`. With `globals: true`, the global `expect` remains the core Rstest expect:
 
 ```ts
 import { expect, test } from '@rstest/playwright';
@@ -115,7 +115,24 @@ export default defineConfig({
 
 ## Configure playwright options
 
-Global Playwright configuration in `rstest.config.ts` is not supported yet. If multiple test files use the same options, define a shared module that overrides the `playwright` fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
+<ApiMeta addedVersion="0.12.0" />
+
+Set project-level Playwright defaults in `rstest.config.ts`. Use `satisfies PlaywrightOptions` to keep type checking and autocomplete:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export default defineConfig({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 1440, height: 900 },
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. If multiple test files need a different shared set of options, define a shared module that overrides the fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';
@@ -130,6 +147,8 @@ export const test = base.extend({
   } satisfies PlaywrightOptions,
 });
 ```
+
+The `export { expect }` line only re-exports the Playwright-aware `expect` from the shared module, so test files can import it alongside the shared `test`. `test.extend` does not require re-exporting `expect`.
 
 ```ts title="tests/home.test.ts"
 import { expect, test } from './e2e';

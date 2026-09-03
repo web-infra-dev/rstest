@@ -577,6 +577,15 @@ export interface RstestConfig {
   browser?: BrowserModeConfig;
 
   /**
+   * Default options for the `@rstest/playwright` fixtures in this project.
+   *
+   * The integration package owns the concrete option type. Use
+   * `satisfies PlaywrightOptions` for type checking and autocomplete.
+   * Values must be serializable across the worker transport.
+   */
+  playwright?: Record<string, unknown>;
+
+  /**
    * Enable Module Federation support.
    *
    * Node-based runners install compatibility shims for federation runtimes
@@ -665,6 +674,7 @@ type OptionalKeys =
   | 'silent'
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
+  | 'playwright'
   | 'resolveSnapshotPath'
   | 'extends';
 

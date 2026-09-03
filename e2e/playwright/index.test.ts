@@ -53,6 +53,8 @@ describe('@rstest/playwright', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
   });
 
   it('preserves Playwright assertion errors at the timeout deadline', async () => {

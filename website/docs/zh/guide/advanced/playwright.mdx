@@ -73,7 +73,7 @@ pnpm exec playwright install chromium
 
 ## 基本用法
 
-从 `@rstest/playwright` 导入 `test` 和 `expect`，而不是从 `@rstest/core` 导入：
+从 `@rstest/playwright` 导入 `test`。如果使用 `toHaveTitle`、`toHaveText` 等 Playwright 专用断言，也要从 `@rstest/playwright` 导入 `expect`。这个 `expect` 会为 `Page` 和 `Locator` 增加对应的断言，但不会替换全局的 Rstest `expect`。即使启用 `globals: true`，全局 `expect` 仍然是 core 的 Rstest expect：
 
 ```ts
 import { expect, test } from '@rstest/playwright';
@@ -115,7 +115,24 @@ export default defineConfig({
 
 ## 配置 Playwright 选项
 
-暂不支持在 `rstest.config.ts` 中添加全局 Playwright 配置项。如果多个测试文件需要使用同一组选项，推荐在共享模块中通过 `test.extend` 覆盖 `playwright` fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
+<ApiMeta addedVersion="0.12.0" />
+
+可以在 `rstest.config.ts` 中设置当前 project 的 Playwright 默认选项。使用 `satisfies PlaywrightOptions` 可以保留类型检查和自动补全：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export default defineConfig({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 1440, height: 900 },
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+该配置会应用到当前 project 的默认 `playwright` fixture。配置值必须可以通过 worker transport 传递。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';
@@ -130,6 +147,8 @@ export const test = base.extend({
   } satisfies PlaywrightOptions,
 });
 ```
+
+这里的 `export { expect }` 只是从共享模块重新导出带有 Playwright 断言的 `expect`，方便测试文件和共享的 `test` 一起导入。`test.extend` 本身不要求重新导出 `expect`。
 
 ```ts title="tests/home.test.ts"
 import { expect, test } from './e2e';

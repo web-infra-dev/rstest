@@ -177,8 +177,9 @@ export const mergeProjectConfig = (
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
+    const { playwright, ...configWithoutPlaywright } = config;
     const merged = mergeRsbuildConfig(result, {
-      ...config,
+      ...configWithoutPlaywright,
       // Plain-merged below instead of via mergeRsbuildConfig; see plainDeepMerge.
       browser: undefined,
       exclude: Array.isArray(config.exclude)
@@ -198,6 +199,10 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     if (config.browser) {
       // An absent base resolves to `override`, so undefined result.browser is fine.
       merged.browser = plainDeepMerge(result.browser, config.browser);
+    }
+
+    if (playwright) {
+      merged.playwright = plainDeepMerge(result.playwright, playwright);
     }
 
     // The following configurations need overrides

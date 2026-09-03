@@ -31,6 +31,7 @@ const baseNormalizedConfig = {
   includeTaskLocation: false,
   silent: false,
   federation: false,
+  playwright: undefined as Record<string, unknown> | undefined,
 };
 
 const makeProject = (
@@ -121,6 +122,18 @@ describe('projectRuntimeConfig', () => {
       env: { HOST: 'yes' },
     });
     expect(config.env).toMatchObject({ HOST: 'yes', FOO: 'bar' });
+  });
+
+  it('only sends playwright config to node workers', () => {
+    const playwright = { contextOptions: { locale: 'en-US' } };
+    const project = makeProject({ playwright });
+
+    expect(
+      projectRuntimeConfig(project, { envMode: 'inherit' }).playwright,
+    ).toBe(playwright);
+    expect(
+      'playwright' in projectRuntimeConfig(project, { envMode: 'static' }),
+    ).toBe(false);
   });
 
   it('testNamePattern round-trips through serializableConfig/unwrapRegex', () => {
