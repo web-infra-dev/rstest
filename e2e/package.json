@@ -12,7 +12,7 @@
     "@module-federation/rstest": "2.9.0",
     "@rsbuild/core": "~2.2.2",
     "@rsbuild/plugin-react": "^2.1.0",
-    "@rslib/core": "1.0.0",
+    "@rslib/core": "~1.0.0",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
