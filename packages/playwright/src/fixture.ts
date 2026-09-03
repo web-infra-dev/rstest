@@ -1119,8 +1119,15 @@ const playwrightFixtures = {
     }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (request: APIRequestContext) => Promise<void>,
   ) => {
+    const requestOptions = playwright.requestOptions;
+    const clientCertificates = requestOptions?.clientCertificates;
     const request = await playwrightRequest.newContext(
-      playwright.requestOptions,
+      clientCertificates === undefined
+        ? requestOptions
+        : {
+            ...requestOptions,
+            clientCertificates: rehydrateClientCertificates(clientCertificates),
+          },
     );
     let released = false;
 

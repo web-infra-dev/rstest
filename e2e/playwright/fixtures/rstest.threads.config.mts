@@ -18,5 +18,17 @@ export default defineConfig({
         },
       ],
     },
+    requestOptions: {
+      clientCertificates: [
+        {
+          origin: 'https://example.com',
+          cert: Buffer.from('request-certificate'),
+          key: {
+            type: 'Buffer',
+            data: [107, 101, 121],
+          },
+        },
+      ],
+    },
   },
 });
