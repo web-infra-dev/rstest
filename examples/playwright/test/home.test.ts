@@ -1,14 +1,4 @@
-import { expect, test as base } from '@rstest/playwright';
-import type { PlaywrightOptions } from '@rstest/playwright';
-
-const test = base.extend({
-  playwright: {
-    browserName: 'chromium',
-    // This example uses the CI-provided Chrome binary to avoid installing
-    // Playwright Chromium. This does not change @rstest/playwright defaults.
-    launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
-  } satisfies PlaywrightOptions,
-});
+import { expect, test } from '@rstest/playwright';
 
 test(
   'opens the built Rsbuild page',
