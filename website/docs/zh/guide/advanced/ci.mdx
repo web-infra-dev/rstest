@@ -147,15 +147,13 @@ export default defineConfig({
 pnpm add @rstest/playwright playwright -D
 ```
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 通过 `playwright` fixture 配置启动选项。定义一个共享的扩展 `test`，然后在浏览器测试文件中导入：
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 的默认启动选项可以直接配置在 `rstest.config.ts` 中：
 
-```ts title="tests/fixtures.ts"
-import { expect, test as base } from '@rstest/playwright';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 import type { PlaywrightOptions } from '@rstest/playwright';
 
-export { expect };
-
-export const test = base.extend({
+export default defineConfig({
   playwright: {
     browserName: 'chromium',
     launchOptions:

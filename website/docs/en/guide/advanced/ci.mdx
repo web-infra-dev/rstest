@@ -147,15 +147,13 @@ Install the Rstest fixtures and the Playwright API:
 pnpm add @rstest/playwright playwright -D
 ```
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) configures launch options through its `playwright` fixture. Define a shared extended `test`, then import it from browser test files:
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) launch defaults can be configured directly in `rstest.config.ts`:
 
-```ts title="tests/fixtures.ts"
-import { expect, test as base } from '@rstest/playwright';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 import type { PlaywrightOptions } from '@rstest/playwright';
 
-export { expect };
-
-export const test = base.extend({
+export default defineConfig({
   playwright: {
     browserName: 'chromium',
     launchOptions:
