@@ -31,7 +31,7 @@
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.1.8",
-    "knip": "^6.33.0",
+    "knip": "^6.34.0",
     "lefthook": "^2.1.12",
     "pkg-pr-new": "^0.0.88",
     "playwright": "^1.62.1",
