@@ -391,7 +391,25 @@ export async function mergeReports(
     (!hasFailure || coverageOptions.reportOnFailure);
   if (shouldGenerateCoverage) {
     const { generateCoverage } = await import('../coverage/generate');
-    await generateCoverage(context, mergedCoverageMap, coverageProvider);
+    const setupFiles = [
+      ...new Set(blobs.flatMap((blob) => blob.setupFiles ?? [])),
+    ];
+    const projectNames = new Set(
+      blobs.flatMap(
+        (blob) => blob.projects ?? blob.results.map((result) => result.project),
+      ),
+    );
+    const projects = projectNames.size
+      ? context.projects.filter((project) => projectNames.has(project.name))
+      : undefined;
+    await generateCoverage(
+      context,
+      mergedCoverageMap,
+      coverageProvider,
+      undefined,
+      setupFiles.length ? setupFiles : undefined,
+      projects,
+    );
   }
 
   if (cleanup && existsSync(blobDir)) {

@@ -211,6 +211,7 @@ export async function runTests(context: Rstest): Promise<void> {
       coverageProvider,
       reportOnFailure: coverage.reportOnFailure,
       setupFiles: [],
+      projects: [],
       traceRun: activeTraceRun,
     });
     if (nodeExecutor) {
@@ -398,6 +399,10 @@ export async function runTests(context: Rstest): Promise<void> {
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
         setupFiles: browserStage.setupFiles,
+        projects: [
+          ...planner.getPlan().nodeProjectsToRun,
+          ...planner.getPlan().browserProjectsToRun,
+        ],
         traceRun: activeTraceRun,
       });
       isTeardown = true;
@@ -454,6 +459,13 @@ export async function runTests(context: Rstest): Promise<void> {
     isSessionClosing: () => isSessionClosing(),
   });
 
+  if (nodeExecutorToRun) {
+    watchDriver.setProjects(
+      nodeExecutorToRun,
+      planner.getPlan().nodeProjectsToRun,
+    );
+  }
+
   if (hasBrowserTestsToRun) {
     const browserProjectsToRun = planner.getBrowserProjectsToRun();
     browserExecutor = await loadBrowserExecutor(
@@ -464,6 +476,7 @@ export async function runTests(context: Rstest): Promise<void> {
     );
     await browserExecutor.init();
     const executor = browserExecutor;
+    watchDriver.setProjects(executor, browserProjectsToRun);
     // The host resolves the rerun scope before signalling (its file-set diff is
     // consumed once), so the hint's filters are the scope this trigger asked
     // for — the cycle's own is that, plus whatever any signal folded into it.
@@ -589,6 +602,7 @@ export async function runTests(context: Rstest): Promise<void> {
           coverageProvider,
           reportOnFailure: coverage.reportOnFailure,
           setupFiles: stage.setupFiles,
+          projects: planner.getPlan().browserProjectsToRun,
           traceRun: activeTraceRun,
         });
         throw new AggregateError(stage.errors, 'Browser globalSetup failed');

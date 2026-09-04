@@ -1,6 +1,11 @@
 import { resolveAndMergeRawCoverage } from '../coverage';
 import { BlobReporter } from '../reporter/blob';
-import type { Duration, ExecutorCycleOutcome, SourceMapInput } from '../types';
+import type {
+  Duration,
+  ExecutorCycleOutcome,
+  InternalProjectContext,
+  SourceMapInput,
+} from '../types';
 import type { CoverageMap, CoverageProvider } from '../types/coverage';
 import {
   color,
@@ -185,6 +190,7 @@ export async function finalizeRunCycle(
     coverageProvider,
     reportOnFailure,
     setupFiles,
+    projects,
     traceRun,
   }: {
     outcomes: ExecutorCycleOutcome[];
@@ -194,6 +200,8 @@ export async function finalizeRunCycle(
     reportOnFailure: boolean;
     /** Materialized setup paths from the participating executors. */
     setupFiles?: string[];
+    /** Projects that participated in this cycle, used for coverage backfill. */
+    projects?: InternalProjectContext[];
     /**
      * The cycle's trace buffer — the one the run loop rotated in for it, so a
      * cycle's spans and the events an executor emitted during it land together.
@@ -276,6 +284,20 @@ export async function finalizeRunCycle(
     results.some((r) => r.status === 'fail') || errors.length > 0;
   const noTestsDiscovered = results.length === 0 && errors.length === 0;
   const testPaths = outcomes.flatMap((o) => o.testPaths);
+  const resolvedSetupFiles = [
+    ...(setupFiles ?? []),
+    ...outcomes.flatMap((outcome) => outcome.coverage?.setupFiles ?? []),
+  ];
+  const participatingProjects = projects ?? context.projects;
+
+  for (const reporter of context.reporters) {
+    if (reporter instanceof BlobReporter) {
+      reporter.setCoverageContext({
+        setupFiles: resolvedSetupFiles,
+        projects: participatingProjects.map((project) => project.name),
+      });
+    }
+  }
 
   context.updateReporterResultState(
     results,
@@ -318,10 +340,6 @@ export async function finalizeRunCycle(
     (!isFailure || reportOnFailure)
   ) {
     const { generateCoverage } = await import('../coverage/generate');
-    const resolvedSetupFiles = [
-      ...(setupFiles ?? []),
-      ...outcomes.flatMap((outcome) => outcome.coverage?.setupFiles ?? []),
-    ];
     await runLifecycleStep('coverage report generation', () =>
       generateCoverage(
         context,
@@ -329,6 +347,7 @@ export async function finalizeRunCycle(
         coverageProvider,
         traceRun.span,
         resolvedSetupFiles,
+        participatingProjects,
       ),
     );
   }

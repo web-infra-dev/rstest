@@ -336,6 +336,68 @@ describe('generateCoverage', () => {
     }
   });
 
+  it('limits coverage backfill to participating projects', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const activeRoot = path.join(rootPath, 'active');
+    const skippedRoot = path.join(rootPath, 'skipped');
+    const activeFile = path.join(activeRoot, 'src', 'index.ts');
+    const skippedFile = path.join(skippedRoot, 'src', 'index.ts');
+
+    mkdirSync(path.dirname(activeFile), { recursive: true });
+    mkdirSync(path.dirname(skippedFile), { recursive: true });
+    writeFileSync(activeFile, 'export const active = 1;\n');
+    writeFileSync(skippedFile, 'export const skipped = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const generatedFiles: string[][] = [];
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateCoverageForUntestedFiles({ files }) {
+        generatedFiles.push(files);
+        return files.map(createFileCoverage);
+      },
+      async generateReports() {},
+    } satisfies CoverageProvider;
+
+    const activeProject = {
+      rootPath: activeRoot,
+      environmentName: 'active',
+      normalizedConfig: { setupFiles: [], globalSetup: [] },
+    };
+    const skippedProject = {
+      rootPath: skippedRoot,
+      environmentName: 'skipped',
+      normalizedConfig: { setupFiles: [], globalSetup: [] },
+    };
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: {
+          ...defaultCoverage,
+          include: ['src/**/*.ts'],
+        },
+      },
+      projects: [activeProject, skippedProject],
+    } as unknown as InternalContext;
+
+    try {
+      await generateCoverage(
+        context,
+        createCoverageMap(),
+        provider,
+        undefined,
+        undefined,
+        [activeProject],
+      );
+      expect(generatedFiles).toEqual([[activeFile]]);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
   it('does not resolve setup files for projects outside the run scope', async () => {
     const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
     const sourceFile = path.join(rootPath, 'src', 'index.ts');

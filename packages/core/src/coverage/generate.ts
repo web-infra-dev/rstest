@@ -2,7 +2,7 @@ import type FS from 'node:fs';
 import { isAbsolute, normalize, relative } from 'pathe';
 import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { InternalContext } from '../types';
+import type { InternalContext, InternalProjectContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -13,6 +13,16 @@ import {
   getSetupFiles,
   materializeVirtualSetupFiles,
 } from '../utils/getSetupFiles';
+
+type CoverageProject = Pick<
+  InternalProjectContext,
+  'environmentName' | 'rootPath'
+> & {
+  normalizedConfig: Pick<
+    InternalProjectContext['normalizedConfig'],
+    'setupFiles' | 'globalSetup'
+  >;
+};
 
 export const getIncludedFiles = async (
   coverage: CoverageOptions,
@@ -198,12 +208,14 @@ export async function generateCoverage(
   coverageProvider: CoverageProvider,
   traceSpan: TraceSpan = noopTraceSpan,
   setupFiles?: string[],
+  projects?: CoverageProject[],
 ): Promise<void> {
   const {
     rootPath,
     normalizedConfig: { coverage },
-    projects,
+    projects: contextProjects,
   } = context;
+  const projectsToBackfill = projects ?? contextProjects;
   const normalizedRootPath = normalize(rootPath);
   try {
     const setupCoverageExcludes = getSetupCoverageExcludes(context, setupFiles);
@@ -278,7 +290,7 @@ export async function generateCoverage(
       // the resident set. Sequential processing lets each project's
       // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
-      for (const p of projects) {
+      for (const p of projectsToBackfill) {
         const includedFiles = (
           await traceSpan(
             'coverage:collect-included-files',

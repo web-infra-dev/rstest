@@ -1,10 +1,15 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'pathe';
 import { describe, expect, it } from '@rstest/core';
 import {
   BLOB_TRACK_MATCHES_RUNNER_EVENTS,
+  BlobReporter,
   blobFileName,
   isBlobFile,
   parseBlobFile,
 } from '../../src/reporter/blob';
+import type { NormalizedConfig } from '../../src/types';
 
 describe('blob wire-format', () => {
   it('records every runner lifecycle event on the track (compile guard)', () => {
@@ -43,5 +48,51 @@ describe('blob wire-format', () => {
     expect(isBlobFile('blob-1-2-3.json')).toBe(false);
     expect(isBlobFile('prefix-blob.json')).toBe(false);
     expect(isBlobFile('blob-a-b.json')).toBe(false);
+  });
+
+  it('persists coverage setup context for deferred merging', async () => {
+    const rootPath = mkdtempSync(join(tmpdir(), 'rstest-blob-'));
+    const outputDir = join(rootPath, '.rstest-reports');
+    const reporter = new BlobReporter({
+      rootPath,
+      config: {} as NormalizedConfig,
+      options: { outputDir: '.rstest-reports' },
+    });
+
+    try {
+      reporter.setCoverageContext({
+        setupFiles: ['/workspace/.rstest-virtual/setup.mjs'],
+        projects: ['browser'],
+      });
+      await reporter.onTestRunEnd({
+        results: [],
+        testResults: [],
+        duration: { totalTime: 0, buildTime: 0, testTime: 0 },
+        snapshotSummary: {
+          added: 0,
+          didUpdate: false,
+          failure: false,
+          filesAdded: 0,
+          filesRemoved: 0,
+          filesRemovedList: [],
+          filesUnmatched: 0,
+          filesUpdated: 0,
+          matched: 0,
+          total: 0,
+          unchecked: 0,
+          uncheckedKeysByFile: [],
+          unmatched: 0,
+          updated: 0,
+        },
+      });
+
+      const blob = JSON.parse(
+        readFileSync(join(outputDir, 'blob.json'), 'utf8'),
+      );
+      expect(blob.setupFiles).toEqual(['/workspace/.rstest-virtual/setup.mjs']);
+      expect(blob.projects).toEqual(['browser']);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
   });
 });
