@@ -146,12 +146,8 @@ export type InternalContext = {
   ) => void;
 };
 
-export type ListCommandOptions = {
+export type ListCommandCollectOptions = {
   filesOnly?: boolean;
-  json?: boolean | string;
-  includeSuites?: boolean;
-  printLocation?: boolean;
-  summary?: boolean;
 };
 
 export type ListCommandResult = {
@@ -161,10 +157,21 @@ export type ListCommandResult = {
   errors?: FormattedError[];
 };
 
+export type ListCommandCollectionResult = {
+  list: ListCommandResult[];
+  errors: FormattedError[];
+  showProject: boolean;
+  getSourceMap: (name: string) => Promise<string | null | undefined>;
+  /** The caller owns teardown so it can render from live collection resources first. */
+  close: () => Promise<void>;
+};
+
 export type RstestInstance = {
   context: InternalContext;
   runTests: () => Promise<void>;
-  listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
+  listTests: (
+    options: ListCommandCollectOptions,
+  ) => Promise<ListCommandCollectionResult>;
   mergeReports: (options?: {
     path?: string;
     cleanup?: boolean;

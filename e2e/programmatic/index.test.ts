@@ -224,6 +224,10 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
+    // Pin that listTests() writes nothing to host stdout for either healthy or broken projects.
+    expect(cli.stdout.trim()).toBe(
+      `__RSTEST_API_RESULT__${JSON.stringify(result)}__END__`,
+    );
     expect(result.context).toEqual({
       rootPathMatches: true,
       projects: [
