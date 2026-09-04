@@ -142,6 +142,10 @@ export const createVmTimersPromisesLoader = (
         (error) => settle(reject, error),
       );
     });
+    // Keep the returned promise rejectable for callers that explicitly await
+    // it, while preventing teardown cancellation from becoming an unhandled
+    // rejection when the caller intentionally discards the promise.
+    void promise.catch(() => undefined);
     return promise;
   };
 

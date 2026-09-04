@@ -215,6 +215,67 @@ describe('loadEsModule', () => {
     expect(resolved).toBe(false);
   });
 
+  it('should handle discarded promise timer rejections during VM disposal', async () => {
+    const vmContext = vm.createContext({
+      clearImmediate,
+      clearTimeout,
+      setImmediate,
+      setTimeout,
+    });
+    const executor = getVmExternalModules(vmContext);
+    const timers = executor.require('node:timers/promises', __filename) as {
+      setTimeout: (delay: number) => Promise<void>;
+    };
+    let unhandled: unknown;
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandled = reason;
+    };
+    process.once('unhandledRejection', onUnhandledRejection);
+
+    timers.setTimeout(100);
+    executor.dispose();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    process.off('unhandledRejection', onUnhandledRejection);
+
+    expect(unhandled).toBeUndefined();
+  });
+
+  it('should bridge promises returned by builtin modules into the VM realm', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const vmPromise = vm.runInContext(
+      'Promise',
+      vmContext,
+    ) as PromiseConstructor;
+    const fsPromises = executor.require('node:fs/promises', __filename) as {
+      access: (path: string) => Promise<void>;
+    };
+
+    const promise = fsPromises.access(__filename);
+
+    expect(promise).toBeInstanceOf(vmPromise);
+    await promise;
+    executor.dispose();
+  });
+
+  it('should bridge promises returned by builtin ESM imports into the VM realm', async () => {
+    const vmContext = vm.createContext({});
+    const mod = await loadModule({
+      codeContent: [
+        "import { access } from 'node:fs/promises';",
+        `export default access(${JSON.stringify(__filename)}) instanceof Promise;`,
+      ].join('\n'),
+      distPath: '/virtual/dist/builtin-promise.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+      vmContext,
+    });
+
+    expect(mod.default).toBe(true);
+  });
+
   it('should distinguish timer values from options', async () => {
     const vmContext = vm.createContext({
       clearImmediate,

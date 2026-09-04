@@ -11,7 +11,7 @@ import {
 import { dirname as nativeDirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
-import { dirname, extname } from 'pathe';
+import { extname } from 'pathe';
 import {
   asModule,
   getOrCreateSyntheticModule,
@@ -377,8 +377,11 @@ class VmExternalModules {
   private moduleBuiltin: unknown;
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
+  private readonly vmPromise: PromiseConstructor;
+  private readonly wrappedBuiltinValues = new WeakMap<object, unknown>();
 
   constructor(private readonly context: vm.Context) {
+    this.vmPromise = vm.runInContext('Promise', context) as PromiseConstructor;
     this.loadVmTimers = createVmTimersLoader(
       vm.runInContext('globalThis', context) as Record<PropertyKey, unknown>,
     );
@@ -1034,7 +1037,7 @@ class VmExternalModules {
     module.filename = filePath;
     module.id = filePath;
     module.loaded = false;
-    module.path = dirname(filePath);
+    module.path = nativeDirname(filePath);
     module.paths = getNodeModulePaths(filePath);
     module.require = moduleRequire;
     this.commonJsCache.set(filePath, module);
@@ -1137,7 +1140,7 @@ class VmExternalModules {
     module.filename = filePath;
     module.id = filePath;
     module.loaded = true;
-    module.path = dirname(filePath);
+    module.path = nativeDirname(filePath);
     module.paths = getNodeModulePaths(filePath);
     module.require = this.createRequire(filePath);
     this.jsonCache.set(filePath, module);
@@ -1433,8 +1436,10 @@ class VmExternalModules {
         nativeRequire(specifier) as Record<PropertyKey, unknown>,
       );
     }
-    if (normalized !== 'module') {
-      return nativeRequire(specifier);
+    if (normalized !== 'module' && normalized !== 'process') {
+      return this.wrapBuiltinModule(
+        nativeRequire(specifier) as Record<PropertyKey, unknown>,
+      );
     }
     if (this.moduleBuiltin) {
       return this.moduleBuiltin;
@@ -1496,7 +1501,7 @@ class VmExternalModules {
     const normalized = resolvedId.replace(/^node:/, '');
     const overrides = new Set<string>();
     let exports: Record<string, unknown>;
-    let defaultExport = imported.default;
+    let defaultExport: unknown;
     if (normalized === 'timers' || normalized === 'timers/promises') {
       const timers = this.loadBuiltin(resolvedId) as Record<
         PropertyKey,
@@ -1535,7 +1540,8 @@ class VmExternalModules {
       }
       defaultExport = runtimeProcess;
     } else {
-      exports = imported;
+      exports = this.wrapBuiltinModule(imported);
+      defaultExport = exports.default;
     }
 
     const module = await asModule(
@@ -1550,6 +1556,66 @@ class VmExternalModules {
       overrides,
     });
     return module;
+  }
+
+  private wrapBuiltinModule(
+    module: Record<PropertyKey, unknown>,
+  ): Record<PropertyKey, unknown> {
+    return this.wrapBuiltinValue(module) as Record<PropertyKey, unknown>;
+  }
+
+  private wrapBuiltinValue(value: unknown): unknown {
+    if (typeof value === 'function') {
+      const cached = this.wrappedBuiltinValues.get(value);
+      if (cached) {
+        return cached;
+      }
+      const wrapped = new Proxy(value, {
+        apply: (target, thisArg, args) =>
+          this.wrapBuiltinResult(Reflect.apply(target, thisArg, args)),
+        construct: (target, args, newTarget) =>
+          Reflect.construct(target, args, newTarget),
+      });
+      this.wrappedBuiltinValues.set(value, wrapped);
+      return wrapped;
+    }
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+
+    const cached = this.wrappedBuiltinValues.get(value);
+    if (cached) {
+      return cached;
+    }
+    const wrapped = Object.create(Object.getPrototypeOf(value)) as Record<
+      PropertyKey,
+      unknown
+    >;
+    this.wrappedBuiltinValues.set(value, wrapped);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor) {
+        continue;
+      }
+      if ('value' in descriptor) {
+        descriptor.value = this.wrapBuiltinValue(descriptor.value);
+      }
+      Object.defineProperty(wrapped, key, descriptor);
+    }
+    return wrapped;
+  }
+
+  private wrapBuiltinResult(value: unknown): unknown {
+    if (
+      value === null ||
+      (typeof value !== 'object' && typeof value !== 'function') ||
+      typeof Reflect.get(value, 'then') !== 'function'
+    ) {
+      return value;
+    }
+    return new this.vmPromise((resolve, reject) => {
+      Promise.resolve(value as PromiseLike<unknown>).then(resolve, reject);
+    });
   }
 }
 
