@@ -8,8 +8,10 @@ import {
 test('should not record timers for a worker-scoped environment', () => {
   const cleared: unknown[] = [];
   const nodeTimers = {
+    setImmediate: () => ({}) as NodeJS.Timeout,
     setTimeout: () => ({}) as NodeJS.Timeout,
     setInterval: () => ({}) as NodeJS.Timeout,
+    clearImmediate: (timer: unknown) => cleared.push(timer),
     clearTimeout: (timer: unknown) => cleared.push(timer),
     clearInterval: (timer: unknown) => cleared.push(timer),
   } as unknown as NodeTimerPrimitives;
@@ -20,11 +22,33 @@ test('should not record timers for a worker-scoped environment', () => {
   });
   testGlobal.setTimeout(() => {}, 1000);
   testGlobal.setInterval(() => {}, 1000);
+  testGlobal.setImmediate(() => {});
   cleanup();
 
   // Nothing to clear proves nothing was recorded — the worker-scoped
   // environment must not retain timers it will never tear down (#1644).
   expect(cleared).toEqual([]);
+});
+
+test('should clear pending immediates for a file-scoped environment', () => {
+  const cleared: unknown[] = [];
+  const nodeTimers = {
+    setImmediate: () => ({ kind: 'immediate' }) as unknown as NodeJS.Timeout,
+    setTimeout: () => ({ kind: 'timeout' }) as unknown as NodeJS.Timeout,
+    setInterval: () => ({ kind: 'interval' }) as unknown as NodeJS.Timeout,
+    clearImmediate: (timer: unknown) => cleared.push(timer),
+    clearTimeout: (timer: unknown) => cleared.push(timer),
+    clearInterval: (timer: unknown) => cleared.push(timer),
+  } as unknown as NodeTimerPrimitives;
+  const testGlobal = {} as typeof globalThis;
+
+  const cleanup = installTimerTracking(testGlobal, nodeTimers, {
+    scope: 'file',
+  });
+  const immediate = testGlobal.setImmediate(() => {});
+  cleanup();
+
+  expect(cleared).toEqual([immediate]);
 });
 
 const createTestURL = () => {

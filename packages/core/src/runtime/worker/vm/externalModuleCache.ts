@@ -191,7 +191,7 @@ export const getExternalModuleFormat = (
     case '.wasm':
       return 'wasm';
     default:
-      return 'unsupported';
+      return mode === 'require' ? 'commonjs' : 'unsupported';
   }
 };
 

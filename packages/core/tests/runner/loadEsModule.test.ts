@@ -258,6 +258,35 @@ describe('loadEsModule', () => {
     executor.dispose();
   });
 
+  it('should keep module and process builtin proxies separate', () => {
+    const vmContext = vm.createContext({ process });
+    const executor = getVmExternalModules(vmContext);
+    const moduleBuiltin = executor.require('node:module', __filename) as {
+      createRequire: unknown;
+    };
+    const processBuiltin = executor.require('node:process', __filename);
+
+    expect(moduleBuiltin.createRequire).toBeTypeOf('function');
+    expect(processBuiltin).toBe(process);
+    expect(executor.require('node:module', __filename)).toBe(moduleBuiltin);
+    expect(executor.require('node:process', __filename)).toBe(processBuiltin);
+  });
+
+  it('should bridge synchronous builtin object results into the VM realm', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const os = executor.require('node:os', __filename) as {
+      cpus: () => Array<{ model: string }>;
+    };
+    const cpus = os.cpus();
+    const inspect = vm.runInContext(
+      '(value) => ({ array: value instanceof Array, object: value[0] instanceof Object })',
+      vmContext,
+    ) as (value: unknown) => { array: boolean; object: boolean };
+
+    expect(inspect(cpus)).toEqual({ array: true, object: true });
+  });
+
   it('should bridge promises returned by builtin ESM imports into the VM realm', async () => {
     const vmContext = vm.createContext({});
     const mod = await loadModule({
@@ -294,6 +323,31 @@ describe('loadEsModule', () => {
     });
 
     expect(mod.default).toBe(true);
+  });
+
+  it('should preserve mutable builtin backing objects across ESM sync', async () => {
+    const vmContext = vm.createContext({});
+    const mod = await loadModule({
+      codeContent: [
+        "import fs, { readFile } from 'node:fs';",
+        "import { syncBuiltinESMExports } from 'node:module';",
+        'const original = fs.readFile;',
+        'const replacement = () => undefined;',
+        'fs.readFile = replacement;',
+        'syncBuiltinESMExports();',
+        'const result = { defaultExport: fs.readFile === replacement, namedExport: readFile === replacement };',
+        'fs.readFile = original;',
+        'export default result;',
+      ].join('\n'),
+      distPath: '/virtual/dist/builtin-sync-mutable.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual({ defaultExport: true, namedExport: true });
   });
 
   it('should distinguish timer values from options', async () => {
@@ -853,6 +907,18 @@ describe('loadEsModule', () => {
     expect(executor.require(externalPath, __filename)).toEqual({
       value: 'extensionless-commonjs',
     });
+  });
+
+  it('loads custom-extension CommonJS require targets', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/unsupported.custom',
+    );
+
+    expect(executor.require(externalPath, __filename)).toBe(
+      'must not execute in the host realm',
+    );
   });
 
   it('should require syntax-compatible .js as ESM in a module package', () => {

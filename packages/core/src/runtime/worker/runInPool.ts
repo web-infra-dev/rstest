@@ -443,8 +443,10 @@ const prepareVmRuntimeRealm = async (
   installVmNodeGlobals(runtimeGlobal, vmContext);
   if (testEnvironment.name === 'node') {
     const nodeTimers: NodeTimerPrimitives = {
+      clearImmediate: globalThis.clearImmediate,
       clearInterval: globalThis.clearInterval,
       clearTimeout: globalThis.clearTimeout,
+      setImmediate: globalThis.setImmediate,
       setInterval: globalThis.setInterval,
       setTimeout: globalThis.setTimeout,
     };

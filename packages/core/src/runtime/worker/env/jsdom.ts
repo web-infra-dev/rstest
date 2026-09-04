@@ -313,8 +313,10 @@ export const setupEnvironment = async (
 ): Promise<TestEnvironmentReturn> => {
   const jsdom = await loadJSDOM(dependency);
   const nodeTimers: NodeTimerPrimitives = {
+    clearImmediate: global.clearImmediate ?? globalThis.clearImmediate,
     clearInterval: global.clearInterval ?? globalThis.clearInterval,
     clearTimeout: global.clearTimeout ?? globalThis.clearTimeout,
+    setImmediate: global.setImmediate ?? globalThis.setImmediate,
     setInterval: global.setInterval ?? globalThis.setInterval,
     setTimeout: global.setTimeout ?? globalThis.setTimeout,
   };
@@ -364,8 +366,10 @@ export const setupVM = async (
     createJSDOM(jsdom, options, context, true);
   const vmContext = dom.getInternalVMContext();
   const nodeTimers: NodeTimerPrimitives = {
+    clearImmediate: globalThis.clearImmediate,
     clearInterval: globalThis.clearInterval,
     clearTimeout: globalThis.clearTimeout,
+    setImmediate: globalThis.setImmediate,
     setInterval: globalThis.setInterval,
     setTimeout: globalThis.setTimeout,
   };

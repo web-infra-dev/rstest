@@ -376,13 +376,31 @@ class VmExternalModules {
   >();
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
+  private processBuiltin: unknown;
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
   private readonly vmPromise: PromiseConstructor;
+  private readonly isVmValue: (value: unknown) => boolean;
   private readonly wrappedBuiltinValues = new WeakMap<object, unknown>();
+  private readonly unwrappedBuiltinValues = new WeakMap<object, object>();
 
   constructor(private readonly context: vm.Context) {
     this.vmPromise = vm.runInContext('Promise', context) as PromiseConstructor;
+    this.isVmValue = vm.runInContext(
+      `(value) => {
+        if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+          return false;
+        }
+        if (typeof value === 'function') {
+          return value instanceof Function;
+        }
+        const prototype = Object.getPrototypeOf(value);
+        return prototype === null ||
+          prototype === Object.prototype ||
+          prototype === Array.prototype;
+      }`,
+      context,
+    ) as (value: unknown) => boolean;
     this.loadVmTimers = createVmTimersLoader(
       vm.runInContext('globalThis', context) as Record<PropertyKey, unknown>,
     );
@@ -1442,6 +1460,15 @@ class VmExternalModules {
         nativeRequire(specifier) as Record<PropertyKey, unknown>,
       );
     }
+
+    if (normalized === 'process') {
+      if (this.processBuiltin) {
+        return this.processBuiltin;
+      }
+      this.processBuiltin = vm.runInContext('globalThis.process', this.context);
+      return this.processBuiltin;
+    }
+
     if (this.moduleBuiltin) {
       return this.moduleBuiltin;
     }
@@ -1547,7 +1574,7 @@ class VmExternalModules {
       }
       defaultExport = runtimeProcess;
     } else {
-      exports = this.wrapBuiltinModule(imported);
+      exports = this.wrapBuiltinExports(imported);
       defaultExport = exports.default;
     }
 
@@ -1576,22 +1603,41 @@ class VmExternalModules {
     return this.wrapBuiltinValue(module) as Record<PropertyKey, unknown>;
   }
 
+  private wrapBuiltinExports(
+    module: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const exports: Record<string, unknown> = {};
+    for (const name of Object.keys(module)) {
+      exports[name] = this.wrapBuiltinValue(module[name]);
+    }
+    return exports;
+  }
+
   private wrapBuiltinValue(value: unknown): unknown {
     if (typeof value === 'function') {
+      if (this.isVmValue(value)) {
+        return value;
+      }
       const cached = this.wrappedBuiltinValues.get(value);
       if (cached) {
         return cached;
       }
       const wrapped = new Proxy(value, {
         apply: (target, thisArg, args) =>
-          this.wrapBuiltinResult(Reflect.apply(target, thisArg, args)),
+          this.wrapBuiltinResult(
+            Reflect.apply(target, this.unwrapBuiltinValue(thisArg), args),
+          ),
         construct: (target, args, newTarget) =>
           Reflect.construct(target, args, newTarget),
       });
       this.wrappedBuiltinValues.set(value, wrapped);
+      this.unwrappedBuiltinValues.set(wrapped, value);
       return wrapped;
     }
     if (value === null || typeof value !== 'object') {
+      return value;
+    }
+    if (this.isVmValue(value)) {
       return value;
     }
 
@@ -1599,35 +1645,117 @@ class VmExternalModules {
     if (cached) {
       return cached;
     }
-    const wrapped = Object.create(Object.getPrototypeOf(value)) as Record<
-      PropertyKey,
-      unknown
-    >;
+
+    // Keep the native object as the proxy target so mutations made through a
+    // VM default export remain visible to syncBuiltinESMExports().
+    const wrapped = new Proxy(value, {
+      defineProperty: (target, property, descriptor) =>
+        Reflect.defineProperty(target, property, {
+          ...descriptor,
+          ...(Object.hasOwn(descriptor, 'value')
+            ? { value: this.unwrapBuiltinValue(descriptor.value) }
+            : {}),
+        }),
+      deleteProperty: (target, property) =>
+        Reflect.deleteProperty(target, property),
+      get: (target, property) =>
+        this.wrapBuiltinValue(Reflect.get(target, property, target)),
+      set: (target, property, newValue) =>
+        Reflect.set(
+          target,
+          property,
+          this.unwrapBuiltinValue(newValue),
+          target,
+        ),
+    });
     this.wrappedBuiltinValues.set(value, wrapped);
+    this.unwrappedBuiltinValues.set(wrapped, value);
+    return wrapped;
+  }
+
+  private unwrapBuiltinValue(value: unknown): unknown {
+    if (
+      (typeof value !== 'object' && typeof value !== 'function') ||
+      value === null
+    ) {
+      return value;
+    }
+    return this.unwrappedBuiltinValues.get(value) ?? value;
+  }
+
+  private wrapBuiltinResult(value: unknown): unknown {
+    if (
+      value === null ||
+      (typeof value !== 'object' && typeof value !== 'function')
+    ) {
+      return value;
+    }
+    if (typeof Reflect.get(value, 'then') === 'function') {
+      return new this.vmPromise((resolve, reject) => {
+        Promise.resolve(value as PromiseLike<unknown>).then(
+          (result) => resolve(this.wrapBuiltinResultValue(result)),
+          reject,
+        );
+      });
+    }
+    return this.wrapBuiltinResultValue(value);
+  }
+
+  private wrapBuiltinResultValue(
+    value: unknown,
+    seen = new WeakMap<object, unknown>(),
+  ): unknown {
+    if (
+      value === null ||
+      (typeof value !== 'object' && typeof value !== 'function') ||
+      this.isVmValue(value)
+    ) {
+      return value;
+    }
+    const cached = seen.get(value);
+    if (cached) {
+      return cached;
+    }
+    if (Array.isArray(value)) {
+      // Only copy realm-neutral data containers. Native handles such as
+      // Buffer, streams, and errors must retain their backing objects.
+      const wrapped = vm.runInContext('[]', this.context) as unknown[];
+      seen.set(value, wrapped);
+      for (const key of Reflect.ownKeys(value)) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!descriptor) {
+          continue;
+        }
+        if ('value' in descriptor) {
+          descriptor.value = this.wrapBuiltinResultValue(
+            descriptor.value,
+            seen,
+          );
+        }
+        Object.defineProperty(wrapped, key, descriptor);
+      }
+      return wrapped;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return value;
+    }
+    const wrapped = vm.runInContext(
+      prototype === null ? 'Object.create(null)' : '({})',
+      this.context,
+    ) as Record<PropertyKey, unknown>;
+    seen.set(value, wrapped);
     for (const key of Reflect.ownKeys(value)) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
       if (!descriptor) {
         continue;
       }
       if ('value' in descriptor) {
-        descriptor.value = this.wrapBuiltinValue(descriptor.value);
+        descriptor.value = this.wrapBuiltinResultValue(descriptor.value, seen);
       }
       Object.defineProperty(wrapped, key, descriptor);
     }
     return wrapped;
-  }
-
-  private wrapBuiltinResult(value: unknown): unknown {
-    if (
-      value === null ||
-      (typeof value !== 'object' && typeof value !== 'function') ||
-      typeof Reflect.get(value, 'then') !== 'function'
-    ) {
-      return value;
-    }
-    return new this.vmPromise((resolve, reject) => {
-      Promise.resolve(value as PromiseLike<unknown>).then(resolve, reject);
-    });
   }
 }
 
