@@ -16,8 +16,37 @@ const tryResolve = (request: string, rootPath: string) => {
   return resolvedPath;
 };
 
-const JAVASCRIPT_DATA_URL_RE =
-  /^data:(?:text|application)\/javascript(?:;[^,]*)*;base64,(.*)$/i;
+type JavaScriptDataUrl = {
+  data: string;
+  isBase64: boolean;
+};
+
+const parseJavaScriptDataUrl = (
+  request: string,
+): JavaScriptDataUrl | undefined => {
+  if (request.slice(0, 5).toLowerCase() !== 'data:') {
+    return undefined;
+  }
+
+  const fragmentIndex = request.indexOf('#');
+  const dataUrl =
+    fragmentIndex === -1 ? request : request.slice(0, fragmentIndex);
+  const commaIndex = dataUrl.indexOf(',');
+  if (commaIndex === -1) {
+    return undefined;
+  }
+
+  const metadata = dataUrl.slice(5, commaIndex).split(';');
+  const mimeType = metadata.shift()?.toLowerCase();
+  if (mimeType !== 'text/javascript' && mimeType !== 'application/javascript') {
+    return undefined;
+  }
+
+  return {
+    data: dataUrl.slice(commaIndex + 1),
+    isBase64: metadata.some((item) => item.toLowerCase() === 'base64'),
+  };
+};
 
 /**
  * Flatten one or more `{ [env]: { [entry]: path } }` setup maps into a flat
@@ -43,7 +72,7 @@ export const getSetupFiles = (
   }
   return Object.fromEntries(
     setups.map((filePath) => {
-      if (JAVASCRIPT_DATA_URL_RE.test(filePath)) {
+      if (parseJavaScriptDataUrl(filePath)) {
         return [
           `virtual~setup~${generateFilePathHash(rootPath, filePath)}`,
           filePath,
@@ -86,21 +115,20 @@ export const materializeVirtualSetupFiles = (
   const virtualModules: Record<string, string> = {};
   const entries = Object.fromEntries(
     Object.entries(setupFiles).map(([entryName, request]) => {
-      const match = JAVASCRIPT_DATA_URL_RE.exec(request);
-      if (!match) {
+      const dataUrl = parseJavaScriptDataUrl(request);
+      if (!dataUrl) {
         return [entryName, request];
       }
-      const encodedSource = decodeURIComponent(match[1] ?? '');
+      const source = decodeURIComponent(dataUrl.data);
 
       const virtualPath = pathe.join(
         rootPath,
         '.rstest-virtual',
         `${entryName}.mjs`,
       );
-      virtualModules[virtualPath] = Buffer.from(
-        encodedSource,
-        'base64',
-      ).toString('utf8');
+      virtualModules[virtualPath] = dataUrl.isBase64
+        ? Buffer.from(source, 'base64').toString('utf8')
+        : source;
       return [entryName, virtualPath];
     }),
   );

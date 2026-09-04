@@ -42,4 +42,27 @@ describe('getSetupFiles', () => {
 
     expect(Object.values(result.virtualModules)).toEqual(['console.log(1)']);
   });
+
+  it('materializes percent-encoded non-Base64 JavaScript data URLs', () => {
+    const result = materializeVirtualSetupFiles(
+      getSetupFiles(
+        ['data:text/javascript,globalThis.ready%20%3D%20true'],
+        '/project',
+      ),
+      '/project',
+    );
+
+    expect(Object.values(result.virtualModules)).toEqual([
+      'globalThis.ready = true',
+    ]);
+  });
+
+  it('does not include data URL fragments in the virtual module source', () => {
+    const result = materializeVirtualSetupFiles(
+      getSetupFiles(['data:text/javascript;base64,dm9pZCAw#v1'], '/project'),
+      '/project',
+    );
+
+    expect(Object.values(result.virtualModules)).toEqual(['void 0']);
+  });
 });
