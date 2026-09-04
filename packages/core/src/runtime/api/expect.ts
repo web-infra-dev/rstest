@@ -132,17 +132,30 @@ type ChaiThrowAssertion = Assertion & {
 const CrossRealmToThrow: ChaiPlugin = (chai, utils) => {
   const overwrite = (_super: (expected?: unknown) => unknown) => {
     return function (this: ChaiThrowAssertion, expected?: unknown) {
+      const isPromiseAssertion = Boolean(utils.flag(this, 'promise'));
+      const isRegExp =
+        expected !== null &&
+        typeof expected === 'object' &&
+        Object.prototype.toString.call(expected) === '[object RegExp]';
+
       // `@vitest/expect` uses `instanceof RegExp` before delegating to Chai.
       // A regexp literal created in a vm.Context is not an instance of the
       // host realm's RegExp, so preserve Vitest's toThrow semantics across
-      // realms by using Chai's cross-realm-safe `throws` implementation.
-      if (
-        expected !== null &&
-        typeof expected === 'object' &&
-        Object.prototype.toString.call(expected) === '[object RegExp]'
-      ) {
+      // realms by using Chai's cross-realm-safe `throws` implementation for
+      // synchronous function assertions. Promise assertions must stay on
+      // Vitest's promise-aware path because their target is the rejection
+      // value, not a callable function.
+      if (isRegExp && !isPromiseAssertion) {
         return this.throws(expected as RegExp);
       }
+
+      // Keep a cross-realm regexp usable by Vitest's promise-aware matcher.
+      // Vitest recognizes host RegExp instances before it handles `.rejects`.
+      if (isRegExp && !(expected instanceof RegExp)) {
+        const regexp = expected as RegExp;
+        return _super.call(this, new RegExp(regexp.source, regexp.flags));
+      }
+
       return _super.call(this, expected);
     };
   };

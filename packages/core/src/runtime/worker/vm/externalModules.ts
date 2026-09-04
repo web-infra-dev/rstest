@@ -379,13 +379,20 @@ class VmExternalModules {
   private processBuiltin: unknown;
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
+  private readonly vmError: typeof Error;
   private readonly vmPromise: PromiseConstructor;
+  private readonly isVmError: (value: unknown) => boolean;
   private readonly isVmValue: (value: unknown) => boolean;
   private readonly wrappedBuiltinValues = new WeakMap<object, unknown>();
   private readonly unwrappedBuiltinValues = new WeakMap<object, object>();
 
   constructor(private readonly context: vm.Context) {
+    this.vmError = vm.runInContext('Error', context) as typeof Error;
     this.vmPromise = vm.runInContext('Promise', context) as PromiseConstructor;
+    this.isVmError = vm.runInContext(
+      '(value) => value instanceof Error',
+      context,
+    ) as (value: unknown) => boolean;
     this.isVmValue = vm.runInContext(
       `(value) => {
         if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
@@ -1658,8 +1665,7 @@ class VmExternalModules {
         }),
       deleteProperty: (target, property) =>
         Reflect.deleteProperty(target, property),
-      get: (target, property) =>
-        this.wrapBuiltinValue(Reflect.get(target, property, target)),
+      get: (target, property) => this.getBuiltinProperty(target, property),
       set: (target, property, newValue) =>
         Reflect.set(
           target,
@@ -1671,6 +1677,19 @@ class VmExternalModules {
     this.wrappedBuiltinValues.set(value, wrapped);
     this.unwrappedBuiltinValues.set(wrapped, value);
     return wrapped;
+  }
+
+  private getBuiltinProperty(target: object, property: PropertyKey): unknown {
+    const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
+    if (descriptor && !descriptor.configurable) {
+      if ('value' in descriptor && descriptor.writable === false) {
+        return descriptor.value;
+      }
+      if ('get' in descriptor && descriptor.get === undefined) {
+        return undefined;
+      }
+    }
+    return this.wrapBuiltinValue(Reflect.get(target, property, target));
   }
 
   private unwrapBuiltinValue(value: unknown): unknown {
@@ -1694,11 +1713,33 @@ class VmExternalModules {
       return new this.vmPromise((resolve, reject) => {
         Promise.resolve(value as PromiseLike<unknown>).then(
           (result) => resolve(this.wrapBuiltinResultValue(result)),
-          reject,
+          (error) => reject(this.wrapBuiltinError(error)),
         );
       });
     }
     return this.wrapBuiltinResultValue(value);
+  }
+
+  private wrapBuiltinError(error: unknown): unknown {
+    // Native Error rejections need the current VM's prototype so standard
+    // `instanceof Error` checks keep working inside the test context. Other
+    // rejection reasons retain their original identity and realm.
+    if (
+      this.isVmError(error) ||
+      !(error instanceof Error) ||
+      error.constructor === this.vmError
+    ) {
+      return error;
+    }
+
+    const wrapped = new this.vmError(error.message);
+    for (const key of Reflect.ownKeys(error)) {
+      const descriptor = Object.getOwnPropertyDescriptor(error, key);
+      if (descriptor) {
+        Object.defineProperty(wrapped, key, descriptor);
+      }
+    }
+    return wrapped;
   }
 
   private wrapBuiltinResultValue(
@@ -1718,7 +1759,8 @@ class VmExternalModules {
     }
     if (Array.isArray(value)) {
       // Only copy realm-neutral data containers. Native handles such as
-      // Buffer, streams, and errors must retain their backing objects.
+      // Buffer, streams, and typed arrays must retain their backing objects;
+      // Error rejection reasons are handled separately above.
       const wrapped = vm.runInContext('[]', this.context) as unknown[];
       seen.set(value, wrapped);
       for (const key of Reflect.ownKeys(value)) {

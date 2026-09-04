@@ -1,5 +1,6 @@
 import { GLOBAL_EXPECT } from '@vitest/expect';
 import { config as chaiConfig, util } from 'chai';
+import vm from 'node:vm';
 import {
   createExpect,
   createFileExpect,
@@ -53,6 +54,18 @@ it('resets omitted Chai options before applying the next project config', () => 
 
   expect(chaiConfig.showDiff).toBe(true);
   expect(chaiConfig.truncateThreshold).toBe(40);
+});
+
+it('keeps toThrow promise-aware for regular and cross-realm regexps', async () => {
+  const vmContext = vm.createContext({});
+  const crossRealmRegExp = vm.runInContext('/expected/', vmContext) as RegExp;
+
+  await expect(Promise.reject(new Error('expected'))).rejects.toThrow(
+    /expected/,
+  );
+  await expect(Promise.reject(new Error('expected'))).rejects.toThrow(
+    crossRealmRegExp,
+  );
 });
 
 /**

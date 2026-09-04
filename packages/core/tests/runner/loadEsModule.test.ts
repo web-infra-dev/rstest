@@ -258,6 +258,30 @@ describe('loadEsModule', () => {
     executor.dispose();
   });
 
+  it('should preserve the VM Error realm for rejected builtin promises', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const fsPromises = executor.require('node:fs/promises', __filename) as {
+      readFile: (path: string) => Promise<unknown>;
+    };
+
+    const missingPath = `${__filename}.missing-vm-error`;
+    let error: unknown;
+    try {
+      await fsPromises.readFile(missingPath);
+    } catch (caught) {
+      error = caught;
+    }
+
+    const isVmError = vm.runInContext(
+      '(value) => value instanceof Error',
+      vmContext,
+    ) as (value: unknown) => boolean;
+    expect(isVmError(error)).toBe(true);
+    expect(error).toMatchObject({ code: 'ENOENT' });
+    executor.dispose();
+  });
+
   it('should keep module and process builtin proxies separate', () => {
     const vmContext = vm.createContext({ process });
     const executor = getVmExternalModules(vmContext);
@@ -348,6 +372,17 @@ describe('loadEsModule', () => {
     });
 
     expect(mod.default).toEqual({ defaultExport: true, namedExport: true });
+  });
+
+  it('should preserve invariant-constrained builtin properties', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const fs = executor.require('node:fs', __filename) as {
+      constants: object;
+    };
+
+    expect(fs.constants).toBe(fs.constants);
+    executor.dispose();
   });
 
   it('should distinguish timer values from options', async () => {
