@@ -20,4 +20,18 @@ describe('vue sfc', () => {
 
     await expectExecSuccess();
   });
+
+  it('should run vue SFC test correctly in browser mode', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'index', '--config=rstest.browser.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
 });
