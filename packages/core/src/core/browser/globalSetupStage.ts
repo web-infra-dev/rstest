@@ -28,6 +28,8 @@ export type BrowserGlobalSetupStageResult = {
    * so the browser wire stays byte-identical to a run without globalSetup.
    */
   env?: Record<string, string | undefined>;
+  /** Materialized global-setup paths resolved for this stage. */
+  setupFiles?: string[];
   /** Setup failures; when non-empty the browser cycle must be skipped. */
   errors: Error[];
 };
@@ -121,7 +123,7 @@ export async function runBrowserGlobalSetupStage(
   ).filter((candidate) => candidate !== undefined);
 
   if (candidates.length === 0) {
-    return { errors: [] };
+    return { errors: [], setupFiles: [] };
   }
 
   const candidateProjects = candidates.map(({ project }) => project);
@@ -263,5 +265,9 @@ export async function runBrowserGlobalSetupStage(
     }
   }
 
-  return { env: ranAnySetup ? envOverlay : undefined, errors };
+  return {
+    env: ranAnySetup ? envOverlay : undefined,
+    errors,
+    setupFiles: setupFileState.getSetupPaths(candidateProjects),
+  };
 }

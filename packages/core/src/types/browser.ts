@@ -107,6 +107,8 @@ export interface BrowserTestRunResult {
   hasFailure: boolean;
   /** Raw coverage batches collected by a browser provider. */
   rawCoverage?: unknown[];
+  /** Materialized setup and global-setup paths resolved for this run. */
+  setupFiles?: string[];
   /** Resources shared by browser raw coverage batches. */
   loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'];
   loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];

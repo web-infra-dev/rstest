@@ -278,6 +278,7 @@ describe('generateCoverage', () => {
   it('does not resolve setup files for projects outside the run scope', async () => {
     const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
     const sourceFile = path.join(rootPath, 'src', 'index.ts');
+    const deletedSetupFile = path.join(rootPath, 'setup.ts');
     mkdirSync(path.dirname(sourceFile), { recursive: true });
     writeFileSync(sourceFile, 'export const value = 1;\n');
 
@@ -304,7 +305,10 @@ describe('generateCoverage', () => {
         {
           rootPath,
           environmentName: 'active',
-          normalizedConfig: { setupFiles: [], globalSetup: [] },
+          normalizedConfig: {
+            setupFiles: ['./setup.ts'],
+            globalSetup: [],
+          },
         },
         {
           rootPath,
@@ -319,7 +323,7 @@ describe('generateCoverage', () => {
 
     try {
       await generateCoverage(context, coverageMap, provider, undefined, [
-        context.projects[0]!,
+        deletedSetupFile,
       ]);
       expect(reportedFiles).toEqual([[sourceFile]]);
     } finally {

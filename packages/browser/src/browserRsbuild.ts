@@ -83,9 +83,14 @@ type BrowserCoverageConfig = Pick<
   'enabled' | 'exclude'
 >;
 
+type BrowserCoverageSetupExcludeState = {
+  coverage: BrowserCoverageConfig;
+  frameworkExcludes: Set<string>;
+};
+
 const browserCoverageSetupExcludes = new WeakMap<
   Pick<InternalProjectContext, 'environmentName'>,
-  Set<string>
+  BrowserCoverageSetupExcludeState
 >();
 
 export const syncBrowserCoverageSetupExcludes = (
@@ -93,27 +98,44 @@ export const syncBrowserCoverageSetupExcludes = (
   coverage: BrowserCoverageConfig | undefined,
   setupFiles: string[],
 ): void => {
-  const previous = browserCoverageSetupExcludes.get(project);
   if (!coverage) {
     browserCoverageSetupExcludes.delete(project);
     return;
   }
 
-  const userExcludes = coverage.exclude.filter(
-    (exclude) => !previous?.has(exclude),
-  );
   const frameworkExcludes = coverage.enabled
-    ? setupFiles.filter((setupFile) => !userExcludes.includes(setupFile))
+    ? setupFiles.filter((setupFile) => !coverage.exclude.includes(setupFile))
     : [];
 
-  coverage.exclude = Array.from(
-    new Set([...userExcludes, ...frameworkExcludes]),
-  );
   if (frameworkExcludes.length) {
-    browserCoverageSetupExcludes.set(project, new Set(frameworkExcludes));
+    browserCoverageSetupExcludes.set(project, {
+      coverage,
+      frameworkExcludes: new Set(frameworkExcludes),
+    });
   } else {
     browserCoverageSetupExcludes.delete(project);
   }
+};
+
+export const getBrowserCoverageConfig = (
+  project: Pick<InternalProjectContext, 'environmentName'>,
+  coverage: BrowserCoverageConfig | undefined,
+): BrowserCoverageConfig | undefined => {
+  if (!coverage) {
+    return undefined;
+  }
+
+  const frameworkExcludes = browserCoverageSetupExcludes.get(project);
+  if (frameworkExcludes?.coverage !== coverage) {
+    return coverage;
+  }
+
+  return {
+    ...coverage,
+    exclude: Array.from(
+      new Set([...coverage.exclude, ...frameworkExcludes.frameworkExcludes]),
+    ),
+  };
 };
 
 class RstestBrowserRuntimePlugin {
@@ -1898,12 +1920,21 @@ export const createBrowserRuntime = async ({
 
     // Register coverage plugin if this project enables coverage
     const coverage = project.normalizedConfig.coverage;
+    const coverageWithSetupExcludes = getBrowserCoverageConfig(
+      project,
+      coverage,
+    );
     if (coverage?.enabled && context.command !== 'list') {
       const { pluginCoverage } = await loadCoverageProvider(
         coverage,
         context.rootPath,
       );
-      rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+      rsbuildInstance.addPlugins([
+        pluginCoverage({
+          ...coverage,
+          exclude: coverageWithSetupExcludes?.exclude ?? coverage.exclude,
+        }),
+      ]);
     }
 
     const devServer = await rsbuildInstance.createDevServer({

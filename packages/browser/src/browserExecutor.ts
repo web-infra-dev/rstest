@@ -83,10 +83,11 @@ export async function createBrowserExecutor(
         testTime: result.duration.testTime,
       },
       coverage:
-        map?.files().length || result.rawCoverage?.length
+        map?.files().length || result.rawCoverage?.length || result.setupFiles
           ? {
               map: map?.toJSON(),
               raw: result.rawCoverage,
+              setupFiles: result.setupFiles,
               loadAssetFiles: result.loadAssetFiles,
               loadSourceMaps: result.loadSourceMaps,
             }

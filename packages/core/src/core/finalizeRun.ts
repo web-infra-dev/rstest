@@ -10,7 +10,7 @@ import {
   logger,
   type TraceRun,
 } from '../utils';
-import type { InternalContext, InternalProjectContext } from '../types';
+import type { InternalContext } from '../types';
 
 export const reportNoTestFiles = ({
   context,
@@ -184,7 +184,7 @@ export async function finalizeRunCycle(
     isWatchMode,
     coverageProvider,
     reportOnFailure,
-    projects = context.projects,
+    setupFiles,
     traceRun,
   }: {
     outcomes: ExecutorCycleOutcome[];
@@ -192,8 +192,8 @@ export async function finalizeRunCycle(
     isWatchMode: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
-    /** Projects whose executors participated in this cycle. */
-    projects?: InternalProjectContext[];
+    /** Materialized setup paths from the participating executors. */
+    setupFiles?: string[];
     /**
      * The cycle's trace buffer — the one the run loop rotated in for it, so a
      * cycle's spans and the events an executor emitted during it land together.
@@ -318,13 +318,17 @@ export async function finalizeRunCycle(
     (!isFailure || reportOnFailure)
   ) {
     const { generateCoverage } = await import('../coverage/generate');
+    const resolvedSetupFiles = [
+      ...(setupFiles ?? []),
+      ...outcomes.flatMap((outcome) => outcome.coverage?.setupFiles ?? []),
+    ];
     await runLifecycleStep('coverage report generation', () =>
       generateCoverage(
         context,
         mergedCoverageMap!,
         coverageProvider,
         traceRun.span,
-        projects,
+        resolvedSetupFiles,
       ),
     );
   }

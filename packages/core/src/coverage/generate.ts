@@ -2,7 +2,7 @@ import type FS from 'node:fs';
 import { isAbsolute, normalize, relative } from 'pathe';
 import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { InternalContext, InternalProjectContext } from '../types';
+import type { InternalContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -101,34 +101,37 @@ const filterExternalFiles = (
 };
 
 const getSetupCoverageExcludes = (
-  projects: InternalProjectContext[],
+  context: InternalContext,
+  setupFiles?: string[],
 ): Set<string> => {
-  const setupFiles = projects.flatMap(({ rootPath, normalizedConfig }) => {
-    if (!normalizedConfig) {
-      return [];
-    }
+  const resolvedSetupFiles =
+    setupFiles ??
+    context.projects.flatMap(({ rootPath, normalizedConfig }) => {
+      if (!normalizedConfig) {
+        return [];
+      }
 
-    const files = [
-      ...Object.values(
-        materializeVirtualSetupFiles(
-          getSetupFiles(normalizedConfig.setupFiles || [], rootPath),
-          rootPath,
-        ).setupFiles,
-      ),
-      ...Object.values(
-        materializeVirtualSetupFiles(
-          getSetupFiles(normalizedConfig.globalSetup || [], rootPath),
-          rootPath,
-        ).setupFiles,
-      ),
-    ];
+      const files = [
+        ...Object.values(
+          materializeVirtualSetupFiles(
+            getSetupFiles(normalizedConfig.setupFiles || [], rootPath),
+            rootPath,
+          ).setupFiles,
+        ),
+        ...Object.values(
+          materializeVirtualSetupFiles(
+            getSetupFiles(normalizedConfig.globalSetup || [], rootPath),
+            rootPath,
+          ).setupFiles,
+        ),
+      ];
 
-    return files.map((filePath) =>
-      isAbsolute(filePath) ? filePath : `${rootPath}/${filePath}`,
-    );
-  });
+      return files.map((filePath) =>
+        isAbsolute(filePath) ? filePath : `${rootPath}/${filePath}`,
+      );
+    });
 
-  return new Set(setupFiles.map((filePath) => normalize(filePath)));
+  return new Set(resolvedSetupFiles.map((filePath) => normalize(filePath)));
 };
 
 const shouldExcludeSetupCoverageFile = (
@@ -194,7 +197,7 @@ export async function generateCoverage(
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
   traceSpan: TraceSpan = noopTraceSpan,
-  coverageProjects: InternalProjectContext[] = context.projects,
+  setupFiles?: string[],
 ): Promise<void> {
   const {
     rootPath,
@@ -211,8 +214,10 @@ export async function generateCoverage(
         const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
         const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
         const normalizedRootPath = normalize(rootPath);
-        const setupCoverageExcludes =
-          getSetupCoverageExcludes(coverageProjects);
+        const setupCoverageExcludes = getSetupCoverageExcludes(
+          context,
+          setupFiles,
+        );
         const absDistPathRoot = distPathRoot
           ? normalize(
               isAbsolute(distPathRoot)

@@ -124,6 +124,8 @@ export interface ExecutorCycleOutcome {
   coverage?: {
     map?: CoverageMapData;
     raw?: unknown[];
+    /** Materialized setup and global-setup paths resolved by this executor. */
+    setupFiles?: string[];
     loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'];
     loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];
   };

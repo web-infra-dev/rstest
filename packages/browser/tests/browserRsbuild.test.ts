@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   createBrowserContextExcludeRegExp,
+  getBrowserCoverageConfig,
   syncBrowserCoverageSetupExcludes,
   toContextKey,
 } from '../src/browserRsbuild';
@@ -13,7 +14,7 @@ describe('browser config resolution', () => {
     syncBrowserCoverageSetupExcludes(project, coverage, [
       '/project/.rstest-virtual/first.mjs',
     ]);
-    expect(coverage.exclude).toEqual([
+    expect(getBrowserCoverageConfig(project, coverage)?.exclude).toEqual([
       'user-exclude',
       '/project/.rstest-virtual/first.mjs',
     ]);
@@ -21,9 +22,36 @@ describe('browser config resolution', () => {
     syncBrowserCoverageSetupExcludes(project, coverage, [
       '/project/.rstest-virtual/second.mjs',
     ]);
-    expect(coverage.exclude).toEqual([
+    expect(getBrowserCoverageConfig(project, coverage)?.exclude).toEqual([
       'user-exclude',
       '/project/.rstest-virtual/second.mjs',
+    ]);
+  });
+
+  it('keeps refreshed user coverage exclusions for former setup files', () => {
+    const project = { environmentName: 'coverage-user-exclude' };
+    const initialCoverage = { enabled: true, exclude: [] };
+
+    syncBrowserCoverageSetupExcludes(project, initialCoverage, [
+      '/project/.rstest-virtual/setup.mjs',
+    ]);
+
+    const refreshedCoverage = {
+      enabled: true,
+      exclude: ['/project/.rstest-virtual/setup.mjs'],
+    };
+    syncBrowserCoverageSetupExcludes(project, refreshedCoverage, [
+      '/project/.rstest-virtual/next-setup.mjs',
+    ]);
+
+    expect(refreshedCoverage.exclude).toEqual([
+      '/project/.rstest-virtual/setup.mjs',
+    ]);
+    expect(
+      getBrowserCoverageConfig(project, refreshedCoverage)?.exclude,
+    ).toEqual([
+      '/project/.rstest-virtual/setup.mjs',
+      '/project/.rstest-virtual/next-setup.mjs',
     ]);
   });
 

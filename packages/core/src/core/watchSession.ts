@@ -173,6 +173,7 @@ export function createWatchCycleDriver({
   getTraceRun,
   setTraceRun,
   enableCliShortcuts,
+  getSetupFiles = () => [],
   isSessionLive,
   isSessionClosing,
 }: {
@@ -182,6 +183,8 @@ export function createWatchCycleDriver({
   getTraceRun: () => TraceRun;
   setTraceRun: (traceRun: TraceRun) => void;
   enableCliShortcuts: boolean;
+  /** Materialized global-setup paths from the current browser stage. */
+  getSetupFiles?: () => string[];
   /**
    * Whether the run still has a session that could answer the ready banner. A
    * browser launch that found no test files (or failed before its runtime came
@@ -264,7 +267,7 @@ export function createWatchCycleDriver({
         isWatchMode: true,
         coverageProvider,
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
-        projects: executor.projects,
+        setupFiles: getSetupFiles(),
         traceRun: getTraceRun(),
       });
       context.exitCode.finishCycle();

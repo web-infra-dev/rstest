@@ -552,15 +552,13 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage:
-        coverageMap?.files().length || rawCoverage.length
-          ? {
-              map: coverageMap?.toJSON(),
-              raw: rawCoverage,
-              loadAssetFiles: loadBrowserCoverageAssetFiles,
-              loadSourceMaps: loadBrowserCoverageSourceMaps,
-            }
-          : undefined,
+      coverage: {
+        map: coverageMap?.toJSON(),
+        raw: rawCoverage,
+        setupFiles: projectEntries.flatMap((entry) => entry.setupFiles),
+        loadAssetFiles: loadBrowserCoverageAssetFiles,
+        loadSourceMaps: loadBrowserCoverageSourceMaps,
+      },
       resolveSourcemap: resolveBrowserSourcemap,
     };
   };
@@ -1182,6 +1180,7 @@ export const runBrowserController = async (
       (result: TestFileResult) => result.status === 'fail',
     ),
     rawCoverage,
+    setupFiles: projectEntries.flatMap((entry) => entry.setupFiles),
     loadAssetFiles: loadBrowserCoverageAssetFiles,
     loadSourceMaps: loadBrowserCoverageSourceMaps,
     getSourcemap: getBrowserSourcemap,

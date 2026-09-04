@@ -15,7 +15,7 @@ export type SetupFileState = {
   globalSetupFiles: Record<string, Record<string, string>>;
   virtualModules: Record<string, Record<string, string>>;
   refresh: (projects: SetupFileProjects) => void;
-  getSetupPaths: () => string[];
+  getSetupPaths: (projects?: InternalProjectContext[]) => string[];
 };
 
 const clearRecord = (record: Record<string, unknown>): void => {
@@ -70,6 +70,26 @@ export const createSetupFileState = (): SetupFileState => {
     globalSetupFiles,
     virtualModules,
     refresh,
-    getSetupPaths: () => collectSetupPaths(setupFiles, globalSetupFiles),
+    getSetupPaths: (projects) => {
+      if (!projects) {
+        return collectSetupPaths(setupFiles, globalSetupFiles);
+      }
+
+      const environments = new Set(
+        projects.map((project) => project.environmentName),
+      );
+      return collectSetupPaths(
+        Object.fromEntries(
+          Object.entries(setupFiles).filter(([environment]) =>
+            environments.has(environment),
+          ),
+        ),
+        Object.fromEntries(
+          Object.entries(globalSetupFiles).filter(([environment]) =>
+            environments.has(environment),
+          ),
+        ),
+      );
+    },
   };
 };
