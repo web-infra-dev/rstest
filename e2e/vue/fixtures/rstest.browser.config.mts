@@ -7,5 +7,8 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
+    providerOptions: {
+      launch: process.env.CI ? { channel: 'chrome' } : undefined,
+    },
   },
 });
