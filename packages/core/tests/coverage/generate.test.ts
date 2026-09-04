@@ -7,7 +7,7 @@ import {
   filterChangedFiles,
   generateCoverage,
 } from '../../src/coverage/generate';
-import type { RstestContext } from '../../src/types';
+import type { InternalContext } from '../../src/types';
 import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
 import type { TraceSpan } from '../../src/utils';
 
@@ -87,7 +87,7 @@ describe('generateCoverage', () => {
           environmentName: 'node',
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, createCoverageMap(), provider);
@@ -148,7 +148,7 @@ describe('generateCoverage', () => {
           },
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, coverageMap, provider);
@@ -204,7 +204,7 @@ describe('generateCoverage', () => {
           },
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, coverageMap, provider);
@@ -255,7 +255,7 @@ describe('generateCoverage', () => {
           environmentName: 'node',
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, coverageMap, provider);
@@ -311,7 +311,7 @@ describe('generateCoverage', () => {
           environmentName: 'node',
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, coverageMap, provider);
@@ -365,7 +365,7 @@ describe('generateCoverage', () => {
           environmentName: 'node',
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, createCoverageMap(), provider);
@@ -406,7 +406,7 @@ describe('generateCoverage', () => {
           environmentName: 'node',
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     try {
       await generateCoverage(context, coverageMap, provider);
@@ -460,7 +460,7 @@ describe('generateCoverage', () => {
           environmentName: 'node',
         },
       ],
-    } as RstestContext;
+    } as InternalContext;
 
     const spans: string[] = [];
     const traceSpan: TraceSpan = async (name, _cat, fn) => {

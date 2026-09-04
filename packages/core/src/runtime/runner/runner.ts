@@ -21,6 +21,7 @@ import type {
   TestFileResult,
   TestResult,
   TestResultStatus,
+  TestSuite,
   WorkerState,
 } from '../../types';
 import {
@@ -44,6 +45,7 @@ import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  getWrappedTimeout,
   inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
@@ -54,6 +56,17 @@ import {
 
 const RealDate = Date;
 const RealAbortController = AbortController;
+
+// Cancellation can start cleanup before setup unwinds. Linked frames let the
+// later phase skip an expired predecessor instead of restoring its deadline.
+type ActiveTimeoutFrame = {
+  active: boolean;
+  previousTestFrame?: ActiveTimeoutFrame;
+  previousTaskFrame?: ActiveTimeoutFrame;
+  startTime: number;
+  task: TestCase | TestSuite;
+  timeout: number;
+};
 
 /**
  * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
@@ -76,12 +89,80 @@ export class TestRunner {
   private workerState: WorkerState | undefined;
   private readonly fileFixtureManager = new FileFixtureManager();
   private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
+  private readonly activeTimeoutFrames = new WeakMap<
+    TestCase | TestSuite,
+    ActiveTimeoutFrame
+  >();
+  private readonly activeTimeoutContexts = new Map<
+    string,
+    ActiveTimeoutFrame
+  >();
   private readonly abortControllers = new WeakMap<
     TestContext,
     AbortController
   >();
 
   constructor(private readonly taskContext: TaskContext) {}
+
+  private async runWithActiveTimeout<T>(
+    test: TestCase | TestSuite,
+    fn: (...args: any[]) => any,
+    callback: () => T | Promise<T>,
+  ): Promise<T> {
+    const timeout = getWrappedTimeout(fn);
+    if (timeout === undefined) {
+      return callback();
+    }
+
+    const taskId = this.taskContext.getCurrent()?.taskId;
+    const frame: ActiveTimeoutFrame = {
+      active: true,
+      previousTestFrame: this.activeTimeoutFrames.get(test),
+      previousTaskFrame: taskId
+        ? this.activeTimeoutContexts.get(taskId)
+        : undefined,
+      startTime: RealDate.now(),
+      task: test,
+      timeout,
+    };
+    this.activeTimeoutFrames.set(test, frame);
+    test.activeTimeout = timeout;
+    test.activeTimeoutStartTime = frame.startTime;
+    if (taskId) {
+      this.activeTimeoutContexts.set(taskId, frame);
+    }
+    try {
+      return await callback();
+    } finally {
+      frame.active = false;
+      if (this.activeTimeoutFrames.get(test) === frame) {
+        let previousFrame = frame.previousTestFrame;
+        while (previousFrame && !previousFrame.active) {
+          previousFrame = previousFrame.previousTestFrame;
+        }
+        if (previousFrame) {
+          this.activeTimeoutFrames.set(test, previousFrame);
+          test.activeTimeout = previousFrame.timeout;
+          test.activeTimeoutStartTime = previousFrame.startTime;
+        } else {
+          this.activeTimeoutFrames.delete(test);
+          test.activeTimeout = undefined;
+          test.activeTimeoutStartTime = undefined;
+        }
+      }
+      if (taskId && this.activeTimeoutContexts.get(taskId) === frame) {
+        let previousFrame = frame.previousTaskFrame;
+        while (previousFrame && !previousFrame.active) {
+          previousFrame = previousFrame.previousTaskFrame;
+        }
+        if (previousFrame) {
+          this.activeTimeoutContexts.set(taskId, previousFrame);
+        } else {
+          this.activeTimeoutContexts.delete(taskId);
+        }
+      }
+    }
+  }
 
   async cleanupFileFixtures(
     result?: TestFileResult,
@@ -167,6 +248,8 @@ export class TestRunner {
 
       let result: TestResult | undefined;
 
+      test.startTime = undefined;
+
       // `onTestFinished` / `onTestFailed` are registered from inside the test
       // body, so each retry / repeat would otherwise stack new handlers on
       // top of leftovers from prior attempts and rerun them. Snapshot the
@@ -242,13 +325,15 @@ export class TestRunner {
         };
         let hookExecution: ReturnType<typeof runHook> | undefined;
         try {
-          return await runWithTimeout(
-            fn,
-            (callback) => {
-              hookExecution = runHook(callback);
-              return hookExecution;
-            },
-            (error) => this.abortContextSignal(test.context, error),
+          return await this.runWithActiveTimeout(test, fn, () =>
+            runWithTimeout(
+              fn,
+              (callback) => {
+                hookExecution = runHook(callback);
+                return hookExecution;
+              },
+              (error) => this.abortContextSignal(test.context, error),
+            ),
           );
         } catch (error) {
           const cancellation =
@@ -334,6 +419,7 @@ export class TestRunner {
       }
 
       if (!result) {
+        test.startTime = RealDate.now();
         const runTest = test.fn
           ? wrapTimeout({
               name: 'test',
@@ -416,6 +502,8 @@ export class TestRunner {
         }
       }
 
+      test.startTime = undefined;
+
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
         .concat(cleanups);
@@ -451,7 +539,7 @@ export class TestRunner {
 
       for (const fn of [...test.onFinished]) {
         try {
-          await fn(test.context);
+          await this.runWithActiveTimeout(test, fn, () => fn(test.context));
         } catch (error) {
           result.status = 'fail';
           result.errors ??= [];
@@ -467,7 +555,7 @@ export class TestRunner {
       if (result.status === 'fail') {
         for (const fn of [...test.onFailed].reverse()) {
           try {
-            await fn(test.context);
+            await this.runWithActiveTimeout(test, fn, () => fn(test.context));
           } catch (error) {
             result.errors ??= [];
             result.errors.push(...(await formatTestError(error)));
@@ -553,15 +641,15 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
-        result = await this.taskContext.run(
-          {
-            taskId: test.testId,
-            taskName: test.name,
-            taskParentNames: test.parentNames,
-            taskType: 'suite',
-            testPath,
-          },
-          async () => {
+        const suiteTask = {
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'suite' as const,
+          testPath,
+        };
+        const runSuite = () =>
+          this.taskContext.run(suiteTask, async () => {
             const start = RealDate.now();
 
             hooks.onTestSuiteStart?.({
@@ -614,8 +702,14 @@ export class TestRunner {
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await fn(suiteContext);
-                  if (cleanupFn) cleanups.push(cleanupFn);
+                  const cleanupFn = await this.runWithActiveTimeout(
+                    test,
+                    fn,
+                    () => fn(suiteContext),
+                  );
+                  if (cleanupFn) {
+                    cleanups.push(inheritTimeout(fn, cleanupFn));
+                  }
                 }
               } catch (error) {
                 hasBeforeAllError = true;
@@ -643,7 +737,9 @@ export class TestRunner {
             if (shouldRunSuiteHooks && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await fn(suiteContext);
+                  await this.runWithActiveTimeout(test, fn, () =>
+                    fn(suiteContext),
+                  );
                 }
               } catch (error) {
                 result.errors?.push(...(await formatTestError(error)));
@@ -657,8 +753,8 @@ export class TestRunner {
             hooks.onTestSuiteResult?.(result);
 
             return result;
-          },
-        );
+          });
+        result = await runSuite();
 
         errors.push(...(result.errors || []));
       } else {
@@ -843,6 +939,11 @@ export class TestRunner {
     return this._test;
   }
 
+  getCurrentTimeoutContext(): TestCase | TestSuite | undefined {
+    const taskId = this.taskContext.getCurrent()?.taskId;
+    return taskId ? this.activeTimeoutContexts.get(taskId)?.task : undefined;
+  }
+
   private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {
     const {
       runtimeConfig: {
@@ -1011,8 +1112,8 @@ export class TestRunner {
     return createFixtureResolver(test, context, fixtureCleanups, {
       fileFixtureManager: this.fileFixtureManager,
       workerFixtureManager,
-      runNamedFixtureSetup: (setup, onTimeout) =>
-        wrapTimeout({
+      runNamedFixtureSetup: (setup, onTimeout) => {
+        const wrappedSetup = wrapTimeout({
           name: 'fixture setup',
           fn: setup,
           timeout: test.timeout,
@@ -1021,15 +1122,26 @@ export class TestRunner {
             onTimeout();
           },
           stackTraceError: test.stackTraceError,
-        })(),
-      wrapNamedFixtureCleanup: (cleanup) =>
-        wrapTimeout({
+        });
+        return this.runWithActiveTimeout(test, wrappedSetup, () =>
+          wrappedSetup(),
+        );
+      },
+      wrapNamedFixtureCleanup: (cleanup) => {
+        const timeoutWrappedCleanup = wrapTimeout({
           name: 'fixture cleanup',
           fn: cleanup,
           timeout: test.timeout,
           onTimeout: (error) => this.abortContextSignal(context, error),
           stackTraceError: test.stackTraceError,
-        }),
+        });
+        return () =>
+          this.runWithActiveTimeout(
+            test,
+            timeoutWrappedCleanup,
+            timeoutWrappedCleanup,
+          );
+      },
     });
   }
 

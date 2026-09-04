@@ -1,10 +1,10 @@
 import { dirname, isAbsolute, join, normalize, resolve } from 'pathe';
 import type {
-  ProjectContext,
+  InternalContext,
+  InternalProjectContext,
   Rstest,
   RstestBuildCacheConfig,
   RstestConfig,
-  RstestContext,
 } from '../types';
 
 export const DEFAULT_CONFIG_NAME = 'rstest.config';
@@ -269,11 +269,11 @@ export const resolveProjectBuildCache = ({
   project,
 }: {
   context: Pick<
-    RstestContext,
+    InternalContext,
     'rootPath' | 'configFilePath' | 'command' | 'normalizedConfig' | 'projects'
   >;
   project: Pick<
-    ProjectContext,
+    InternalProjectContext,
     'environmentName' | 'configFilePath' | 'normalizedConfig'
   >;
 }): false | RstestBuildCacheConfig =>
@@ -346,6 +346,10 @@ export const SYNTHETIC_STACK_ERROR_MESSAGE = 'STACK_TRACE_ERROR';
 /** Default per-test timeout (ms). Single source for the config default and any
  * downstream fallback. */
 export const DEFAULT_TEST_TIMEOUT = 5_000;
+
+export const DEFAULT_BROWSER_TEST_TIMEOUT = 15_000;
+export const DEFAULT_EXPECT_POLL_TIMEOUT = 1_000;
+export const DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT = 5_000;
 export const FIXTURE_CLEANUP_TIMEOUT_MS = 10_000;
 
 export const TS_CONFIG_FILE = 'tsconfig.json';

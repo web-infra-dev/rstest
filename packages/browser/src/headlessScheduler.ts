@@ -1,5 +1,5 @@
 import type {
-  RstestContext,
+  InternalContext,
   TestFileResult,
 } from '@rstest/core/internal/browser';
 import {
@@ -57,14 +57,14 @@ import type {
 import type { WatchSignals } from './watchSignals';
 
 type HeadlessSchedulerContext = Pick<
-  RstestContext,
+  InternalContext,
   | 'command'
   | 'rootPath'
   | 'snapshotManager'
   | 'stateManager'
   | 'updateReporterResultState'
 > & {
-  normalizedConfig: Pick<RstestContext['normalizedConfig'], 'bail' | 'pool'>;
+  normalizedConfig: Pick<InternalContext['normalizedConfig'], 'bail' | 'pool'>;
 };
 
 type HeadlessSchedulerDeps = {

@@ -26,6 +26,85 @@ describe('browser mode - error handling', () => {
     expect(cli.exec.exitCode).not.toBe(0);
   });
 
+  it('reports an expect.element mismatch before the test timeout', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/elementAssertionTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).toContain('with timeout 5000ms');
+    expect(output).not.toMatch(/timed out in 500ms/i);
+  });
+
+  it('reports suite hook element mismatches before hook timeouts', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/elementAssertionTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('beforeAll hook timed out in 2000ms');
+    expect(output).not.toContain('afterAll hook timed out in 2000ms');
+    expect(output).not.toContain('fixture setup timed out in 2000ms');
+    expect(output).not.toContain('fixture cleanup timed out in 2000ms');
+  });
+
+  it('resets the element timeout before teardown hooks', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/teardownElementAssertionTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('afterEach hook timed out in 2000ms');
+  });
+
+  it('keeps concurrent suite hooks concurrent', async () => {
+    const { expectExecSuccess } = await runBrowserCli('error', {
+      args: ['tests/concurrentSuiteHooks.test.ts'],
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('does not leak a concurrent suite hook deadline into a sibling test', async () => {
+    const { expectExecSuccess } = await runBrowserCli('error', {
+      args: ['tests/concurrentElementAssertionContext.test.ts'],
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('activates the cleanup deadline during fixture cancellation', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/fixtureCancellationCleanupTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('fixture setup timed out in 1000ms');
+    expect(output).toContain(
+      'cancellation cleanup reached after element assertion',
+    );
+    expect(output).not.toContain('Expect "to.have.text"');
+    expect(output).not.toContain('fixture cleanup timed out in 1000ms');
+  });
+
+  it('caps use-style fixture cleanup assertions', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/useStyleFixtureCleanupTimeout.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('fixture cleanup timed out in 1000ms');
+  });
+
   it('should exit non-zero via core when the browser fails to launch', async () => {
     // A bad executablePath makes the provider launch throw. The host returns a
     // fatal outcome (`results: []`, `errors: [launchError]`) that core's
@@ -62,6 +141,19 @@ describe('browser mode - error handling', () => {
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'UNHANDLED_BROWSER_REJECTION',
     );
+  });
+
+  it('keeps a zero poll timeout finite in Browser Mode', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: [
+        '-c',
+        'rstest.zeroPoll.config.mts',
+        'tests/elementAssertionTimeout.test.ts',
+      ],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain('with timeout 1ms');
   });
 
   it('reports hook fixtures missing from browser tests', async () => {

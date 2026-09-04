@@ -19,6 +19,7 @@ import {
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  DEFAULT_EXPECT_POLL_TIMEOUT,
   DEFAULT_TEST_TIMEOUT,
   formatRootStr,
   getOutputDistPathRoot,
@@ -66,6 +67,11 @@ const resolveConfigPath = (root: string, customConfig?: string) => {
   return null;
 };
 
+export interface LoadedRstestConfig {
+  content: RstestConfig;
+  filePath: string | null;
+}
+
 export async function loadConfig({
   cwd = process.cwd(),
   path,
@@ -76,10 +82,7 @@ export async function loadConfig({
   path?: string;
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
-}): Promise<{
-  content: RstestConfig;
-  filePath: string | null;
-}> {
+} = {}): Promise<LoadedRstestConfig> {
   const configFilePath = resolveConfigPath(cwd, path);
 
   if (!configFilePath) {
@@ -133,6 +136,7 @@ export const resolveExtends = async (
   );
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
+  merged.extends = undefined;
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(
@@ -286,7 +290,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   expect: {
     poll: {
       interval: 50,
-      timeout: 1000,
+      timeout: DEFAULT_EXPECT_POLL_TIMEOUT,
     },
   },
   env: {},

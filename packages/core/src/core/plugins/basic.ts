@@ -7,7 +7,7 @@ import {
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../runtime/worker/runtimeHooks';
 import { createVmTimersShim } from '../../runtime/worker/vm/timers';
-import type { RstestContext } from '../../types';
+import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 import {
@@ -32,7 +32,7 @@ require.cache = __rstest_native_require.cache;
 require.extensions = __rstest_native_require.extensions;
 `;
 
-export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
+export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
   context,
 ) => ({
   name: 'rstest:basic',

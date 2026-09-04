@@ -1,5 +1,5 @@
 import { projectRuntimeConfig } from '../../src/core/runtimeConfigProjection';
-import type { ProjectContext } from '../../src/types';
+import type { InternalProjectContext } from '../../src/types';
 import { serializableConfig } from '../../src/utils/helper';
 import { unwrapRegex } from '../../src/utils/regexpWireFormat';
 
@@ -35,10 +35,10 @@ const baseNormalizedConfig = {
 
 const makeProject = (
   overrides: Partial<typeof baseNormalizedConfig> = {},
-): ProjectContext =>
+): InternalProjectContext =>
   ({
     normalizedConfig: { ...baseNormalizedConfig, ...overrides },
-  }) as unknown as ProjectContext;
+  }) as unknown as InternalProjectContext;
 
 describe('projectRuntimeConfig', () => {
   it('preserves federation mode for node and browser workers', () => {
@@ -121,6 +121,34 @@ describe('projectRuntimeConfig', () => {
       env: { HOST: 'yes' },
     });
     expect(config.env).toMatchObject({ HOST: 'yes', FOO: 'bar' });
+  });
+
+  it.each([
+    {
+      name: 'clears the pool color fallback when config sets NO_COLOR',
+      projectEnv: { NO_COLOR: '1' },
+      expected: {
+        FORCE_COLOR: undefined,
+        NO_COLOR: '1',
+        HOST: 'yes',
+      },
+    },
+    {
+      name: 'preserves an explicit FORCE_COLOR from config',
+      projectEnv: { FORCE_COLOR: '0' },
+      expected: {
+        FORCE_COLOR: '0',
+        NO_COLOR: undefined,
+        HOST: 'yes',
+      },
+    },
+  ])('inherit $name', ({ projectEnv, expected }) => {
+    const config = projectRuntimeConfig(makeProject({ env: projectEnv }), {
+      envMode: 'inherit',
+      env: { HOST: 'yes' },
+    });
+
+    expect(config.env).toEqual(expected);
   });
 
   it('testNamePattern round-trips through serializableConfig/unwrapRegex', () => {

@@ -1,7 +1,7 @@
 {
   "name": "rstest",
   "displayName": "Rstest",
-  "version": "0.11.10",
+  "version": "0.11.12",
   "private": true,
   "description": "VS Code extension for Rstest",
   "categories": [
@@ -18,7 +18,7 @@
   "scripts": {
     "build": "rslib build && npx prettier ./LICENSE.md --write",
     "build:local": "cross-env SOURCEMAP=true rslib build",
-    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
+    "preinstall": "node ./scripts/ensureIcon.cjs",
     "lint": "rslint .",
     "package:vsce": "npm run build && vsce package",
     "test": "npm run test:unit && npm run test:e2e",
@@ -62,6 +62,11 @@
         "title": "Run in Terminal",
         "category": "Rstest",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "rstest.openRstackExtension",
+        "title": "Migrate to Rstack",
+        "category": "Rstest"
       }
     ],
     "configuration": {
@@ -264,14 +269,13 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.2.0",
-    "@rslib/core": "1.0.0-rc.2",
+    "@rsbuild/core": "~2.2.2",
+    "@rslib/core": "~1.0.0",
     "@rstest/core": "workspace:*",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.3",
-    "@types/semver": "^7.8.0",
     "@types/vscode": "1.97.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "3.9.2",
@@ -280,11 +284,10 @@
     "mocha": "^11.8.0",
     "ovsx": "^1.1.1",
     "picomatch": "^4.0.7",
-    "semver": "^7.8.5",
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
     "valibot": "^1.4.2",
-    "yuku-parser": "^0.9.1"
+    "yuku-parser": "^0.9.3"
   },
   "engines": {
     "vscode": "^1.97.0"

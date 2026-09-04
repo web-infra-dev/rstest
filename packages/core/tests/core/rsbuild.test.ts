@@ -1,25 +1,75 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
-import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type {
+  OnAfterCreateCompilerFn,
+  RsbuildInstance,
+  RsbuildPlugin,
+  Rspack,
+} from '@rsbuild/core';
 import { join, normalize } from 'pathe';
+import { withDefaultConfig } from '../../src/config';
+import { listTests } from '../../src/core/listTests';
+import { Rstest } from '../../src/core/rstest';
 import {
+  createRsbuildServer,
   prepareRsbuild,
   syncCoverageSetupExcludes,
 } from '../../src/core/rsbuild';
-import { withTempDir } from '../helpers/tempDir';
 import { createSetupFileState } from '../../src/core/setupFileState';
 import type {
+  InternalContext,
   ResolvedRstestConfig,
-  RstestContext,
   RstestExposeAPI,
   TestEnvironmentModuleReference,
 } from '../../src/types';
-import { listTests } from '../../src/core/listTests';
-import { Rstest } from '../../src/core/rstest';
 import { castArray, TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
+import { withTempDir } from '../helpers/tempDir';
 
 process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
+
+const createFakeRsbuild = ({
+  compiler,
+  inspectConfigError,
+}: {
+  compiler?: Rspack.Compiler;
+  inspectConfigError?: Error;
+} = {}) => {
+  const close = rs.fn(async () => undefined);
+  let onAfterCreateCompiler: OnAfterCreateCompilerFn | undefined;
+  const rsbuildInstance = {
+    onAfterCreateCompiler(callback: OnAfterCreateCompilerFn) {
+      onAfterCreateCompiler = callback;
+    },
+    async createDevServer() {
+      if (compiler) {
+        await onAfterCreateCompiler?.({ compiler, environments: {} });
+      }
+      return { close };
+    },
+    async inspectConfig() {
+      throw inspectConfigError;
+    },
+  } as unknown as RsbuildInstance;
+  return { close, rsbuildInstance };
+};
+
+const createTestRsbuildServer = (
+  rsbuildInstance: RsbuildInstance,
+  inspectedConfig?: Parameters<
+    typeof createRsbuildServer
+  >[0]['inspectedConfig'],
+) =>
+  createRsbuildServer({
+    globTestSourceEntries: async () => ({}),
+    setupFiles: {},
+    globalSetupFiles: {},
+    rsbuildInstance,
+    inspectedConfig,
+    isWatchMode: false,
+    rootPath,
+  });
+
 const poolTestEnvironmentModules: Array<
   ReadonlyMap<string, TestEnvironmentModuleReference> | undefined
 > = [];
@@ -32,9 +82,9 @@ let validateBrowserConfigCalls = 0;
 
 rs.mock('../../src/core/browser/loader', () => {
   const createBrowserExecutor = async (
-    _context: RstestContext,
+    _context: InternalContext,
     options: {
-      projects: RstestContext['projects'];
+      projects: InternalContext['projects'];
       shardedEntries?: Map<string, { entries: Record<string, string> }>;
     },
   ) => ({
@@ -65,8 +115,8 @@ rs.mock('../../src/core/browser/loader', () => {
       runBrowserTests: async () => undefined,
     }),
     runBrowserDiscovery: async (
-      _context: RstestContext,
-      browserProjects: RstestContext['projects'],
+      _context: InternalContext,
+      browserProjects: InternalContext['projects'],
     ) => {
       browserDiscoveryBoots.push(browserProjects.map((p) => p.name));
       return undefined;
@@ -75,8 +125,8 @@ rs.mock('../../src/core/browser/loader', () => {
       validateBrowserConfigCalls += 1;
     },
     loadBrowserExecutor: async (
-      context: RstestContext,
-      browserProjects: RstestContext['projects'],
+      context: InternalContext,
+      browserProjects: InternalContext['projects'],
       _coverageProvider: null,
       options?: {
         shardedEntries?: Map<string, { entries: Record<string, string> }>;
@@ -182,7 +232,7 @@ describe('prepareRsbuild', () => {
       clean: true,
       reportOnFailure: false,
       allowExternal: false,
-    } satisfies RstestContext['normalizedConfig']['coverage'];
+    } satisfies InternalContext['normalizedConfig']['coverage'];
 
     syncCoverageSetupExcludes(coverage, [
       '/project/setup.ts',
@@ -194,6 +244,46 @@ describe('prepareRsbuild', () => {
       '/project/setup.ts',
       '/project/globalSetup.ts',
     ]);
+  });
+
+  it('closes the dev server when its compiler is unavailable', async () => {
+    const { close, rsbuildInstance } = createFakeRsbuild();
+
+    await expect(createTestRsbuildServer(rsbuildInstance)).rejects.toThrow(
+      'rspackCompiler was not initialized',
+    );
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('closes the dev server when its output file system is unavailable', async () => {
+    const { close, rsbuildInstance } = createFakeRsbuild({
+      compiler: { outputFileSystem: null } as Rspack.Compiler,
+    });
+
+    await expect(createTestRsbuildServer(rsbuildInstance)).rejects.toThrow(
+      'Expect outputFileSystem to be defined, but got null',
+    );
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('closes the dev server when config inspection fails', async () => {
+    const debug = process.env.DEBUG;
+    const { close, rsbuildInstance } = createFakeRsbuild({
+      inspectConfigError: new Error('config inspection failed'),
+    });
+    process.env.DEBUG = 'rstest';
+
+    try {
+      await expect(
+        createTestRsbuildServer(rsbuildInstance, {
+          ...withDefaultConfig({ root: rootPath }),
+          projects: [],
+        }),
+      ).rejects.toThrow('config inspection failed');
+      expect(close).toHaveBeenCalledOnce();
+    } finally {
+      process.env.DEBUG = debug;
+    }
   });
 
   it('should list browser shard entries after node modifyRstestConfig hooks', async () => {
@@ -719,7 +809,7 @@ describe('prepareRsbuild', () => {
         pool: { type: 'threads' },
       },
       projects: [projectA, projectB],
-    } as unknown as RstestContext;
+    } as unknown as InternalContext;
 
     const rsbuildInstance = await prepareRsbuild({
       context,
@@ -842,7 +932,7 @@ describe('prepareRsbuild', () => {
         pool: { execArgv: [], type: 'forks' },
       },
       projects: [project],
-    } as unknown as RstestContext;
+    } as unknown as InternalContext;
     const rsbuildInstance = await prepareRsbuild({
       context,
       globTestSourceEntries: async () => ({}),
@@ -928,7 +1018,7 @@ describe('prepareRsbuild', () => {
           pool: { type: 'forks' },
         },
         projects: [project],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -994,7 +1084,7 @@ describe('prepareRsbuild', () => {
           pool: { type: 'forks' },
         },
         projects: [project],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -1067,7 +1157,7 @@ describe('prepareRsbuild', () => {
           pool: { type: 'forks' },
         },
         projects: [project],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -1135,7 +1225,7 @@ describe('prepareRsbuild', () => {
           pool: { type: 'vmThreads' },
         },
         projects: [project],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -1196,7 +1286,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -1273,7 +1363,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });
@@ -1360,7 +1450,7 @@ describe('prepareRsbuild', () => {
               },
             },
           ],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState,
       });
@@ -1452,7 +1542,7 @@ describe('prepareRsbuild', () => {
           pool: { type: 'forks' },
         },
         projects: [project],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -1551,7 +1641,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });
@@ -1642,7 +1732,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState,
       });
@@ -1754,7 +1844,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });
@@ -1860,7 +1950,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });
@@ -1958,7 +2048,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });
@@ -2013,7 +2103,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2072,7 +2162,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2133,7 +2223,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2186,7 +2276,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2245,7 +2335,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2308,7 +2398,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2373,7 +2463,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2431,7 +2521,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2489,7 +2579,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2551,7 +2641,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2626,7 +2716,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2753,7 +2843,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2837,7 +2927,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -2892,7 +2982,7 @@ describe('prepareRsbuild', () => {
             },
           },
         ],
-      } as unknown as RstestContext,
+      } as unknown as InternalContext,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
@@ -3043,7 +3133,7 @@ describe('prepareRsbuild', () => {
               normalizedConfig,
             },
           ],
-        } as unknown as RstestContext,
+        } as unknown as InternalContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });

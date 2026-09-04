@@ -533,6 +533,42 @@ describe('createFixtureResolver', () => {
     expect(events).toEqual(['setup:base:named fixture test', 'cleanup']);
   });
 
+  it('wraps use-style fixture cleanup', async () => {
+    const events: string[] = [];
+    let cleanupWrapperCalls = 0;
+    const fixtures = normalizeFixtures({
+      value: [
+        async (_context: any, use: any) => {
+          events.push('setup');
+          await use('value');
+          events.push('cleanup');
+        },
+      ],
+    } as any);
+    const context: Record<string, any> = {};
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(
+      { fixtures } as any,
+      context,
+      cleanups,
+      {
+        wrapNamedFixtureCleanup: (cleanup) => async () => {
+          cleanupWrapperCalls++;
+          await cleanup();
+        },
+      },
+    );
+
+    await resolver.resolveTestFixtures(({ value }: any) => value);
+
+    expect(context.value).toBe('value');
+    expect(events).toEqual(['setup']);
+    expect(cleanupWrapperCalls).toBe(0);
+    await cleanups[0]!();
+    expect(cleanupWrapperCalls).toBe(1);
+    expect(events).toEqual(['setup', 'cleanup']);
+  });
+
   it('rejects more than one cleanup for a named fixture', async () => {
     const fixtures = normalizeNamedFixture(
       'value',
@@ -717,6 +753,47 @@ describe('createFixtureResolver', () => {
     ).rejects.toBe(setupError);
     expect(cleanups).toHaveLength(1);
     await expect(cleanups[0]!()).rejects.toBe(cleanupError);
+  });
+
+  it('reuses cleanup execution started by a timed-out setup', async () => {
+    const setupError = new Error('fixture setup timed out');
+    let finishCleanup: (() => void) | undefined;
+    let cleanupWrapperCalls = 0;
+    const fixtures = normalizeNamedFixture(
+      'value',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(
+          () =>
+            new Promise<void>((resolve) => {
+              finishCleanup = resolve;
+            }),
+        );
+        return new Promise<never>(() => {});
+      },
+    );
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups, {
+      runNamedFixtureSetup: async (setup, onTimeout) => {
+        void setup();
+        await Promise.resolve();
+        onTimeout();
+        throw setupError;
+      },
+      wrapNamedFixtureCleanup: (cleanup) => async () => {
+        cleanupWrapperCalls++;
+        await cleanup();
+      },
+    });
+
+    await expect(
+      resolver.resolveTestFixtures(({ value }: any) => value),
+    ).rejects.toBe(setupError);
+    expect(cleanupWrapperCalls).toBe(1);
+
+    const queuedCleanup = cleanups[0]!();
+    expect(cleanupWrapperCalls).toBe(1);
+    finishCleanup?.();
+    await expect(queuedCleanup).resolves.toBeUndefined();
   });
 
   it('does not parse callbacks when the test has no fixtures', async () => {
@@ -966,6 +1043,7 @@ describe('createFixtureResolver', () => {
 
   it('tears down fixture setup that finishes after cancellation', async () => {
     const events: string[] = [];
+    let cleanupWrapperCalls = 0;
     let continueSetup: (() => void) | undefined;
     let continueTeardown: (() => void) | undefined;
     const setupPaused = new Promise<void>((resolve) => {
@@ -997,6 +1075,12 @@ describe('createFixtureResolver', () => {
       { fixtures } as any,
       context,
       cleanups,
+      {
+        wrapNamedFixtureCleanup: (cleanup) => async () => {
+          cleanupWrapperCalls++;
+          await cleanup();
+        },
+      },
     );
 
     const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
@@ -1016,6 +1100,7 @@ describe('createFixtureResolver', () => {
     expect(resolutionSettled).toBe(false);
     continueTeardown!();
     await expect(resolution).resolves.toEqual({ status: 'skipped' });
+    expect(cleanupWrapperCalls).toBe(1);
     expect(events).toEqual(['setup', 'teardown:start', 'teardown']);
     expect(context).toEqual({});
     expect(cleanups).toEqual([]);

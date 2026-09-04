@@ -104,7 +104,10 @@ export interface TestEachFn {
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
   ): TestCall<(...args: [...T]) => MaybePromise<void>>;
-  <T>(cases: readonly T[]): TestCall<(...args: T[]) => MaybePromise<void>>;
+  <T extends readonly unknown[]>(
+    cases: readonly T[],
+  ): TestCall<(...args: [...T]) => MaybePromise<void>>;
+  <T>(cases: readonly T[]): TestCall<(param: T) => MaybePromise<void>>;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
@@ -143,6 +146,9 @@ export interface DescribeEachFn {
     cases: readonly T[],
   ): DescribeCall<(param: T) => MaybePromise<void>>;
   <T extends readonly [unknown, ...unknown[]]>(
+    cases: readonly T[],
+  ): DescribeCall<(...args: [...T]) => MaybePromise<void>>;
+  <T extends readonly unknown[]>(
     cases: readonly T[],
   ): DescribeCall<(...args: [...T]) => MaybePromise<void>>;
   <T>(cases: readonly T[]): DescribeCall<(param: T) => MaybePromise<void>>;

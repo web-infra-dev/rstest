@@ -94,7 +94,7 @@ expect.soft(1 + 2).toBe(4);
 Repeatedly calls `actual` and retries the matcher until it passes or times out.
 
 - **Default `interval`:** `50` (ms)
-- **Default `timeout`:** `1000` (ms)
+- **Default `timeout`:** `1000` (ms), or `5000` (ms) in Browser Mode
 
 You can change these defaults with the [`expect.poll` configuration](/config/test/expect#expectpoll). Options passed to an individual call take precedence.
 

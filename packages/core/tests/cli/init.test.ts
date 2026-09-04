@@ -156,6 +156,27 @@ describe('mergeWithCLIOptions', () => {
       memoryLimit: '256MB',
     });
   });
+  it.each(['1.5/2', '1/2.5'])(
+    'rejects a non-integer --shard value: %s',
+    (shard) => {
+      expect(() => mergeWithCLIOptions({}, { shard })).toThrow(
+        `Invalid shard option: ${shard}`,
+      );
+    },
+  );
+
+  it.each([
+    { changed: false, passWithNoTests: undefined },
+    { changed: true, passWithNoTests: true },
+    { changed: 'main', passWithNoTests: true },
+  ])(
+    'sets passWithNoTests to $passWithNoTests for changed: $changed',
+    ({ changed, passWithNoTests }) => {
+      const config = mergeWithCLIOptions({}, { changed });
+
+      expect(config.passWithNoTests).toBe(passWithNoTests);
+    },
+  );
 });
 
 describe('resolveProjects', () => {

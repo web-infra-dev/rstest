@@ -182,7 +182,13 @@ const setErrorName = (error: Error, type: string): Error => {
   }
 };
 
-const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
+const setupEnv = (
+  env: Partial<NodeJS.ProcessEnv> | undefined,
+  deletedEnvKeys: string[],
+) => {
+  for (const key of deletedEnvKeys) {
+    Reflect.deleteProperty(process.env, key);
+  }
   if (env) {
     Object.entries(env).forEach(([key, value]) => {
       if (value === undefined) {
@@ -454,6 +460,7 @@ const preparePool = async (
     entryInfo: { distPath, testPath },
     updateSnapshot,
     context,
+    deletedEnvKeys,
     environmentKey,
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
@@ -550,7 +557,7 @@ const preparePool = async (
       },
     } = context;
 
-    setupEnv(env);
+    setupEnv(env, deletedEnvKeys);
 
     if (isVmPool) {
       const vmRealm = await prepareVmRuntimeRealm(
@@ -974,8 +981,9 @@ export const runInPool = async (
   };
 
   const exit = process.exit.bind(process);
-  process.exit = (code = process.exitCode || 0): never => {
-    throw new Error(`process.exit unexpectedly called with "${code}"`);
+  process.exit = (code): never => {
+    const effectiveCode = code ?? Reflect.get(process, 'exitCode') ?? 0;
+    throw new Error(`process.exit unexpectedly called with "${effectiveCode}"`);
   };
 
   const kill = process.kill.bind(process);

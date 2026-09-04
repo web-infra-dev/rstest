@@ -2,8 +2,13 @@ import { afterAll, describe, expect, it } from '@rstest/core';
 
 const logs: string[] = [];
 
+// Not every row is an array, so each row must arrive whole — the array row too.
+const mixedTable = [null, 42, ['a']];
+const mixedReceived: unknown[] = [];
+
 afterAll(() => {
   expect(logs.length).toBe(9);
+  expect(mixedReceived).toEqual(mixedTable);
 });
 
 describe.each([
@@ -55,5 +60,11 @@ describe.each<{ a: number; b: number; expected: number }>`
   it(`should return ${expected}`, () => {
     expect(a + b).toBe(expected);
     logs.push('executed');
+  });
+});
+
+describe.each(mixedTable)('mixed table case %#', (value) => {
+  it('should receive the row itself', () => {
+    mixedReceived.push(value);
   });
 });

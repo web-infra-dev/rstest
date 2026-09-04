@@ -158,8 +158,12 @@ describe.todo('should implement this suite');
 - **Type:**
 
 ```ts
-describe.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+// Every row is an array: the row is spread into the arguments
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 Creates a describe block for each item in the provided array. Like `describe`, it accepts an optional [`TestOptions`](#testoptions) object as its second argument and applies it to every generated suite.
@@ -174,6 +178,8 @@ describe.each([
   });
 });
 ```
+
+Rows are spread into the suite function arguments only when every row of the table is an array. Once any row is not an array, every row is passed whole, so an array row of a mixed table arrives as the array itself.
 
 You can also use a tagged template literal table syntax:
 

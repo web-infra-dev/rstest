@@ -12,8 +12,12 @@ let cleaners: Cleaner[] = [];
 /**
  * Add a cleaner to handle side effects
  */
-export const onBeforeRestart = (cleaner: Cleaner): void => {
-  cleaners.push(cleaner);
+export const onBeforeRestart = (cleaner: Cleaner): (() => void) => {
+  const registration = () => cleaner();
+  cleaners.push(registration);
+  return () => {
+    cleaners = cleaners.filter((candidate) => candidate !== registration);
+  };
 };
 
 const clearConsole = () => {
@@ -22,7 +26,7 @@ const clearConsole = () => {
   }
 };
 
-const beforeRestart = async ({
+export const beforeRestart = async ({
   filePath,
   root,
   clear = true,

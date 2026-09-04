@@ -1,6 +1,6 @@
 {
   "name": "@rstest/playwright",
-  "version": "0.11.10",
+  "version": "0.11.12",
   "description": "Playwright fixture integration for Rstest",
   "keywords": [
     "rstest",
@@ -39,7 +39,7 @@
     "test": "pnpm run build && rstest"
   },
   "devDependencies": {
-    "@rslib/core": "1.0.0-rc.2",
+    "@rslib/core": "~1.0.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "playwright": "^1.62.1",

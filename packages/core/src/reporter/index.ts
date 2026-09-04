@@ -3,6 +3,7 @@ import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
+  InternalContext,
   NormalizedConfig,
   NormalizedProjectConfig,
   Reporter,
@@ -138,6 +139,11 @@ export class DefaultReporter implements Reporter {
     this.nonTTYProgressNotifier?.stop();
   }
 
+  dispose(): void {
+    this.statusRenderer?.stop();
+    this.nonTTYProgressNotifier?.stop();
+  }
+
   async onTestRunEnd({
     results,
     testResults,
@@ -182,5 +188,18 @@ export class DefaultReporter implements Reporter {
       rootPath: this.rootPath,
       snapshotSummary,
     });
+  }
+}
+
+export function disposeBuiltInReporters(
+  context: Pick<InternalContext, 'reporters'>,
+): void {
+  // TODO: RFC PR2 should make reporter lifecycle context-owned and define a
+  // disposal contract for custom reporters. PR1 only releases built-in TTY
+  // renderer resources that would otherwise pollute an embedding host.
+  for (const reporter of context.reporters) {
+    if (reporter instanceof DefaultReporter) {
+      reporter.dispose();
+    }
   }
 }

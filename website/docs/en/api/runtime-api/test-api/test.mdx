@@ -135,8 +135,12 @@ test.todo('should implement this test');
 - **Type:**
 
 ```ts
-test.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+// Every row is an array: the row is spread into the arguments
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+test.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 Runs the same test logic for each item in the provided array.
@@ -199,6 +203,15 @@ test.each([
 // this will return
 // adds 1 + 2 to equal 3
 // adds 2 + 2 to equal 4
+```
+
+Rows are spread into the test function arguments only when every row of the table is an array. Once any row is not an array, every row is passed whole, so an array row of a mixed table arrives as the array itself:
+
+```ts
+test.each([null, 42, ['a']])('rejects %o', (value) => {
+  // The third case receives ['a'], not 'a'.
+  expect(isValid(value)).toBe(false);
+});
 ```
 
 You can also access object properties with `$` prefix:

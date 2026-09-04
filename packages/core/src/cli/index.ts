@@ -2,21 +2,24 @@ import { logger } from '../utils/logger';
 import { setupCommands } from './commands';
 import { prepareCli } from './prepare';
 
-export { initCli } from './init';
-
+/** @experimental Subject to change until 1.0.0. */
 export type RunCLIOptions = {
   /**
-   * The command-line arguments to parse, matching the shape of Node.js `process.argv`
-   * @default process.argv
+   * The command, filters, and flags to parse, exactly as written after `rstest`
+   * on the command line.
+   * @default process.argv.slice(2)
    */
   argv?: string[];
 };
 
-export function runCLI({ argv = process.argv }: RunCLIOptions = {}): void {
+/** @experimental Subject to change until 1.0.0. */
+export function runCLI({
+  argv = process.argv.slice(2),
+}: RunCLIOptions = {}): void {
   prepareCli();
 
   try {
-    setupCommands(argv);
+    setupCommands(['node', 'rstest', ...argv]);
   } catch (err) {
     logger.error('Failed to start Rstest CLI.');
     logger.error(err);

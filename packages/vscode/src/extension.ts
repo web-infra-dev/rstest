@@ -2,7 +2,11 @@ import vscode from 'vscode';
 import { RstestDiagnostics } from './diagnostics';
 import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
-import { runningWorkers } from './master';
+import { closeWorkerGracefully, runningWorkers } from './master';
+import {
+  createMigrationNotice,
+  rstackEditorTakesOver,
+} from './migrationNotice';
 import { Project, WorkspaceManager } from './project';
 import { disposeTerminal } from './terminal';
 import { RstestFileCoverage } from './testRunReporter';
@@ -16,15 +20,21 @@ import {
 } from './testTree';
 
 export async function activate(context: vscode.ExtensionContext) {
-  const rstest = new Rstest(context);
-  return rstest;
+  context.subscriptions.push(logger);
+  const standingDown = rstackEditorTakesOver();
+  createMigrationNotice(context, standingDown);
+  if (standingDown) {
+    return;
+  }
+  return new Rstest(context);
 }
 
-export function deactivate() {
-  for (const worker of runningWorkers) {
-    worker.$close();
-  }
+export async function deactivate() {
+  // VS Code may cap extension deactivation time. Start all graceful closes
+  // concurrently so teardown gets the available window before force fallback.
+  const workerCloses = Array.from(runningWorkers, closeWorkerGracefully);
   disposeTerminal();
+  await Promise.all(workerCloses);
 }
 
 class Rstest {
@@ -47,7 +57,6 @@ class Rstest {
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
     context.subscriptions.push(this.ctrl);
     context.subscriptions.push(this.diagnostics);
-    context.subscriptions.push(logger);
 
     this.startScanWorkspaces();
     this.setupTestController();
@@ -334,20 +343,17 @@ class Rstest {
         } else if (data instanceof ProjectFolder) {
           // grouping folder spans multiple projects; recurse into children
           await discoverTests(gatherTestItems(test.children, false));
-        } else if (data instanceof TestFolder) {
+        } else if (data instanceof TestFile || data instanceof TestFolder) {
           await data.api.runTest({
             ...commonOptions,
             fileFilter: data.uri.fsPath,
-          });
-        } else if (data instanceof TestFile) {
-          await data.api.runTest({
-            ...commonOptions,
-            fileFilter: data.uri.fsPath,
+            fileFilterMode: data instanceof TestFolder ? 'fuzzy' : 'exact',
           });
         } else if (data instanceof TestCase) {
           await data.api.runTest({
             ...commonOptions,
             fileFilter: data.uri.fsPath,
+            fileFilterMode: 'exact',
             testCaseNamePath: data.parentNames.concat(test.label),
             isSuite: data.type === 'suite',
           });

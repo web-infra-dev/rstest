@@ -43,11 +43,14 @@ import type {
   MatcherState,
   RstestExpect,
   TestCase,
+  TestSuite,
   WorkerState,
 } from '../../types';
+import { DEFAULT_EXPECT_POLL_TIMEOUT } from '../../utils/constants';
 import { toNativePath } from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import { createExpectPoll } from './poll';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
@@ -100,7 +103,10 @@ type GlobalWithExpect = typeof globalThis & {
 export const getGlobalExpect = (): RstestExpect =>
   (globalThis as GlobalWithExpect)[GLOBAL_EXPECT];
 
-type ElementExpectHandler = (locator: unknown) => unknown;
+type ElementExpectHandler = (
+  locator: unknown,
+  options: { getTimeout: () => number },
+) => unknown;
 
 let elementExpectHandler: ElementExpectHandler | undefined;
 
@@ -155,6 +161,7 @@ use(JestAsymmetricMatchers);
 
 export function createExpect({
   getCurrentTest,
+  getElementTest,
   getWorkerState,
   snapshotPlugin,
 }: {
@@ -166,6 +173,7 @@ export function createExpect({
    */
   getWorkerState: () => WorkerState;
   getCurrentTest: () => TestCase | undefined;
+  getElementTest?: () => TestCase | TestSuite | undefined;
   snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
   if (snapshotPlugin) {
@@ -207,6 +215,13 @@ export function createExpect({
   expect.poll = createExpectPoll(
     expect,
     () => getWorkerState().runtimeConfig.expect.poll,
+    () => {
+      if (getElementTest) {
+        const timeoutContext = getElementTest();
+        return timeoutContext?.type === 'case' ? timeoutContext : undefined;
+      }
+      return getCurrentTest();
+    },
   );
 
   const element = (locator: unknown): unknown => {
@@ -217,7 +232,19 @@ export function createExpect({
       );
     }
 
-    const assertion = elementExpectHandler(locator);
+    const getTimeout = (): number => {
+      const currentTest = getElementTest ? getElementTest() : getCurrentTest();
+      const pollTimeout =
+        getWorkerState().runtimeConfig.expect?.poll?.timeout ??
+        DEFAULT_EXPECT_POLL_TIMEOUT;
+      const remainingTestTimeout = currentTest
+        ? getRemainingTestTimeout(currentTest, TEST_TIMEOUT_BUFFER)
+        : undefined;
+      return remainingTestTimeout === undefined
+        ? pollTimeout
+        : Math.min(pollTimeout, remainingTestTimeout);
+    };
+    const assertion = elementExpectHandler(locator, { getTimeout });
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     return assertion;
@@ -285,6 +312,19 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
     fileExpect = createExpect({
       getWorkerState: getContextWorkerState,
       getCurrentTest: () => fileContext().testRunner.getCurrentTest(),
+      getElementTest: () => {
+        const { testRunner } = fileContext();
+        const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
+        const currentTest = testRunner.getCurrentTest();
+        const timeoutContext = activeTimeoutContext ?? currentTest;
+        // The file-level expect is shared, so the runner's current-test pointer
+        // and browser task context are not reliable while concurrent flows are
+        // interleaved. Tests use context.expect when they need their deadline;
+        // concurrent suite hooks fall back to the configured poll timeout.
+        return timeoutContext?.concurrent || timeoutContext?.inConcurrentScope
+          ? undefined
+          : timeoutContext;
+      },
       snapshotPlugin,
     });
     // The slot the runner and `@vitest/expect` internals read; assigned once —
