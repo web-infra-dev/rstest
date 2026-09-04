@@ -193,7 +193,14 @@ export const prepareRsbuild = async ({
     };
     setupFileState.refresh(setupFileProjects);
     if (command !== 'list') {
-      syncCoverageSetupExcludes(coverage, getSetupPaths());
+      syncCoverageSetupExcludes(
+        coverage,
+        getSetupPaths(),
+        [
+          ...setupFileProjects.setupProjects,
+          ...setupFileProjects.globalSetupProjects,
+        ].map((project) => project.rootPath),
+      );
     }
   };
 

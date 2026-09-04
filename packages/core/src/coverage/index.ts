@@ -20,12 +20,21 @@ export { resolveAndMergeRawCoverage } from './resolveRawCoverage';
 export const syncCoverageSetupExcludes = (
   coverage: NormalizedCoverageOptions | undefined,
   setupPaths: string[],
+  rootPaths: string[],
 ): void => {
   if (!coverage?.enabled || !setupPaths.length) {
     return;
   }
 
-  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupPaths]));
+  coverage.exclude = Array.from(
+    new Set([
+      ...coverage.exclude,
+      ...setupPaths,
+      ...rootPaths.flatMap((rootPath) =>
+        setupPaths.map((setupPath) => relative(rootPath, setupPath)),
+      ),
+    ]),
+  );
 };
 
 export const loadCoverageProvider = async (
