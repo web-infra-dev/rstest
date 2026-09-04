@@ -161,6 +161,34 @@ describe('programmatic createRstest', () => {
     expect(result.teardownEntries).toEqual(['context-a', 'context-b']);
   });
 
+  it('reports missing dependencies without prompting embedded callers', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-missing-dependencies.mjs'],
+      onTestFinished,
+      unsetEnv: ['CI'],
+      options: {
+        nodeOptions: { cwd: fixturesDir, env: { NO_COLOR: '1' } },
+      },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+    const dependencyMessage =
+      'Failed to load coverage provider module: @rstest/coverage-istanbul';
+
+    expect(execution.exitCode).toBe(0);
+    expect(result.run).toMatchObject({ status: 'error' });
+    expect(result.run.message).toContain(dependencyMessage);
+    expect(result.watch.message).toContain(dependencyMessage);
+    expect(result.mergeReports).toMatchObject({ status: 'error' });
+    expect(result.mergeReports.message).toContain(dependencyMessage);
+    expect(cli.log).not.toContain('Install it now?');
+    expect(cli.log).not.toContain('Installing ');
+  });
+
   it('accepts a loaded disk config without resolving extends twice', async ({
     onTestFinished,
   }) => {

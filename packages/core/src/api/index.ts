@@ -16,7 +16,7 @@ import {
   resolveRunnerInputs,
   resolveRunnerOperationInputs,
 } from '../core/resolveConfig';
-import { disposeBuiltInReporters } from '../reporter';
+import { exitReporters } from '../reporter';
 import type {
   InternalContext,
   ListCommandResult,
@@ -200,9 +200,6 @@ export async function createRstest(
     });
 
   type Engine = Awaited<ReturnType<typeof build>>;
-  const releaseEngine = (engine: Engine): void => {
-    disposeBuiltInReporters(engine.context);
-  };
   const withEngine = async <Result>(
     command: 'run' | 'list' | 'merge-reports',
     runOptions: RunOptions,
@@ -215,7 +212,7 @@ export async function createRstest(
       return await operation(engine);
     } finally {
       if (engine) {
-        releaseEngine(engine);
+        await exitReporters(engine.context);
       }
     }
   };
@@ -239,8 +236,6 @@ export async function createRstest(
             return await result;
           } catch (error) {
             return capture.errorResult(error);
-          } finally {
-            capture.dispose();
           }
         },
       );
@@ -286,18 +281,13 @@ export async function createRstest(
         capture = createResultReporter(engine.context, {
           onResult: watchOptions.onResult,
         });
-        try {
-          applySnapshotUpdateOption(engine.context, watchOptions.update);
-          engine.context.reporters.push(capture.reporter);
-          const initialResult = capture.nextResult();
-          await engine.runTests();
-          await initialResult;
-        } catch (error) {
-          capture.dispose();
-          throw error;
-        }
+        engine.context.reporters.push(capture.reporter);
+        applySnapshotUpdateOption(engine.context, watchOptions.update);
+        const initialResult = capture.nextResult();
+        await engine.runTests();
+        await initialResult;
       } catch (error) {
-        releaseEngine(engine);
+        await exitReporters(engine.context);
         throw error;
       }
 
@@ -306,14 +296,8 @@ export async function createRstest(
       return {
         close(): Promise<void> {
           if (!closePromise) {
-            closePromise = (async () => {
-              try {
-                await closeWatchSession?.();
-              } finally {
-                capture.dispose();
-                releaseEngine(engine);
-              }
-            })();
+            closePromise =
+              closeWatchSession?.() ?? exitReporters(engine.context);
           }
           return closePromise;
         },

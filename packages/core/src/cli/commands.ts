@@ -4,13 +4,22 @@ import type {
   RstestCommand,
   RstestInstance,
 } from '../types';
-import { color, determineAgent, formatError, logger } from '../utils';
+import { color, determineAgent, formatError, isTTY, logger } from '../utils';
 import { buildResolvedRunner, isRelatedRun } from '../core/buildRunner';
+import { exitReporters } from '../reporter';
+import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { mirrorExitCode } from './exitCode';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
 export type { CommonOptions } from './init';
+
+let cliPrompts: Promise<typeof import('@clack/prompts')> | undefined;
+const cliPackageInstallerConfirm: PackageInstallerConfirm = async (options) => {
+  const { confirm, isCancel } = await (cliPrompts ??= import('@clack/prompts'));
+  const result = await confirm(options);
+  return isCancel(result) ? false : result;
+};
 
 type OptionConfig = {
   default?: string;
@@ -541,11 +550,12 @@ const filterHelpOptions = (
   });
 
 const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
-  for (const reporter of rstest?.context.reporters || []) {
-    reporter.onExit?.();
-  }
   logger.error('Failed to run Rstest.');
   logger.error(formatError(err));
+  if (rstest) {
+    void exitReporters(rstest.context).finally(() => process.exit(1));
+    return;
+  }
   process.exit(1);
 };
 
@@ -555,9 +565,13 @@ const resolveCliRuntime = async (options: CommonOptions) => {
     import('../core'),
   ]);
   const inputs = await initCli(options);
+  const packageInstallerConfirm = isTTY('stdin')
+    ? cliPackageInstallerConfirm
+    : undefined;
   const buildCliRunner: typeof createRstest = (...args) => {
     const rstest = createRstest(...args);
     mirrorExitCode(rstest.context);
+    rstest.context.packageInstallerConfirm = packageInstallerConfirm;
     return rstest;
   };
 
@@ -607,24 +621,25 @@ export const runRest = async ({
     process.on('unhandledRejection', unexpectedlyExitHandler);
 
     if (command === 'watch') {
-      const { watchFilesForRestart, onBeforeRestart } =
-        await import('../core/restart');
-
-      onBeforeRestart(() => {
-        process.off('uncaughtException', unexpectedlyExitHandler);
-        process.off('unhandledRejection', unexpectedlyExitHandler);
-      });
-
+      const { watchFilesForRestart } = await import('../core/restart');
       await watchFilesForRestart({
         rstest,
         options,
         filters,
+        beforeRestart: () => {
+          process.off('uncaughtException', unexpectedlyExitHandler);
+          process.off('unhandledRejection', unexpectedlyExitHandler);
+        },
       });
     }
 
     await rstest.runTests();
   } catch (err) {
     handleUnexpectedExit(rstest, err);
+    return;
+  }
+  if (command !== 'watch' && rstest) {
+    await exitReporters(rstest.context);
   }
 };
 
@@ -760,7 +775,11 @@ export function createCli(): CAC {
           createRstestContext: createRstest,
         });
 
-        await rstest.mergeReports({ path, cleanup: options.cleanup });
+        try {
+          await rstest.mergeReports({ path, cleanup: options.cleanup });
+        } finally {
+          await exitReporters(rstest.context);
+        }
       } catch (err) {
         logger.error('Failed to merge reports.');
         logger.error(formatError(err));
