@@ -552,13 +552,15 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: {
-        map: coverageMap?.toJSON(),
-        raw: rawCoverage,
-        setupFiles: projectEntries.flatMap((entry) => entry.setupFiles),
-        loadAssetFiles: loadBrowserCoverageAssetFiles,
-        loadSourceMaps: loadBrowserCoverageSourceMaps,
-      },
+      coverage:
+        coverageMap?.files().length || rawCoverage.length
+          ? {
+              map: coverageMap?.toJSON(),
+              raw: rawCoverage,
+              loadAssetFiles: loadBrowserCoverageAssetFiles,
+              loadSourceMaps: loadBrowserCoverageSourceMaps,
+            }
+          : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
   };
@@ -1160,7 +1162,6 @@ export const runBrowserController = async (
     return {
       ...errorResult,
       rawCoverage,
-      setupFiles: projectEntries.flatMap((entry) => entry.setupFiles),
       loadAssetFiles: loadBrowserCoverageAssetFiles,
       loadSourceMaps: loadBrowserCoverageSourceMaps,
       watchSession,
@@ -1181,7 +1182,6 @@ export const runBrowserController = async (
       (result: TestFileResult) => result.status === 'fail',
     ),
     rawCoverage,
-    setupFiles: projectEntries.flatMap((entry) => entry.setupFiles),
     loadAssetFiles: loadBrowserCoverageAssetFiles,
     loadSourceMaps: loadBrowserCoverageSourceMaps,
     getSourcemap: getBrowserSourcemap,

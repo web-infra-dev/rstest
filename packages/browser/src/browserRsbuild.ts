@@ -24,6 +24,7 @@ import {
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
+  syncCoverageSetupExcludes,
   type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
 import openEditor from 'open-editor';
@@ -76,66 +77,6 @@ type BrowserProjectEntries = {
   setupFiles: string[];
   virtualModules: Record<string, string>;
   testFiles: string[];
-};
-
-type BrowserCoverageConfig = Pick<
-  NonNullable<InternalProjectContext['normalizedConfig']['coverage']>,
-  'enabled' | 'exclude'
->;
-
-type BrowserCoverageSetupExcludeState = {
-  coverage: BrowserCoverageConfig;
-  frameworkExcludes: Set<string>;
-};
-
-const browserCoverageSetupExcludes = new WeakMap<
-  Pick<InternalProjectContext, 'environmentName'>,
-  BrowserCoverageSetupExcludeState
->();
-
-export const syncBrowserCoverageSetupExcludes = (
-  project: Pick<InternalProjectContext, 'environmentName'>,
-  coverage: BrowserCoverageConfig | undefined,
-  setupFiles: string[],
-): void => {
-  if (!coverage) {
-    browserCoverageSetupExcludes.delete(project);
-    return;
-  }
-
-  const frameworkExcludes = coverage.enabled
-    ? setupFiles.filter((setupFile) => !coverage.exclude.includes(setupFile))
-    : [];
-
-  if (frameworkExcludes.length) {
-    browserCoverageSetupExcludes.set(project, {
-      coverage,
-      frameworkExcludes: new Set(frameworkExcludes),
-    });
-  } else {
-    browserCoverageSetupExcludes.delete(project);
-  }
-};
-
-export const getBrowserCoverageConfig = (
-  project: Pick<InternalProjectContext, 'environmentName'>,
-  coverage: BrowserCoverageConfig | undefined,
-): BrowserCoverageConfig | undefined => {
-  if (!coverage) {
-    return undefined;
-  }
-
-  const frameworkExcludes = browserCoverageSetupExcludes.get(project);
-  if (frameworkExcludes?.coverage !== coverage) {
-    return coverage;
-  }
-
-  return {
-    ...coverage,
-    exclude: Array.from(
-      new Set([...coverage.exclude, ...frameworkExcludes.frameworkExcludes]),
-    ),
-  };
 };
 
 class RstestBrowserRuntimePlugin {
@@ -959,8 +900,7 @@ export const collectProjectEntries = async (
         project.rootPath,
       );
       const materializedSetupFiles = Object.values(setup.setupFiles);
-      syncBrowserCoverageSetupExcludes(
-        project,
+      syncCoverageSetupExcludes(
         project.normalizedConfig.coverage,
         materializedSetupFiles,
       );
@@ -1919,21 +1859,12 @@ export const createBrowserRuntime = async ({
 
     // Register coverage plugin if this project enables coverage
     const coverage = project.normalizedConfig.coverage;
-    const coverageWithSetupExcludes = getBrowserCoverageConfig(
-      project,
-      coverage,
-    );
     if (coverage?.enabled && context.command !== 'list') {
       const { pluginCoverage } = await loadCoverageProvider(
         coverage,
         context.rootPath,
       );
-      rsbuildInstance.addPlugins([
-        pluginCoverage({
-          ...coverage,
-          exclude: coverageWithSetupExcludes?.exclude ?? coverage.exclude,
-        }),
-      ]);
+      rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
     }
 
     const devServer = await rsbuildInstance.createDevServer({
@@ -2088,8 +2019,7 @@ export async function resolveProjectEntries(
           project.rootPath,
         );
         const materializedSetupFiles = Object.values(setup.setupFiles);
-        syncBrowserCoverageSetupExcludes(
-          project,
+        syncCoverageSetupExcludes(
           project.normalizedConfig.coverage,
           materializedSetupFiles,
         );

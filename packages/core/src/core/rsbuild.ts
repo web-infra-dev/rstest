@@ -8,6 +8,7 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
+import { syncCoverageSetupExcludes } from '../coverage';
 import type {
   EntryInfo,
   InternalContext,
@@ -50,16 +51,7 @@ type WatchBuildData = {
   runtimeChunkFiles?: string[];
 };
 
-export const syncCoverageSetupExcludes = (
-  coverage: NormalizedProjectConfig['coverage'] | undefined,
-  setupPaths: string[],
-): void => {
-  if (!coverage?.enabled || !setupPaths.length) {
-    return;
-  }
-
-  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupPaths]));
-};
+export { syncCoverageSetupExcludes } from '../coverage';
 
 const getRuntimeChunkFiles = ({
   chunks,

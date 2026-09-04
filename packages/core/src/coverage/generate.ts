@@ -2,27 +2,13 @@ import type FS from 'node:fs';
 import { isAbsolute, normalize, relative } from 'pathe';
 import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { InternalContext, InternalProjectContext } from '../types';
+import type { InternalContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
   CoverageProvider,
 } from '../types/coverage';
 import { logger, noopTraceSpan, type TraceSpan } from '../utils';
-import {
-  getSetupFiles,
-  materializeVirtualSetupFiles,
-} from '../utils/getSetupFiles';
-
-type CoverageProject = Pick<
-  InternalProjectContext,
-  'environmentName' | 'rootPath'
-> & {
-  normalizedConfig: Pick<
-    InternalProjectContext['normalizedConfig'],
-    'setupFiles' | 'globalSetup'
-  >;
-};
 
 export const getIncludedFiles = async (
   coverage: CoverageOptions,
@@ -110,38 +96,25 @@ const filterExternalFiles = (
   return files.filter((file) => isSameOrSubPath(file, rootPath));
 };
 
-const getSetupCoverageExcludes = (
-  context: InternalContext,
-  setupFiles?: string[],
-): Set<string> => {
-  const resolvedSetupFiles =
-    setupFiles ??
-    context.projects.flatMap(({ rootPath, normalizedConfig }) => {
+const getSetupCoverageExcludes = (context: InternalContext): Set<string> => {
+  const setupFiles = context.projects.flatMap(
+    ({ rootPath, normalizedConfig }) => {
       if (!normalizedConfig) {
         return [];
       }
 
       const files = [
-        ...Object.values(
-          materializeVirtualSetupFiles(
-            getSetupFiles(normalizedConfig.setupFiles || [], rootPath),
-            rootPath,
-          ).setupFiles,
-        ),
-        ...Object.values(
-          materializeVirtualSetupFiles(
-            getSetupFiles(normalizedConfig.globalSetup || [], rootPath),
-            rootPath,
-          ).setupFiles,
-        ),
+        ...(normalizedConfig.setupFiles || []),
+        ...(normalizedConfig.globalSetup || []),
       ];
 
       return files.map((filePath) =>
         isAbsolute(filePath) ? filePath : `${rootPath}/${filePath}`,
       );
-    });
+    },
+  );
 
-  return new Set(resolvedSetupFiles.map((filePath) => normalize(filePath)));
+  return new Set(setupFiles.map((filePath) => normalize(filePath)));
 };
 
 const shouldExcludeSetupCoverageFile = (
@@ -207,18 +180,13 @@ export async function generateCoverage(
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
   traceSpan: TraceSpan = noopTraceSpan,
-  setupFiles?: string[],
-  projects?: CoverageProject[],
 ): Promise<void> {
   const {
     rootPath,
     normalizedConfig: { coverage },
-    projects: contextProjects,
+    projects,
   } = context;
-  const projectsToBackfill = projects ?? contextProjects;
-  const normalizedRootPath = normalize(rootPath);
   try {
-    const setupCoverageExcludes = getSetupCoverageExcludes(context, setupFiles);
     const finalCoverageMap = coverageMap;
 
     await traceSpan(
@@ -227,6 +195,8 @@ export async function generateCoverage(
       () => {
         const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
         const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
+        const normalizedRootPath = normalize(rootPath);
+        const setupCoverageExcludes = getSetupCoverageExcludes(context);
         const absDistPathRoot = distPathRoot
           ? normalize(
               isAbsolute(distPathRoot)
@@ -290,33 +260,24 @@ export async function generateCoverage(
       // the resident set. Sequential processing lets each project's
       // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
-      for (const p of projectsToBackfill) {
-        const includedFiles = (
-          await traceSpan(
-            'coverage:collect-included-files',
-            'coverage',
-            async () =>
-              filterChangedFiles(
-                filterExternalFiles(
-                  await getIncludedFiles(coverage, p.rootPath),
-                  p.rootPath,
-                  coverage.allowExternal,
-                ),
-                context.changedCoverageFilters,
+      for (const p of projects) {
+        const includedFiles = await traceSpan(
+          'coverage:collect-included-files',
+          'coverage',
+          async () =>
+            filterChangedFiles(
+              filterExternalFiles(
+                await getIncludedFiles(coverage, p.rootPath),
                 p.rootPath,
+                coverage.allowExternal,
               ),
-            {
-              project: p.environmentName,
-              changedOnly: context.changedCoverageFilters !== undefined,
-            },
-          )
-        ).filter(
-          (file) =>
-            !shouldExcludeSetupCoverageFile(
-              file,
-              normalizedRootPath,
-              setupCoverageExcludes,
+              context.changedCoverageFilters,
+              p.rootPath,
             ),
+          {
+            project: p.environmentName,
+            changedOnly: context.changedCoverageFilters !== undefined,
+          },
         );
         allFiles.push(...includedFiles);
 

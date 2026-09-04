@@ -1,6 +1,6 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { exitReporters } from '../reporter';
-import type { InternalProjectContext, TestExecutor } from '../types';
+import type { TestExecutor } from '../types';
 import type { CoverageProvider } from '../types/coverage';
 import {
   clearScreen,
@@ -85,10 +85,6 @@ export type WatchCycleOptions = {
  */
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
-  /** Register setup paths that are not part of an executor's cycle outcome. */
-  setSetupFiles(executor: TestExecutor, setupFiles: string[]): void;
-  /** Register the projects owned by an executor for coverage backfill. */
-  setProjects(executor: TestExecutor, projects: InternalProjectContext[]): void;
   /**
    * Whether every one of `executors` has settled its first cycle of this
    * session. Shortcuts are installed before the first one so the ready banner
@@ -231,8 +227,6 @@ export function createWatchCycleDriver({
   // cycle across every executor, so anything dispatched earlier has already
   // reached its `finally` by the time the next one asks.
   const settled = new Set<TestExecutor>();
-  const setupFilesByExecutor = new Map<TestExecutor, string[]>();
-  const projectsByExecutor = new Map<TestExecutor, InternalProjectContext[]>();
 
   const runOne = async (
     executor: TestExecutor,
@@ -271,8 +265,6 @@ export function createWatchCycleDriver({
         isWatchMode: true,
         coverageProvider,
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
-        setupFiles: setupFilesByExecutor.get(executor),
-        projects: projectsByExecutor.get(executor),
         traceRun: getTraceRun(),
       });
       context.exitCode.finishCycle();
@@ -292,12 +284,6 @@ export function createWatchCycleDriver({
   };
 
   return {
-    setSetupFiles(executor, setupFiles) {
-      setupFilesByExecutor.set(executor, setupFiles);
-    },
-    setProjects(executor, projects) {
-      projectsByExecutor.set(executor, projects);
-    },
     runCycle(executor, options = {}) {
       const resolved = {
         ...options,

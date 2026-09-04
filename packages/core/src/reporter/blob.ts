@@ -49,10 +49,6 @@ export type BlobData = {
   duration: Duration;
   snapshotSummary: SnapshotSummary;
   unhandledErrors?: { message: string; stack?: string; name?: string }[];
-  /** Materialized setup paths used by the shard's coverage run. */
-  setupFiles?: string[];
-  /** Projects that participated in the shard's coverage run. */
-  projects?: string[];
   /** Keyed by {@link blobFileKey}. */
   files: Record<string, BlobFileData>;
 };
@@ -122,8 +118,6 @@ export class BlobReporter implements Reporter {
   // One track per file, for a single one-shot run: watch mode is rejected at
   // reporter construction (`rstest.ts`), so no track ever spans two cycles.
   private readonly files = new Map<string, BlobFileData>();
-  private setupFiles: string[] = [];
-  private projects: string[] = [];
 
   constructor({
     rootPath,
@@ -145,18 +139,6 @@ export class BlobReporter implements Reporter {
       h: 'start',
       test,
     });
-  }
-
-  /** @internal Set by core before the blob is written. */
-  setCoverageContext({
-    setupFiles,
-    projects,
-  }: {
-    setupFiles: string[];
-    projects: string[];
-  }): void {
-    this.setupFiles = setupFiles;
-    this.projects = projects;
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
@@ -239,8 +221,6 @@ export class BlobReporter implements Reporter {
         stack: e.stack,
         name: e.name,
       })),
-      setupFiles: this.setupFiles,
-      projects: this.projects,
       files: Object.fromEntries(this.files),
     };
 

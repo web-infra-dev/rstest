@@ -553,7 +553,6 @@ export function createNodeExecutor(
       coverage: {
         map: mergedCoverageMap?.toJSON(),
         raw: rawCoverageResults,
-        setupFiles: setupFileState.getSetupPaths(projects),
         loadAssetFiles: coverageResourceLoaders.loadAssetFiles,
         loadSourceMaps: coverageResourceLoaders.loadSourceMaps,
       },

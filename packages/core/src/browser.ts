@@ -69,7 +69,11 @@ export { pluginMockRuntime } from './core/plugins/mockRuntime';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
-export { createCoverageProvider, loadCoverageProvider } from './coverage';
+export {
+  createCoverageProvider,
+  loadCoverageProvider,
+  syncCoverageSetupExcludes,
+} from './coverage';
 export {
   getUserRstestConfigPluginProjects,
   hasUserRstestConfigPlugins,
