@@ -110,4 +110,24 @@ describe('threads pool e2e', () => {
     expect(threadIds).toHaveLength(2);
     expect(new Set(threadIds).size).toBe(1);
   });
+
+  it('rejects non-cloneable environment options before worker dispatch', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, './fixtures/non-cloneable-options'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      'Node worker pools require `testEnvironment.options` to be structured-cloneable',
+    );
+  });
 });

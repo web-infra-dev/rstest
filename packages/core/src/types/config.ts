@@ -301,6 +301,10 @@ export type TestEnvironmentPrebundle = 'auto' | boolean;
 
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
+  /**
+   * Options passed to the environment constructor. Node worker pools send
+   * these options over IPC, so they must be structured-cloneable.
+   */
   options?: Record<string, any>;
   /**
    * Prebundle the environment before workers load it.

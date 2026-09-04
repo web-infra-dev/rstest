@@ -72,9 +72,11 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js 而从 worker realm 复制进来的 global（例如 `Buffer`）使用共享的 constructor，直接修改这些 constructor 可能跨文件保留；`ArrayBuffer` 和 `Uint8Array` 等 VM 原生 global 则会随每个文件重新创建。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。在 `happy-dom` 环境中，DOM 实现对象由 `happy-dom` 自身的 provider realm 创建；不要假设所有 DOM 值都能通过 VM intrinsic 的 `Object` 或 `Array` 的 `instanceof` 检查，应使用环境提供的 DOM constructor。
 
+Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironment.options`，因此这些配置必须支持 structured clone。包含函数的选项（例如 `beforeParse`、自定义 callback hook），以及内部包含函数的实例，会在 dispatch 前被拒绝。如果环境依赖 host 侧 callback，请改用可克隆配置，或把等价的初始化逻辑移到 setup file。这个限制适用于 `forks`、`threads` 和 `vmThreads`。
+
 每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
 
-跨过 Node builtin 边界时，Rstest 会将普通对象、数组、Promise fulfillment value 和 Error rejection reason 适配到当前 VM，以便常见的 prototype 和 `instanceof Error` 检查正常工作。这不是对所有值的通用 realm 转换：Buffer、stream、typed array、native handle 等 Node 原生对象会保留原生 backing 和 prototype；jsdom 与 happy-dom 创建的 DOM 对象也会保留各自 provider realm 的 prototype。需要跨 realm 传值时，不要依赖不同 realm 之间的 constructor identity。
+跨过 Node builtin 边界时，Rstest 会将直接返回值和 Promise 结果中的普通对象、数组及 Error rejection reason 适配到当前 VM。callback 参数，以及 native builtin 同步抛出的异常，不在转换范围内。这不是对所有值的通用 realm 转换：Buffer、stream、typed array、native handle 等 Node 原生对象会保留原生 backing 和 prototype；jsdom 与 happy-dom 创建的 DOM 对象也会保留各自 provider realm 的 prototype。需要跨 realm 传值时，不要依赖不同 realm 之间的 constructor identity。
 
 External JavaScript ES module、CommonJS module、JSON module 和 WebAssembly module 会在当前文件的 VM 中执行，同时支持 JavaScript、JSON 和 base64 WebAssembly `data:` URL。在 Node.js 24.9 及以上版本中，CommonJS module 可以同步 `require()` 不包含 top-level await 的 ES module，完整依赖图仍在当前文件的 VM 中执行；异步依赖图会与 Node.js 一致抛出 `ERR_REQUIRE_ASYNC_MODULE`。更低版本的 Node.js 会在 `vmThreads` 中拒绝 `require()` ES module，此时请改用动态 `import()`。TypeScript 源码、自定义 loader 等其他扩展名的 external 文件需要先 bundle，再通过 `vmThreads` 运行。
 

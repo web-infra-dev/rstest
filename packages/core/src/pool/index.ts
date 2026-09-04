@@ -28,6 +28,7 @@ import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import { getNumCpus, parseMemoryLimit, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
+import { assertWorkerEnvironmentOptions } from './workerOptions';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
@@ -486,6 +487,7 @@ export const createPool = async ({
         context,
         project,
       );
+      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -636,6 +638,7 @@ export const createPool = async ({
         context,
         project,
       );
+      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
