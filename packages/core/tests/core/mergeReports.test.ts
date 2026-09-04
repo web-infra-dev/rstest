@@ -37,7 +37,7 @@ rs.mock('../../src/reporter/blob', () => ({
     duration: { buildTime: 0, testTime: 0, totalTime: 0 },
     files: {},
     results: [],
-    projects: ['old-project'],
+    projects: ['old-project', 'renamed-project'],
     snapshotSummary: {
       added: 0,
       didUpdate: false,
@@ -109,7 +109,7 @@ describe('mergeReports', () => {
     ).toBeLessThan(prepareRsbuildSpy.mock.invocationCallOrder[0]!);
   });
 
-  it('lets coverage generation fall back when blob project names changed', async () => {
+  it('lets coverage generation fall back when blob project names cannot be mapped completely', async () => {
     createCoverageProviderSpy.mockResolvedValue({
       createCoverageMap: () => ({
         merge() {},

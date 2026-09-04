@@ -402,7 +402,10 @@ export async function mergeReports(
     const matchedProjects = context.projects.filter((project) =>
       projectNames.has(project.name),
     );
-    const projects = matchedProjects.length ? matchedProjects : undefined;
+    const projects =
+      projectNames.size === matchedProjects.length
+        ? matchedProjects
+        : undefined;
     await generateCoverage(
       context,
       mergedCoverageMap,
