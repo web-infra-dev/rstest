@@ -296,6 +296,8 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
 
+  e2e/externals/fixtures/test-vm-external: {}
+
   e2e/federation/fixtures/basic: {}
 
   e2e/federation/fixtures/cli: {}
@@ -1160,6 +1162,9 @@ importers:
       '@types/chai':
         specifier: ^5.2.3
         version: 5.2.3
+      cjs-module-lexer:
+        specifier: ^2.2.1
+        version: 2.2.1
     devDependencies:
       '@antfu/install-pkg':
         specifier: ^1.1.0
@@ -1292,6 +1297,12 @@ importers:
         version: 4.5.1(patch_hash=81ef529661db8cd15383f446caaeb02a0e8e8909c386ebe9b91ec16cf3a7b0d6)
 
   packages/core/tests/runner/fixtures/bare-parent: {}
+
+  packages/core/tests/runner/fixtures/vm-external/module-semantics/ambiguous: {}
+
+  packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-commonjs: {}
+
+  packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm: {}
 
   packages/coverage-istanbul:
     dependencies:
@@ -4993,6 +5004,9 @@ packages:
   cipher-base@1.0.7:
     resolution: {integrity: sha512-Mz9QMT5fJe7bKI7MH31UilT5cEK5EHHRCccw/YRFsRY47AuNgaV6HY3rscp0/I4Q+tTW/5zoqpSeRRI54TkDWA==}
     engines: {node: '>= 0.10'}
+
+  cjs-module-lexer@2.2.1:
+    resolution: {integrity: sha512-Ca8swihM+/4yKecYHY52kgJd300hi2lADU/a1RxNTRe+RJ9jvqQlESpbz9DnG9mowez8qwXHB8qYdIUw9e+F5Q==}
 
   cli-boxes@3.0.0:
     resolution: {integrity: sha512-/lzGpEWL/8PfI0BmBOPRwp0c/wFNX1RdUML3jK/RcSBA9T8mZDdQpqYBKtCFTOfQbwPqWEOpjqW+Fnayc0969g==}
@@ -12664,6 +12678,8 @@ snapshots:
       inherits: 2.0.4
       safe-buffer: 5.2.1
       to-buffer: 1.2.2
+
+  cjs-module-lexer@2.2.1: {}
 
   cli-boxes@3.0.0: {}
 

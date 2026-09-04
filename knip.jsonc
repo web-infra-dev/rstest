@@ -13,6 +13,16 @@
     "@vue/server-renderer",
     "vue",
   ],
+  "ignore": [
+    // Runtime-loaded fixture in a nested type=module package boundary.
+    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm/value.js",
+    // Runtime-loaded fixture for extensionless CommonJS resolution.
+    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm/require-extensionless.cjs",
+    // Runtime-loaded fixtures in a package scope without an explicit type.
+    "packages/core/tests/runner/fixtures/vm-external/module-semantics/ambiguous/**",
+    // Runtime-loaded fixture in a nested type=commonjs package boundary.
+    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-commonjs/value.js",
+  ],
   "workspaces": {
     ".": {
       "entry": [

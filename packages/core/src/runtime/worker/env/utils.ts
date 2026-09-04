@@ -4,10 +4,24 @@ import { KEYS } from './jsdomKeys';
 
 export type NodeTimerPrimitives = Pick<
   typeof globalThis,
-  'clearInterval' | 'clearTimeout' | 'setInterval' | 'setTimeout'
+  | 'clearImmediate'
+  | 'clearInterval'
+  | 'clearTimeout'
+  | 'setImmediate'
+  | 'setInterval'
+  | 'setTimeout'
 >;
 
-const TIMER_KEYS = ['setInterval', 'setTimeout'] as const;
+const TIMER_KEYS = [
+  'setImmediate',
+  'clearImmediate',
+  'setInterval',
+  'clearInterval',
+  'setTimeout',
+  'clearTimeout',
+] as const;
+
+type NodeTimerHandle = NodeJS.Immediate | NodeJS.Timeout;
 
 const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
@@ -15,11 +29,15 @@ function getWindowKeys(
   global: any,
   win: any,
   additionalKeys: string[] = [],
+  preserveExistingKeys = false,
 ): Set<string> {
   const keysArray = [...additionalKeys, ...KEYS];
 
   return new Set(
     keysArray.concat(Object.getOwnPropertyNames(win)).filter((k) => {
+      if (preserveExistingKeys && k in global) {
+        return false;
+      }
       if (SKIP_KEYS.includes(k)) {
         return false;
       }
@@ -118,10 +136,16 @@ export function installGlobal(
      */
     bindFunctions?: boolean;
     additionalKeys?: string[];
+    preserveExistingKeys?: boolean;
   } = {},
 ): () => void {
-  const { bindFunctions = true } = options || {};
-  const keys = getWindowKeys(global, win, options.additionalKeys);
+  const { bindFunctions = true, preserveExistingKeys = false } = options || {};
+  const keys = getWindowKeys(
+    global,
+    win,
+    options.additionalKeys,
+    preserveExistingKeys,
+  );
 
   const originals = new Map<string | symbol, PropertyDescriptor>();
 
@@ -200,7 +224,8 @@ export function installGlobal(
 /**
  * Shadow the DOM timers `installGlobal` just exposed with Node's, so tests get
  * real `NodeJS.Timeout` handles. A file-scoped environment gets wrappers that
- * record every timer created, so the returned cleanup can clear the stragglers;
+ * record every timeout, interval, and immediate created, so the returned
+ * cleanup can clear the stragglers;
  * a worker-scoped one gets the Node primitives unwrapped — its teardown never
  * runs, so recording would retain every timer and its callback closure for the
  * worker's whole life (see `TestEnvironmentReturn.teardown`).
@@ -247,13 +272,13 @@ export function installTimerTracking(
     return restore;
   }
 
-  const pending = new Map<NodeJS.Timeout, (timer: NodeJS.Timeout) => void>();
+  const pending = new Map<NodeTimerHandle, (timer: unknown) => void>();
   let active = true;
 
   const record = (
-    timer: NodeJS.Timeout,
-    clearTimer: (timer: NodeJS.Timeout) => void,
-  ): NodeJS.Timeout => {
+    timer: NodeTimerHandle,
+    clearTimer: (timer: unknown) => void,
+  ): NodeTimerHandle => {
     if (active) {
       pending.set(timer, clearTimer);
     }
@@ -263,13 +288,18 @@ export function installTimerTracking(
   const setTimeout = ((...args: unknown[]) =>
     record(
       Reflect.apply(nodeTimers.setTimeout, global, args) as NodeJS.Timeout,
-      nodeTimers.clearTimeout,
+      nodeTimers.clearTimeout as (timer: unknown) => void,
     )) as NodeTimerPrimitives['setTimeout'];
   const setInterval = ((...args: unknown[]) =>
     record(
       Reflect.apply(nodeTimers.setInterval, global, args) as NodeJS.Timeout,
-      nodeTimers.clearInterval,
+      nodeTimers.clearInterval as (timer: unknown) => void,
     )) as NodeTimerPrimitives['setInterval'];
+  const setImmediate = ((...args: unknown[]) =>
+    record(
+      Reflect.apply(nodeTimers.setImmediate, global, args) as NodeJS.Immediate,
+      nodeTimers.clearImmediate as (timer: unknown) => void,
+    )) as unknown as NodeTimerPrimitives['setImmediate'];
 
   const customPromisifyDescriptor = Object.getOwnPropertyDescriptor(
     nodeTimers.setTimeout,
@@ -283,7 +313,14 @@ export function installTimerTracking(
     );
   }
 
-  install({ setInterval, setTimeout });
+  install({
+    clearImmediate: nodeTimers.clearImmediate,
+    clearInterval: nodeTimers.clearInterval,
+    clearTimeout: nodeTimers.clearTimeout,
+    setImmediate,
+    setInterval,
+    setTimeout,
+  });
 
   return () => {
     active = false;

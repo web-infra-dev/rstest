@@ -1,4 +1,7 @@
-import { restoreScopedEntry } from '../../../src/runtime/api/utilities';
+import {
+  createRstestUtilities,
+  restoreScopedEntry,
+} from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
 import { createUtilities } from './helpers';
 
@@ -133,6 +136,33 @@ describe('rstest utilities wait APIs', () => {
     expect(attempts).toBe(3);
 
     rs.useRealTimers();
+  });
+
+  it('cancels abandoned waits when the file state is reset', async () => {
+    const rs = await createUtilities();
+    let untilAttempts = 0;
+    const pendingUntil = rs.waitUntil(
+      () => {
+        untilAttempts += 1;
+        return false;
+      },
+      { timeout: 1_000, interval: 1_000 },
+    );
+    let forAttempts = 0;
+    const pendingFor = rs.waitFor(
+      () => {
+        forAttempts += 1;
+        throw new Error('still pending');
+      },
+      { timeout: 1_000, interval: 1_000 },
+    );
+
+    await createRstestUtilities();
+
+    await expect(pendingUntil).resolves.toBeUndefined();
+    await expect(pendingFor).resolves.toBeUndefined();
+    expect(untilAttempts).toBe(1);
+    expect(forAttempts).toBe(1);
   });
 
   it('returns real timers when fake timers are enabled', async () => {

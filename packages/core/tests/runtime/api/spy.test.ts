@@ -3,6 +3,121 @@ import { describe, expect, it } from '@rstest/core';
 import { initSpy } from '../../../src/runtime/api/spy';
 
 describe('initSpy fn()', () => {
+  it('creates mocks in the supplied VM realm', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const mock = fn();
+    const isVmFunction = runInNewContext(
+      '(value) => value instanceof Function',
+      context,
+    ) as (value: unknown) => boolean;
+    const isVmObject = runInNewContext(
+      '(value) => value instanceof Object',
+      context,
+    ) as (value: unknown) => boolean;
+
+    expect(isVmFunction(mock)).toBe(true);
+    expect(isVmObject(new mock())).toBe(true);
+  });
+
+  it('creates resolved and rejected values in the supplied VM realm', async () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const isVmPromise = runInNewContext(
+      '(value) => value instanceof Promise',
+      context,
+    ) as (value: unknown) => boolean;
+
+    const resolved = fn().mockResolvedValue('value')();
+    expect(isVmPromise(resolved)).toBe(true);
+    await expect(resolved).resolves.toBe('value');
+
+    const rejected = fn().mockRejectedValue('error')();
+    expect(isVmPromise(rejected)).toBe(true);
+    await expect(rejected).rejects.toBe('error');
+  });
+
+  it('exposes mock state collections in the supplied VM realm', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const mock = fn((value: string) => value);
+    mock('value');
+
+    const check = (
+      runInNewContext(
+        `(mock) => ({
+        calls: mock.mock.calls instanceof Array,
+        call: mock.mock.calls[0] instanceof Array,
+        instances: mock.mock.instances instanceof Array,
+        contexts: mock.mock.contexts instanceof Array,
+        invocationCallOrder: mock.mock.invocationCallOrder instanceof Array,
+        results: mock.mock.results instanceof Array,
+        result: mock.mock.results[0] instanceof Object,
+        settledResults: mock.mock.settledResults instanceof Array,
+      })`,
+        context,
+      ) as (mockValue: unknown) => Record<string, boolean>
+    )(mock);
+
+    expect(check).toEqual({
+      calls: true,
+      call: true,
+      instances: true,
+      contexts: true,
+      invocationCallOrder: true,
+      results: true,
+      result: true,
+      settledResults: true,
+    });
+  });
+
+  it('installs and reuses the VM-realm spy for a spied method', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { spyOn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const object = {
+      method: () => 'value',
+    };
+    const original = object.method;
+    const isVmFunction = runInNewContext(
+      '(value) => value instanceof Function',
+      context,
+    ) as (value: unknown) => boolean;
+
+    const spy = spyOn(object, 'method');
+
+    expect(object.method).toBe(spy);
+    expect(isVmFunction(object.method)).toBe(true);
+    expect(spyOn(object, 'method')).toBe(spy);
+    expect(object.method()).toBe('value');
+
+    spy.mockRestore();
+    expect(object.method).toBe(original);
+  });
+
   it('tracks calls, results and invocationCallOrder', () => {
     const { fn } = initSpy();
     const spy = fn((x: number) => x * 2);
@@ -203,6 +318,22 @@ describe('initSpy withImplementation', () => {
     expect(spy()).toBe('once');
     expect(spy()).toBe('original');
   });
+
+  it('returns the VM mock after an asynchronous withImplementation callback', async () => {
+    const context = runInNewContext('globalThis', {}) as Record<string, any>;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const spy = fn(() => 'original');
+
+    const result = spy.withImplementation(
+      () => 'temporary',
+      () => runInNewContext('Promise.resolve()', context),
+    );
+
+    expect(await result).toBe(spy);
+  });
 });
 
 describe('initSpy spyOn', () => {
@@ -231,10 +362,12 @@ describe('initSpy spyOn', () => {
   it('spies on a getter accessor', () => {
     const { spyOn } = initSpy();
     let backing = 1;
+    let reads = 0;
     const obj = {} as { val: number };
     Object.defineProperty(obj, 'val', {
       configurable: true,
       get() {
+        reads++;
         return backing;
       },
       set(next: number) {
@@ -243,7 +376,9 @@ describe('initSpy spyOn', () => {
     });
 
     const getSpy = spyOn(obj, 'val', 'get');
+    expect(reads).toBe(0);
     void obj.val;
+    expect(reads).toBe(1);
     expect(getSpy.mock.calls).toHaveLength(1);
   });
 

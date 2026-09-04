@@ -54,8 +54,13 @@ import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
-export function setupChaiConfig(config: ChaiConfig): void {
-  Object.assign(chaiConfig, config);
+const defaultChaiConfig: ChaiConfig = {
+  showDiff: chaiConfig.showDiff,
+  truncateThreshold: chaiConfig.truncateThreshold,
+};
+
+export function setupChaiConfig(config: ChaiConfig = {}): void {
+  Object.assign(chaiConfig, defaultChaiConfig, config);
 }
 
 const EXPECT_BOOKKEEPING_STATE = {
@@ -120,11 +125,51 @@ const ReturnedAlias: ChaiPlugin = (chai, utils) => {
   });
 };
 
+type ChaiThrowAssertion = Assertion & {
+  throws: (expected?: RegExp | string) => unknown;
+};
+
+const CrossRealmToThrow: ChaiPlugin = (chai, utils) => {
+  const overwrite = (_super: (expected?: unknown) => unknown) => {
+    return function (this: ChaiThrowAssertion, expected?: unknown) {
+      const isPromiseAssertion = Boolean(utils.flag(this, 'promise'));
+      const isRegExp =
+        expected !== null &&
+        typeof expected === 'object' &&
+        Object.prototype.toString.call(expected) === '[object RegExp]';
+
+      // `@vitest/expect` uses `instanceof RegExp` before delegating to Chai.
+      // A regexp literal created in a vm.Context is not an instance of the
+      // host realm's RegExp, so preserve Vitest's toThrow semantics across
+      // realms by using Chai's cross-realm-safe `throws` implementation for
+      // synchronous function assertions. Promise assertions must stay on
+      // Vitest's promise-aware path because their target is the rejection
+      // value, not a callable function.
+      if (isRegExp && !isPromiseAssertion) {
+        return this.throws(expected as RegExp);
+      }
+
+      // Keep a cross-realm regexp usable by Vitest's promise-aware matcher.
+      // Vitest recognizes host RegExp instances before it handles `.rejects`.
+      if (isRegExp && !(expected instanceof RegExp)) {
+        const regexp = expected as RegExp;
+        return _super.call(this, new RegExp(regexp.source, regexp.flags));
+      }
+
+      return _super.call(this, expected);
+    };
+  };
+
+  utils.overwriteMethod(chai.Assertion.prototype, 'toThrow', overwrite);
+  utils.overwriteMethod(chai.Assertion.prototype, 'toThrowError', overwrite);
+};
+
 // These plugins mutate Chai's process-level prototype, not an expect instance.
 use(JestExtend);
 use(JestChaiExpect);
 use(ChaiStyleAssertions);
 use(ReturnedAlias);
+use(CrossRealmToThrow);
 use(JestAsymmetricMatchers);
 
 export function createExpect({

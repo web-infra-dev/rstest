@@ -26,8 +26,9 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseWorkers } from '../utils/workers';
+import { getNumCpus, parseMemoryLimit, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
+import { assertWorkerEnvironmentOptions } from './workerOptions';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
@@ -61,25 +62,27 @@ const getWorkerConfig = (
   ),
 });
 
-const filterAssetsByEntry = async (
+const VM_WORKER_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+
+const getVmWorkerCacheLimit = (
+  memoryLimit: number | undefined,
+): number | undefined =>
+  memoryLimit === undefined
+    ? undefined
+    : Math.min(VM_WORKER_CACHE_MAX_BYTES, Math.floor(memoryLimit / 4));
+
+const getAssetNames = (
   entryInfo: EntryInfo,
-  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>,
-  getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
   allAssetNames: string[] | undefined,
   federation: boolean,
-) => {
+): string[] => {
   const entryAssetNames =
     federation && allAssetNames
       ? allAssetNames.filter((name) => !name.endsWith('.map'))
       : entryInfo.files!;
-  const assetNames = Array.from(new Set([...entryAssetNames, ...setupAssets]));
-  const [neededFiles, neededSourceMaps] = await Promise.all([
-    getAssetFiles(assetNames),
-    getSourceMaps(assetNames),
-  ]);
 
-  return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
+  return Array.from(new Set([...entryAssetNames, ...setupAssets]));
 };
 
 const getNodeExecArgv = () => {
@@ -132,6 +135,7 @@ const buildTask = async ({
   traceSpan,
   testEnvironmentModule,
   buildId = 0,
+  workerCacheLimit,
   captureBundleCoverage = false,
 }: {
   type: 'run' | 'collect';
@@ -152,6 +156,7 @@ const buildTask = async ({
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
+  workerCacheLimit?: number;
   captureBundleCoverage?: boolean;
 }): Promise<{
   task: PoolTask;
@@ -159,15 +164,24 @@ const buildTask = async ({
 }> => {
   const bundleCoverageAssets: Record<string, number> | undefined =
     captureBundleCoverage ? {} : undefined;
-  const getAssets = async () => {
-    const assets = await filterAssetsByEntry(
-      entryInfo,
-      getAssetFiles,
-      getSourceMaps,
-      setupAssets,
-      assetNames,
-      project.normalizedConfig.federation,
-    );
+  const taskAssetNames = getAssetNames(
+    entryInfo,
+    setupAssets,
+    assetNames,
+    project.normalizedConfig.federation,
+  );
+  const getAssets = async (
+    requestedAssetNames = taskAssetNames,
+    requestedSourceMapNames = requestedAssetNames,
+  ) => {
+    const [neededFiles, neededSourceMaps] = await Promise.all([
+      getAssetFiles(requestedAssetNames),
+      getSourceMaps(requestedSourceMapNames),
+    ]);
+    const assets = {
+      assetFiles: neededFiles,
+      sourceMaps: neededSourceMaps,
+    };
     if (bundleCoverageAssets) {
       for (const [name, content] of Object.entries(assets.assetFiles)) {
         bundleCoverageAssets[name] = content.byteLength;
@@ -190,6 +204,7 @@ const buildTask = async ({
       type,
       options: {
         entryInfo,
+        assetNames: taskAssetNames,
         // Known limit: the config portion is `stableJson`, so environment option
         // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
         // function, a `virtualConsole` instance) collapse to identical bytes —
@@ -209,21 +224,27 @@ const buildTask = async ({
           taskId: index + 1,
           buildId,
           project: project.name,
+          pool: workerKind,
           rootPath: context.rootPath,
           projectRoot: project.rootPath,
           runtimeConfig,
           testEnvironmentModule,
+          workerCacheLimit: captureBundleCoverage
+            ? undefined
+            : workerCacheLimit,
           trace: context.trace,
         },
         deletedEnvKeys,
         type,
         setupEntries,
         updateSnapshot,
-        // Federation entries need the complete compilation asset map. Fetch it
-        // when a worker starts the task so concurrent task preparation cannot
-        // retain one full copy per test entry.
+        // Bundle coverage needs the complete per-task asset map, so its debug
+        // mode deliberately bypasses the vmThreads cache. In normal runs,
+        // vmThreads uses the lazy path below and caches shared assets by name.
         assets:
-          isMemorySufficient() && !project.normalizedConfig.federation
+          (workerKind !== 'vmThreads' || captureBundleCoverage) &&
+          isMemorySufficient() &&
+          !project.normalizedConfig.federation
             ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
                 ...traceArgs,
                 mode: 'eager',
@@ -232,12 +253,15 @@ const buildTask = async ({
       },
       rpcMethods: {
         ...rpcMethods,
-        // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-        getAssetsByEntry: () =>
-          traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-            ...traceArgs,
-            mode: 'rpc',
-          }),
+        // vmThreads uses this path for its per-worker asset cache; other pools
+        // use it when eager host-side asset delivery is not safe.
+        getAssetsByEntry: (requestedAssetNames, requestedSourceMapNames) =>
+          traceSpan(
+            'host:get-assets-by-entry',
+            'host',
+            () => getAssets(requestedAssetNames, requestedSourceMapNames),
+            { ...traceArgs, mode: 'rpc' },
+          ),
       },
     },
     bundleCoverageAssets,
@@ -404,10 +428,24 @@ export const createPool = async ({
   // Internal idle-runner floor for `isolate: false`. It is not user-tunable
   // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
   const minWorkers = Math.min(maxWorkers, recommendCount);
+  const memoryLimit =
+    workerKind === 'vmThreads'
+      ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
+      : undefined;
+  const workerCacheLimit =
+    workerKind === 'vmThreads' ? getVmWorkerCacheLimit(memoryLimit) : undefined;
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
-    isolate,
+    // VM threads amortize worker startup while recreating the VM realm for
+    // every file, so host worker reuse is independent of the user's isolate
+    // setting. VM runtime lifecycle branches remain file-scoped by pool type.
+    isolate: workerKind === 'vmThreads' ? false : isolate,
+    // VM contexts can retain module and realm allocations until their worker
+    // exits. Recycle from the worker's own V8 heap report, like Jest and
+    // Vitest, while keeping the worker alive below the limit. The default
+    // gives each VM worker an equal share of the machine memory.
+    memoryLimit,
     maxWorkers,
     minWorkers,
     execArgv: [
@@ -449,6 +487,7 @@ export const createPool = async ({
         context,
         project,
       );
+      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -499,6 +538,7 @@ export const createPool = async ({
                     project.environmentName,
                   ),
                   buildId,
+                  workerCacheLimit,
                   captureBundleCoverage,
                 }),
               traceArgs,
@@ -598,6 +638,7 @@ export const createPool = async ({
         context,
         project,
       );
+      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -625,6 +666,7 @@ export const createPool = async ({
             testEnvironmentModule: testEnvironmentModules?.get(
               project.environmentName,
             ),
+            workerCacheLimit,
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {

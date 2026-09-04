@@ -1,56 +1,81 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
+import { normalize } from 'pathe';
 import { runRstestCli } from '../scripts';
 
 const fixturePath = join(__dirname, 'fixtures');
 const enableConfig = 'rstest.enable.v8.config.ts';
 
 describe('coverage v8-specific behavior', () => {
-  it('writes bundle assets alongside raw V8 coverage for debugging', async ({
-    onTestFinished,
-  }) => {
-    const debugDirectory = join(fixturePath, '.rstest');
-    const removeDebugOutput = () => fs.removeSync(debugDirectory);
-    removeDebugOutput();
-    onTestFinished(removeDebugOutput);
+  it.for(['forks', 'vmThreads'] as const)(
+    'writes bundle assets alongside raw V8 coverage under %s',
+    async (pool, { onTestFinished }) => {
+      const debugDirectory = join(fixturePath, '.rstest');
+      const reportsDirectory = `test-temp-v8-${pool}`;
+      const reportPath = join(fixturePath, reportsDirectory);
+      const removeDebugOutput = () => fs.removeSync(debugDirectory);
+      removeDebugOutput();
+      onTestFinished(removeDebugOutput);
+      onTestFinished(() => fs.removeSync(reportPath));
 
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '-c', enableConfig, '--coverage.reporters', 'text-summary'],
-      options: {
-        nodeOptions: {
-          cwd: fixturePath,
-          env: { DEBUG: 'rstest:bundle-coverage' },
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          enableConfig,
+          '--pool',
+          pool,
+          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+          '--coverage.reporters',
+          'text-summary',
+          '--coverage.reporters',
+          'json',
+          '--coverage.reportsDirectory',
+          reportsDirectory,
+        ],
+        options: {
+          nodeOptions: {
+            cwd: fixturePath,
+            env: { DEBUG: 'rstest:bundle-coverage' },
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
+      await expectExecSuccess();
 
-    const files = fs
-      .readdirSync(debugDirectory)
-      .filter((file) => file.startsWith('bundle-coverage-'));
-    expect(files).toHaveLength(1);
+      const files = fs
+        .readdirSync(debugDirectory)
+        .filter((file) => file.startsWith('bundle-coverage-'));
+      expect(files).toHaveLength(1);
 
-    const output = fs.readJsonSync(join(debugDirectory, files[0]!)) as {
-      version: number;
-      tests: {
-        assets: Record<string, number>;
-        rawV8: { entries: { filePath: string }[] };
-      }[];
-    };
-    expect(output.version).toBe(1);
-    expect(output.tests.length).toBeGreaterThan(0);
+      const output = fs.readJsonSync(join(debugDirectory, files[0]!)) as {
+        version: number;
+        tests: {
+          assets: Record<string, number>;
+          rawV8: { entries: { filePath: string }[] };
+        }[];
+      };
+      expect(output.version).toBe(1);
+      expect(output.tests.length).toBeGreaterThan(0);
 
-    for (const test of output.tests) {
-      expect(Object.keys(test.assets).length).toBeGreaterThan(0);
-      expect(test.rawV8.entries.length).toBeGreaterThan(0);
-      expect(
-        test.rawV8.entries.every((entry) => entry.filePath in test.assets),
-      ).toBeTruthy();
-    }
-  });
+      for (const test of output.tests) {
+        expect(Object.keys(test.assets).length).toBeGreaterThan(0);
+        expect(test.rawV8.entries.length).toBeGreaterThan(0);
+        expect(
+          test.rawV8.entries.every((entry) => entry.filePath in test.assets),
+        ).toBeTruthy();
+      }
+
+      const coverage = fs.readJsonSync(
+        join(reportPath, 'coverage-final.json'),
+      ) as Record<string, unknown>;
+      expect(Object.keys(coverage).map(normalize)).toContainEqual(
+        expect.stringMatching(/\/src\/index\.ts$/),
+      );
+    },
+  );
 
   it('preserves the configured provider with --coverage', async ({
     onTestFinished,

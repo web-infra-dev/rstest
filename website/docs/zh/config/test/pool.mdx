@@ -10,13 +10,21 @@ import { ApiMeta } from '@components/ApiMeta';
 - **类型：**
 
 ```ts
-export type RstestPoolType = 'forks' | 'threads';
+export type RstestPoolType = 'forks' | 'threads' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** 用于运行测试的线程池 */
   type?: RstestPoolType;
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
+  /**
+   * `vmThreads` worker 完成一个测试文件后，如果报告的 V8 `heapUsed` 达到该阈值，
+   * 则会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 的硬上限。
+   * 支持字节数、百分比和单位字符串。
+   * 当前仅由 `vmThreads` 支持。
+   * @default undefined（`vmThreads` 使用 `系统内存 / maxWorkers`）
+   */
+  memoryLimit?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
   execArgv?: string[];
 };
@@ -36,13 +44,13 @@ const defaultPool = {
 };
 ```
 
-- **CLI：** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.execArgv <arg>`
+- **CLI：** `--pool <type>`、`--pool.type <type>`、`--pool.maxWorkers <value>`、`--pool.memoryLimit <limit>`、`--pool.execArgv <arg>`
 
 用于运行测试的线程池的选项。
 
 ## Pool 类型
 
-Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异仅在于 worker 的创建方式。
+Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异在于 worker 的创建方式和隔离方式。
 
 ### forks
 
@@ -52,7 +60,25 @@ Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 <ApiMeta addedVersion="0.10.0" />
 
-每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。Worker 与主进程共享 V8 heap 和 stdio。
+每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。每个 worker 都拥有独立的 V8 isolate 和 heap，但所有 worker 共享同一个操作系统进程，内存会汇总到该进程的 RSS。Rstest 会将各 worker 的 stdout 和 stderr 传回主进程。
+
+### vmThreads
+
+<ApiMeta addedVersion="0.11.13" />
+
+`vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
+
+[`isolate`](/config/test/isolate) 选项对 `vmThreads` 不生效。为了保持配置兼容性，Rstest 会接受 `isolate: false`，但每个文件仍会获得新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。
+
+VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js 而从 worker realm 复制进来的 global（例如 `Buffer`）使用共享的 constructor，直接修改这些 constructor 可能跨文件保留；`ArrayBuffer` 和 `Uint8Array` 等 VM 原生 global 则会随每个文件重新创建。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。在 `happy-dom` 环境中，DOM 实现对象由 `happy-dom` 自身的 provider realm 创建；不要假设所有 DOM 值都能通过 VM intrinsic 的 `Object` 或 `Array` 的 `instanceof` 检查，应使用环境提供的 DOM constructor。
+
+Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironment.options`，因此这些配置必须支持 structured clone。包含函数的选项（例如 `beforeParse`、自定义 callback hook），以及内部包含函数的实例，会在 dispatch 前被拒绝。如果环境依赖 host 侧 callback，请改用可克隆配置，或把等价的初始化逻辑移到 setup file。这个限制适用于 `forks`、`threads` 和 `vmThreads`。
+
+每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
+
+跨过 Node builtin 边界时，Rstest 会将直接返回值和 Promise 结果中的普通对象、数组及 Error rejection reason 适配到当前 VM。callback 参数，以及 native builtin 同步抛出的异常，不在转换范围内。这不是对所有值的通用 realm 转换：Buffer、stream、typed array、native handle 等 Node 原生对象会保留原生 backing 和 prototype；jsdom 与 happy-dom 创建的 DOM 对象也会保留各自 provider realm 的 prototype。需要跨 realm 传值时，不要依赖不同 realm 之间的 constructor identity。
+
+External JavaScript ES module、CommonJS module、JSON module 和 WebAssembly module 会在当前文件的 VM 中执行，同时支持 JavaScript、JSON 和 base64 WebAssembly `data:` URL。在 Node.js 24.9 及以上版本中，CommonJS module 可以同步 `require()` 不包含 top-level await 的 ES module，完整依赖图仍在当前文件的 VM 中执行；异步依赖图会与 Node.js 一致抛出 `ERR_REQUIRE_ASYNC_MODULE`。更低版本的 Node.js 会在 `vmThreads` 中拒绝 `require()` ES module，此时请改用动态 `import()`。TypeScript 源码、自定义 loader 等其他扩展名的 external 文件需要先 bundle，再通过 `vmThreads` 运行。
 
 ## 如何选择 pool 类型
 
@@ -61,18 +87,29 @@ Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 下列情况可以考虑切换到 `threads`：
 
 - 测试以小型用例为主、单文件耗时短，worker 启动开销在总时间中占比明显 — `worker_threads` 启动比 `child_process.fork` 快约 10×，watch 模式 rerun 体感几乎秒回。
-- 并行运行时机器内存吃紧或观察到 OOM — threads 共享主进程的 V8 heap，多个 worker 不会各占一份 V8 实例。
-- 测试代码本身不修改 cwd / 环境变量 / signal handler，也不依赖按文件重置的进程级状态。
+- Worker 启动是主要瓶颈，且测试套件可以共享同一个操作系统进程。各 worker 的 heap 仍然独立，并会计入同一个进程的 RSS。
+- 测试代码不调用 `process.chdir()`、不修改 worker 级状态，也不依赖在文件之间重置这些状态。
+
+下列情况可以考虑切换到 `vmThreads`：
+
+- 每个文件都需要新的 global 或 DOM 环境，但每文件创建 worker thread 的成本占比明显。
+- 测试可以兼容 cross-realm value，且不依赖进程级隔离。
+- 共享配置设置了 `isolate: false`，但当前测试套件仍需保持文件级 JavaScript 隔离。
 
 下列情况建议继续使用 `forks`：
 
-- 测试里会修改 `process.chdir`、环境变量、signal handler 等进程级状态，并依赖按文件之间互相隔离。
+- 测试里会调用 `process.chdir()`、修改 worker 级状态，或依赖按文件维度的进程隔离。
 - 项目使用 native addon（如 `better-sqlite3`、`sharp`、`canvas`）—— 未针对 worker thread 设计的 addon 在 `threads` 下可能让整个运行直接 abort（`SIGSEGV` / `SIGABRT`，且无法捕获）。
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
+- 需要严格的进程级隔离。此时应使用 `forks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
 
-## 控制文件级并行度
+## 配置 worker 并行度和内存
 
-`pool.maxWorkers` 控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
+### `pool.maxWorkers`
+
+控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
+
+默认值会根据 CPU 数量和运行模式自动计算。你可以传入正整数，或传入可用 CPU 数量的百分比。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -84,7 +121,7 @@ export default defineConfig({
 });
 ```
 
-也可以通过 CLI 传入相同配置：
+也可以通过 CLI 传入该配置：
 
 ```bash
 npx rstest --pool.maxWorkers 1
@@ -97,6 +134,32 @@ npx rstest --pool.maxWorkers 1
 - 固定数字，如 `4`：无论机器规模如何，都把资源占用限制在已知安全的范围内。
 
 `maxWorkers` 控制的是文件级并行度。它不会限制单个测试文件内的 `test.concurrent` 用例；如需限制这类用例，请使用 [`maxConcurrency`](/config/test/max-concurrency)。
+
+### `pool.memoryLimit`
+
+<ApiMeta addedVersion="0.11.13" />
+
+设置 `vmThreads` worker 的 V8 heap 回收阈值。每个测试文件运行结束后，Rstest 会读取 worker 的 `heapUsed`；达到阈值时，会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 或 OOM 的硬上限。
+
+该配置当前仅作用于 `vmThreads`，传给 `forks` 或 `threads` 时会被忽略。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`KB`、`KiB`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认使用等额的系统内存（`系统内存 / maxWorkers`）。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'vmThreads',
+    maxWorkers: 4,
+    memoryLimit: '256MB',
+  },
+});
+```
+
+也可以通过 CLI 设置：
+
+```bash
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
+```
 
 ## 向 worker 传递 Node.js flags
 

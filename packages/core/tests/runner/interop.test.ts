@@ -1,5 +1,6 @@
 import {
   createInteropProxy,
+  getOrCreateSyntheticModule,
   interopModule,
 } from '../../src/runtime/worker/interop';
 
@@ -175,5 +176,25 @@ describe('dynamic-import CJS interop pipeline', () => {
 
       expect(ns.then).toBe(1);
     });
+  });
+
+  it('keeps non-enumerable CommonJS named exports in synthetic modules', async () => {
+    const cjsExports = {} as Record<string, unknown>;
+    Object.defineProperty(cjsExports, 'value', {
+      configurable: true,
+      enumerable: false,
+      value: 1,
+    });
+    const module = getOrCreateSyntheticModule(
+      cjsExports,
+      'non-enumerable-cjs-export',
+      undefined,
+    );
+    await module.link(() => {
+      throw new Error('unexpected dependency');
+    });
+    await module.evaluate();
+
+    expect((module.namespace as Record<string, unknown>).value).toBe(1);
   });
 });

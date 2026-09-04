@@ -14,6 +14,8 @@ import type { RunnerRuntime } from './runner/runtime';
  */
 export interface FileContext {
   workerState: WorkerState;
+  /** Global object owned by the current test environment (VM or host). */
+  runtimeGlobal?: Record<string, unknown>;
   /** Collection-phase registrar (`describe`/`it`/hooks land here). */
   runnerRuntime: RunnerRuntime;
   /** Execution-phase runner (current test, `onTestFinished`/`onTestFailed`). */
@@ -27,6 +29,10 @@ let current: FileContext | undefined;
 
 export const setFileContext = (context: FileContext): void => {
   current = context;
+};
+
+export const clearFileContext = (): void => {
+  current = undefined;
 };
 
 /**

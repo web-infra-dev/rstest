@@ -2,6 +2,11 @@
   "name": "bare-parent",
   "type": "module",
   "imports": {
-    "#fixture-pkg": "./bare-parent-pkg/index.mjs"
+    "#fixture-pkg": "./bare-parent-pkg/index.mjs",
+    "#sync-condition": {
+      "module-sync": "./sync-condition.mjs",
+      "require": "./sync-condition-fallback.cjs",
+      "default": "./sync-condition-fallback.cjs"
+    }
   }
 }

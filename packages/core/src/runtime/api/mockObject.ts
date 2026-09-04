@@ -91,11 +91,18 @@ function isBuiltinReadonly(target: unknown, prop: Key): boolean {
 /**
  * Collect all method names from an object's prototype chain
  */
-function collectPrototypeMethods(proto: any): Key[] {
+function collectPrototypeMethods(
+  proto: any,
+  constructors: GlobalConstructors,
+): Key[] {
   const methods: Key[] = [];
   let current = proto;
 
-  while (current && current !== Object.prototype) {
+  while (
+    current &&
+    current !== constructors.Object.prototype &&
+    current !== Object.prototype
+  ) {
     for (const key of [
       ...Object.getOwnPropertyNames(current),
       ...Object.getOwnPropertySymbols(current),
@@ -141,6 +148,11 @@ function getEnumerableProperties(
     constructors.Array.prototype,
     constructors.Map.prototype,
     constructors.RegExp.prototype,
+    Object.prototype,
+    Function.prototype,
+    Array.prototype,
+    Map.prototype,
+    RegExp.prototype,
   ];
 
   let current = obj;
@@ -247,7 +259,7 @@ export function mockObject<T extends Record<Key, any>>(
    */
   const createFunctionMock = (fn: (...args: any[]) => any): Mock => {
     const prototypeMembers = fn.prototype
-      ? collectPrototypeMethods(fn.prototype)
+      ? collectPrototypeMethods(fn.prototype, globalConstructors)
       : [];
 
     return createMockInstance({
@@ -293,15 +305,23 @@ export function mockObject<T extends Record<Key, any>>(
     if (Array.isArray(value)) {
       if (!isSpyMode) {
         // automock mode: return empty array
-        return [];
+        return new globalConstructors.Array();
       }
       // autospy mode: process array elements recursively
-      return value.map((item) => processValue(item));
+      const result = new globalConstructors.Array(value.length);
+      for (let index = 0; index < value.length; index++) {
+        if (index in value) {
+          result[index] = processValue(value[index]);
+        }
+      }
+      return result;
     }
 
     // Handle plain objects
     if (isPlainObject(value)) {
-      const result: Record<Key, any> = {};
+      const result = globalConstructors.Object.create(
+        globalConstructors.Object.prototype,
+      ) as Record<Key, any>;
       processedRefs.set(value, result);
       processProperties(value, result, snapshot);
       return result;

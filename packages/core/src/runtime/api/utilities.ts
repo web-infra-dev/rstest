@@ -17,13 +17,80 @@ import { initSpy } from './spy';
 const DEFAULT_WAIT_TIMEOUT = 1000;
 const DEFAULT_WAIT_INTERVAL = 50;
 
-const getRealSetTimeout = () =>
-  getRealTimers().setTimeout ?? globalThis.setTimeout.bind(globalThis);
-const getRealClearTimeout = () =>
-  getRealTimers().clearTimeout ?? globalThis.clearTimeout.bind(globalThis);
+const getRuntimeGlobal = (): typeof globalThis =>
+  (fileContext().runtimeGlobal as typeof globalThis | undefined) ?? globalThis;
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => getRealSetTimeout()(resolve, ms));
+const getRealSetTimeout = () => {
+  const runtimeGlobal = getRuntimeGlobal();
+  return (
+    getRealTimers().setTimeout ?? runtimeGlobal.setTimeout.bind(runtimeGlobal)
+  );
+};
+const getRealClearTimeout = () => {
+  const runtimeGlobal = getRuntimeGlobal();
+  return (
+    getRealTimers().clearTimeout ??
+    runtimeGlobal.clearTimeout.bind(runtimeGlobal)
+  );
+};
+
+type WaitController = {
+  cancelled: boolean;
+  cancel: () => void;
+  schedule: (callback: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const createWaitController = (): WaitController => {
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const realSetTimeout = getRealSetTimeout();
+  const realClearTimeout = getRealClearTimeout();
+  let resolveSleep: (() => void) | undefined;
+  let cancelled = false;
+
+  const schedule = (callback: () => void, ms: number) => {
+    let timerId: ReturnType<typeof setTimeout>;
+    timerId = realSetTimeout(() => {
+      timers.delete(timerId);
+      callback();
+    }, ms);
+    timers.add(timerId);
+    return timerId;
+  };
+
+  const cancel = () => {
+    if (cancelled) {
+      return;
+    }
+    cancelled = true;
+    for (const timerId of timers) {
+      realClearTimeout(timerId);
+    }
+    timers.clear();
+    resolveSleep?.();
+    resolveSleep = undefined;
+  };
+
+  return {
+    get cancelled() {
+      return cancelled;
+    },
+    cancel,
+    schedule,
+    sleep: (ms) =>
+      new Promise<void>((resolve) => {
+        if (cancelled) {
+          resolve();
+          return;
+        }
+        resolveSleep = resolve;
+        schedule(() => {
+          resolveSleep = undefined;
+          resolve();
+        }, ms);
+      }),
+  };
+};
 
 const createWaitForTimeoutError = (timeout: number, cause?: unknown) =>
   new Error(`waitFor timed out in ${timeout}ms`, { cause });
@@ -109,7 +176,17 @@ export const restoreScopedEntry = <E>(
 };
 
 let utilitiesPromise:
-  Promise<{ rstest: RstestUtilities; resetForFile: () => void }> | undefined;
+  | Promise<{
+      rstest: RstestUtilities;
+      resetForFile: () => void;
+      disposeForFile: () => void;
+    }>
+  | undefined;
+let disposeCurrentWaits: (() => void) | undefined;
+
+export const disposeRstestUtilities = (): void => {
+  disposeCurrentWaits?.();
+};
 
 /**
  * `rstest`/`rs` is a build-once singleton with a STABLE identity across files,
@@ -128,6 +205,7 @@ let utilitiesPromise:
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
   utilitiesPromise ??= buildRstestUtilities();
   const bound = await utilitiesPromise;
+  disposeCurrentWaits = bound.disposeForFile;
   // On the first file this is a no-op (the fresh singleton already has empty
   // maps/registry); every later file returns it to a clean slate, mirroring the
   // previous per-file rebuild.
@@ -138,6 +216,7 @@ export const createRstestUtilities = async (): Promise<RstestUtilities> => {
 const buildRstestUtilities = async (): Promise<{
   rstest: RstestUtilities;
   resetForFile: () => void;
+  disposeForFile: () => void;
 }> => {
   type RuntimeEnvStore = Record<string, string | undefined>;
   const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
@@ -157,18 +236,25 @@ const buildRstestUtilities = async (): Promise<{
   const originalEnvValues = new Map<string, EnvStackEntry[]>();
   const originalGlobalValues = new Map<PropertyKey, GlobalStackEntry[]>();
   const timerStack: TimerStackEntry[] = [];
+  const timersByGlobal = new WeakMap<object, InstanceType<typeof FakeTimers>>();
+  const pendingWaits = new Set<() => void>();
+  const disposeForFile = (): void => {
+    for (const cancel of pendingWaits) {
+      cancel();
+    }
+    pendingWaits.clear();
+  };
 
   const { FakeTimers } = await import(
     /* webpackChunkName: "fake-timers" */ './fakeTimers'
   );
 
-  let _timers: InstanceType<typeof FakeTimers>;
   let currentFakeTimersConfig: FakeTimerInstallOpts | undefined;
 
   let originalConfig: undefined | RuntimeConfig;
 
   const resolveRuntimeEnv = (): RuntimeEnvStore => {
-    const globalRef = globalThis as GlobalWithRuntimeEnv;
+    const globalRef = getRuntimeGlobal() as GlobalWithRuntimeEnv;
     const runtimeEnv = globalRef[RSTEST_ENV_SYMBOL];
     if (runtimeEnv && typeof runtimeEnv === 'object') {
       return runtimeEnv as RuntimeEnvStore;
@@ -184,12 +270,13 @@ const buildRstestUtilities = async (): Promise<{
   };
 
   const timers = () => {
-    if (!_timers) {
-      _timers = new FakeTimers({
-        global: globalThis,
-      });
+    const runtimeGlobal = getRuntimeGlobal();
+    let timer = timersByGlobal.get(runtimeGlobal);
+    if (!timer) {
+      timer = new FakeTimers({ global: runtimeGlobal });
+      timersByGlobal.set(runtimeGlobal, timer);
     }
-    return _timers;
+    return timer;
   };
 
   const createDisposableRstestUtilities = (
@@ -250,15 +337,16 @@ const buildRstestUtilities = async (): Promise<{
   };
 
   const restoreGlobalValue = (name: PropertyKey, entry: GlobalStackEntry) => {
+    const runtimeGlobal = getRuntimeGlobal();
     restoreScopedEntry(originalGlobalValues.get(name), entry, {
       onSupersede: (laterEntry) => {
         laterEntry.descriptor = entry.descriptor;
       },
       onTail: () => {
         if (!entry.descriptor) {
-          Reflect.deleteProperty(globalThis, name);
+          Reflect.deleteProperty(runtimeGlobal, name);
         } else {
-          Object.defineProperty(globalThis, name, entry.descriptor);
+          Object.defineProperty(runtimeGlobal, name, entry.descriptor);
         }
       },
       onEmpty: () => originalGlobalValues.delete(name),
@@ -299,7 +387,7 @@ const buildRstestUtilities = async (): Promise<{
     forEachMock,
     createMockInstance,
     resetCallOrder,
-  } = initSpy(() => fileContext().workerState.project);
+  } = initSpy(() => fileContext().workerState.project, getRuntimeGlobal);
 
   const rstest: RstestUtilities = {
     fn,
@@ -309,20 +397,21 @@ const buildRstestUtilities = async (): Promise<{
       value: T,
       options?: { spy?: boolean },
     ): MaybeMockedDeep<T> => {
+      const runtimeGlobal = getRuntimeGlobal();
       return mockObjectImpl(
         {
           globalConstructors: {
-            Object,
-            Function,
-            Array,
-            Map,
-            RegExp,
+            Object: runtimeGlobal.Object,
+            Function: runtimeGlobal.Function,
+            Array: runtimeGlobal.Array,
+            Map: runtimeGlobal.Map,
+            RegExp: runtimeGlobal.RegExp,
           },
           createMockInstance,
           type: options?.spy ? 'autospy' : 'automock',
         },
         { value },
-        {},
+        runtimeGlobal.Object.create(runtimeGlobal.Object.prototype),
       ).value as MaybeMockedDeep<T>;
     },
     // Type helper - just returns the same item
@@ -427,13 +516,14 @@ const buildRstestUtilities = async (): Promise<{
       return rstest;
     },
     stubGlobal: (name: string | symbol | number, value: any) => {
+      const runtimeGlobal = getRuntimeGlobal();
       const descriptorStack = originalGlobalValues.get(name) ?? [];
       const entry = {
-        descriptor: Object.getOwnPropertyDescriptor(globalThis, name),
+        descriptor: Object.getOwnPropertyDescriptor(runtimeGlobal, name),
       };
       descriptorStack.push(entry);
       originalGlobalValues.set(name, descriptorStack);
-      Object.defineProperty(globalThis, name, {
+      Object.defineProperty(runtimeGlobal, name, {
         value,
         writable: true,
         configurable: true,
@@ -444,15 +534,16 @@ const buildRstestUtilities = async (): Promise<{
       );
     },
     unstubAllGlobals: () => {
+      const runtimeGlobal = getRuntimeGlobal();
       originalGlobalValues.forEach((descriptorStack, name) => {
         const original = descriptorStack[0];
         if (!original) {
           return;
         }
         if (!original.descriptor) {
-          Reflect.deleteProperty(globalThis, name);
+          Reflect.deleteProperty(runtimeGlobal, name);
         } else {
-          Object.defineProperty(globalThis, name, original.descriptor);
+          Object.defineProperty(runtimeGlobal, name, original.descriptor);
         }
       });
       originalGlobalValues.clear();
@@ -483,19 +574,20 @@ const buildRstestUtilities = async (): Promise<{
       return rstest;
     },
     getRealSystemTime: () => {
-      return _timers ? timers().getRealSystemTime() : Date.now();
+      const timer = timersByGlobal.get(getRuntimeGlobal());
+      return timer ? timer.getRealSystemTime() : getRuntimeGlobal().Date.now();
     },
     getRealTimers: () => ({
       setTimeout: getRealSetTimeout(),
       clearTimeout: getRealClearTimeout(),
       setImmediate:
         getRealTimers().setImmediate ??
-        (typeof globalThis.setImmediate === 'function'
-          ? globalThis.setImmediate.bind(globalThis)
+        (typeof getRuntimeGlobal().setImmediate === 'function'
+          ? getRuntimeGlobal().setImmediate.bind(getRuntimeGlobal())
           : undefined),
     }),
     isFakeTimers: () => {
-      return _timers ? timers().isFakeTimers() : false;
+      return timersByGlobal.get(getRuntimeGlobal())?.isFakeTimers() ?? false;
     },
     runAllTimers: () => {
       timers().runAllTimers();
@@ -554,23 +646,30 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitFor: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const clearTimeoutFn = getRealClearTimeout();
+      const controller = createWaitController();
+      pendingWaits.add(controller.cancel);
 
       let timedOut = false;
       let lastError: unknown;
 
-      const timeoutId = getRealSetTimeout()(() => {
+      controller.schedule(() => {
         timedOut = true;
       }, timeout);
 
       try {
         while (true) {
+          if (controller.cancelled) {
+            return undefined as Awaited<ReturnType<typeof callback>>;
+          }
           if (timedOut) {
             throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
           try {
             const value = await callback();
+            if (controller.cancelled) {
+              return undefined as Awaited<ReturnType<typeof callback>>;
+            }
             if (timedOut) {
               throw lastError ?? createWaitForTimeoutError(timeout);
             }
@@ -583,28 +682,44 @@ const buildRstestUtilities = async (): Promise<{
             throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
-          await sleep(interval);
+          await controller.sleep(interval);
         }
       } finally {
-        clearTimeoutFn(timeoutId);
+        pendingWaits.delete(controller.cancel);
+        controller.cancel();
       }
     },
     waitUntil: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const clearTimeoutFn = getRealClearTimeout();
+      const controller = createWaitController();
+      pendingWaits.add(controller.cancel);
 
       let timedOut = false;
-      const timeoutId = getRealSetTimeout()(() => {
+      controller.schedule(() => {
         timedOut = true;
       }, timeout);
 
       try {
         while (true) {
+          if (controller.cancelled) {
+            return undefined as never;
+          }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);
           }
 
-          const value = await callback();
+          let value: Awaited<ReturnType<typeof callback>>;
+          try {
+            value = await callback();
+          } catch (error) {
+            if (controller.cancelled) {
+              return undefined as never;
+            }
+            throw error;
+          }
+          if (controller.cancelled) {
+            return undefined as never;
+          }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);
           }
@@ -616,10 +731,11 @@ const buildRstestUtilities = async (): Promise<{
             throw createWaitUntilTimeoutError(timeout);
           }
 
-          await sleep(interval);
+          await controller.sleep(interval);
         }
       } finally {
-        clearTimeoutFn(timeoutId);
+        pendingWaits.delete(controller.cancel);
+        controller.cancel();
       }
     },
   };
@@ -635,6 +751,7 @@ const buildRstestUtilities = async (): Promise<{
   // weak references (see `initSpy`), so file-local mocks fall out on their own
   // once their evicted module is collected.
   const resetForFile = (): void => {
+    disposeForFile();
     resetCallOrder();
     originalEnvValues.clear();
     originalGlobalValues.clear();
@@ -643,5 +760,5 @@ const buildRstestUtilities = async (): Promise<{
     currentFakeTimersConfig = undefined;
   };
 
-  return { rstest, resetForFile };
+  return { rstest, resetForFile, disposeForFile };
 };

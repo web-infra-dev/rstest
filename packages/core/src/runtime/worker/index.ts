@@ -136,9 +136,12 @@ const runTask = async (
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
-      memory: MEMORY_REPORTING_ENABLED
-        ? { rss: process.memoryUsage().rss }
-        : undefined,
+      memory:
+        request.options.context.pool === 'vmThreads'
+          ? { heapUsed: process.memoryUsage().heapUsed }
+          : MEMORY_REPORTING_ENABLED
+            ? { rss: process.memoryUsage().rss }
+            : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into

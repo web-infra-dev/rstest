@@ -1,11 +1,50 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
+import { normalize } from 'pathe';
 import { runRstestCli } from '../scripts';
 
 const fixturePath = join(__dirname, 'fixtures');
 
 describe('coverage istanbul-specific behavior', () => {
+  it('collects instrumented VM globals under vmThreads', async ({
+    onTestFinished,
+  }) => {
+    const reportsDirectory = 'test-temp-istanbul-vm-threads';
+    onTestFinished(() => fs.removeSync(join(fixturePath, reportsDirectory)));
+    const { expectExecSuccess, cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'src/index.test.ts',
+        '-c',
+        'rstest.enable.config.ts',
+        '--pool',
+        'vmThreads',
+        '--pool.maxWorkers',
+        '1',
+        '--pool.memoryLimit',
+        '256MB',
+        '--coverage.reporters',
+        'text-summary',
+        '--coverage.reporters',
+        'json',
+        '--coverage.reportsDirectory',
+        reportsDirectory,
+      ],
+      options: { nodeOptions: { cwd: fixturePath } },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('Statements   : 100% ( 2/2 )');
+    const coverage = fs.readJsonSync(
+      join(fixturePath, reportsDirectory, 'coverage-final.json'),
+    ) as Record<string, unknown>;
+    expect(Object.keys(coverage).map(normalize)).toEqual([
+      expect.stringMatching(/\/src\/index\.ts$/),
+    ]);
+  });
+
   it('enables the default provider with --coverage', async ({
     onTestFinished,
   }) => {

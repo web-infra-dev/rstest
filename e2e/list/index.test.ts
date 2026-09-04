@@ -36,6 +36,20 @@ describe('test list command', () => {
     `);
   });
 
+  it('should preserve worker cleanup callbacks while collecting non-isolated files', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures-no-isolate'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should list tests correctly with test shard', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

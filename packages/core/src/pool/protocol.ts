@@ -32,7 +32,9 @@ export type CollectTaskResult = {
 
 export type WorkerMemoryReport = {
   /** Resident set size (bytes) sampled just before the worker sent the response. */
-  rss: number;
+  rss?: number;
+  /** V8 heap used (bytes) sampled just before a VM worker sent the response. */
+  heapUsed?: number;
 };
 
 /** Worker-to-host notification that a test environment prebundle was rejected. */

@@ -187,10 +187,17 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
 
 const poolOptionDefinitions: OptionDefinition[] = [
   ['--pool <type>', 'Shorthand for --pool.type'],
-  ['--pool.type <type>', 'Specify the test pool type (forks | threads)'],
+  [
+    '--pool.type <type>',
+    'Specify the test pool type (forks | threads | vmThreads)',
+  ],
   [
     '--pool.maxWorkers <value>',
     'Maximum number or percentage of workers (e.g. 4 or 50%)',
+  ],
+  [
+    '--pool.memoryLimit <limit>',
+    'Memory limit for vmThreads workers before recycling (e.g. 256MB or 50%); currently only supported by vmThreads',
   ],
   [
     '--pool.execArgv <arg>',
@@ -415,6 +422,16 @@ const normalizePoolCliArgs = (argv: string[]): string[] => {
 
   if (!hasPoolNestedOption) {
     return argv;
+  }
+
+  const poolOptions = new Set(
+    [...valueTakingOptions].filter((option) => option.startsWith('--pool.')),
+  );
+  for (const arg of argv) {
+    const option = arg.split('=', 1)[0];
+    if (option?.startsWith('--pool.') && !poolOptions.has(option)) {
+      throw new Error(`Unknown option \`${option}\``);
+    }
   }
 
   return argv.map((arg) => {

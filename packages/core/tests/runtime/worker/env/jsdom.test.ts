@@ -1,9 +1,11 @@
+import { runInContext } from 'node:vm';
 import { promisify } from 'node:util';
 import { expect, test } from '@rstest/core';
 import type { DOMWindow } from 'jsdom';
 import {
   environment,
   forwardVirtualConsole,
+  setupVM,
 } from '../../../../src/runtime/worker/env/jsdom';
 
 const createTestGlobal = (): typeof globalThis =>
@@ -123,6 +125,73 @@ test('forwards the console with the jsdom v27+ API', () => {
   );
 
   expect(forwarded).toEqual([console]);
+});
+
+test('does not drop VM console events during JSDOM initialization', async () => {
+  const calls: unknown[][] = [];
+  const { teardown } = await setupVM(
+    {
+      html: '<script>console.warn("during initialization")</script>',
+      beforeParse(window: DOMWindow) {
+        window.console.warn = (...args: unknown[]) => calls.push(args);
+      },
+    },
+    { scope: 'file' },
+  );
+
+  try {
+    expect(calls).toEqual([['during initialization']]);
+  } finally {
+    teardown();
+  }
+});
+
+test('forwards deferred VM console events to the configured target', async () => {
+  const calls: unknown[][] = [];
+  const { setVirtualConsoleTarget, teardown } = await setupVM(
+    {
+      console: true,
+      html: '<script>console.warn("during initialization")</script>',
+    },
+    { scope: 'file' },
+  );
+
+  try {
+    setVirtualConsoleTarget({
+      warn: (...args: unknown[]) => calls.push(args),
+    } as unknown as Console);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(calls).toEqual([['during initialization']]);
+  } finally {
+    teardown();
+  }
+});
+
+test('bridges Node AbortSignal to VM JSDOM event listeners', async () => {
+  const { context, teardown } = await setupVM({}, { scope: 'file' });
+  const vmGlobal = runInContext('globalThis', context) as typeof globalThis;
+  const controller = new AbortController();
+  let calls = 0;
+
+  try {
+    vmGlobal.document.addEventListener(
+      'rstest-vm-abort-signal',
+      () => calls++,
+      { signal: controller.signal },
+    );
+    vmGlobal.document.dispatchEvent(
+      new vmGlobal.Event('rstest-vm-abort-signal'),
+    );
+    expect(calls).toBe(1);
+
+    controller.abort();
+    vmGlobal.document.dispatchEvent(
+      new vmGlobal.Event('rstest-vm-abort-signal'),
+    );
+    expect(calls).toBe(1);
+  } finally {
+    teardown();
+  }
 });
 
 test('clears pending Node timers during jsdom teardown', async () => {

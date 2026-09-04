@@ -144,6 +144,18 @@ describe('mergeWithCLIOptions', () => {
     expect(config.shard).toEqual({ index: 1, count: 3 });
   });
 
+  it('merges pool.memoryLimit without replacing existing pool fields', () => {
+    const config = mergeWithCLIOptions(
+      { pool: { type: 'vmThreads', maxWorkers: 2 } },
+      { pool: { memoryLimit: '256MB' } },
+    );
+
+    expect(config.pool).toEqual({
+      type: 'vmThreads',
+      maxWorkers: 2,
+      memoryLimit: '256MB',
+    });
+  });
   it.each(['1.5/2', '1/2.5'])(
     'rejects a non-integer --shard value: %s',
     (shard) => {
@@ -957,6 +969,24 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.pool).toEqual({
         maxWorkers: 1,
+      });
+    });
+
+    it('should apply --pool.memoryLimit', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+        },
+        root: rootPath,
+        options: {
+          pool: {
+            memoryLimit: '256MB',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({
+        memoryLimit: '256MB',
       });
     });
 

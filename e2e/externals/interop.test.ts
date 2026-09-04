@@ -11,11 +11,19 @@ describe('test interop', () => {
   beforeAll(() => {
     fse.copySync(
       join(__dirname, './fixtures/test-interop'),
+      join(__dirname, './node_modules/test-interop'),
+    );
+    fse.copySync(
+      join(__dirname, './fixtures/test-interop'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
     );
     fse.copySync(
       join(__dirname, './fixtures/test-lodash'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
+    );
+    fse.copySync(
+      join(__dirname, './fixtures/test-vm-external'),
+      join(__dirname, './node_modules/test-vm-external'),
     );
   });
 
@@ -60,6 +68,38 @@ describe('test interop', () => {
               './fixtures/rstest.lodash.config.mts',
             ]
           : ['run', './fixtures/interopLodash', '--testEnvironment=node'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('should execute external modules in the vmThreads realm', async ({
+    onTestFinished,
+  }) => {
+    const wasmSource = Buffer.from(
+      'AGFzbQEAAAABBQFgAAF/AhcBDy4vd2FzbS1nbHVlLm1qcwNpbXAAAAMCAQAHBwEDZXhwAAEKBgEEABAACw==',
+      'base64',
+    );
+    const wasmPath = join(
+      __dirname,
+      './node_modules/test-vm-external/external.wasm',
+    );
+    fse.writeFileSync(wasmPath, wasmSource);
+    onTestFinished(() => fse.removeSync(wasmPath));
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        './fixtures/vmRealm.test.ts',
+        '-c',
+        './fixtures/rstest.vmExternal.config.mts',
+      ],
       options: {
         nodeOptions: {
           cwd: __dirname,
