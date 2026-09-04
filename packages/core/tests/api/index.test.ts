@@ -5,6 +5,7 @@ import stripAnsi from 'strip-ansi';
 import { createRstest } from '../../src/api';
 import type { RstestConfig } from '../../src/types';
 import { withTempDir } from '../helpers/tempDir';
+import { emptyDuration, emptySnapshotSummary } from '../reporter/helpers';
 
 const defaultReporterConfig = [
   [
@@ -242,7 +243,7 @@ describe('createRstest', () => {
     });
   });
 
-  it('disposes per-operation TTY reporters', async () => {
+  it('runs onExit for per-operation TTY reporters', async () => {
     await withTempDir('rstest-api-reporter-', async (root) => {
       writeFileSync(join(root, 'index.test.js'), "test('works', () => {});\n");
       await withProcessOutputState(async (state) => {
@@ -287,19 +288,85 @@ describe('createRstest', () => {
     });
   });
 
-  it('releases reporters when watch creation rejects blob reporting', async () => {
+  it('runs custom reporter onExit after run, merge, and watch close, but not list', async () => {
+    await withTempDir('rstest-api-custom-reporter-', async (root) => {
+      writeFileSync(join(root, 'index.test.js'), "test('works', () => {});\n");
+      mkdirSync(join(root, '.rstest-reports'));
+      writeFileSync(
+        join(root, '.rstest-reports/blob.json'),
+        JSON.stringify({
+          version: RSTEST_VERSION,
+          results: [],
+          testResults: [],
+          duration: emptyDuration,
+          snapshotSummary: emptySnapshotSummary,
+          files: {},
+        }),
+      );
+      const onExit = rs.fn(async () => {});
+      const rstest = await createBuiltRstest({
+        cwd: root,
+        config: {
+          globals: true,
+          include: ['index.test.js'],
+          reporters: [{ onExit }],
+        },
+      });
+
+      await rstest.run();
+      expect(onExit).toHaveBeenCalledTimes(1);
+
+      await rstest.listTests();
+      // List contexts attach no reporters, so they have no onExit hook to run.
+      expect(onExit).toHaveBeenCalledTimes(1);
+
+      await rstest.mergeReports();
+      expect(onExit).toHaveBeenCalledTimes(2);
+
+      const watcher = await rstest.watch();
+      expect(onExit).toHaveBeenCalledTimes(2);
+      await watcher.close();
+      expect(onExit).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  it('does not replace a run result with a reporter onExit error', async () => {
+    await withTempDir('rstest-api-reporter-on-exit-error-', async (root) => {
+      writeFileSync(join(root, 'index.test.js'), "test('works', () => {});\n");
+      const rstest = await createBuiltRstest({
+        cwd: root,
+        config: {
+          globals: true,
+          include: ['index.test.js'],
+          reporters: [
+            {
+              onExit() {
+                throw new Error('onExit failed');
+              },
+            },
+          ],
+        },
+      });
+
+      await expect(rstest.run()).resolves.toMatchObject({ status: 'pass' });
+    });
+  });
+
+  it('runs onExit when watch creation rejects blob reporting', async () => {
     await withTempDir('rstest-api-watch-blob-', async (root) => {
       await withProcessOutputState(async (state) => {
+        const onExit = rs.fn();
         const rstest = await createBuiltRstest({
           cwd: root,
           config: {
-            reporters: [...defaultReporterConfig, 'blob'],
+            reporters: [...defaultReporterConfig, { onExit }, 'blob'],
           },
         });
 
         await expect(rstest.watch()).rejects.toThrow(
           'Blob reporter is not supported in watch mode.',
         );
+        expect(onExit).toHaveBeenCalledTimes(1);
         expect(process.stdout.write).toBe(state.stdoutWrite);
         expect(process.stderr.write).toBe(state.stderrWrite);
         expect(process.listenerCount('exit')).toBe(state.exitListenerCount);

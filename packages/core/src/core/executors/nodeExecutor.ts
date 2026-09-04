@@ -240,6 +240,7 @@ export function createNodeExecutor(
     runDependencyValidationPromise ??= ensureTestEnvironmentDependencies(
       getPlan().nodeProjectsToRun,
       rootPath,
+      { confirm: context.packageInstallerConfirm },
     );
     return runDependencyValidationPromise;
   };

@@ -1,8 +1,8 @@
 import {
   cleanCoverageReports,
   createCoverageProviderWithLog,
+  ensureCoverageProviderInstalled,
 } from '../coverage';
-import { ensureRunDependencies } from './dependencies';
 import type { TestExecutor } from '../types';
 import {
   color,
@@ -135,7 +135,9 @@ export async function runTests(context: Rstest): Promise<void> {
   // Gated on there being something to run: auto-installing a missing coverage
   // package for a run with no work is the wrong default.
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
-    await ensureRunDependencies({ projects: [], rootPath, coverage });
+    await ensureCoverageProviderInstalled(coverage, rootPath, {
+      confirm: context.packageInstallerConfirm,
+    });
     const coveragePluginLoadError = planner.coveragePluginLoadError();
     if (coveragePluginLoadError) {
       throw coveragePluginLoadError;
@@ -517,14 +519,12 @@ export async function runTests(context: Rstest): Promise<void> {
   watchTeardown.addCleanup(() => {
     context.closeWatchSession = undefined;
   });
+  const closeActiveWatchSession = () =>
+    context.closeWatchSession?.() ?? closeWatchSession();
   isSessionClosing = () => watchTeardown.isClosing();
-  watchTeardown.addCleanup(registerWatchSignalExit(context, closeWatchSession));
-
-  const { onBeforeRestart } = await import('./restart');
-  // The restart cleaner queue remains module-global until RFC PR2 makes the
-  // restart lifecycle context-local. This session must still remove its own
-  // registration when a host closes it without restarting.
-  watchTeardown.addCleanup(onBeforeRestart(closeWatchSession));
+  watchTeardown.addCleanup(
+    registerWatchSignalExit(context, closeActiveWatchSession),
+  );
 
   // Installed before the first cycle so the ready banner can never appear
   // before stdin has an owner (a keystroke answering it would be swallowed).
@@ -541,7 +541,7 @@ export async function runTests(context: Rstest): Promise<void> {
       createWatchShortcutHandlers(
         context,
         watchTargets,
-        closeWatchSession,
+        closeActiveWatchSession,
         () => watchDriver.hasSettledCycle(shortcutExecutors),
       ),
     );
