@@ -326,6 +326,80 @@ describe('loadEsModule', () => {
     expect(executor.require('node:process', __filename)).toBe(processBuiltin);
   });
 
+  it('should route Module.createRequire through the VM loader', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath('vm-external/helper.cjs');
+    const module = await loadModule({
+      codeContent: [
+        "import { Module } from 'node:module';",
+        `const require = Module.createRequire(${JSON.stringify(pathToFileURL(externalPath).href)});`,
+        'export default require("./helper.cjs")({});',
+      ].join('\n'),
+      distPath: '/virtual/dist/module-create-require.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+      vmContext,
+    });
+
+    expect(module.default).toBe(true);
+  });
+
+  it('should create missing require resolution errors in the VM realm', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const require = executor.createRequire(__filename);
+    const missingSpecifier = './missing-vm-module';
+
+    let error: unknown;
+    try {
+      require.resolve(missingSpecifier);
+    } catch (caught) {
+      error = caught;
+    }
+
+    const isVmError = vm.runInContext(
+      '(value) => value instanceof Error',
+      vmContext,
+    ) as (value: unknown) => boolean;
+    expect(isVmError(error)).toBe(true);
+    expect(error).toMatchObject({ code: 'MODULE_NOT_FOUND' });
+  });
+
+  it('should expose __esModule as an own require(esm) export', () => {
+    if (!('hasAsyncGraph' in vm.SourceTextModule.prototype)) {
+      return;
+    }
+
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const directory = mkdtempSync(join(tmpdir(), 'rstest-require-esm-'));
+    const externalPath = join(directory, 'default-and-named.mjs');
+    writeFileSync(
+      externalPath,
+      "export default 'default';\nexport const named = 'named';\n",
+    );
+
+    try {
+      const namespace = executor.require(externalPath, __filename) as Record<
+        string,
+        unknown
+      >;
+
+      expect(
+        Object.prototype.hasOwnProperty.call(namespace, '__esModule'),
+      ).toBe(true);
+      expect(Object.keys(namespace)).toContain('__esModule');
+      expect(namespace.__esModule).toBe(true);
+      expect(Object.isExtensible(namespace)).toBe(false);
+      expect(Object.getPrototypeOf(namespace)).toBe(null);
+    } finally {
+      executor.dispose();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('should bridge synchronous builtin object results into the VM realm', () => {
     const vmContext = vm.createContext({});
     const executor = getVmExternalModules(vmContext);

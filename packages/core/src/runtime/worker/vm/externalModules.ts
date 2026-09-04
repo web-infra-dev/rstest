@@ -109,11 +109,8 @@ const supportsSyncEsmEvaluate =
   typeof Reflect.get(vm.SourceTextModule.prototype, 'hasAsyncGraph') ===
     'function';
 
-const [nodeMajor = 0, nodeMinor = 0] = process.versions.node
-  .split('.')
-  .map(Number);
-const supportsCjsModuleExportsMarker =
-  nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 12);
+const [nodeMajor = 0] = process.versions.node.split('.').map(Number);
+const supportsCjsModuleExportsMarker = nodeMajor >= 23;
 
 initializeCommonJsLexer();
 
@@ -382,6 +379,7 @@ class VmExternalModules {
   >();
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
+  private moduleClass: typeof Module | undefined;
   private processBuiltin: unknown;
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
@@ -458,8 +456,13 @@ class VmExternalModules {
       this.require(specifier, filename, getParentModule?.())) as NodeJS.Require;
 
     require.resolve = Object.assign(
-      (specifier: string, options?: { paths?: string[] }) =>
-        resolveRequire(nativeRequire, specifier, options),
+      (specifier: string, options?: { paths?: string[] }) => {
+        try {
+          return resolveRequire(nativeRequire, specifier, options);
+        } catch (error) {
+          throw this.wrapBuiltinError(error);
+        }
+      },
       {
         paths: nativeRequire.resolve.paths.bind(nativeRequire.resolve),
       },
@@ -480,7 +483,12 @@ class VmExternalModules {
     }
 
     const nativeRequire = createNativeRequire(parent);
-    const resolved = resolveRequire(nativeRequire, specifier);
+    let resolved: string;
+    try {
+      resolved = resolveRequire(nativeRequire, specifier);
+    } catch (error) {
+      throw this.wrapBuiltinError(error);
+    }
     switch (getModuleFormat(resolved, 'require')) {
       case 'data':
         throw createRequireEsmError(this.context, resolved);
@@ -754,7 +762,7 @@ class VmExternalModules {
       resolvedId,
       defaultExport,
       this.context,
-      // Node added the `module.exports` namespace marker in v22.12.0. This is
+      // Node 23 added the `module.exports` namespace marker. This is
       // independent of the VM graph API, which is also available in Node 20.
       supportsCjsModuleExportsMarker ? { value: exports } : undefined,
     );
@@ -1071,7 +1079,7 @@ class VmExternalModules {
 
     let module: CommonJsModule;
     const moduleRequire = this.createRequire(filePath, () => module);
-    module = new Module(filePath, parentModule);
+    module = new (this.getVmModuleClass())(filePath, parentModule);
     module.exports = vm.runInContext(
       'Object.create(Object.prototype)',
       this.context,
@@ -1177,7 +1185,10 @@ class VmExternalModules {
     if (requireCacheEntry.hit) {
       return requireCacheEntry.exports;
     }
-    const module = new Module(filePath, parentModule) as CommonJsModule;
+    const module = new (this.getVmModuleClass())(
+      filePath,
+      parentModule,
+    ) as CommonJsModule;
     module.exports = this.parseJsonSource(readSource(filePath));
     module.filename = filePath;
     module.id = filePath;
@@ -1206,20 +1217,41 @@ class VmExternalModules {
     }
     const namespace = module.namespace as Record<PropertyKey, unknown>;
     const forwardedNamespace = Reflect.has(namespace, 'default')
-      ? new Proxy(namespace, {
-          get(target, property, receiver) {
-            if (property === '__esModule' && !Reflect.has(target, property)) {
-              return true;
-            }
-            return Reflect.get(target, property, receiver);
-          },
-          has(target, property) {
-            return property === '__esModule' || Reflect.has(target, property);
-          },
-        })
+      ? this.createRequireEsmNamespace(namespace)
       : namespace;
     this.esmRequireNamespaceCache.set(identifier, forwardedNamespace);
     return forwardedNamespace;
+  }
+
+  private createRequireEsmNamespace(
+    namespace: Record<PropertyKey, unknown>,
+  ): Record<PropertyKey, unknown> {
+    const forwardedNamespace = vm.runInContext(
+      'Object.create(null)',
+      this.context,
+    ) as Record<PropertyKey, unknown>;
+
+    for (const property of Reflect.ownKeys(namespace)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(namespace, property);
+      if (!descriptor) {
+        continue;
+      }
+      Object.defineProperty(forwardedNamespace, property, {
+        configurable: descriptor.configurable,
+        enumerable: descriptor.enumerable,
+        get: () => Reflect.get(namespace, property),
+      });
+    }
+
+    if (!Reflect.has(namespace, '__esModule')) {
+      Object.defineProperty(forwardedNamespace, '__esModule', {
+        configurable: false,
+        enumerable: true,
+        value: true,
+        writable: true,
+      });
+    }
+    return Object.preventExtensions(forwardedNamespace);
   }
 
   private requireEsModuleSync(
@@ -1503,6 +1535,9 @@ class VmExternalModules {
     let moduleBuiltin: unknown;
     moduleBuiltin = new Proxy(nativeModule, {
       get: (target, property, receiver) => {
+        if (property === 'Module') {
+          return this.getVmModuleClass();
+        }
         if (property === 'createRequire') {
           return this.createRequire;
         }
@@ -1514,6 +1549,34 @@ class VmExternalModules {
     });
     this.moduleBuiltin = moduleBuiltin;
     return moduleBuiltin;
+  }
+
+  private getVmModuleClass(): typeof Module {
+    if (!this.moduleClass) {
+      let vmModule: typeof Module;
+      vmModule = new Proxy(Module, {
+        get: (target, property, receiver) => {
+          if (property === 'createRequire') {
+            return this.createRequire;
+          }
+          if (property === 'syncBuiltinESMExports') {
+            return this.syncBuiltinESMExports;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+        construct: (target, args, newTarget) => {
+          const instance = Reflect.construct(target, args, newTarget);
+          Object.defineProperty(instance, 'constructor', {
+            configurable: true,
+            value: vmModule,
+            writable: true,
+          });
+          return instance;
+        },
+      });
+      this.moduleClass = vmModule;
+    }
+    return this.moduleClass;
   }
 
   private syncBuiltinESMExports = (): void => {
@@ -1576,7 +1639,7 @@ class VmExternalModules {
       const moduleBuiltin = this.loadBuiltin(resolvedId);
       exports = {
         ...imported,
-        Module,
+        Module: this.getVmModuleClass(),
         createRequire: this.createRequire,
         syncBuiltinESMExports: this.syncBuiltinESMExports,
         default: moduleBuiltin,

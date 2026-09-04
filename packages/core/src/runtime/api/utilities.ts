@@ -34,8 +34,63 @@ const getRealClearTimeout = () => {
   );
 };
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => getRealSetTimeout()(resolve, ms));
+type WaitController = {
+  cancelled: boolean;
+  cancel: () => void;
+  schedule: (callback: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const createWaitController = (): WaitController => {
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const realSetTimeout = getRealSetTimeout();
+  const realClearTimeout = getRealClearTimeout();
+  let resolveSleep: (() => void) | undefined;
+  let cancelled = false;
+
+  const schedule = (callback: () => void, ms: number) => {
+    let timerId: ReturnType<typeof setTimeout>;
+    timerId = realSetTimeout(() => {
+      timers.delete(timerId);
+      callback();
+    }, ms);
+    timers.add(timerId);
+    return timerId;
+  };
+
+  const cancel = () => {
+    if (cancelled) {
+      return;
+    }
+    cancelled = true;
+    for (const timerId of timers) {
+      realClearTimeout(timerId);
+    }
+    timers.clear();
+    resolveSleep?.();
+    resolveSleep = undefined;
+  };
+
+  return {
+    get cancelled() {
+      return cancelled;
+    },
+    cancel,
+    schedule,
+    sleep: (ms) =>
+      new Promise<void>((resolve) => {
+        if (cancelled) {
+          resolve();
+          return;
+        }
+        resolveSleep = resolve;
+        schedule(() => {
+          resolveSleep = undefined;
+          resolve();
+        }, ms);
+      }),
+  };
+};
 
 const createWaitForTimeoutError = (timeout: number, cause?: unknown) =>
   new Error(`waitFor timed out in ${timeout}ms`, { cause });
@@ -121,7 +176,17 @@ export const restoreScopedEntry = <E>(
 };
 
 let utilitiesPromise:
-  Promise<{ rstest: RstestUtilities; resetForFile: () => void }> | undefined;
+  | Promise<{
+      rstest: RstestUtilities;
+      resetForFile: () => void;
+      disposeForFile: () => void;
+    }>
+  | undefined;
+let disposeCurrentWaits: (() => void) | undefined;
+
+export const disposeRstestUtilities = (): void => {
+  disposeCurrentWaits?.();
+};
 
 /**
  * `rstest`/`rs` is a build-once singleton with a STABLE identity across files,
@@ -140,6 +205,7 @@ let utilitiesPromise:
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
   utilitiesPromise ??= buildRstestUtilities();
   const bound = await utilitiesPromise;
+  disposeCurrentWaits = bound.disposeForFile;
   // On the first file this is a no-op (the fresh singleton already has empty
   // maps/registry); every later file returns it to a clean slate, mirroring the
   // previous per-file rebuild.
@@ -150,6 +216,7 @@ export const createRstestUtilities = async (): Promise<RstestUtilities> => {
 const buildRstestUtilities = async (): Promise<{
   rstest: RstestUtilities;
   resetForFile: () => void;
+  disposeForFile: () => void;
 }> => {
   type RuntimeEnvStore = Record<string, string | undefined>;
   const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
@@ -170,6 +237,13 @@ const buildRstestUtilities = async (): Promise<{
   const originalGlobalValues = new Map<PropertyKey, GlobalStackEntry[]>();
   const timerStack: TimerStackEntry[] = [];
   const timersByGlobal = new WeakMap<object, InstanceType<typeof FakeTimers>>();
+  const pendingWaits = new Set<() => void>();
+  const disposeForFile = (): void => {
+    for (const cancel of pendingWaits) {
+      cancel();
+    }
+    pendingWaits.clear();
+  };
 
   const { FakeTimers } = await import(
     /* webpackChunkName: "fake-timers" */ './fakeTimers'
@@ -572,23 +646,30 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitFor: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const clearTimeoutFn = getRealClearTimeout();
+      const controller = createWaitController();
+      pendingWaits.add(controller.cancel);
 
       let timedOut = false;
       let lastError: unknown;
 
-      const timeoutId = getRealSetTimeout()(() => {
+      controller.schedule(() => {
         timedOut = true;
       }, timeout);
 
       try {
         while (true) {
+          if (controller.cancelled) {
+            return undefined as Awaited<ReturnType<typeof callback>>;
+          }
           if (timedOut) {
             throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
           try {
             const value = await callback();
+            if (controller.cancelled) {
+              return undefined as Awaited<ReturnType<typeof callback>>;
+            }
             if (timedOut) {
               throw lastError ?? createWaitForTimeoutError(timeout);
             }
@@ -601,28 +682,44 @@ const buildRstestUtilities = async (): Promise<{
             throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
-          await sleep(interval);
+          await controller.sleep(interval);
         }
       } finally {
-        clearTimeoutFn(timeoutId);
+        pendingWaits.delete(controller.cancel);
+        controller.cancel();
       }
     },
     waitUntil: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const clearTimeoutFn = getRealClearTimeout();
+      const controller = createWaitController();
+      pendingWaits.add(controller.cancel);
 
       let timedOut = false;
-      const timeoutId = getRealSetTimeout()(() => {
+      controller.schedule(() => {
         timedOut = true;
       }, timeout);
 
       try {
         while (true) {
+          if (controller.cancelled) {
+            return undefined as never;
+          }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);
           }
 
-          const value = await callback();
+          let value: Awaited<ReturnType<typeof callback>>;
+          try {
+            value = await callback();
+          } catch (error) {
+            if (controller.cancelled) {
+              return undefined as never;
+            }
+            throw error;
+          }
+          if (controller.cancelled) {
+            return undefined as never;
+          }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);
           }
@@ -634,10 +731,11 @@ const buildRstestUtilities = async (): Promise<{
             throw createWaitUntilTimeoutError(timeout);
           }
 
-          await sleep(interval);
+          await controller.sleep(interval);
         }
       } finally {
-        clearTimeoutFn(timeoutId);
+        pendingWaits.delete(controller.cancel);
+        controller.cancel();
       }
     },
   };
@@ -653,6 +751,7 @@ const buildRstestUtilities = async (): Promise<{
   // weak references (see `initSpy`), so file-local mocks fall out on their own
   // once their evicted module is collected.
   const resetForFile = (): void => {
+    disposeForFile();
     resetCallOrder();
     originalEnvValues.clear();
     originalGlobalValues.clear();
@@ -661,5 +760,5 @@ const buildRstestUtilities = async (): Promise<{
     currentFakeTimersConfig = undefined;
   };
 
-  return { rstest, resetForFile };
+  return { rstest, resetForFile, disposeForFile };
 };

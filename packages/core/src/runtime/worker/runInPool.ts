@@ -24,6 +24,7 @@ import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { clearFileContext } from '../fileContext';
+import { disposeRstestUtilities } from '../api/utilities';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
@@ -529,6 +530,9 @@ const preparePool = async (
     preparedPoolCleaned = true;
 
     const errors: unknown[] = [];
+    if (isVmPool) {
+      disposeRstestUtilities();
+    }
     const cleanupResults = await Promise.allSettled(
       cleanupFns.map((fn) => fn()),
     );
