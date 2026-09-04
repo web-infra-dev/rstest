@@ -1,12 +1,10 @@
 import { Buffer } from 'node:buffer';
-import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 
-const setupSource = readFileSync(
-  new URL('./setup.js', import.meta.url),
-  'utf8',
-);
+const setupFilePath = fileURLToPath(new URL('./setup.ts', import.meta.url));
+const setupSource = `import ${JSON.stringify(setupFilePath)};`;
 
 export default defineConfig({
   browser: {
