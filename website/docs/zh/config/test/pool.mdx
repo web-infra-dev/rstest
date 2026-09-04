@@ -64,7 +64,7 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 ### vmThreads
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.11.13" />
 
 `vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
 
@@ -133,7 +133,7 @@ npx rstest --pool.maxWorkers 1
 
 ### `pool.memoryLimit`
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.11.13" />
 
 设置 `vmThreads` worker 的 V8 heap 回收阈值。每个测试文件运行结束后，Rstest 会读取 worker 的 `heapUsed`；达到阈值时，会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 或 OOM 的硬上限。
 
