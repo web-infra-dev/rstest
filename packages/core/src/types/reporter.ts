@@ -275,7 +275,7 @@ export interface Reporter {
   onUserConsoleLog?: (log: UserConsoleLog) => void;
 
   /**
-   * Called when rstest exit abnormally
+   * Called when the reporter's owning context is released.
    */
-  onExit?: () => void;
+  onExit?: () => MaybePromise<void>;
 }

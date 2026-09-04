@@ -1,24 +1,11 @@
 import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
 import { type CommonOptions, runRest } from '../cli/commands';
+import { exitReporters } from '../reporter';
 import type { RstestInstance } from '../types';
 import { color, isColorSupported, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
-
-type Cleaner = () => unknown;
-
-let cleaners: Cleaner[] = [];
-
-/**
- * Add a cleaner to handle side effects
- */
-export const onBeforeRestart = (cleaner: Cleaner): (() => void) => {
-  const registration = () => cleaner();
-  cleaners.push(registration);
-  return () => {
-    cleaners = cleaners.filter((candidate) => candidate !== registration);
-  };
-};
+import { runLifecycleStep } from './finalizeRun';
 
 const clearConsole = () => {
   if (isTTY() && !process.env.DEBUG && isColorSupported) {
@@ -26,46 +13,72 @@ const clearConsole = () => {
   }
 };
 
-export const beforeRestart = async ({
+export async function beforeRestart({
+  rstest,
+  beforeRestart: cleanup,
   filePath,
-  root,
   clear = true,
 }: {
-  root: string;
+  rstest: {
+    context: Pick<
+      RstestInstance['context'],
+      'closeWatchSession' | 'reporters' | 'rootPath'
+    >;
+  };
+  beforeRestart?: () => void | Promise<void>;
   filePath?: string;
   clear?: boolean;
-}): Promise<void> => {
+}): Promise<void> {
   if (clear) {
     clearConsole();
   }
 
   if (filePath) {
-    const filename = path.relative(root, filePath);
+    const filename = path.relative(rstest.context.rootPath, filePath);
     logger.info(`restarting Rstest as ${color.yellow(filename)} changed\n`);
   } else {
     logger.info('restarting Rstest...\n');
   }
 
-  for (const cleaner of cleaners) {
-    await cleaner();
-  }
-  cleaners = [];
-};
+  const step = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await runLifecycleStep(label, fn);
+    } catch (error) {
+      logger.log(color.red(`Error during cleanup: ${error}`));
+    }
+  };
+
+  // Keep uncaught handlers armed while the watch session tears down.
+  await step('watch session cleanup', async () => {
+    await rstest.context.closeWatchSession?.();
+  });
+  await exitReporters(rstest.context);
+  await step('restart cleanup', async () => {
+    await cleanup?.();
+  });
+}
 
 const restart = async ({
+  rstest,
+  beforeRestart: cleanup,
   filePath,
   clear = true,
   options,
   filters,
-  root,
 }: {
-  root: string;
+  rstest: RstestInstance;
+  beforeRestart?: () => void | Promise<void>;
   options: CommonOptions;
   filters: Array<string | number>;
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
-  await beforeRestart({ filePath, root, clear });
+  await beforeRestart({
+    rstest,
+    beforeRestart: cleanup,
+    filePath,
+    clear,
+  });
 
   await runRest({ options, filters, command: 'watch' });
 
@@ -74,6 +87,7 @@ const restart = async ({
 
 export async function watchFilesForRestart({
   rstest,
+  beforeRestart,
   watchOptions,
   options,
   filters,
@@ -81,6 +95,7 @@ export async function watchFilesForRestart({
   options: CommonOptions;
   filters: Array<string | number>;
   rstest: RstestInstance;
+  beforeRestart?: () => void | Promise<void>;
   watchOptions?: ChokidarOptions;
 }): Promise<void> {
   const configFilePaths = [
@@ -113,7 +128,13 @@ export async function watchFilesForRestart({
     }
     restarting = true;
 
-    const restarted = await restart({ options, root, filters, filePath });
+    const restarted = await restart({
+      rstest,
+      beforeRestart,
+      options,
+      filters,
+      filePath,
+    });
 
     if (restarted) {
       await watcher.close();

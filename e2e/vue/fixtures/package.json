@@ -15,6 +15,7 @@
     "@rsbuild/plugin-babel": "^2.1.0",
     "@rsbuild/plugin-vue": "^2.0.1",
     "@rsbuild/plugin-vue-jsx": "^2.0.1",
+    "@rstest/browser": "workspace:*",
     "@rstest/core": "workspace:*",
     "@vue/compiler-dom": "^3.5.42",
     "@vue/server-renderer": "^3.5.42",

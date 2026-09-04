@@ -559,6 +559,9 @@ importers:
       '@rsbuild/plugin-vue-jsx':
         specifier: ^2.0.1
         version: 2.0.1(@babel/core@7.29.7(supports-color@8.1.1))(@rsbuild/core@2.2.2(@module-federation/runtime-tools@2.9.0))(supports-color@8.1.1)
+      '@rstest/browser':
+        specifier: workspace:*
+        version: link:../../../packages/browser
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
