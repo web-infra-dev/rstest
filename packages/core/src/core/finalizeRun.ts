@@ -10,7 +10,7 @@ import {
   logger,
   type TraceRun,
 } from '../utils';
-import type { InternalContext } from '../types';
+import type { InternalContext, InternalProjectContext } from '../types';
 
 export const reportNoTestFiles = ({
   context,
@@ -184,6 +184,7 @@ export async function finalizeRunCycle(
     isWatchMode,
     coverageProvider,
     reportOnFailure,
+    projects = context.projects,
     traceRun,
   }: {
     outcomes: ExecutorCycleOutcome[];
@@ -191,6 +192,8 @@ export async function finalizeRunCycle(
     isWatchMode: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
+    /** Projects whose executors participated in this cycle. */
+    projects?: InternalProjectContext[];
     /**
      * The cycle's trace buffer — the one the run loop rotated in for it, so a
      * cycle's spans and the events an executor emitted during it land together.
@@ -321,6 +324,7 @@ export async function finalizeRunCycle(
         mergedCoverageMap!,
         coverageProvider,
         traceRun.span,
+        projects,
       ),
     );
   }

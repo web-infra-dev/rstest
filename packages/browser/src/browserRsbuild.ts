@@ -78,16 +78,42 @@ type BrowserProjectEntries = {
   testFiles: string[];
 };
 
-const syncBrowserCoverageSetupExcludes = (
-  project: InternalProjectContext,
+type BrowserCoverageConfig = Pick<
+  NonNullable<InternalProjectContext['normalizedConfig']['coverage']>,
+  'enabled' | 'exclude'
+>;
+
+const browserCoverageSetupExcludes = new WeakMap<
+  Pick<InternalProjectContext, 'environmentName'>,
+  Set<string>
+>();
+
+export const syncBrowserCoverageSetupExcludes = (
+  project: Pick<InternalProjectContext, 'environmentName'>,
+  coverage: BrowserCoverageConfig | undefined,
   setupFiles: string[],
 ): void => {
-  const coverage = project.normalizedConfig.coverage;
-  if (!coverage?.enabled || !setupFiles.length) {
+  const previous = browserCoverageSetupExcludes.get(project);
+  if (!coverage) {
+    browserCoverageSetupExcludes.delete(project);
     return;
   }
 
-  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupFiles]));
+  const userExcludes = coverage.exclude.filter(
+    (exclude) => !previous?.has(exclude),
+  );
+  const frameworkExcludes = coverage.enabled
+    ? setupFiles.filter((setupFile) => !userExcludes.includes(setupFile))
+    : [];
+
+  coverage.exclude = Array.from(
+    new Set([...userExcludes, ...frameworkExcludes]),
+  );
+  if (frameworkExcludes.length) {
+    browserCoverageSetupExcludes.set(project, new Set(frameworkExcludes));
+  } else {
+    browserCoverageSetupExcludes.delete(project);
+  }
 };
 
 class RstestBrowserRuntimePlugin {
@@ -895,7 +921,11 @@ export const collectProjectEntries = async (
         project.rootPath,
       );
       const materializedSetupFiles = Object.values(setup.setupFiles);
-      syncBrowserCoverageSetupExcludes(project, materializedSetupFiles);
+      syncBrowserCoverageSetupExcludes(
+        project,
+        project.normalizedConfig.coverage,
+        materializedSetupFiles,
+      );
 
       return {
         project,
@@ -2028,7 +2058,11 @@ export async function resolveProjectEntries(
           project.rootPath,
         );
         const materializedSetupFiles = Object.values(setup.setupFiles);
-        syncBrowserCoverageSetupExcludes(project, materializedSetupFiles);
+        syncBrowserCoverageSetupExcludes(
+          project,
+          project.normalizedConfig.coverage,
+          materializedSetupFiles,
+        );
         projectEntries.push({
           project,
           setupFiles: materializedSetupFiles,

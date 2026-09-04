@@ -21,6 +21,9 @@ type JavaScriptDataUrl = {
   isBase64: boolean;
 };
 
+const decodeDataUrlPayload = (data: string): string =>
+  decodeURIComponent(data.replace(/%(?![0-9a-f]{2})/gi, '%25'));
+
 const parseJavaScriptDataUrl = (
   request: string,
 ): JavaScriptDataUrl | undefined => {
@@ -37,14 +40,14 @@ const parseJavaScriptDataUrl = (
   }
 
   const metadata = dataUrl.slice(5, commaIndex).split(';');
-  const mimeType = metadata.shift()?.toLowerCase();
+  const mimeType = metadata.shift()?.trim().toLowerCase();
   if (mimeType !== 'text/javascript' && mimeType !== 'application/javascript') {
     return undefined;
   }
 
   return {
     data: dataUrl.slice(commaIndex + 1),
-    isBase64: metadata.some((item) => item.toLowerCase() === 'base64'),
+    isBase64: metadata.some((item) => item.trim().toLowerCase() === 'base64'),
   };
 };
 
@@ -119,7 +122,7 @@ export const materializeVirtualSetupFiles = (
       if (!dataUrl) {
         return [entryName, request];
       }
-      const source = decodeURIComponent(dataUrl.data);
+      const source = decodeDataUrlPayload(dataUrl.data);
 
       const virtualPath = pathe.join(
         rootPath,

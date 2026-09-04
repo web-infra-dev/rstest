@@ -1,10 +1,32 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   createBrowserContextExcludeRegExp,
+  syncBrowserCoverageSetupExcludes,
   toContextKey,
 } from '../src/browserRsbuild';
 
 describe('browser config resolution', () => {
+  it('replaces materialized setup coverage exclusions on refresh', () => {
+    const coverage = { enabled: true, exclude: ['user-exclude'] };
+    const project = { environmentName: 'coverage-refresh' };
+
+    syncBrowserCoverageSetupExcludes(project, coverage, [
+      '/project/.rstest-virtual/first.mjs',
+    ]);
+    expect(coverage.exclude).toEqual([
+      'user-exclude',
+      '/project/.rstest-virtual/first.mjs',
+    ]);
+
+    syncBrowserCoverageSetupExcludes(project, coverage, [
+      '/project/.rstest-virtual/second.mjs',
+    ]);
+    expect(coverage.exclude).toEqual([
+      'user-exclude',
+      '/project/.rstest-virtual/second.mjs',
+    ]);
+  });
+
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {
     // Keys must match the browser runtime's `toContextKey` so `loadTest(key)`
     // resolves against the manifest import map.

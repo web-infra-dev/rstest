@@ -43,6 +43,18 @@ describe('getSetupFiles', () => {
     expect(Object.values(result.virtualModules)).toEqual(['console.log(1)']);
   });
 
+  it('trims JavaScript data URL metadata tokens', () => {
+    const result = materializeVirtualSetupFiles(
+      getSetupFiles(
+        ['data:text/javascript ; base64 ,Y29uc29sZS5sb2coMSk%3D'],
+        '/project',
+      ),
+      '/project',
+    );
+
+    expect(Object.values(result.virtualModules)).toEqual(['console.log(1)']);
+  });
+
   it('materializes percent-encoded non-Base64 JavaScript data URLs', () => {
     const result = materializeVirtualSetupFiles(
       getSetupFiles(
@@ -64,5 +76,16 @@ describe('getSetupFiles', () => {
     );
 
     expect(Object.values(result.virtualModules)).toEqual(['void 0']);
+  });
+
+  it('preserves unmatched percent escapes in non-Base64 payloads', () => {
+    const result = materializeVirtualSetupFiles(
+      getSetupFiles(['data:text/javascript,globalThis.value=5%2'], '/project'),
+      '/project',
+    );
+
+    expect(Object.values(result.virtualModules)).toEqual([
+      'globalThis.value=5%2',
+    ]);
   });
 });

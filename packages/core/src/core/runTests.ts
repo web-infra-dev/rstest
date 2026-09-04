@@ -208,6 +208,7 @@ export async function runTests(context: Rstest): Promise<void> {
       isWatchMode,
       coverageProvider,
       reportOnFailure: coverage.reportOnFailure,
+      projects: [],
       traceRun: activeTraceRun,
     });
     if (nodeExecutor) {
@@ -394,6 +395,7 @@ export async function runTests(context: Rstest): Promise<void> {
         isWatchMode: false,
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
+        projects: executors.flatMap((executor) => executor.projects),
         traceRun: activeTraceRun,
       });
       isTeardown = true;
@@ -586,6 +588,7 @@ export async function runTests(context: Rstest): Promise<void> {
           isWatchMode: true,
           coverageProvider,
           reportOnFailure: coverage.reportOnFailure,
+          projects: planner.getBrowserProjectsToRun(),
           traceRun: activeTraceRun,
         });
         throw new AggregateError(stage.errors, 'Browser globalSetup failed');

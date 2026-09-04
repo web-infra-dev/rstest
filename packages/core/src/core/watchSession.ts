@@ -264,6 +264,7 @@ export function createWatchCycleDriver({
         isWatchMode: true,
         coverageProvider,
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
+        projects: executor.projects,
         traceRun: getTraceRun(),
       });
       context.exitCode.finishCycle();

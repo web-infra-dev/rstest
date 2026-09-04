@@ -121,10 +121,10 @@ describe('generateCoverage', () => {
       collect: () => null,
       cleanup: () => {},
       createCoverageMap: () => createCoverageMap(),
+      generateCoverageForUntestedFiles: async () => [],
       async generateReports(coverageMap) {
         reportedFiles.push(coverageMap.files());
       },
-      generateCoverageForUntestedFiles: async () => [],
     } satisfies CoverageProvider;
 
     const coverageMap = createCoverageMap();
@@ -182,10 +182,10 @@ describe('generateCoverage', () => {
       collect: () => null,
       cleanup: () => {},
       createCoverageMap: () => createCoverageMap(),
+      generateCoverageForUntestedFiles: async () => [],
       async generateReports(coverageMap) {
         reportedFiles.push(coverageMap.files());
       },
-      generateCoverageForUntestedFiles: async () => [],
     } satisfies CoverageProvider;
 
     const coverageMap = createCoverageMap();
@@ -269,6 +269,58 @@ describe('generateCoverage', () => {
 
     try {
       await generateCoverage(context, coverageMap, provider);
+      expect(reportedFiles).toEqual([[sourceFile]]);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
+  it('does not resolve setup files for projects outside the run scope', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const sourceFile = path.join(rootPath, 'src', 'index.ts');
+    mkdirSync(path.dirname(sourceFile), { recursive: true });
+    writeFileSync(sourceFile, 'export const value = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const reportedFiles: string[][] = [];
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      generateCoverageForUntestedFiles: async () => [],
+      async generateReports(coverageMap) {
+        reportedFiles.push(coverageMap.files());
+      },
+    } satisfies CoverageProvider;
+
+    const coverageMap = createCoverageMap();
+    coverageMap.addFileCoverage(createFileCoverage(sourceFile));
+
+    const context = {
+      rootPath,
+      normalizedConfig: { coverage: defaultCoverage },
+      projects: [
+        {
+          rootPath,
+          environmentName: 'active',
+          normalizedConfig: { setupFiles: [], globalSetup: [] },
+        },
+        {
+          rootPath,
+          environmentName: 'skipped',
+          normalizedConfig: {
+            setupFiles: ['./missing-setup.ts'],
+            globalSetup: [],
+          },
+        },
+      ],
+    } as unknown as InternalContext;
+
+    try {
+      await generateCoverage(context, coverageMap, provider, undefined, [
+        context.projects[0]!,
+      ]);
       expect(reportedFiles).toEqual([[sourceFile]]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
