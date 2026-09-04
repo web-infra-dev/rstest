@@ -276,6 +276,26 @@ describe('loadEsModule', () => {
     expect(mod.default).toBe(true);
   });
 
+  it('should preserve builtin promise bridges after syncing ESM exports', async () => {
+    const vmContext = vm.createContext({});
+    const mod = await loadModule({
+      codeContent: [
+        "import { access } from 'node:fs/promises';",
+        "import { syncBuiltinESMExports } from 'node:module';",
+        'syncBuiltinESMExports();',
+        `export default access(${JSON.stringify(__filename)}) instanceof Promise;`,
+      ].join('\n'),
+      distPath: '/virtual/dist/builtin-promise-after-sync.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+      vmContext,
+    });
+
+    expect(mod.default).toBe(true);
+  });
+
   it('should distinguish timer values from options', async () => {
     const vmContext = vm.createContext({
       clearImmediate,

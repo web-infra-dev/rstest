@@ -94,6 +94,7 @@ type BuiltinModuleRecord = {
   module: vm.SyntheticModule;
   imported: Record<string, unknown>;
   overrides: Set<string>;
+  wrapExports: boolean;
 };
 
 type WebAssemblyCacheEntry = {
@@ -1477,13 +1478,19 @@ class VmExternalModules {
       module,
       imported,
       overrides,
+      wrapExports,
     } of this.builtinModuleRecords.values()) {
       if (module.status !== 'evaluated') {
         continue;
       }
       for (const name of Object.keys(imported)) {
         if (!overrides.has(name)) {
-          module.setExport(name, imported[name]);
+          module.setExport(
+            name,
+            wrapExports
+              ? this.wrapBuiltinValue(imported[name])
+              : imported[name],
+          );
         }
       }
     }
@@ -1554,6 +1561,11 @@ class VmExternalModules {
       module,
       imported,
       overrides,
+      wrapExports:
+        normalized !== 'timers' &&
+        normalized !== 'timers/promises' &&
+        normalized !== 'module' &&
+        normalized !== 'process',
     });
     return module;
   }
