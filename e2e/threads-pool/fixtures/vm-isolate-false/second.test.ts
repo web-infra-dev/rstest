@@ -1,3 +1,5 @@
+import { appendFileSync } from 'node:fs';
+import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
 import { threadId } from 'node:worker_threads';
 import { expect, it } from '@rstest/core';
 import { getCount, increment } from './shared';
@@ -31,4 +33,24 @@ workerTest('isolates the second file', ({ workerValue }) => {
 
 it('runs after the previous VM context has been disposed', async () => {
   await new Promise((resolve) => setTimeout(resolve, 100));
+});
+
+it('re-homes host fetch errors into the VM realm', async () => {
+  await expect(fetch('not a url')).rejects.toThrow(TypeError);
+});
+
+it('keeps process guards active during VM cleanup', () => {
+  const marker = process.env.RSTEST_VM_GUARD_MARKER;
+  if (!marker) {
+    throw new Error('RSTEST_VM_GUARD_MARKER is required');
+  }
+
+  void setTimeoutPromise(60_000).catch(() => {
+    try {
+      process.kill(process.pid, 'SIGCONT');
+      appendFileSync(marker, 'unguarded\n');
+    } catch {
+      appendFileSync(marker, 'guarded\n');
+    }
+  });
 });

@@ -109,6 +109,12 @@ const supportsSyncEsmEvaluate =
   typeof Reflect.get(vm.SourceTextModule.prototype, 'hasAsyncGraph') ===
     'function';
 
+const [nodeMajor = 0, nodeMinor = 0] = process.versions.node
+  .split('.')
+  .map(Number);
+const supportsCjsModuleExportsMarker =
+  nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 12);
+
 initializeCommonJsLexer();
 
 // Selecting `module-sync` without the VM graph API can resolve a package to an
@@ -380,6 +386,7 @@ class VmExternalModules {
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
   private readonly vmError: typeof Error;
+  private readonly getVmErrorConstructor: (name: string) => typeof Error;
   private readonly vmPromise: PromiseConstructor;
   private readonly isVmError: (value: unknown) => boolean;
   private readonly isVmValue: (value: unknown) => boolean;
@@ -388,6 +395,16 @@ class VmExternalModules {
 
   constructor(private readonly context: vm.Context) {
     this.vmError = vm.runInContext('Error', context) as typeof Error;
+    this.getVmErrorConstructor = vm.runInContext(
+      `(name) => {
+        const constructor = globalThis[name];
+        return typeof constructor === 'function' &&
+          (constructor === Error || constructor.prototype instanceof Error)
+          ? constructor
+          : Error;
+      }`,
+      context,
+    ) as (name: string) => typeof Error;
     this.vmPromise = vm.runInContext('Promise', context) as PromiseConstructor;
     this.isVmError = vm.runInContext(
       '(value) => value instanceof Error',
@@ -737,10 +754,9 @@ class VmExternalModules {
       resolvedId,
       defaultExport,
       this.context,
-      // Node added the `module.exports` namespace marker together with the
-      // synchronous require(esm) VM graph API. Do not expose it on older
-      // supported Node versions, where native CJS namespaces do not have it.
-      supportsSyncEsmEvaluate ? { value: exports } : undefined,
+      // Node added the `module.exports` namespace marker in v22.12.0. This is
+      // independent of the VM graph API, which is also available in Node 20.
+      supportsCjsModuleExportsMarker ? { value: exports } : undefined,
     );
   }
 
@@ -1732,7 +1748,16 @@ class VmExternalModules {
       return error;
     }
 
-    const wrapped = new this.vmError(error.message);
+    const constructor = Reflect.get(error, 'constructor');
+    const constructorName =
+      typeof constructor === 'function'
+        ? Reflect.get(constructor, 'name')
+        : undefined;
+    const ErrorConstructor =
+      typeof constructorName === 'string'
+        ? this.getVmErrorConstructor(constructorName)
+        : this.vmError;
+    const wrapped = new ErrorConstructor(error.message);
     for (const key of Reflect.ownKeys(error)) {
       const descriptor = Object.getOwnPropertyDescriptor(error, key);
       if (descriptor) {

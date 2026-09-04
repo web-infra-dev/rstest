@@ -66,6 +66,7 @@ describe('threads pool e2e', () => {
   }) => {
     const markerDirectory = mkdtempSync(join(tmpdir(), 'rstest-vm-cleanup-'));
     const cleanupMarker = join(markerDirectory, 'worker-fixture-cleanup.txt');
+    const guardMarker = join(markerDirectory, 'process-guard.txt');
     onTestFinished(() =>
       rmSync(markerDirectory, { force: true, recursive: true }),
     );
@@ -85,7 +86,10 @@ describe('threads pool e2e', () => {
       options: {
         nodeOptions: {
           cwd: join(__dirname, './fixtures/vm-isolate-false'),
-          env: { RSTEST_VM_CLEANUP_MARKER: cleanupMarker },
+          env: {
+            RSTEST_VM_CLEANUP_MARKER: cleanupMarker,
+            RSTEST_VM_GUARD_MARKER: guardMarker,
+          },
         },
       },
     });
@@ -98,6 +102,7 @@ describe('threads pool e2e', () => {
     expect(readFileSync(cleanupMarker, 'utf8').trim().split('\n')).toHaveLength(
       2,
     );
+    expect(readFileSync(guardMarker, 'utf8').trim()).toBe('guarded');
 
     const threadIds = [...output.matchAll(/VM_THREAD_ID:(\d+)/g)].map(
       (match) => match[1],

@@ -244,7 +244,36 @@ const installVmNodeGlobals = (
       'fetch',
       createVmFunction(
         vmContext,
-        '(hostFetch) => async (...args) => hostFetch(...args)',
+        `(hostFetch) => async (...args) => {
+          try {
+            return await hostFetch(...args);
+          } catch (error) {
+            if (
+              error === null ||
+              (typeof error !== 'object' && typeof error !== 'function') ||
+              Object.prototype.toString.call(error) !== '[object Error]'
+            ) {
+              throw error;
+            }
+            const constructor =
+              typeof error.name === 'string'
+                ? globalThis[error.name]
+                : undefined;
+            const ErrorConstructor =
+              typeof constructor === 'function' &&
+              (constructor === Error || constructor.prototype instanceof Error)
+                ? constructor
+                : Error;
+            const wrapped = new ErrorConstructor(error.message);
+            for (const key of Reflect.ownKeys(error)) {
+              const descriptor = Object.getOwnPropertyDescriptor(error, key);
+              if (descriptor) {
+                Object.defineProperty(wrapped, key, descriptor);
+              }
+            }
+            throw wrapped;
+          }
+        }`,
         globalThis.fetch,
       ),
     );
@@ -1006,10 +1035,10 @@ export const runInPool = async (
     return kill(pid, signal);
   };
 
-  cleanups.push(() => {
+  const restoreProcessGuards = () => {
     process.kill = kill;
     process.exit = exit;
-  });
+  };
 
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
@@ -1045,6 +1074,7 @@ export const runInPool = async (
     } catch (error) {
       errors.push(error);
     } finally {
+      restoreProcessGuards();
       isTeardown = true;
     }
 

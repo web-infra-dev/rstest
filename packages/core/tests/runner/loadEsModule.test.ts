@@ -282,6 +282,36 @@ describe('loadEsModule', () => {
     executor.dispose();
   });
 
+  it('should preserve builtin promise rejection error subclasses', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const fsPromises = executor.require('node:fs/promises', __filename) as {
+      readFile: (path: string) => Promise<unknown>;
+    };
+
+    let error: unknown;
+    try {
+      await fsPromises.readFile(undefined as unknown as string);
+    } catch (caught) {
+      error = caught;
+    }
+
+    const inspect = vm.runInContext(
+      '(value) => ({ error: value instanceof Error, type: value instanceof TypeError, name: value.name })',
+      vmContext,
+    ) as (value: unknown) => {
+      error: boolean;
+      type: boolean;
+      name: string;
+    };
+    expect(inspect(error)).toEqual({
+      error: true,
+      type: true,
+      name: 'TypeError',
+    });
+    executor.dispose();
+  });
+
   it('should keep module and process builtin proxies separate', () => {
     const vmContext = vm.createContext({ process });
     const executor = getVmExternalModules(vmContext);
@@ -524,8 +554,9 @@ describe('loadEsModule', () => {
       false,
     )) as Record<string, unknown>;
 
+    const nativeNamespace = await import(pathToFileURL(externalPath).href);
     expect('module.exports' in namespace).toBe(
-      'hasAsyncGraph' in vm.SourceTextModule.prototype,
+      'module.exports' in nativeNamespace,
     );
   });
 
