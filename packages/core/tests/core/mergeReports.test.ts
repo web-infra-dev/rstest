@@ -91,6 +91,7 @@ describe('mergeReports', () => {
     expect(ensureCoverageProviderInstalledSpy).toHaveBeenCalledWith(
       context.normalizedConfig.coverage,
       rootPath,
+      {},
     );
     expect(
       ensureCoverageProviderInstalledSpy.mock.invocationCallOrder[0],

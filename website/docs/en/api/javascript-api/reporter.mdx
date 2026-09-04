@@ -70,9 +70,13 @@ interface Reporter {
   onTestCaseResult?(result: TestResult): void;
   onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
   onUserConsoleLog?(log: UserConsoleLog): void;
-  onExit?(): void;
+  onExit?(): MaybePromise<void>;
 }
 ```
+
+<ApiMeta addedVersion="0.12.0" />
+
+Starting in v0.12.0, Rstest also calls `onExit` when the reporter's owning context is released after normal run, list, or merge completion, watch close, or startup failure. It continues to run on abnormal CLI exits. List contexts currently do not attach reporters, so they have no reporter hooks to call. Use `onExit` to release resources such as streams or renderers. Errors from the hook do not replace the operation's result or error.
 
 <ApiMeta addedVersion="0.11.1" />
 

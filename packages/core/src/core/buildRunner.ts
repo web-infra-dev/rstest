@@ -1,7 +1,7 @@
 import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import type { CommonOptions } from '../cli/init';
-import { disposeBuiltInReporters } from '../reporter';
+import { exitReporters } from '../reporter';
 import type {
   FileFilterMode,
   Project,
@@ -354,7 +354,7 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
     rstest.context.relatedRerunFiles = selection.relatedRerunFiles;
     return rstest;
   } catch (error) {
-    disposeBuiltInReporters(rstest.context);
+    await exitReporters(rstest.context);
     throw error;
   }
 }

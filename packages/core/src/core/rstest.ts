@@ -3,7 +3,7 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
-import { DefaultReporter, disposeBuiltInReporters } from '../reporter';
+import { DefaultReporter, exitReporters } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
 import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
@@ -26,6 +26,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
+import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import {
   castArray,
   DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT,
@@ -121,6 +122,7 @@ export class Rstest implements InternalContext {
   public globalTeardownCallbacks: Array<
     () => boolean | void | Promise<boolean | void>
   > = [];
+  public packageInstallerConfirm?: PackageInstallerConfirm;
   public closeWatchSession?: () => Promise<void>;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
@@ -322,7 +324,8 @@ export class Rstest implements InternalContext {
         );
       }
     } catch (error) {
-      disposeBuiltInReporters({ reporters });
+      // Sync scope; sync onExit hooks run eagerly, async ones never reject.
+      void exitReporters({ reporters });
       throw error;
     }
 
@@ -436,7 +439,8 @@ function createReporters(
     }
     return result;
   } catch (error) {
-    disposeBuiltInReporters({ reporters: result });
+    // Sync scope; sync onExit hooks run eagerly, async ones never reject.
+    void exitReporters({ reporters: result });
     throw error;
   }
 }
