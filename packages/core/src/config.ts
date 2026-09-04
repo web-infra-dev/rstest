@@ -67,6 +67,11 @@ const resolveConfigPath = (root: string, customConfig?: string) => {
   return null;
 };
 
+export interface LoadedRstestConfig {
+  content: RstestConfig;
+  filePath: string | null;
+}
+
 export async function loadConfig({
   cwd = process.cwd(),
   path,
@@ -77,10 +82,7 @@ export async function loadConfig({
   path?: string;
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
-}): Promise<{
-  content: RstestConfig;
-  filePath: string | null;
-}> {
+} = {}): Promise<LoadedRstestConfig> {
   const configFilePath = resolveConfigPath(cwd, path);
 
   if (!configFilePath) {
@@ -134,6 +136,7 @@ export const resolveExtends = async (
   );
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
+  merged.extends = undefined;
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(

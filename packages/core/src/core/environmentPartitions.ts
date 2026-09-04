@@ -1,4 +1,8 @@
-import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
+import type {
+  InternalContext,
+  InternalProjectContext,
+  ProjectEntries,
+} from '../types';
 import {
   applyEnvironmentComment,
   getShardedFiles,
@@ -11,29 +15,29 @@ import {
 import { isBrowserProject } from './isBrowserProject';
 
 type GetProjectEntries = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ) => Promise<Record<string, string>>;
 
 type RefreshEnvironmentPartitionResult = {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   /** Present only when the run is sharded. */
   shardCounts?: ShardCounts;
 };
 
 type RefreshEnvironmentPartitionEntry = {
-  project: ProjectContext;
+  project: InternalProjectContext;
   alias: string;
   testPath: string;
 };
 
-const getSourceEnvironmentName = (project: ProjectContext): string =>
+const getSourceEnvironmentName = (project: InternalProjectContext): string =>
   project._environmentGroup?.sourceEnvironmentName ?? project.environmentName;
 
-const getSourceProjectName = (project: ProjectContext): string =>
+const getSourceProjectName = (project: InternalProjectContext): string =>
   project._environmentGroup?.sourceProjectName ?? project.name;
 
-const getSourceProjectKey = (project: ProjectContext): string =>
+const getSourceProjectKey = (project: InternalProjectContext): string =>
   `${isBrowserProject(project) ? 'browser' : 'node'}:${getSourceEnvironmentName(project)}`;
 
 const hasEntries = (
@@ -98,7 +102,7 @@ const getUniqueProjectName = (
 
 const pushProjectEntries = (
   target: RefreshEnvironmentPartitionEntry[],
-  project: ProjectContext,
+  project: InternalProjectContext,
   entries: Record<string, string> | undefined,
 ): void => {
   for (const [alias, testPath] of Object.entries(entries || {})) {
@@ -119,9 +123,9 @@ const getRefreshBaseTestEnvironment = ({
   baseProject,
   sourceProject,
 }: {
-  baseProject: ProjectContext | undefined;
-  sourceProject: ProjectContext;
-}): ProjectContext['normalizedConfig']['testEnvironment'] => {
+  baseProject: InternalProjectContext | undefined;
+  sourceProject: InternalProjectContext;
+}): InternalProjectContext['normalizedConfig']['testEnvironment'] => {
   const environmentGroup = sourceProject._environmentGroup;
   if (baseProject) {
     return baseProject.normalizedConfig.testEnvironment;
@@ -143,11 +147,11 @@ const findMatchingPartitionProject = ({
   usedEnvironmentNames,
   environmentKey,
 }: {
-  baseTestEnvironment: ProjectContext['normalizedConfig']['testEnvironment'];
-  sourceGroup: ProjectContext[];
+  baseTestEnvironment: InternalProjectContext['normalizedConfig']['testEnvironment'];
+  sourceGroup: InternalProjectContext[];
   usedEnvironmentNames: Set<string>;
   environmentKey: string;
-}): ProjectContext | undefined =>
+}): InternalProjectContext | undefined =>
   sourceGroup.find((project) => {
     const group = project._environmentGroup;
     const expectedEnvironment = group?.environmentComment
@@ -166,8 +170,8 @@ const reassignGlobalSetupOwner = ({
   sourceProjects,
 }: {
   entriesCache: Map<string, ProjectEntries>;
-  projects: ProjectContext[];
-  sourceProjects: Map<string, ProjectContext[]>;
+  projects: InternalProjectContext[];
+  sourceProjects: Map<string, InternalProjectContext[]>;
 }): void => {
   for (const sourceKey of sourceProjects.keys()) {
     const groupProjects = projects.filter(
@@ -192,7 +196,7 @@ const reassignGlobalSetupOwner = ({
 };
 
 const createEmptyEntriesCache = (
-  projects: ProjectContext[],
+  projects: InternalProjectContext[],
   fileFilters: string[] | undefined,
 ): Map<string, ProjectEntries> =>
   new Map(
@@ -206,9 +210,9 @@ const createEmptyEntriesCache = (
   );
 
 const groupProjectsBySource = (
-  projects: ProjectContext[],
-): Map<string, ProjectContext[]> => {
-  const sourceProjects = new Map<string, ProjectContext[]>();
+  projects: InternalProjectContext[],
+): Map<string, InternalProjectContext[]> => {
+  const sourceProjects = new Map<string, InternalProjectContext[]>();
   for (const project of projects) {
     const sourceKey = getSourceProjectKey(project);
     const sourceGroup = sourceProjects.get(sourceKey) ?? [];
@@ -223,13 +227,13 @@ export const refreshEnvironmentPartitionEntries = async ({
   projects,
   getProjectEntries,
 }: {
-  context: RstestContext;
-  projects: ProjectContext[];
+  context: InternalContext;
+  projects: InternalProjectContext[];
   getProjectEntries: GetProjectEntries;
 }): Promise<RefreshEnvironmentPartitionResult> => {
   const sourceProjects = groupProjectsBySource(projects);
   const refreshedEntries: RefreshEnvironmentPartitionEntry[] = [];
-  const refreshedProjects: ProjectContext[] = [];
+  const refreshedProjects: InternalProjectContext[] = [];
 
   for (const sourceGroup of sourceProjects.values()) {
     const firstProject = sourceGroup[0]!;
@@ -255,7 +259,7 @@ export const refreshEnvironmentPartitionEntries = async ({
       baseProject,
       sourceProject,
     });
-    const groupingProject: ProjectContext = {
+    const groupingProject: InternalProjectContext = {
       ...sourceProject,
       name: sourceProjectName,
       environmentName: sourceEnvironmentName,

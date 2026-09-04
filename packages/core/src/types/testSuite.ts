@@ -191,6 +191,7 @@ export type FormattedError = {
   expected?: string;
   actual?: string;
   retryCount?: number;
+  cause?: unknown;
 };
 
 export type TestResult = {

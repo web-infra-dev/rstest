@@ -4,7 +4,7 @@ import path from 'node:path';
 import { normalize } from 'pathe';
 import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
 import { createProjectPlanState } from '../../src/core/projectPlan';
-import type { ProjectContext, RstestContext } from '../../src/types';
+import type { InternalContext, InternalProjectContext } from '../../src/types';
 import {
   applyEnvironmentComment,
   parseEnvironmentComment,
@@ -13,7 +13,7 @@ import {
 
 const fixturesRoot = path.join(process.cwd(), 'packages/core/tests/fixtures');
 
-const createProject = (): ProjectContext => ({
+const createProject = (): InternalProjectContext => ({
   name: 'default',
   environmentName: 'default',
   rootPath: fixturesRoot,
@@ -35,7 +35,7 @@ const createProject = (): ProjectContext => ({
       strictPort: false,
       providerOptions: {},
     },
-  } as unknown as ProjectContext['normalizedConfig'],
+  } as unknown as InternalProjectContext['normalizedConfig'],
 });
 
 describe('environment comments', () => {
@@ -45,7 +45,7 @@ describe('environment comments', () => {
         writeFileSync(path.join(root, `${name}.test.ts`), `// ${name}\n`);
       }
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -61,7 +61,7 @@ describe('environment comments', () => {
         projects: [project],
         normalizedConfig: { shard: { index: 1, count: 2 } },
         fileFilters: ['c.test.ts', 'd.test.ts'],
-      } as unknown as RstestContext;
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: true,
@@ -90,7 +90,7 @@ describe('environment comments', () => {
         '// @rstest-environment jsdom\n',
       );
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -106,7 +106,7 @@ describe('environment comments', () => {
         projects: [project],
         normalizedConfig: {},
         fileFilters: ['base.test.ts'],
-      } as unknown as RstestContext;
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: true,
@@ -499,7 +499,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
       writeFileSync(newNodeFile, '// new node test\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -522,8 +522,8 @@ const jsdom = '// @rstest-environment jsdom';
             count: 1,
           },
         },
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -548,14 +548,15 @@ const jsdom = '// @rstest-environment jsdom';
     });
   });
 
-  it('preserves a modified base environment when refreshing partitions', async () => {
+  it('keeps dynamic watch entries in their environment partition', async () => {
     await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
+      const addedJsdomFile = path.join(root, 'added-jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -573,8 +574,60 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
+      const planState = createProjectPlanState({
+        context,
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+      writeFileSync(
+        addedJsdomFile,
+        '// @rstest-environment jsdom\n// added during watch\n',
+      );
+
+      await expect(planState.globTestSourceEntries('default')).resolves.toEqual(
+        {
+          'node~test~ts': normalize(nodeFile),
+        },
+      );
+      await expect(
+        planState.globTestSourceEntries('default-environment-1'),
+      ).resolves.toEqual({
+        'added-jsdom~test~ts': normalize(addedJsdomFile),
+        'jsdom~test~ts': normalize(jsdomFile),
+      });
+    });
+  });
+
+  it('preserves a modified base environment when refreshing partitions', async () => {
+    await withTempDir('rstest-env-comment-', async (root) => {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: InternalProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -616,7 +669,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(explicitJsdomFile, '// @rstest-environment jsdom\n');
       writeFileSync(explicitNodeFile, '// @rstest-environment node\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -634,8 +687,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -697,7 +750,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(invalidFile, '// @rstest-environment custom\n');
       writeFileSync(validFile, '// valid test\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -715,8 +768,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -744,7 +797,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
       writeFileSync(browserFile, '// @rstest-environment jsdom\n');
 
-      const nodeProject: ProjectContext = {
+      const nodeProject: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -758,7 +811,7 @@ const jsdom = '// @rstest-environment jsdom';
           includeSource: [],
         },
       };
-      const browserProject: ProjectContext = {
+      const browserProject: InternalProjectContext = {
         ...createProject(),
         name: 'browser',
         environmentName: 'browser',
@@ -783,8 +836,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [browserProject, nodeProject],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -808,7 +861,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(nodeFile, '// node test\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -831,8 +884,8 @@ const jsdom = '// @rstest-environment jsdom';
             count: 1,
           },
         },
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -870,7 +923,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
       writeFileSync(newJsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -888,8 +941,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -927,7 +980,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(nodeFile, '// node test\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -945,8 +998,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: true,
@@ -991,7 +1044,7 @@ const jsdom = '// @rstest-environment jsdom';
         '// @rstest-environment-options { "url": "https://example.test/" }\n',
       );
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -1009,8 +1062,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -1049,7 +1102,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(explicitNodeFile, '// @rstest-environment node\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -1067,8 +1120,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -1127,7 +1180,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(nodeFile, '// node test\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -1145,8 +1198,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -1181,7 +1234,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(nodeFile, '// node test\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -1204,8 +1257,8 @@ const jsdom = '// @rstest-environment jsdom';
             count: 2,
           },
         },
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,
@@ -1253,7 +1306,7 @@ const jsdom = '// @rstest-environment jsdom';
       writeFileSync(otherBrowserFile, '// other browser test\n');
       writeFileSync(newBrowserFile, '// new browser test\n');
 
-      const nodeProject: ProjectContext = {
+      const nodeProject: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -1267,7 +1320,7 @@ const jsdom = '// @rstest-environment jsdom';
           includeSource: [],
         },
       };
-      const browserProject: ProjectContext = {
+      const browserProject: InternalProjectContext = {
         ...createProject(),
         name: 'browser',
         environmentName: 'browser',
@@ -1297,8 +1350,8 @@ const jsdom = '// @rstest-environment jsdom';
             count: 2,
           },
         },
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({ context, isWatchMode: false });
 
       const initialPlan = await planState.resolveRunnableProjects();
@@ -1329,7 +1382,7 @@ const jsdom = '// @rstest-environment jsdom';
       const file = path.join(root, 'invalid.test.ts');
       writeFileSync(file, '// @rstest-environment custom\n');
 
-      const project: ProjectContext = {
+      const project: InternalProjectContext = {
         ...createProject(),
         rootPath: root,
         normalizedConfig: {
@@ -1347,8 +1400,8 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
-      } as unknown as RstestContext;
+        fileFilters: undefined,
+      } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
         isWatchMode: false,

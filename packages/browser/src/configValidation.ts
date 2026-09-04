@@ -1,14 +1,14 @@
 import {
   browserIgnoredRuntimeConfigKeys,
   color,
+  type InternalContext,
   logger,
-  type RstestContext,
   type RuntimeConfig,
 } from '@rstest/core/internal/browser';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
 type BrowserProjectConfig =
-  RstestContext['projects'][number]['normalizedConfig'];
+  InternalContext['projects'][number]['normalizedConfig'];
 
 /**
  * Per-key warning for a browser-ignored RuntimeConfig field, keyed by the exact
@@ -140,7 +140,7 @@ const validateViewport = (viewport: unknown): void => {
  * runs — a mixed repo legitimately sets them for its node projects and must not
  * get unsilenceable noise on a correct configuration.
  */
-const reportUnsupportedBrowserOptions = (context: RstestContext): void => {
+const reportUnsupportedBrowserOptions = (context: InternalContext): void => {
   const browserProjects = context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
@@ -245,7 +245,7 @@ const reportUnsupportedBrowserOptions = (context: RstestContext): void => {
   }
 };
 
-export const validateBrowserConfig = (context: RstestContext): void => {
+export const validateBrowserConfig = (context: InternalContext): void => {
   for (const project of context.projects) {
     const { browser, output } = project.normalizedConfig;
     if (!browser.enabled) {

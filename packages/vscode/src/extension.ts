@@ -2,7 +2,7 @@ import vscode from 'vscode';
 import { RstestDiagnostics } from './diagnostics';
 import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
-import { runningWorkers } from './master';
+import { closeWorkerGracefully, runningWorkers } from './master';
 import {
   createMigrationNotice,
   rstackEditorTakesOver,
@@ -29,11 +29,12 @@ export async function activate(context: vscode.ExtensionContext) {
   return new Rstest(context);
 }
 
-export function deactivate() {
-  for (const worker of runningWorkers) {
-    worker.$close();
-  }
+export async function deactivate() {
+  // VS Code may cap extension deactivation time. Start all graceful closes
+  // concurrently so teardown gets the available window before force fallback.
+  const workerCloses = Array.from(runningWorkers, closeWorkerGracefully);
   disposeTerminal();
+  await Promise.all(workerCloses);
 }
 
 class Rstest {
@@ -342,20 +343,17 @@ class Rstest {
         } else if (data instanceof ProjectFolder) {
           // grouping folder spans multiple projects; recurse into children
           await discoverTests(gatherTestItems(test.children, false));
-        } else if (data instanceof TestFolder) {
+        } else if (data instanceof TestFile || data instanceof TestFolder) {
           await data.api.runTest({
             ...commonOptions,
             fileFilter: data.uri.fsPath,
-          });
-        } else if (data instanceof TestFile) {
-          await data.api.runTest({
-            ...commonOptions,
-            fileFilter: data.uri.fsPath,
+            fileFilterMode: data instanceof TestFolder ? 'fuzzy' : 'exact',
           });
         } else if (data instanceof TestCase) {
           await data.api.runTest({
             ...commonOptions,
             fileFilter: data.uri.fsPath,
+            fileFilterMode: 'exact',
             testCaseNamePath: data.parentNames.concat(test.label),
             isSuite: data.type === 'suite',
           });

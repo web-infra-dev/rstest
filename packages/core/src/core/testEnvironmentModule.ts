@@ -11,7 +11,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
-import type { ProjectContext, TestEnvironmentModuleReference } from '../types';
+import type {
+  InternalProjectContext,
+  TestEnvironmentModuleReference,
+} from '../types';
 import { ADDITIONAL_NODE_BUILTINS, logger } from '../utils';
 import {
   importMetaHook,
@@ -29,7 +32,7 @@ import { getMockRstestPluginOptions } from './plugins/mockBuild';
 
 export type PreparedTestEnvironmentModules = {
   modules: ReadonlyMap<string, TestEnvironmentModuleReference>;
-  update: (projects: ProjectContext[]) => Promise<void>;
+  update: (projects: InternalProjectContext[]) => Promise<void>;
   cleanup: () => Promise<void>;
 };
 
@@ -367,7 +370,7 @@ const shouldPrebundle = async ({
 }: {
   name: EnvironmentDependencyName;
   packageName: string;
-  project: ProjectContext;
+  project: InternalProjectContext;
   resolvedPath: string;
 }): Promise<boolean> => {
   const option = project.normalizedConfig.testEnvironment.prebundle ?? false;
@@ -396,7 +399,7 @@ export const prepareTestEnvironmentModules = async ({
   projects,
   rootPath,
 }: {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   rootPath: string;
 }): Promise<PreparedTestEnvironmentModules> => {
   const modules = new Map<string, TestEnvironmentModuleReference>();
@@ -408,7 +411,9 @@ export const prepareTestEnvironmentModules = async ({
     }
   };
 
-  const update = async (nextProjects: ProjectContext[]): Promise<void> => {
+  const update = async (
+    nextProjects: InternalProjectContext[],
+  ): Promise<void> => {
     const nextModules = new Map<string, TestEnvironmentModuleReference>();
 
     for (const project of nextProjects) {

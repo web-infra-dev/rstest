@@ -3,7 +3,7 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
-import { DefaultReporter } from '../reporter';
+import { DefaultReporter, disposeBuiltInReporters } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
 import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
@@ -14,14 +14,14 @@ import { VerboseReporter } from '../reporter/verbose';
 import type {
   BuiltInReporterNames,
   FileFilterMode,
+  InternalContext,
+  InternalProjectContext,
   NormalizedConfig,
   NormalizedProjectConfig,
   Project,
-  ProjectContext,
   Reporter,
   RstestCommand,
   RstestConfig,
-  RstestContext,
   RstestTestState,
   TestFileResult,
   TestResult,
@@ -37,6 +37,7 @@ import {
   resolveBuildCacheDependencyPaths,
   TS_CONFIG_FILE,
 } from '../utils';
+import { createExitCode, type RstestExitCode } from './exitCode';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -48,8 +49,8 @@ function formatEnvironmentName(name: string): string {
 
 /**
  * Report a fatal configuration error. In embedded (programmatic) mode the
- * caller owns the process, so throw and let `runRstest` surface it; otherwise
- * log and exit the CLI process.
+ * caller owns the process, so throw and let the instance API surface it;
+ * otherwise log and exit the CLI process.
  */
 function failConfig(embedded: boolean, message: string): never {
   if (embedded) {
@@ -99,9 +100,10 @@ type Options = {
   trace?: boolean;
   /** See the `embedded` option on `createRstest`. */
   embedded?: boolean;
+  initializeReporters?: boolean;
 };
 
-export class Rstest implements RstestContext {
+export class Rstest implements InternalContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
@@ -114,6 +116,12 @@ export class Rstest implements RstestContext {
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
   public embedded: boolean;
+  public exitCode: RstestExitCode = createExitCode();
+  public workerEnv: Record<string, string | undefined> = {};
+  public globalTeardownCallbacks: Array<
+    () => boolean | void | Promise<boolean | void>
+  > = [];
+  public closeWatchSession?: () => Promise<void>;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
@@ -143,7 +151,7 @@ export class Rstest implements RstestContext {
     },
   };
 
-  public projects: ProjectContext[] = [];
+  public projects: InternalProjectContext[] = [];
 
   public constructor(
     {
@@ -155,6 +163,7 @@ export class Rstest implements RstestContext {
       projects,
       trace = false,
       embedded = false,
+      initializeReporters = true,
     }: Options,
     userConfig: RstestConfig,
   ) {
@@ -280,7 +289,7 @@ export class Rstest implements RstestContext {
     );
 
     const reporters =
-      command !== 'list'
+      initializeReporters && command !== 'list'
         ? createReporters(rstestConfig.reporters, {
             rootPath,
             config: rstestConfig,
@@ -302,14 +311,19 @@ export class Rstest implements RstestContext {
     // Like sharding above: blob reports feed the one-shot `merge-reports` CI
     // workflow, and recording across watch reruns has no coherent semantics
     // (a rerun replaces results the recorded events no longer match).
-    if (
-      command === 'watch' &&
-      reporters.some((r) => r instanceof BlobReporter)
-    ) {
-      failConfig(
-        embedded,
-        'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
-      );
+    try {
+      if (
+        command === 'watch' &&
+        reporters.some((r) => r instanceof BlobReporter)
+      ) {
+        failConfig(
+          embedded,
+          'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
+        );
+      }
+    } catch (error) {
+      disposeBuiltInReporters({ reporters });
+      throw error;
     }
 
     this.reporters = reporters;
@@ -391,30 +405,38 @@ function createReporters(
   reporters: RstestConfig['reporters'],
   initConfig: any = {},
 ): (Reporter | GithubActionsReporter | JUnitReporter)[] {
-  const result = castArray(reporters).map((reporter) => {
-    if (typeof reporter === 'string' || Array.isArray(reporter)) {
-      const [name, options = {}] =
-        typeof reporter === 'string' ? [reporter, {}] : reporter;
-      // built-in reporters
-      if (name in reportersMap) {
-        const Reporter = reportersMap[name];
-        return new Reporter({
-          ...initConfig,
-          options: {
-            ...(initConfig.options || {}),
-            ...options,
-          },
-        });
+  const result: (Reporter | GithubActionsReporter | JUnitReporter)[] = [];
+  try {
+    for (const reporter of castArray(reporters)) {
+      if (typeof reporter === 'string' || Array.isArray(reporter)) {
+        const [name, options = {}] =
+          typeof reporter === 'string' ? [reporter, {}] : reporter;
+        // built-in reporters
+        if (name in reportersMap) {
+          const Reporter = reportersMap[name];
+          result.push(
+            new Reporter({
+              ...initConfig,
+              options: {
+                ...(initConfig.options || {}),
+                ...options,
+              },
+            }),
+          );
+          continue;
+        }
+
+        // TODO: load third-party reporters
+        throw new Error(
+          `Reporter ${name} not found. Please install it or use a built-in reporter.`,
+        );
       }
 
-      // TODO: load third-party reporters
-      throw new Error(
-        `Reporter ${name} not found. Please install it or use a built-in reporter.`,
-      );
+      result.push(reporter);
     }
-
-    return reporter;
-  });
-
-  return result;
+    return result;
+  } catch (error) {
+    disposeBuiltInReporters({ reporters: result });
+    throw error;
+  }
 }

@@ -1,6 +1,6 @@
 import type {
   BrowserRuntimeConfig,
-  ProjectContext,
+  InternalProjectContext,
   RuntimeConfig,
 } from '../types';
 import { resolveTaskColorEnv } from '../utils/logger';
@@ -10,10 +10,7 @@ type EnvSource = Record<string, string | undefined>;
 interface InheritEnvOptions {
   /** Node: spread the full env (defaults to `process.env`). */
   envMode: 'inherit';
-  /**
-   * Full env base to inherit from; defaults to `process.env`, read at
-   * projection time so globalSetup mutations are already applied.
-   */
+  /** Full env base to inherit from; defaults to `process.env`. */
   env?: EnvSource;
 }
 
@@ -31,22 +28,22 @@ interface StaticEnvOptions {
 }
 
 /**
- * The single core-owned projection from a `ProjectContext` to a runtime config.
+ * The single core-owned projection from an `InternalProjectContext` to a runtime config.
  * Node mode (`envMode: 'inherit'`) returns the full {@link RuntimeConfig};
  * browser mode (`envMode: 'static'`) returns the narrowed
  * {@link BrowserRuntimeConfig}. Replaces the two drifted copies previously in
  * `pool/index.ts` and `hostController.ts`.
  */
 export function projectRuntimeConfig(
-  project: ProjectContext,
+  project: InternalProjectContext,
   options: InheritEnvOptions,
 ): RuntimeConfig;
 export function projectRuntimeConfig(
-  project: ProjectContext,
+  project: InternalProjectContext,
   options: StaticEnvOptions,
 ): BrowserRuntimeConfig;
 export function projectRuntimeConfig(
-  project: ProjectContext,
+  project: InternalProjectContext,
   options: InheritEnvOptions | StaticEnvOptions,
 ): RuntimeConfig | BrowserRuntimeConfig {
   const {

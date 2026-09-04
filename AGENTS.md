@@ -57,7 +57,7 @@ pnpm install                  # Install all workspace dependencies
 pnpm build                    # Build all packages under packages/*
 pnpm test                     # Run unit tests via rstest
 pnpm e2e                      # Run e2e tests
-pnpm lint                     # Prettier + spell check + harness docs + rslint
+pnpm lint                     # Prettier + spell check + doc type sync + harness docs + rslint
 pnpm lint:type                # Run rslint --type-check (needs built package .d.ts)
 pnpm typecheck                # Alias of lint:type
 pnpm format                   # Prettier format + heading-case --write

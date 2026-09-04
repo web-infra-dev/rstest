@@ -34,6 +34,23 @@ export interface Options {
 }
 
 type StreamType = 'output' | 'error';
+type StreamWrite = Writable['write'];
+type WriteCallback = (error?: Error | null) => void;
+
+const streamInterceptors = new WeakMap<
+  StreamWrite,
+  { active: boolean; original: StreamWrite }
+>();
+
+const unwrapStoppedInterceptors = (write: StreamWrite): StreamWrite => {
+  let current = write;
+  let interceptor = streamInterceptors.get(current);
+  while (interceptor && !interceptor.active) {
+    current = interceptor.original;
+    interceptor = streamInterceptors.get(current);
+  }
+  return current;
+};
 
 /**
  * This method is modified based on source found in
@@ -92,6 +109,7 @@ export class WindowRenderer {
   stop(): void {
     this.cleanups.splice(0).map((fn) => fn());
     clearInterval(this.renderInterval);
+    process.off('exit', this.exitHandler);
   }
 
   /**
@@ -203,10 +221,18 @@ export class WindowRenderer {
   }
 
   private interceptStream(stream: NodeJS.WriteStream, type: StreamType) {
-    const original = stream.write.bind(stream);
+    const original = stream.write;
+    const interceptor = { active: true, original };
 
-    // @ts-expect-error -- not sure how 2 overloads should be typed
-    stream.write = (chunk, encoding, callback) => {
+    const interceptedWrite = (
+      chunk: string | Uint8Array,
+      encoding?: BufferEncoding | WriteCallback,
+      callback?: WriteCallback,
+    ): boolean => {
+      if (!interceptor.active) {
+        return Reflect.apply(original, stream, [chunk, encoding, callback]);
+      }
+
       const writeCallback =
         typeof encoding === 'function' ? encoding : callback;
 
@@ -220,9 +246,14 @@ export class WindowRenderer {
       writeCallback?.();
       return true;
     };
+    streamInterceptors.set(interceptedWrite, interceptor);
+    stream.write = interceptedWrite;
 
-    return function restore() {
-      stream.write = original;
+    return () => {
+      interceptor.active = false;
+      if (stream.write === interceptedWrite) {
+        stream.write = unwrapStoppedInterceptors(original);
+      }
     };
   }
 

@@ -679,6 +679,7 @@ export type NormalizedBrowserModeConfig = {
   providerOptions: Record<string, unknown>;
 };
 
+// Exported from `/api` as `RstestContext.config`; shape changes are public API changes.
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,

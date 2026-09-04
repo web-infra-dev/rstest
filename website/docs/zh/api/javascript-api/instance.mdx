@@ -1,0 +1,455 @@
+---
+description: 'Rstest 实例 API 参考：createRstest、rstest.context、rstest.run、rstest.watch、rstest.listTests、rstest.mergeReports 和 runCLI。'
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Rstest 实例
+
+<ApiMeta addedVersion="0.12.0" />
+
+本页介绍的所有 API 都由 [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 的 `@rstest/core/api` 入口导出。你可以通过这些 API 创建 Rstest 实例、运行或列出测试、启动监听会话，以及合并 blob 报告。
+
+```ts
+import { createRstest } from '@rstest/core/api';
+```
+
+:::warning
+目前所有导出都是实验性的，在 Rstest 1.0.0 之前可能发生变化。请暂时锁定 `@rstest/core` 的精确版本来保证 API 稳定性。
+:::
+
+## createRstest
+
+`createRstest` 函数用于创建并返回一个 Rstest 实例。`config` 会在创建实例时解析一次，并作为实例的基础配置持续复用。传给实例方法的选项只应用于当前操作，不会修改这份基础配置。
+
+`cwd` 默认为 `process.cwd()`，并作为相对 `config.root` 的解析基准；省略 `config` 时使用空的内联配置，不会从 `cwd` 中发现配置文件。
+
+`createRstest` 会设置 `RSTEST=true`，仅当 `NODE_ENV` 尚未设置时才设置 `NODE_ENV=test`，并且不会恢复这两个环境变量。
+
+### 示例
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.status);
+```
+
+### 加载配置文件
+
+使用主入口的 [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) 加载配置文件，再将返回值（`{ content, filePath }`）直接作为 `config` 传入。
+
+```ts
+import { loadConfig } from '@rstest/core';
+import { createRstest } from '@rstest/core/api';
+
+const loaded = await loadConfig();
+const rstest = await createRstest({ config: loaded });
+```
+
+### CreateRstestOptions
+
+- **类型：**
+
+```ts
+interface LoadedRstestConfig {
+  content: RstestConfig; // 已加载的配置内容。
+  filePath: string | null; // `loadConfig` 返回的配置文件来源路径，没有时为 `null`。
+}
+
+interface CreateRstestOptions {
+  cwd?: string;
+  config?: RstestConfig | LoadedRstestConfig;
+}
+
+function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
+```
+
+## rstest.context
+
+`rstest.context` 是一个在创建实例时解析一次的只读对象。你可以在不运行测试的情况下检查解析后的状态，例如用 `rootPath` 确定结果中的 `testPath` 在 workspace 中的位置，用 `projects` 展示或筛选多项目配置，用 `config` 查看生效的配置，也可以用 `version` 做兼容性检查。
+
+### 示例
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    projects: [
+      {
+        name: 'unit',
+        include: ['tests/**/*.test.ts'],
+      },
+    ],
+  },
+});
+
+console.log(rstest.context.version);
+console.log(rstest.context.rootPath);
+
+for (const project of rstest.context.projects) {
+  console.log(project.name, project.rootPath);
+}
+```
+
+### RstestContext
+
+- **类型：**
+
+```ts
+interface ProjectContext {
+  name: string; // 项目名称。
+  rootPath: string; // 项目的绝对根路径。
+  configFilePath?: string; // 与项目关联的配置文件路径（如果有）。
+}
+
+interface RstestContext {
+  readonly version: string;
+  readonly rootPath: string;
+  readonly config: Readonly<NormalizedConfig>;
+  readonly projects: readonly ProjectContext[];
+}
+```
+
+### context.version
+
+当前使用的 `@rstest/core` 版本。
+
+- **类型：** `string`
+
+### context.rootPath
+
+Rstest 实例的绝对根路径。它由 `config.root` 解析得出；当 `config.root` 为相对路径时，以 `cwd` 为基准。
+
+- **类型：** `string`
+
+### context.config
+
+Rstest 实例规范化后的配置。
+
+- **类型：** `Readonly<NormalizedConfig>`
+
+### context.projects
+
+解析后的项目 Context。未显式配置 `projects` 时，该数组包含由 `config.name` 命名的默认项目（默认名称为 `'rstest'`）。
+
+- **类型：** `readonly ProjectContext[]`
+
+## rstest.run
+
+`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。失败会通过 `status` 报告，不会导致 Promise 被拒绝；具体规则见 [TestRunResult](#testrunresult)。
+
+### 示例
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+const result = await rstest.run({
+  filters: ['src/foo.test.ts'],
+  filterMode: 'exact',
+});
+
+console.log(result.status);
+console.log(result.summary.tests);
+```
+
+### 选择测试文件
+
+以下选项用于选择测试文件：
+
+- `filters` 默认使用不区分大小写的子字符串匹配。省略 `filters` 时选择所有文件；显式传入空数组时，两种模式都不会选择任何文件。
+- `filterMode` 设为 `'exact'` 后会使用规范化路径全等匹配。
+- `related` 将 `filters` 作为源文件输入，并选择与其关联的测试。
+- `changed` 选择与工作区变更相关的测试，也可以指定一个起始 Git 引用。`changed: false` 会禁用 `changed` 文件选择。
+- `shard` 接受 CLI 风格的 `"1/3"` 或 `{ index: 1, count: 3 }`。
+- `project` 支持项目名称、`*` 通配符和 `!` 排除项。
+
+其余选项控制本次运行的执行行为：
+
+- `testNamePattern` 使用 `RegExp` 或字符串模式按测试名称选择测试。
+- `update` 控制快照更新模式。`update: false` 会显式禁用快照更新；省略 `update` 时会保留配置或默认模式。
+- `bail` 表示停止本次运行前允许的测试失败数；布尔值 `true` 表示 1。
+- `passWithNoTests` 控制没有匹配测试时本次运行是否成功。
+
+### RunOptions
+
+- **类型：**
+
+```ts
+interface RunOptions {
+  filters?: string[];
+  filterMode?: FileFilterMode;
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+
+interface RstestInstance {
+  run(options?: RunOptions): Promise<TestRunResult>;
+}
+```
+
+### TestRunResult
+
+- **类型：**
+
+```ts
+interface SerializedError {
+  name: string; // 错误类名称。
+  message: string; // 错误信息。
+  stack?: string; // 序列化后的调用栈。
+  diff?: string; // 格式化后的断言差异。
+  actual?: string; // 序列化后的断言实际值。
+  expected?: string; // 序列化后的断言预期值。
+  retryCount?: number; // 产生此错误的重试次数。
+  cause?: SerializedError; // 序列化后的错误原因。
+}
+
+interface TestCaseResult {
+  status: TestResultStatus; // 最终结果状态。
+  name: string; // 测试或测试文件的显示名称。
+  testPath: string; // 所属测试文件的路径。
+  parentNames?: string[]; // 外层测试套件的名称。
+  duration?: number; // 执行时长（毫秒）。
+  errors?: SerializedError[]; // 最后一次执行产生的错误。
+  retryErrors?: SerializedError[]; // 之前重试产生的错误。
+  retryCount?: number; // 已执行的重试次数。
+  project: string; // 项目名称。
+  meta?: TaskMeta; // 关联到任务的可序列化元数据。
+}
+
+interface TestFileRunResult extends TestCaseResult {
+  tests: TestCaseResult[]; // 当前文件中声明的测试结果。
+}
+
+type TestRunStatus = 'pass' | 'fail' | 'error';
+
+interface TestRunResult {
+  status: TestRunStatus; // 本次运行的整体状态。
+  files: TestFileRunResult[]; // 当前轮次执行的测试文件结果。
+  summary: {
+    tests: {
+      total: number; // 测试总数。
+      passed: number; // 通过的测试数量。
+      failed: number; // 失败的测试数量。
+      skipped: number; // 跳过的测试数量。
+      todo: number; // todo 测试数量。
+    };
+    files: {
+      total: number; // 测试文件总数。
+      failed: number; // 失败的测试文件数量。
+    };
+  };
+  unhandledErrors: SerializedError[]; // 未归属于单个测试的错误。
+  duration: {
+    total: number; // 总时长（毫秒）。
+  };
+  snapshot?: SnapshotSummary;
+  coverage?: CoverageMapData;
+}
+```
+
+当 `unhandledErrors` 不为空时，`status` 为 `'error'`。当本次运行已完成但退出状态非零时，`status` 为 `'fail'`，例如测试或测试文件失败、覆盖率未达阈值、未设置 `passWithNoTests` 时没有找到测试，或者 `globalSetup` 清理失败。其他情况下，`status` 为 `'pass'`。
+
+只有在测试运行开始前终止执行时，`snapshot` 才会缺失。启用覆盖率时会提供 `coverage`。
+
+`SerializedError` 是可安全序列化为 JSON 的普通对象，不是错误类实例。
+
+## rstest.watch
+
+`rstest.watch()` 会启动 Node.js 监听会话，并返回用于关闭它的监听器。
+
+### 示例
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+const watcher = await rstest.watch({
+  onResult(result) {
+    console.log(
+      result.status,
+      result.files.map((file) => file.testPath),
+    );
+  },
+});
+
+await watcher.close();
+```
+
+每个已完成的轮次（包括初始轮次）之后，都会调用 `onResult`。结果按当前轮次统计：`files` 和 `summary` 只包含该轮次实际执行的文件。如需维护会话状态，请自行按 `testPath` 合并结果。
+
+`onResult` 抛出的错误会被隔离，不会停止监听会话。调用 `watcher.close()` 会释放编译器、worker、文件监听器，并运行待处理的 `globalSetup` 清理函数。该方法是幂等的，重复调用会得到相同结果；清理失败时，它返回的 Promise 会被拒绝。
+
+`rstest.watch()` 会拒绝 `related` 和 `changed`，因为它们会选择固定的文件集合，而监听会话必须能够发现新的关联测试。使用这些选项时请调用 `rstest.run()`。`related: false` 和 `changed: false` 会被忽略。
+
+`rstest.watch()` 暂不支持浏览器项目，启动时会拒绝。浏览器项目请使用 `rstest.run()`。
+
+### WatchOptions
+
+- **类型：**
+
+```ts
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
+
+interface RstestWatcher {
+  close(): Promise<void>;
+}
+
+interface RstestInstance {
+  watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+}
+```
+
+## rstest.listTests
+
+`rstest.listTests()` 会收集测试文件和测试声明，但不运行测试主体。
+
+### 示例
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+const tests = await rstest.listTests({
+  includeSuites: true,
+  includeLocation: true,
+});
+
+console.log(tests);
+```
+
+设置 `filesOnly` 可跳过声明收集。`includeSuites` 会将具名测试套件作为独立条目返回。`includeLocation` 会加入源码位置。
+
+每个条目都包含 `testPath` 和 `project`。隐式默认项目的条目使用 `config.name`（默认为 `'rstest'`）。测试声明条目包含自身的 `name`、带测试套件前缀的 `fullName`，以及表示层级的 `parentNames`；文件条目不包含 `name` 和 `fullName`。标记为 `skip` 或 `todo` 的声明也会返回，`runMode` 分别为 `skip` 或 `todo`；可运行声明不提供 `runMode`。
+
+条目按深度优先的声明顺序返回。测试套件紧邻其后代之前，同一文件的所有条目保持连续。
+
+收集失败时，`rstest.listTests()` 返回的 Promise 会被拒绝，而不是返回部分列表或空列表。
+
+`rstest.listTests()` 会忽略 `shard` 并始终列出所有文件；`rstest list --shard` 则只列出选定分片。
+
+### ListOptions
+
+- **类型：**
+
+```ts
+interface ListOptions {
+  filesOnly?: boolean;
+  includeSuites?: boolean;
+  includeLocation?: boolean;
+}
+
+interface ListedTest {
+  testPath: string; // 测试文件路径。
+  name?: string; // 声明自身的名称；文件条目不包含此字段。
+  fullName?: string; // 带测试套件前缀的显示名称；文件条目不包含此字段。
+  parentNames?: string[]; // 外层测试套件的名称。
+  project: string; // 项目名称。
+  location?: TestLocation; // 请求后提供的源码位置。
+  runMode?: 'skip' | 'todo'; // 不可运行声明的 skip 或 todo 模式。
+  type: 'file' | 'suite' | 'case'; // 条目类型。
+}
+
+interface RstestInstance {
+  listTests(options?: ListOptions & RunOptions): Promise<ListedTest[]>;
+}
+```
+
+## rstest.mergeReports
+
+`rstest.mergeReports()` 用于合并 blob 报告，并返回与 `rstest.run()` 相同的结果模型。
+
+### 示例
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest();
+
+const result = await rstest.mergeReports({
+  path: './.rstest-reports',
+  cleanup: true,
+});
+
+console.log(result.status);
+```
+
+`path` 用于选择 blob 报告目录。`cleanup` 会在合并成功后删除已消费的报告。
+
+### MergeReportsOptions
+
+- **类型：**
+
+```ts
+interface MergeReportsOptions {
+  path?: string;
+  cleanup?: boolean;
+}
+
+interface RstestInstance {
+  mergeReports(options?: MergeReportsOptions): Promise<TestRunResult>;
+}
+```
+
+## runCLI
+
+`runCLI` 会在当前进程中运行 Rstest 命令行。它会解析 `argv`、设置 `process.exitCode`，并安装 CLI 的 signal handlers。需要 CLI 的进程行为时，请使用 `runCLI`；实例方法不会设置 `process.exitCode` 或安装 signal handlers。
+
+### 示例
+
+```ts
+import { runCLI } from '@rstest/core/api';
+
+runCLI({
+  argv: ['run', 'src/foo.test.ts', '--update'],
+});
+```
+
+`argv` 包含在命令行中写在 `rstest` 之后的命令、过滤条件和选项。默认值为 `process.argv.slice(2)`。
+
+所有可用的命令和选项，请参阅 [CLI 文档](/guide/basic/cli)。
+
+### RunCLIOptions
+
+- **类型：**
+
+```ts
+interface RunCLIOptions {
+  argv?: string[];
+}
+
+function runCLI(options?: RunCLIOptions): void;
+```
