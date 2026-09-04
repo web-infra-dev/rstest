@@ -425,7 +425,6 @@ export async function runTests(context: Rstest): Promise<void> {
   // a browser rerun waits instead of interleaving on the shared `stateManager`.
   // ===================================================================
   const enableCliShortcuts = isCliShortcutsEnabled(context);
-  let browserGlobalSetupFiles: string[] = [];
   // Constructed (not launched) below so its invalidation subscriber, the shared
   // teardown, and the stdin owner — all three closing over it — are in place
   // before either side's first cycle. Loading it can exit on a version mismatch,
@@ -445,7 +444,6 @@ export async function runTests(context: Rstest): Promise<void> {
       activeTraceRun = traceRun;
     },
     enableCliShortcuts,
-    getSetupFiles: () => browserGlobalSetupFiles,
     // The node side always keeps the session open; a browser-only mixed watch
     // has nothing left when the host's launch opened no session.
     isSessionLive: () =>
@@ -600,7 +598,7 @@ export async function runTests(context: Rstest): Promise<void> {
         return;
       }
       browserWatchEnv = stage.env;
-      browserGlobalSetupFiles = stage.setupFiles ?? [];
+      watchDriver.setSetupFiles(browserExecutor, stage.setupFiles ?? []);
     }
 
     if (nodeExecutorToRun) {

@@ -84,6 +84,8 @@ export type WatchCycleOptions = {
  */
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
+  /** Register setup paths that are not part of an executor's cycle outcome. */
+  setSetupFiles(executor: TestExecutor, setupFiles: string[]): void;
   /**
    * Whether every one of `executors` has settled its first cycle of this
    * session. Shortcuts are installed before the first one so the ready banner
@@ -173,7 +175,6 @@ export function createWatchCycleDriver({
   getTraceRun,
   setTraceRun,
   enableCliShortcuts,
-  getSetupFiles = () => [],
   isSessionLive,
   isSessionClosing,
 }: {
@@ -183,8 +184,6 @@ export function createWatchCycleDriver({
   getTraceRun: () => TraceRun;
   setTraceRun: (traceRun: TraceRun) => void;
   enableCliShortcuts: boolean;
-  /** Materialized global-setup paths from the current browser stage. */
-  getSetupFiles?: () => string[];
   /**
    * Whether the run still has a session that could answer the ready banner. A
    * browser launch that found no test files (or failed before its runtime came
@@ -229,6 +228,7 @@ export function createWatchCycleDriver({
   // cycle across every executor, so anything dispatched earlier has already
   // reached its `finally` by the time the next one asks.
   const settled = new Set<TestExecutor>();
+  const setupFilesByExecutor = new Map<TestExecutor, string[]>();
 
   const runOne = async (
     executor: TestExecutor,
@@ -267,7 +267,7 @@ export function createWatchCycleDriver({
         isWatchMode: true,
         coverageProvider,
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
-        setupFiles: getSetupFiles(),
+        setupFiles: setupFilesByExecutor.get(executor),
         traceRun: getTraceRun(),
       });
       context.exitCode.finishCycle();
@@ -287,6 +287,9 @@ export function createWatchCycleDriver({
   };
 
   return {
+    setSetupFiles(executor, setupFiles) {
+      setupFilesByExecutor.set(executor, setupFiles);
+    },
     runCycle(executor, options = {}) {
       const resolved = {
         ...options,
