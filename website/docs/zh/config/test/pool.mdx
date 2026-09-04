@@ -70,7 +70,7 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 [`isolate`](/config/test/isolate) 选项对 `vmThreads` 不生效。为了保持配置兼容性，Rstest 会接受 `isolate: false`，但每个文件仍会获得新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。
 
-VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js 而从 worker realm 复制进来的 global（例如 `Buffer`）使用共享的 constructor，直接修改这些 constructor 可能跨文件保留；`ArrayBuffer` 和 `Uint8Array` 等 VM 原生 global 则会随每个文件重新创建。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
+VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js 而从 worker realm 复制进来的 global（例如 `Buffer`）使用共享的 constructor，直接修改这些 constructor 可能跨文件保留；`ArrayBuffer` 和 `Uint8Array` 等 VM 原生 global 则会随每个文件重新创建。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。在 `happy-dom` 环境中，DOM 实现对象由 `happy-dom` 自身的 provider realm 创建；不要假设所有 DOM 值都能通过 VM intrinsic 的 `Object` 或 `Array` 的 `instanceof` 检查，应使用环境提供的 DOM constructor。
 
 每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
 

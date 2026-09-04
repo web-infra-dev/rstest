@@ -58,6 +58,11 @@ const disableVmCompilationCache = (): void => {
   vmCompilationCacheDisabled = true;
 };
 
+export const isBlockedProcessKillTarget = (
+  pid: number,
+  currentPid: number,
+): boolean => pid === 0 || pid === -1 || Math.abs(pid) === currentPid;
+
 // Threads-pool workers all share `process.pid` with the host, and each
 // worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
 // restarts at 1 inside every thread. Without a synthetic pid the merged
@@ -988,7 +993,10 @@ export const runInPool = async (
 
   const kill = process.kill.bind(process);
   process.kill = (pid: number, signal?: NodeJS.Signals) => {
-    if (pid === -1 || Math.abs(pid) === process.pid) {
+    // On POSIX, pid 0 targets the current process group. A VM test must not
+    // be able to signal the host shell or sibling workers through this shared
+    // worker-thread process.
+    if (isBlockedProcessKillTarget(pid, process.pid)) {
       throw new Error(
         `process.kill unexpectedly called with "${pid}" and "${signal}"`,
       );

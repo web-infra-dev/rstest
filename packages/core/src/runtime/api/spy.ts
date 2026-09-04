@@ -58,6 +58,41 @@ export const initSpy = (
     return promise as PromiseConstructor;
   };
 
+  const getRealmArray = (): ArrayConstructor => {
+    const array = getRuntimeGlobal().Array;
+    if (typeof array !== 'function') {
+      throw new TypeError('The runtime global does not provide Array.');
+    }
+    return array as ArrayConstructor;
+  };
+
+  const getRealmObject = (): ObjectConstructor => {
+    const object = getRuntimeGlobal().Object;
+    if (typeof object !== 'function') {
+      throw new TypeError('The runtime global does not provide Object.');
+    }
+    return object as ObjectConstructor;
+  };
+
+  const toRealmArray = <T>(values: readonly T[]): T[] => {
+    const array = getRealmArray();
+    return array === Array ? (values as T[]) : array.from(values);
+  };
+
+  const toRealmCall = <T extends readonly unknown[]>(call: T): T =>
+    toRealmArray(call) as unknown as T;
+
+  const toRealmResult = <T>(
+    type: 'return' | 'throw' | 'fulfilled' | 'rejected',
+    value: T,
+  ): { type: typeof type; value: T } => {
+    const object = getRealmObject();
+    if (object === Object) {
+      return { type, value };
+    }
+    return object.assign(new object(), { type, value });
+  };
+
   const projectMocks = (): Set<WeakRef<MockInstance>> => {
     const key = getProjectKey();
     const set = mocksByProject.get(key) ?? new Set<WeakRef<MockInstance>>();
@@ -346,35 +381,46 @@ export const initSpy = (
     Object.defineProperty(spyFn, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
-          return spyState.calls;
+          return toRealmArray(
+            spyState.calls.map((call) => toRealmCall(call)),
+          ) as MockContext<T>['calls'];
         },
         get lastCall() {
-          return spyState.calls[spyState.callCount - 1];
+          const lastCall = spyState.calls[spyState.callCount - 1];
+          return lastCall
+            ? (toRealmCall(lastCall) as MockContext<T>['lastCall'])
+            : undefined;
         },
         get instances() {
-          return mockState.instances;
+          return toRealmArray(mockState.instances);
         },
         get contexts() {
-          return mockState.contexts;
+          return toRealmArray(mockState.contexts);
         },
         get invocationCallOrder() {
-          return mockState.invocationCallOrder;
+          return toRealmArray(mockState.invocationCallOrder);
         },
         get results() {
-          return spyState.results.map(([resultType, value]) => {
-            const type =
-              resultType === 'error' ? ('throw' as const) : ('return' as const);
-            return { type: type, value };
-          });
+          return toRealmArray(
+            spyState.results.map(([resultType, value]) => {
+              const type =
+                resultType === 'error'
+                  ? ('throw' as const)
+                  : ('return' as const);
+              return toRealmResult(type, value);
+            }),
+          ) as MockContext<T>['results'];
         },
         get settledResults() {
-          return spyState.resolves.map(([resultType, value]) => {
-            const type =
-              resultType === 'error'
-                ? ('rejected' as const)
-                : ('fulfilled' as const);
-            return { type, value };
-          });
+          return toRealmArray(
+            spyState.resolves.map(([resultType, value]) => {
+              const type =
+                resultType === 'error'
+                  ? ('rejected' as const)
+                  : ('fulfilled' as const);
+              return toRealmResult(type, value);
+            }),
+          ) as MockContext<T>['settledResults'];
         },
       }),
     });

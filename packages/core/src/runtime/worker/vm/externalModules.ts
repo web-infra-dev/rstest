@@ -708,7 +708,10 @@ class VmExternalModules {
       resolvedId,
       defaultExport,
       this.context,
-      { value: exports },
+      // Node added the `module.exports` namespace marker together with the
+      // synchronous require(esm) VM graph API. Do not expose it on older
+      // supported Node versions, where native CJS namespaces do not have it.
+      supportsSyncEsmEvaluate ? { value: exports } : undefined,
     );
   }
 

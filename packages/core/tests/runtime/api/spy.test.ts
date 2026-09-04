@@ -49,6 +49,46 @@ describe('initSpy fn()', () => {
     await expect(rejected).rejects.toBe('error');
   });
 
+  it('exposes mock state collections in the supplied VM realm', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const mock = fn((value: string) => value);
+    mock('value');
+
+    const check = (
+      runInNewContext(
+        `(mock) => ({
+        calls: mock.mock.calls instanceof Array,
+        call: mock.mock.calls[0] instanceof Array,
+        instances: mock.mock.instances instanceof Array,
+        contexts: mock.mock.contexts instanceof Array,
+        invocationCallOrder: mock.mock.invocationCallOrder instanceof Array,
+        results: mock.mock.results instanceof Array,
+        result: mock.mock.results[0] instanceof Object,
+        settledResults: mock.mock.settledResults instanceof Array,
+      })`,
+        context,
+      ) as (mockValue: unknown) => Record<string, boolean>
+    )(mock);
+
+    expect(check).toEqual({
+      calls: true,
+      call: true,
+      instances: true,
+      contexts: true,
+      invocationCallOrder: true,
+      results: true,
+      result: true,
+      settledResults: true,
+    });
+  });
+
   it('installs and reuses the VM-realm spy for a spied method', () => {
     const context = runInNewContext('globalThis', {}) as Record<
       string,

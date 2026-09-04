@@ -341,6 +341,24 @@ describe('loadEsModule', () => {
     expect(mod.default).toBe('reexported');
   });
 
+  it('matches the Node-version-specific CommonJS namespace marker', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/plain-default.cjs',
+    );
+
+    const namespace = (await executor.import(
+      externalPath,
+      true,
+      false,
+    )) as Record<string, unknown>;
+
+    expect('module.exports' in namespace).toBe(
+      'hasAsyncGraph' in vm.SourceTextModule.prototype,
+    );
+  });
+
   it('should reject named imports that the CommonJS lexer cannot detect', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath(
