@@ -1,4 +1,5 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import { exitReporters } from '../reporter';
 import type { TestExecutor } from '../types';
 import type { CoverageProvider } from '../types/coverage';
 import {
@@ -599,8 +600,12 @@ export function createWatchTeardown({
         await step('trace run finalize', () => getTraceRun().finalize());
         await step('trace controller cleanup', () => traceController.close());
       } finally {
-        for (const cleanup of cleanups.splice(0)) {
-          cleanup();
+        try {
+          for (const cleanup of cleanups.splice(0)) {
+            cleanup();
+          }
+        } finally {
+          await exitReporters(context);
         }
       }
     }

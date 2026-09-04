@@ -70,9 +70,13 @@ interface Reporter {
   onTestCaseResult?(result: TestResult): void;
   onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
   onUserConsoleLog?(log: UserConsoleLog): void;
-  onExit?(): void;
+  onExit?(): MaybePromise<void>;
 }
 ```
+
+<ApiMeta addedVersion="0.12.0" />
+
+从 v0.12.0 开始，除了 CLI 异常退出，Rstest 还会在 reporter 所属 context 释放时调用 `onExit`，包括 run、list 或 merge 正常结束、watch close 和启动失败。list context 目前不会 attach reporter，因此没有可调用的 reporter Hook。可以用 `onExit` 释放 stream、renderer 等资源。Hook 抛出的错误不会覆盖操作本身的结果或错误。
 
 <ApiMeta addedVersion="0.11.1" />
 

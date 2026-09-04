@@ -205,7 +205,9 @@ const collectNodeTests = async ({
   };
 
   try {
-    await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath);
+    await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath, {
+      confirm: context.packageInstallerConfirm,
+    });
     testEnvironmentModules = await prepareTestEnvironmentModules({
       projects: nodeProjects,
       rootPath: context.rootPath,

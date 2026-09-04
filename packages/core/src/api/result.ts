@@ -135,7 +135,6 @@ export type ResultReporter = {
   reporter: Reporter;
   nextResult(): Promise<TestRunResult>;
   errorResult(error: unknown): TestRunResult;
-  dispose(): void;
 };
 
 export function createResultReporter(
@@ -184,6 +183,12 @@ export function createResultReporter(
           coverage,
         };
       },
+      onExit() {
+        captured = undefined;
+        cycleFiles = [];
+        resolveResult = undefined;
+        removeCycleEndListener();
+      },
     },
     nextResult: () =>
       new Promise<TestRunResult>((resolve) => {
@@ -198,12 +203,6 @@ export function createResultReporter(
       };
       failedCycle.unhandledErrors.unshift(toSerializedError(error));
       return createResult(context, failedCycle);
-    },
-    dispose() {
-      captured = undefined;
-      cycleFiles = [];
-      resolveResult = undefined;
-      removeCycleEndListener();
     },
   };
 }
