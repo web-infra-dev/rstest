@@ -67,6 +67,24 @@ describe('WorkerCache', () => {
     expect(cache.assetFiles.get('b')).toBe('bbbb');
   });
 
+  it('stores missing source maps returned by the host as an empty sentinel', async () => {
+    const cache = createWorkerAssetCache(new WorkerCache(256));
+    const getAssetsByEntry = rs.fn(async () => ({
+      assetFiles: {},
+      // The host can return null for an asset without a source map at the IPC boundary.
+      sourceMaps: { 'manifest.json': null },
+    })) as unknown as Parameters<typeof loadCachedAssets>[2];
+
+    const assets = await loadCachedAssets(
+      ['manifest.json'],
+      cache,
+      getAssetsByEntry,
+    );
+
+    expect(assets.sourceMaps).toEqual({});
+    expect(cache.sourceMaps.get('manifest.json')).toBe('');
+  });
+
   it('shares one byte budget across cache namespaces', () => {
     const workerCache = new WorkerCache(150);
     const assets = createWorkerAssetCache(workerCache).assetFiles;

@@ -59,32 +59,48 @@ export const createVmTimersPromisesLoader = (
     return error;
   };
 
-  const isOptions = (
+  const isOptionsObject = (
     value: unknown,
   ): value is {
     ref?: boolean;
     signal?: AbortSignal;
-  } =>
-    typeof value === 'object' &&
-    value !== null &&
-    ('ref' in value || 'signal' in value);
+  } => typeof value === 'object' && value !== null;
+
+  const getOptionsIndex = (name: PropertyKey): number | undefined => {
+    if (name === 'setTimeout') {
+      return 2;
+    }
+    if (name === 'setImmediate' || name === 'wait') {
+      return 1;
+    }
+    return undefined;
+  };
 
   const createPromiseTimer = (
     method: (...args: unknown[]) => Promise<unknown>,
     target: Record<PropertyKey, unknown>,
     args: unknown[],
+    optionsIndex: number | undefined,
   ): unknown => {
     const PromiseConstructor = runtimeGlobal.Promise as PromiseConstructor;
-    const lastArg = args.at(-1);
-    const externalOptions = isOptions(lastArg) ? lastArg : undefined;
+    const hasOptionsArgument =
+      optionsIndex !== undefined && args.length > optionsIndex;
+    const externalOptions =
+      hasOptionsArgument && isOptionsObject(args[optionsIndex])
+        ? args[optionsIndex]
+        : undefined;
     const controller = new AbortController();
-    const options = {
-      ...externalOptions,
-      signal: controller.signal,
-    };
-    const nativeArgs = externalOptions
-      ? [...args.slice(0, -1), options]
-      : [...args, options];
+    const nativeArgs = [...args];
+    if (optionsIndex !== undefined) {
+      if (!hasOptionsArgument) {
+        nativeArgs[optionsIndex] = { signal: controller.signal };
+      } else if (externalOptions) {
+        nativeArgs[optionsIndex] = {
+          ...externalOptions,
+          signal: controller.signal,
+        };
+      }
+    }
 
     let settled = false;
     let removeSignalListener: (() => void) | undefined;
@@ -152,6 +168,7 @@ export const createVmTimersPromisesLoader = (
           method as (...args: unknown[]) => Promise<unknown>,
           target,
           args,
+          getOptionsIndex(name),
         );
       methods.set(name, wrapped);
       return wrapped;

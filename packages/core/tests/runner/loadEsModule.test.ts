@@ -215,6 +215,31 @@ describe('loadEsModule', () => {
     expect(resolved).toBe(false);
   });
 
+  it('should distinguish timer values from options', async () => {
+    const vmContext = vm.createContext({
+      clearImmediate,
+      clearTimeout,
+      setImmediate,
+      setTimeout,
+    });
+    const executor = getVmExternalModules(vmContext);
+    const timers = executor.require('node:timers/promises', __filename) as {
+      setImmediate: (value: object) => Promise<object>;
+      setTimeout: (delay: number, value: object) => Promise<object>;
+    };
+    const timeoutValue = { signal: 'value' };
+    const immediateValue = { ref: 'value' };
+
+    await expect(timers.setTimeout(0, timeoutValue)).resolves.toBe(
+      timeoutValue,
+    );
+    await expect(timers.setImmediate(immediateValue)).resolves.toBe(
+      immediateValue,
+    );
+
+    executor.dispose();
+  });
+
   it('should expose Node CommonJS module relationships inside the VM', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath('vm-external/module-semantics/parent.cjs');

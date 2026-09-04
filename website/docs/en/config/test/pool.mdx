@@ -65,7 +65,7 @@ Each test file runs in a Node.js worker thread spawned via `node:worker_threads`
 
 ### vmThreads
 
-<ApiMeta addedVersion="0.11.11" />
+<ApiMeta addedVersion="0.12.0" />
 
 `vmThreads` reuses Node.js worker threads while creating a fresh `vm.Context` for every test file. This keeps file-level JavaScript globals, DOM objects, and the bundled module graph isolated without paying for a new worker thread for every file. It is intended for DOM-heavy suites where environment setup is expensive but worker startup is also measurable.
 
@@ -134,7 +134,7 @@ Common values:
 
 ### `pool.memoryLimit`
 
-<ApiMeta addedVersion="0.11.11" />
+<ApiMeta addedVersion="0.12.0" />
 
 Sets the V8 heap threshold for recycling a `vmThreads` worker. After a test file finishes, Rstest reads the worker's `heapUsed`; if it reaches the threshold, the worker is recycled before another file is assigned to it. This is a worker-recycling threshold, not a hard process RSS or OOM limit.
 

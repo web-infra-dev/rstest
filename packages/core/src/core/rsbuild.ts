@@ -673,12 +673,19 @@ export const createRsbuildServer = async ({
           );
         },
         getSourceMaps: async (names: string[]) => {
-          return Object.fromEntries(
+          const entries: (readonly [string, string] | undefined)[] =
             await Promise.all(
               names.map(async (name) => {
                 const content = await getSourceMap(name);
-                return [name, content];
+                return content === null
+                  ? undefined
+                  : ([name, content] as const);
               }),
+            );
+          return Object.fromEntries(
+            entries.filter(
+              (entry): entry is readonly [string, string] =>
+                entry !== undefined,
             ),
           );
         },

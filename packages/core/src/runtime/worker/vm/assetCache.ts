@@ -21,16 +21,19 @@ const getContentSize = (content: AssetFileContent): number => {
   return content.byteLength;
 };
 
+const getSourceMapSize = (content: string): number =>
+  Buffer.byteLength(content);
+
 export type WorkerAssetCache = {
   assetFiles: WorkerCacheNamespace<AssetFileContent>;
-  sourceMaps: WorkerCacheNamespace<AssetFileContent>;
+  sourceMaps: WorkerCacheNamespace<string>;
 };
 
 export const createWorkerAssetCache = (
   cache: WorkerCache,
 ): WorkerAssetCache => ({
   assetFiles: cache.namespace('asset', getContentSize),
-  sourceMaps: cache.namespace('source-map', getContentSize),
+  sourceMaps: cache.namespace('source-map', getSourceMapSize),
 });
 
 export const workerAssetCache: WorkerAssetCache =
@@ -71,7 +74,11 @@ export const loadCachedAssets = async (
       : { assetFiles: {}, sourceMaps: {} };
 
   Object.assign(assetFiles, fetched.assetFiles);
-  Object.assign(sourceMaps, fetched.sourceMaps);
+  for (const [name, content] of Object.entries(fetched.sourceMaps)) {
+    if (typeof content === 'string' && content) {
+      sourceMaps[name] = content;
+    }
+  }
 
   // Populate the LRU only after the task's complete asset set is retained in
   // the return value. An insertion may evict an earlier hit when one task is
@@ -80,7 +87,7 @@ export const loadCachedAssets = async (
     cache.assetFiles.set(name, content);
   }
   for (const [name, content] of Object.entries(fetched.sourceMaps)) {
-    cache.sourceMaps.set(name, content);
+    cache.sourceMaps.set(name, typeof content === 'string' ? content : '');
   }
   for (const name of missingSourceMapNames) {
     if (!(name in fetched.sourceMaps)) {
