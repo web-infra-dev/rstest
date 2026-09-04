@@ -9,6 +9,8 @@ import {
 import { createExitCode } from '../../src/core/exitCode';
 import { mergeReports } from '../../src/core/mergeReports';
 import { prepareRsbuild } from '../../src/core/rsbuild';
+import { generateCoverage } from '../../src/coverage/generate';
+import { parseBlobFile } from '../../src/reporter/blob';
 import type { Rstest } from '../../src/core/rstest';
 
 rs.mock('../../src/coverage', () => ({
@@ -23,14 +25,19 @@ rs.mock('../../src/core/rsbuild', () => ({
   })),
 }));
 
+rs.mock('../../src/coverage/generate', () => ({
+  generateCoverage: rs.fn(async () => {}),
+}));
+
 rs.mock('../../src/reporter/blob', () => ({
   blobFileKey: rs.fn(),
   blobFileKeyProject: rs.fn(),
   isBlobFile: () => true,
-  parseBlobFile: () => ({
+  parseBlobFile: rs.fn(() => ({
     duration: { buildTime: 0, testTime: 0, totalTime: 0 },
     files: {},
     results: [],
+    projects: ['old-project'],
     snapshotSummary: {
       added: 0,
       didUpdate: false,
@@ -48,7 +55,7 @@ rs.mock('../../src/reporter/blob', () => ({
       updated: 0,
     },
     testResults: [],
-  }),
+  })),
 }));
 
 const ensureCoverageProviderInstalledSpy = rs.mocked(
@@ -57,6 +64,8 @@ const ensureCoverageProviderInstalledSpy = rs.mocked(
 const prepareRsbuildSpy = rs.mocked(prepareRsbuild);
 const cleanCoverageReportsSpy = rs.mocked(cleanCoverageReports);
 const createCoverageProviderSpy = rs.mocked(createCoverageProvider);
+const generateCoverageSpy = rs.mocked(generateCoverage);
+const parseBlobFileSpy = rs.mocked(parseBlobFile);
 
 describe('mergeReports', () => {
   let rootPath: string;
@@ -69,6 +78,8 @@ describe('mergeReports', () => {
     prepareRsbuildSpy.mockClear();
     cleanCoverageReportsSpy.mockClear();
     createCoverageProviderSpy.mockClear();
+    generateCoverageSpy.mockClear();
+    parseBlobFileSpy.mockClear();
   });
 
   afterEach(() => {
@@ -96,5 +107,35 @@ describe('mergeReports', () => {
     expect(
       ensureCoverageProviderInstalledSpy.mock.invocationCallOrder[0],
     ).toBeLessThan(prepareRsbuildSpy.mock.invocationCallOrder[0]!);
+  });
+
+  it('lets coverage generation fall back when blob project names changed', async () => {
+    createCoverageProviderSpy.mockResolvedValue({
+      createCoverageMap: () => ({
+        merge() {},
+      }),
+    } as never);
+
+    const currentProject = { name: 'renamed-project' };
+    const context = {
+      normalizedConfig: {
+        coverage: { enabled: true, include: ['src/**'] },
+      },
+      projects: [currentProject],
+      reporters: [],
+      rootPath,
+      exitCode: createExitCode(),
+    } as unknown as Rstest;
+
+    await mergeReports(context);
+
+    expect(generateCoverageSpy).toHaveBeenCalledWith(
+      context,
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      undefined,
+      undefined,
+    );
   });
 });

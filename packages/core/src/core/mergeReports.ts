@@ -399,9 +399,10 @@ export async function mergeReports(
         (blob) => blob.projects ?? blob.results.map((result) => result.project),
       ),
     );
-    const projects = projectNames.size
-      ? context.projects.filter((project) => projectNames.has(project.name))
-      : undefined;
+    const matchedProjects = context.projects.filter((project) =>
+      projectNames.has(project.name),
+    );
+    const projects = matchedProjects.length ? matchedProjects : undefined;
     await generateCoverage(
       context,
       mergedCoverageMap,
