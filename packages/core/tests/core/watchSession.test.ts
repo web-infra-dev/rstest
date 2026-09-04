@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { describe, expect, it } from '@rstest/core';
+import { afterAll, beforeAll, describe, expect, it, rs } from '@rstest/core';
 import { isCliShortcutsEnabled } from '../../src/core/cliShortcuts';
 import { Rstest } from '../../src/core/rstest';
 import {
@@ -17,6 +17,14 @@ import type { TraceController, TraceRun } from '../../src/utils';
 import { FATAL_SIGNALS } from '../../src/utils/signals';
 
 const rootPath = join(__dirname, 'fixtures/watch-session');
+
+beforeAll(() => {
+  rs.spyOn(console, 'log').mockImplementation(() => {});
+});
+
+afterAll(() => {
+  rs.restoreAllMocks();
+});
 
 const emptyOutcome = (): ExecutorCycleOutcome => ({
   results: [],
