@@ -17,7 +17,7 @@ const tryResolve = (request: string, rootPath: string) => {
 };
 
 const JAVASCRIPT_DATA_URL_RE =
-  /^data:(?:text|application)\/javascript(?:;charset=utf-8)?;base64,(.+)$/;
+  /^data:(?:text|application)\/javascript(?:;charset=utf-8)?;base64,(.*)$/;
 
 /**
  * Flatten one or more `{ [env]: { [entry]: path } }` setup maps into a flat

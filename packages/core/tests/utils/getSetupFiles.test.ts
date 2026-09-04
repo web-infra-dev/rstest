@@ -21,4 +21,13 @@ describe('getSetupFiles', () => {
       'console.log("setup");',
     ]);
   });
+
+  it('materializes empty JavaScript data URLs as virtual setup modules', () => {
+    const result = materializeVirtualSetupFiles(
+      getSetupFiles(['data:text/javascript;base64,'], '/project'),
+      '/project',
+    );
+
+    expect(Object.values(result.virtualModules)).toEqual(['']);
+  });
 });
