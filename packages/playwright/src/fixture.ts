@@ -28,7 +28,6 @@ import {
   describe as rstestDescribe,
   expect as rstestExpect,
   registerWorkerCleanup,
-  rs,
   test as base,
 } from '@rstest/core';
 import type {
@@ -53,6 +52,7 @@ import type {
   LaunchOptions,
   Page,
 } from 'playwright';
+import { getPlaywrightConfig } from './config';
 
 export type PlaywrightBrowserName = 'chromium';
 
@@ -827,11 +827,13 @@ const defaultPlaywrightFixture = async (
   _context: TestContext,
   use: (options: PlaywrightOptions) => Promise<void>,
 ) => {
-  const configuredPlaywright = rs.getConfig().playwright as
-    PlaywrightOptions | undefined;
+  const configuredPlaywright = getPlaywrightConfig();
+  const options = configuredPlaywright
+    ? structuredClone(configuredPlaywright)
+    : undefined;
   await use({
-    ...configuredPlaywright,
-    browserName: configuredPlaywright?.browserName ?? DEFAULT_BROWSER_NAME,
+    ...options,
+    browserName: options?.browserName ?? DEFAULT_BROWSER_NAME,
   });
 };
 

@@ -48,11 +48,6 @@ const ignoredKeyWarnings: Partial<
     isNonDefault: (config) => config.logHeapUsage === true,
     message: () => 'Ignoring logHeapUsage in browser mode.',
   },
-  playwright: {
-    isNonDefault: (config) => config.playwright !== undefined,
-    message: () =>
-      'Ignoring playwright config in browser mode: @rstest/playwright runs in Node mode.',
-  },
 };
 
 /**

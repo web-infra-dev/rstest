@@ -158,6 +158,7 @@ export async function runBrowserGlobalSetupStage(
           globTestSourceEntries: emptyEntries,
           setupFiles: setupFileState.setupFiles,
           globalSetupFiles: setupFileState.globalSetupFiles,
+          virtualModules: setupFileState.virtualModules,
           context,
           isWatch: false,
         }),

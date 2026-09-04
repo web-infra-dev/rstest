@@ -591,38 +591,6 @@ describe('mergeRstestConfig', () => {
     expect(launch.logger).toBeInstanceOf(Logger);
     expect(launch.logger.log()).toBe('logged');
   });
-
-  it('should deep-merge project playwright options without chaining opaque values', () => {
-    const baseLogger = () => {};
-    const overrideLogger = () => {};
-    const merged = mergeRstestConfig(
-      {
-        playwright: {
-          launchOptions: {
-            args: ['--no-sandbox'],
-            logger: { log: baseLogger },
-          },
-        },
-      },
-      {
-        playwright: {
-          launchOptions: {
-            args: ['--headless=new'],
-            logger: { log: overrideLogger },
-          },
-          contextOptions: { locale: 'en-US' },
-        },
-      },
-    );
-
-    expect(merged.playwright).toEqual({
-      launchOptions: {
-        args: ['--headless=new'],
-        logger: { log: overrideLogger },
-      },
-      contextOptions: { locale: 'en-US' },
-    });
-  });
 });
 
 describe('withDefaultConfig browser normalization', () => {

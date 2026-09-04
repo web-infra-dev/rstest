@@ -196,6 +196,43 @@ describe('prepareRsbuild', () => {
     ]);
   });
 
+  it('should exclude materialized virtual setup files from coverage', () => {
+    const setupFile =
+      'data:text/javascript;base64,Y29uc29sZS5sb2coInNldHVwIik7';
+    const setupFileState = createSetupFileState();
+    setupFileState.refresh({
+      setupProjects: [
+        {
+          rootPath: '/project',
+          environmentName: 'test',
+          normalizedConfig: {
+            setupFiles: [setupFile],
+            globalSetup: [],
+          },
+        } as unknown as RstestContext['projects'][number],
+      ],
+      globalSetupProjects: [],
+    });
+    const coverage = {
+      enabled: true,
+      exclude: [],
+      provider: 'istanbul',
+      reporters: [],
+      reportsDirectory: 'coverage',
+      clean: true,
+      reportOnFailure: false,
+      allowExternal: false,
+    } satisfies RstestContext['normalizedConfig']['coverage'];
+
+    syncCoverageSetupExcludes(coverage, setupFileState.getSetupPaths());
+
+    const [materializedPath] = setupFileState.getSetupPaths();
+    expect(materializedPath).toMatch(
+      /^\/project\/.rstest-virtual\/virtual~setup~.+\.mjs$/,
+    );
+    expect(coverage.exclude).toEqual([materializedPath]);
+  });
+
   it('should list browser shard entries after node modifyRstestConfig hooks', async () => {
     await withTempDir('rstest-list-shard-', async (tempRoot) => {
       for (const file of [

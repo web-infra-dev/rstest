@@ -41,12 +41,19 @@ const writeNodeImportablePlaywrightSource = async (root: string) => {
     join(__dirname, '../src/expect.ts'),
     'utf-8',
   );
+  const configSource = await readFile(
+    join(__dirname, '../src/config.ts'),
+    'utf-8',
+  );
 
   await writeFile(
     join(root, 'fixture.ts'),
-    source.replace("from './expect';", "from './expect.ts';"),
+    source
+      .replace("from './expect';", "from './expect.ts';")
+      .replace("from './config';", "from './config.ts';"),
   );
   await writeFile(join(root, 'expect.ts'), expectSource);
+  await writeFile(join(root, 'config.ts'), configSource);
 };
 
 const supportsIpv6Loopback = async () => {

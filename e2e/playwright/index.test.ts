@@ -43,7 +43,12 @@ describe('@rstest/playwright', () => {
   it('only resolves directly destructured test.for fixtures', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'for-fixtures.test.ts'],
+      args: [
+        'run',
+        '--pool.maxWorkers=1',
+        'for-fixtures.test.ts',
+        'config-second.test.ts',
+      ],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -54,6 +59,7 @@ describe('@rstest/playwright', () => {
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_SECOND_FILE_OK');
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
   });
 

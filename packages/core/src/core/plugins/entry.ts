@@ -1,4 +1,4 @@
-import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import { rspack, type RsbuildPlugin, type Rspack } from '@rsbuild/core';
 import path from 'pathe';
 import type { RstestContext } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
@@ -33,6 +33,7 @@ export const pluginEntryWatch: (params: {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  virtualModules: Record<string, Record<string, string>>;
   testEntryPathState?: TestEntryPathState;
   isWatch: boolean;
   configFilePath?: string;
@@ -41,6 +42,7 @@ export const pluginEntryWatch: (params: {
   globTestSourceEntries,
   setupFiles,
   globalSetupFiles,
+  virtualModules,
   context,
   testEntryPathState,
 }) => ({
@@ -59,6 +61,18 @@ export const pluginEntryWatch: (params: {
     };
 
     api.modifyRspackConfig(async (config, { environment }) => {
+      const environmentVirtualModules = virtualModules[environment.name];
+      if (
+        environmentVirtualModules &&
+        Object.keys(environmentVirtualModules).length
+      ) {
+        config.plugins.push(
+          new rspack.experiments.VirtualModulesPlugin(
+            environmentVirtualModules,
+          ),
+        );
+      }
+
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {

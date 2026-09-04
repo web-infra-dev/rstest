@@ -81,10 +81,6 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     ],
   },
   {
-    name: 'integration',
-    items: ['playwright'],
-  },
-  {
     name: 'snapshot',
     items: ['update', 'snapshotFormat', 'resolveSnapshotPath'],
   },

@@ -157,10 +157,9 @@ export const resolveExtends = async (
  * Deep-merge plain data: recurse into plain objects, replace everything else
  * (arrays, functions, class instances) with the later value.
  *
- * For opaque provider payloads such as `browser.providerOptions` and
- * `playwright` — values must NOT use `mergeRsbuildConfig`, whose
- * function-chaining / array-concat would corrupt callable options
- * (`launch.logger.log`) or append `launch.args`.
+ * For `browser.providerOptions` — an opaque provider payload that must NOT use
+ * `mergeRsbuildConfig`, whose function-chaining / array-concat would corrupt
+ * callable options (`launch.logger.log`) or append `launch.args`.
  */
 export const plainDeepMerge = <T>(base: T, override: T): T =>
   deepmerge(base ?? {}, override ?? {}, {
@@ -179,9 +178,8 @@ export const mergeProjectConfig = (
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
-    const { playwright, ...configWithoutPlaywright } = config;
     const merged = mergeRsbuildConfig(result, {
-      ...configWithoutPlaywright,
+      ...config,
       // Plain-merged below instead of via mergeRsbuildConfig; see plainDeepMerge.
       browser: undefined,
       exclude: Array.isArray(config.exclude)
@@ -201,10 +199,6 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     if (config.browser) {
       // An absent base resolves to `override`, so undefined result.browser is fine.
       merged.browser = plainDeepMerge(result.browser, config.browser);
-    }
-
-    if (playwright) {
-      merged.playwright = plainDeepMerge(result.playwright, playwright);
     }
 
     // The following configurations need overrides

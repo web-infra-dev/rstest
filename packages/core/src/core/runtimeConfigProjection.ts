@@ -77,7 +77,6 @@ export function projectRuntimeConfig(
     chaiConfig,
     includeTaskLocation,
     silent,
-    playwright,
   } = project.normalizedConfig;
 
   const shared = {
@@ -137,7 +136,6 @@ export function projectRuntimeConfig(
     coverage: { ...coverage, reporters: [] },
     logHeapUsage,
     detectAsyncLeaks,
-    playwright,
     env: {
       ...resolveTaskColorEnv(resolvedEnv),
       ...resolvedEnv,

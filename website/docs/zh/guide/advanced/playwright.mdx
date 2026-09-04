@@ -117,22 +117,22 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.12.0" />
 
-可以在 `rstest.config.ts` 中设置 Playwright 默认选项。根配置会作为所有 project 的默认值，project 中的 `playwright` 配置会覆盖根配置。使用 `satisfies PlaywrightOptions` 可以保留类型检查和自动补全：
+可以通过 `definePlaywrightConfig` 在 `rstest.config.ts` 中设置 Playwright 默认选项：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
-import type { PlaywrightOptions } from '@rstest/playwright';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  playwright: {
+  extends: definePlaywrightConfig({
     contextOptions: {
       viewport: { width: 1440, height: 900 },
     },
-  } satisfies PlaywrightOptions,
+  }),
 });
 ```
 
-该配置会应用到当前 project 的默认 `playwright` fixture。配置值必须可以通过 worker transport 传递。配置 client certificate 时请使用 `certPath`/`keyPath`/`pfxPath`，不要直接传入 `Buffer`。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
+`definePlaywrightConfig` 会添加一个生成的 setup file，用来初始化默认的 `playwright` fixture。如果使用多 project 配置，请将它添加到每个使用 `@rstest/playwright` 的 Node.js project 的 `extends` 中。配置值必须支持 JSON 序列化，不支持 `launchOptions.logger` 等函数、class instance、client certificate 中直接传入的 `Buffer`，以及依赖当前测试或 retry context 的值。此类配置请改用 `certPath`/`keyPath`/`pfxPath` 或 `test.extend`。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';

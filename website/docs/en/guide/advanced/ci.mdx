@@ -147,18 +147,18 @@ Install the Rstest fixtures and the Playwright API:
 pnpm add @rstest/playwright playwright -D
 ```
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) launch defaults can be configured directly in `rstest.config.ts`:
+Configure [@rstest/playwright](/guide/advanced/playwright) launch defaults in `rstest.config.ts`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
-import type { PlaywrightOptions } from '@rstest/playwright';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  playwright: {
+  extends: definePlaywrightConfig({
     browserName: 'chromium',
     launchOptions:
       process.env.GITHUB_ACTIONS === 'true' ? { channel: 'chrome' } : undefined,
-  } satisfies PlaywrightOptions,
+  }),
 });
 ```
 

@@ -1,5 +1,9 @@
 import type { ProjectContext } from '../types';
-import { collectSetupPaths, getSetupFiles } from '../utils/getSetupFiles';
+import {
+  collectSetupPaths,
+  getSetupFiles,
+  materializeVirtualSetupFiles,
+} from '../utils/getSetupFiles';
 
 export type SetupFileProjects = {
   setupProjects: ProjectContext[];
@@ -9,6 +13,7 @@ export type SetupFileProjects = {
 export type SetupFileState = {
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  virtualModules: Record<string, Record<string, string>>;
   refresh: (projects: SetupFileProjects) => void;
   getSetupPaths: () => string[];
 };
@@ -22,6 +27,7 @@ const clearRecord = (record: Record<string, unknown>): void => {
 export const createSetupFileState = (): SetupFileState => {
   const setupFiles: Record<string, Record<string, string>> = {};
   const globalSetupFiles: Record<string, Record<string, string>> = {};
+  const virtualModules: Record<string, Record<string, string>> = {};
 
   const refresh = ({
     setupProjects,
@@ -29,18 +35,32 @@ export const createSetupFileState = (): SetupFileState => {
   }: SetupFileProjects): void => {
     clearRecord(setupFiles);
     clearRecord(globalSetupFiles);
+    clearRecord(virtualModules);
 
     for (const project of setupProjects) {
-      setupFiles[project.environmentName] = getSetupFiles(
-        project.normalizedConfig.setupFiles ?? [],
+      const resolved = materializeVirtualSetupFiles(
+        getSetupFiles(
+          project.normalizedConfig.setupFiles ?? [],
+          project.rootPath,
+        ),
         project.rootPath,
       );
+      setupFiles[project.environmentName] = resolved.setupFiles;
+      virtualModules[project.environmentName] = resolved.virtualModules;
     }
 
     for (const project of globalSetupProjects) {
-      globalSetupFiles[project.environmentName] = getSetupFiles(
-        project.normalizedConfig.globalSetup ?? [],
+      const resolved = materializeVirtualSetupFiles(
+        getSetupFiles(
+          project.normalizedConfig.globalSetup ?? [],
+          project.rootPath,
+        ),
         project.rootPath,
+      );
+      globalSetupFiles[project.environmentName] = resolved.setupFiles;
+      Object.assign(
+        (virtualModules[project.environmentName] ??= {}),
+        resolved.virtualModules,
       );
     }
   };
@@ -48,6 +68,7 @@ export const createSetupFileState = (): SetupFileState => {
   return {
     setupFiles,
     globalSetupFiles,
+    virtualModules,
     refresh,
     getSetupPaths: () => collectSetupPaths(setupFiles, globalSetupFiles),
   };

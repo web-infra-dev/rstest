@@ -59,8 +59,6 @@ export const executorCapabilities: Record<
   chaiConfig: { node: 'supported', browser: 'supported' },
   includeTaskLocation: { node: 'supported', browser: 'supported' },
   silent: { node: 'supported', browser: 'supported' },
-  // `@rstest/playwright` runs in Node workers, not Browser Mode.
-  playwright: { node: 'supported', browser: 'stripped' },
 };
 
 const runtimeConfigKeys = Object.keys(

@@ -28,7 +28,6 @@
   "test-environment",
   "federation",
   "browser",
-  "playwright",
   "clear-mocks",
   "reset-mocks",
   "restore-mocks",

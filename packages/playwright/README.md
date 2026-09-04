@@ -227,22 +227,22 @@ String text assertions normalize whitespace. Each Playwright-style assertion ret
 
 ## Configure playwright options
 
-Set Playwright defaults in `rstest.config.ts`. Use `satisfies PlaywrightOptions` to keep type checking and autocomplete:
+Set Playwright defaults in `rstest.config.ts` with `definePlaywrightConfig`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
-import type { PlaywrightOptions } from '@rstest/playwright';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  playwright: {
+  extends: definePlaywrightConfig({
     contextOptions: {
       viewport: { width: 1440, height: 900 },
     },
-  } satisfies PlaywrightOptions,
+  }),
 });
 ```
 
-The config is available to the default `playwright` fixture in this project. Values must be serializable across the worker transport. For client certificates, use `certPath`/`keyPath`/`pfxPath` instead of direct `Buffer` values. Use `test.extend` for functions, class instances, or test-specific overrides:
+`definePlaywrightConfig` adds a generated setup file that initializes the default `playwright` fixture. In a multi-project config, add it to each Node.js project's `extends` that uses `@rstest/playwright`. Values must be JSON-serializable. For client certificates, use `certPath`/`keyPath`/`pfxPath` instead of direct `Buffer` values. Use `test.extend` for functions, class instances, or test-specific overrides:
 
 ```ts
 import { expect, test } from '@rstest/playwright';

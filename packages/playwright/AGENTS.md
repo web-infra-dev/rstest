@@ -8,7 +8,7 @@ Playwright fixture integration for Rstest. Provides Node-side Playwright browser
 - Treat Playwright as a peer dependency
 - Reuse `@rstest/core` runtime APIs instead of duplicating test runner behavior
 - Keep browser/context/page/request lifecycle cleanup deterministic
-- Keep `rstest.config.ts` Playwright defaults transport-safe; use certificate path options instead of direct `Buffer` values, and use `test.extend` for functions, class instances, and test-specific values
+- Keep generated setup module options JSON-serializable; use certificate path options instead of direct `Buffer` values, and use `test.extend` for functions, class instances, and test-specific values
 
 ## Don't
 

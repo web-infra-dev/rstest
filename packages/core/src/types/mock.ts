@@ -63,8 +63,6 @@ type RuntimeOptions = Partial<
   >
 >;
 
-type RuntimeConfigSnapshot = RuntimeOptions & Pick<RuntimeConfig, 'playwright'>;
-
 export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
    * List of the call arguments of all calls that have been made to the mock.
@@ -582,7 +580,7 @@ export interface RstestUtilities {
   /**
    * get runtime config for the current test.
    */
-  getConfig: () => RuntimeConfigSnapshot;
+  getConfig: () => RuntimeOptions;
 
   /**
    * Reset runtime config that were changed with `rstest.setConfig`.

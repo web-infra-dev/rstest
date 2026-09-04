@@ -33,6 +33,7 @@ description: Use when asked to create a pull request for this repository. It hel
    - In `Summary`, explain the change context first: the user-facing problem, maintenance goal, or compatibility constraint that makes the change necessary.
    - Prioritize high-signal information: public API changes, behavior changes, breaking changes, migration notes, and important compatibility implications.
    - Then describe the main implementation change only as much as needed to understand the review.
+   - For API or configuration changes, include a minimal usage example in the PR body. For infrastructure changes, show the infrastructure's own input/output usage; do not replace it with an example of a follow-up integration API.
    - Keep it short: one compact paragraph or 2-4 bullets is usually enough.
    - Avoid low-signal sections such as `Test plan` or `Validation`, routine verification commands, generated file lists, or obvious implementation details unless the repository template explicitly requires them or the change has unusual validation risk.
    - Good background examples:
@@ -47,7 +48,7 @@ description: Use when asked to create a pull request for this repository. It hel
 
 8. Push the branch only after re-checking the branch name. Never push the default branch directly.
 
-9. Create the PR with `gh pr create`.
+9. Create the PR with `gh pr create`, or use the configured GitHub connector when GitHub CLI authentication is unavailable.
 
 ## Constraints
 

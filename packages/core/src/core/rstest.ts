@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { SnapshotManager } from '@vitest/snapshot/manager';
 import { join } from 'pathe';
 import { isCI } from 'std-env';
-import { plainDeepMerge, withDefaultConfig } from '../config';
+import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
 import { DotReporter } from '../reporter/dot';
@@ -209,15 +209,6 @@ export class Rstest implements RstestContext {
             withDefaultConfig(projectUserConfig) as NormalizedProjectConfig,
             projectUserConfig,
           );
-          if (
-            rstestConfig.playwright !== undefined ||
-            config.playwright !== undefined
-          ) {
-            config.playwright = plainDeepMerge(
-              rstestConfig.playwright,
-              config.playwright,
-            );
-          }
           // some configs are global only
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;

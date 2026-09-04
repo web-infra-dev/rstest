@@ -1,8 +1,9 @@
+import { Buffer } from 'node:buffer';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { rspack } from '@rsbuild/core';
 import pathe from 'pathe';
-import { getAbsolutePath } from './helper';
+import { generateFilePathHash, getAbsolutePath } from './helper';
 import { color } from './logger';
 import { formatTestEntryName } from './testFiles';
 
@@ -14,6 +15,9 @@ const tryResolve = (request: string, rootPath: string) => {
   const { path: resolvedPath } = esmFirstResolver.sync(rootPath, request);
   return resolvedPath;
 };
+
+const JAVASCRIPT_DATA_URL_RE =
+  /^data:(?:text|application)\/javascript(?:;charset=utf-8)?;base64,(.+)$/;
 
 /**
  * Flatten one or more `{ [env]: { [entry]: path } }` setup maps into a flat
@@ -39,6 +43,13 @@ export const getSetupFiles = (
   }
   return Object.fromEntries(
     setups.map((filePath) => {
+      if (JAVASCRIPT_DATA_URL_RE.test(filePath)) {
+        return [
+          `virtual~setup~${generateFilePathHash(rootPath, filePath)}`,
+          filePath,
+        ];
+      }
+
       const setupFile = filePath.startsWith('file://')
         ? fileURLToPath(filePath)
         : filePath;
@@ -63,4 +74,39 @@ export const getSetupFiles = (
       }
     }),
   );
+};
+
+export const materializeVirtualSetupFiles = (
+  setupFiles: Record<string, string>,
+  rootPath: string,
+): {
+  setupFiles: Record<string, string>;
+  virtualModules: Record<string, string>;
+} => {
+  const virtualModules: Record<string, string> = {};
+  const entries = Object.fromEntries(
+    Object.entries(setupFiles).map(([entryName, request]) => {
+      const match = JAVASCRIPT_DATA_URL_RE.exec(request);
+      if (!match) {
+        return [entryName, request];
+      }
+      const encodedSource = match[1];
+      if (encodedSource === undefined) {
+        return [entryName, request];
+      }
+
+      const virtualPath = pathe.join(
+        rootPath,
+        '.rstest-virtual',
+        `${entryName}.mjs`,
+      );
+      virtualModules[virtualPath] = Buffer.from(
+        encodedSource,
+        'base64',
+      ).toString('utf8');
+      return [entryName, virtualPath];
+    }),
+  );
+
+  return { setupFiles: entries, virtualModules };
 };

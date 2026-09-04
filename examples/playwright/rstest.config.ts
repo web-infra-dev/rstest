@@ -1,12 +1,12 @@
 import { defineConfig } from '@rstest/core';
-import type { PlaywrightOptions } from '@rstest/playwright';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
+  extends: definePlaywrightConfig({
+    browserName: 'chromium',
+    launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
+  }),
   include: ['./test/**/*.test.ts'],
   isolate: false,
   testEnvironment: 'node',
-  playwright: {
-    browserName: 'chromium',
-    launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
-  } satisfies PlaywrightOptions,
 });

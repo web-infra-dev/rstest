@@ -84,7 +84,6 @@ export type RuntimeConfig = Pick<
   | 'chaiConfig'
   | 'includeTaskLocation'
   | 'silent'
-  | 'playwright'
 >;
 
 /**
@@ -100,11 +99,7 @@ export type RuntimeConfig = Pick<
  */
 export type BrowserRuntimeConfig = Omit<
   RuntimeConfig,
-  | 'testEnvironment'
-  | 'detectAsyncLeaks'
-  | 'logHeapUsage'
-  | 'coverage'
-  | 'playwright'
+  'testEnvironment' | 'detectAsyncLeaks' | 'logHeapUsage' | 'coverage'
 >;
 
 export type TestEnvironmentModuleReference = {
