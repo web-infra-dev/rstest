@@ -578,8 +578,8 @@ exports.canvasInstalled = canvasInstalled;
     });
   });
 
-  it('does not prebundle by default', async () => {
-    await withTempDir('rstest-env-default-native-', async (root) => {
+  it('uses automatic prebundle by default', async () => {
+    await withTempDir('rstest-env-default-auto-', async (root) => {
       createPackage(root, 'export class JSDOM {}');
 
       const result = await prepareTestEnvironmentModules({
@@ -591,7 +591,7 @@ exports.canvasInstalled = canvasInstalled;
         expect(result.modules.get('jsdom')).toMatchObject({
           name: 'jsdom',
         });
-        expect(result.modules.get('jsdom')?.bundlePath).toBeUndefined();
+        expect(result.modules.get('jsdom')?.bundlePath).toBeTruthy();
       } finally {
         await result.cleanup();
       }
