@@ -40,14 +40,96 @@ export const createVmTimersLoader = (
 
 export const createVmTimersPromisesLoader = (
   runtimeGlobal: Record<PropertyKey, unknown>,
-): ((timersModule: Record<PropertyKey, unknown>) => unknown) => {
+): ((timersModule: Record<PropertyKey, unknown>) => unknown) & {
+  dispose: () => void;
+} => {
   let timersProxy: unknown;
   let schedulerProxy: unknown;
   const wrappedMethods = new WeakMap<object, Map<PropertyKey, unknown>>();
+  const pending = new Set<{ cancel: () => void }>();
 
-  return (timersModule) => {
+  const createAbortError = (): Error => {
+    const ErrorConstructor = runtimeGlobal.Error as
+      (new (message?: string) => Error) | undefined;
+    const error = ErrorConstructor
+      ? new ErrorConstructor('The operation was aborted')
+      : new Error('The operation was aborted');
+    error.name = 'AbortError';
+    (error as Error & { code?: string }).code = 'ABORT_ERR';
+    return error;
+  };
+
+  const isOptions = (
+    value: unknown,
+  ): value is {
+    ref?: boolean;
+    signal?: AbortSignal;
+  } =>
+    typeof value === 'object' &&
+    value !== null &&
+    ('ref' in value || 'signal' in value);
+
+  const createPromiseTimer = (
+    method: (...args: unknown[]) => Promise<unknown>,
+    target: Record<PropertyKey, unknown>,
+    args: unknown[],
+  ): unknown => {
     const PromiseConstructor = runtimeGlobal.Promise as PromiseConstructor;
-    const promiseResolve = PromiseConstructor.resolve.bind(PromiseConstructor);
+    const lastArg = args.at(-1);
+    const externalOptions = isOptions(lastArg) ? lastArg : undefined;
+    const controller = new AbortController();
+    const options = {
+      ...externalOptions,
+      signal: controller.signal,
+    };
+    const nativeArgs = externalOptions
+      ? [...args.slice(0, -1), options]
+      : [...args, options];
+
+    let settled = false;
+    let removeSignalListener: (() => void) | undefined;
+    let rejectPromise!: (reason: unknown) => void;
+    let cancel = (): void => {};
+    const record = { cancel: () => cancel() };
+    const settle = (callback: (value: unknown) => void, value: unknown) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      pending.delete(record);
+      removeSignalListener?.();
+      callback(value);
+    };
+    cancel = () => {
+      controller.abort();
+      settle(rejectPromise, createAbortError());
+    };
+
+    const promise = new PromiseConstructor((resolve, reject) => {
+      rejectPromise = reject;
+      const signal = externalOptions?.signal;
+      if (signal?.aborted) {
+        cancel();
+        return;
+      }
+      if (signal) {
+        const onAbort = () => {
+          cancel();
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        removeSignalListener = () =>
+          signal.removeEventListener('abort', onAbort);
+      }
+      pending.add(record);
+      void Promise.resolve(Reflect.apply(method, target, nativeArgs)).then(
+        (value) => settle(resolve, value),
+        (error) => settle(reject, error),
+      );
+    });
+    return promise;
+  };
+
+  const loadTimersPromises = ((timersModule) => {
     const wrapPromiseMethod = (
       target: Record<PropertyKey, unknown>,
       name: PropertyKey,
@@ -66,7 +148,11 @@ export const createVmTimersPromisesLoader = (
         return cached;
       }
       const wrapped = (...args: unknown[]) =>
-        promiseResolve(Reflect.apply(method, target, args));
+        createPromiseTimer(
+          method as (...args: unknown[]) => Promise<unknown>,
+          target,
+          args,
+        );
       methods.set(name, wrapped);
       return wrapped;
     };
@@ -99,7 +185,16 @@ export const createVmTimersPromisesLoader = (
       });
     }
     return timersProxy;
+  }) as ((timersModule: Record<PropertyKey, unknown>) => unknown) & {
+    dispose: () => void;
   };
+  loadTimersPromises.dispose = () => {
+    for (const timer of pending) {
+      timer.cancel();
+    }
+    pending.clear();
+  };
+  return loadTimersPromises;
 };
 
 export const createVmTimersShim =

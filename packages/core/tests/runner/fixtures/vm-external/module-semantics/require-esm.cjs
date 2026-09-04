@@ -14,6 +14,8 @@ try {
     sameRealm:
       Object.getPrototypeOf(namespace.realmObject) === Object.prototype,
     esModule: namespace.__esModule === true,
+    namespaceTag: Object.prototype.toString.call(namespace),
+    namespaceExtensible: Object.isExtensible(namespace),
     state: namespace.state,
     value: namespace.value,
   };

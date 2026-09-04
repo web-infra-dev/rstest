@@ -189,6 +189,32 @@ describe('loadEsModule', () => {
     expect(mod.default).toEqual({ defaultExport: true, namedExport: true });
   });
 
+  it('should cancel pending promise timers when disposing a VM executor', async () => {
+    const vmContext = vm.createContext({
+      clearImmediate,
+      clearTimeout,
+      setImmediate,
+      setTimeout,
+    });
+    const executor = getVmExternalModules(vmContext);
+    const timers = executor.require('node:timers/promises', __filename) as {
+      setTimeout: (delay: number, value: string) => Promise<string>;
+    };
+    let resolved = false;
+    const pending = timers.setTimeout(100, 'done').then(() => {
+      resolved = true;
+    });
+
+    executor.dispose();
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'ABORT_ERR',
+      name: 'AbortError',
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(resolved).toBe(false);
+  });
+
   it('should expose Node CommonJS module relationships inside the VM', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath('vm-external/module-semantics/parent.cjs');
@@ -646,6 +672,8 @@ describe('loadEsModule', () => {
             sameNamespace: true,
             sameRealm: true,
             esModule: false,
+            namespaceTag: '[object Module]',
+            namespaceExtensible: false,
             state: expect.anything(),
             value: 'esm',
           }
@@ -773,6 +801,40 @@ describe('loadEsModule', () => {
       }
       expect(requireError).toMatchObject({ code: 'ERR_REQUIRE_ASYNC_MODULE' });
     }
+  });
+
+  it('should reject synchronous require(esm) cycles', () => {
+    if (!('hasAsyncGraph' in vm.SourceTextModule.prototype)) {
+      return;
+    }
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const rootPath = fixturePath(
+      'vm-external/module-semantics/sync-cycle-root.mjs',
+    );
+
+    expect(() => executor.require(rootPath, __filename)).toThrow(
+      expect.objectContaining({ code: 'ERR_REQUIRE_CYCLE_MODULE' }),
+    );
+  });
+
+  it('should not treat an arbitrary thenable default export as an async entry', async () => {
+    const mod = await loadModule({
+      codeContent: [
+        'export default {',
+        '  then() {',
+        "    throw new Error('thenable should not be called');",
+        '  },',
+        '};',
+      ].join('\n'),
+      distPath: '/virtual/dist/thenable-default.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+    });
+
+    expect(typeof mod.default.then).toBe('function');
   });
 
   it('should create synchronous require errors in the VM realm', () => {

@@ -31,6 +31,34 @@ export const shouldInjectSourceURL = (): boolean => {
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
+const isPromise = (value: unknown, vmContext?: vm.Context): boolean => {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function')
+  ) {
+    return false;
+  }
+
+  const promiseThen = Promise.prototype.then;
+  const vmPromiseThen = vmContext
+    ? (vm.runInContext(
+        'Promise.prototype.then',
+        vmContext,
+      ) as typeof promiseThen)
+    : undefined;
+  return [promiseThen, vmPromiseThen].some((then) => {
+    if (!then) {
+      return false;
+    }
+    try {
+      Reflect.apply(then, value, [() => undefined, () => undefined]);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+};
+
 export const appendSourceURL = (
   codeContent: string,
   sourceUrl: string,
@@ -340,12 +368,7 @@ export const loadModule = async ({
   };
 
   const defaultExport: unknown = ns.default;
-  return defaultExport !== null &&
-    (typeof defaultExport === 'object' ||
-      typeof defaultExport === 'function') &&
-    typeof Reflect.get(defaultExport, 'then') === 'function'
-    ? defaultExport
-    : ns;
+  return isPromise(defaultExport, vmContext) ? defaultExport : ns;
 };
 
 /**

@@ -286,6 +286,17 @@ const createConcurrentRequireError = (
   );
 };
 
+const createRequireCycleError = (
+  context: vm.Context,
+  identifier: string,
+): NodeJS.ErrnoException => {
+  return createVmError(
+    context,
+    `Cannot require() ES Module ${identifier} in a cycle. A cycle involving require(esm) is not allowed.`,
+    'ERR_REQUIRE_CYCLE_MODULE',
+  );
+};
+
 const isSyntaxError = (error: unknown): boolean =>
   error instanceof SyntaxError ||
   (typeof error === 'object' &&
@@ -365,6 +376,7 @@ class VmExternalModules {
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
   private interopDefault = true;
+  private readonly activeSyncRequireRoots = new Set<string>();
 
   constructor(private readonly context: vm.Context) {
     this.loadVmTimers = createVmTimersLoader(
@@ -512,6 +524,7 @@ class VmExternalModules {
   }
 
   dispose(): void {
+    this.loadVmTimersPromises.dispose();
     this.esmJsonCache.clear();
     this.moduleEvaluationCache.clear();
     for (const script of this.scripts) {
@@ -1143,137 +1156,140 @@ class VmExternalModules {
     if (cachedNamespace) {
       return cachedNamespace;
     }
-    const namespace = Object.create(null) as Record<PropertyKey, unknown>;
-    for (const key of Reflect.ownKeys(module.namespace)) {
-      Object.defineProperty(namespace, key, {
-        configurable: false,
-        enumerable: true,
-        get: () => Reflect.get(module.namespace, key),
-      });
-    }
-    if (
-      Reflect.has(namespace, 'default') &&
-      !Reflect.has(namespace, '__esModule')
-    ) {
-      Object.defineProperty(namespace, '__esModule', {
-        configurable: false,
-        enumerable: true,
-        value: true,
-        writable: true,
-      });
-    }
-    this.esmRequireNamespaceCache.set(identifier, namespace);
-    return namespace;
+    const namespace = module.namespace as Record<PropertyKey, unknown>;
+    const forwardedNamespace = Reflect.has(namespace, 'default')
+      ? new Proxy(namespace, {
+          get(target, property, receiver) {
+            if (property === '__esModule' && !Reflect.has(target, property)) {
+              return true;
+            }
+            return Reflect.get(target, property, receiver);
+          },
+          has(target, property) {
+            return property === '__esModule' || Reflect.has(target, property);
+          },
+        })
+      : namespace;
+    this.esmRequireNamespaceCache.set(identifier, forwardedNamespace);
+    return forwardedNamespace;
   }
 
   private requireEsModuleSync(
     rootIdentifier: string,
     forceRootSource: boolean,
   ): SyncSourceTextModule {
-    const cachedRoot = this.esmCache.get(rootIdentifier);
-    if (cachedRoot) {
-      return this.reuseSyncModule(rootIdentifier, cachedRoot);
+    if (this.activeSyncRequireRoots.has(rootIdentifier)) {
+      throw createRequireCycleError(this.context, rootIdentifier);
     }
-
-    // Keep new modules private until every dependency is proven synchronous.
-    // A rejected require must not poison a later dynamic import of the graph.
-    const scratch = new Map<string, SyncModuleEntry>();
-    const pendingIdentifiers = [rootIdentifier];
-
-    while (pendingIdentifiers.length > 0) {
-      const identifier = pendingIdentifiers.pop()!;
-      if (scratch.has(identifier)) {
-        continue;
+    this.activeSyncRequireRoots.add(rootIdentifier);
+    try {
+      const cachedRoot = this.esmCache.get(rootIdentifier);
+      if (cachedRoot) {
+        return this.reuseSyncModule(rootIdentifier, cachedRoot);
       }
 
-      const cached = this.esmCache.get(identifier);
-      if (cached) {
-        scratch.set(identifier, {
-          commit: false,
-          module: this.reuseSyncModule(identifier, cached),
-        });
-        continue;
-      }
+      // Keep new modules private until every dependency is proven synchronous.
+      // A rejected require must not poison a later dynamic import of the graph.
+      const scratch = new Map<string, SyncModuleEntry>();
+      const pendingIdentifiers = [rootIdentifier];
 
-      const disposition = this.materializeSyncModule(
-        identifier,
-        forceRootSource && identifier === rootIdentifier,
-      );
-      if (disposition.kind === 'ready') {
-        scratch.set(identifier, {
-          commit: false,
-          module: disposition.module,
-        });
-        continue;
-      }
+      while (pendingIdentifiers.length > 0) {
+        const identifier = pendingIdentifiers.pop()!;
+        if (scratch.has(identifier)) {
+          continue;
+        }
 
-      const module = this.createEsmModule(identifier, disposition.code);
-      if (module.hasTopLevelAwait()) {
-        throw createRequireAsyncModuleError(
-          this.context,
+        const cached = this.esmCache.get(identifier);
+        if (cached) {
+          scratch.set(identifier, {
+            commit: false,
+            module: this.reuseSyncModule(identifier, cached),
+          });
+          continue;
+        }
+
+        const disposition = this.materializeSyncModule(
           identifier,
-          'the module uses top-level await',
+          forceRootSource && identifier === rootIdentifier,
         );
-      }
-      const dependencies = module.moduleRequests.map(
-        ({ specifier, attributes }) => {
-          const resolved = this.resolve(specifier, identifier);
-          this.validateImportAttributes(resolved, attributes);
-          return resolved;
-        },
-      );
-      scratch.set(identifier, { commit: true, dependencies, module });
-      for (const dependency of dependencies) {
-        if (!scratch.has(dependency)) {
-          pendingIdentifiers.push(dependency);
+        if (disposition.kind === 'ready') {
+          scratch.set(identifier, {
+            commit: false,
+            module: disposition.module,
+          });
+          continue;
+        }
+
+        const module = this.createEsmModule(identifier, disposition.code);
+        if (module.hasTopLevelAwait()) {
+          throw createRequireAsyncModuleError(
+            this.context,
+            identifier,
+            'the module uses top-level await',
+          );
+        }
+        const dependencies = module.moduleRequests.map(
+          ({ specifier, attributes }) => {
+            const resolved = this.resolve(specifier, identifier);
+            this.validateImportAttributes(resolved, attributes);
+            return resolved;
+          },
+        );
+        scratch.set(identifier, { commit: true, dependencies, module });
+        for (const dependency of dependencies) {
+          if (!scratch.has(dependency)) {
+            pendingIdentifiers.push(dependency);
+          }
         }
       }
-    }
 
-    for (const entry of scratch.values()) {
-      if (entry.commit) {
-        entry.module.linkRequests(
-          entry.dependencies.map(
-            (dependency) => scratch.get(dependency)!.module,
-          ),
+      for (const entry of scratch.values()) {
+        if (entry.commit) {
+          entry.module.linkRequests(
+            entry.dependencies.map(
+              (dependency) => scratch.get(dependency)!.module,
+            ),
+          );
+        }
+      }
+
+      const root = scratch.get(rootIdentifier)!;
+      if (!root.commit) {
+        throw new Error(
+          `[rstest] Expected ${rootIdentifier} to be an ESM source module.`,
         );
       }
-    }
-
-    const root = scratch.get(rootIdentifier)!;
-    if (!root.commit) {
-      throw new Error(
-        `[rstest] Expected ${rootIdentifier} to be an ESM source module.`,
-      );
-    }
-    root.module.instantiate();
-    if (moduleHasAsyncGraph(root.module)) {
-      throw createRequireAsyncModuleError(
-        this.context,
-        rootIdentifier,
-        'its dependency graph uses top-level await',
-      );
-    }
-
-    for (const [identifier, entry] of scratch) {
-      if (entry.commit && !this.esmCache.has(identifier)) {
-        this.esmCache.set(identifier, entry.module);
+      root.module.instantiate();
+      if (moduleHasAsyncGraph(root.module)) {
+        throw createRequireAsyncModuleError(
+          this.context,
+          rootIdentifier,
+          'its dependency graph uses top-level await',
+        );
       }
-    }
 
-    // Once the graph has no TLA, V8 settles evaluate() before it returns. The
-    // promise still needs a rejection handler while the synchronous status and
-    // original evaluation error are read below.
-    void this.evaluateModule(root.module).catch(() => undefined);
-    if (root.module.status === 'errored') {
-      throw root.module.error;
+      for (const [identifier, entry] of scratch) {
+        if (entry.commit && !this.esmCache.has(identifier)) {
+          this.esmCache.set(identifier, entry.module);
+        }
+      }
+
+      // Once the graph has no TLA, V8 settles evaluate() before it returns. The
+      // promise still needs a rejection handler while the synchronous status and
+      // original evaluation error are read below.
+      void this.evaluateModule(root.module).catch(() => undefined);
+      if (root.module.status === 'errored') {
+        throw root.module.error;
+      }
+      if (root.module.status !== 'evaluated') {
+        throw new Error(
+          `[rstest] Expected synchronous ESM evaluation to complete for ${rootIdentifier}, but the module status is "${root.module.status}".`,
+        );
+      }
+      return root.module;
+    } finally {
+      this.activeSyncRequireRoots.delete(rootIdentifier);
     }
-    if (root.module.status !== 'evaluated') {
-      throw new Error(
-        `[rstest] Expected synchronous ESM evaluation to complete for ${rootIdentifier}, but the module status is "${root.module.status}".`,
-      );
-    }
-    return root.module;
   }
 
   private reuseSyncModule(
