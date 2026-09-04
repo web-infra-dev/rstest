@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
+  InternalContext,
+  InternalProjectContext,
   NormalizedProjectConfig,
-  ProjectContext,
-  RstestContext,
 } from '../types';
 import { getTestEntries } from '../utils';
 import { createSetupFileState } from './setupFileState';
@@ -18,7 +18,7 @@ type ModuleGraph = {
 };
 
 type ProjectConfigSnapshot = {
-  project: ProjectContext;
+  project: InternalProjectContext;
   normalizedConfig: NormalizedProjectConfig;
   rootPath: string;
   outputModule: boolean;
@@ -43,7 +43,7 @@ const clonePlainConfig = <T>(value: T): T => {
 };
 
 const snapshotProjectConfigs = (
-  projects: ProjectContext[],
+  projects: InternalProjectContext[],
 ): ProjectConfigSnapshot[] =>
   projects.map((project) => ({
     project,
@@ -266,7 +266,7 @@ const collectReachableDependents = ({
 };
 
 const collectProjectEntries = async (
-  context: RstestContext,
+  context: InternalContext,
 ): Promise<Map<string, Record<string, string>>> => {
   const entries = new Map<string, Record<string, string>>();
 
@@ -283,7 +283,7 @@ const collectProjectEntries = async (
           includeSource,
           rootPath: context.rootPath,
           projectRoot: root,
-          fileFilters: [],
+          fileFilters: undefined,
         }),
       );
     }),
@@ -356,7 +356,7 @@ const collectDirectlyMatchedFiles = ({
 };
 
 export async function resolveRelatedTestFiles(
-  context: RstestContext,
+  context: InternalContext,
   options: {
     sourceFilters: string[];
     filterLabel?: string;

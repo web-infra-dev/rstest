@@ -8,15 +8,18 @@ const MIGRATION_NOTES_URL =
   'https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions';
 
 /**
- * The Rstack extension bundles the same Rstest integration as this extension. When
- * it is installed, enabled, and has its Rstest stack switched on, this
- * extension must stand down so only one Test Explorer controller runs.
+ * The Rstack extension bundles the same Rstest integration as this extension.
+ * This predicate mirrors its VS Code-level gates (workspace trust and
+ * `rstack.rstest.enable`), not project detection.
  * `extensions.getExtension` only sees enabled extensions, so a disabled
- * Rstack extension does not count.
+ * Rstack extension does not count. Trust needs no change listener: VS Code
+ * does not activate this extension in Restricted Mode, and granted trust
+ * cannot be revoked without a reload.
  */
 export function rstackEditorTakesOver(): boolean {
   return (
     vscode.extensions.getExtension(RSTACK_EXTENSION_ID) !== undefined &&
+    vscode.workspace.isTrusted &&
     vscode.workspace.getConfiguration('rstack.rstest').get('enable', true)
   );
 }

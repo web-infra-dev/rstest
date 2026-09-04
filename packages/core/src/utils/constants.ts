@@ -1,10 +1,10 @@
 import { dirname, isAbsolute, join, normalize, resolve } from 'pathe';
 import type {
-  ProjectContext,
+  InternalContext,
+  InternalProjectContext,
   Rstest,
   RstestBuildCacheConfig,
   RstestConfig,
-  RstestContext,
 } from '../types';
 
 export const DEFAULT_CONFIG_NAME = 'rstest.config';
@@ -269,11 +269,11 @@ export const resolveProjectBuildCache = ({
   project,
 }: {
   context: Pick<
-    RstestContext,
+    InternalContext,
     'rootPath' | 'configFilePath' | 'command' | 'normalizedConfig' | 'projects'
   >;
   project: Pick<
-    ProjectContext,
+    InternalProjectContext,
     'environmentName' | 'configFilePath' | 'normalizedConfig'
   >;
 }): false | RstestBuildCacheConfig =>

@@ -3,8 +3,8 @@ import { pathToFileURL } from 'node:url';
 import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
-  ProjectContext,
-  RstestContext,
+  InternalContext,
+  InternalProjectContext,
   TestExecutor,
 } from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
@@ -41,7 +41,7 @@ export interface BrowserExecutorLoadOptions extends BrowserExecutorRunOptions {
  * per-file coverage into the same map shape the node pool produces.
  */
 export interface CreateBrowserExecutorOptions extends BrowserExecutorRunOptions {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   coverageProvider: CoverageProvider | null;
 }
 
@@ -68,18 +68,18 @@ export type BrowserTestExecutor = TestExecutor &
  * This is the single source of truth for the core↔browser load boundary:
  * `loadBrowserModule` returns it, and `@rstest/browser`'s public entry
  * constrains its exports against it via `satisfies`. The `context` is typed
- * as {@link RstestContext} (not `unknown`) so drift between the two sides —
+ * as {@link InternalContext} (not `unknown`) so drift between the two sides —
  * such as a dropped `options` argument — surfaces as a type error.
  */
 export interface BrowserHostModule {
-  validateBrowserConfig: (context: RstestContext) => void;
+  validateBrowserConfig: (context: InternalContext) => void;
   /**
    * The outer-seam entry point: build a {@link TestExecutor} the shared run loop
    * drives alongside the node pool. Obtained through the version-locked dynamic
    * seam so core never statically imports playwright.
    */
   createBrowserExecutor: (
-    context: RstestContext,
+    context: InternalContext,
     options: CreateBrowserExecutorOptions,
   ) => Promise<BrowserTestExecutor>;
   /**
@@ -87,7 +87,7 @@ export interface BrowserHostModule {
    * watch reruns go through `createBrowserExecutor`, never through here.
    */
   runBrowserTests: (
-    context: RstestContext,
+    context: InternalContext,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
 }
@@ -209,8 +209,8 @@ export async function loadBrowserModule(
 }
 
 export async function loadAndValidateBrowserModule(
-  context: RstestContext,
-  browserProjects: ProjectContext[],
+  context: InternalContext,
+  browserProjects: InternalProjectContext[],
 ): Promise<BrowserHostModule> {
   const browserModule = await loadBrowserModule({
     projectRoots: browserProjects.map((project) => project.rootPath),
@@ -227,8 +227,8 @@ export async function loadAndValidateBrowserModule(
  * {@link BrowserTestExecutor}.
  */
 export async function runBrowserDiscovery(
-  context: RstestContext,
-  browserProjects: ProjectContext[],
+  context: InternalContext,
+  browserProjects: InternalProjectContext[],
   options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   const browserModule = await loadBrowserModule({
@@ -267,8 +267,8 @@ export async function runBrowserDiscovery(
  * ever loading an executor has to ask for the check itself.
  */
 export async function validateBrowserRunConfig(
-  context: RstestContext,
-  browserProjects: ProjectContext[],
+  context: InternalContext,
+  browserProjects: InternalProjectContext[],
 ): Promise<void> {
   const { validateBrowserConfig } = await loadBrowserModule({
     projectRoots: browserProjects.map((p) => p.rootPath),
@@ -284,8 +284,8 @@ export async function validateBrowserRunConfig(
  * both go through one browser entry point.
  */
 export async function loadBrowserExecutor(
-  context: RstestContext,
-  browserProjects: ProjectContext[],
+  context: InternalContext,
+  browserProjects: InternalProjectContext[],
   coverageProvider: CoverageProvider | null,
   loadOptions?: BrowserExecutorLoadOptions,
 ): Promise<BrowserTestExecutor> {

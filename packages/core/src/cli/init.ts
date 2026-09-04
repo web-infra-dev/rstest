@@ -185,7 +185,11 @@ export function mergeWithCLIOptions(
     }
   }
 
-  if (options.changed !== undefined && options.passWithNoTests === undefined) {
+  if (
+    options.changed !== undefined &&
+    options.changed !== false &&
+    options.passWithNoTests === undefined
+  ) {
     config.passWithNoTests ??= true;
   }
 
@@ -208,13 +212,13 @@ export function mergeWithCLIOptions(
     if (
       !index ||
       !count ||
-      Number.isNaN(index) ||
-      Number.isNaN(count) ||
+      !Number.isInteger(index) ||
+      !Number.isInteger(count) ||
       index < 1 ||
       index > count
     ) {
       throw new Error(
-        `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
+        `Invalid shard option: ${options.shard}. It must use positive integers in the format <index>/<count> and be 1-based.`,
       );
     }
     config.shard = {
@@ -434,6 +438,20 @@ async function resolveConfig(
   };
 }
 
+export const formatNoProjectsFoundError = (
+  config: Pick<RstestConfig, 'projects'>,
+  projectFilter?: CommonOptions['project'],
+): string => {
+  let message = `No projects found, please make sure you have at least one valid project.
+${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
+
+  if (projectFilter) {
+    message += `\n${color.gray('projectName filter:')} ${JSON.stringify(projectFilter, null, 2)}`;
+  }
+
+  return message;
+};
+
 export async function resolveProjects({
   config,
   root,
@@ -585,14 +603,7 @@ export async function resolveProjects({
   );
 
   if (!projects.length) {
-    let errorMsg = `No projects found, please make sure you have at least one valid project.
-${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
-
-    if (options.project) {
-      errorMsg += `\n${color.gray('projectName filter:')} ${JSON.stringify(options.project, null, 2)}`;
-    }
-
-    throw errorMsg;
+    throw formatNoProjectsFoundError(config, options.project);
   }
 
   const names = new Set<string>();
@@ -618,30 +629,29 @@ export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
   configFilePath?: string;
   projects: Project[];
+  cwd: string;
 }> {
   const cwd = process.cwd();
-  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
-
-  const { config, configFilePath } = await resolveConfig({
-    ...options,
-    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
+  const { resolveRunnerInputs } = await import('../core/resolveConfig');
+  const { config, configFilePath, projects } = await resolveRunnerInputs({
+    source: { type: 'discover' },
+    options,
+    cwd,
+    tweakConfig: (config) => {
+      if (
+        determineAgent().isAgent &&
+        !options.reporters &&
+        config.reporters == null
+      ) {
+        config.reporters = ['md'];
+      }
+    },
   });
-
-  // In agent environments, default to markdown output when the user didn't
-  // explicitly set reporters (no `reporters` in config and no `--reporters`).
-  if (
-    determineAgent().isAgent &&
-    !options.reporters &&
-    config.reporters == null
-  ) {
-    config.reporters = ['md'];
-  }
-
-  const projects = await resolveProjects({ config, root, options });
 
   return {
     config,
     configFilePath,
     projects,
+    cwd,
   };
 }

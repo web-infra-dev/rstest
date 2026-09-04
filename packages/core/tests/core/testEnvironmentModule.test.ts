@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import type { ProjectContext, TestEnvironmentPrebundle } from '../../src/types';
+import type {
+  InternalProjectContext,
+  TestEnvironmentPrebundle,
+} from '../../src/types';
 import { prepareTestEnvironmentModules } from '../../src/core/testEnvironmentModule';
 import { logger } from '../../src/utils';
 
@@ -18,7 +21,7 @@ const createProject = (
     outputModule?: boolean;
     prebundle?: TestEnvironmentPrebundle;
   } = {},
-): ProjectContext => {
+): InternalProjectContext => {
   return {
     rootPath,
     environmentName,
@@ -29,7 +32,7 @@ const createProject = (
         ...(prebundle === undefined ? {} : { prebundle }),
       },
     },
-  } as ProjectContext;
+  } as InternalProjectContext;
 };
 
 const createPackage = (
@@ -575,8 +578,8 @@ exports.canvasInstalled = canvasInstalled;
     });
   });
 
-  it('does not prebundle by default', async () => {
-    await withTempDir('rstest-env-default-native-', async (root) => {
+  it('uses automatic prebundle by default', async () => {
+    await withTempDir('rstest-env-default-auto-', async (root) => {
       createPackage(root, 'export class JSDOM {}');
 
       const result = await prepareTestEnvironmentModules({
@@ -588,7 +591,7 @@ exports.canvasInstalled = canvasInstalled;
         expect(result.modules.get('jsdom')).toMatchObject({
           name: 'jsdom',
         });
-        expect(result.modules.get('jsdom')?.bundlePath).toBeUndefined();
+        expect(result.modules.get('jsdom')?.bundlePath).toBeTruthy();
       } finally {
         await result.cleanup();
       }

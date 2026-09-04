@@ -2,9 +2,9 @@ import { createRsbuild, logger as RsbuildLogger } from '@rsbuild/core';
 import type {
   EntryInfo,
   ExecutorCycleOutcome,
-  ProjectContext,
+  InternalContext,
+  InternalProjectContext,
   ProjectEntries,
-  RstestContext,
 } from '../../types';
 import { isDebug, resolveShardedEntries } from '../../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
@@ -24,7 +24,7 @@ import { createSetupFileState } from '../setupFileState';
 export type BrowserGlobalSetupStageResult = {
   /**
    * Merged env change-set the browser projects' globalSetup applied to the
-   * host `process.env` (later projects win). `undefined` when no setup ran,
+   * run context (later projects win). `undefined` when no setup ran,
    * so the browser wire stays byte-identical to a run without globalSetup.
    */
   env?: Record<string, string | undefined>;
@@ -72,8 +72,8 @@ export const globalSetupFailureOutcome = (
  *
  */
 export async function runBrowserGlobalSetupStage(
-  context: RstestContext,
-  browserProjects: ProjectContext[],
+  context: InternalContext,
+  browserProjects: InternalProjectContext[],
   {
     entriesCache,
   }: {
@@ -108,7 +108,12 @@ export async function runBrowserGlobalSetupStage(
         // honoring include/exclude, CLI file filters, and sharding.
         const entries = gateEntries
           ? (gateEntries.get(project.environmentName)?.entries ?? {})
-          : await getProjectEntries({ context, project });
+          : await getProjectEntries({
+              context,
+              project,
+              fileFilters: context.fileFilters,
+              fileFilterMode: context.fileFilterMode,
+            });
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;
       }),
@@ -193,7 +198,7 @@ export async function runBrowserGlobalSetupStage(
   // Materialize compiled assets before closing the server so no compiler
   // lingers while user setup code runs.
   let prepared: {
-    project: ProjectContext;
+    project: InternalProjectContext;
     entryCount: number;
     globalSetupEntries: EntryInfo[];
     assetFiles: Record<string, Buffer>;
@@ -242,7 +247,7 @@ export async function runBrowserGlobalSetupStage(
       success,
       errors: setupErrors,
       envChanges,
-    } = await runGlobalSetup({
+    } = await runGlobalSetup(context, {
       globalSetupEntries: item.globalSetupEntries,
       assetFiles: item.assetFiles,
       sourceMaps: item.sourceMaps,

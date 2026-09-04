@@ -298,8 +298,8 @@ export type EnvironmentWithOptions = {
    *
    * - `'auto'`: prebundle supported built-in environments.
    * - `true`: always prebundle the selected built-in environment.
-   * - `false` (default): load the environment natively.
-   * @default false
+   * - `false`: load the environment natively.
+   * @default 'auto'
    */
   prebundle?: TestEnvironmentPrebundle;
 };
@@ -679,6 +679,7 @@ export type NormalizedBrowserModeConfig = {
   providerOptions: Record<string, unknown>;
 };
 
+// Exported from `/api` as `RstestContext.config`; shape changes are public API changes.
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,

@@ -1,5 +1,5 @@
 import { projectRuntimeConfig } from '../../src/core/runtimeConfigProjection';
-import type { ProjectContext } from '../../src/types';
+import type { InternalProjectContext } from '../../src/types';
 import { serializableConfig } from '../../src/utils/helper';
 import { unwrapRegex } from '../../src/utils/regexpWireFormat';
 
@@ -35,10 +35,10 @@ const baseNormalizedConfig = {
 
 const makeProject = (
   overrides: Partial<typeof baseNormalizedConfig> = {},
-): ProjectContext =>
+): InternalProjectContext =>
   ({
     normalizedConfig: { ...baseNormalizedConfig, ...overrides },
-  }) as unknown as ProjectContext;
+  }) as unknown as InternalProjectContext;
 
 describe('projectRuntimeConfig', () => {
   it('preserves federation mode for node and browser workers', () => {

@@ -1,5 +1,7 @@
 import { join } from 'node:path';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
+import { isCliShortcutsEnabled } from '../../src/core/cliShortcuts';
+import { beforeRestart, onBeforeRestart } from '../../src/core/restart';
 import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
@@ -83,6 +85,35 @@ const createGatedExecutor = (name: string) => {
   return { executor, release: () => release(), started };
 };
 
+describe('isCliShortcutsEnabled', () => {
+  it('disables shortcuts for an embedded watcher in a TTY host', () => {
+    const context = createContext();
+    const stdinIsTTY = process.stdin.isTTY;
+    const ci = process.env.CI;
+    Object.defineProperty(process.stdin, 'isTTY', {
+      configurable: true,
+      value: true,
+    });
+    delete process.env.CI;
+
+    try {
+      expect(isCliShortcutsEnabled(context)).toBe(false);
+      context.embedded = false;
+      expect(isCliShortcutsEnabled(context)).toBe(true);
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', {
+        configurable: true,
+        value: stdinIsTTY,
+      });
+      if (ci === undefined) {
+        delete process.env.CI;
+      } else {
+        process.env.CI = ci;
+      }
+    }
+  });
+});
+
 const createDriver = (
   context: Rstest,
   isSessionClosing: () => boolean = () => false,
@@ -132,6 +163,7 @@ describe('registerWatchSignalExit', () => {
 
 describe('createWatchTeardown', () => {
   it('defers a cleanup registered while close is in flight', async () => {
+    const context = createContext();
     let releaseClose: () => void = () => {};
     let markCloseStarted: () => void = () => {};
     const closeStarted = new Promise<void>((resolve) => {
@@ -146,6 +178,7 @@ describe('createWatchTeardown', () => {
       await closeBlocked;
     };
     const teardown = createWatchTeardown({
+      context,
       executors: [executor],
       traceController: {
         close: async () => {},
@@ -164,6 +197,53 @@ describe('createWatchTeardown', () => {
     releaseClose();
     await closing;
     expect(cleanups).toBe(1);
+  });
+
+  it('rejects every close call when global teardown fails', async () => {
+    const context = createContext();
+    context.globalTeardownCallbacks.push(async () => false);
+    let finalized = 0;
+    const teardown = createWatchTeardown({
+      context,
+      executors: [createFakeExecutor('node')],
+      traceController: {
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: () =>
+        ({
+          finalize: async () => {
+            finalized += 1;
+          },
+        }) as TraceRun,
+    });
+
+    const firstClose = teardown.close();
+    expect(teardown.close()).toBe(firstClose);
+    await expect(firstClose).rejects.toThrow('Global teardown failed.');
+    await expect(teardown.close()).rejects.toThrow('Global teardown failed.');
+    expect(finalized).toBe(1);
+  });
+
+  it('unregisters its restart cleaner when the session closes', async () => {
+    const context = createContext();
+    const staleCleaner = rs.fn();
+    const teardown = createWatchTeardown({
+      context,
+      executors: [createFakeExecutor('node')],
+      traceController: {
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
+    });
+    teardown.addCleanup(onBeforeRestart(staleCleaner));
+
+    await teardown.close();
+    const activeCleaner = rs.fn();
+    onBeforeRestart(activeCleaner);
+    await beforeRestart({ root: rootPath, clear: false });
+
+    expect(staleCleaner).not.toHaveBeenCalled();
+    expect(activeCleaner).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -457,6 +537,7 @@ describe('createWatchCycleDriver', () => {
     ];
     const { executor, release, started } = createGatedExecutor('node');
     const teardown = createWatchTeardown({
+      context,
       executors: [executor],
       traceController: {
         close: async () => {},

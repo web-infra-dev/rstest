@@ -1,4 +1,4 @@
-import type { ProjectContext } from '../types';
+import type { InternalProjectContext } from '../types';
 import {
   collectSetupPaths,
   getSetupFiles,
@@ -6,8 +6,8 @@ import {
 } from '../utils/getSetupFiles';
 
 export type SetupFileProjects = {
-  setupProjects: ProjectContext[];
-  globalSetupProjects: ProjectContext[];
+  setupProjects: InternalProjectContext[];
+  globalSetupProjects: InternalProjectContext[];
 };
 
 export type SetupFileState = {

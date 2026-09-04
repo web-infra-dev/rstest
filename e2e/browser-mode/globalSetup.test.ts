@@ -115,11 +115,9 @@ const expectSignalExitDuringGlobalSetup = async ({
   }
 };
 
-// Phase 5 step 5 gate (red-first): browser projects must run `globalSetup` on
-// the host — today the browser path never compiles nor executes it — and the
-// post-setup `process.env` change-set must be propagated into the browser
-// runtime env store (readable via `process.env` / `import.meta.env`), with
-// explicit `test.env` config still winning over globalSetup mutations.
+// Browser projects run `globalSetup` in an isolated setup worker and propagate
+// its env change-set into the browser runtime store. Explicit `test.env` config
+// still takes precedence.
 describe('browser mode - globalSetup', () => {
   it('runs globalSetup, propagates env into browser tests, and tears down in order', async () => {
     const { cli, expectExecSuccess } = await runBrowserCli(
@@ -153,7 +151,7 @@ describe('browser mode - globalSetup', () => {
 
     const setupIndex = cli.stdout.indexOf('[browser-global-setup] executed');
     const testIndex = cli.stdout.indexOf(
-      'tests/globalSetup.test.ts > browser globalSetup env propagation (from-global-setup) > reads env changes made by globalSetup on the host',
+      'tests/globalSetup.test.ts > browser globalSetup env propagation (from-global-setup) > reads env changes made by globalSetup',
     );
     const teardownIndex = cli.stdout.indexOf(
       '[browser-global-teardown] executed',

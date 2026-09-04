@@ -123,17 +123,18 @@ Use `onTestCaseStart` when you need the declared metadata before the test runs. 
 
 ## Read metadata from the programmatic API
 
-The `runRstest` result includes the same result metadata as reporters.
+The result returned by `rstest.run()` includes the same result metadata as reporters.
 
 ```ts
-import { runRstest } from '@rstest/core/api';
+import { createRstest } from '@rstest/core/api';
 
-const result = await runRstest({
+const rstest = await createRstest({
   cwd: process.cwd(),
-  inlineConfig: {
+  config: {
     include: ['src/**/*.test.ts'],
   },
 });
+const result = await rstest.run();
 
 for (const file of result.files) {
   console.log(file.testPath, file.meta);

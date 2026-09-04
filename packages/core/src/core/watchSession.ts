@@ -16,7 +16,7 @@ import {
   notifyReportersOnTestRunStart,
   runLifecycleStep,
 } from './finalizeRun';
-import { runGlobalTeardown } from './globalSetup';
+import { GLOBAL_TEARDOWN_ERROR, runGlobalTeardown } from './globalSetup';
 import type { Rstest } from './rstest';
 import {
   collectFailedTestPaths,
@@ -72,8 +72,8 @@ export type WatchCycleOptions = {
    * Post-globalSetup env change-set, produced by the core-owned pre-cycle
    * globalSetup stage. Set on the session's initial browser cycle only — that
    * cycle is the host launch, and the host keeps the change-set for the whole
-   * session. The node executor ignores it either way: the stage already mutated
-   * the host `process.env`, which the pool re-reads at dispatch.
+   * session. The node executor ignores this field because its pool composes the
+   * same context-local overlay at dispatch.
    */
   env?: Record<string, string | undefined>;
 };
@@ -266,6 +266,7 @@ export function createWatchCycleDriver({
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
         traceRun: getTraceRun(),
       });
+      context.exitCode.finishCycle();
     } finally {
       // In `finally`, so a startup that failed still counts as past startup —
       // see {@link WatchCycleDriver.hasSettledCycle}. The caller keeps the
@@ -551,10 +552,12 @@ export interface WatchTeardown {
 }
 
 export function createWatchTeardown({
+  context,
   executors,
   traceController,
   getTraceRun,
 }: {
+  context: Rstest;
   /** Closed in order; the browser side goes first, as it always has. */
   executors: TestExecutor[];
   traceController: TraceController;
@@ -587,7 +590,10 @@ export function createWatchTeardown({
       }
       // The watch session owns the shared queue and drains it only after every
       // executor has closed.
-      await step('global teardown', () => runGlobalTeardown());
+      const teardownSucceeded = await runGlobalTeardown(context);
+      if (!teardownSucceeded) {
+        throw new Error(GLOBAL_TEARDOWN_ERROR);
+      }
     } finally {
       try {
         await step('trace run finalize', () => getTraceRun().finalize());
