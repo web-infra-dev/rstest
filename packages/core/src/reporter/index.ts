@@ -13,7 +13,8 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { flushOutputStreams, isTTY } from '../utils';
+import { runLifecycleStep } from '../core/finalizeRun';
+import { color, flushOutputStreams, isTTY, logger } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
@@ -136,10 +137,6 @@ export class DefaultReporter implements Reporter {
 
   onExit(): void {
     this.statusRenderer?.clear();
-    this.nonTTYProgressNotifier?.stop();
-  }
-
-  dispose(): void {
     this.statusRenderer?.stop();
     this.nonTTYProgressNotifier?.stop();
   }
@@ -191,15 +188,22 @@ export class DefaultReporter implements Reporter {
   }
 }
 
-export function disposeBuiltInReporters(
+export function exitReporters(
   context: Pick<InternalContext, 'reporters'>,
-): void {
-  // TODO: RFC PR2 should make reporter lifecycle context-owned and define a
-  // disposal contract for custom reporters. PR1 only releases built-in TTY
-  // renderer resources that would otherwise pollute an embedding host.
-  for (const reporter of context.reporters) {
-    if (reporter instanceof DefaultReporter) {
-      reporter.dispose();
+): Promise<void> {
+  const exits: Promise<void>[] = [];
+  for (const reporter of context.reporters.splice(0)) {
+    const { onExit } = reporter;
+    if (!onExit) {
+      continue;
     }
+    exits.push(
+      runLifecycleStep('reporter onExit', async () => {
+        await onExit.call(reporter);
+      }).catch((error) => {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }),
+    );
   }
+  return Promise.all(exits).then(() => {});
 }
