@@ -18,7 +18,6 @@ const tryResolve = (request: string, rootPath: string) => {
 
 type JavaScriptDataUrl = {
   data: string;
-  isBase64: boolean;
 };
 
 const decodeDataUrlPayload = (data: string): string =>
@@ -44,10 +43,12 @@ const parseJavaScriptDataUrl = (
   if (mimeType !== 'text/javascript' && mimeType !== 'application/javascript') {
     return undefined;
   }
+  if (!metadata.some((item) => item.trim().toLowerCase() === 'base64')) {
+    return undefined;
+  }
 
   return {
     data: dataUrl.slice(commaIndex + 1),
-    isBase64: metadata.some((item) => item.trim().toLowerCase() === 'base64'),
   };
 };
 
@@ -129,9 +130,9 @@ export const materializeVirtualSetupFiles = (
         '.rstest-virtual',
         `${entryName}.mjs`,
       );
-      virtualModules[virtualPath] = dataUrl.isBase64
-        ? Buffer.from(source, 'base64').toString('utf8')
-        : source;
+      virtualModules[virtualPath] = Buffer.from(source, 'base64').toString(
+        'utf8',
+      );
       return [entryName, virtualPath];
     }),
   );

@@ -1160,6 +1160,7 @@ export const runBrowserController = async (
     return {
       ...errorResult,
       rawCoverage,
+      setupFiles: projectEntries.flatMap((entry) => entry.setupFiles),
       loadAssetFiles: loadBrowserCoverageAssetFiles,
       loadSourceMaps: loadBrowserCoverageSourceMaps,
       watchSession,

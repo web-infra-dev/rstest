@@ -204,7 +204,9 @@ export async function generateCoverage(
     normalizedConfig: { coverage },
     projects,
   } = context;
+  const normalizedRootPath = normalize(rootPath);
   try {
+    const setupCoverageExcludes = getSetupCoverageExcludes(context, setupFiles);
     const finalCoverageMap = coverageMap;
 
     await traceSpan(
@@ -213,11 +215,6 @@ export async function generateCoverage(
       () => {
         const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
         const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
-        const normalizedRootPath = normalize(rootPath);
-        const setupCoverageExcludes = getSetupCoverageExcludes(
-          context,
-          setupFiles,
-        );
         const absDistPathRoot = distPathRoot
           ? normalize(
               isAbsolute(distPathRoot)
@@ -282,23 +279,32 @@ export async function generateCoverage(
       // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
       for (const p of projects) {
-        const includedFiles = await traceSpan(
-          'coverage:collect-included-files',
-          'coverage',
-          async () =>
-            filterChangedFiles(
-              filterExternalFiles(
-                await getIncludedFiles(coverage, p.rootPath),
+        const includedFiles = (
+          await traceSpan(
+            'coverage:collect-included-files',
+            'coverage',
+            async () =>
+              filterChangedFiles(
+                filterExternalFiles(
+                  await getIncludedFiles(coverage, p.rootPath),
+                  p.rootPath,
+                  coverage.allowExternal,
+                ),
+                context.changedCoverageFilters,
                 p.rootPath,
-                coverage.allowExternal,
               ),
-              context.changedCoverageFilters,
-              p.rootPath,
+            {
+              project: p.environmentName,
+              changedOnly: context.changedCoverageFilters !== undefined,
+            },
+          )
+        ).filter(
+          (file) =>
+            !shouldExcludeSetupCoverageFile(
+              file,
+              normalizedRootPath,
+              setupCoverageExcludes,
             ),
-          {
-            project: p.environmentName,
-            changedOnly: context.changedCoverageFilters !== undefined,
-          },
         );
         allFiles.push(...includedFiles);
 

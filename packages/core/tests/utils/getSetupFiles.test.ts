@@ -31,7 +31,7 @@ describe('getSetupFiles', () => {
     expect(Object.values(result.virtualModules)).toEqual(['']);
   });
 
-  it('matches data URL metadata case-insensitively and decodes the payload', () => {
+  it('matches supported data URL metadata case-insensitively', () => {
     const result = materializeVirtualSetupFiles(
       getSetupFiles(
         ['data:TEXT/JAVASCRIPT;charset=UTF-8;base64,Y29uc29sZS5sb2coMSk%3D'],
@@ -55,18 +55,13 @@ describe('getSetupFiles', () => {
     expect(Object.values(result.virtualModules)).toEqual(['console.log(1)']);
   });
 
-  it('materializes percent-encoded non-Base64 JavaScript data URLs', () => {
-    const result = materializeVirtualSetupFiles(
+  it('does not virtualize non-Base64 JavaScript data URLs', () => {
+    expect(() =>
       getSetupFiles(
         ['data:text/javascript,globalThis.ready%20%3D%20true'],
         '/project',
       ),
-      '/project',
-    );
-
-    expect(Object.values(result.virtualModules)).toEqual([
-      'globalThis.ready = true',
-    ]);
+    ).toThrow();
   });
 
   it('does not include data URL fragments in the virtual module source', () => {
@@ -76,16 +71,5 @@ describe('getSetupFiles', () => {
     );
 
     expect(Object.values(result.virtualModules)).toEqual(['void 0']);
-  });
-
-  it('preserves unmatched percent escapes in non-Base64 payloads', () => {
-    const result = materializeVirtualSetupFiles(
-      getSetupFiles(['data:text/javascript,globalThis.value=5%2'], '/project'),
-      '/project',
-    );
-
-    expect(Object.values(result.virtualModules)).toEqual([
-      'globalThis.value=5%2',
-    ]);
   });
 });

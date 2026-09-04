@@ -275,6 +275,67 @@ describe('generateCoverage', () => {
     }
   });
 
+  it('does not backfill setup files matched by coverage.include', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const setupFile = path.join(rootPath, 'src', 'setup.ts');
+    const sourceFile = path.join(rootPath, 'src', 'index.ts');
+
+    mkdirSync(path.dirname(setupFile), { recursive: true });
+    writeFileSync(setupFile, 'export {};\n');
+    writeFileSync(sourceFile, 'export const value = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const generatedFiles: string[][] = [];
+    const reportedFiles: string[][] = [];
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateCoverageForUntestedFiles({ files }) {
+        generatedFiles.push(files);
+        return files.map(createFileCoverage);
+      },
+      async generateReports(coverageMap) {
+        reportedFiles.push(coverageMap.files());
+      },
+    } satisfies CoverageProvider;
+
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: {
+          ...defaultCoverage,
+          include: ['src/**/*.ts'],
+        },
+      },
+      projects: [
+        {
+          rootPath,
+          environmentName: 'browser',
+          normalizedConfig: {
+            setupFiles: [setupFile],
+            globalSetup: [],
+          },
+        },
+      ],
+    } as unknown as InternalContext;
+
+    try {
+      await generateCoverage(
+        context,
+        createCoverageMap(),
+        provider,
+        undefined,
+        [setupFile],
+      );
+      expect(generatedFiles).toEqual([[sourceFile]]);
+      expect(reportedFiles).toEqual([[sourceFile]]);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
   it('does not resolve setup files for projects outside the run scope', async () => {
     const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
     const sourceFile = path.join(rootPath, 'src', 'index.ts');
