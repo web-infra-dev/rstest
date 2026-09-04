@@ -52,7 +52,7 @@ describe('createResultReporter', () => {
       expect(callbackCount).toBe(2);
       expect(unhandledRejections).toEqual([]);
     } finally {
-      capture.dispose();
+      await capture.reporter.onExit?.();
       process.off('unhandledRejection', onUnhandledRejection);
     }
   });

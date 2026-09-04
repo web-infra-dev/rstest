@@ -1,0 +1,14 @@
+import { defineConfig, type RstestConfig } from '@rstest/core';
+import rsbuildConfig from './rsbuild.config';
+
+export default defineConfig({
+  ...(rsbuildConfig as RstestConfig),
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+    providerOptions: {
+      launch: process.env.CI ? { channel: 'chrome' } : undefined,
+    },
+  },
+});

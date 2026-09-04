@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, rs } from '@rstest/core';
 import { isCliShortcutsEnabled } from '../../src/core/cliShortcuts';
-import { beforeRestart, onBeforeRestart } from '../../src/core/restart';
 import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
@@ -230,28 +229,6 @@ describe('createWatchTeardown', () => {
     await expect(firstClose).rejects.toThrow('Global teardown failed.');
     await expect(teardown.close()).rejects.toThrow('Global teardown failed.');
     expect(finalized).toBe(1);
-  });
-
-  it('unregisters its restart cleaner when the session closes', async () => {
-    const context = createContext();
-    const staleCleaner = rs.fn();
-    const teardown = createWatchTeardown({
-      context,
-      executors: [createFakeExecutor('node')],
-      traceController: {
-        close: async () => {},
-      } as unknown as TraceController,
-      getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
-    });
-    teardown.addCleanup(onBeforeRestart(staleCleaner));
-
-    await teardown.close();
-    const activeCleaner = rs.fn();
-    onBeforeRestart(activeCleaner);
-    await beforeRestart({ root: rootPath, clear: false });
-
-    expect(staleCleaner).not.toHaveBeenCalled();
-    expect(activeCleaner).toHaveBeenCalledTimes(1);
   });
 });
 

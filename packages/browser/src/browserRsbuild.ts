@@ -77,6 +77,8 @@ type BrowserProjectEntries = {
 };
 
 class RstestBrowserRuntimePlugin {
+  constructor(private readonly browserRuntimeDir: string) {}
+
   apply(compiler: Rspack.Compiler) {
     const { RuntimeModule } = compiler.webpack;
     class BrowserRuntimeModule extends RuntimeModule {
@@ -115,6 +117,20 @@ function __rstest_clean_browser_test_entry__(testEntryPath) {
         );
       },
     );
+
+    compiler.hooks.afterPlugins.tap('RstestBrowserSourceMapRule', () => {
+      compiler.options.module.rules.unshift({
+        test: /\.js$/,
+        include: this.browserRuntimeDir,
+        extractSourceMap: true,
+      });
+
+      if (isDebug()) {
+        logger.log(
+          `[rstest:browser] extractSourceMap rule added for: ${this.browserRuntimeDir}`,
+        );
+      }
+    });
   }
 }
 
@@ -1684,30 +1700,13 @@ export const createBrowserRuntime = async ({
                         : false;
                       rspackConfig.plugins = rspackConfig.plugins || [];
                       rspackConfig.plugins.push(
-                        new RstestBrowserRuntimePlugin(),
+                        new RstestBrowserRuntimePlugin(
+                          dirname(browserRuntimePath),
+                        ),
                       );
                       rspackConfig.plugins.push(virtualManifestPlugin);
 
                       applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                      // Extract and merge sourcemaps from pre-built @rstest/core files
-                      // This preserves the sourcemap chain for inline snapshot support
-                      // See: https://rspack.rs/config/module-rules#rulesextractsourcemap
-                      const browserRuntimeDir = dirname(browserRuntimePath);
-                      rspackConfig.module = rspackConfig.module || {};
-                      rspackConfig.module.rules =
-                        rspackConfig.module.rules || [];
-                      rspackConfig.module.rules.unshift({
-                        test: /\.js$/,
-                        include: browserRuntimeDir,
-                        extractSourceMap: true,
-                      });
-
-                      if (isDebug()) {
-                        logger.log(
-                          `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                        );
-                      }
                     },
                   },
                 },

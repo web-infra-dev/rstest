@@ -1,6 +1,7 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
 import type { RstestExitCode } from '../core/exitCode';
 import type { TestStateManager } from '../core/stateManager';
+import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import type {
   EnvironmentName,
   NormalizedConfig,
@@ -126,6 +127,8 @@ export type InternalContext = {
   globalTeardownCallbacks: Array<
     () => boolean | void | Promise<boolean | void>
   >;
+  /** CLI-owned confirmation hook for optional dependency installation. */
+  packageInstallerConfirm?: PackageInstallerConfirm;
   /** Active watch-session closer for programmatic hosts. */
   closeWatchSession?: () => Promise<void>;
   reporters: Reporter[];
