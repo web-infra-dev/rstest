@@ -17,7 +17,7 @@ const tryResolve = (request: string, rootPath: string) => {
 };
 
 const JAVASCRIPT_DATA_URL_RE =
-  /^data:(?:text|application)\/javascript(?:;charset=utf-8)?;base64,(.*)$/;
+  /^data:(?:text|application)\/javascript(?:;[^,]*)*;base64,(.*)$/i;
 
 /**
  * Flatten one or more `{ [env]: { [entry]: path } }` setup maps into a flat
@@ -90,10 +90,7 @@ export const materializeVirtualSetupFiles = (
       if (!match) {
         return [entryName, request];
       }
-      const encodedSource = match[1];
-      if (encodedSource === undefined) {
-        return [entryName, request];
-      }
+      const encodedSource = decodeURIComponent(match[1] ?? '');
 
       const virtualPath = pathe.join(
         rootPath,

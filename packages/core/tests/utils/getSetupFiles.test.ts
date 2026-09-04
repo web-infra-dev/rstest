@@ -30,4 +30,16 @@ describe('getSetupFiles', () => {
 
     expect(Object.values(result.virtualModules)).toEqual(['']);
   });
+
+  it('matches data URL metadata case-insensitively and decodes the payload', () => {
+    const result = materializeVirtualSetupFiles(
+      getSetupFiles(
+        ['data:TEXT/JAVASCRIPT;charset=UTF-8;base64,Y29uc29sZS5sb2coMSk%3D'],
+        '/project',
+      ),
+      '/project',
+    );
+
+    expect(Object.values(result.virtualModules)).toEqual(['console.log(1)']);
+  });
 });

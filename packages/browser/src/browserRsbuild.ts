@@ -78,6 +78,18 @@ type BrowserProjectEntries = {
   testFiles: string[];
 };
 
+const syncBrowserCoverageSetupExcludes = (
+  project: InternalProjectContext,
+  setupFiles: string[],
+): void => {
+  const coverage = project.normalizedConfig.coverage;
+  if (!coverage?.enabled || !setupFiles.length) {
+    return;
+  }
+
+  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupFiles]));
+};
+
 class RstestBrowserRuntimePlugin {
   apply(compiler: Rspack.Compiler) {
     const { RuntimeModule } = compiler.webpack;
@@ -882,10 +894,12 @@ export const collectProjectEntries = async (
         getSetupFiles(setupFiles, project.rootPath),
         project.rootPath,
       );
+      const materializedSetupFiles = Object.values(setup.setupFiles);
+      syncBrowserCoverageSetupExcludes(project, materializedSetupFiles);
 
       return {
         project,
-        setupFiles: Object.values(setup.setupFiles),
+        setupFiles: materializedSetupFiles,
         virtualModules: setup.virtualModules,
         testFiles: Object.values(tests),
       };
@@ -2013,9 +2027,11 @@ export async function resolveProjectEntries(
           getSetupFiles(project.normalizedConfig.setupFiles, project.rootPath),
           project.rootPath,
         );
+        const materializedSetupFiles = Object.values(setup.setupFiles);
+        syncBrowserCoverageSetupExcludes(project, materializedSetupFiles);
         projectEntries.push({
           project,
-          setupFiles: Object.values(setup.setupFiles),
+          setupFiles: materializedSetupFiles,
           virtualModules: setup.virtualModules,
           testFiles: Object.values(entryInfo.entries),
         });

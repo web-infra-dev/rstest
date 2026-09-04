@@ -9,6 +9,10 @@ import type {
   CoverageProvider,
 } from '../types/coverage';
 import { logger, noopTraceSpan, type TraceSpan } from '../utils';
+import {
+  getSetupFiles,
+  materializeVirtualSetupFiles,
+} from '../utils/getSetupFiles';
 
 export const getIncludedFiles = async (
   coverage: CoverageOptions,
@@ -104,8 +108,18 @@ const getSetupCoverageExcludes = (context: InternalContext): Set<string> => {
       }
 
       const files = [
-        ...(normalizedConfig.setupFiles || []),
-        ...(normalizedConfig.globalSetup || []),
+        ...Object.values(
+          materializeVirtualSetupFiles(
+            getSetupFiles(normalizedConfig.setupFiles || [], rootPath),
+            rootPath,
+          ).setupFiles,
+        ),
+        ...Object.values(
+          materializeVirtualSetupFiles(
+            getSetupFiles(normalizedConfig.globalSetup || [], rootPath),
+            rootPath,
+          ).setupFiles,
+        ),
       ];
 
       return files.map((filePath) =>

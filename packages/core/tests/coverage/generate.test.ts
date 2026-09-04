@@ -7,6 +7,10 @@ import {
   filterChangedFiles,
   generateCoverage,
 } from '../../src/coverage/generate';
+import {
+  getSetupFiles,
+  materializeVirtualSetupFiles,
+} from '../../src/utils/getSetupFiles';
 import type { InternalContext } from '../../src/types';
 import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
 import type { TraceSpan } from '../../src/utils';
@@ -205,6 +209,63 @@ describe('generateCoverage', () => {
         },
       ],
     } as InternalContext;
+
+    try {
+      await generateCoverage(context, coverageMap, provider);
+      expect(reportedFiles).toEqual([[sourceFile]]);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
+  it('filters virtual setup files from the final coverage map', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const setupFile =
+      'data:text/javascript;base64,Y29uc29sZS5sb2coInNldHVwIik7';
+    const virtualSetupFile = Object.values(
+      materializeVirtualSetupFiles(
+        getSetupFiles([setupFile], rootPath),
+        rootPath,
+      ).setupFiles,
+    )[0]!;
+    const sourceFile = path.join(rootPath, 'src', 'index.ts');
+
+    mkdirSync(path.dirname(sourceFile), { recursive: true });
+    writeFileSync(sourceFile, 'export const value = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const reportedFiles: string[][] = [];
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateReports(coverageMap) {
+        reportedFiles.push(coverageMap.files());
+      },
+      generateCoverageForUntestedFiles: async () => [],
+    } satisfies CoverageProvider;
+
+    const coverageMap = createCoverageMap();
+    coverageMap.addFileCoverage(createFileCoverage(sourceFile));
+    coverageMap.addFileCoverage(createFileCoverage(virtualSetupFile));
+
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: defaultCoverage,
+      },
+      projects: [
+        {
+          rootPath,
+          environmentName: 'browser',
+          normalizedConfig: {
+            setupFiles: [setupFile],
+            globalSetup: [],
+          },
+        },
+      ],
+    } as unknown as InternalContext;
 
     try {
       await generateCoverage(context, coverageMap, provider);
