@@ -30,7 +30,7 @@ test('should not record timers for a worker-scoped environment', () => {
   expect(cleared).toEqual([]);
 });
 
-test('should clear pending immediates for a file-scoped environment', () => {
+test('should clear pending immediate callbacks for a file-scoped environment', () => {
   const cleared: unknown[] = [];
   const nodeTimers = {
     setImmediate: () => ({ kind: 'immediate' }) as unknown as NodeJS.Timeout,
