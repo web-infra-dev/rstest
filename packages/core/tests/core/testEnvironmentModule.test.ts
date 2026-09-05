@@ -110,6 +110,9 @@ exports.canvasToken = canvas.token;
         if (!moduleReference?.bundlePath) {
           throw new Error('Expected jsdom to be bundled.');
         }
+        expect(moduleReference.bundlePath).toBe(
+          fs.realpathSync(moduleReference.bundlePath),
+        );
         expect(fs.existsSync(moduleReference.bundlePath)).toBe(true);
 
         const bundled = await import(
