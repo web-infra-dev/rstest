@@ -376,7 +376,7 @@ export class Rstest implements InternalContext {
     // would shift run-to-run with the sequencer's scheduling. Sort is stable,
     // so individual test cases keep their in-file declaration order.
     const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
-      a.testPath.localeCompare(b.testPath);
+      a.testPath === b.testPath ? 0 : a.testPath.localeCompare(b.testPath);
     this.reporterResults.results.sort(byTestPath);
     this.reporterResultIndex.clear();
     this.reporterResults.results.forEach((result, index) => {
