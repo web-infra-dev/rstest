@@ -426,8 +426,15 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     const originalTestPath = this.toProjectRelativePath(normalizedKey, root);
+    // Browser entry resolution can append materialized setup paths after the
+    // run-scoped provider has compiled its glob matcher.
+    const isExactExcluded =
+      this.options.exclude?.includes(normalizedKey) ||
+      this.options.exclude?.includes(originalTestPath);
     return (
-      !this.isExcluded(originalTestPath) && this.isIncluded(originalTestPath)
+      !isExactExcluded &&
+      !this.isExcluded(originalTestPath) &&
+      this.isIncluded(originalTestPath)
     );
   }
 

@@ -60,6 +60,46 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
   });
 
+  it('does not report virtual setup files in coverage', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportsDirectory = join(fixtureDir, 'coverage-virtual-setup');
+    const reportPath = join(reportsDirectory, 'coverage-final.json');
+    fs.rmSync(reportsDirectory, { recursive: true, force: true });
+
+    const { expectExecSuccess } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.virtualSetup.config.mts'],
+    });
+
+    await expectExecSuccess();
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(
+      Object.keys(report).some((file) => file.includes('.rstest-virtual')),
+    ).toBe(false);
+  });
+
+  it('does not report virtual setup files in V8 coverage', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportsDirectory = join(fixtureDir, 'coverage-virtual-setup-v8');
+    const reportPath = join(reportsDirectory, 'coverage-final.json');
+    fs.rmSync(reportsDirectory, { recursive: true, force: true });
+
+    const { expectExecSuccess } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.virtualSetupV8.config.mts'],
+    });
+
+    await expectExecSuccess();
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(
+      Object.keys(report).some((file) => file.includes('.rstest-virtual')),
+    ).toBe(false);
+  });
+
   it('should collect native V8 coverage from Chromium browser tests', async () => {
     const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
     const reportPath = join(

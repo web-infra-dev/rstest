@@ -8,6 +8,7 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
+import { syncCoverageSetupExcludes } from '../coverage';
 import type {
   EntryInfo,
   InternalContext,
@@ -50,16 +51,7 @@ type WatchBuildData = {
   runtimeChunkFiles?: string[];
 };
 
-export const syncCoverageSetupExcludes = (
-  coverage: NormalizedProjectConfig['coverage'] | undefined,
-  setupPaths: string[],
-): void => {
-  if (!coverage?.enabled || !setupPaths.length) {
-    return;
-  }
-
-  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupPaths]));
-};
+export { syncCoverageSetupExcludes } from '../coverage';
 
 const getRuntimeChunkFiles = ({
   chunks,
@@ -183,7 +175,8 @@ export const prepareRsbuild = async ({
     command,
     normalizedConfig: { coverage, dev = {}, isolate, pool },
   } = context;
-  const { setupFiles, globalSetupFiles, getSetupPaths } = setupFileState;
+  const { setupFiles, globalSetupFiles, virtualModules, getSetupPaths } =
+    setupFileState;
   const testEntryPathState: TestEntryPathState = new Map();
 
   // Default execution still excludes browser projects. Callers can opt in to a
@@ -200,7 +193,14 @@ export const prepareRsbuild = async ({
     };
     setupFileState.refresh(setupFileProjects);
     if (command !== 'list') {
-      syncCoverageSetupExcludes(coverage, getSetupPaths());
+      syncCoverageSetupExcludes(
+        coverage,
+        getSetupPaths(),
+        [
+          ...setupFileProjects.setupProjects,
+          ...setupFileProjects.globalSetupProjects,
+        ].map((project) => project.rootPath),
+      );
     }
   };
 
@@ -230,6 +230,7 @@ export const prepareRsbuild = async ({
           globTestSourceEntries,
           setupFiles,
           globalSetupFiles,
+          virtualModules,
           context,
           testEntryPathState: isolate ? undefined : testEntryPathState,
           isWatch: command === 'watch',

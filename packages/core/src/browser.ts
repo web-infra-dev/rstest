@@ -69,7 +69,11 @@ export { pluginMockRuntime } from './core/plugins/mockRuntime';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
-export { createCoverageProvider, loadCoverageProvider } from './coverage';
+export {
+  createCoverageProvider,
+  loadCoverageProvider,
+  syncCoverageSetupExcludes,
+} from './coverage';
 export {
   getUserRstestConfigPluginProjects,
   hasUserRstestConfigPlugins,
@@ -120,7 +124,10 @@ export {
   RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
-export { getSetupFiles } from './utils/getSetupFiles';
+export {
+  getSetupFiles,
+  materializeVirtualSetupFiles,
+} from './utils/getSetupFiles';
 export { resolveShardedEntries } from './utils/shard';
 export { getTestEntries } from './utils/testFiles';
 export { rsbuild };

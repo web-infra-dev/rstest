@@ -74,6 +74,7 @@ Contracts between modules or processes — not readable from any single file.
 
 - `rs.mock` hoisting/rewriting happens at build time inside rspack's native `RstestPlugin`; registration happens at runtime inside the injected `mockRuntimeCode.js` registry. The `rstest_*` member names are the wire contract between the two — renaming either side alone breaks mocking.
 - Setup files and test files must share one webpack runtime chunk — mock state lives on that runtime's `__webpack_require__`.
+- Base64 JavaScript `data:` URL setup entries are materialized as absolute virtual modules before entry assembly; setup state, cache control, and `VirtualModulesPlugin` must use that same materialized path. Coverage excludes must include its absolute path and each provider root-relative form. Virtual setup code executes but is intentionally not collected as coverage.
 - `@rstest/core` must stay external to the runtime-published global: hoisted callbacks run above bundled imports, so a bundled provider module would load too late.
 - Under `isolate: false`, cache control invalidates only the test entry currently being dispatched. Clearing every discovered entry before every file breaks once-per-worker dependency state.
 - Raw runtime/loader files resolved via `__dirname` at build time ↔ the dist copy list in `rslib.config.ts` — adding/renaming one requires updating both.

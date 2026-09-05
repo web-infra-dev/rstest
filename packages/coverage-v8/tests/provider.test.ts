@@ -88,7 +88,10 @@ const trackNativeMerge = (
 // whole type to `never`.
 type ProviderInternals = Omit<
   CoverageProvider,
-  'findInDict' | 'convertWithAst' | 'takeRawCoverage'
+  | 'findInDict'
+  | 'convertWithAst'
+  | 'takeRawCoverage'
+  | 'shouldKeepOriginalSource'
 > & {
   findInDict: (
     dict: Record<string, string> | undefined,
@@ -113,6 +116,7 @@ type ProviderInternals = Omit<
     transformedSource?: { code: string },
   ) => Promise<Record<string, FileCoverageData>>;
   takeRawCoverage: () => Promise<unknown[]>;
+  shouldKeepOriginalSource: (filePath: string, root?: string) => boolean;
 };
 
 function getProviderInternals(provider: CoverageProvider): ProviderInternals {
@@ -1108,6 +1112,17 @@ export default class CustomCoverageReporter {
     expect(
       provider.findInDict(dict, '/private/tmp/project/src/private.ts'),
     ).toBe('private-prefix');
+  });
+
+  it('uses exact exclusions appended after provider construction', () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-live-exclude');
+    const options = createOptions();
+    const provider = getProviderInternals(new CoverageProvider(options, root));
+    const setupPath = join(root, '.rstest-virtual', 'setup.mjs');
+
+    options.exclude = ['.rstest-virtual/setup.mjs'];
+
+    expect(provider.shouldKeepOriginalSource(setupPath, root)).toBe(false);
   });
 
   it('skips excluded no-sourcemap files before reading or converting them', async () => {

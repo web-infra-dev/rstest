@@ -1,8 +1,9 @@
+import { Buffer } from 'node:buffer';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { rspack } from '@rsbuild/core';
 import pathe from 'pathe';
-import { getAbsolutePath } from './helper';
+import { generateFilePathHash, getAbsolutePath } from './helper';
 import { color } from './logger';
 import { formatTestEntryName } from './testFiles';
 
@@ -13,6 +14,42 @@ const tryResolve = (request: string, rootPath: string) => {
   });
   const { path: resolvedPath } = esmFirstResolver.sync(rootPath, request);
   return resolvedPath;
+};
+
+type JavaScriptDataUrl = {
+  data: string;
+};
+
+const decodeDataUrlPayload = (data: string): string =>
+  decodeURIComponent(data.replace(/%(?![0-9a-f]{2})/gi, '%25'));
+
+const parseJavaScriptDataUrl = (
+  request: string,
+): JavaScriptDataUrl | undefined => {
+  if (request.slice(0, 5).toLowerCase() !== 'data:') {
+    return undefined;
+  }
+
+  const fragmentIndex = request.indexOf('#');
+  const dataUrl =
+    fragmentIndex === -1 ? request : request.slice(0, fragmentIndex);
+  const commaIndex = dataUrl.indexOf(',');
+  if (commaIndex === -1) {
+    return undefined;
+  }
+
+  const metadata = dataUrl.slice(5, commaIndex).split(';');
+  const mimeType = metadata.shift()?.trim().toLowerCase();
+  if (mimeType !== 'text/javascript' && mimeType !== 'application/javascript') {
+    return undefined;
+  }
+  if (!metadata.some((item) => item.trim().toLowerCase() === 'base64')) {
+    return undefined;
+  }
+
+  return {
+    data: dataUrl.slice(commaIndex + 1),
+  };
 };
 
 /**
@@ -39,6 +76,13 @@ export const getSetupFiles = (
   }
   return Object.fromEntries(
     setups.map((filePath) => {
+      if (parseJavaScriptDataUrl(filePath)) {
+        return [
+          `virtual~setup~${generateFilePathHash(rootPath, filePath)}`,
+          filePath,
+        ];
+      }
+
       const setupFile = filePath.startsWith('file://')
         ? fileURLToPath(filePath)
         : filePath;
@@ -63,4 +107,35 @@ export const getSetupFiles = (
       }
     }),
   );
+};
+
+export const materializeVirtualSetupFiles = (
+  setupFiles: Record<string, string>,
+  rootPath: string,
+): {
+  setupFiles: Record<string, string>;
+  virtualModules: Record<string, string>;
+} => {
+  const virtualModules: Record<string, string> = {};
+  const entries = Object.fromEntries(
+    Object.entries(setupFiles).map(([entryName, request]) => {
+      const dataUrl = parseJavaScriptDataUrl(request);
+      if (!dataUrl) {
+        return [entryName, request];
+      }
+      const source = decodeDataUrlPayload(dataUrl.data);
+
+      const virtualPath = pathe.join(
+        rootPath,
+        '.rstest-virtual',
+        `${entryName}.mjs`,
+      );
+      virtualModules[virtualPath] = Buffer.from(source, 'base64').toString(
+        'utf8',
+      );
+      return [entryName, virtualPath];
+    }),
+  );
+
+  return { setupFiles: entries, virtualModules };
 };

@@ -18,11 +18,13 @@ import {
   isDebug,
   logger,
   loadCoverageProvider,
+  materializeVirtualSetupFiles,
   pluginMockRuntime,
   resolveProjectBuildCache,
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
+  syncCoverageSetupExcludes,
   type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
 import openEditor from 'open-editor';
@@ -73,6 +75,7 @@ export const serializeForInlineScript = (value: unknown): string => {
 type BrowserProjectEntries = {
   project: InternalProjectContext;
   setupFiles: string[];
+  virtualModules: Record<string, string>;
   testFiles: string[];
 };
 
@@ -892,11 +895,21 @@ export const collectProjectEntries = async (
         fileFilterMode: context.fileFilterMode,
       });
 
-      const setup = getSetupFiles(setupFiles, project.rootPath);
+      const setup = materializeVirtualSetupFiles(
+        getSetupFiles(setupFiles, project.rootPath),
+        project.rootPath,
+      );
+      const materializedSetupFiles = Object.values(setup.setupFiles);
+      syncCoverageSetupExcludes(
+        project.normalizedConfig.coverage,
+        materializedSetupFiles,
+        [context.rootPath, project.rootPath],
+      );
 
       return {
         project,
-        setupFiles: Object.values(setup),
+        setupFiles: materializedSetupFiles,
+        virtualModules: setup.virtualModules,
         testFiles: Object.values(tests),
       };
     }),
@@ -972,7 +985,9 @@ const generateManifestModule = ({
   isWatchMode,
 }: {
   manifestPath: string;
-  entries: BrowserProjectEntries[];
+  entries: Array<
+    Pick<BrowserProjectEntries, 'project' | 'setupFiles' | 'testFiles'>
+  >;
   isWatchMode: boolean;
 }): string => {
   const manifestDirPosix = normalize(dirname(manifestPath));
@@ -1263,6 +1278,7 @@ export const createBrowserRuntime = async ({
     manifestPath: string;
     project: InternalProjectContext;
     modules: Record<string, string>;
+    virtualModules: Record<string, string>;
   }> = [];
 
   const createRuntimeWithoutProvider = (): BrowserRuntime => {
@@ -1300,8 +1316,15 @@ export const createBrowserRuntime = async ({
     manifestPath: string;
     project: InternalProjectContext;
     modules: Record<string, string>;
+    virtualModules: Record<string, string>;
   }): void => {
     const entry = getProjectEntry(manifestModule.project);
+    for (const virtualPath of Object.keys(manifestModule.virtualModules)) {
+      if (virtualPath !== manifestModule.manifestPath) {
+        delete manifestModule.virtualModules[virtualPath];
+      }
+    }
+    Object.assign(manifestModule.virtualModules, entry?.virtualModules);
     manifestModule.modules[manifestModule.manifestPath] =
       generateManifestModule({
         manifestPath: manifestModule.manifestPath,
@@ -1491,7 +1514,8 @@ export const createBrowserRuntime = async ({
       VIRTUAL_MANIFEST_FILENAME,
     );
     const entry = getProjectEntry(project);
-    const virtualManifestModules = {
+    const virtualModules = {
+      ...(entry?.virtualModules ?? {}),
       [manifestPath]: generateManifestModule({
         manifestPath,
         entries: [
@@ -1504,13 +1528,14 @@ export const createBrowserRuntime = async ({
         isWatchMode,
       }),
     };
-    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin(
-      virtualManifestModules,
+    const virtualModulesPlugin = new rspack.experiments.VirtualModulesPlugin(
+      virtualModules,
     );
     manifestModules.push({
       manifestPath,
       project,
-      modules: virtualManifestModules,
+      modules: virtualModules,
+      virtualModules,
     });
 
     const rstestInternalAliases = {
@@ -1618,12 +1643,7 @@ export const createBrowserRuntime = async ({
                 context,
                 project,
               });
-              const setupFiles = Object.values(
-                getSetupFiles(
-                  project.normalizedConfig.setupFiles,
-                  project.rootPath,
-                ),
-              );
+              const setupFiles = getProjectEntry(project)?.setupFiles ?? [];
               // Merge order: current config -> userConfig -> rstest required config (highest priority)
               const merged = mergeEnvironmentConfig(
                 config,
@@ -1704,7 +1724,7 @@ export const createBrowserRuntime = async ({
                           dirname(browserRuntimePath),
                         ),
                       );
-                      rspackConfig.plugins.push(virtualManifestPlugin);
+                      rspackConfig.plugins.push(virtualModulesPlugin);
 
                       applyDefaultWatchOptions(rspackConfig, isWatchMode);
                     },
@@ -1995,13 +2015,20 @@ export async function resolveProjectEntries(
     for (const project of browserProjects) {
       const entryInfo = shardedEntries.get(project.environmentName);
       if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
-        const setup = getSetupFiles(
-          project.normalizedConfig.setupFiles,
+        const setup = materializeVirtualSetupFiles(
+          getSetupFiles(project.normalizedConfig.setupFiles, project.rootPath),
           project.rootPath,
+        );
+        const materializedSetupFiles = Object.values(setup.setupFiles);
+        syncCoverageSetupExcludes(
+          project.normalizedConfig.coverage,
+          materializedSetupFiles,
+          [context.rootPath, project.rootPath],
         );
         projectEntries.push({
           project,
-          setupFiles: Object.values(setup),
+          setupFiles: materializedSetupFiles,
+          virtualModules: setup.virtualModules,
           testFiles: Object.values(entryInfo.entries),
         });
       }
