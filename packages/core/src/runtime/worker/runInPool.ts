@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { pathToFileURL } from 'node:url';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { normalize } from 'pathe';
 import { install } from 'source-map-support';
@@ -35,6 +36,7 @@ import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
+let currentEnvironmentBundle: { path: string; url: string } | undefined;
 
 // Threads-pool workers all share `process.pid` with the host, and each
 // worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
@@ -53,6 +55,19 @@ install({
       return {
         url: source,
         map: JSON.parse(sourceMaps[source]),
+      };
+    }
+    // Stack frames may identify the same ESM file as either a filesystem path
+    // or a file URL, and source-map-support passes that value through unchanged.
+    if (
+      source === currentEnvironmentBundle?.path ||
+      source === currentEnvironmentBundle?.url
+    ) {
+      // Environment bundles are built without sourcemaps. Returning null would
+      // let source-map-support read and scan the entire bundle on first use.
+      return {
+        url: source,
+        map: { version: 3, sources: [], names: [], mappings: '' },
       };
     }
     return null;
@@ -171,6 +186,14 @@ const preparePool = async (
   tracker?: PhaseTracker,
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ) => {
+  const environmentBundlePath = context.testEnvironmentModule?.bundlePath;
+  currentEnvironmentBundle = environmentBundlePath
+    ? {
+        path: environmentBundlePath,
+        url: pathToFileURL(environmentBundlePath).href,
+      }
+    : undefined;
+
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   globalCleanups.forEach((fn) => {
     fn();
