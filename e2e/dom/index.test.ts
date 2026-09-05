@@ -82,6 +82,9 @@ describe('jsdom', () => {
     expect(defaultConfig.cli.stdout).toContain(
       'bundled test environment jsdom',
     );
+    expect(defaultConfig.cli.log).not.toContain(
+      'falling back to its native entry',
+    );
 
     const native = await run('rstest.native.config.mts');
     await native.expectExecSuccess();
@@ -90,6 +93,9 @@ describe('jsdom', () => {
     const explicitAuto = await run('rstest.prebundle.config.mts');
     await explicitAuto.expectExecSuccess();
     expect(explicitAuto.cli.stdout).toContain('bundled test environment jsdom');
+    expect(explicitAuto.cli.log).not.toContain(
+      'falling back to its native entry',
+    );
   });
 
   it('should run test correctly with custom externals', async () => {
