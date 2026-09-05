@@ -299,6 +299,8 @@ const createTestEnvironmentBuildConfig = ({
       config.plugins.push(
         new rspack.experiments.RstestPlugin({
           ...getMockRstestPluginOptions({ rootPath: projectRoot }),
+          // Environment bundles contain no test mocks, so skip the mock-hoist asset scan.
+          hoistMockModule: false,
           injectDynamicImportOrigin: true,
           injectRequireResolveOrigin: {
             functionName: importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK),
