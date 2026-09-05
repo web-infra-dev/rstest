@@ -343,7 +343,9 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).not.toContain(
         join(tempRoot, 'b-browser.test.ts'),
@@ -408,7 +410,9 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'a-browser.test.ts'),
@@ -447,7 +451,9 @@ describe('prepareRsbuild', () => {
         { root: tempRoot },
       );
 
-      const list = await listTests(context, { json: false, filesOnly: true });
+      const result = await listTests(context, { filesOnly: true });
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'a-browser.test.ts'),
@@ -491,7 +497,9 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'added-node.test.ts'),
@@ -559,7 +567,9 @@ describe('prepareRsbuild', () => {
         { root: tempRoot },
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'full-node.test.ts'),
@@ -612,7 +622,8 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
 
       const dependency = poolTestEnvironmentModules
         .at(-1)
@@ -645,7 +656,10 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      await expect(listTests(context, { json: false })).resolves.toEqual([]);
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
+      expect(list).toEqual([]);
 
       // The plan resolves the zero-entry project out, so no pool is created
       // at all — not even one with an empty environment-module map.
@@ -672,9 +686,7 @@ describe('prepareRsbuild', () => {
 
         poolCollectError = new Error('collect failed');
 
-        await expect(listTests(context, { json: false })).rejects.toThrow(
-          'collect failed',
-        );
+        await expect(listTests(context, {})).rejects.toThrow('collect failed');
         expect(poolCloseCount).toBe(1);
       } finally {
         poolCollectError = undefined;

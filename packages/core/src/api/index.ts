@@ -317,14 +317,14 @@ export async function createRstest(
         { ...listOptions, shard: undefined },
         commonOptions,
         async (engine) => {
-          const files = await engine.listTests({
-            ...listOptions,
-            printLocation: listOptions.includeLocation,
+          const result = await engine.listTests({
+            filesOnly: listOptions.filesOnly,
           });
+          await result.close();
           if (engine.context.exitCode.current !== 0) {
             throw new Error('Failed to list tests.');
           }
-          return flattenListedTests(files, listOptions);
+          return flattenListedTests(result.list, listOptions);
         },
       );
     },
