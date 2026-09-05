@@ -370,13 +370,14 @@ export class Rstest implements InternalContext {
         );
     }
 
+    // Compare code units so report order does not depend on the host locale.
     // Reporter *presentation* order is deterministic by test path, decoupled
     // from *execution* order (which is perf-first and cache/timing dependent —
     // see testSequencer.ts). Without this, the order files appear in reports
     // would shift run-to-run with the sequencer's scheduling. Sort is stable,
     // so individual test cases keep their in-file declaration order.
     const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
-      a.testPath === b.testPath ? 0 : a.testPath.localeCompare(b.testPath);
+      a.testPath < b.testPath ? -1 : a.testPath > b.testPath ? 1 : 0;
     this.reporterResults.results.sort(byTestPath);
     this.reporterResultIndex.clear();
     this.reporterResults.results.forEach((result, index) => {

@@ -57,6 +57,8 @@ The `Reporter` interface provides lifecycle hooks for test execution. Each hook 
 - **Case-level hooks**: `onTestCaseStart`, `onTestCaseResult`
 - **Run-level hooks**: `onTestRunStart`, `onTestRunEnd`, `onUserConsoleLog`, `onExit`
 
+The `results` and `testResults` arrays passed to `onTestRunEnd` are sorted by `testPath` in UTF-16 code unit order, independent of the system locale. Entries with the same path retain their relative order. This report ordering does not affect test execution order.
+
 ### Basic interface structure
 
 ```ts

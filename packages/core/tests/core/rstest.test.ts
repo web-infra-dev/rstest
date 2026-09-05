@@ -1,5 +1,6 @@
 import { join } from 'pathe';
 import { Rstest } from '../../src/core/rstest';
+import type { TestResult } from '../../src/types';
 
 // Mock std-env to ensure consistent snapshot across environments
 rs.mock('std-env', () => ({
@@ -11,6 +12,39 @@ process.env.DEBUG = 'false';
 const rootPath = join(__dirname, '../..');
 
 describe('rstest context', () => {
+  it('sorts reporter paths by code units and preserves in-file test order', () => {
+    const context = new Rstest(
+      { cwd: rootPath, command: 'run', projects: [] },
+      {},
+    );
+    const paths = ['ä.test.ts', 'z.test.ts', 'a.test.ts', 'B.test.ts'];
+    const tests: TestResult[] = paths.flatMap((testPath) =>
+      ['second', 'first'].map((name) => ({
+        testId: `${testPath}:${name}`,
+        testPath,
+        name,
+        status: 'pass',
+        project: '',
+      })),
+    );
+    context.updateReporterResultState(
+      tests
+        .filter((test) => test.name === 'second')
+        .map((test) => ({ ...test, results: [] })),
+      tests,
+    );
+
+    const orderedPaths = ['B.test.ts', 'a.test.ts', 'z.test.ts', 'ä.test.ts'];
+    expect(
+      context.reporterResults.results.map((file) => file.testPath),
+    ).toEqual(orderedPaths);
+    expect(
+      context.reporterResults.testResults.map((test) => test.testId),
+    ).toEqual(
+      orderedPaths.flatMap((path) => [`${path}:second`, `${path}:first`]),
+    );
+  });
+
   it('uses a longer default test timeout for browser projects', () => {
     const browserContext = new Rstest(
       {

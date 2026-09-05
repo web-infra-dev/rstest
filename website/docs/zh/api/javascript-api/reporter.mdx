@@ -57,6 +57,8 @@ export default defineConfig({
 - **用例级钩子**：`onTestCaseStart`、`onTestCaseResult`
 - **运行级钩子**：`onTestRunStart`、`onTestRunEnd`、`onUserConsoleLog`、`onExit`
 
+传入 `onTestRunEnd` 的 `results` 和 `testResults` 数组按 `testPath` 的 UTF-16 编码单元顺序排序，不受系统 locale 影响。路径相同的条目保留原有相对顺序。报告排序不会影响测试执行顺序。
+
 ### 基本接口结构
 
 ```ts
