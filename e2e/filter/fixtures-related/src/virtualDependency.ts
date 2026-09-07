@@ -1,0 +1,1 @@
+export const virtualDependency = true;

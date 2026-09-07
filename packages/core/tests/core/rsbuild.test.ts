@@ -11,8 +11,8 @@ import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
 import {
   createRsbuildServer,
+  excludeVirtualSetupFromCoverage,
   prepareRsbuild,
-  syncCoverageSetupExcludes,
 } from '../../src/core/rsbuild';
 import { createSetupFileState } from '../../src/core/setupFileState';
 import type {
@@ -222,10 +222,10 @@ describe('prepareRsbuild', () => {
     poolCloseCount = 0;
   });
 
-  it('should add setup files to coverage excludes without duplicates', () => {
+  it('should add virtual setup files to coverage excludes without duplicates', () => {
     const coverage = {
       enabled: true,
-      exclude: ['**/node_modules/**', '/project/setup.ts'],
+      exclude: ['**/node_modules/**', '/project/.rstest-virtual/setup.mjs'],
       provider: 'istanbul',
       reporters: [],
       reportsDirectory: 'coverage',
@@ -234,16 +234,59 @@ describe('prepareRsbuild', () => {
       allowExternal: false,
     } satisfies InternalContext['normalizedConfig']['coverage'];
 
-    syncCoverageSetupExcludes(coverage, [
-      '/project/setup.ts',
-      '/project/globalSetup.ts',
-    ]);
+    excludeVirtualSetupFromCoverage(coverage, {
+      '/project/.rstest-virtual/setup.mjs': '',
+      '/project/.rstest-virtual/globalSetup.mjs': '',
+    });
 
     expect(coverage.exclude).toEqual([
       '**/node_modules/**',
-      '/project/setup.ts',
-      '/project/globalSetup.ts',
+      '/project/.rstest-virtual/setup.mjs',
+      '/project/.rstest-virtual/globalSetup.mjs',
     ]);
+  });
+
+  it('should add materialized virtual setup files to coverage excludes', () => {
+    const setupFileState = createSetupFileState();
+    setupFileState.refresh({
+      setupProjects: [
+        {
+          rootPath: '/project',
+          environmentName: 'test',
+          normalizedConfig: {
+            setupFiles: [
+              'data:text/javascript;base64,Y29uc29sZS5sb2coInNldHVwIik7',
+            ],
+            globalSetup: [],
+          },
+        } as unknown as InternalContext['projects'][number],
+      ],
+      globalSetupProjects: [],
+    });
+    const coverage = {
+      enabled: true,
+      exclude: [],
+      provider: 'istanbul',
+      reporters: [],
+      reportsDirectory: 'coverage',
+      clean: true,
+      reportOnFailure: false,
+      allowExternal: false,
+    } satisfies InternalContext['normalizedConfig']['coverage'];
+
+    excludeVirtualSetupFromCoverage(
+      coverage,
+      setupFileState.virtualModules.test!,
+    );
+
+    const [materializedPath] = setupFileState.getSetupPaths();
+    if (!materializedPath) {
+      throw new Error('Expected a materialized setup path');
+    }
+    expect(materializedPath).toMatch(
+      /^\/project\/.rstest-virtual\/virtual~setup~.+\.mjs$/,
+    );
+    expect(coverage.exclude).toEqual([materializedPath]);
   });
 
   it('closes the dev server when its compiler is unavailable', async () => {

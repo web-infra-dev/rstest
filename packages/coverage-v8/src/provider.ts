@@ -35,6 +35,9 @@ type CoverageReporterConstructor = new (
 ) => ReportBase;
 
 const COVERAGE_PROCESSING_CONCURRENCY = 4;
+const isWindowsAbsolutePath = (filePath: string): boolean =>
+  win32.isAbsolute(filePath) &&
+  (!posix.isAbsolute(filePath) || filePath.startsWith('//'));
 const SOURCE_MAP_INNER_PATTERN =
   /\s*[#@]\s*sourceMappingURL\s*=\s*([^\s'"]*)\s*/;
 const SOURCE_MAP_URL_PATTERN = new RegExp(
@@ -426,8 +429,22 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     const originalTestPath = this.toProjectRelativePath(normalizedKey, root);
+    // Browser entry resolution can append materialized setup paths after the
+    // run-scoped provider has compiled its glob matcher.
+    const isExactExcluded = this.options.exclude?.some((excluded) => {
+      const normalizedExcluded = this.normalizeSlashes(excluded);
+      if (
+        isWindowsAbsolutePath(normalizedKey) ||
+        isWindowsAbsolutePath(normalizedExcluded)
+      ) {
+        return normalizedExcluded.toLowerCase() === normalizedKey.toLowerCase();
+      }
+      return normalizedExcluded === normalizedKey;
+    });
     return (
-      !this.isExcluded(originalTestPath) && this.isIncluded(originalTestPath)
+      !isExactExcluded &&
+      !this.isExcluded(originalTestPath) &&
+      this.isIncluded(originalTestPath)
     );
   }
 
