@@ -1114,16 +1114,44 @@ export default class CustomCoverageReporter {
     ).toBe('private-prefix');
   });
 
-  it('uses absolute exclusions appended after provider construction', () => {
-    const root = join(tmpdir(), 'rstest-coverage-v8-live-exclude');
-    const options = createOptions();
-    const provider = getProviderInternals(new CoverageProvider(options, root));
-    const setupPath = join(root, '.rstest-virtual', 'setup.mjs');
+  it.each([
+    {
+      root: '/project',
+      excludedPath: '/project/.rstest-virtual/setup.mjs',
+      sourcePath: '/project/.rstest-virtual/setup.mjs',
+    },
+    {
+      root: '/project',
+      excludedPath: '/Project/.rstest-virtual/Setup.mjs',
+      sourcePath: '/project/.rstest-virtual/setup.mjs',
+    },
+    {
+      root: 'C:/project',
+      excludedPath: 'C:/project/.rstest-virtual/setup.mjs',
+      sourcePath: 'c:/PROJECT/.rstest-virtual/SETUP.mjs',
+    },
+    {
+      root: 'C:/project',
+      excludedPath: 'C:\\Project\\.rstest-virtual\\Setup.mjs',
+      sourcePath: 'c:/project/.rstest-virtual/setup.mjs',
+    },
+  ])(
+    'matches a late absolute exclusion for $sourcePath',
+    ({ root, excludedPath, sourcePath }) => {
+      const options = createOptions();
+      const provider = getProviderInternals(
+        new CoverageProvider(options, root),
+      );
 
-    options.exclude = [setupPath];
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(true);
+      options.exclude = [excludedPath];
 
-    expect(provider.shouldKeepOriginalSource(setupPath, root)).toBe(false);
-  });
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(false);
+      expect(
+        provider.shouldKeepOriginalSource(`${sourcePath}.other`, root),
+      ).toBe(true);
+    },
+  );
 
   it('skips excluded no-sourcemap files before reading or converting them', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-early-filter');
