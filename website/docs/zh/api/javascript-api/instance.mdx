@@ -189,6 +189,8 @@ console.log(result.summary.tests);
 
 ### RunOptions
 
+`RunOptions` 接受除 `config`、`configLoader`、`root` 和 `trace` 之外的所有 `rstest run` flag。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
+
 - **类型：**
 
 ```ts
@@ -203,6 +205,8 @@ interface RunOptions {
   update?: boolean;
   bail?: number | boolean;
   passWithNoTests?: boolean;
+  // ……以及其余所有 `rstest run` flag，用于覆盖同名配置项，
+  // 例如 `testTimeout`、`coverage`、`reporters`。
 }
 
 interface RstestInstance {

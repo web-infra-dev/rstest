@@ -1,17 +1,11 @@
 import cac, { type CAC, type Command } from 'cac';
-import type { RstestCommand, RstestInstance } from '../types';
-import {
-  color,
-  determineAgent,
-  formatError,
-  getAbsolutePath,
-  isTTY,
-  logger,
-} from '../utils';
+import type { RstestInstance } from '../types';
+import type { RunOptions } from '../api/types';
+import { color, determineAgent, formatError, isTTY, logger } from '../utils';
 import { buildResolvedRunner, isRelatedRun } from '../core/buildRunner';
 import { exitReporters } from '../reporter';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
-import { mirrorExitCode, setHostExitCode } from './exitCode';
+import { setHostExitCode } from './exitCode';
 import type { CommonOptions } from './init';
 import { renderListTests, type ListCommandOptions } from './listRenderer';
 import { showRstest } from './prepare';
@@ -24,6 +18,13 @@ const cliPackageInstallerConfirm: PackageInstallerConfirm = async (options) => {
   const result = await confirm(options);
   return isCancel(result) ? false : result;
 };
+
+const cliHostRuntime = () => ({
+  packageInstallerConfirm: isTTY('stdin')
+    ? cliPackageInstallerConfirm
+    : undefined,
+  onExitCodeChange: setHostExitCode,
+});
 
 type OptionConfig = {
   default?: string;
@@ -78,10 +79,9 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
   [
-    '--related',
+    '--related, --findRelatedTests',
     'Treat positional arguments as source file paths and run only related tests',
   ],
-  ['--findRelatedTests', 'Alias for --related for Jest compatibility'],
   [
     '--changed [commit]',
     'Run tests related to changed files in the current Git repository, optionally since a commit',
@@ -569,13 +569,11 @@ const resolveCliRuntime = async (options: CommonOptions) => {
     import('../core'),
   ]);
   const inputs = await initCli(options);
-  const packageInstallerConfirm = isTTY('stdin')
-    ? cliPackageInstallerConfirm
-    : undefined;
+  const runtime = cliHostRuntime();
   const buildCliRunner: typeof createRstest = (...args) => {
     const rstest = createRstest(...args);
-    mirrorExitCode(rstest.context);
-    rstest.context.packageInstallerConfirm = packageInstallerConfirm;
+    rstest.context.exitCode.onChange(runtime.onExitCodeChange);
+    rstest.context.packageInstallerConfirm = runtime.packageInstallerConfirm;
     return rstest;
   };
 
@@ -585,20 +583,69 @@ const resolveCliRuntime = async (options: CommonOptions) => {
   };
 };
 
-export const runRest = async ({
+const toRunOptions = (options: CommonOptions): RunOptions => {
+  const {
+    config: _config,
+    configLoader: _configLoader,
+    root: _root,
+    trace: _trace,
+    ...runOptions
+  } = options;
+  return runOptions;
+};
+
+const runOnce = async ({
   options,
   filters,
-  command,
 }: {
   options: CommonOptions;
-  filters: Array<string | number>;
-  command: RstestCommand;
+  filters: string[];
+}): Promise<void> => {
+  const unexpectedlyExitHandler = (err: unknown) =>
+    handleUnexpectedExit(undefined, err);
+  try {
+    const [
+      { loadCliConfig, applyAgentReporterDefault },
+      { createRstestInstance },
+    ] = await Promise.all([import('./init'), import('../api/createRstest')]);
+    const cwd = process.cwd();
+    const loaded = await loadCliConfig(options, cwd);
+    // Every other flag replays per project through run().
+    if (options.root !== undefined) {
+      loaded.content.root = options.root;
+    }
+    applyAgentReporterDefault(loaded.content, options);
+    const rstest = await createRstestInstance(
+      { cwd, config: loaded, configLoader: options.configLoader },
+      {
+        embedded: false,
+        trace: options.trace,
+        ...cliHostRuntime(),
+      },
+    );
+    process.on('uncaughtException', unexpectedlyExitHandler);
+    process.on('unhandledRejection', unexpectedlyExitHandler);
+    await rstest.run({
+      filters: filters.length ? filters : undefined,
+      ...toRunOptions(options),
+    });
+  } catch (err) {
+    handleUnexpectedExit(undefined, err);
+  }
+};
+
+export const runWatch = async ({
+  options,
+  filters,
+}: {
+  options: CommonOptions;
+  filters: string[];
 }): Promise<void> => {
   // A related selection is resolved once here and frozen for the whole session,
   // so under watch later edits stay invisible and an empty resolution yields a
   // session that can never run a test. Rejected up front, like the sharding
   // watch guard in the `Rstest` constructor.
-  if (command === 'watch' && isRelatedRun(options)) {
+  if (isRelatedRun(options)) {
     logger.error(
       'The `--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode. Use `rstest run` for a one-shot related run — watch already reruns tests affected by file changes.',
     );
@@ -615,7 +662,7 @@ export const runRest = async ({
     rstest = await buildResolvedRunner({
       inputs,
       options,
-      command,
+      command: 'watch',
       filters: filters.length ? filters : undefined,
       createRstestContext: createRstest,
     });
@@ -624,26 +671,20 @@ export const runRest = async ({
 
     process.on('unhandledRejection', unexpectedlyExitHandler);
 
-    if (command === 'watch') {
-      const { watchFilesForRestart } = await import('../core/restart');
-      await watchFilesForRestart({
-        rstest,
-        options,
-        filters,
-        beforeRestart: () => {
-          process.off('uncaughtException', unexpectedlyExitHandler);
-          process.off('unhandledRejection', unexpectedlyExitHandler);
-        },
-      });
-    }
+    const { watchFilesForRestart } = await import('../core/restart');
+    await watchFilesForRestart({
+      rstest,
+      options,
+      filters,
+      beforeRestart: () => {
+        process.off('uncaughtException', unexpectedlyExitHandler);
+        process.off('unhandledRejection', unexpectedlyExitHandler);
+      },
+    });
 
     await rstest.runTests();
   } catch (err) {
     handleUnexpectedExit(rstest, err);
-    return;
-  }
-  if (command !== 'watch' && rstest) {
-    await exitReporters(rstest.context);
   }
 };
 
@@ -686,9 +727,9 @@ export function createCli(): CAC {
         showRstest();
       }
       if (options.watch) {
-        await runRest({ options, filters, command: 'watch' });
+        await runWatch({ options, filters });
       } else {
-        await runRest({ options, filters, command: 'run' });
+        await runOnce({ options, filters });
       }
     },
   );
@@ -702,7 +743,7 @@ export function createCli(): CAC {
     if (!determineAgent().isAgent) {
       showRstest();
     }
-    await runRest({ options, filters, command: 'run' });
+    await runOnce({ options, filters });
   });
 
   const watchCommand = cli.command(
@@ -714,7 +755,7 @@ export function createCli(): CAC {
     if (!determineAgent().isAgent) {
       showRstest();
     }
-    await runRest({ options, filters, command: 'watch' });
+    await runWatch({ options, filters });
   });
 
   const listCommand = cli.command(
@@ -779,20 +820,11 @@ export function createCli(): CAC {
       }
       try {
         const [
-          { loadConfig },
-          { applyAgentReporterDefault, mergeWithCLIOptions },
+          { loadCliConfig, applyAgentReporterDefault, mergeWithCLIOptions },
           { createRstest },
-        ] = await Promise.all([
-          import('../config'),
-          import('./init'),
-          import('../api'),
-        ]);
+        ] = await Promise.all([import('./init'), import('../api')]);
         const cwd = process.cwd();
-        const loaded = await loadConfig({
-          cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
-          path: options.config,
-          configLoader: options.configLoader,
-        });
+        const loaded = await loadCliConfig(options, cwd);
         mergeWithCLIOptions(loaded.content, options);
         applyAgentReporterDefault(loaded.content, options);
         const rstest = await createRstest({

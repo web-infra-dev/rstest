@@ -76,7 +76,7 @@ describe('createRstest', () => {
       for (let index = 0; index < 2; index++) {
         const rstest = await createRstest({ config });
 
-        expect(rstest.context.config.reporters).toBe(config.reporters);
+        expect(rstest.context.config.reporters).toEqual(config.reporters);
         expect(process.stdout.write).toBe(state.stdoutWrite);
         expect(process.stderr.write).toBe(state.stderrWrite);
         expect(process.listenerCount('exit')).toBe(state.exitListenerCount);

@@ -11,6 +11,22 @@ const parsePayload = (stdout: string) =>
   parseMarkerPayload<Record<string, any>>(stdout, '__RSTEST_API_RESULT__');
 
 describe('programmatic createRstest', () => {
+  it('validates duplicate names only among selected projects', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-duplicate-projects.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+    expect(result.status).toBe('pass');
+    expect(result.passed).toBe(1);
+    expect(result.error).toContain('Project name "beta" is already used');
+  });
+
   it('uses inline config and rejects build failures', async ({
     onTestFinished,
   }) => {
@@ -186,6 +202,23 @@ describe('programmatic createRstest', () => {
     expect(result.mergeReports).toMatchObject({ status: 'rejected' });
     expect(result.mergeReports.message).toContain(dependencyMessage);
     expect(cli.log).not.toContain('Install it now?');
+    expect(cli.log).not.toContain('Installing ');
+  });
+
+  it('prompts for missing coverage dependencies through runCLI in a TTY host', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'node',
+      args: ['run-cli-missing-dependencies.mjs'],
+      onTestFinished,
+      unsetEnv: ['CI'],
+      options: { nodeOptions: { cwd: fixturesDir, env: { NO_COLOR: '1' } } },
+    });
+    await cli.waitForStdout('Install it now?');
+    expect(cli.stdout).toContain('@rstest/coverage-istanbul');
+    cli.exec.process!.stdin!.write('n\r');
+    await expectExecFailed();
     expect(cli.log).not.toContain('Installing ');
   });
 

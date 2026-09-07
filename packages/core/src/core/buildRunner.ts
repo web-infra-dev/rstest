@@ -36,14 +36,11 @@ const isChangedRun = (changed: CommonOptions['changed']): boolean =>
   changed !== undefined && changed !== false;
 
 export const isRelatedRun = (options: CommonOptions): boolean =>
-  options.related === true ||
-  options.findRelatedTests === true ||
-  isChangedRun(options.changed);
+  options.related === true || isChangedRun(options.changed);
 
 export const validateRelatedOptions = (options: CommonOptions): void => {
   const count = [
     options.related === true,
-    options.findRelatedTests === true,
     isChangedRun(options.changed),
   ].filter(Boolean).length;
 
@@ -321,6 +318,23 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   createRstestContext: CreateRstestContextFn<Instance>;
   embedded?: boolean;
 }): Promise<Instance> {
+  const { projects } = inputs;
+  const names = new Set<string>();
+
+  projects.forEach((project) => {
+    if (names.has(project.config.name!)) {
+      const conflictProjects = projects.filter(
+        (p) => p.config.name === project.config.name,
+      );
+      throw `Project name "${project.config.name}" is already used. Please ensure all projects have unique names.
+Conflicting projects:
+${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n')}
+        `;
+    }
+
+    names.add(project.config.name!);
+  });
+
   const selection = await resolveEffectiveFilters({
     options,
     filters,

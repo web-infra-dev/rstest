@@ -5,7 +5,6 @@ import {
   type ListOptions,
   type LoadedRstestConfig,
   type RstestConfig,
-  type RunOptions,
   type SerializedError,
   type TestCaseResult,
   type TestFileRunResult,
@@ -21,7 +20,6 @@ export type {
   TaskMeta,
   TestLocation,
 } from '@rstest/core/api';
-import type { CommonOptions } from '../../src/cli/init';
 import type {
   FormattedError,
   TestFileResult as InternalTestFileResult,
@@ -44,15 +42,6 @@ type SameKeys<Left, Right> = [Left] extends [Right]
     : false
   : false;
 type Assert<Condition extends true> = Condition;
-
-export type RunOptionsCommonFieldsAreForwarded = Assert<
-  Exclude<
-    keyof RunOptions,
-    'filters' | 'filterMode'
-  > extends keyof CommonOptions
-    ? true
-    : false
->;
 
 // `projected` promises a same-named field; another public key records a rename.
 export const testResultDisposition = {

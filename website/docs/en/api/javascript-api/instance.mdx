@@ -189,6 +189,8 @@ The remaining options control execution behavior for this run:
 
 ### RunOptions
 
+`RunOptions` accepts every `rstest run` flag except `config`, `configLoader`, `root` and `trace`. See [CLI options](/guide/basic/cli#cli-options) for the full flag list and [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts) for the exact types.
+
 - **Type:**
 
 ```ts
@@ -203,6 +205,8 @@ interface RunOptions {
   update?: boolean;
   bail?: number | boolean;
   passWithNoTests?: boolean;
+  // ...plus every other `rstest run` flag as an override of the config option
+  // of the same name, e.g. `testTimeout`, `coverage`, `reporters`.
 }
 
 interface RstestInstance {
