@@ -17,10 +17,11 @@ import {
 export { ensureCoverageProviderInstalled } from './install';
 export { resolveAndMergeRawCoverage } from './resolveRawCoverage';
 
-export const syncCoverageSetupExcludes = (
+export const excludeVirtualSetupFromCoverage = (
   coverage: NormalizedCoverageOptions | undefined,
-  setupPaths: string[],
+  virtualModules: Record<string, string>,
 ): void => {
+  const setupPaths = Object.keys(virtualModules);
   if (!coverage?.enabled || !setupPaths.length) {
     return;
   }

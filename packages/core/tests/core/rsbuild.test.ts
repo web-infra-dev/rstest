@@ -11,8 +11,8 @@ import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
 import {
   createRsbuildServer,
+  excludeVirtualSetupFromCoverage,
   prepareRsbuild,
-  syncCoverageSetupExcludes,
 } from '../../src/core/rsbuild';
 import { createSetupFileState } from '../../src/core/setupFileState';
 import type {
@@ -222,10 +222,10 @@ describe('prepareRsbuild', () => {
     poolCloseCount = 0;
   });
 
-  it('should add setup files to coverage excludes without duplicates', () => {
+  it('should add virtual setup files to coverage excludes without duplicates', () => {
     const coverage = {
       enabled: true,
-      exclude: ['**/node_modules/**', '/project/setup.ts'],
+      exclude: ['**/node_modules/**', '/project/.rstest-virtual/setup.mjs'],
       provider: 'istanbul',
       reporters: [],
       reportsDirectory: 'coverage',
@@ -234,15 +234,15 @@ describe('prepareRsbuild', () => {
       allowExternal: false,
     } satisfies InternalContext['normalizedConfig']['coverage'];
 
-    syncCoverageSetupExcludes(coverage, [
-      '/project/setup.ts',
-      '/project/globalSetup.ts',
-    ]);
+    excludeVirtualSetupFromCoverage(coverage, {
+      '/project/.rstest-virtual/setup.mjs': '',
+      '/project/.rstest-virtual/globalSetup.mjs': '',
+    });
 
     expect(coverage.exclude).toEqual([
       '**/node_modules/**',
-      '/project/setup.ts',
-      '/project/globalSetup.ts',
+      '/project/.rstest-virtual/setup.mjs',
+      '/project/.rstest-virtual/globalSetup.mjs',
     ]);
   });
 
@@ -274,7 +274,10 @@ describe('prepareRsbuild', () => {
       allowExternal: false,
     } satisfies InternalContext['normalizedConfig']['coverage'];
 
-    syncCoverageSetupExcludes(coverage, setupFileState.getSetupPaths());
+    excludeVirtualSetupFromCoverage(
+      coverage,
+      setupFileState.virtualModules.test!,
+    );
 
     const [materializedPath] = setupFileState.getSetupPaths();
     if (!materializedPath) {

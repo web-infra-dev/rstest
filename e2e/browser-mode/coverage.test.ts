@@ -60,7 +60,7 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
   });
 
-  it('does not report virtual setup files in coverage', async () => {
+  it('excludes virtual setup but keeps replaced real setup in coverage', async () => {
     const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
     const reportsDirectory = join(fixtureDir, 'coverage-virtual-setup');
     const reportPath = join(reportsDirectory, 'coverage-final.json');
@@ -78,9 +78,12 @@ describe('browser mode - coverage', () => {
     expect(
       Object.keys(report).some((file) => file.includes('.rstest-virtual')),
     ).toBe(false);
+    expect(
+      Object.keys(report).map((file) => file.replaceAll('\\', '/')),
+    ).toContain(join(fixtureDir, 'src/sum.ts').replaceAll('\\', '/'));
   });
 
-  it('does not report virtual setup files in V8 coverage', async () => {
+  it('excludes virtual setup but keeps replaced real setup in V8 coverage', async () => {
     const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
     const reportsDirectory = join(fixtureDir, 'coverage-virtual-setup-v8');
     const reportPath = join(reportsDirectory, 'coverage-final.json');
@@ -98,6 +101,9 @@ describe('browser mode - coverage', () => {
     expect(
       Object.keys(report).some((file) => file.includes('.rstest-virtual')),
     ).toBe(false);
+    expect(
+      Object.keys(report).map((file) => file.replaceAll('\\', '/')),
+    ).toContain(join(fixtureDir, 'src/sum.ts').replaceAll('\\', '/'));
   });
 
   it('should collect native V8 coverage from Chromium browser tests', async () => {

@@ -8,7 +8,7 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
-import { syncCoverageSetupExcludes } from '../coverage';
+import { excludeVirtualSetupFromCoverage } from '../coverage';
 import type {
   EntryInfo,
   InternalContext,
@@ -51,7 +51,7 @@ type WatchBuildData = {
   runtimeChunkFiles?: string[];
 };
 
-export { syncCoverageSetupExcludes } from '../coverage';
+export { excludeVirtualSetupFromCoverage } from '../coverage';
 
 const getRuntimeChunkFiles = ({
   chunks,
@@ -193,7 +193,9 @@ export const prepareRsbuild = async ({
     };
     setupFileState.refresh(setupFileProjects);
     if (command !== 'list') {
-      syncCoverageSetupExcludes(coverage, getSetupPaths());
+      for (const modules of Object.values(virtualModules)) {
+        excludeVirtualSetupFromCoverage(coverage, modules);
+      }
     }
   };
 

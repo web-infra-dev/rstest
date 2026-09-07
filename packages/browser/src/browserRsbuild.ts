@@ -10,6 +10,7 @@ import {
   applyWebMockRspackConfig,
   color,
   type EntryHashSnapshot,
+  excludeVirtualSetupFromCoverage,
   getSetupFiles,
   getTestEntries,
   initModifyRstestConfigHooks,
@@ -24,7 +25,6 @@ import {
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
-  syncCoverageSetupExcludes,
   type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
 import openEditor from 'open-editor';
@@ -900,9 +900,13 @@ export const collectProjectEntries = async (
         project.rootPath,
       );
       const materializedSetupFiles = Object.values(setup.setupFiles);
-      syncCoverageSetupExcludes(
+      excludeVirtualSetupFromCoverage(
+        context.normalizedConfig.coverage,
+        setup.virtualModules,
+      );
+      excludeVirtualSetupFromCoverage(
         project.normalizedConfig.coverage,
-        materializedSetupFiles,
+        setup.virtualModules,
       );
 
       return {
@@ -2019,9 +2023,13 @@ export async function resolveProjectEntries(
           project.rootPath,
         );
         const materializedSetupFiles = Object.values(setup.setupFiles);
-        syncCoverageSetupExcludes(
+        excludeVirtualSetupFromCoverage(
+          context.normalizedConfig.coverage,
+          setup.virtualModules,
+        );
+        excludeVirtualSetupFromCoverage(
           project.normalizedConfig.coverage,
-          materializedSetupFiles,
+          setup.virtualModules,
         );
         projectEntries.push({
           project,
