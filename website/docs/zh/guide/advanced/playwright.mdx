@@ -73,7 +73,7 @@ pnpm exec playwright install chromium
 
 ## 基本用法
 
-从 `@rstest/playwright` 导入 `test`。如果使用 `toHaveTitle`、`toHaveText` 等 Playwright 专用断言，也要从 `@rstest/playwright` 导入 `expect`。这个 `expect` 会为 `Page` 和 `Locator` 增加对应的断言，但不会替换全局的 Rstest `expect`。即使启用 `globals: true`，全局 `expect` 仍然是 core 的 Rstest expect：
+推荐从 `@rstest/playwright` 导入 `test` 和 `expect`，而不是从 `@rstest/core` 导入，这样可以获得 `toHaveTitle`、`toHaveText` 等 Playwright 专用断言能力：
 
 ```ts
 import { expect, test } from '@rstest/playwright';

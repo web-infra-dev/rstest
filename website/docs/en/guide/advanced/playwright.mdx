@@ -73,7 +73,7 @@ pnpm exec playwright install chromium
 
 ## Basic usage
 
-Import `test` from `@rstest/playwright`. If you use Playwright-specific assertions such as `toHaveTitle` or `toHaveText`, import `expect` from `@rstest/playwright` as well. This `expect` adds assertions for `Page` and `Locator`; it does not replace the global Rstest `expect`. With `globals: true`, the global `expect` remains the core Rstest expect:
+Import `test` and `expect` from `@rstest/playwright` instead of `@rstest/core` to enable Playwright-specific assertions such as `toHaveTitle` and `toHaveText`:
 
 ```ts
 import { expect, test } from '@rstest/playwright';
