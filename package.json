@@ -35,7 +35,7 @@
     "knip": "^6.34.0",
     "lefthook": "^2.1.12",
     "pkg-pr-new": "^0.0.88",
-    "playwright": "^1.62.1",
+    "playwright": "^1.63.0",
     "prettier": "^3.9.6",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3"
