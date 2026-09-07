@@ -1,11 +1,14 @@
 import { createRequire } from 'node:module';
-import { builtinModules } from 'node:module';
+import moduleBuiltin, {
+  builtinModules,
+  syncBuiltinESMExports,
+} from 'node:module';
+import { types } from 'node:util';
 import { readFile, readFileSync } from 'node:fs';
 import path from 'node:path';
 import timers, { setTimeout } from 'node:timers';
 import helper from './helper.cjs';
 import nonEnumerableModule from './non-enumerable.cjs';
-import { 'module.exports' as commonJsModuleExports } from './helper.cjs';
 import metadata from './data.json' with { type: 'json' };
 import requiredEsm from './require-esm.cjs';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
@@ -37,7 +40,6 @@ export const inspectRealm = (value) => ({
   importedJson: metadata.label,
   jsonSameObject: metadata === requiredMetadata,
   nonEnumerableValue: nonEnumerableModule.value,
-  moduleExportsMarker: commonJsModuleExports === helper,
   plainDefault: { default: helper.default, named: helper.named },
   requiredEsm,
   requiredJson: requiredMetadata.label,
@@ -133,7 +135,7 @@ export const verifyNodeGlobals = async () => {
 export const verifyBuiltinCallback = () =>
   new Promise((resolve) => {
     readFile('/rstest-file-that-does-not-exist', (error) => {
-      resolve(error instanceof Error);
+      resolve({ isVmError: error instanceof Error, code: error.code });
     });
   });
 
@@ -142,14 +144,40 @@ export const verifyBuiltinSyncError = () => {
     readFileSync('/rstest-file-that-does-not-exist');
     return false;
   } catch (error) {
-    return error instanceof Error;
+    return { isVmError: error instanceof Error, code: error.code };
   }
 };
 
-export const verifyModuleBuiltin = () => ({
-  builtinModulesArray: builtinModules instanceof Array,
-  builtinModulesObject: builtinModules instanceof Object,
-});
+export const verifyModuleBuiltin = () => {
+  const beforeSync = moduleBuiltin;
+  syncBuiltinESMExports();
+  return {
+    builtinModulesArray: builtinModules instanceof Array,
+    builtinModulesObject: builtinModules instanceof Object,
+    commonJsArray: require('node:module').builtinModules instanceof Array,
+    moduleClassArray:
+      require('node:module').Module.builtinModules instanceof Array,
+    sameArray: require('node:module').builtinModules === builtinModules,
+    sameDefault:
+      moduleBuiltin === beforeSync && moduleBuiltin === require('node:module'),
+    functionIsProxy: types.isProxy(() => {}),
+  };
+};
+
+export const inspectLoaderBoundaries = async () => {
+  const ambiguous = await import('./ambiguous/dependency.js');
+  const legacy = await import('./node_modules/legacy/index.js');
+  return {
+    ambiguousKeys: Object.keys(ambiguous),
+    ambiguousValue: ambiguous.value,
+    legacyValue: legacy.default.named,
+    legacySame: legacy.default === require('./node_modules/legacy/index.js'),
+    dataModulo: (await import('data:text/javascript,export default 5%2'))
+      .default,
+    dataUnicode: (await import('data:text/javascript,export default "汉%"'))
+      .default,
+  };
+};
 
 export const createTimerPromise = () =>
   require('node:timers/promises').setTimeout(0, 'timer');

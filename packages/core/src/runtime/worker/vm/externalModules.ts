@@ -109,11 +109,8 @@ const supportsSyncEsmEvaluate =
   typeof Reflect.get(vm.SourceTextModule.prototype, 'hasAsyncGraph') ===
     'function';
 
-const [nodeMajor = 0, nodeMinor = 0] = process.versions.node
-  .split('.')
-  .map(Number);
-const supportsCjsModuleExportsMarker =
-  nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 12);
+const [nodeMajor = 0] = process.versions.node.split('.').map(Number);
+const supportsCjsModuleExportsMarker = nodeMajor >= 23;
 
 initializeCommonJsLexer();
 
@@ -382,7 +379,6 @@ class VmExternalModules {
     BuiltinModuleRecord
   >();
   private linkQueue: Promise<void> = Promise.resolve();
-  private moduleBuiltin: unknown;
   private moduleClass: typeof Module | undefined;
   private processBuiltin: unknown;
   private interopDefault = true;
@@ -392,7 +388,6 @@ class VmExternalModules {
   private readonly vmPromise: PromiseConstructor;
   private readonly isVmError: (value: unknown) => boolean;
   private readonly isVmValue: (value: unknown) => boolean;
-  private readonly wrappedBuiltinCallbacks = new WeakMap<object, unknown>();
   private readonly wrappedBuiltinValues = new WeakMap<object, unknown>();
   private readonly unwrappedBuiltinValues = new WeakMap<object, object>();
 
@@ -618,6 +613,9 @@ class VmExternalModules {
         return this.loadEsm(resolvedId);
       case 'commonjs': {
         const filePath = getFilePath(resolvedId);
+        if (this.esmSyntaxFallbackFiles.has(filePath)) {
+          return this.loadEsm(resolvedId);
+        }
         const exports = this.loadCommonJs(filePath, undefined, () =>
           this.loadEsm(resolvedId),
         );
@@ -770,8 +768,7 @@ class VmExternalModules {
       resolvedId,
       defaultExport,
       this.context,
-      // Node 22.12 added the `module.exports` namespace marker. This is
-      // independent of the VM graph API, which is also available in Node 20.
+      // Native CJS namespace shape is independent of synchronous VM graph support.
       supportsCjsModuleExportsMarker ? { value: exports } : undefined,
     );
   }
@@ -1142,29 +1139,24 @@ class VmExternalModules {
         this.commonJsCache.delete(filePath);
         Reflect.deleteProperty(this.requireCache, filePath);
         if (
-          supportsSyncEsmEvaluate &&
           extname(filePath) === '.js' &&
           isAmbiguousJavaScriptModule(filePath) &&
           isSyntaxError(error)
         ) {
-          try {
-            const exports = this.requireEsm(filePath, true);
-            this.esmSyntaxFallbackFiles.add(filePath);
-            return exports;
-          } catch (esmError) {
-            if (!isSyntaxError(esmError)) {
-              throw esmError;
+          if (onCompileSyntaxError) {
+            return onCompileSyntaxError(error);
+          }
+          if (supportsSyncEsmEvaluate) {
+            try {
+              const exports = this.requireEsm(filePath, true);
+              this.esmSyntaxFallbackFiles.add(filePath);
+              return exports;
+            } catch (esmError) {
+              if (!isSyntaxError(esmError)) {
+                throw esmError;
+              }
             }
           }
-        }
-        if (
-          onCompileSyntaxError &&
-          !supportsSyncEsmEvaluate &&
-          extname(filePath) === '.js' &&
-          isAmbiguousJavaScriptModule(filePath) &&
-          isSyntaxError(error)
-        ) {
-          return onCompileSyntaxError(error);
         }
         throw error;
       }
@@ -1551,45 +1543,28 @@ class VmExternalModules {
       return this.processBuiltin;
     }
 
-    if (this.moduleBuiltin) {
-      return this.moduleBuiltin;
-    }
-
-    const nativeModule = nativeRequire(specifier) as Record<
-      PropertyKey,
-      unknown
-    >;
-    let moduleBuiltin: unknown;
-    moduleBuiltin = new Proxy(nativeModule, {
-      get: (target, property, receiver) => {
-        if (property === 'Module') {
-          return this.getVmModuleClass();
-        }
-        if (property === 'createRequire') {
-          return this.createRequire;
-        }
-        if (property === 'syncBuiltinESMExports') {
-          return this.syncBuiltinESMExports;
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    this.moduleBuiltin = moduleBuiltin;
-    return moduleBuiltin;
+    return this.getVmModuleClass();
   }
 
   private getVmModuleClass(): typeof Module {
     if (!this.moduleClass) {
       let vmModule: typeof Module;
       vmModule = new Proxy(Module, {
-        get: (target, property, receiver) => {
+        get: (target, property) => {
+          if (property === 'Module') {
+            return vmModule;
+          }
+          // Module instances use Node's prototype; only static exports are bridged.
+          if (property === 'prototype') {
+            return target.prototype;
+          }
           if (property === 'createRequire') {
             return this.createRequire;
           }
           if (property === 'syncBuiltinESMExports') {
             return this.syncBuiltinESMExports;
           }
-          return Reflect.get(target, property, receiver);
+          return this.getBuiltinProperty(target, property);
         },
         construct: (target, args, newTarget) => {
           const instance = Reflect.construct(target, args, newTarget);
@@ -1674,6 +1649,7 @@ class VmExternalModules {
       overrides.add('Module');
       overrides.add('createRequire');
       overrides.add('syncBuiltinESMExports');
+      overrides.add('default');
       defaultExport = moduleBuiltin;
     } else if (normalized === 'process') {
       const runtimeProcess = vm.runInContext(
@@ -1735,19 +1711,10 @@ class VmExternalModules {
         return cached;
       }
       const wrapped = new Proxy(value, {
-        apply: (target, thisArg, args) => {
-          try {
-            return this.wrapBuiltinResult(
-              Reflect.apply(
-                target,
-                this.unwrapBuiltinValue(thisArg),
-                this.unwrapBuiltinArguments(args),
-              ),
-            );
-          } catch (error) {
-            throw this.wrapBuiltinError(error);
-          }
-        },
+        apply: (target, thisArg, args) =>
+          this.wrapBuiltinResult(
+            Reflect.apply(target, this.unwrapBuiltinValue(thisArg), args),
+          ),
         construct: (target, args, newTarget) =>
           Reflect.construct(target, args, newTarget),
       });
@@ -1847,37 +1814,6 @@ class VmExternalModules {
       });
     }
     return this.wrapBuiltinResultValue(value);
-  }
-
-  private wrapBuiltinCallback(
-    value: (...args: unknown[]) => unknown,
-  ): (...args: unknown[]) => unknown {
-    const cached = this.wrappedBuiltinCallbacks.get(value);
-    if (cached) {
-      return cached as (...args: unknown[]) => unknown;
-    }
-    const wrapped = new Proxy(value, {
-      apply: (target, thisArg, args) => {
-        const wrappedArgs = args.map((arg, index) =>
-          index === 0
-            ? this.wrapBuiltinError(arg)
-            : this.wrapBuiltinResultValue(arg),
-        );
-        return Reflect.apply(target, thisArg, wrappedArgs);
-      },
-    });
-    this.wrappedBuiltinCallbacks.set(value, wrapped);
-    this.wrappedBuiltinCallbacks.set(wrapped, wrapped);
-    return wrapped;
-  }
-
-  private unwrapBuiltinArguments(args: unknown[]): unknown[] {
-    return args.map((arg) => {
-      if (typeof arg === 'function' && this.isVmValue(arg)) {
-        return this.wrapBuiltinCallback(arg as (...args: unknown[]) => unknown);
-      }
-      return this.unwrapBuiltinValue(arg);
-    });
   }
 
   private wrapBuiltinError(error: unknown): unknown {

@@ -705,6 +705,83 @@ describe('loadEsModule', () => {
     );
   });
 
+  it.each([false, true])(
+    'keeps ambiguous imports as ESM (require first: %s)',
+    async (requireFirst) => {
+      const context = vm.createContext({});
+      const executor = getVmExternalModules(context);
+      const externalPath = fixturePath(
+        'vm-external/module-semantics/ambiguous/dependency.js',
+      );
+      if (requireFirst && 'hasAsyncGraph' in vm.SourceTextModule.prototype) {
+        executor.require(externalPath, __filename);
+      }
+      const nativeNamespace = await import(pathToFileURL(externalPath).href);
+      const namespace = (await executor.import(
+        externalPath,
+        false,
+        false,
+      )) as Record<string, unknown>;
+      expect(Object.keys(namespace)).toEqual(Object.keys(nativeNamespace));
+      expect(namespace).toEqual(nativeNamespace);
+      expect(await executor.import(externalPath, false, false)).toBe(namespace);
+    },
+  );
+
+  it.each([
+    ['export default 5%2', 'export default 5%2'],
+    ['export default "a%zz+%FF"', 'export default "a%zz+\uFFFD"'],
+    ['export default "汉%"', 'export default "汉%"'],
+    ['export default "%E4%B8%AD%"', 'export default "中%"'],
+  ])(
+    'decodes data URL percent sequences: %s',
+    async (source, decodedSource) => {
+      const executor = getVmExternalModules(vm.createContext({}));
+      const url = `data:text/javascript,${source}`;
+      // Node 20 rejects literal percent sequences; use the encoded equivalent
+      // as the native oracle for the decoded JavaScript on every supported version.
+      const nativeUrl = `data:text/javascript,${encodeURIComponent(decodedSource)}`;
+      expect(await executor.import(url, false, false)).toEqual(
+        await import(nativeUrl),
+      );
+    },
+  );
+
+  it('preserves function arguments passed as data to builtins', () => {
+    const context = vm.createContext({});
+    const executor = getVmExternalModules(context);
+    context.require = executor.createRequire(__filename);
+    expect(
+      vm.runInContext(`require('node:util').types.isProxy(() => {})`, context),
+    ).toBe(false);
+  });
+
+  it('bridges node:module arrays across CJS, ESM and builtin sync', async () => {
+    const context = vm.createContext({});
+    const executor = getVmExternalModules(context);
+    context.require = executor.createRequire(__filename);
+    context.namespace = await executor.import('node:module', false, false);
+    expect(
+      vm.runInContext(
+        `(() => {
+      const mod = require('node:module');
+      const beforeSync = namespace.default;
+      mod.syncBuiltinESMExports();
+      return [
+        mod.builtinModules instanceof Array,
+        mod.Module.builtinModules instanceof Array,
+        mod.builtinModules === namespace.builtinModules,
+        namespace.default === beforeSync,
+        namespace.default === mod,
+        mod.Module.createRequire === mod.createRequire,
+        mod.Module === mod,
+      ];
+    })()`,
+        context,
+      ),
+    ).toEqual([true, true, true, true, true, true, true]);
+  });
+
   it('should reject named imports that the CommonJS lexer cannot detect', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath(

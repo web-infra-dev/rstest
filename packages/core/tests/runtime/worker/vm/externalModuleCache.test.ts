@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -70,5 +70,22 @@ it('accepts a BOM-prefixed package.json when resolving JavaScript format', async
     expect(
       getExternalModuleFormat(pathToFileURL(join(directory, 'value.js')).href),
     ).toBe('module');
+  });
+});
+
+it('does not inherit package type through node_modules', async () => {
+  await withTempDir('rstest-vm-package-boundary-', (directory) => {
+    writeFileSync(join(directory, 'package.json'), '{"type":"module"}');
+    expect(getExternalModuleFormat(join(directory, 'app.js'))).toBe('module');
+    for (const name of ['legacy', '@scope/legacy']) {
+      const dependency = join(directory, 'node_modules', name);
+      mkdirSync(dependency, { recursive: true });
+      expect(getExternalModuleFormat(join(dependency, 'index.js'))).toBe(
+        'commonjs',
+      );
+      expect(
+        getExternalModuleFormat(join(dependency, 'index.js'), 'require'),
+      ).toBe('commonjs');
+    }
   });
 });

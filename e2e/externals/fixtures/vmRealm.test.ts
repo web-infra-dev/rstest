@@ -7,6 +7,7 @@ const {
   createTimerPromise,
   createStaticTimerPromise,
   inspectRealm,
+  inspectLoaderBoundaries,
   inspectCommonJsPaths,
   inspectFailedChild,
   requireAddonGraph,
@@ -64,7 +65,6 @@ it('executes external modules in the test VM realm', async () => {
     },
     importedJson: 'external-json',
     jsonSameObject: true,
-    moduleExportsMarker: true,
     nonEnumerableValue: 42,
     plainDefault: { default: 'inner', named: 1 },
     requiredEsm:
@@ -77,11 +77,23 @@ it('executes external modules in the test VM realm', async () => {
     wasm: 42,
     wasmFunction: true,
   });
-  await expect(verifyBuiltinCallback()).resolves.toBe(true);
-  expect(verifyBuiltinSyncError()).toBe(true);
+  // Callback arguments and synchronous native throws retain their host realm.
+  await expect(verifyBuiltinCallback()).resolves.toEqual({
+    isVmError: false,
+    code: 'ENOENT',
+  });
+  expect(verifyBuiltinSyncError()).toEqual({
+    isVmError: false,
+    code: 'ENOENT',
+  });
   expect(verifyModuleBuiltin()).toEqual({
     builtinModulesArray: true,
     builtinModulesObject: true,
+    commonJsArray: true,
+    moduleClassArray: true,
+    sameArray: true,
+    sameDefault: true,
+    functionIsProxy: false,
   });
   expect(await verifyUnsupportedImportAttribute()).toBe(
     'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
@@ -122,5 +134,16 @@ it('executes external modules in the test VM realm', async () => {
     responseText: 'vm',
     structuredCloneNestedObject: true,
     structuredCloneObject: true,
+  });
+});
+
+it('loads ambiguous ESM, legacy CommonJS and percent-containing data URLs', async () => {
+  await expect(inspectLoaderBoundaries()).resolves.toEqual({
+    ambiguousKeys: ['value'],
+    ambiguousValue: 'syntax-detected-esm',
+    legacyValue: 1,
+    legacySame: true,
+    dataModulo: 1,
+    dataUnicode: '汉%',
   });
 });

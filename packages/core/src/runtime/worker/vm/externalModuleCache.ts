@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, extname, join, parse } from 'pathe';
+import { basename, dirname, extname, join, parse } from 'pathe';
 import { workerCache } from './cache';
 
 export type ExternalModuleFormat =
@@ -107,6 +107,13 @@ const resolvePackageType = (filePath: string): PackageType => {
   const visited: string[] = [];
 
   while (true) {
+    // A dependency without package.json must not inherit the application's type.
+    if (basename(directory) === 'node_modules') {
+      for (const item of visited) {
+        packageTypeCache.set(item, 'ambiguous');
+      }
+      return 'ambiguous';
+    }
     const cached = packageTypeCache.get(directory);
     if (cached) {
       for (const item of visited) {
@@ -195,6 +202,24 @@ export const getExternalModuleFormat = (
   }
 };
 
+const decodeExternalDataText = (code: string): string => {
+  // URL percent decoding operates on UTF-8 bytes and leaves invalid escapes intact.
+  const bytes = Buffer.from(code);
+  let length = 0;
+  for (let index = 0; index < bytes.length; index++) {
+    if (bytes[index] === 0x25) {
+      const hex = bytes.toString('latin1', index + 1, index + 3);
+      if (/^[\da-f]{2}$/i.test(hex)) {
+        bytes[length++] = Number.parseInt(hex, 16);
+        index += 2;
+        continue;
+      }
+    }
+    bytes[length++] = bytes[index]!;
+  }
+  return bytes.subarray(0, length).toString();
+};
+
 export const parseExternalDataUri = (identifier: string): ParsedDataUri => {
   const dataUri = identifier.split('#', 1)[0]!;
   const match = dataUri.match(dataUriPattern);
@@ -232,7 +257,7 @@ export const parseExternalDataUri = (identifier: string): ParsedDataUri => {
   return {
     code: isBase64
       ? decodeExternalBase64(code, identifier).toString()
-      : decodeURIComponent(code),
+      : decodeExternalDataText(code),
     mime: mime === 'application/json' ? 'application/json' : 'text/javascript',
   };
 };

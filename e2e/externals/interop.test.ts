@@ -25,6 +25,13 @@ describe('test interop', () => {
       join(__dirname, './fixtures/test-vm-external'),
       join(__dirname, './node_modules/test-vm-external'),
     );
+    fse.copySync(
+      join(__dirname, './fixtures/test-vm-external/helper.cjs'),
+      join(
+        __dirname,
+        './node_modules/test-vm-external/node_modules/legacy/index.js',
+      ),
+    );
   });
 
   it('should interopDefault correctly in jsdom test environment', async () => {

@@ -298,6 +298,8 @@ importers:
 
   e2e/externals/fixtures/test-vm-external: {}
 
+  e2e/externals/fixtures/test-vm-external/ambiguous: {}
+
   e2e/federation/fixtures/basic: {}
 
   e2e/federation/fixtures/cli: {}
