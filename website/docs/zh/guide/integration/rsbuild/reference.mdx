@@ -1,63 +1,12 @@
 ---
-description: 本指南介绍了如何将 Rstest 与 Rsbuild 集成，以便在你的 Rsbuild 项目中进行无缝测试。
+description: Rstest Rsbuild adapter 的 API 和配置映射参考。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
-# Rsbuild
+# Rsbuild adapter 配置参考
 
-本指南介绍了如何将 Rstest 与 [Rsbuild](https://rsbuild.rs) 集成，以便在你的 Rsbuild 项目中进行无缝测试。
-
-## 快速开始
-
-### 新建项目
-
-创建一个新的 Rsbuild + Rstest 项目。在创建时添加 `--tools rstest` 标志：
-
-```bash
-npm create rsbuild@latest -- --tools rstest
-```
-
-脚手架包含了 Rstest 和演示测试。使用 `npm run test` 来运行它们。
-
-### 现有项目
-
-要将 Rstest 添加到现有项目中，请遵循[快速入门](/guide/start/quick-start)来安装和设置测试脚本。
-
-## 复用 Rsbuild 配置
-
-[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) 是一个官方适配器，它允许 Rstest 自动从你现有的 Rsbuild 配置文件中继承测试相关配置。这可以确保测试环境与构建配置尽量保持一致，同时避免把仅用于开发服务器或页面构建的选项带进测试流程。
-
-### 安装适配器
-
-import { PackageManagerTabs } from '@theme';
-
-<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
-
-### 继承你的配置
-
-使用适配器中的 `withRsbuildConfig` 函数，你可以从 Rsbuild 配置文件中继承 Rstest 配置。
-
-```typescript
-import { defineConfig } from '@rstest/core';
-import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
-
-export default defineConfig({
-  extends: withRsbuildConfig(),
-  // 额外的 Rstest 特定配置
-});
-```
-
-这将自动：
-
-- 加载你的 `rsbuild.config.ts` 文件
-- 提取并映射测试相关的 Rsbuild 选项到 Rstest 配置
-- 与你提供的任何其他 Rstest 配置合并
-- 将加载到的 Rsbuild 配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此该配置变更时 `--changed` 会运行完整测试套件
-
-适配器不会原样复用整份 Rsbuild 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、静态资源处理和 `target`。像 `dev`、`server`、`html` 这类面向开发服务器、页面入口或产物输出的配置，会在转换时自动裁剪掉，避免把测试无关配置带入 Rstest。
-
-默认情况下，适配器使用 `process.cwd()` 来解析 Rsbuild 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。你也可以通过 `config` 选项直接传入 Rsbuild 配置对象。更多详情请参阅 [API](#api)。
+安装与快速配置请查看 [Rsbuild 集成概览](./)。本页包含完整的 adapter API、配置映射和调试方法。
 
 ## API
 
