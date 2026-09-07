@@ -1139,6 +1139,12 @@ export default class CustomCoverageReporter {
       sourcePath: 'c:/project/.rstest-virtual/setup.mjs',
       matches: true,
     },
+    {
+      root: '//server/share/project',
+      excludedPath: '//SERVER/SHARE/Project/.rstest-virtual/Setup.mjs',
+      sourcePath: '//server/share/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
   ])(
     'matches a late absolute exclusion for $sourcePath',
     ({ root, excludedPath, sourcePath, matches = true }) => {
