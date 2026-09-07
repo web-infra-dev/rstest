@@ -98,6 +98,7 @@ export const inspectFailedChild = () => commonJsPaths.inspectFailedChild();
 
 export const requireAddonGraph = () => require('./import-addon.mjs');
 export const importAddonGraph = () => import('./import-addon.mjs');
+export const importMissingDependency = (specifier) => import(specifier);
 
 export const verifyNodeGlobals = async () => {
   const pendingResponse = fetch('data:text/plain,vm');

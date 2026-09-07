@@ -1,7 +1,8 @@
 import { resolveObjectURL } from 'node:buffer';
+import { appendFileSync } from 'node:fs';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { promisify } from 'node:util';
-import { afterAll, expect } from '@rstest/core';
+import { afterAll, expect, rs } from '@rstest/core';
 
 if (process.env.RSTEST_VM_PROMISIFIED_TIMERS_STARTED) {
   expect(process.env.RSTEST_VM_PROMISIFIED_TIMERS_CANCELLED).toBe('2');
@@ -13,7 +14,7 @@ if (process.env.RSTEST_VM_PROMISIFIED_TIMERS_STARTED) {
 }
 process.env.RSTEST_VM_PROMISIFIED_TIMERS_CANCELLED = '0';
 
-afterAll(() => {
+afterAll(async () => {
   process.env.RSTEST_VM_PROMISIFIED_TIMERS_STARTED = 'true';
   // Both entry points must be cancelled before the next file starts, without
   // depending on whether a short delay happens to expire during teardown.
@@ -30,6 +31,27 @@ afterAll(() => {
       },
     );
   }
+  const marker = process.env.RSTEST_VM_WAIT_MARKER;
+  if (!marker) throw new Error('RSTEST_VM_WAIT_MARKER is required');
+  const options = { timeout: 60_000, interval: 10_000 };
+  const waits = [
+    rs.waitUntil(() => false, options),
+    rs.waitFor(() => {
+      throw new Error('still waiting');
+    }, options),
+  ];
+  for (const wait of waits) {
+    void wait
+      .then(
+        () => {
+          appendFileSync(marker, 'fulfilled\n');
+          setTimeout(() => appendFileSync(marker, 'late timer\n'), 10);
+        },
+        () => appendFileSync(marker, 'rejected\n'),
+      )
+      .finally(() => appendFileSync(marker, 'finally\n'));
+  }
+  await Promise.resolve();
 });
 
 const previousObjectURL = process.env.RSTEST_VM_PREVIOUS_OBJECT_URL;

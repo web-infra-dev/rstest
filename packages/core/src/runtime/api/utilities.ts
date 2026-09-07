@@ -45,7 +45,6 @@ const createWaitController = (): WaitController => {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const realSetTimeout = getRealSetTimeout();
   const realClearTimeout = getRealClearTimeout();
-  let resolveSleep: (() => void) | undefined;
   let cancelled = false;
 
   const schedule = (callback: () => void, ms: number) => {
@@ -67,8 +66,6 @@ const createWaitController = (): WaitController => {
       realClearTimeout(timerId);
     }
     timers.clear();
-    resolveSleep?.();
-    resolveSleep = undefined;
   };
 
   return {
@@ -79,18 +76,16 @@ const createWaitController = (): WaitController => {
     schedule,
     sleep: (ms) =>
       new Promise<void>((resolve) => {
-        if (cancelled) {
-          resolve();
-          return;
+        if (!cancelled) {
+          schedule(resolve, ms);
         }
-        resolveSleep = resolve;
-        schedule(() => {
-          resolveSleep = undefined;
-          resolve();
-        }, ms);
       }),
   };
 };
+
+// Disposal must not launch user continuations. Allocate per cancelled wait:
+// a shared pending Promise would retain every disposed file's reactions.
+const createCancelledWaitResult = (): Promise<never> => new Promise(() => {});
 
 const createWaitForTimeoutError = (timeout: number, cause?: unknown) =>
   new Error(`waitFor timed out in ${timeout}ms`, { cause });
@@ -659,7 +654,7 @@ const buildRstestUtilities = async (): Promise<{
       try {
         while (true) {
           if (controller.cancelled) {
-            return undefined as Awaited<ReturnType<typeof callback>>;
+            return createCancelledWaitResult();
           }
           if (timedOut) {
             throw lastError ?? createWaitForTimeoutError(timeout);
@@ -668,13 +663,16 @@ const buildRstestUtilities = async (): Promise<{
           try {
             const value = await callback();
             if (controller.cancelled) {
-              return undefined as Awaited<ReturnType<typeof callback>>;
+              return createCancelledWaitResult();
             }
             if (timedOut) {
               throw lastError ?? createWaitForTimeoutError(timeout);
             }
             return value;
           } catch (error) {
+            if (controller.cancelled) {
+              return createCancelledWaitResult();
+            }
             lastError = error;
           }
 
@@ -702,7 +700,7 @@ const buildRstestUtilities = async (): Promise<{
       try {
         while (true) {
           if (controller.cancelled) {
-            return undefined as never;
+            return createCancelledWaitResult();
           }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);
@@ -713,12 +711,12 @@ const buildRstestUtilities = async (): Promise<{
             value = await callback();
           } catch (error) {
             if (controller.cancelled) {
-              return undefined as never;
+              return createCancelledWaitResult();
             }
             throw error;
           }
           if (controller.cancelled) {
-            return undefined as never;
+            return createCancelledWaitResult();
           }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);

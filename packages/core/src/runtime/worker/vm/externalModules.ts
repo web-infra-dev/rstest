@@ -558,7 +558,11 @@ class VmExternalModules {
   }
 
   resolve(specifier: string, parent: string): string {
-    return resolveExternalSpecifier(specifier, parent);
+    try {
+      return resolveExternalSpecifier(specifier, parent);
+    } catch (error) {
+      throw this.wrapBuiltinError(error);
+    }
   }
 
   async importModuleDynamically(

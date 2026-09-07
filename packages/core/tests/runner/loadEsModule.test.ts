@@ -400,6 +400,30 @@ describe('loadEsModule', () => {
     }
   });
 
+  it.each(['missing-rstest-vm-dependency', '@rstest/missing-vm-dependency'])(
+    'creates dynamic import resolution errors in the VM: %s',
+    async (specifier) => {
+      const context = vm.createContext({});
+      const executor = getVmExternalModules(context);
+      const isVmError = vm.runInContext(
+        '(error) => error instanceof Error',
+        context,
+      );
+      await expect(
+        executor.importModuleDynamically(
+          specifier,
+          pathToFileURL(__filename).href,
+        ),
+      ).rejects.toSatisfy((error) => {
+        expect(error).toMatchObject({
+          message: expect.stringContaining(specifier),
+        });
+        expect(error).toHaveProperty('code');
+        return isVmError(error);
+      });
+    },
+  );
+
   it('should bridge synchronous builtin object results into the VM realm', () => {
     const vmContext = vm.createContext({});
     const executor = getVmExternalModules(vmContext);

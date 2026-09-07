@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -67,6 +67,8 @@ describe('threads pool e2e', () => {
     const markerDirectory = mkdtempSync(join(tmpdir(), 'rstest-vm-cleanup-'));
     const cleanupMarker = join(markerDirectory, 'worker-fixture-cleanup.txt');
     const guardMarker = join(markerDirectory, 'process-guard.txt');
+    const waitMarker = join(markerDirectory, 'wait-reactions.txt');
+    writeFileSync(waitMarker, '');
     onTestFinished(() =>
       rmSync(markerDirectory, { force: true, recursive: true }),
     );
@@ -89,6 +91,7 @@ describe('threads pool e2e', () => {
           env: {
             RSTEST_VM_CLEANUP_MARKER: cleanupMarker,
             RSTEST_VM_GUARD_MARKER: guardMarker,
+            RSTEST_VM_WAIT_MARKER: waitMarker,
           },
         },
       },
@@ -105,6 +108,7 @@ describe('threads pool e2e', () => {
       2,
     );
     expect(readFileSync(guardMarker, 'utf8').trim()).toBe('guarded');
+    expect(readFileSync(waitMarker, 'utf8')).toBe('');
 
     const threadIds = [...output.matchAll(/VM_THREAD_ID:(\d+)/g)].map(
       (match) => match[1],

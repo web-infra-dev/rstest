@@ -72,6 +72,8 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 `rs.waitFor()`、`rs.waitUntil()`、`rs.runAllTimersAsync()` 等异步 runtime helper 在 worker realm 执行。它们返回的 Promise 和内部创建的错误，不保证通过针对 VM constructor 的 `instanceof Promise` 或 `instanceof Error` 检查。请使用 `await`，并按值或错误消息断言。用户 callback 的返回值和错误会原样传递，不做 realm 转换；API 引用仍保持稳定，并在调用时读取当前文件的状态。
 
+请始终 await `rs.waitFor()` 和 `rs.waitUntil()`。如果它们在 VM 文件 teardown 时仍未完成，Rstest 会清理内部定时器，并让对应 Promise 保持 pending，而不是 resolve 或 reject，避免清理操作触发用户的后续回调。这不会取消用户 callback 内已经启动的工作。
+
 文件 teardown 时，Rstest 会清理通过其文件级定时器包装创建的待执行定时器，包括 `util.promisify(setTimeout)` 和 `util.promisify(setImmediate)`。这些 promisify 定时器中尚未完成的操作会以 `AbortError` 取消，与已包装的 `node:timers/promises` timeout 和 immediate 操作一致。测试仍需 await 或主动取消自己的异步任务：VM teardown 不会取消任意 Promise 链、原生 I/O 或后台任务。取消本身可能执行用户的 `catch` 或 `finally`，因此不保证 teardown 后完全没有用户代码执行。
 
 VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js 而从 worker realm 复制进来的 global（例如 `Buffer`）使用共享的 constructor，直接修改这些 constructor 可能跨文件保留；`ArrayBuffer` 和 `Uint8Array` 等 VM 原生 global 则会随每个文件重新创建。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。在 `happy-dom` 环境中，DOM 实现对象由 `happy-dom` 自身的 provider realm 创建；不要假设所有 DOM 值都能通过 VM intrinsic 的 `Object` 或 `Array` 的 `instanceof` 检查，应使用环境提供的 DOM constructor。

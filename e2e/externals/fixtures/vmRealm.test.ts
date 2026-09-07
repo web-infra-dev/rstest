@@ -12,6 +12,7 @@ const {
   inspectFailedChild,
   requireAddonGraph,
   importAddonGraph,
+  importMissingDependency,
   importedImportMetaMain,
   verifyImportAttributeErrorRealm,
   verifyNodeGlobals,
@@ -21,6 +22,16 @@ const {
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it.each(['missing-rstest-vm-dependency', '@rstest/missing-vm-dependency'])(
+  'creates external dynamic import resolution errors in the VM: %s',
+  async (specifier) => {
+    await expect(importMissingDependency(specifier)).rejects.toThrow(Error);
+    await expect(importMissingDependency(specifier)).rejects.toMatchObject({
+      code: 'ERR_MODULE_NOT_FOUND',
+    });
+  },
+);
 
 it('rejects native addon imports in synchronous and asynchronous ESM graphs', async () => {
   expect(requireAddonGraph).toThrow(
