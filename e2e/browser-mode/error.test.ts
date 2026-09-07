@@ -40,7 +40,11 @@ describe('browser mode - error handling', () => {
 
   it('reports suite hook element mismatches before hook timeouts', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('error', {
-      args: ['tests/elementAssertionTimeout.test.ts'],
+      args: [
+        'tests/elementAssertionTimeout.test.ts',
+        '--testNamePattern',
+        'runs suite hooks',
+      ],
     });
 
     await expectExecFailed();
