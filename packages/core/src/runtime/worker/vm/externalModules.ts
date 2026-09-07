@@ -339,14 +339,15 @@ const moduleHasAsyncGraph = (module: vm.Module): boolean =>
   (module as SyncSourceTextModule).hasAsyncGraph();
 
 const createUnsupportedFormatError = (
+  context: vm.Context,
   filePath: string,
 ): NodeJS.ErrnoException => {
   const extension = extname(filePath) || '(no extension)';
-  const error: NodeJS.ErrnoException = new Error(
+  return createVmError(
+    context,
     `External module ${filePath} has unsupported format ${extension} in the vmThreads pool. Bundle this module instead of externalizing it.`,
+    'ERR_UNKNOWN_FILE_EXTENSION',
   );
-  error.code = 'ERR_UNKNOWN_FILE_EXTENSION';
-  return error;
 };
 
 class VmExternalModules {
@@ -510,7 +511,7 @@ class VmExternalModules {
           'WebAssembly modules cannot be loaded synchronously',
         );
       case 'unsupported':
-        throw createUnsupportedFormatError(resolved);
+        throw createUnsupportedFormatError(this.context, resolved);
     }
   }
 
@@ -630,7 +631,10 @@ class VmExternalModules {
         return this.getJsonModule(resolvedId);
       case 'native':
         if (!isBuiltin(resolvedId)) {
-          throw createUnsupportedFormatError(getFilePath(resolvedId));
+          throw createUnsupportedFormatError(
+            this.context,
+            getFilePath(resolvedId),
+          );
         }
         return this.loadNativeModule(resolvedId);
       case 'wasm':
@@ -640,7 +644,10 @@ class VmExternalModules {
           loadingWebAssemblyIds,
         );
       case 'unsupported':
-        throw createUnsupportedFormatError(getFilePath(resolvedId));
+        throw createUnsupportedFormatError(
+          this.context,
+          getFilePath(resolvedId),
+        );
     }
   }
 
@@ -1013,7 +1020,10 @@ class VmExternalModules {
         // require(esm) still follows ESM import rules for its dependencies.
         // Direct CommonJS require of an addon uses the separate require path.
         if (!isBuiltin(identifier)) {
-          throw createUnsupportedFormatError(getFilePath(identifier));
+          throw createUnsupportedFormatError(
+            this.context,
+            getFilePath(identifier),
+          );
         }
         return {
           kind: 'ready',
@@ -1030,7 +1040,10 @@ class VmExternalModules {
           'WebAssembly modules cannot be loaded synchronously',
         );
       case 'unsupported':
-        throw createUnsupportedFormatError(getFilePath(identifier));
+        throw createUnsupportedFormatError(
+          this.context,
+          getFilePath(identifier),
+        );
     }
   }
 

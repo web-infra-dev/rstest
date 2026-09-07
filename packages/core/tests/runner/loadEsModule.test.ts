@@ -611,12 +611,13 @@ describe('loadEsModule', () => {
   it('rejects native addons in require(esm) graphs without blocking direct CommonJS loads', () => {
     const directory = mkdtempSync(join(tmpdir(), 'rstest-vm-addon-'));
     const entry = join(directory, 'entry.mjs');
+    const vmContext = vm.createContext({});
     const addonPath = fixturePath(
       'vm-external/module-semantics/native-addon.node',
     );
     writeFileSync(join(directory, 'native-addon.node'), 'Not a native binary.');
     writeFileSync(entry, "import './native-addon.node';");
-    const executor = getVmExternalModules(vm.createContext({}));
+    const executor = getVmExternalModules(vmContext);
     try {
       expect(() => executor.require(entry, __filename)).toThrow(
         expect.objectContaining({
@@ -626,6 +627,11 @@ describe('loadEsModule', () => {
               : 'ERR_REQUIRE_ESM',
         }),
       );
+      try {
+        executor.require(entry, __filename);
+      } catch (error) {
+        expect(error).toBeInstanceOf(vm.runInContext('Error', vmContext));
+      }
       // The dummy addon is not a binary, so reaching dlopen proves this path
       // still delegates to Node rather than applying the ESM format rejection.
       expect(() => executor.require(addonPath, __filename)).toThrow(

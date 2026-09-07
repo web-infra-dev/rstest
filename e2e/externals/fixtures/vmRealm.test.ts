@@ -27,8 +27,15 @@ it('rejects native addon imports in synchronous and asynchronous ESM graphs', as
           : 'ERR_REQUIRE_ESM',
     }),
   );
-  await expect(importAddonGraph()).rejects.toMatchObject({
-    code: 'ERR_UNKNOWN_FILE_EXTENSION',
+  try {
+    requireAddonGraph();
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+  }
+  await expect(importAddonGraph()).rejects.toSatisfy((error) => {
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ code: 'ERR_UNKNOWN_FILE_EXTENSION' });
+    return true;
   });
 });
 
