@@ -1119,25 +1119,29 @@ export default class CustomCoverageReporter {
       root: '/project',
       excludedPath: '/project/.rstest-virtual/setup.mjs',
       sourcePath: '/project/.rstest-virtual/setup.mjs',
+      matches: true,
     },
     {
       root: '/project',
       excludedPath: '/Project/.rstest-virtual/Setup.mjs',
       sourcePath: '/project/.rstest-virtual/setup.mjs',
+      matches: false,
     },
     {
       root: 'C:/project',
       excludedPath: 'C:/project/.rstest-virtual/setup.mjs',
       sourcePath: 'c:/PROJECT/.rstest-virtual/SETUP.mjs',
+      matches: true,
     },
     {
       root: 'C:/project',
       excludedPath: 'C:\\Project\\.rstest-virtual\\Setup.mjs',
       sourcePath: 'c:/project/.rstest-virtual/setup.mjs',
+      matches: true,
     },
   ])(
     'matches a late absolute exclusion for $sourcePath',
-    ({ root, excludedPath, sourcePath }) => {
+    ({ root, excludedPath, sourcePath, matches = true }) => {
       const options = createOptions();
       const provider = getProviderInternals(
         new CoverageProvider(options, root),
@@ -1146,7 +1150,9 @@ export default class CustomCoverageReporter {
       expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(true);
       options.exclude = [excludedPath];
 
-      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(false);
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(
+        !matches,
+      );
       expect(
         provider.shouldKeepOriginalSource(`${sourcePath}.other`, root),
       ).toBe(true);
