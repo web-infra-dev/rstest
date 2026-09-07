@@ -20,6 +20,9 @@ export * from './runtime/api/public';
 // The registry is global-symbol backed so independently bundled Node runtime
 // entries still observe the same callbacks.
 export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
+// Node-side integrations can release resources at the end of the current file.
+// Unlike suite hooks, this also runs when collection or suite execution fails.
+export { registerFileCleanup } from './runtime/runner/fileCleanup';
 
 export type {
   CoverageOptions,

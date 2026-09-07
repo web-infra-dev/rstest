@@ -63,6 +63,23 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
   });
 
+  it('cleans Playwright config between projects with isolate false', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--pool.maxWorkers=1'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures', 'project-config'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      'RSTEST_PLAYWRIGHT_CONFIG_PROJECT_ISOLATED_OK',
+    );
+  });
+
   it('preserves Playwright assertion errors at the timeout deadline', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',

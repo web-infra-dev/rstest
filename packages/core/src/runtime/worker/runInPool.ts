@@ -23,6 +23,7 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
+import { takeFileCleanups } from '../runner/fileCleanup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
@@ -430,7 +431,11 @@ const preparePool = async (
     taskContext,
     unhandledErrors,
     cleanup: async () => {
-      await Promise.all(cleanupFns.map((fn) => fn()));
+      try {
+        await Promise.all(takeFileCleanups().map((cleanup) => cleanup()));
+      } finally {
+        await Promise.all(cleanupFns.map((fn) => fn()));
+      }
     },
   };
 };

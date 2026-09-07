@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { afterAll } from '@rstest/core';
+import { registerFileCleanup } from '@rstest/core';
 import type { ExtendConfig } from '@rstest/core';
 import type { PlaywrightOptions } from './fixture';
 
@@ -101,7 +101,7 @@ export const __registerPlaywrightConfig = (
   };
   registry.entries.push(entry);
 
-  afterAll(() => {
+  registerFileCleanup(() => {
     const index = registry.entries.indexOf(entry);
     if (index !== -1) {
       registry.entries.splice(index, 1);
