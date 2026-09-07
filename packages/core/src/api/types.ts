@@ -1,3 +1,4 @@
+import type { LoadConfigOptions } from '@rsbuild/core';
 import type {
   CoverageMapData,
   FileFilterMode,
@@ -30,6 +31,8 @@ export interface CreateRstestOptions {
   cwd?: string;
   /** Inline or loaded configuration. */
   config?: RstestConfig | LoadedRstestConfig;
+  /** The loader used for config files discovered through `projects`; defaults to `auto`. */
+  configLoader?: LoadConfigOptions['loader'];
 }
 
 /** @experimental Subject to change until 1.0.0. */

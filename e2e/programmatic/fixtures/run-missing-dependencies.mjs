@@ -52,7 +52,12 @@ try {
     reporters: [],
   };
   const rstest = await createRstest({ cwd: root, config });
-  const runResult = await rstest.run();
+  let runResult;
+  try {
+    runResult = await rstest.run();
+  } catch (error) {
+    runResult = { status: 'rejected', message: error.message };
+  }
 
   let watchError;
   let watcher;
@@ -65,19 +70,18 @@ try {
     await watcher.close();
   }
 
-  const mergeResult = await rstest.mergeReports();
+  let mergeResult;
+  try {
+    mergeResult = await rstest.mergeReports();
+  } catch (error) {
+    mergeResult = { status: 'rejected', message: error.message };
+  }
 
   console.log(
     `__RSTEST_API_RESULT__${JSON.stringify({
-      run: {
-        status: runResult.status,
-        message: runResult.unhandledErrors[0]?.message,
-      },
+      run: runResult,
       watch: { message: watchError },
-      mergeReports: {
-        status: mergeResult.status,
-        message: mergeResult.unhandledErrors[0]?.message,
-      },
+      mergeReports: mergeResult,
     })}__END__`,
   );
 } finally {
