@@ -52,14 +52,23 @@ Run Rslint from your project root:
 A successful run prints a summary similar to this:
 
 ```text
-Found 0 errors and 0 warnings (linted 1 file with 7 rules in 80ms using 14 threads)
+start   Linting...
+success Lint passed in 92ms (1 file, 14 rules, 14 threads)
 ```
 
-When Rslint finds a problem, it reports the rule name, source location, and a summary such as:
+When Rslint finds a problem, it reports the rule name, source location, code frame, and failure summary:
 
 ```text
-rstest/no-identical-title — [error] Test title is used multiple times in the same describe block
-Found 1 error and 0 warnings (linted 1 file with 7 rules in 30ms using 14 threads)
+start   Linting...
+
+  rstest/no-identical-title  — [error] Test title is used multiple times in the same describe block
+  ╭─┴──────────( invalid.test.ts:8:8 )─────
+  │ 7 │
+  │ 8 │  test('same title', () => {
+  │ 9 │    expect(false).toBeFalsy();
+  ╰────────────────────────────────
+
+error   Lint failed with 1 error in 31ms (1 file, 14 rules, 14 threads)
 ```
 
 You can also add the command to the `scripts` section of `package.json` and run it through your package manager's lint script.

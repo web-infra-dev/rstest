@@ -52,14 +52,23 @@ export default defineConfig([rstestPlugin.configs.recommended]);
 运行成功后，会输出类似下面的汇总信息：
 
 ```text
-Found 0 errors and 0 warnings (linted 1 file with 7 rules in 80ms using 14 threads)
+start   Linting...
+success Lint passed in 92ms (1 file, 14 rules, 14 threads)
 ```
 
-如果 Rslint 发现问题，会输出 rule 名称、源码位置和类似下面的汇总信息：
+如果 Rslint 发现问题，会输出 rule 名称、源码位置、代码片段和失败汇总信息：
 
 ```text
-rstest/no-identical-title — [error] Test title is used multiple times in the same describe block
-Found 1 error and 0 warnings (linted 1 file with 7 rules in 30ms using 14 threads)
+start   Linting...
+
+  rstest/no-identical-title  — [error] Test title is used multiple times in the same describe block
+  ╭─┴──────────( invalid.test.ts:8:8 )─────
+  │ 7 │
+  │ 8 │  test('same title', () => {
+  │ 9 │    expect(false).toBeFalsy();
+  ╰────────────────────────────────
+
+error   Lint failed with 1 error in 31ms (1 file, 14 rules, 14 threads)
 ```
 
 也可以把这条命令加入 `package.json` 的 `scripts`，再通过 package manager 的 lint script 运行。
