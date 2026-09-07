@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, it } from '@rstest/core';
@@ -116,4 +117,45 @@ describe('test interop', () => {
 
     await expectExecSuccess();
   });
+
+  it.each([
+    { flags: [] },
+    { flags: ['--no-addons'] },
+    { flags: ['--no-addons', '--no-experimental-require-module'] },
+    { flags: ['--conditions=custom condition'] },
+  ])(
+    'uses native require conditions with worker flags $flags',
+    async ({ flags }) => {
+      const entry = join(
+        __dirname,
+        'node_modules/test-vm-external/conditions/entry.cjs',
+      );
+      const expected = execFileSync(
+        process.execPath,
+        [
+          ...flags,
+          '-e',
+          `console.log(JSON.stringify(require(${JSON.stringify(entry)})))`,
+        ],
+        { encoding: 'utf8' },
+      );
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          './fixtures/vmConditions.test.ts',
+          '-c',
+          './fixtures/rstest.vmExternal.config.mts',
+          ...flags.map((flag) => `--pool.execArgv=${flag}`),
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: { RSTEST_EXPECTED_REQUIRE_CONDITIONS: expected },
+          },
+        },
+      });
+      await expectExecSuccess();
+    },
+  );
 });

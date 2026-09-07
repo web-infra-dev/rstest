@@ -9,6 +9,7 @@ const {
   inspectRealm,
   inspectLoaderBoundaries,
   inspectCommonJsPaths,
+  inspectCommonJsGetters,
   inspectFailedChild,
   requireAddonGraph,
   importAddonGraph,
@@ -22,6 +23,15 @@ const {
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('snapshots CJS named getters using the original exports receiver', async () => {
+  expect(await inspectCommonJsGetters()).toEqual({
+    before: [43, 43, 43],
+    after: [43, 43, 44],
+    sameDefault: true,
+    gettersReadOnce: true,
+  });
+});
 
 it.each(['missing-rstest-vm-dependency', '@rstest/missing-vm-dependency'])(
   'creates external dynamic import resolution errors in the VM: %s',

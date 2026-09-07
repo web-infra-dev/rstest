@@ -69,6 +69,10 @@ Each test file runs in a Node.js worker thread spawned via `node:worker_threads`
 
 `vmThreads` reuses Node.js worker threads while creating a fresh `vm.Context` for every test file. This keeps file-level JavaScript globals, DOM objects, and the bundled module graph isolated without paying for a new worker thread for every file. It is intended for DOM-heavy suites where environment setup is expensive but worker startup is also measurable.
 
+Its core guarantee is file-level VM isolation with reusable compilation resources, not complete equivalence with a separate Node.js process or a replacement for Node's module loader. Support is limited to the loading paths and cross-realm behavior described below.
+
+#### Isolation and cross-realm limits
+
 The [`isolate`](/config/test/isolate) option has no effect on `vmThreads`. Passing `isolate: false` is accepted for configuration compatibility, but every file still receives a fresh VM context, module graph, test environment, and worker-scoped fixture lifecycle.
 
 Async runtime helpers such as `rs.waitFor()`, `rs.waitUntil()`, and `rs.runAllTimersAsync()` execute in the worker realm. Their returned Promises and internally created errors are not guaranteed to pass `instanceof Promise` or `instanceof Error` against VM constructors. Use `await` and assertions on values or error messages. User callback values and errors are passed through without realm conversion; the stable API references still resolve the current file's state at call time.
@@ -87,7 +91,22 @@ Across the Node builtin boundary, Rstest adapts plain objects, arrays, Promise f
 
 In the Node environment, `fetch()` returns a VM Promise but preserves the native `Response`. Its body methods, such as `json()` and `text()`, keep native Promises, results, and errors; conversion does not extend to methods on returned native objects. A failing `structuredClone()` also preserves Node's native `DOMException` (`name: 'DataCloneError'`, `code: 25`). Use `await` and assertions on content or error `name`/`code`, rather than `instanceof Promise`, `Object`, or `Error` against VM constructors for these values.
 
-External JavaScript ES modules, CommonJS modules, JSON modules, and WebAssembly modules execute inside the file VM. JavaScript, JSON, and base64 WebAssembly `data:` URLs are also supported. On Node.js 24.9 or later, CommonJS modules can synchronously `require()` ES modules that do not use top-level await; the complete dependency graph remains in the file VM. An async graph throws `ERR_REQUIRE_ASYNC_MODULE`, matching Node.js. Earlier Node.js versions reject `require()` of an ES module in `vmThreads`; use dynamic `import()` instead. Bundle external files with other extensions, such as TypeScript source or custom loaders, before running them in `vmThreads`.
+#### Supported module loading
+
+| Loading path                         | Supported behavior                                                                                                                      | Boundary                                                                                                                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Built test and setup bundles         | Execute in the file VM; setup executes for each file.                                                                                   | Only immutable compilation resources are reused, not setup or dependency execution state.                                                                                 |
+| External JavaScript ESM and CommonJS | Execute in the file VM, including static and dynamic JavaScript imports.                                                                | This is not support for arbitrary Node loader hooks or runtime source transforms.                                                                                         |
+| CommonJS named exports               | Statically detected own exports are read from the original `module.exports` receiver, including non-enumerable properties and getters.  | Named exports are snapshots, not live bindings. The existing `interopDefault` option still applies; do not assume every CJS namespace is identical to native ESM interop. |
+| External JSON and WebAssembly        | JSON and asynchronously loaded WebAssembly execute in the file VM. JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. | JSON ESM imports require `type: 'json'`; synchronous `require()` of WebAssembly is not supported.                                                                         |
+| Synchronous `require(esm)`           | Supported on Node.js 24.9+ when the VM graph API is available and the graph has no top-level await.                                     | Async graphs throw `ERR_REQUIRE_ASYNC_MODULE`; older VM implementations reject ESM require with `ERR_REQUIRE_ESM`. Use dynamic `import()` instead.                        |
+| Native addons                        | Direct CommonJS `require()` delegates loading to Node.                                                                                  | Addon state is outside VM isolation; importing `.node` files through the VM ESM graph is not supported.                                                                   |
+
+CommonJS path and export-condition selection are delegated to Node's native `require.resolve()`, including its handling of startup flags. VM execution support is checked **after** resolution: Rstest does not select a different package entry to work around an unsupported VM operation.
+
+For example, on Node.js 22 a package's `module-sync` condition may select an ESM entry that the VM cannot require synchronously. This throws `ERR_REQUIRE_ESM` rather than selecting the package's CommonJS fallback. Use dynamic `import()` or bundle the dependency instead.
+
+Custom Node loaders and external TypeScript execution are outside this scope; compile or bundle those files first. The supported loading paths do not imply universal cross-realm value conversion or cancellation of arbitrary asynchronous work. Failures within a supported path are compatibility bugs, not additional implicit limitations.
 
 ## Choose a pool type
 

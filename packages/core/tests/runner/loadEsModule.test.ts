@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
@@ -6,6 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
@@ -907,6 +909,63 @@ describe('loadEsModule', () => {
     }
   });
 
+  it.each([false, true])(
+    'reads CJS named exports from their original receiver (interopDefault=%s)',
+    async (interopDefault) => {
+      const directory = mkdtempSync(join(tmpdir(), 'rstest-vm-cjs-getters-'));
+      const externalPath = join(directory, 'getters.cjs');
+      const context = vm.createContext({});
+      try {
+        writeFileSync(
+          externalPath,
+          `
+        const state = new WeakMap([[exports, 42]]);
+        exports.value = exports.hidden = exports.throwing = exports.deleted = undefined;
+        for (const name of ['value', 'hidden', 'throwing']) {
+          Object.defineProperty(exports, name, {
+            enumerable: name !== 'hidden',
+            get() {
+              if (name === 'throwing') throw new Error('getter failure');
+              return state.get(this);
+            },
+          });
+        }
+        delete exports.deleted;
+        Object.setPrototypeOf(exports, { deleted: 'inherited' });
+      `,
+        );
+        const source = `
+        const result = [ns.value, ns.hidden, ns.throwing ?? null, ns.deleted ?? null, ns.default.value];
+      `;
+        const expected = JSON.parse(
+          execFileSync(
+            process.execPath,
+            [
+              '--input-type=module',
+              '-e',
+              `const ns = await import(${JSON.stringify(pathToFileURL(externalPath).href)});\n${source}\nconsole.log(JSON.stringify(result));`,
+            ],
+            { encoding: 'utf8' },
+          ),
+        );
+        expect(expected).toEqual([42, 42, null, null, 42]);
+        const mod = await loadModule({
+          codeContent: `import * as ns from ${JSON.stringify(externalPath)};\n${source}\nexport default result;`,
+          distPath: join(directory, 'entry.mjs'),
+          testPath: __filename,
+          rstestContext: {},
+          assetFiles: {},
+          interopDefault,
+          vmContext: context,
+        });
+        expect(mod.default).toEqual(expected);
+      } finally {
+        disposeVmExternalModules(context);
+        rmSync(directory, { force: true, recursive: true });
+      }
+    },
+  );
+
   it('should resolve CommonJS reexports with require conditions', async () => {
     const temporaryDirectory = mkdtempSync(
       join(tmpdir(), 'rstest-vm-conditional-reexport-'),
@@ -1456,9 +1515,14 @@ describe('loadEsModule', () => {
     ).rejects.toThrow('runtime syntax error');
   });
 
-  it('should select module-sync only when synchronous VM ESM is supported', async () => {
+  it('keeps native module-sync selection separate from VM execution support', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath('bare-parent/bare-parent-pkg/index.mjs');
+    expect(
+      getVmExternalModules(vmContext)
+        .createRequire(externalPath)
+        .resolve('#sync-condition'),
+    ).toBe(createRequire(externalPath).resolve('#sync-condition'));
     const mod = await loadModule({
       codeContent: [
         `import { condition as result } from ${JSON.stringify(externalPath)};`,
@@ -1475,9 +1539,7 @@ describe('loadEsModule', () => {
     expect(mod.default).toEqual(
       'hasAsyncGraph' in vm.SourceTextModule.prototype
         ? { code: undefined, value: 'module-sync-esm' }
-        : Number(process.versions.node.split('.')[0]) >= 22
-          ? { code: undefined, value: 'require-commonjs' }
-          : { code: 'ERR_REQUIRE_ESM', value: undefined },
+        : { code: 'ERR_REQUIRE_ESM', value: undefined },
     );
   });
 

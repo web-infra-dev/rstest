@@ -81,6 +81,8 @@ Contracts between modules or processes — not readable from any single file.
 
 ### Test runtime (`src/runtime`)
 
+- VM compatibility is scoped by the supported-loading table and realm boundaries in `website/docs/en/config/test/pool.mdx` and its Chinese counterpart. Adding a module format, loader hook, or new realm-conversion category requires an explicit scope decision, not an incidental review fix. Bugs within an already supported path need regression coverage, not a new disclaimer.
+- For VM loader compatibility changes, compare the affected path against native Node under the same launch options and supported Node versions. Resolution and VM execution capability are separate: do not select a different package entry just because the native-selected entry cannot execute in the VM.
 - Everything in `src/runtime/` executes inside the test execution context (forks child, worker thread, or browser page — browser-safe parts re-exported through `src/browserRuntime.ts`), never in the host CLI process.
 - Live-binding contract: under `isolate: false` one worker runs many files while user modules persist, so every injected API member is built once with a stable identity and resolves the running file's `FileContext` at call time — never as a per-file closure.
 - A new `Rstest` API member → add to `globalApiList` (compile-enforced exhaustiveness) and export a forwarder in `src/runtime/api/public.ts`.

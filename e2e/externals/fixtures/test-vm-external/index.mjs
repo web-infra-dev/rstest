@@ -9,6 +9,7 @@ import path from 'node:path';
 import timers, { setTimeout } from 'node:timers';
 import helper from './helper.cjs';
 import nonEnumerableModule from './non-enumerable.cjs';
+import { receiverValue, hiddenReceiverValue } from './non-enumerable.cjs';
 import metadata from './data.json' with { type: 'json' };
 import requiredEsm from './require-esm.cjs';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
@@ -24,6 +25,28 @@ const require = createRequire(import.meta.url);
 const requiredMetadata = require('./data.json');
 
 const commonJsPaths = require('./path-helper.cjs');
+
+export const inspectCommonJsGetters = async () => {
+  const readsBefore = nonEnumerableModule.getterReads;
+  await import('./non-enumerable.cjs');
+  const readsAfter = nonEnumerableModule.getterReads;
+  const before = [
+    receiverValue,
+    hiddenReceiverValue,
+    nonEnumerableModule.receiverValue,
+  ];
+  nonEnumerableModule.updateValue();
+  return {
+    before,
+    after: [
+      receiverValue,
+      hiddenReceiverValue,
+      nonEnumerableModule.receiverValue,
+    ],
+    sameDefault: nonEnumerableModule === require('./non-enumerable.cjs'),
+    gettersReadOnce: readsBefore === 2 && readsAfter === readsBefore,
+  };
+};
 
 export const inspectRealm = (value) => ({
   commonJs: helper.isPlainObject(value),

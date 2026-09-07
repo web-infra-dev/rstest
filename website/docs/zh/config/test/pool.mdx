@@ -68,6 +68,10 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 `vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
 
+核心保证是文件级 VM 隔离和编译资源复用，不是与独立 Node.js 进程完全等价，也不是替代 Node module loader。支持范围以下文列出的加载方式和跨 realm 行为为准。
+
+#### 隔离与跨 realm 限制
+
 [`isolate`](/config/test/isolate) 选项对 `vmThreads` 不生效。为了保持配置兼容性，Rstest 会接受 `isolate: false`，但每个文件仍会获得新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。
 
 `rs.waitFor()`、`rs.waitUntil()`、`rs.runAllTimersAsync()` 等异步 runtime helper 在 worker realm 执行。它们返回的 Promise 和内部创建的错误，不保证通过针对 VM constructor 的 `instanceof Promise` 或 `instanceof Error` 检查。请使用 `await`，并按值或错误消息断言。用户 callback 的返回值和错误会原样传递，不做 realm 转换；API 引用仍保持稳定，并在调用时读取当前文件的状态。
@@ -86,7 +90,22 @@ Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironmen
 
 在 Node 环境中，`fetch()` 返回 VM Promise，但保留原生 `Response`。它的 `json()`、`text()` 等 body 方法仍返回原生 Promise、结果和异常；转换不会延伸到返回的原生对象的方法。`structuredClone()` 失败时也会保留 Node 原生 `DOMException`（`name: 'DataCloneError'`、`code: 25`）。对于这些值，请使用 `await`，并按内容或错误的 `name`／`code` 断言，避免用 VM constructor 做 `instanceof Promise`、`Object` 或 `Error` 检查。
 
-External JavaScript ES module、CommonJS module、JSON module 和 WebAssembly module 会在当前文件的 VM 中执行，同时支持 JavaScript、JSON 和 base64 WebAssembly `data:` URL。在 Node.js 24.9 及以上版本中，CommonJS module 可以同步 `require()` 不包含 top-level await 的 ES module，完整依赖图仍在当前文件的 VM 中执行；异步依赖图会与 Node.js 一致抛出 `ERR_REQUIRE_ASYNC_MODULE`。更低版本的 Node.js 会在 `vmThreads` 中拒绝 `require()` ES module，此时请改用动态 `import()`。TypeScript 源码、自定义 loader 等其他扩展名的 external 文件需要先 bundle，再通过 `vmThreads` 运行。
+#### 支持的模块加载方式
+
+| 加载方式                            | 支持的行为                                                                                                    | 边界                                                                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 构建后的 test 和 setup bundle       | 在文件 VM 中执行；setup 每文件执行。                                                                          | 只复用不可变的编译资源，不复用 setup 或依赖的执行状态。                                                                                    |
+| External JavaScript ESM 和 CommonJS | 在文件 VM 中执行，包括 JavaScript 的静态和动态 import。                                                       | 不支持任意 Node loader hook 或运行时源码转换。                                                                                             |
+| CommonJS named export               | 从原始 `module.exports` receiver 读取静态识别出的自有导出，包括不可枚举属性和 getter。                        | named export 是值快照，不是 live binding。已有的 `interopDefault` 选项仍然生效；不能假设所有 CJS namespace 都与原生 ESM interop 完全一致。 |
+| External JSON 和 WebAssembly        | JSON 和异步加载的 WebAssembly 在文件 VM 中执行，同时支持 JavaScript、JSON 和 base64 WebAssembly `data:` URL。 | JSON ESM import 需要 `type: 'json'`；不支持同步 `require()` WebAssembly。                                                                  |
+| 同步 `require(esm)`                 | Node.js 24.9+、VM graph API 可用且依赖图不含 top-level await 时支持。                                         | 异步依赖图抛出 `ERR_REQUIRE_ASYNC_MODULE`；更早的 VM 实现以 `ERR_REQUIRE_ESM` 拒绝 ESM require，请改用动态 `import()`。                    |
+| Native addon                        | 直接通过 CommonJS `require()` 加载时交给 Node 处理。                                                          | addon 状态不受 VM 隔离；不支持通过 VM ESM graph import `.node` 文件。                                                                      |
+
+CommonJS 路径和 export condition 的选择交给 Node 原生 `require.resolve()`，启动参数也由 Node 处理。Rstest 在解析完成后检查 VM 能否执行所选入口，不会为了绕过不支持的 VM 操作而改选另一个 package 入口。
+
+例如在 Node.js 22 上，package 的 `module-sync` condition 可能选中 VM 无法同步 require 的 ESM 入口。此时会抛出 `ERR_REQUIRE_ESM`，不会改选该 package 的 CommonJS fallback。请改用动态 `import()`，或将依赖 bundle 后运行。
+
+自定义 Node loader 和 external TypeScript 执行不在支持范围内，请先编译或 bundle。支持上述加载方式不代表提供通用跨 realm 转换，也不代表能取消任意异步工作。已支持路径上的错误属于兼容性 bug，不应被视为额外的隐含限制。
 
 ## 如何选择 pool 类型
 

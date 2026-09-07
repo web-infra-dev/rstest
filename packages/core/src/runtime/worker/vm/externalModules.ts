@@ -114,58 +114,6 @@ const supportsCjsModuleExportsMarker = nodeMajor >= 23;
 
 initializeCommonJsLexer();
 
-// Selecting `module-sync` without the VM graph API can resolve a package to an
-// ESM-only entry that this loader cannot execute synchronously.
-const requireConditions = (() => {
-  const conditions = ['node', 'require', 'node-addons'];
-  if (supportsSyncEsmEvaluate) {
-    conditions.push('module-sync');
-  }
-  const args = [
-    ...process.execArgv,
-    ...(process.env.NODE_OPTIONS?.split(/\s+/) ?? []),
-  ];
-  for (let index = 0; index < args.length; index++) {
-    const argument = args[index];
-    if (argument === undefined) {
-      continue;
-    }
-    const inlineCondition = argument.match(/^(?:--conditions|-C)=(.+)$/)?.[1];
-    if (inlineCondition) {
-      conditions.push(inlineCondition);
-    } else if (
-      (argument === '--conditions' || argument === '-C') &&
-      index + 1 < args.length
-    ) {
-      const condition = args[++index];
-      if (condition !== undefined) {
-        conditions.push(condition);
-      }
-    }
-  }
-  if (!supportsSyncEsmEvaluate) {
-    return new Set(
-      conditions.filter((condition) => condition !== 'module-sync'),
-    );
-  }
-  return new Set(conditions);
-})();
-
-type RequireResolveWithConditions = (
-  specifier: string,
-  options?: { conditions?: Set<string>; paths?: string[] },
-) => string;
-
-const resolveRequire = (
-  nativeRequire: NodeJS.Require,
-  specifier: string,
-  options?: { paths?: string[] },
-): string =>
-  (nativeRequire.resolve as RequireResolveWithConditions)(specifier, {
-    ...options,
-    conditions: requireConditions,
-  });
-
 let executors = new WeakMap<vm.Context, VmExternalModules>();
 let scriptExecutors = new WeakMap<vm.Script, VmExternalModules>();
 
@@ -458,7 +406,7 @@ class VmExternalModules {
     require.resolve = Object.assign(
       (specifier: string, options?: { paths?: string[] }) => {
         try {
-          return resolveRequire(nativeRequire, specifier, options);
+          return nativeRequire.resolve(specifier, options);
         } catch (error) {
           throw this.wrapBuiltinError(error);
         }
@@ -485,7 +433,9 @@ class VmExternalModules {
     const nativeRequire = createNativeRequire(parent);
     let resolved: string;
     try {
-      resolved = resolveRequire(nativeRequire, specifier);
+      // Node owns export conditions and launch flags; VM execution support is
+      // checked after resolution, without selecting a different package entry.
+      resolved = nativeRequire.resolve(specifier);
     } catch (error) {
       throw this.wrapBuiltinError(error);
     }
@@ -733,21 +683,36 @@ class VmExternalModules {
       (typeof exports === 'object' || typeof exports === 'function')
         ? Object.getOwnPropertyNames(exports)
         : []);
-    const namespace: Record<string, any> =
+    const namespace: Record<string, unknown> =
       exports !== null &&
       (typeof exports === 'object' || typeof exports === 'function')
         ? Object.defineProperties(
             {},
             Object.fromEntries(
               exportNames
-                .filter((name) => name !== 'default')
+                .filter(
+                  (name) =>
+                    name !== 'default' &&
+                    (name !== 'module.exports' ||
+                      !supportsCjsModuleExportsMarker),
+                )
                 .map((name) => [
                   name,
-                  Object.getOwnPropertyDescriptor(exports, name) ?? {
-                    configurable: true,
+                  {
                     enumerable: true,
-                    value: undefined,
-                    writable: true,
+                    // SyntheticModule snapshots at evaluation, not on every cached
+                    // import. Read getters with the original exports receiver.
+                    get() {
+                      if (!Object.hasOwn(exports, name)) {
+                        return undefined;
+                      }
+                      try {
+                        return Reflect.get(exports, name);
+                      } catch {
+                        // Node also leaves throwing CJS named getters undefined.
+                        return undefined;
+                      }
+                    },
                   },
                 ]),
             ),
