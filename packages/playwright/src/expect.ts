@@ -301,16 +301,19 @@ const createPlaywrightMatcher =
       message,
     );
 
-const runWithTimeout = async (check: () => Promise<void>, timeout: number) => {
+const runWithTimeout = async (
+  check: () => Promise<void>,
+  timeout: number,
+): Promise<Error | undefined> => {
   const timers = getRealTimers();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    await Promise.race([
-      check(),
-      new Promise<never>((_, reject) => {
+    return await Promise.race([
+      check().then(() => undefined),
+      new Promise<Error>((resolve) => {
         timeoutId = timers.setTimeout(() => {
-          reject(
+          resolve(
             new Error(`Playwright assertion timed out after ${timeout}ms.`),
           );
         }, timeout);
@@ -340,23 +343,26 @@ const waitForExpectation = async (
 
     firstAttempt = false;
     try {
-      await runWithTimeout(
+      const timeoutError = await runWithTimeout(
         check,
         Number.isFinite(remaining) ? Math.max(remaining, 0) : 0,
       );
-      return;
-    } catch (error) {
-      lastError = error;
 
-      const remainingAfterCheck = deadline - getRealNow();
-      if (!Number.isFinite(remainingAfterCheck) || remainingAfterCheck <= 0) {
-        break;
+      if (!timeoutError) {
+        return;
       }
 
-      await waitForRealTime(
-        Math.min(EXPECT_POLL_INTERVAL, remainingAfterCheck),
-      );
+      lastError ??= timeoutError;
+    } catch (error) {
+      lastError = error;
     }
+
+    const remainingAfterCheck = deadline - getRealNow();
+    if (!Number.isFinite(remainingAfterCheck) || remainingAfterCheck <= 0) {
+      break;
+    }
+
+    await waitForRealTime(Math.min(EXPECT_POLL_INTERVAL, remainingAfterCheck));
   }
 
   if (lastError instanceof Error) {
