@@ -109,8 +109,11 @@ const supportsSyncEsmEvaluate =
   typeof Reflect.get(vm.SourceTextModule.prototype, 'hasAsyncGraph') ===
     'function';
 
-const [nodeMajor = 0] = process.versions.node.split('.').map(Number);
-const supportsCjsModuleExportsMarker = nodeMajor >= 23;
+const [nodeMajor = 0, nodeMinor = 0] = process.versions.node
+  .split('.')
+  .map(Number);
+const supportsCjsModuleExportsMarker =
+  nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 12);
 
 initializeCommonJsLexer();
 
@@ -767,7 +770,7 @@ class VmExternalModules {
       resolvedId,
       defaultExport,
       this.context,
-      // Node 23 added the `module.exports` namespace marker. This is
+      // Node 22.12 added the `module.exports` namespace marker. This is
       // independent of the VM graph API, which is also available in Node 20.
       supportsCjsModuleExportsMarker ? { value: exports } : undefined,
     );

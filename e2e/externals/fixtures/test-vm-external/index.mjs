@@ -5,6 +5,7 @@ import path from 'node:path';
 import timers, { setTimeout } from 'node:timers';
 import helper from './helper.cjs';
 import nonEnumerableModule from './non-enumerable.cjs';
+import { 'module.exports' as commonJsModuleExports } from './helper.cjs';
 import metadata from './data.json' with { type: 'json' };
 import requiredEsm from './require-esm.cjs';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
@@ -36,6 +37,7 @@ export const inspectRealm = (value) => ({
   importedJson: metadata.label,
   jsonSameObject: metadata === requiredMetadata,
   nonEnumerableValue: nonEnumerableModule.value,
+  moduleExportsMarker: commonJsModuleExports === helper,
   plainDefault: { default: helper.default, named: helper.named },
   requiredEsm,
   requiredJson: requiredMetadata.label,

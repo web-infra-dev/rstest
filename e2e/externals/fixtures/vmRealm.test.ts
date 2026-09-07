@@ -64,6 +64,7 @@ it('executes external modules in the test VM realm', async () => {
     },
     importedJson: 'external-json',
     jsonSameObject: true,
+    moduleExportsMarker: true,
     nonEnumerableValue: 42,
     plainDefault: { default: 'inner', named: 1 },
     requiredEsm:
