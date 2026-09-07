@@ -242,7 +242,7 @@ export default defineConfig({
 });
 ```
 
-`definePlaywrightConfig` adds a generated setup file that initializes the default `playwright` fixture. In a multi-project config, add it to each Node.js project's `extends` that uses `@rstest/playwright`. Values must be JSON-serializable. For client certificates, use `certPath`/`keyPath`/`pfxPath` instead of direct `Buffer` values. Use `test.extend` for functions, class instances, or test-specific overrides:
+`definePlaywrightConfig` configures the default `playwright` fixture for the current project. In a multi-project config, add it to each Node.js project's `extends` that uses `@rstest/playwright`. Values must be JSON-serializable. For client certificates, use `certPath`/`keyPath`/`pfxPath` instead of direct `Buffer` values. Use `test.extend` for functions, class instances, or test-specific overrides:
 
 ```ts
 import { expect, test } from '@rstest/playwright';

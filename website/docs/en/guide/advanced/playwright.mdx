@@ -132,7 +132,7 @@ export default defineConfig({
 });
 ```
 
-`definePlaywrightConfig` adds a generated setup file that initializes the default `playwright` fixture. In a multi-project config, add it to each Node.js project's `extends` that uses `@rstest/playwright`. Values must be JSON-serializable. Functions such as `launchOptions.logger`, class instances, direct `Buffer` values in client certificates, and values that depend on the current test or retry context are not supported. Use `certPath`/`keyPath`/`pfxPath` or `test.extend` instead. If multiple test files need a different shared set of options, define a shared module that overrides the fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
+`definePlaywrightConfig` configures the default `playwright` fixture for the current project. In a multi-project config, add it to each Node.js project's `extends` that uses `@rstest/playwright`. Values must be JSON-serializable. Functions such as `launchOptions.logger`, class instances, direct `Buffer` values in client certificates, and values that depend on the current test or retry context are not supported. Use `certPath`/`keyPath`/`pfxPath` or `test.extend` instead. If multiple test files need a different shared set of options, define a shared module that overrides the fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';
