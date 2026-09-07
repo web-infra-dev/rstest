@@ -1,7 +1,25 @@
 [
   "playwright",
   "rslint",
-  { "type": "dir", "name": "rslib", "label": "Rslib" },
-  { "type": "dir", "name": "rsbuild", "label": "Rsbuild" },
-  { "type": "dir", "name": "rspack", "label": "Rspack" }
+  {
+    "type": "dir",
+    "name": "rslib",
+    "label": "Rslib",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "rsbuild",
+    "label": "Rsbuild",
+    "collapsible": true,
+    "collapsed": true
+  },
+  {
+    "type": "dir",
+    "name": "rspack",
+    "label": "Rspack",
+    "collapsible": true,
+    "collapsed": true
+  }
 ]
