@@ -23,6 +23,10 @@ When a CLI command migrates to the public `createRstest` (as `merge-reports` alr
 
 `NormalizedConfig` is exported from `@rstest/core/api` as the type of `RstestContext.config`, so changing its shape is a public API change.
 
+The CLI carries process-level behavior (`embedded`, `trace`, installer confirmation, and exit-code mirroring) through `createRstestInstance` in `src/api/createRstest.ts`; these never enter the public `CreateRstestOptions`.
+
+`CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`) and `trace`; a new `rstest run` flag is added to `RunOptions` and becomes a CLI flag through that derivation.
+
 ## Executor contract (node + browser isomorphism)
 
 Core owns the run-cycle contract shared by the node pool and `@rstest/browser`:

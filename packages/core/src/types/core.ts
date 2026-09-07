@@ -79,7 +79,7 @@ export type InternalContext = {
   fileFilters?: string[];
   /** How file filters should match discovered test files. */
   fileFilterMode?: FileFilterMode;
-  /** Original source filters passed to `--related`, `--findRelatedTests`, or resolved from `--changed`. */
+  /** Original source filters passed to `--related` or resolved from `--changed`. */
   relatedFilters?: string[];
   /** CLI option that produced related source filters. */
   relatedMode?: 'related' | 'changed';

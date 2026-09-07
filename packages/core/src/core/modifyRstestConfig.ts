@@ -5,7 +5,7 @@ import type {
   RsbuildConfig,
   RsbuildInstance,
 } from '@rsbuild/core';
-import { mergeRstestConfig } from '../config';
+import { clonePlainConfig, mergeRstestConfig } from '../config';
 import type {
   EnvironmentWithOptions,
   InternalContext,
@@ -136,20 +136,6 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     get: (config) => config.projects,
   },
 ];
-
-const clonePlainConfig = <T>(value: T): T => {
-  if (Array.isArray(value)) {
-    return value.map((item) => clonePlainConfig(item)) as T;
-  }
-
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
-    ) as T;
-  }
-
-  return value;
-};
 
 const isConfigValueEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) {
