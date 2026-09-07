@@ -26,7 +26,6 @@ export class Worker {
     apiPath,
     configFilePath,
     coreVersion,
-    fileFilterMode,
     fileFilters,
     rstestPath,
     command = 'run',
@@ -64,7 +63,7 @@ export class Worker {
       },
     });
 
-    return { rstest, fileFilterMode, fileFilters, command };
+    return { rstest, fileFilters, command };
   }
 
   public async getNormalizedConfig(options: WorkerInitOptions) {
@@ -106,7 +105,7 @@ export class Worker {
   private async executeTestRun(data: WorkerInitOptions): Promise<void> {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
     try {
-      const { rstest, fileFilterMode, fileFilters, command } = await this.init({
+      const { rstest, fileFilters, command } = await this.init({
         ...data,
         coverage: data.coverage?.enabled
           ? {
@@ -117,7 +116,6 @@ export class Worker {
       });
       const runOptions = {
         filters: fileFilters,
-        filterMode: fileFilterMode,
       } satisfies NonNullable<Parameters<typeof rstest.run>[0]>;
       // TODO: Browser and mixed continuous runs intentionally fail through the
       // public watch() guard until browser watch support lands in RFC PR4. Keep
@@ -190,13 +188,12 @@ export class Worker {
   }
 
   public async listTests(data: WorkerInitOptions) {
-    const { rstest, fileFilterMode, fileFilters } = await this.init({
+    const { rstest, fileFilters } = await this.init({
       ...data,
       command: 'list',
     });
     const filterOptions = {
       filters: fileFilters,
-      filterMode: fileFilterMode,
     };
     const declarations = await rstest.listTests({
       ...filterOptions,

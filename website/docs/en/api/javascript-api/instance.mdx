@@ -161,50 +161,24 @@ const rstest = await createRstest({
 });
 
 const result = await rstest.run({
-  filters: ['src/foo.test.ts'],
-  filterMode: 'exact',
+  filters: ['"src/foo.test.ts"'],
 });
 
 console.log(result.status);
 console.log(result.summary.tests);
 ```
 
-### Select test files
-
-The following options select test files:
-
-- `filters` uses case-insensitive substring matching by default. Omit `filters` to select all files; an explicit empty array selects none in either mode.
-- `filterMode` uses normalized path equality when set to `'exact'`.
-- `related` interprets `filters` as source files and selects their related tests.
-- `changed` selects tests related to working tree changes, optionally since a Git ref. `changed: false` disables changed-file selection.
-- `shard` accepts the CLI-style `"1/3"` form or `{ index: 1, count: 3 }`.
-- `project` supports project names, `*` wildcards, and `!` exclusions.
-
-The remaining options control execution behavior for this run:
-
-- `testNamePattern` selects tests by name using a `RegExp` or string pattern.
-- `update` controls the snapshot update mode. `update: false` explicitly disables snapshot updates; omitting `update` keeps the configured or default mode.
-- `bail` is the number of test failures allowed before stopping this run; boolean `true` means one.
-- `passWithNoTests` controls whether this run succeeds when no tests match.
-
 ### RunOptions
 
 `RunOptions` accepts every `rstest run` flag except `config`, `configLoader`, `root` and `trace`. See [CLI options](/guide/basic/cli#cli-options) for the full flag list and [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts) for the exact types.
+
+`filters` is API-only; the CLI passes filters as positional arguments. It uses case-insensitive substring matching by default. Wrap a filter in matching single or double quotes to match an exact absolute or root-relative path, for example `filters: ['"src/foo.test.ts"', 'utils']`; quoted and unquoted filters can be mixed. Omit `filters` to select all files; an explicit empty array selects none.
 
 - **Type:**
 
 ```ts
 interface RunOptions {
   filters?: string[];
-  filterMode?: FileFilterMode;
-  related?: boolean;
-  changed?: boolean | string;
-  shard?: string | { index: number; count: number };
-  project?: string[];
-  testNamePattern?: RegExp | string;
-  update?: boolean;
-  bail?: number | boolean;
-  passWithNoTests?: boolean;
   // ...plus every other `rstest run` flag as an override of the config option
   // of the same name, e.g. `testTimeout`, `coverage`, `reporters`.
 }

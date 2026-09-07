@@ -55,9 +55,8 @@ describe('filterFiles', () => {
     expect(
       filterFiles(
         ['/repo/tests/index.test.ts', '/repo/tests/index.test.tsx'],
-        ['/repo/tests/index.test.ts'],
+        ['"/repo/tests/index.test.ts"'],
         '/repo',
-        'exact',
       ),
     ).toEqual(['/repo/tests/index.test.ts']);
   });
@@ -67,9 +66,8 @@ describe('filterFiles', () => {
       expect(
         filterFiles(
           ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts'],
-          ['/repo/tests/Foo.test.ts'],
+          ['"/repo/tests/Foo.test.ts"'],
           '/repo',
-          'exact',
         ),
       ).toEqual(['/repo/tests/Foo.test.ts']);
     });
@@ -80,9 +78,8 @@ describe('filterFiles', () => {
       expect(
         filterFiles(
           ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts'],
-          ['/repo/tests/Foo.test.ts'],
+          ['"/repo/tests/Foo.test.ts"'],
           '/repo',
-          'exact',
         ),
       ).toEqual(['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts']);
     });

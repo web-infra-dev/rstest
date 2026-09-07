@@ -45,22 +45,10 @@ export type HostRuntime = {
   onExitCodeChange?: (code: number) => void;
 };
 
-const toShardOption = (shard: RunOptions['shard']): string | undefined =>
-  typeof shard === 'string'
-    ? shard
-    : shard
-      ? `${shard.index}/${shard.count}`
-      : undefined;
-
 const toCommonOptions = ({
   filters: _filters,
-  filterMode: _filterMode,
-  shard,
   ...common
-}: RunOptions = {}): CommonOptions => ({
-  ...common,
-  shard: toShardOption(shard),
-});
+}: RunOptions = {}): CommonOptions => common;
 
 const listedRunModes = {
   run: undefined,
@@ -192,7 +180,6 @@ export async function createRstestInstance(
       options: { ...commonOptions, trace: runtime.trace },
       command,
       filters: runOptions.filters,
-      filterMode: runOptions.filterMode,
       createRstestContext: createHostContext,
       embedded: runtime.embedded,
     });

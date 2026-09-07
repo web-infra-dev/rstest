@@ -892,7 +892,6 @@ export const collectProjectEntries = async (
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         fileFilters: context.fileFilters,
-        fileFilterMode: context.fileFilterMode,
       });
 
       const setup = materializeVirtualSetupFiles(

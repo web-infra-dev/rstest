@@ -6,7 +6,7 @@ import type {
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../types';
-import { getTestEntries } from '../utils';
+import { getTestEntries, normalizeExactPathMatch } from '../utils';
 import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
 
@@ -315,14 +315,6 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
     });
   },
 });
-
-const normalizeExactPathMatch = (filePath: string): string => {
-  const normalizedPath = normalize(filePath);
-
-  return process.platform === 'win32'
-    ? normalizedPath.toLocaleLowerCase()
-    : normalizedPath;
-};
 
 const collectDirectlyMatchedFiles = ({
   files,

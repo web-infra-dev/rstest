@@ -15,15 +15,11 @@ import {
   logger,
 } from '../utils';
 
-export type CommonOptions = Omit<
-  RunOptions,
-  'filters' | 'filterMode' | 'shard'
-> & {
+export type CommonOptions = Omit<RunOptions, 'filters'> & {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
   trace?: boolean;
-  shard?: string;
 };
 
 export const loadCliConfig = (

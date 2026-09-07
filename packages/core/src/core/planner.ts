@@ -192,9 +192,7 @@ export async function createTestPlanner(
         getPlan().entriesCache.get(project.environmentName)?.entries || {},
       ),
     );
-    return filters
-      ? filterFiles(entries, filters, context.rootPath, context.fileFilterMode)
-      : entries;
+    return filters ? filterFiles(entries, filters, context.rootPath) : entries;
   };
 
   return {
