@@ -1,79 +1,12 @@
 ---
-description: 本指南介绍如何将 Rstest 集成到 Rslib 项目中，为你的 Rslib 项目提供无缝的测试体验。
+description: Rstest Rslib adapter 的 API 和配置映射参考。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
-# Rslib
+# Rslib adapter 配置参考
 
-本指南介绍如何将 Rstest 集成到 [Rslib](https://rslib.rs) 项目中，为你的 Rslib 项目提供无缝的测试体验。
-
-## 快速开始
-
-### 新项目
-
-通过在创建时添加 `--tools rstest` 参数，即可创建一个 Rslib + Rstest 项目：
-
-```bash
-npx create-rslib --template react-ts --tools rstest --dir my-project
-```
-
-脚手架已包含 Rstest 和示例测试，运行 `npm run test` 即可执行测试。
-
-### 已有项目
-
-如需为已有项目添加 Rstest，请参考[快速开始](/guide/start/quick-start)安装 Rstest 并配置测试脚本。
-
-## 复用 Rslib 配置
-
-[@rstest/adapter-rslib](https://www.npmjs.com/package/@rstest/adapter-rslib) 是 Rstest 官方提供的适配器，允许 Rstest 自动继承现有 Rslib 配置文件中的测试相关配置。这样可以确保测试环境与构建配置尽量保持一致，同时避免把只服务于构建产物的选项带进测试流程。
-
-### 安装适配器
-
-import { PackageManagerTabs } from '@theme';
-
-<PackageManagerTabs command="add @rstest/adapter-rslib -D" />
-
-### 扩展配置
-
-使用适配器中的 `withRslibConfig` 函数，可以从 Rslib 配置文件中扩展 Rstest 配置。
-
-```typescript
-import { defineConfig } from '@rstest/core';
-import { withRslibConfig } from '@rstest/adapter-rslib';
-
-export default defineConfig({
-  extends: withRslibConfig(),
-  // 额外的 Rstest 特定配置
-});
-```
-
-这将自动：
-
-- 加载你的 `rslib.config.ts` 文件
-- 提取并映射测试相关的 Rslib 选项到 Rstest 配置
-- 与你提供的其他 Rstest 配置合并
-- 将加载到的 Rslib 配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此该配置变更时 `--changed` 会运行完整测试套件
-
-如果你在 Rslib 配置里开启了 `performance.buildCache`，`withRslibConfig()` 会把这项配置传给 Rstest，Rstest 仍会继续补充自己的缓存默认值，例如运行时摘要项和基于配置文件的失效条件。
-
-如果你的 Rslib 配置没有开启 `performance.buildCache`，Rstest 默认也不会开启它。只有在你希望测试构建使用持久化缓存时，才需要在 Rstest 配置里显式设置 `performance.buildCache`：
-
-```ts
-import { defineConfig } from '@rstest/core';
-import { withRslibConfig } from '@rstest/adapter-rslib';
-
-export default defineConfig({
-  extends: withRslibConfig(),
-  performance: {
-    buildCache: true,
-  },
-});
-```
-
-适配器不会原样复用整份 Rslib 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、装饰器相关配置、静态资源处理和 `target`。像 `dev`、`server`、`html` 等未映射字段，以及其他仅用于开发服务器、页面入口或构建产物的配置，会在转换时自动裁剪掉。
-
-默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。你也可以通过 `config` 选项直接传入 Rslib 配置对象。更多详情请参阅 [API](#api)。
+安装与快速配置请查看 [Rslib 集成概览](./)。本页包含完整的 adapter API、配置映射、cache 行为和调试方法。
 
 ## API
 
@@ -264,6 +197,5 @@ export default defineConfig({
 
 ## 相关文档
 
-- [`@rstest/adapter-rslib` 文档](https://www.npmjs.com/package/@rstest/adapter-rslib)
 - [Rslib 配置概览](https://rslib.rs/config)
 - [Rstest 配置概览](/config/)

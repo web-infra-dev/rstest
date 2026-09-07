@@ -1,0 +1,54 @@
+---
+description: 本指南介绍如何在 Rsbuild 项目中集成 Rstest，并复用已有的 Rsbuild 构建配置。
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# Rsbuild
+
+在 [Rsbuild](https://rsbuild.rs) 项目中使用 Rstest，并复用已有的应用构建配置。
+
+## 快速开始
+
+### 新项目
+
+创建 Rsbuild + Rstest 项目时，加上 `--tools rstest`：
+
+```bash
+npm create rsbuild@latest -- --tools rstest
+```
+
+脚手架会包含 Rstest 和示例测试。使用 `npm run test` 运行测试。
+
+### 已有项目
+
+已有项目可以参考[快速开始](/guide/start/quick-start)，完成 Rstest 的安装和测试脚本配置。
+
+## 复用 Rsbuild 配置
+
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) 会读取 Rsbuild 配置，并将测试编译需要的配置转换为 Rstest 配置。
+
+### 安装适配器
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+### 扩展配置
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+});
+```
+
+适配器会读取 `rsbuild.config.ts`，转换测试编译需要的选项，将结果与 Rstest 配置合并，并通过 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 监听已加载的配置文件。同时，它会移除 `rsbuild:type-check` plugin，因为测试流程不会执行类型检查。
+
+它不会复制 `dev`、`server`、`html` 等只用于构建的配置。如果默认配置位置或 environment 不适合当前项目，可以使用 `cwd`、`config` 或 `environmentName`。
+
+如果其他工具已经在内存中生成了 Rsbuild 配置对象，可以使用 `toRstestConfig` 直接转换，而不必重新读取配置文件。两种入口、options、配置映射和调试方法请查看[配置参考](./reference)。
+
+## 相关文档
+
+- [Rsbuild 配置概览](https://rsbuild.rs/config)

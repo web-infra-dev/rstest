@@ -1,1 +1,7 @@
-["playwright", "rslint", "rslib", "rsbuild", "rspack"]
+[
+  "playwright",
+  "rslint",
+  { "type": "dir", "name": "rslib", "label": "Rslib" },
+  { "type": "dir", "name": "rsbuild", "label": "Rsbuild" },
+  { "type": "dir", "name": "rspack", "label": "Rspack" }
+]

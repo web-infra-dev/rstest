@@ -1,0 +1,54 @@
+---
+description: This guide covers how to integrate Rstest with Rsbuild for seamless testing in your Rsbuild projects.
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# Rsbuild
+
+Use Rstest with [Rsbuild](https://rsbuild.rs) while reusing the configuration that already defines your application build.
+
+## Quick start
+
+### New project
+
+Create a new Rsbuild + Rstest project with the `--tools rstest` flag:
+
+```bash
+npm create rsbuild@latest -- --tools rstest
+```
+
+The scaffold includes Rstest and demo tests. Run them with `npm run test`.
+
+### Existing project
+
+To add Rstest to an existing project, follow the [Quick Start](/guide/start/quick-start) to install and set up test scripts.
+
+## Reuse Rsbuild config
+
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) loads your Rsbuild config and converts the test-relevant parts into Rstest configuration.
+
+### Install adapter
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+### Extend your config
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+});
+```
+
+The adapter loads `rsbuild.config.ts`, maps options used by test compilation, merges them with your Rstest config, and watches the loaded config through [`forceRerunTriggers`](/config/test/force-rerun-triggers). It also removes the `rsbuild:type-check` plugin because type checking does not run in the test pipeline.
+
+It does not copy build-only settings such as `dev`, `server`, or `html`. Use `cwd`, `config`, or `environmentName` when the default config location or environment does not match your project.
+
+If another tool already creates an Rsbuild config object in memory, use `toRstestConfig` instead of loading a config file. See the [configuration reference](./reference) for both entry points, options, mapping, and debug instructions.
+
+## Related documentation
+
+- [Rsbuild configuration overview](https://rsbuild.rs/config)

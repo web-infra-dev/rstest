@@ -1,51 +1,10 @@
-# Rspack
+---
+description: API and configuration mapping reference for the Rstest Rspack adapter.
+---
 
-This guide covers how to integrate Rstest with [Rspack](https://rspack.rs) for seamless testing in your Rspack projects.
+# Rspack adapter reference
 
-## Quick start
-
-To add Rstest to an existing Rspack project, follow the [Quick Start](/guide/start/quick-start) to install and set up test scripts.
-
-## Reuse Rspack config
-
-[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) is an official adapter that allows Rstest to automatically inherit configuration from your existing Rspack config file. This ensures your test environment matches your build configuration without duplication.
-
-### Install adapter
-
-import { PackageManagerTabs } from '@theme';
-
-<PackageManagerTabs command="add @rstest/adapter-rspack -D" />
-
-### Extend your config
-
-Using the `withRspackConfig` function from the adapter, you can extend your Rstest configuration from the Rspack config file.
-
-```typescript
-import { defineConfig } from '@rstest/core';
-import { withRspackConfig } from '@rstest/adapter-rspack';
-
-export default defineConfig({
-  extends: withRspackConfig(),
-  // Additional rstest-specific configuration
-});
-```
-
-This will automatically:
-
-- Load your `rspack.config.ts` file
-- Map compatible Rspack options to Rstest configuration
-- Merge with any additional Rstest config you provide
-- Add the loaded Rspack config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes
-
-By default, the adapter uses `process.cwd()` to resolve the Rspack config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
-
-:::warning
-Since Rstest uses Rsbuild internally as its bundler, some Rstest built-in behaviors may differ from Rspack's defaults. For example, Rstest has its own CSS processing pipeline. To avoid conflicts, this adapter automatically disables Rstest (Rsbuild) built-in CSS plugins so that Rspack's CSS configuration takes effect. This means that some Rsbuild-specific CSS features and configurations (e.g., `output.cssModules` configuration) will not be available when using this adapter.
-:::
-
-## Example project
-
-See the [Rspack adapter example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/rspack-adapter) for a complete React project that inherits its Rspack configuration in Rstest.
+For setup and important caveats, see the [Rspack integration overview](./). This page contains the complete adapter API, compatibility mapping, and debugging workflow.
 
 ## API
 
