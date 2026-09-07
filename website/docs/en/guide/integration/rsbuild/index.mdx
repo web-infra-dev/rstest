@@ -43,7 +43,7 @@ export default defineConfig({
 });
 ```
 
-The adapter loads `rsbuild.config.ts`, maps options used by test compilation, merges them with your Rstest config, and watches the loaded config through [`forceRerunTriggers`](/config/test/force-rerun-triggers). It also removes the `rsbuild:type-check` plugin because type checking does not run in the test pipeline.
+The adapter loads `rsbuild.config.ts`, maps options used by test compilation, merges them with your Rstest config, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes. It also removes the `rsbuild:type-check` plugin because type checking does not run in the test pipeline.
 
 It does not copy build-only settings such as `dev`, `server`, or `html`. Use `cwd`, `config`, or `environmentName` when the default config location or environment does not match your project.
 

@@ -31,10 +31,10 @@ export default defineConfig({
 });
 ```
 
-适配器会读取 `rspack.config.ts`，将兼容的 compiler 选项与生成的测试构建合并，并通过 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 监听已加载的配置文件。
+适配器会读取 `rspack.config.ts`，将兼容的 compiler 选项与生成的测试构建合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此当该配置发生变化时，`--changed` 会运行完整测试套件。
 
 :::warning
-Rstest 内部使用 Rsbuild，因此适配器会保留 Rstest 自己负责的测试结构；应用 Rspack CSS 配置时，还会禁用 Rstest 内置的 CSS plugin。这样会导致部分 Rsbuild 专属 CSS 选项（例如 `output.cssModules`）不可用。
+Rstest 内部使用 Rsbuild，因此适配器会保留 Rstest 自己负责的测试结构，并始终移除内置的 `rsbuild:css`、`rsbuild:less` 和 `rsbuild:sass` CSS plugin。这样会导致部分 Rsbuild 专属 CSS 选项（例如 `output.cssModules`）不可用。
 :::
 
 如果默认的 Rspack 配置不适合当前项目，可以使用 `cwd`、`configPath`、`configName` 或 environment 相关选项。选项详情、映射规则和调试方法请查看[配置参考](./reference)。

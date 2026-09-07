@@ -155,6 +155,24 @@ export default defineConfig({
 });
 ```
 
+## Cache behavior
+
+When `performance.buildCache` is enabled in your Rslib config, `withRslibConfig()` passes it through to Rstest and Rstest will still append its own cache defaults, such as runtime digest inputs and config-file-based invalidation.
+
+If your Rslib config does not enable `performance.buildCache`, Rstest keeps it disabled by default. Enable it explicitly in your Rstest config when you want persistent cache for test builds:
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
 ## Configuration mapping
 
 The adapter automatically maps these Rslib options to Rstest:

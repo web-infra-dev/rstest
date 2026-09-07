@@ -155,6 +155,24 @@ export default defineConfig({
 });
 ```
 
+## Cache 行为
+
+如果你在 Rslib 配置里开启了 `performance.buildCache`，`withRslibConfig()` 会把这项配置传给 Rstest，Rstest 仍会继续补充自己的缓存默认值，例如运行时摘要项和基于配置文件的失效条件。
+
+如果你的 Rslib 配置没有开启 `performance.buildCache`，Rstest 默认也不会开启它。只有在你希望测试构建使用持久化缓存时，才需要在 Rstest 配置里显式设置 `performance.buildCache`：
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
 ## 配置映射
 
 适配器会自动将以下 Rslib 选项映射到 Rstest：

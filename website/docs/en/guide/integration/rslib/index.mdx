@@ -43,7 +43,7 @@ export default defineConfig({
 });
 ```
 
-The adapter loads `rslib.config.ts`, maps options used by test compilation, merges them with your Rstest config, and watches the loaded config through [`forceRerunTriggers`](/config/test/force-rerun-triggers).
+The adapter loads `rslib.config.ts`, maps options used by test compilation, merges them with your Rstest config, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes.
 
 It does not copy build-only settings such as `dev`, `server`, or `html`. Use `cwd`, `config`, or `libId` when the default config location or library selection does not match your project.
 
