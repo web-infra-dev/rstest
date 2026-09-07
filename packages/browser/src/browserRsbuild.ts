@@ -903,7 +903,6 @@ export const collectProjectEntries = async (
       syncCoverageSetupExcludes(
         project.normalizedConfig.coverage,
         materializedSetupFiles,
-        [context.rootPath, project.rootPath],
       );
 
       return {
@@ -2023,7 +2022,6 @@ export async function resolveProjectEntries(
         syncCoverageSetupExcludes(
           project.normalizedConfig.coverage,
           materializedSetupFiles,
-          [context.rootPath, project.rootPath],
         );
         projectEntries.push({
           project,

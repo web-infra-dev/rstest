@@ -5,7 +5,7 @@ import type {
   RsbuildPlugin,
   Rspack,
 } from '@rsbuild/core';
-import { join, normalize, relative } from 'pathe';
+import { join, normalize } from 'pathe';
 import { withDefaultConfig } from '../../src/config';
 import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
@@ -234,18 +234,15 @@ describe('prepareRsbuild', () => {
       allowExternal: false,
     } satisfies InternalContext['normalizedConfig']['coverage'];
 
-    syncCoverageSetupExcludes(
-      coverage,
-      ['/project/setup.ts', '/project/globalSetup.ts'],
-      ['/project'],
-    );
+    syncCoverageSetupExcludes(coverage, [
+      '/project/setup.ts',
+      '/project/globalSetup.ts',
+    ]);
 
     expect(coverage.exclude).toEqual([
       '**/node_modules/**',
       '/project/setup.ts',
       '/project/globalSetup.ts',
-      'setup.ts',
-      'globalSetup.ts',
     ]);
   });
 
@@ -277,9 +274,7 @@ describe('prepareRsbuild', () => {
       allowExternal: false,
     } satisfies InternalContext['normalizedConfig']['coverage'];
 
-    syncCoverageSetupExcludes(coverage, setupFileState.getSetupPaths(), [
-      '/project',
-    ]);
+    syncCoverageSetupExcludes(coverage, setupFileState.getSetupPaths());
 
     const [materializedPath] = setupFileState.getSetupPaths();
     if (!materializedPath) {
@@ -288,10 +283,7 @@ describe('prepareRsbuild', () => {
     expect(materializedPath).toMatch(
       /^\/project\/.rstest-virtual\/virtual~setup~.+\.mjs$/,
     );
-    expect(coverage.exclude).toEqual([
-      materializedPath,
-      relative('/project', materializedPath),
-    ]);
+    expect(coverage.exclude).toEqual([materializedPath]);
   });
 
   it('closes the dev server when its compiler is unavailable', async () => {
