@@ -302,6 +302,24 @@ describe('@rstest/playwright expect', () => {
     expect(Date.now() - start).toBeLessThan(1000);
   });
 
+  it('preserves the last assertion error when the final polling attempt times out', async () => {
+    let attempts = 0;
+    const locator = {
+      ...createLocator({ texts: ['Hello'] }),
+      isVisible: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return false;
+        }
+        return new Promise<boolean>(() => {});
+      },
+    } as unknown as Locator;
+
+    await rstestExpect(
+      expect(locator).toBeVisible({ timeout: 100 }),
+    ).rejects.toThrow('Expected locator to be visible.');
+  });
+
   test('uses real timers for Playwright assertion retries', async () => {
     try {
       rstest.useFakeTimers({ now: 0 });
