@@ -1,6 +1,7 @@
 [
   "cli",
   "configure-rstest",
+  "configure-rslint",
   "test-filter",
   "mock",
   "snapshot",
