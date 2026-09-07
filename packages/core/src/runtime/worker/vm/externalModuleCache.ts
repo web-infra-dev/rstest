@@ -31,7 +31,7 @@ const importMetaResolve = import.meta.resolve?.bind(import.meta);
 const dataUriPattern =
   /^data:(?<mime>text\/javascript|application\/javascript|application\/json|application\/wasm)(?<parameters>(?:;[^,]*)*),(?<code>.*)$/i;
 const base64Pattern =
-  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?$/;
 
 const createInvalidDataUrlError = (
   identifier: string,

@@ -145,5 +145,6 @@ it('loads ambiguous ESM, legacy CommonJS and percent-containing data URLs', asyn
     legacySame: true,
     dataModulo: 1,
     dataUnicode: '汉%',
+    dataBase64: { javascript: 1, json: 1, wasmExports: [] },
   });
 });

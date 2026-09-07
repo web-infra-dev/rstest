@@ -8,8 +8,6 @@ import {
   parseExternalDataUri,
 } from '../../../../src/runtime/worker/vm/externalModuleCache';
 
-// cspell:ignore Xhwb
-
 describe('parseExternalDataUri', () => {
   it('accepts Node JavaScript MIME aliases and case-insensitive parameters', () => {
     expect(
@@ -19,11 +17,33 @@ describe('parseExternalDataUri', () => {
     ).toEqual({ code: 'export default 1', mime: 'text/javascript' });
   });
 
-  it('accepts base64 JavaScript data URLs', () => {
-    const encoded = Buffer.from('export default 1').toString('base64');
+  it.each(['', 'export default 1', 'export default 12', 'export default 123'])(
+    'accepts optional base64 padding: %s',
+    (source) => {
+      const encoded = Buffer.from(source).toString('base64');
+      for (const payload of [encoded, encoded.replace(/=+$/, '')]) {
+        expect(
+          parseExternalDataUri(`data:TEXT/JAVASCRIPT;BASE64,${payload}`),
+        ).toEqual({
+          code: source,
+          mime: 'text/javascript',
+        });
+      }
+    },
+  );
+
+  it('accepts percent-encoded whitespace around base64 without padding', () => {
+    const encoded = Buffer.from('export default 1')
+      .toString('base64')
+      .replace(/=+$/, '');
     expect(
-      parseExternalDataUri(`data:TEXT/JAVASCRIPT;BASE64,${encoded}`),
-    ).toEqual({ code: 'export default 1', mime: 'text/javascript' });
+      parseExternalDataUri(
+        `data:text/javascript;base64,%09${encoded}%0A%0D%0C%20`,
+      ),
+    ).toEqual({
+      code: 'export default 1',
+      mime: 'text/javascript',
+    });
   });
 
   it('does not treat non-terminal base64 parameters as an encoding marker', () => {
@@ -37,11 +57,24 @@ describe('parseExternalDataUri', () => {
     });
   });
 
-  it('rejects malformed base64 data URLs', () => {
+  it.each([
+    'A',
+    'AAAAA',
+    'AA=',
+    'AAA==',
+    'AAAA=',
+    '=AAA',
+    'AA=A',
+    'AA===',
+    'AA!',
+    'AA_',
+    'AA-',
+    '%',
+    '%FF',
+    'AA%0B',
+  ])('rejects malformed base64 data URLs: %s', (payload) => {
     expect(() =>
-      parseExternalDataUri(
-        'data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQgMQ==!',
-      ),
+      parseExternalDataUri(`data:text/javascript;base64,${payload}`),
     ).toThrow(expect.objectContaining({ code: 'ERR_INVALID_URL' }));
   });
 

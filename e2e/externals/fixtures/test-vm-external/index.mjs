@@ -176,6 +176,19 @@ export const inspectLoaderBoundaries = async () => {
       .default,
     dataUnicode: (await import('data:text/javascript,export default "汉%"'))
       .default,
+    dataBase64: {
+      javascript: (
+        await import('data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQgMQ')
+      ).default,
+      json: (
+        await import('data:application/json;base64,eyJ2YWx1ZSI6MX0', {
+          with: { type: 'json' },
+        })
+      ).default.value,
+      wasmExports: Object.keys(
+        await import('data:application/wasm;base64,AGFzbQEAAAA'),
+      ),
+    },
   };
 };
 
