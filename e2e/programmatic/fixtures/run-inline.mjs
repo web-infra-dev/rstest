@@ -42,7 +42,12 @@ try {
       },
     },
   });
-  const buildFailureResult = await buildFailure.run();
+  let buildFailureResult;
+  try {
+    buildFailureResult = await buildFailure.run();
+  } catch (error) {
+    buildFailureResult = { status: 'rejected', message: error.message };
+  }
 
   console.log(
     `__RSTEST_API_RESULT__${JSON.stringify({
@@ -62,10 +67,7 @@ try {
       unhandledErrors: result.unhandledErrors,
       duration: { hasTotal: typeof result.duration.total === 'number' },
       snapshotPresent: typeof result.snapshot === 'object',
-      buildFailure: {
-        status: buildFailureResult.status,
-        message: buildFailureResult.unhandledErrors[0]?.message,
-      },
+      buildFailure: buildFailureResult,
     })}__END__`,
   );
 } finally {

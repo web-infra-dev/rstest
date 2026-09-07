@@ -111,11 +111,13 @@ describe('createRstest', () => {
       const project = ['missing'];
       const message = 'No projects found';
 
-      const result = await rstest.run({ project });
-      expect(result.status).toBe('error');
-      expect(result.unhandledErrors).toHaveLength(1);
-      const [error] = result.unhandledErrors;
-      const errorMessage = stripAnsi(error?.message ?? '');
+      const error: Error = await rstest.run({ project }).then(
+        () => {
+          throw new Error('run() resolved');
+        },
+        (reason) => reason,
+      );
+      const errorMessage = stripAnsi(error.message);
       expect(errorMessage).toMatch(/^No projects found,/);
       expect(errorMessage).toContain('projectName filter: [\n  "missing"\n]');
       await expect(rstest.watch({ project })).rejects.toThrow(message);
@@ -205,15 +207,9 @@ describe('createRstest', () => {
         config: { reporters: [] },
       });
 
-      const result = await rstest.run({
-        shard: { index: 1.5, count: 2 },
-      });
-
-      expect(result.status).toBe('error');
-      expect(result.unhandledErrors).toHaveLength(1);
-      expect(result.unhandledErrors[0]?.message).toContain(
-        'Invalid shard option: 1.5/2',
-      );
+      await expect(
+        rstest.run({ shard: { index: 1.5, count: 2 } }),
+      ).rejects.toThrow('Invalid shard option: 1.5/2');
     });
   });
 

@@ -19,6 +19,8 @@ Core testing framework for Rstest.
 
 `resolveRunnerInputs` owns configuration-source resolution and `buildResolvedRunner` owns selection plus context construction. The public instance API is the CLI's target driver; commands not migrated yet may call this shared chain directly. Every change must narrow the gap between those drivers: expose new CLI needs as public observations or capabilities rather than adding CLI-only execution paths.
 
+When a CLI command migrates to the public `createRstest` (as `merge-reports` already has), config discovery, the CLI → config merge, the agent reporter default, host exit code, and error printing stay in `src/cli`; never add them to the engine or the public API to make a migration easier.
+
 `NormalizedConfig` is exported from `@rstest/core/api` as the type of `RstestContext.config`, so changing its shape is a public API change.
 
 ## Executor contract (node + browser isomorphism)

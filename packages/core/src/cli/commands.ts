@@ -1,10 +1,17 @@
 import cac, { type CAC, type Command } from 'cac';
 import type { RstestCommand, RstestInstance } from '../types';
-import { color, determineAgent, formatError, isTTY, logger } from '../utils';
+import {
+  color,
+  determineAgent,
+  formatError,
+  getAbsolutePath,
+  isTTY,
+  logger,
+} from '../utils';
 import { buildResolvedRunner, isRelatedRun } from '../core/buildRunner';
 import { exitReporters } from '../reporter';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
-import { mirrorExitCode } from './exitCode';
+import { mirrorExitCode, setHostExitCode } from './exitCode';
 import type { CommonOptions } from './init';
 import { renderListTests, type ListCommandOptions } from './listRenderer';
 import { showRstest } from './prepare';
@@ -771,19 +778,35 @@ export function createCli(): CAC {
         showRstest();
       }
       try {
-        const { inputs, createRstest } = await resolveCliRuntime(options);
-        const rstest = await buildResolvedRunner({
-          inputs,
-          options,
-          command: 'merge-reports',
-          filters: undefined,
-          createRstestContext: createRstest,
+        const [
+          { loadConfig },
+          { applyAgentReporterDefault, mergeWithCLIOptions },
+          { createRstest },
+        ] = await Promise.all([
+          import('../config'),
+          import('./init'),
+          import('../api'),
+        ]);
+        const cwd = process.cwd();
+        const loaded = await loadConfig({
+          cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
+          path: options.config,
+          configLoader: options.configLoader,
+        });
+        mergeWithCLIOptions(loaded.content, options);
+        applyAgentReporterDefault(loaded.content, options);
+        const rstest = await createRstest({
+          cwd,
+          config: loaded,
+          configLoader: options.configLoader,
         });
 
-        try {
-          await rstest.mergeReports({ path, cleanup: options.cleanup });
-        } finally {
-          await exitReporters(rstest.context);
+        const result = await rstest.mergeReports({
+          path,
+          cleanup: options.cleanup,
+        });
+        if (result.status !== 'pass') {
+          setHostExitCode(1);
         }
       } catch (err) {
         logger.error('Failed to merge reports.');
