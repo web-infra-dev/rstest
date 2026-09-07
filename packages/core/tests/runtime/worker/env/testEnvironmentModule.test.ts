@@ -52,6 +52,7 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.JSDOM as unknown as { source: string }).source,
       ).toBe('bundle');
+      expect(fs.existsSync(`${bundlePath}.probe-ok`)).toBe(true);
       expect(
         await loadTestEnvironmentModule({
           name: 'jsdom',
@@ -96,6 +97,7 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.JSDOM as unknown as { source: string }).source,
       ).toBe('resolved');
+      expect(fs.existsSync(`${bundlePath}.probe-ok`)).toBe(false);
     });
   });
 
