@@ -154,7 +154,10 @@ export async function runTests(context: Rstest): Promise<void> {
   // suppressing it for one run shape would re-split the single assembly.
   const coverageProvider = planner.coveragePluginLoadError()
     ? null
-    : await createCoverageProviderWithLog(coverage, rootPath);
+    : await createCoverageProviderWithLog(
+        context.normalizedConfig.coverage,
+        rootPath,
+      );
 
   // The cold-start gate, followed rather than re-decided here: the planner
   // brings up no node build for a run with zero node projects, so that run

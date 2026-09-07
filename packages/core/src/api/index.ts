@@ -28,11 +28,7 @@ import {
   getTaskNameWithPrefix,
   ROOT_SUITE_NAME,
 } from '../utils';
-import {
-  createErrorResult,
-  createResultReporter,
-  type ResultReporter,
-} from './result';
+import { createResultReporter, type ResultReporter } from './result';
 import type {
   CreateRstestOptions,
   ListedTest,
@@ -155,7 +151,7 @@ export async function createRstest(
           ? getAbsolutePath(cwd, config.filePath)
           : undefined,
     },
-    options: {},
+    options: { configLoader: options.configLoader },
     cwd,
   });
   const initialContext = createRstestContext(
@@ -222,26 +218,13 @@ export async function createRstest(
     commonOptions: CommonOptions | undefined,
     operation: (engine: Engine) => Promise<void>,
   ): Promise<TestRunResult> => {
-    try {
-      return await withEngine(
-        command,
-        runOptions,
-        commonOptions,
-        async (engine) => {
-          const capture: ResultReporter = createResultReporter(engine.context);
-          engine.context.reporters.push(capture.reporter);
-          const result = capture.nextResult();
-          try {
-            await operation(engine);
-            return await result;
-          } catch (error) {
-            return capture.errorResult(error);
-          }
-        },
-      );
-    } catch (error) {
-      return createErrorResult(error);
-    }
+    return withEngine(command, runOptions, commonOptions, async (engine) => {
+      const capture = createResultReporter(engine.context);
+      engine.context.reporters.push(capture.reporter);
+      const result = capture.nextResult();
+      await operation(engine);
+      return await result;
+    });
   };
 
   return {
@@ -317,14 +300,14 @@ export async function createRstest(
         { ...listOptions, shard: undefined },
         commonOptions,
         async (engine) => {
-          const files = await engine.listTests({
-            ...listOptions,
-            printLocation: listOptions.includeLocation,
+          const result = await engine.listTests({
+            filesOnly: listOptions.filesOnly,
           });
+          await result.close();
           if (engine.context.exitCode.current !== 0) {
             throw new Error('Failed to list tests.');
           }
-          return flattenListedTests(files, listOptions);
+          return flattenListedTests(result.list, listOptions);
         },
       );
     },

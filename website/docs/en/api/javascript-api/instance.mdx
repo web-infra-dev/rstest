@@ -68,6 +68,7 @@ interface LoadedRstestConfig {
 interface CreateRstestOptions {
   cwd?: string;
   config?: RstestConfig | LoadedRstestConfig;
+  configLoader?: 'auto' | 'jiti' | 'native'; // Loader for configs discovered through `projects`; defaults to `auto`.
 }
 
 function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
@@ -146,7 +147,7 @@ The resolved project contexts. Without an explicit `projects` config, the array 
 
 ## rstest.run
 
-`rstest.run()` runs one test cycle and returns a `TestRunResult`. Failures are reported through `status` and never reject the promise; see [TestRunResult](#testrunresult).
+`rstest.run()` runs one test cycle and returns a `TestRunResult`. It rejects when the run cannot start due to invalid options, configuration or compiler errors; test failures are reported through `status` without rejecting the promise; see [TestRunResult](#testrunresult).
 
 ### Example
 
@@ -392,6 +393,8 @@ interface RstestInstance {
 
 `rstest.mergeReports()` merges blob reports and returns the same result model as `rstest.run()`.
 
+It rejects when the operation cannot produce a run result; failures in the merged tests are reported through `status` without rejecting the promise.
+
 ### Example
 
 ```ts
@@ -434,11 +437,12 @@ interface RstestInstance {
 import { runCLI } from '@rstest/core/api';
 
 runCLI({
-  argv: ['run', 'src/foo.test.ts', '--update'],
+  argv: [...process.argv.slice(0, 2), 'run', 'src/foo.test.ts', '--update'],
 });
 ```
 
-`argv` contains the command, filters, and flags exactly as you would type them after `rstest` on the command line. It defaults to `process.argv.slice(2)`.
+`argv` matches the shape of Node.js `process.argv` and defaults to `process.argv`: the first two entries are the executable and script paths and are ignored, while the command, filters, and flags start at index 2.
+This is the same shape used by Rsbuild's and Rspress's `runCLI`.
 
 See the [CLI documentation](/guide/basic/cli) for all available commands and flags.
 

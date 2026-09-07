@@ -68,6 +68,7 @@ interface LoadedRstestConfig {
 interface CreateRstestOptions {
   cwd?: string;
   config?: RstestConfig | LoadedRstestConfig;
+  configLoader?: 'auto' | 'jiti' | 'native'; // 通过 `projects` 发现的配置文件所使用的 loader；默认为 `auto`。
 }
 
 function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
@@ -146,7 +147,7 @@ Rstest 实例规范化后的配置。
 
 ## rstest.run
 
-`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。失败会通过 `status` 报告，不会导致 Promise 被拒绝；具体规则见 [TestRunResult](#testrunresult)。
+`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。当无效选项、配置或 compiler 错误导致运行无法启动时，Promise 会被拒绝；测试失败仍通过 `status` 报告，不会导致 Promise 被拒绝，具体规则见 [TestRunResult](#testrunresult)。
 
 ### 示例
 
@@ -392,6 +393,8 @@ interface RstestInstance {
 
 `rstest.mergeReports()` 用于合并 blob 报告，并返回与 `rstest.run()` 相同的结果模型。
 
+当本次操作无法产生运行结果时，Promise 会被拒绝；合并的测试结果中若有测试失败，仍通过 `status` 报告，不会导致 Promise 被拒绝。
+
 ### 示例
 
 ```ts
@@ -434,11 +437,12 @@ interface RstestInstance {
 import { runCLI } from '@rstest/core/api';
 
 runCLI({
-  argv: ['run', 'src/foo.test.ts', '--update'],
+  argv: [...process.argv.slice(0, 2), 'run', 'src/foo.test.ts', '--update'],
 });
 ```
 
-`argv` 包含在命令行中写在 `rstest` 之后的命令、过滤条件和选项。默认值为 `process.argv.slice(2)`。
+`argv` 的结构与 Node.js 的 `process.argv` 一致，默认值为 `process.argv`：前两项是 executable 和 script 的路径，会被忽略，命令、filters 和 flags 从索引 2 开始。
+这与 Rsbuild 和 Rspress 的 `runCLI` 使用的结构相同。
 
 所有可用的命令和选项，请参阅 [CLI 文档](/guide/basic/cli)。
 

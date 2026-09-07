@@ -1,6 +1,6 @@
 import type {
   FileFilterMode,
-  ListCommandOptions,
+  ListCommandCollectOptions,
   Project,
   RstestCommand,
   RstestConfig,
@@ -64,7 +64,7 @@ export function createRstest(
     await runTests(context);
   };
 
-  const listTests = async (options: ListCommandOptions) => {
+  const listTests = async (options: ListCommandCollectOptions) => {
     const { listTests } = await import('./listTests');
     return listTests(context, options);
   };

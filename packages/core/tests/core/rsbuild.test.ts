@@ -11,8 +11,8 @@ import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
 import {
   createRsbuildServer,
+  excludeVirtualSetupFromCoverage,
   prepareRsbuild,
-  syncCoverageSetupExcludes,
 } from '../../src/core/rsbuild';
 import { createSetupFileState } from '../../src/core/setupFileState';
 import type {
@@ -222,10 +222,10 @@ describe('prepareRsbuild', () => {
     poolCloseCount = 0;
   });
 
-  it('should add setup files to coverage excludes without duplicates', () => {
+  it('should add virtual setup files to coverage excludes without duplicates', () => {
     const coverage = {
       enabled: true,
-      exclude: ['**/node_modules/**', '/project/setup.ts'],
+      exclude: ['**/node_modules/**', '/project/.rstest-virtual/setup.mjs'],
       provider: 'istanbul',
       reporters: [],
       reportsDirectory: 'coverage',
@@ -234,16 +234,59 @@ describe('prepareRsbuild', () => {
       allowExternal: false,
     } satisfies InternalContext['normalizedConfig']['coverage'];
 
-    syncCoverageSetupExcludes(coverage, [
-      '/project/setup.ts',
-      '/project/globalSetup.ts',
-    ]);
+    excludeVirtualSetupFromCoverage(coverage, {
+      '/project/.rstest-virtual/setup.mjs': '',
+      '/project/.rstest-virtual/globalSetup.mjs': '',
+    });
 
     expect(coverage.exclude).toEqual([
       '**/node_modules/**',
-      '/project/setup.ts',
-      '/project/globalSetup.ts',
+      '/project/.rstest-virtual/setup.mjs',
+      '/project/.rstest-virtual/globalSetup.mjs',
     ]);
+  });
+
+  it('should add materialized virtual setup files to coverage excludes', () => {
+    const setupFileState = createSetupFileState();
+    setupFileState.refresh({
+      setupProjects: [
+        {
+          rootPath: '/project',
+          environmentName: 'test',
+          normalizedConfig: {
+            setupFiles: [
+              'data:text/javascript;base64,Y29uc29sZS5sb2coInNldHVwIik7',
+            ],
+            globalSetup: [],
+          },
+        } as unknown as InternalContext['projects'][number],
+      ],
+      globalSetupProjects: [],
+    });
+    const coverage = {
+      enabled: true,
+      exclude: [],
+      provider: 'istanbul',
+      reporters: [],
+      reportsDirectory: 'coverage',
+      clean: true,
+      reportOnFailure: false,
+      allowExternal: false,
+    } satisfies InternalContext['normalizedConfig']['coverage'];
+
+    excludeVirtualSetupFromCoverage(
+      coverage,
+      setupFileState.virtualModules.test!,
+    );
+
+    const [materializedPath] = setupFileState.getSetupPaths();
+    if (!materializedPath) {
+      throw new Error('Expected a materialized setup path');
+    }
+    expect(materializedPath).toMatch(
+      /^\/project\/.rstest-virtual\/virtual~setup~.+\.mjs$/,
+    );
+    expect(coverage.exclude).toEqual([materializedPath]);
   });
 
   it('closes the dev server when its compiler is unavailable', async () => {
@@ -343,7 +386,9 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).not.toContain(
         join(tempRoot, 'b-browser.test.ts'),
@@ -408,7 +453,9 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'a-browser.test.ts'),
@@ -447,7 +494,9 @@ describe('prepareRsbuild', () => {
         { root: tempRoot },
       );
 
-      const list = await listTests(context, { json: false, filesOnly: true });
+      const result = await listTests(context, { filesOnly: true });
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'a-browser.test.ts'),
@@ -491,7 +540,9 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'added-node.test.ts'),
@@ -559,7 +610,9 @@ describe('prepareRsbuild', () => {
         { root: tempRoot },
       );
 
-      const list = await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
 
       expect(list.map((item) => item.testPath)).toEqual([
         join(tempRoot, 'full-node.test.ts'),
@@ -612,7 +665,8 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      await listTests(context, { json: false });
+      const result = await listTests(context, {});
+      await result.close();
 
       const dependency = poolTestEnvironmentModules
         .at(-1)
@@ -645,7 +699,10 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      await expect(listTests(context, { json: false })).resolves.toEqual([]);
+      const result = await listTests(context, {});
+      await result.close();
+      const { list } = result;
+      expect(list).toEqual([]);
 
       // The plan resolves the zero-entry project out, so no pool is created
       // at all — not even one with an empty environment-module map.
@@ -672,9 +729,7 @@ describe('prepareRsbuild', () => {
 
         poolCollectError = new Error('collect failed');
 
-        await expect(listTests(context, { json: false })).rejects.toThrow(
-          'collect failed',
-        );
+        await expect(listTests(context, {})).rejects.toThrow('collect failed');
         expect(poolCloseCount).toBe(1);
       } finally {
         poolCollectError = undefined;
