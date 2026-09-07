@@ -22,7 +22,7 @@
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "@types/react-dom": "^19.2.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "rsbuild-plugin-google-analytics": "^1.0.6",
