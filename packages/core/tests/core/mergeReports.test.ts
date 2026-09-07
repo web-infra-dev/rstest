@@ -6,6 +6,7 @@ import {
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../../src/coverage';
+import { createExitCode } from '../../src/core/exitCode';
 import { mergeReports } from '../../src/core/mergeReports';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import type { Rstest } from '../../src/core/rstest';
@@ -82,6 +83,7 @@ describe('mergeReports', () => {
       projects: [],
       reporters: [],
       rootPath,
+      exitCode: createExitCode(),
     } as unknown as Rstest;
 
     await mergeReports(context);
@@ -89,6 +91,7 @@ describe('mergeReports', () => {
     expect(ensureCoverageProviderInstalledSpy).toHaveBeenCalledWith(
       context.normalizedConfig.coverage,
       rootPath,
+      {},
     );
     expect(
       ensureCoverageProviderInstalledSpy.mock.invocationCallOrder[0],

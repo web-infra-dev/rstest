@@ -6,13 +6,13 @@ Rstest here means `@rstest/core`, the JavaScript testing framework powered by Rs
 
 ## Prerequisite check
 
-If the target already has Jest or Vitest configured (any of the signals below), **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — migration has its own flow:
+If the target already has Jest, Vitest, or Playwright Test configured (any of the signals below), **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — migration has its own flow:
 
-- A `jest.config.{js,ts,cjs,mjs,cts,mts,json}` or `vitest.config.{js,ts,cjs,mjs,cts,mts,json}`.
-- A `jest` / `@jest/globals` / `ts-jest` / `vitest` dep, or an inline `"jest"` / `"vitest"` field in `package.json`.
-- A `test` script invoking `jest` / `vitest`.
-- A workspace root with hoisted Jest/Vitest deps or config that affect this target.
-- The user asked to migrate from Jest/Vitest, or to keep Jest/Vitest and add Rstest side-by-side.
+- A `jest.config.{js,ts,cjs,mjs,cts,mts,json}`, `vitest.config.{js,ts,cjs,mjs,cts,mts,json}`, or `playwright.config.{js,ts,cjs,mjs,cts,mts,json}`.
+- A `jest` / `@jest/globals` / `ts-jest` / `vitest` / `@playwright/test` dep, or an inline `"jest"` / `"vitest"` field in `package.json`.
+- A `test` script invoking `jest` / `vitest` / `playwright test`.
+- A workspace root with hoisted Jest, Vitest, or Playwright Test deps or config that affect this target.
+- The user asked to migrate from Jest, Vitest, or Playwright Test, or to keep one of them and add Rstest side-by-side.
 
 Otherwise, continue below.
 
@@ -25,7 +25,7 @@ All work in this prompt happens inside a single **target package**.
 **Monorepo** (signals: `pnpm-workspace.yaml`, `workspaces` in root `package.json`, `turbo.json`, `nx.json`):
 
 - If the user named a specific package (by path, package name, or source file), that package is the target.
-- If the user expressed repo-wide scope ("this monorepo", "the whole repo", "every package", "all packages") **and** at least one package has Jest/Vitest signals, **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — that flow iterates per package and handles heterogeneity.
+- If the user expressed repo-wide scope ("this monorepo", "the whole repo", "every package", "all packages") **and** at least one package has Jest, Vitest, or Playwright Test signals, **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — that flow iterates per package and handles heterogeneity.
 - Otherwise, **STOP this prompt and ask**:
 
   > This is a monorepo. Rstest setup is applied to one package at a time. Which package should Rstest go in — the workspace root, or a specific package (e.g. `packages/foo`)?

@@ -11,12 +11,89 @@ const createTestGlobal = (): typeof globalThis =>
     clearInterval: globalThis.clearInterval,
     clearTimeout: globalThis.clearTimeout,
     console: globalThis.console,
+    AbortController: globalThis.AbortController,
+    AbortSignal: globalThis.AbortSignal,
     fetch: globalThis.fetch,
     setInterval: globalThis.setInterval,
     setTimeout: globalThis.setTimeout,
     URL: globalThis.URL,
     URLSearchParams: globalThis.URLSearchParams,
   }) as typeof globalThis;
+
+test('bridges Node AbortSignal to jsdom event listeners', async () => {
+  const testGlobal = createTestGlobal();
+  let JSDOMAbortController!: typeof AbortController;
+  let eventTargetPrototype!: EventTarget;
+  let originalAddEventListener!: EventTarget['addEventListener'];
+  const { teardown } = await environment.setup(
+    testGlobal,
+    {
+      beforeParse(window: DOMWindow) {
+        JSDOMAbortController = window.AbortController;
+        eventTargetPrototype = window.EventTarget.prototype;
+        originalAddEventListener = eventTargetPrototype.addEventListener;
+      },
+    },
+    { scope: 'file' },
+  );
+
+  try {
+    expect(testGlobal.AbortController).toBe(globalThis.AbortController);
+    expect(eventTargetPrototype.addEventListener).not.toBe(
+      originalAddEventListener,
+    );
+
+    for (const controller of [
+      new testGlobal.AbortController(),
+      new JSDOMAbortController(),
+    ]) {
+      let calls = 0;
+      const type = 'rstest-abort-signal';
+      testGlobal.document.addEventListener(type, () => calls++, {
+        signal: controller.signal,
+      });
+      testGlobal.document.dispatchEvent(new testGlobal.Event(type));
+      expect(calls).toBe(1);
+
+      controller.abort();
+      testGlobal.document.dispatchEvent(new testGlobal.Event(type));
+      expect(calls).toBe(1);
+    }
+
+    const abortedController = new testGlobal.AbortController();
+    abortedController.abort();
+    let calls = 0;
+    const type = 'rstest-aborted-signal';
+    testGlobal.document.addEventListener(type, () => calls++, {
+      signal: abortedController.signal,
+    });
+    testGlobal.document.dispatchEvent(new testGlobal.Event(type));
+    expect(calls).toBe(0);
+
+    const syntheticController = new testGlobal.AbortController();
+    syntheticController.signal.addEventListener('abort', (event) =>
+      event.stopImmediatePropagation(),
+    );
+    let syntheticCalls = 0;
+    const syntheticType = 'rstest-synthetic-abort-event';
+    testGlobal.document.addEventListener(
+      syntheticType,
+      () => syntheticCalls++,
+      { signal: syntheticController.signal },
+    );
+    syntheticController.signal.dispatchEvent(new Event('abort'));
+    testGlobal.document.dispatchEvent(new testGlobal.Event(syntheticType));
+    expect(syntheticCalls).toBe(1);
+
+    syntheticController.abort();
+    testGlobal.document.dispatchEvent(new testGlobal.Event(syntheticType));
+    expect(syntheticCalls).toBe(1);
+  } finally {
+    await teardown(testGlobal);
+  }
+
+  expect(eventTargetPrototype.addEventListener).toBe(originalAddEventListener);
+});
 
 test('forwards the console with the pre-v27 jsdom API', () => {
   const forwarded: Console[] = [];

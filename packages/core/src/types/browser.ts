@@ -1,8 +1,7 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { ProjectContext } from './core';
+import type { InternalProjectContext } from './core';
 import type { RawCoverageResolveOptions } from './coverage';
-import type { GetSourcemap } from './reporter';
+import type { GetSourcemap, SourceMapInput } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
 
@@ -24,7 +23,7 @@ export interface BrowserTestRunOptions {
    * output). The host keeps a stable reference to this instead of re-deriving
    * `browser.enabled` projects from `context.projects` (which planning mutates).
    */
-  projects?: ProjectContext[];
+  projects?: InternalProjectContext[];
   /**
    * Pre-calculated sharded entries for browser projects.
    * If provided, the browser controller will use these instead of collecting its own.

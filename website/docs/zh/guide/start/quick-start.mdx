@@ -55,12 +55,12 @@ import { PackageManagerTabs } from '@theme';
 https://rstest.rs/guide/start/agent-install.md`}
 />
 
-如果要从已有的 Jest 或 Vitest 项目迁移，请使用这个 prompt：
+如果要从已有的 Jest、Vitest 或 Playwright Test 项目迁移，请使用这个 prompt。Playwright Test 项目会迁移到 `@rstest/playwright`：
 
 <Prompt
   title="迁移到 Rstest"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this project to Rstest, the JavaScript testing framework, by following the instructions here:
+  prompt={`Migrate this project to Rstest, the JavaScript testing framework. Detect whether it uses Jest, Vitest, or Playwright Test; for Playwright Test, migrate to @rstest/playwright. Follow the instructions here:
 https://rstest.rs/guide/start/agent-migrate.md`}
 />
 

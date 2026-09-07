@@ -123,17 +123,18 @@ const metadataReporter: Reporter = {
 
 ## 从 programmatic API 读取 metadata
 
-`runRstest` 的结果中包含与 Reporter 相同的结果 metadata。
+`rstest.run()` 返回的结果中包含与 Reporter 相同的结果 metadata。
 
 ```ts
-import { runRstest } from '@rstest/core/api';
+import { createRstest } from '@rstest/core/api';
 
-const result = await runRstest({
+const rstest = await createRstest({
   cwd: process.cwd(),
-  inlineConfig: {
+  config: {
     include: ['src/**/*.test.ts'],
   },
 });
+const result = await rstest.run();
 
 for (const file of result.files) {
   console.log(file.testPath, file.meta);

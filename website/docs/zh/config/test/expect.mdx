@@ -9,9 +9,9 @@ import { ApiMeta } from '@components/ApiMeta';
 <ApiMeta addedVersion="0.11.6" />
 
 - **类型：** `ExpectConfig`
-- **默认值：** `{ poll: { interval: 50, timeout: 1000 } }`
+- **默认值：** `{ poll: { interval: 50, timeout: 1000 } }`（Browser Mode 下 `timeout` 为 `5000`）
 
-配置 [`expect.poll()`](/api/runtime-api/test-api/expect#expectpoll) 使用的默认值。直接传给 `expect.poll()` 的选项优先级更高。
+配置 [`expect.poll()`](/api/runtime-api/test-api/expect#expectpoll) 使用的默认值。Browser Mode 下默认轮询超时为 `5000ms`，Node Mode 下为 `1000ms`。隐式使用的默认值会受当前 test 阶段的剩余时间限制；直接传给 `expect.poll()` 的选项优先级更高，不参与这个限制。`expect.poll()` 仍然只能在 test 中使用：它可以使用 per-test hook 和 fixture 的 active timeout，但不能在 `beforeAll` 或 `afterAll` 中使用。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -40,6 +40,6 @@ export default defineConfig({
 ### expect.poll.timeout
 
 - **类型：** `number`
-- **默认值：** `1000`
+- **默认值：** `1000`（Browser Mode 下为 `5000`）
 
-断言失败前允许的最长轮询时间，单位为毫秒。
+断言失败前允许的最长轮询时间，单位为毫秒。调用处未显式传入 timeout 时，实际值还会受当前 test 阶段的剩余时间限制。

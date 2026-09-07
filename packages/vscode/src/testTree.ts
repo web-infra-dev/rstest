@@ -1,5 +1,6 @@
 import { TextDecoder } from 'node:util';
 import type { TestInfo } from '@rstest/core';
+import type { ListedTest } from '@rstest/core/api';
 import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { logger } from './logger';
@@ -54,6 +55,46 @@ export function gatherTestItems(
   });
   return items;
 }
+
+const createPreviousRangeLookup = (items: vscode.TestItem[]) => {
+  const previousRanges = new Map<string, vscode.Range>();
+  const snapshot = (item: vscode.TestItem, idPath: string[]) => {
+    if (item.range) previousRanges.set(idPath.join('\x00'), item.range);
+    item.children.forEach((child) => snapshot(child, [...idPath, child.id]));
+  };
+  items.forEach((item) => snapshot(item, [item.id]));
+  return (idPath: string[]) => previousRanges.get(idPath.join('\x00'));
+};
+
+const toVscodeRange = (
+  location: { line: number; column: number } | undefined,
+): vscode.Range | undefined => {
+  if (!location) return undefined;
+  const line = location.line - 1;
+  const column = location.column - 1;
+  return new vscode.Range(line, column, line, column);
+};
+
+export const groupListedTestsByFile = (
+  tests: ListedTest[],
+  requestedFiles: string[] = [],
+): Array<{ uri: vscode.Uri; tests: ListedTest[] }> => {
+  // Seed filtered refreshes so deleted or newly excluded files clear the tree.
+  const byFile = new Map<string, ListedTest[]>(
+    requestedFiles.map((file) => [file, []]),
+  );
+  for (const test of tests) {
+    const entries = byFile.get(test.testPath) ?? [];
+    byFile.set(test.testPath, entries);
+    if (test.type !== 'file') {
+      entries.push(test);
+    }
+  }
+  return Array.from(byFile, ([file, entries]) => ({
+    uri: vscode.Uri.file(file),
+    tests: entries,
+  }));
+};
 
 export class TestFolder {
   constructor(
@@ -147,7 +188,21 @@ export class TestFile {
     this.testItem?.children.replace(this.children);
   }
 
-  public updateFromList(tests: TestInfo[]) {
+  public updateFromList(tests: TestInfo[] | ListedTest[]) {
+    const listedTests = tests.filter(isListedTest);
+    if (listedTests.length) {
+      // A file has one VS Code URI even when several projects collect it.
+      // Render one declaration tree instead of merging the project copies.
+      const firstProject = listedTests[0].project;
+      this.updateFromListedTests(
+        listedTests.filter((test) => test.project === firstProject),
+      );
+      return;
+    }
+    const testInfos = tests.filter(
+      (test): test is TestInfo => !isListedTest(test),
+    );
+
     // A run's reported tests may arrive without a source location (the runtime
     // only emits locations when `includeTaskLocation` resolves one, which
     // depends on the project's core version and build). Snapshot the ranges we
@@ -155,13 +210,7 @@ export class TestFile {
     // collapsing to line 1, which would move every gutter icon to the imports.
     // Keys are the path of duplicate-aware item ids so that duplicate sibling
     // names each keep their own range.
-    const previousRanges = new Map<string, vscode.Range>();
-    const rangeKey = (idPath: string[]) => idPath.join('\x00');
-    const snapshot = (item: vscode.TestItem, idPath: string[]) => {
-      if (item.range) previousRanges.set(rangeKey(idPath), item.range);
-      item.children.forEach((child) => snapshot(child, [...idPath, child.id]));
-    };
-    this.children.forEach((item) => snapshot(item, [item.id]));
+    const getPreviousRange = createPreviousRangeLookup(this.children);
 
     const handleChild = (
       test: TestInfo,
@@ -174,15 +223,7 @@ export class TestFile {
         ...parentIds,
         getTestItemId(test.name, siblingIndexOf(parent, test.name)),
       ];
-      let range: vscode.Range | undefined;
-      if (test.location) {
-        // vscode location is zero based
-        const line = test.location.line - 1;
-        const column = test.location.column - 1;
-        range = new vscode.Range(line, column, line, column);
-      } else {
-        range = previousRanges.get(rangeKey(ids));
-      }
+      const range = toVscodeRange(test.location) ?? getPreviousRange(ids);
       const testItem = this.onTest(
         range,
         test.name,
@@ -200,13 +241,74 @@ export class TestFile {
     };
     const children: vscode.TestItem[] = [];
     const realTests =
-      tests[0]?.type === 'suite' && tests[0].name === ROOT_SUITE_NAME
-        ? tests[0].tests
-        : tests;
+      testInfos[0]?.type === 'suite' && testInfos[0].name === ROOT_SUITE_NAME
+        ? testInfos[0].tests
+        : testInfos;
     realTests.forEach((test) => {
       handleChild(test, children, [], []);
     });
     this.children = children;
+    this.testItem?.children.replace(this.children);
+  }
+
+  private updateFromListedTests(tests: ListedTest[]): void {
+    const getPreviousRange = createPreviousRangeLookup(this.children);
+
+    type Parent = {
+      names: string[];
+      ids: string[];
+      children: vscode.TestItem[];
+      item?: vscode.TestItem;
+    };
+    const root: Parent = { names: [], ids: [], children: [] };
+    const parents: Parent[] = [root];
+    const finalizeParent = (): void => {
+      const parent = parents.pop()!;
+      parent.item?.children.replace(parent.children);
+    };
+
+    for (const test of tests) {
+      const parentNames = test.parentNames ?? [];
+      const parentKey = parentNames.join('\x00');
+      while (
+        parents.length > 1 &&
+        parents.at(-1)!.names.join('\x00') !== parentKey
+      ) {
+        finalizeParent();
+      }
+      const parent = parents.at(-1)!;
+      if (!test.name) continue;
+      const id = getTestItemId(
+        test.name,
+        siblingIndexOf(parent.children, test.name),
+      );
+      const ids = [...parent.ids, id];
+      const range = toVscodeRange(test.location) ?? getPreviousRange(ids);
+      const testItem = this.onTest(
+        range,
+        test.name,
+        test.type === 'suite' ? 'suite' : 'test',
+        parent.children,
+        parentNames,
+      );
+      testItem.description = test.runMode;
+
+      if (test.type === 'suite') {
+        const children: vscode.TestItem[] = [];
+        parents.push({
+          names: [...parentNames, test.name],
+          ids,
+          children,
+          item: testItem,
+        });
+      }
+    }
+
+    while (parents.length > 1) {
+      finalizeParent();
+    }
+
+    this.children = root.children;
     this.testItem?.children.replace(this.children);
   }
 
@@ -240,6 +342,10 @@ export class TestFile {
     return testItem;
   }
 }
+
+// Runtime TestInfo always has testId; public ListedTest deliberately does not.
+const isListedTest = (test: TestInfo | ListedTest): test is ListedTest =>
+  !('testId' in test);
 
 export class TestCase {
   constructor(

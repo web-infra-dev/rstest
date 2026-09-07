@@ -5,7 +5,7 @@ description: Default timeout of a test in milliseconds. 0 will disable the timeo
 # testTimeout
 
 - **Type:** `number`
-- **Default:** `5_000`
+- **Default:** `5_000` (`15_000` in Browser Mode)
 - **CLI:** `--testTimeout=5000`
 
 Default timeout of a test in milliseconds. `0` will disable the timeout.
@@ -35,4 +35,4 @@ Rstest determines the test timeout based on the following priority order:
 2. Timeout configured in the test file via [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig)
 3. `--testTimeout` option in CLI
 4. `testTimeout` option in the configuration file
-5. Default value of `5000` milliseconds
+5. Default value of `5000` milliseconds (`15000` milliseconds in Browser Mode). Browser Mode also uses a `5000` milliseconds default for `expect.poll.timeout`; Node Mode uses `1000` milliseconds.

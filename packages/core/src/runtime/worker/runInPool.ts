@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { pathToFileURL } from 'node:url';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { normalize } from 'pathe';
 import { install } from 'source-map-support';
@@ -35,6 +36,7 @@ import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
+let currentEnvironmentBundle: { path: string; url: string } | undefined;
 
 // Threads-pool workers all share `process.pid` with the host, and each
 // worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
@@ -53,6 +55,19 @@ install({
       return {
         url: source,
         map: JSON.parse(sourceMaps[source]),
+      };
+    }
+    // Stack frames may identify the same ESM file as either a filesystem path
+    // or a file URL, and source-map-support passes that value through unchanged.
+    if (
+      source === currentEnvironmentBundle?.path ||
+      source === currentEnvironmentBundle?.url
+    ) {
+      // Environment bundles are built without sourcemaps. Returning null would
+      // let source-map-support read and scan the entire bundle on first use.
+      return {
+        url: source,
+        map: { version: 3, sources: [], names: [], mappings: '' },
       };
     }
     return null;
@@ -122,7 +137,13 @@ const setErrorName = (error: Error, type: string): Error => {
   }
 };
 
-const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
+const setupEnv = (
+  env: Partial<NodeJS.ProcessEnv> | undefined,
+  deletedEnvKeys: string[],
+) => {
+  for (const key of deletedEnvKeys) {
+    Reflect.deleteProperty(process.env, key);
+  }
   if (env) {
     Object.entries(env).forEach(([key, value]) => {
       if (value === undefined) {
@@ -159,11 +180,20 @@ const preparePool = async (
     entryInfo: { distPath, testPath },
     updateSnapshot,
     context,
+    deletedEnvKeys,
     environmentKey,
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ) => {
+  const environmentBundlePath = context.testEnvironmentModule?.bundlePath;
+  currentEnvironmentBundle = environmentBundlePath
+    ? {
+        path: environmentBundlePath,
+        url: pathToFileURL(environmentBundlePath).href,
+      }
+    : undefined;
+
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   globalCleanups.forEach((fn) => {
     fn();
@@ -212,7 +242,7 @@ const preparePool = async (
     },
   } = context;
 
-  setupEnv(env);
+  setupEnv(env, deletedEnvKeys);
 
   const shouldInterceptConsole =
     !disableConsoleIntercept || silent === true || silent === 'passed-only';
@@ -433,7 +463,6 @@ const loadFiles = async ({
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
-  const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
   // A reused worker can hold several projects' runtime chunks at once, so pass
   // the current entry path to every self-scoped cleaner. Only its
@@ -448,7 +477,6 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     });
   }
 
@@ -468,7 +496,6 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     });
   }
 
@@ -482,7 +509,6 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
-    virtualFsAssetFiles,
   });
 };
 
@@ -554,8 +580,9 @@ export const runInPool = async (
   const cleanups: (() => MaybePromise<void>)[] = [];
 
   const exit = process.exit.bind(process);
-  process.exit = (code = process.exitCode || 0): never => {
-    throw new Error(`process.exit unexpectedly called with "${code}"`);
+  process.exit = (code): never => {
+    const effectiveCode = code ?? Reflect.get(process, 'exitCode') ?? 0;
+    throw new Error(`process.exit unexpectedly called with "${effectiveCode}"`);
   };
 
   const kill = process.kill.bind(process);

@@ -1,7 +1,7 @@
 import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { EnvironmentName } from './config';
-import type { ProjectContext, RstestContext } from './core';
+import type { InternalContext, InternalProjectContext } from './core';
 import type {
   TestCaseInfo,
   TestFileInfo,
@@ -56,7 +56,7 @@ export type RuntimeRPC = {
 };
 
 export type RuntimeConfig = Pick<
-  RstestContext['normalizedConfig'],
+  InternalContext['normalizedConfig'],
   | 'testTimeout'
   | 'testNamePattern'
   | 'globals'
@@ -117,8 +117,8 @@ export type CurrentTaskInfo = Pick<
 >;
 
 export type WorkerContext = {
-  rootPath: RstestContext['rootPath'];
-  projectRoot: ProjectContext['rootPath'];
+  rootPath: InternalContext['rootPath'];
+  projectRoot: InternalProjectContext['rootPath'];
   project: string;
   runtimeConfig: RuntimeConfig;
   taskId: number;
@@ -139,6 +139,8 @@ export type RunWorkerOptions = {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
     context: WorkerContext;
+    /** Env deletions use a separate JSON-safe wire field because JSON drops `undefined`. */
+    deletedEnvKeys: string[];
     /**
      * Identity of this task's test environment, derived host-side by
      * `getEnvironmentKey`. The pool reuses a worker only for matching keys

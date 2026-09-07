@@ -1,7 +1,7 @@
-import type { RstestContext } from '../types';
+import type { InternalContext } from '../types';
 
 type RelatedRunContext = Pick<
-  RstestContext,
+  InternalContext,
   | 'relatedFilters'
   | 'relatedMode'
   | 'relatedResolutionEmpty'

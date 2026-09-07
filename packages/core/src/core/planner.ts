@@ -1,5 +1,5 @@
 import type { RsbuildInstance } from '@rsbuild/core';
-import type { ProjectContext } from '../types';
+import type { InternalProjectContext } from '../types';
 import { filterFiles, type TraceEvent } from '../utils';
 import {
   type BrowserRunPlan,
@@ -73,8 +73,8 @@ export interface TestPlanner extends BrowserRunPlan {
 }
 
 export type CreateTestPlannerOptions = {
-  browserProjects: ProjectContext[];
-  nodeProjects: ProjectContext[];
+  browserProjects: InternalProjectContext[];
+  nodeProjects: InternalProjectContext[];
   isWatchMode: boolean;
   /** Forwards the discovery boot's trace events into the run's trace buffer. */
   onTraceEvents?: (events: TraceEvent[]) => void;
@@ -116,7 +116,7 @@ export async function createTestPlanner(
         project.environmentName,
     ),
   );
-  const rsbuildProjects: ProjectContext[] = [
+  const rsbuildProjects: InternalProjectContext[] = [
     ...plan.nodeProjectsToRun,
     ...nodeProjects.filter(
       (project) => !plannedNodeSourceNames.has(project.environmentName),

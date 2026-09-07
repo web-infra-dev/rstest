@@ -5,8 +5,8 @@ import type {
   CoverageMapData,
   EntryInfo,
   FormattedError,
-  ProjectContext,
-  RstestContext,
+  InternalContext,
+  InternalProjectContext,
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
@@ -18,10 +18,10 @@ import type {
 import {
   color,
   getFileTaskId,
-  getForceColorEnv,
   isDeno,
   logger,
   needFlagExperimentalDetectModule,
+  pickColorEnv,
   toError,
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
@@ -31,6 +31,7 @@ import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import { composeWorkerEnv } from '../core/workerEnv';
 import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import {
   type BundleCoverageResult,
@@ -47,8 +48,18 @@ import type { PoolTask, PoolWorkerKind } from './types';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
-  projectRuntimeConfig(context, { envMode: 'inherit' });
+const getWorkerConfig = (
+  context: InternalContext,
+  project: InternalProjectContext,
+) => ({
+  runtimeConfig: projectRuntimeConfig(project, {
+    envMode: 'inherit',
+    env: composeWorkerEnv(context.workerEnv),
+  }),
+  deletedEnvKeys: Object.keys(context.workerEnv).filter(
+    (key) => context.workerEnv[key] === undefined,
+  ),
+});
 
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
@@ -93,7 +104,7 @@ type PoolDispatchParams = {
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
-  project: ProjectContext;
+  project: InternalProjectContext;
   /** Per-compile id threaded to the worker for rebuild-boundary cache flushing (#1373). Defaults to `0`. */
   buildId?: number;
 };
@@ -110,6 +121,7 @@ const buildTask = async ({
   context,
   project,
   runtimeConfig,
+  deletedEnvKeys,
   setupEntries,
   setupAssets,
   assetNames,
@@ -126,9 +138,10 @@ const buildTask = async ({
   workerKind: PoolWorkerKind;
   entryInfo: EntryInfo;
   index: number;
-  context: RstestContext;
-  project: ProjectContext;
+  context: InternalContext;
+  project: InternalProjectContext;
   runtimeConfig: RuntimeConfig;
+  deletedEnvKeys: string[];
   setupEntries: EntryInfo[];
   setupAssets: string[];
   assetNames: string[];
@@ -184,10 +197,13 @@ const buildTask = async ({
         // environment under `isolate: false`. Accepted as too narrow to guard;
         // if it ever matters, fall back to a project-scoped key when the config
         // is not JSON-representable instead of trying to serialize those values.
-        environmentKey: getEnvironmentKey(
-          runtimeConfig.testEnvironment,
-          testEnvironmentModule,
-        ),
+        environmentKey: [
+          getEnvironmentKey(
+            runtimeConfig.testEnvironment,
+            testEnvironmentModule,
+          ),
+          JSON.stringify(pickColorEnv(runtimeConfig.env)),
+        ].join('\0'),
         context: {
           outputModule: project.outputModule,
           taskId: index + 1,
@@ -199,6 +215,7 @@ const buildTask = async ({
           testEnvironmentModule,
           trace: context.trace,
         },
+        deletedEnvKeys,
         type,
         setupEntries,
         updateSnapshot,
@@ -241,7 +258,7 @@ const workerErrorToResult = (
   err: unknown,
   testPath: string,
   projectName: string,
-  context: RstestContext,
+  context: InternalContext,
 ): { fileResult: TestFileResult; crashedResults: TestResult[] } => {
   const error = toError(err);
 
@@ -308,7 +325,7 @@ export const createPool = async ({
   context,
   testEnvironmentModules,
 }: {
-  context: RstestContext;
+  context: InternalContext;
   testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
 }): Promise<{
   runTests: (params: {
@@ -318,7 +335,7 @@ export const createPool = async ({
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
-    project: ProjectContext;
+    project: InternalProjectContext;
     /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
     buildId?: number;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
@@ -398,11 +415,6 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    env: {
-      NODE_ENV: 'test',
-      ...getForceColorEnv(),
-      ...process.env,
-    } as Record<string, string>,
     memoryGate: selectMemoryGate(workerKind),
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(
@@ -411,7 +423,9 @@ export const createPool = async ({
     },
   });
 
-  const createProjectSink = (project: ProjectContext): RunnerEventSink =>
+  const createProjectSink = (
+    project: InternalProjectContext,
+  ): RunnerEventSink =>
     createRunnerEventSink(context, project.normalizedConfig);
   const captureBundleCoverage = isBundleCoverageDebugEnabled();
 
@@ -431,7 +445,10 @@ export const createPool = async ({
       traceSpan,
     }) => {
       const projectName = project.name;
-      const runtimeConfig = getRuntimeConfig(project);
+      const { runtimeConfig, deletedEnvKeys } = getWorkerConfig(
+        context,
+        project,
+      );
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -469,6 +486,7 @@ export const createPool = async ({
                   context,
                   project,
                   runtimeConfig,
+                  deletedEnvKeys,
                   setupEntries,
                   setupAssets,
                   assetNames,
@@ -576,7 +594,10 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const runtimeConfig = getRuntimeConfig(project);
+      const { runtimeConfig, deletedEnvKeys } = getWorkerConfig(
+        context,
+        project,
+      );
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -591,6 +612,7 @@ export const createPool = async ({
             context,
             project,
             runtimeConfig,
+            deletedEnvKeys,
             setupEntries,
             setupAssets,
             assetNames,

@@ -56,7 +56,7 @@ export type ExpectPollConfig = {
   interval?: number;
   /**
    * Polling timeout in milliseconds.
-   * @default 1000
+   * @default 1000 (5000 in Browser Mode)
    */
   timeout?: number;
 };
@@ -298,8 +298,8 @@ export type EnvironmentWithOptions = {
    *
    * - `'auto'`: prebundle supported built-in environments.
    * - `true`: always prebundle the selected built-in environment.
-   * - `false` (default): load the environment natively.
-   * @default false
+   * - `false`: load the environment natively.
+   * @default 'auto'
    */
   prebundle?: TestEnvironmentPrebundle;
 };
@@ -487,7 +487,7 @@ export interface RstestConfig {
 
   /**
    * Timeout of a test in milliseconds.
-   * @default 5000
+   * @default 5000 (15000 in Browser Mode)
    */
   testTimeout?: number;
 
@@ -679,6 +679,7 @@ export type NormalizedBrowserModeConfig = {
   providerOptions: Record<string, unknown>;
 };
 
+// Exported from `/api` as `RstestContext.config`; shape changes are public API changes.
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,

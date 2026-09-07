@@ -234,7 +234,9 @@ export async function mergeReports(
   const { blobs, paths: blobPaths } = loadBlobFiles(blobDir);
   let coverageOptions = context.normalizedConfig.coverage;
   if (coverageOptions.enabled) {
-    await ensureCoverageProviderInstalled(coverageOptions, context.rootPath);
+    await ensureCoverageProviderInstalled(coverageOptions, context.rootPath, {
+      confirm: context.packageInstallerConfirm,
+    });
   }
   if (coverageOptions.enabled && coverageOptions.include?.length) {
     const { prepareRsbuild } = await import('./rsbuild');
@@ -328,7 +330,7 @@ export async function mergeReports(
     allUnhandledErrors.length > 0;
 
   if (hasFailure) {
-    process.exitCode = 1;
+    context.exitCode.raise(1);
   }
 
   for (const reporter of context.reporters) {
@@ -402,4 +404,6 @@ export async function mergeReports(
       color.gray(`Cleaned up blob reports from: ${relativeBlobDir}\n`),
     );
   }
+
+  context.exitCode.finishCycle();
 }

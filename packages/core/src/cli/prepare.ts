@@ -10,7 +10,9 @@ function initNodeEnv() {
 /**
  * Initialize the test environment variables that worker processes inherit via
  * `process.env`. Shared by the CLI (`prepareCli`) and the programmatic API
- * (`runRstest`) so both paths run tests with `NODE_ENV=test` and `RSTEST=true`.
+ * (`createRstest`). Both paths always set `RSTEST=true` and default `NODE_ENV`
+ * to `test` only when unset. Neither process-level assignment is snapshotted
+ * or restored.
  */
 export function initRstestEnv(): void {
   initNodeEnv();

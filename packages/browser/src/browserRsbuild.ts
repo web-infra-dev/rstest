@@ -10,18 +10,20 @@ import {
   applyWebMockRspackConfig,
   color,
   type EntryHashSnapshot,
+  excludeVirtualSetupFromCoverage,
   getSetupFiles,
   getTestEntries,
   initModifyRstestConfigHooks,
+  type InternalContext,
+  type InternalProjectContext,
   isDebug,
   logger,
   loadCoverageProvider,
+  materializeVirtualSetupFiles,
   pluginMockRuntime,
-  type ProjectContext,
   resolveProjectBuildCache,
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
-  type RstestContext,
   rsbuild,
   type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
@@ -71,12 +73,15 @@ export const serializeForInlineScript = (value: unknown): string => {
 // Type Definitions
 
 type BrowserProjectEntries = {
-  project: ProjectContext;
+  project: InternalProjectContext;
   setupFiles: string[];
+  virtualModules: Record<string, string>;
   testFiles: string[];
 };
 
 class RstestBrowserRuntimePlugin {
+  constructor(private readonly browserRuntimeDir: string) {}
+
   apply(compiler: Rspack.Compiler) {
     const { RuntimeModule } = compiler.webpack;
     class BrowserRuntimeModule extends RuntimeModule {
@@ -115,6 +120,20 @@ function __rstest_clean_browser_test_entry__(testEntryPath) {
         );
       },
     );
+
+    compiler.hooks.afterPlugins.tap('RstestBrowserSourceMapRule', () => {
+      compiler.options.module.rules.unshift({
+        test: /\.js$/,
+        include: this.browserRuntimeDir,
+        extractSourceMap: true,
+      });
+
+      if (isDebug()) {
+        logger.log(
+          `[rstest:browser] extractSourceMap rule added for: ${this.browserRuntimeDir}`,
+        );
+      }
+    });
   }
 }
 
@@ -125,15 +144,15 @@ export type BrowserProviderProject = {
 
 type BrowserLaunchOptions = {
   provider: BrowserProvider;
-  browser: ProjectContext['normalizedConfig']['browser']['browser'];
-  headless: ProjectContext['normalizedConfig']['browser']['headless'];
-  port: ProjectContext['normalizedConfig']['browser']['port'];
-  strictPort: ProjectContext['normalizedConfig']['browser']['strictPort'];
+  browser: InternalProjectContext['normalizedConfig']['browser']['browser'];
+  headless: InternalProjectContext['normalizedConfig']['browser']['headless'];
+  port: InternalProjectContext['normalizedConfig']['browser']['port'];
+  strictPort: InternalProjectContext['normalizedConfig']['browser']['strictPort'];
   providerOptions: Record<string, unknown>;
 };
 
 const getBrowserProviderOptions = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): Record<string, unknown> => {
   const browserConfig = project.normalizedConfig.browser as {
     providerOptions?: Record<string, unknown>;
@@ -794,13 +813,15 @@ const getAffectedTestFiles = ({
   return outcome.affectedPaths;
 };
 
-export const getBrowserProjects = (context: RstestContext): ProjectContext[] =>
+export const getBrowserProjects = (
+  context: InternalContext,
+): InternalProjectContext[] =>
   context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
 
 const getBrowserRsbuildEnvironmentConfig = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): RsbuildEnvironmentConfig => ({
   plugins: project.normalizedConfig.plugins,
   root: project.rootPath,
@@ -810,7 +831,7 @@ const getBrowserRsbuildEnvironmentConfig = (
 // and browser server fetch timeout.
 
 const getBrowserLaunchOptions = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): BrowserLaunchOptions => ({
   provider: project.normalizedConfig.browser.provider,
   browser: project.normalizedConfig.browser.browser,
@@ -821,7 +842,7 @@ const getBrowserLaunchOptions = (
 });
 
 const ensureConsistentBrowserLaunchOptions = (
-  projects: ProjectContext[],
+  projects: InternalProjectContext[],
 ): BrowserLaunchOptions => {
   if (projects.length === 0) {
     throw new Error('No browser-enabled projects found.');
@@ -852,11 +873,11 @@ const ensureConsistentBrowserLaunchOptions = (
 };
 
 export const collectProjectEntries = async (
-  context: RstestContext,
+  context: InternalContext,
   // The explicit browser-project subset the executor was constructed with. Falls
   // back to re-deriving from `context` for internal callers (e.g. the watch
   // plugin) that do not carry the plan's project list.
-  browserProjects: ProjectContext[] = getBrowserProjects(context),
+  browserProjects: InternalProjectContext[] = getBrowserProjects(context),
 ): Promise<BrowserProjectEntries[]> => {
   return Promise.all(
     browserProjects.map(async (project) => {
@@ -870,15 +891,28 @@ export const collectProjectEntries = async (
         includeSource,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
-        fileFilters: context.fileFilters || [],
+        fileFilters: context.fileFilters,
         fileFilterMode: context.fileFilterMode,
       });
 
-      const setup = getSetupFiles(setupFiles, project.rootPath);
+      const setup = materializeVirtualSetupFiles(
+        getSetupFiles(setupFiles, project.rootPath),
+        project.rootPath,
+      );
+      const materializedSetupFiles = Object.values(setup.setupFiles);
+      excludeVirtualSetupFromCoverage(
+        context.normalizedConfig.coverage,
+        setup.virtualModules,
+      );
+      excludeVirtualSetupFromCoverage(
+        project.normalizedConfig.coverage,
+        setup.virtualModules,
+      );
 
       return {
         project,
-        setupFiles: Object.values(setup),
+        setupFiles: materializedSetupFiles,
+        virtualModules: setup.virtualModules,
         testFiles: Object.values(tests),
       };
     }),
@@ -954,7 +988,9 @@ const generateManifestModule = ({
   isWatchMode,
 }: {
   manifestPath: string;
-  entries: BrowserProjectEntries[];
+  entries: Array<
+    Pick<BrowserProjectEntries, 'project' | 'setupFiles' | 'testFiles'>
+  >;
   isWatchMode: boolean;
 }): string => {
   const manifestDirPosix = normalize(dirname(manifestPath));
@@ -1196,13 +1232,13 @@ export const createBrowserRuntime = async ({
   skipProviderLaunch,
   appliedModifyRstestConfigEnvironments,
 }: {
-  context: RstestContext;
+  context: InternalContext;
   projectEntries: BrowserProjectEntries[];
   /**
    * The explicit browser-project subset (plan output). Drives launch-option
    * consistency and the container origin (`browserProjects[0]`).
    */
-  browserProjects: ProjectContext[];
+  browserProjects: InternalProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   freezeShardedEntries?: boolean;
   tempDir: string;
@@ -1243,8 +1279,9 @@ export const createBrowserRuntime = async ({
   const watchState = createBrowserWatchState();
   const manifestModules: Array<{
     manifestPath: string;
-    project: ProjectContext;
+    project: InternalProjectContext;
     modules: Record<string, string>;
+    virtualModules: Record<string, string>;
   }> = [];
 
   const createRuntimeWithoutProvider = (): BrowserRuntime => {
@@ -1273,17 +1310,24 @@ export const createBrowserRuntime = async ({
     };
   };
 
-  const getProjectEntry = (project: ProjectContext) =>
+  const getProjectEntry = (project: InternalProjectContext) =>
     projectEntries.find(
       (item) => item.project.environmentName === project.environmentName,
     );
 
   const refreshManifestModule = (manifestModule: {
     manifestPath: string;
-    project: ProjectContext;
+    project: InternalProjectContext;
     modules: Record<string, string>;
+    virtualModules: Record<string, string>;
   }): void => {
     const entry = getProjectEntry(manifestModule.project);
+    for (const virtualPath of Object.keys(manifestModule.virtualModules)) {
+      if (virtualPath !== manifestModule.manifestPath) {
+        delete manifestModule.virtualModules[virtualPath];
+      }
+    }
+    Object.assign(manifestModule.virtualModules, entry?.virtualModules);
     manifestModule.modules[manifestModule.manifestPath] =
       generateManifestModule({
         manifestPath: manifestModule.manifestPath,
@@ -1464,7 +1508,7 @@ export const createBrowserRuntime = async ({
 
   // ---- Build one isolated rsbuild instance + dev server per project ----
   const buildProjectServer = async (
-    project: ProjectContext,
+    project: InternalProjectContext,
     isContainerServer: boolean,
   ): Promise<BrowserProjectServer> => {
     const manifestPath = join(
@@ -1473,7 +1517,8 @@ export const createBrowserRuntime = async ({
       VIRTUAL_MANIFEST_FILENAME,
     );
     const entry = getProjectEntry(project);
-    const virtualManifestModules = {
+    const virtualModules = {
+      ...(entry?.virtualModules ?? {}),
       [manifestPath]: generateManifestModule({
         manifestPath,
         entries: [
@@ -1486,13 +1531,14 @@ export const createBrowserRuntime = async ({
         isWatchMode,
       }),
     };
-    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin(
-      virtualManifestModules,
+    const virtualModulesPlugin = new rspack.experiments.VirtualModulesPlugin(
+      virtualModules,
     );
     manifestModules.push({
       manifestPath,
       project,
-      modules: virtualManifestModules,
+      modules: virtualModules,
+      virtualModules,
     });
 
     const rstestInternalAliases = {
@@ -1600,12 +1646,7 @@ export const createBrowserRuntime = async ({
                 context,
                 project,
               });
-              const setupFiles = Object.values(
-                getSetupFiles(
-                  project.normalizedConfig.setupFiles,
-                  project.rootPath,
-                ),
-              );
+              const setupFiles = getProjectEntry(project)?.setupFiles ?? [];
               // Merge order: current config -> userConfig -> rstest required config (highest priority)
               const merged = mergeEnvironmentConfig(
                 config,
@@ -1682,30 +1723,13 @@ export const createBrowserRuntime = async ({
                         : false;
                       rspackConfig.plugins = rspackConfig.plugins || [];
                       rspackConfig.plugins.push(
-                        new RstestBrowserRuntimePlugin(),
+                        new RstestBrowserRuntimePlugin(
+                          dirname(browserRuntimePath),
+                        ),
                       );
-                      rspackConfig.plugins.push(virtualManifestPlugin);
+                      rspackConfig.plugins.push(virtualModulesPlugin);
 
                       applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                      // Extract and merge sourcemaps from pre-built @rstest/core files
-                      // This preserves the sourcemap chain for inline snapshot support
-                      // See: https://rspack.rs/config/module-rules#rulesextractsourcemap
-                      const browserRuntimeDir = dirname(browserRuntimePath);
-                      rspackConfig.module = rspackConfig.module || {};
-                      rspackConfig.module.rules =
-                        rspackConfig.module.rules || [];
-                      rspackConfig.module.rules.unshift({
-                        test: /\.js$/,
-                        include: browserRuntimeDir,
-                        extractSourceMap: true,
-                      });
-
-                      if (isDebug()) {
-                        logger.log(
-                          `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                        );
-                      }
                     },
                   },
                 },
@@ -1985,22 +2009,32 @@ export const createBrowserRuntime = async ({
 };
 
 export async function resolveProjectEntries(
-  context: RstestContext,
+  context: InternalContext,
   shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
-  browserProjects: ProjectContext[],
+  browserProjects: InternalProjectContext[],
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
     const projectEntries: BrowserProjectEntries[] = [];
     for (const project of browserProjects) {
       const entryInfo = shardedEntries.get(project.environmentName);
       if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
-        const setup = getSetupFiles(
-          project.normalizedConfig.setupFiles,
+        const setup = materializeVirtualSetupFiles(
+          getSetupFiles(project.normalizedConfig.setupFiles, project.rootPath),
           project.rootPath,
+        );
+        const materializedSetupFiles = Object.values(setup.setupFiles);
+        excludeVirtualSetupFromCoverage(
+          context.normalizedConfig.coverage,
+          setup.virtualModules,
+        );
+        excludeVirtualSetupFromCoverage(
+          project.normalizedConfig.coverage,
+          setup.virtualModules,
         );
         projectEntries.push({
           project,
-          setupFiles: Object.values(setup),
+          setupFiles: materializedSetupFiles,
+          virtualModules: setup.virtualModules,
           testFiles: Object.values(entryInfo.entries),
         });
       }

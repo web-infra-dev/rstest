@@ -1,6 +1,6 @@
 import { isBuiltin } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import type { RstestContext } from '../../types';
+import type { InternalContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 import { rstestCoreGlobalExternal } from './mockBuild';
@@ -252,7 +252,7 @@ function autoExternalNodeBuiltin(
   }
 }
 
-export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
+export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
   context,
 ) => ({
   name: 'rstest:external',

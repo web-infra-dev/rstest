@@ -28,6 +28,13 @@ export function isModuleNotFoundError(
   );
 }
 
+export function isPackagePathNotExportedError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+  );
+}
+
 export function formatCoreNotFoundMessage(searchedFrom: string): string {
   return `Cannot find "@rstest/core" from ${searchedFrom}. Install the project dependencies, then refresh the Test Explorer. If Rstest is installed elsewhere, set "rstest.rstestPackagePath" to its package.json.`;
 }

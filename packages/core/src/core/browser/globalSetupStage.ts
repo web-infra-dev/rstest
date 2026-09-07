@@ -2,13 +2,16 @@ import { createRsbuild, logger as RsbuildLogger } from '@rsbuild/core';
 import type {
   EntryInfo,
   ExecutorCycleOutcome,
-  ProjectContext,
+  InternalContext,
+  InternalProjectContext,
   ProjectEntries,
-  RstestContext,
 } from '../../types';
 import { isDebug, resolveShardedEntries } from '../../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
-import { getRsbuildEnvironmentConfig } from '../modifyRstestConfig';
+import {
+  getRsbuildEnvironmentConfig,
+  initModifyRstestConfigHooks,
+} from '../modifyRstestConfig';
 import { getProjectEntries } from '../projectPlan';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
@@ -21,7 +24,7 @@ import { createSetupFileState } from '../setupFileState';
 export type BrowserGlobalSetupStageResult = {
   /**
    * Merged env change-set the browser projects' globalSetup applied to the
-   * host `process.env` (later projects win). `undefined` when no setup ran,
+   * run context (later projects win). `undefined` when no setup ran,
    * so the browser wire stays byte-identical to a run without globalSetup.
    */
   env?: Record<string, string | undefined>;
@@ -69,8 +72,8 @@ export const globalSetupFailureOutcome = (
  *
  */
 export async function runBrowserGlobalSetupStage(
-  context: RstestContext,
-  browserProjects: ProjectContext[],
+  context: InternalContext,
+  browserProjects: InternalProjectContext[],
   {
     entriesCache,
   }: {
@@ -105,7 +108,12 @@ export async function runBrowserGlobalSetupStage(
         // honoring include/exclude, CLI file filters, and sharding.
         const entries = gateEntries
           ? (gateEntries.get(project.environmentName)?.entries ?? {})
-          : await getProjectEntries({ context, project });
+          : await getProjectEntries({
+              context,
+              project,
+              fileFilters: context.fileFilters,
+              fileFilterMode: context.fileFilterMode,
+            });
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;
       }),
@@ -116,10 +124,11 @@ export async function runBrowserGlobalSetupStage(
     return { errors: [] };
   }
 
+  const candidateProjects = candidates.map(({ project }) => project);
   const setupFileState = createSetupFileState();
   setupFileState.refresh({
     setupProjects: [],
-    globalSetupProjects: candidates.map(({ project }) => project),
+    globalSetupProjects: candidateProjects,
   });
 
   const { dev = {} } = context.normalizedConfig;
@@ -141,7 +150,7 @@ export async function runBrowserGlobalSetupStage(
         writeToDisk: dev.writeToDisk || debugMode,
       },
       environments: Object.fromEntries(
-        candidates.map(({ project }) => [
+        candidateProjects.map((project) => [
           project.environmentName,
           getRsbuildEnvironmentConfig(project),
         ]),
@@ -154,6 +163,7 @@ export async function runBrowserGlobalSetupStage(
           globTestSourceEntries: emptyEntries,
           setupFiles: setupFileState.setupFiles,
           globalSetupFiles: setupFileState.globalSetupFiles,
+          virtualModules: setupFileState.virtualModules,
           context,
           isWatch: false,
         }),
@@ -161,6 +171,20 @@ export async function runBrowserGlobalSetupStage(
       ],
     },
   });
+
+  initModifyRstestConfigHooks(
+    context,
+    rsbuildInstance,
+    candidateProjects,
+    candidateProjects,
+    {
+      // Discovery already applied these callbacks. This compile only needs to
+      // expose the settled project config before user plugin setup runs.
+      appliedEnvironmentNames: new Set(
+        candidateProjects.map((project) => project.environmentName),
+      ),
+    },
+  );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     isWatchMode: false,
@@ -174,7 +198,7 @@ export async function runBrowserGlobalSetupStage(
   // Materialize compiled assets before closing the server so no compiler
   // lingers while user setup code runs.
   let prepared: {
-    project: ProjectContext;
+    project: InternalProjectContext;
     entryCount: number;
     globalSetupEntries: EntryInfo[];
     assetFiles: Record<string, Buffer>;
@@ -223,7 +247,7 @@ export async function runBrowserGlobalSetupStage(
       success,
       errors: setupErrors,
       envChanges,
-    } = await runGlobalSetup({
+    } = await runGlobalSetup(context, {
       globalSetupEntries: item.globalSetupEntries,
       assetFiles: item.assetFiles,
       sourceMaps: item.sourceMaps,
@@ -239,5 +263,8 @@ export async function runBrowserGlobalSetupStage(
     }
   }
 
-  return { env: ranAnySetup ? envOverlay : undefined, errors };
+  return {
+    env: ranAnySetup ? envOverlay : undefined,
+    errors,
+  };
 }

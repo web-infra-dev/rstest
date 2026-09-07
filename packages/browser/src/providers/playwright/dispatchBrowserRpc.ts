@@ -77,6 +77,11 @@ const callExpect = async (
   return null;
 };
 
+const normalizePlaywrightTimeout = (
+  timeout: number,
+  isExplicit: boolean,
+): number => (isExplicit ? timeout : Math.max(timeout, 1));
+
 const assertSerializedText = (
   value: unknown,
   matcherName: string,
@@ -365,7 +370,12 @@ export async function dispatchPlaywrightBrowserRpc({
     if (!supportedExpectElementMatchers.has(request.method)) {
       throw new Error(`Expect matcher not supported: ${request.method}`);
     }
-    return dispatchExpectMatcher(locator, request, !!request.isNot, timeout);
+    return dispatchExpectMatcher(
+      locator,
+      request,
+      !!request.isNot,
+      normalizePlaywrightTimeout(timeout, request.timeoutIsExplicit === true),
+    );
   }
 
   throw new Error(`Unknown browser rpc kind: ${request.kind}`);

@@ -1,6 +1,7 @@
 [
   "cli",
   "configure-rstest",
+  "css",
   "test-filter",
   "mock",
   "snapshot",

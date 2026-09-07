@@ -1,4 +1,7 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
+import type {
+  SourceMapInput as UpstreamSourceMapInput,
+  TraceMap,
+} from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
@@ -18,7 +21,11 @@ export type Duration = {
   testTime: number;
 };
 
-export type { SnapshotSummary, SourceMapInput };
+export type { SnapshotSummary };
+
+// Deliberately omit the nominal TraceMap class so declarations inlined by the
+// main and /api entries remain structurally assignable.
+export type SourceMapInput = Exclude<UpstreamSourceMapInput, TraceMap>;
 
 export type GetSourcemap = (
   sourcePath: string,
@@ -268,7 +275,7 @@ export interface Reporter {
   onUserConsoleLog?: (log: UserConsoleLog) => void;
 
   /**
-   * Called when rstest exit abnormally
+   * Called when the reporter's owning context is released.
    */
-  onExit?: () => void;
+  onExit?: () => MaybePromise<void>;
 }

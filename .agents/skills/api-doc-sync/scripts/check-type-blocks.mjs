@@ -311,4 +311,7 @@ for (const f of findings) {
     stdout.write(`  [${f.page}] ${f.kind}: ${f.detail}\n`);
   }
 }
+stdout.write(
+  '\n  Update both English and Chinese type blocks; only comments may differ between locales.\n',
+);
 exit(1);

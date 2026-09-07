@@ -2,6 +2,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -11,7 +12,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
-import type { ProjectContext, TestEnvironmentModuleReference } from '../types';
+import type {
+  InternalProjectContext,
+  TestEnvironmentModuleReference,
+} from '../types';
 import { ADDITIONAL_NODE_BUILTINS, logger } from '../utils';
 import {
   importMetaHook,
@@ -29,7 +33,7 @@ import { getMockRstestPluginOptions } from './plugins/mockBuild';
 
 export type PreparedTestEnvironmentModules = {
   modules: ReadonlyMap<string, TestEnvironmentModuleReference>;
-  update: (projects: ProjectContext[]) => Promise<void>;
+  update: (projects: InternalProjectContext[]) => Promise<void>;
   cleanup: () => Promise<void>;
 };
 
@@ -295,6 +299,8 @@ const createTestEnvironmentBuildConfig = ({
       config.plugins.push(
         new rspack.experiments.RstestPlugin({
           ...getMockRstestPluginOptions({ rootPath: projectRoot }),
+          // Environment bundles contain no test mocks, so skip the mock-hoist asset scan.
+          hoistMockModule: false,
           injectDynamicImportOrigin: true,
           injectRequireResolveOrigin: {
             functionName: importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK),
@@ -356,7 +362,11 @@ const buildTestEnvironmentModule = async ({
 
   const result = await rsbuild.build();
   await result.close();
-  return join(outputPath, 'environment.mjs');
+  const bundlePath = join(outputPath, 'environment.mjs');
+  // The OS temp path can contain an alias (macOS exposes /var as /private/var),
+  // while Node's ESM stack uses the canonical path. Resolve it once here so
+  // workers and source-map-support identify the generated file consistently.
+  return realpath(bundlePath);
 };
 
 const shouldPrebundle = async ({
@@ -367,10 +377,10 @@ const shouldPrebundle = async ({
 }: {
   name: EnvironmentDependencyName;
   packageName: string;
-  project: ProjectContext;
+  project: InternalProjectContext;
   resolvedPath: string;
 }): Promise<boolean> => {
-  const option = project.normalizedConfig.testEnvironment.prebundle ?? false;
+  const option = project.normalizedConfig.testEnvironment.prebundle ?? 'auto';
   if (option === true) {
     return true;
   }
@@ -396,7 +406,7 @@ export const prepareTestEnvironmentModules = async ({
   projects,
   rootPath,
 }: {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   rootPath: string;
 }): Promise<PreparedTestEnvironmentModules> => {
   const modules = new Map<string, TestEnvironmentModuleReference>();
@@ -408,7 +418,9 @@ export const prepareTestEnvironmentModules = async ({
     }
   };
 
-  const update = async (nextProjects: ProjectContext[]): Promise<void> => {
+  const update = async (
+    nextProjects: InternalProjectContext[],
+  ): Promise<void> => {
     const nextModules = new Map<string, TestEnvironmentModuleReference>();
 
     for (const project of nextProjects) {

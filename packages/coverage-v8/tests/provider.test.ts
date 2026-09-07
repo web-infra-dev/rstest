@@ -88,7 +88,10 @@ const trackNativeMerge = (
 // whole type to `never`.
 type ProviderInternals = Omit<
   CoverageProvider,
-  'findInDict' | 'convertWithAst' | 'takeRawCoverage'
+  | 'findInDict'
+  | 'convertWithAst'
+  | 'takeRawCoverage'
+  | 'shouldKeepOriginalSource'
 > & {
   findInDict: (
     dict: Record<string, string> | undefined,
@@ -113,6 +116,7 @@ type ProviderInternals = Omit<
     transformedSource?: { code: string },
   ) => Promise<Record<string, FileCoverageData>>;
   takeRawCoverage: () => Promise<unknown[]>;
+  shouldKeepOriginalSource: (filePath: string, root?: string) => boolean;
 };
 
 function getProviderInternals(provider: CoverageProvider): ProviderInternals {
@@ -1110,6 +1114,57 @@ export default class CustomCoverageReporter {
       provider.findInDict(dict, '/private/tmp/project/src/private.ts'),
     ).toBe('private-prefix');
   });
+
+  it.each([
+    {
+      root: '/project',
+      excludedPath: '/project/.rstest-virtual/setup.mjs',
+      sourcePath: '/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
+    {
+      root: '/project',
+      excludedPath: '/Project/.rstest-virtual/Setup.mjs',
+      sourcePath: '/project/.rstest-virtual/setup.mjs',
+      matches: false,
+    },
+    {
+      root: 'C:/project',
+      excludedPath: 'C:/project/.rstest-virtual/setup.mjs',
+      sourcePath: 'c:/PROJECT/.rstest-virtual/SETUP.mjs',
+      matches: true,
+    },
+    {
+      root: 'C:/project',
+      excludedPath: 'C:\\Project\\.rstest-virtual\\Setup.mjs',
+      sourcePath: 'c:/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
+    {
+      root: '//server/share/project',
+      excludedPath: '//SERVER/SHARE/Project/.rstest-virtual/Setup.mjs',
+      sourcePath: '//server/share/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
+  ])(
+    'matches a late absolute exclusion for $sourcePath',
+    ({ root, excludedPath, sourcePath, matches = true }) => {
+      const options = createOptions();
+      const provider = getProviderInternals(
+        new CoverageProvider(options, root),
+      );
+
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(true);
+      options.exclude = [excludedPath];
+
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(
+        !matches,
+      );
+      expect(
+        provider.shouldKeepOriginalSource(`${sourcePath}.other`, root),
+      ).toBe(true);
+    },
+  );
 
   it('skips excluded no-sourcemap files before reading or converting them', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-early-filter');

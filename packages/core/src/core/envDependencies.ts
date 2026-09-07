@@ -32,6 +32,12 @@ type PackageInstaller = (
 
 type PackageInstalledChecker = (packageName: string, root: string) => boolean;
 
+type EnsureTestEnvironmentDependenciesOptions = {
+  confirm?: InstallPackageOptions['confirm'];
+  installer?: PackageInstaller;
+  isInstalled?: PackageInstalledChecker;
+};
+
 export const createTestEnvironmentLoadError = (
   packageName: string,
   root: string,
@@ -86,9 +92,11 @@ export const getTestEnvironmentResolutionRoots = (
 export const ensureTestEnvironmentDependencies = async (
   projects: ProjectWithTestEnvironment[],
   root: string,
-  options: InstallPackageOptions = {},
-  installer: PackageInstaller = installTestEnvironmentDependency,
-  isInstalled: PackageInstalledChecker = isPackageInstalled,
+  {
+    confirm,
+    installer = installTestEnvironmentDependency,
+    isInstalled = isPackageInstalled,
+  }: EnsureTestEnvironmentDependenciesOptions = {},
 ): Promise<void> => {
   const packages = new Map<string, EnvironmentDependency>();
 
@@ -124,8 +132,14 @@ export const ensureTestEnvironmentDependencies = async (
     }
   }
 
+  const installOptions = confirm ? { confirm } : {};
   for (const [packageName, dependency] of packages) {
-    await installer(packageName, root, dependency.environmentName, options);
+    await installer(
+      packageName,
+      root,
+      dependency.environmentName,
+      installOptions,
+    );
 
     if (
       !Array.from(dependency.roots).some((resolutionRoot) =>

@@ -14,7 +14,14 @@ export const CoverageProviderMap: Record<string, string> = {
 type CoverageProviderInstaller = (
   moduleName: string,
   root: string,
+  options?: InstallPackageOptions,
 ) => Promise<boolean>;
+
+type EnsureCoverageProviderOptions = {
+  confirm?: InstallPackageOptions['confirm'];
+  installer?: CoverageProviderInstaller;
+};
+
 export const installCoverageProvider = async (
   moduleName: string,
   root: string,
@@ -56,7 +63,10 @@ export const createCoverageProviderLoadError = (
 export const ensureCoverageProviderInstalled = async (
   options: CoverageOptions,
   root: string,
-  installer: CoverageProviderInstaller = installCoverageProvider,
+  {
+    confirm,
+    installer = installCoverageProvider,
+  }: EnsureCoverageProviderOptions = {},
 ): Promise<void> => {
   if (!options.enabled) {
     return;
@@ -67,7 +77,7 @@ export const ensureCoverageProviderInstalled = async (
     return;
   }
 
-  await installer(moduleName, root);
+  await installer(moduleName, root, confirm ? { confirm } : {});
 
   if (!isPackageInstalled(moduleName, root)) {
     throw createCoverageProviderLoadError(moduleName, root);

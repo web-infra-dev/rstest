@@ -4,8 +4,8 @@ import {
   sinkToRuntimeRpc,
 } from '../../src/core/runnerEventSink';
 import type {
-  ProjectContext,
-  RstestContext,
+  InternalContext,
+  InternalProjectContext,
   TestFileResult,
   UserConsoleLog,
 } from '../../src/types';
@@ -48,13 +48,13 @@ const makeContext = (
         calls.snapshotAdd.push(r);
       },
     },
-  } as unknown as RstestContext;
+  } as unknown as InternalContext;
 
   const projectConfig = {
     onConsoleLog: overrides.onConsoleLog,
     disableConsoleIntercept: overrides.disableConsoleIntercept ?? false,
     resolveSnapshotPath: overrides.resolveSnapshotPath,
-  } as unknown as ProjectContext['normalizedConfig'];
+  } as unknown as InternalProjectContext['normalizedConfig'];
 
   return { context, projectConfig, calls };
 };

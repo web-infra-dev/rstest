@@ -330,20 +330,32 @@ const waitForExpectation = async (
   const timeout = options?.timeout ?? DEFAULT_EXPECT_TIMEOUT;
   const deadline = getRealNow() + timeout;
   let lastError: unknown;
+  let firstAttempt = true;
 
-  while (getRealNow() <= deadline) {
+  while (true) {
+    const remaining = deadline - getRealNow();
+    if (!firstAttempt && remaining <= 0) {
+      break;
+    }
+
+    firstAttempt = false;
     try {
-      await runWithTimeout(check, Math.max(deadline - getRealNow(), 0));
+      await runWithTimeout(
+        check,
+        Number.isFinite(remaining) ? Math.max(remaining, 0) : 0,
+      );
       return;
     } catch (error) {
       lastError = error;
 
-      const remaining = deadline - getRealNow();
-      if (remaining <= 0) {
+      const remainingAfterCheck = deadline - getRealNow();
+      if (!Number.isFinite(remainingAfterCheck) || remainingAfterCheck <= 0) {
         break;
       }
 
-      await waitForRealTime(Math.min(EXPECT_POLL_INTERVAL, remaining));
+      await waitForRealTime(
+        Math.min(EXPECT_POLL_INTERVAL, remainingAfterCheck),
+      );
     }
   }
 

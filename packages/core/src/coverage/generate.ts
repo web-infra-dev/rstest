@@ -2,7 +2,7 @@ import type FS from 'node:fs';
 import { isAbsolute, normalize, relative } from 'pathe';
 import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { RstestContext } from '../types';
+import type { InternalContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -96,7 +96,7 @@ const filterExternalFiles = (
   return files.filter((file) => isSameOrSubPath(file, rootPath));
 };
 
-const getSetupCoverageExcludes = (context: RstestContext): Set<string> => {
+const getSetupCoverageExcludes = (context: InternalContext): Set<string> => {
   const setupFiles = context.projects.flatMap(
     ({ rootPath, normalizedConfig }) => {
       if (!normalizedConfig) {
@@ -176,7 +176,7 @@ export const filterChangedFiles = (
 };
 
 export async function generateCoverage(
-  context: RstestContext,
+  context: InternalContext,
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
   traceSpan: TraceSpan = noopTraceSpan,
@@ -363,12 +363,12 @@ export async function generateCoverage(
       if (!thresholdResult.success) {
         logger.log('');
         logger.stderr(thresholdResult.message);
-        process.exitCode = 1;
+        context.exitCode.raise(1);
       }
     }
   } catch (error) {
     logger.stderr('Failed to generate coverage reports:', error);
-    process.exitCode = 1;
+    context.exitCode.raise(1);
   }
 }
 

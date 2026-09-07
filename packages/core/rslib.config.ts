@@ -236,6 +236,18 @@ export default defineConfig({
   tools: {
     rspack: {
       ...rslibRspackConfig,
+      module: {
+        ...rslibRspackConfig.module,
+        rules: [
+          {
+            // `fakeTimers.ts` loads `@sinonjs/fake-timers` through
+            // `createRequire(import.meta.url)`; let Rspack bundle that call so
+            // the dependency stays in the chunk for the Node and browser targets.
+            test: /[\\/]runtime[\\/]api[\\/]fakeTimers\.ts$/,
+            parser: { createRequire: true },
+          },
+        ],
+      },
       watchOptions: {
         ignored: /\.git/,
       },

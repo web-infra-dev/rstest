@@ -1,14 +1,15 @@
-import type { RstestContext } from '../types';
+import type { InternalContext } from '../types';
 import { clearScreen, color, isTTY, logger } from '../utils';
 
-export const isCliShortcutsEnabled = (): boolean => isTTY('stdin');
+export const isCliShortcutsEnabled = (context: InternalContext): boolean =>
+  !context.embedded && isTTY('stdin');
 
 /**
  * Watch-ready banner printed after the initial run and every rerun. Shared by
  * the node watch loop and the browser watch host so the hint text cannot drift.
  */
 export const logWatchReadyMessage = (
-  context: RstestContext,
+  context: InternalContext,
   enableCliShortcuts: boolean,
 ): void => {
   logger.log(color.green('  Waiting for file changes...'));
@@ -253,7 +254,7 @@ export async function setupCliShortcuts({
         try {
           await closeServer();
         } finally {
-          process.exit(process.exitCode ?? 0);
+          process.exit();
         }
       },
     },

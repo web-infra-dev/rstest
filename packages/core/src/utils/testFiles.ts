@@ -56,9 +56,7 @@ export const filterFiles = (
   mode: FileFilterMode = 'fuzzy',
 ): string[] => {
   if (!filters.length) {
-    // `exact` mode: an empty filter list matches zero files; `fuzzy` mode keeps
-    // the "no filter = all files" convenience.
-    return mode === 'exact' ? [] : testFiles;
+    return [];
   }
 
   const fileFilters =
@@ -153,7 +151,7 @@ export const getTestEntries = async ({
   include: string[];
   exclude: string[];
   includeSource: string[];
-  fileFilters: string[];
+  fileFilters?: string[];
   fileFilterMode?: FileFilterMode;
   projectRoot: string;
 }): Promise<Record<string, string>> => {
@@ -207,12 +205,13 @@ export const getTestEntries = async ({
   }
 
   return Object.fromEntries(
-    filterFiles(testFiles, fileFilters, rootPath, fileFilterMode).map(
-      (entry) => {
-        const relativePath = pathe.relative(rootPath, entry);
-        return [formatTestEntryName(relativePath), entry];
-      },
-    ),
+    (fileFilters === undefined
+      ? testFiles
+      : filterFiles(testFiles, fileFilters, rootPath, fileFilterMode)
+    ).map((entry) => {
+      const relativePath = pathe.relative(rootPath, entry);
+      return [formatTestEntryName(relativePath), entry];
+    }),
   );
 };
 

@@ -2,8 +2,8 @@ import type {
   BrowserHostModule,
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  InternalContext,
   ListBrowserTestsOptions,
-  RstestContext,
 } from '@rstest/core/internal/browser';
 import { createBrowserExecutor } from './browserExecutor';
 import { validateBrowserConfig } from './configValidation';
@@ -16,14 +16,14 @@ import {
 export { createBrowserExecutor, validateBrowserConfig };
 
 export async function runBrowserTests(
-  context: RstestContext,
+  context: InternalContext,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   return runBrowserController(context, options);
 }
 
 export async function listBrowserTests(
-  context: RstestContext,
+  context: InternalContext,
   options?: ListBrowserTestsOptions,
 ): Promise<ListBrowserTestsResult> {
   // Forward `options` (e.g. `shardedEntries`) so `rstest list --shard` lists

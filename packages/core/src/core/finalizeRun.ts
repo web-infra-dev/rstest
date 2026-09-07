@@ -10,13 +10,13 @@ import {
   logger,
   type TraceRun,
 } from '../utils';
-import type { RstestContext } from '../types';
+import type { InternalContext } from '../types';
 
 export const reportNoTestFiles = ({
   context,
   mode = 'all',
 }: {
-  context: RstestContext;
+  context: InternalContext;
   mode?: 'all' | 'on-demand';
 }): void => {
   if (context.command === 'watch') {
@@ -39,18 +39,7 @@ export const reportNoTestFiles = ({
       logger.error(color.red(message));
     }
 
-    // `process.exitCode` mutations here (and in deeper layers such as
-    // globalSetup teardown, coverage threshold checks) are restored to their
-    // pre-run value by `runRstest` in the embedded path via try/finally, so
-    // we don't need to gate them per-call site. Never-downgrade: a zero code
-    // (passWithNoTests) must not clear a prior non-zero code.
-    if (
-      code !== 0 ||
-      process.exitCode === undefined ||
-      process.exitCode === 0
-    ) {
-      process.exitCode = code;
-    }
+    context.exitCode.raise(code);
   }
 
   if (mode === 'all') {
@@ -86,7 +75,7 @@ export const reportNoTestFiles = ({
 };
 
 export const notifyReportersOnTestRunStart = async (
-  context: RstestContext,
+  context: InternalContext,
 ): Promise<void> => {
   for (const reporter of context.reporters) {
     await reporter.onTestRunStart?.();
@@ -101,7 +90,7 @@ export const notifyReportersOnTestRunEnd = async ({
   unhandledErrors,
   filterRerunTestPaths,
 }: {
-  context: RstestContext;
+  context: InternalContext;
   coverage?: CoverageMap;
   duration: Duration;
   getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
@@ -188,7 +177,7 @@ export const runLifecycleStep = async <T>(
  * reporter `onTestRunEnd`, exit code, and the bail message.
  */
 export async function finalizeRunCycle(
-  context: RstestContext,
+  context: InternalContext,
   {
     outcomes,
     mode,
@@ -295,11 +284,8 @@ export async function finalizeRunCycle(
     reportNoTestFiles({ context, mode });
   }
 
-  // Never-downgrade: a failure raises the code to 1 only when nothing has
-  // already set a non-zero code (matches the browser host's
-  // `ensureProcessExitCode`), so a pre-set exit code survives.
-  if (isFailure && (process.exitCode === undefined || process.exitCode === 0)) {
-    process.exitCode = 1;
+  if (isFailure) {
+    context.exitCode.raise(1);
   }
 
   await runLifecycleStep('reporter onTestRunEnd', () =>
