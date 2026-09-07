@@ -11,7 +11,7 @@ const parsePayload = (stdout: string) =>
   parseMarkerPayload<Record<string, any>>(stdout, '__RSTEST_API_RESULT__');
 
 describe('programmatic createRstest', () => {
-  it('uses inline config and contains build failures in run results', async ({
+  it('uses inline config and rejects build failures', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -44,7 +44,7 @@ describe('programmatic createRstest', () => {
     expect(result.unhandledErrors).toEqual([]);
     expect(result.duration.hasTotal).toBe(true);
     expect(result.snapshotPresent).toBe(true);
-    expect(result.buildFailure.status).toBe('error');
+    expect(result.buildFailure.status).toBe('rejected');
     expect(result.buildFailure.message).toContain(
       'programmatic build exploded',
     );
@@ -180,10 +180,10 @@ describe('programmatic createRstest', () => {
       'Failed to load coverage provider module: @rstest/coverage-istanbul';
 
     expect(execution.exitCode).toBe(0);
-    expect(result.run).toMatchObject({ status: 'error' });
+    expect(result.run).toMatchObject({ status: 'rejected' });
     expect(result.run.message).toContain(dependencyMessage);
     expect(result.watch.message).toContain(dependencyMessage);
-    expect(result.mergeReports).toMatchObject({ status: 'error' });
+    expect(result.mergeReports).toMatchObject({ status: 'rejected' });
     expect(result.mergeReports.message).toContain(dependencyMessage);
     expect(cli.log).not.toContain('Install it now?');
     expect(cli.log).not.toContain('Installing ');

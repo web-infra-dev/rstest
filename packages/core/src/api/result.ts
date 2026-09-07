@@ -134,7 +134,6 @@ const createResult = (
 export type ResultReporter = {
   reporter: Reporter;
   nextResult(): Promise<TestRunResult>;
-  errorResult(error: unknown): TestRunResult;
 };
 
 export function createResultReporter(
@@ -194,25 +193,5 @@ export function createResultReporter(
       new Promise<TestRunResult>((resolve) => {
         resolveResult = resolve;
       }),
-    errorResult(error) {
-      const failedCycle: CapturedCycle = captured ?? {
-        files: cycleFiles,
-        unhandledErrors: [],
-        duration: { total: 0 },
-        snapshot: context.snapshotManager.summary,
-      };
-      failedCycle.unhandledErrors.unshift(toSerializedError(error));
-      return createResult(context, failedCycle);
-    },
-  };
-}
-
-export function createErrorResult(error: unknown): TestRunResult {
-  return {
-    status: 'error',
-    files: [],
-    summary: computeSummary([]),
-    unhandledErrors: [toSerializedError(error)],
-    duration: { total: 0 },
   };
 }

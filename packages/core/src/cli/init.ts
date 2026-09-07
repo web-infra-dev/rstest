@@ -625,6 +625,19 @@ ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n
   return projects;
 }
 
+export function applyAgentReporterDefault(
+  config: RstestConfig,
+  options: CommonOptions,
+): void {
+  if (
+    determineAgent().isAgent &&
+    !options.reporters &&
+    config.reporters == null
+  ) {
+    config.reporters = ['md'];
+  }
+}
+
 export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
   configFilePath?: string;
@@ -637,15 +650,7 @@ export async function initCli(options: CommonOptions): Promise<{
     source: { type: 'discover' },
     options,
     cwd,
-    tweakConfig: (config) => {
-      if (
-        determineAgent().isAgent &&
-        !options.reporters &&
-        config.reporters == null
-      ) {
-        config.reporters = ['md'];
-      }
-    },
+    tweakConfig: (config) => applyAgentReporterDefault(config, options),
   });
 
   return {
