@@ -24,6 +24,7 @@ import {
   ROOT_SUITE_NAME,
 } from '../utils';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
+import { createListTestsError, type ListTestsError } from './listTestsError';
 import { createResultReporter, type ResultReporter } from './result';
 import type {
   CreateRstestOptions,
@@ -281,26 +282,30 @@ export async function createRstestInstance(
     async listTests(
       listOptions: ListOptions & RunOptions = {},
     ): Promise<ListedTest[]> {
-      const commonOptions = {
-        ...toCommonOptions(listOptions),
-        shard: undefined,
-        includeTaskLocation: listOptions.includeLocation,
-      };
-      return withEngine(
-        'list',
-        { ...listOptions, shard: undefined },
-        commonOptions,
-        async (engine) => {
-          const result = await engine.listTests({
-            filesOnly: listOptions.filesOnly,
-          });
-          await result.close();
-          if (engine.context.exitCode.current !== 0) {
-            throw new Error('Failed to list tests.');
+      const commonOptions = toCommonOptions(listOptions);
+      return withEngine('list', listOptions, commonOptions, async (engine) => {
+        const result = await engine.listTests({
+          filesOnly: listOptions.filesOnly,
+        });
+        let collectionError: ListTestsError | undefined;
+        try {
+          if (
+            result.list.some((file) => file.errors?.length) ||
+            result.errors.length
+          ) {
+            collectionError = await createListTestsError(result);
           }
-          return flattenListedTests(result.list, listOptions);
-        },
-      );
+        } finally {
+          await result.close();
+        }
+        if (collectionError) {
+          throw collectionError;
+        }
+        if (engine.context.exitCode.current !== 0) {
+          throw new Error('Failed to list tests.');
+        }
+        return flattenListedTests(result.list, listOptions);
+      });
     },
 
     async mergeReports(

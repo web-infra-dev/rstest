@@ -225,6 +225,28 @@ describe('test projects', () => {
     });
   });
 
+  it('omits project metadata when list selects one configured project', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--json',
+        '--summary',
+        '--project',
+        'client-node',
+        '--globals',
+      ],
+      options: { nodeOptions: { cwd: join(__dirname, 'fixtures') } },
+    });
+    await expectExecSuccess();
+    const json = JSON.parse(cli.stdout);
+    expect(json.summary.files).toBeGreaterThan(0);
+    expect(json.summary).not.toHaveProperty('projects');
+    for (const item of json.items) {
+      expect(item).not.toHaveProperty('project');
+    }
+  });
+
   it('should run projects with extends correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

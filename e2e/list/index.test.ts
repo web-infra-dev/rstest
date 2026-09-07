@@ -62,6 +62,25 @@ describe('test list command', () => {
     `);
   });
 
+  it('should report collection errors with source locations', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['list'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures-collection-error'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain('FAIL  collection-error.test.ts');
+    expect(cli.stderr).toContain('collection failed from helper');
+    expect(cli.stderr).toContain('error-source.ts:1');
+  });
+
   it('should list tests correctly with file filter', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

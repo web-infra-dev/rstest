@@ -324,21 +324,21 @@ const rstest = await createRstest({
 
 const tests = await rstest.listTests({
   includeSuites: true,
-  includeLocation: true,
+  includeTaskLocation: true,
 });
 
 console.log(tests);
 ```
 
-Set `filesOnly` to skip collecting declarations. `includeSuites` includes named suites as separate entries. `includeLocation` adds source locations.
+Set `filesOnly` to skip collecting declarations. `includeSuites` includes named suites as separate entries. `includeTaskLocation` from `RunOptions` adds source locations.
 
 Every entry includes `testPath` and `project`. Entries from the implicit default project use `config.name` (`'rstest'` by default). Declaration entries include their own `name`, a suite-prefixed `fullName`, and `parentNames` for the hierarchy; file entries omit `name` and `fullName`. Skipped and todo declarations are included with `runMode` set to `skip` or `todo`; runnable declarations omit `runMode`.
 
 Entries are returned in depth-first declaration order. A suite immediately precedes its descendants, and all entries from one file stay contiguous.
 
-`rstest.listTests()` rejects when collection fails instead of returning a partial or empty list.
+`rstest.listTests()` rejects with `ListTestsError` when collection fails instead of returning a partial or empty list.
 
-`rstest.listTests()` ignores `shard` and always lists every file, unlike `rstest list --shard`, which lists only the selected shard.
+`shard` applies only when passed explicitly to `rstest.listTests()`, limiting the result to the selected shard. When it is omitted, every file is listed; a `shard` value from the instance config is dropped as before.
 
 ### ListOptions
 
@@ -348,7 +348,6 @@ Entries are returned in depth-first declaration order. A suite immediately prece
 interface ListOptions {
   filesOnly?: boolean;
   includeSuites?: boolean;
-  includeLocation?: boolean;
 }
 
 interface ListedTest {

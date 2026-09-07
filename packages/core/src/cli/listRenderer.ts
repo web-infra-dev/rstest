@@ -1,20 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { relative } from 'pathe';
-import type {
-  ListCommandCollectOptions,
-  ListCommandCollectionResult,
-  Location,
-  TestInfo,
-} from '../types';
-import {
-  bgColor,
-  color,
-  getTaskNameWithPrefix,
-  logger,
-  prettyTestPath,
-  ROOT_SUITE_NAME,
-} from '../utils';
+import type { ListedTest } from '../api/types';
+import type { ListCommandCollectOptions, Location } from '../types';
+import { color, logger, prettyTestPath } from '../utils';
 
 export type ListCommandOptions = ListCommandCollectOptions & {
   includeSuites?: boolean;
@@ -136,101 +125,36 @@ const createListSummaryPayload = ({
 };
 
 export async function renderListTests(
-  result: ListCommandCollectionResult,
+  list: ListedTest[],
   {
     rootPath,
+    showProject,
     filesOnly,
     json,
     printLocation,
     includeSuites,
     summary,
-  }: ListCommandOptions & { rootPath: string },
+  }: ListCommandOptions & { rootPath: string; showProject: boolean },
 ): Promise<void> {
-  const { list, errors, showProject, getSourceMap } = result;
-  const hasError = list.some((file) => file.errors?.length) || errors.length;
-  if (hasError) {
-    const { printError } = await import('../utils/error');
-    for (const file of list) {
-      const relativePath = relative(rootPath, file.testPath);
-
-      if (file.errors?.length) {
-        //  FAIL  tests/index.test.ts
-        logger.log(`${bgColor('bgRed', ' FAIL ')} ${relativePath}`);
-
-        for (const error of file.errors) {
-          await printError(
-            error,
-            async (name) => {
-              const sourceMap = await getSourceMap(name);
-              return sourceMap ? JSON.parse(sourceMap) : null;
-            },
-            rootPath,
-          );
-        }
-      }
-    }
-
-    if (errors.length) {
-      const { printError } = await import('../utils/error');
-      for (const error of errors || []) {
-        logger.stderr(bgColor('bgRed', ' Unhandled Error '));
-        await printError(
-          error,
-          async (name) => {
-            const sourceMap = await getSourceMap(name);
-            return sourceMap ? JSON.parse(sourceMap) : null;
-          },
-          rootPath,
-        );
-      }
-    }
-    return;
-  }
-
   const tests: InternalListedTest[] = [];
-
-  const traverseTests = (test: TestInfo) => {
-    if (['skip', 'todo'].includes(test.runMode)) {
-      return;
+  for (const test of list) {
+    if (test.runMode === 'skip' || test.runMode === 'todo') {
+      continue;
     }
-
-    if (
-      test.type === 'case' ||
-      (includeSuites && test.type === 'suite' && test.name !== ROOT_SUITE_NAME)
-    )
+    if (filesOnly) {
       tests.push({
         file: test.testPath,
-        name: getTaskNameWithPrefix(test),
+        project: showProject ? test.project : undefined,
+        type: 'file',
+      });
+    } else {
+      tests.push({
+        file: test.testPath,
+        name: test.fullName,
         location: test.location,
         type: test.type,
         project: showProject ? test.project : undefined,
       });
-
-    if (test.type === 'suite') {
-      for (const child of test.tests) {
-        traverseTests(child);
-      }
-    }
-  };
-
-  for (const file of list) {
-    if (filesOnly) {
-      if (showProject) {
-        tests.push({
-          file: file.testPath,
-          project: file.project,
-          type: 'file',
-        });
-      } else {
-        tests.push({
-          file: file.testPath,
-          type: 'file',
-        });
-      }
-      continue;
-    }
-    for (const test of file.tests) {
-      traverseTests(test);
     }
   }
 

@@ -324,21 +324,21 @@ const rstest = await createRstest({
 
 const tests = await rstest.listTests({
   includeSuites: true,
-  includeLocation: true,
+  includeTaskLocation: true,
 });
 
 console.log(tests);
 ```
 
-设置 `filesOnly` 可跳过声明收集。`includeSuites` 会将具名测试套件作为独立条目返回。`includeLocation` 会加入源码位置。
+设置 `filesOnly` 可跳过声明收集。`includeSuites` 会将具名测试套件作为独立条目返回。`RunOptions` 中的 `includeTaskLocation` 会加入源码位置。
 
 每个条目都包含 `testPath` 和 `project`。隐式默认项目的条目使用 `config.name`（默认为 `'rstest'`）。测试声明条目包含自身的 `name`、带测试套件前缀的 `fullName`，以及表示层级的 `parentNames`；文件条目不包含 `name` 和 `fullName`。标记为 `skip` 或 `todo` 的声明也会返回，`runMode` 分别为 `skip` 或 `todo`；可运行声明不提供 `runMode`。
 
 条目按深度优先的声明顺序返回。测试套件紧邻其后代之前，同一文件的所有条目保持连续。
 
-收集失败时，`rstest.listTests()` 返回的 Promise 会被拒绝，而不是返回部分列表或空列表。
+收集失败时，`rstest.listTests()` 返回的 Promise 会以 `ListTestsError` 拒绝，而不是返回部分列表或空列表。
 
-`rstest.listTests()` 会忽略 `shard` 并始终列出所有文件；`rstest list --shard` 则只列出选定分片。
+只有显式传给 `rstest.listTests()` 的 `shard` 才会生效，并将结果限制在选定分片。省略 `shard` 时会列出所有文件；实例配置中的 `shard` 仍会像以前一样被丢弃。
 
 ### ListOptions
 
@@ -348,7 +348,6 @@ console.log(tests);
 interface ListOptions {
   filesOnly?: boolean;
   includeSuites?: boolean;
-  includeLocation?: boolean;
 }
 
 interface ListedTest {

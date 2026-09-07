@@ -1,7 +1,16 @@
 import cac, { type CAC, type Command } from 'cac';
+import { relative } from 'pathe';
 import type { RstestInstance } from '../types';
 import type { RunOptions } from '../api/types';
-import { color, determineAgent, formatError, isTTY, logger } from '../utils';
+import {
+  bgColor,
+  color,
+  determineAgent,
+  filterProjects,
+  formatError,
+  isTTY,
+  logger,
+} from '../utils';
 import { buildResolvedRunner, isRelatedRun } from '../core/buildRunner';
 import { exitReporters } from '../reporter';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
@@ -766,37 +775,75 @@ export function createCli(): CAC {
   applyOptions(listCommand, listCommandOptionDefinitions);
   listCommand.action(
     async (filters: string[], options: CommonOptions & ListCommandOptions) => {
+      const cwd = process.cwd();
+      let rootPath = cwd;
       try {
-        const { inputs, createRstest } = await resolveCliRuntime(options);
-
-        if (options.printLocation) {
-          inputs.config.includeTaskLocation = true;
+        const [
+          { loadCliConfig, applyAgentReporterDefault },
+          { createRstestInstance },
+        ] = await Promise.all([
+          import('./init'),
+          import('../api/createRstest'),
+        ]);
+        const loaded = await loadCliConfig(options, cwd);
+        if (options.root !== undefined) {
+          loaded.content.root = options.root;
         }
-
-        const rstest = await buildResolvedRunner({
-          inputs,
-          options,
-          command: 'list',
-          filters: filters.length ? filters : undefined,
-          createRstestContext: createRstest,
-        });
-
+        applyAgentReporterDefault(loaded.content, options);
+        const rstest = await createRstestInstance(
+          { cwd, config: loaded, configLoader: options.configLoader },
+          { embedded: false, trace: options.trace, ...cliHostRuntime() },
+        );
+        rootPath = rstest.context.rootPath;
+        const {
+          filesOnly,
+          includeSuites,
+          printLocation,
+          json,
+          summary,
+          ...commonOptions
+        } = options;
         const result = await rstest.listTests({
-          filesOnly: options.filesOnly,
+          ...toRunOptions(commonOptions),
+          filters: filters.length ? filters : undefined,
+          filesOnly,
+          includeTaskLocation: printLocation || options.includeTaskLocation,
+          includeSuites,
         });
-        try {
-          await renderListTests(result, {
-            rootPath: rstest.context.rootPath,
-            filesOnly: options.filesOnly,
-            json: options.json,
-            includeSuites: options.includeSuites,
-            printLocation: options.printLocation,
-            summary: options.summary,
-          });
-        } finally {
-          await result.close();
-        }
+        await renderListTests(result, {
+          rootPath,
+          // Public context keeps all configured projects; selection precedes planning.
+          showProject:
+            filterProjects(
+              rstest.context.projects.map((project) => ({
+                config: { name: project.name },
+              })),
+              commonOptions,
+            ).length > 1,
+          filesOnly,
+          json,
+          includeSuites,
+          printLocation,
+          summary,
+        });
       } catch (err) {
+        const { ListTestsError } = await import('../api/listTestsError');
+        if (err instanceof ListTestsError) {
+          const { printError } = await import('../utils/error');
+          for (const file of err.files) {
+            logger.log(
+              `${bgColor('bgRed', ' FAIL ')} ${relative(rootPath, file.testPath)}`,
+            );
+            for (const error of file.errors) {
+              await printError(error, async () => null, rootPath);
+            }
+          }
+          for (const error of err.unhandledErrors) {
+            logger.stderr(bgColor('bgRed', ' Unhandled Error '));
+            await printError(error, async () => null, rootPath);
+          }
+          process.exit(1);
+        }
         logger.error('Failed to run Rstest list.');
         logger.error(formatError(err));
         process.exit(1);
