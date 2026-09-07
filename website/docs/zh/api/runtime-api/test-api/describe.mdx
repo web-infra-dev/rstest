@@ -158,8 +158,12 @@ describe.todo('should implement this suite');
 - **类型：**
 
 ```ts
-describe.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+// Every row is an array: the row is spread into the arguments
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 为数组中的每一项生成一个 describe 块。与 `describe` 一样，它的第二个参数可选地接受一个 [`TestOptions`](#testoptions) 对象，并作用于生成的每个套件。
@@ -174,6 +178,8 @@ describe.each([
   });
 });
 ```
+
+只有当表格的每一行都是数组时，行才会展开成套件函数的多个参数。只要有一行不是数组，每一行都会整体作为单个参数传入，混合表中的数组行会原样传给套件函数。
 
 你也可以使用标签模板字面量的表格语法：
 

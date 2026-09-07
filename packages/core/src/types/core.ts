@@ -1,5 +1,7 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
+import type { RstestExitCode } from '../core/exitCode';
 import type { TestStateManager } from '../core/stateManager';
+import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import type {
   EnvironmentName,
   NormalizedConfig,
@@ -25,7 +27,7 @@ export type FileFilterMode = 'fuzzy' | 'exact';
 
 export type Project = { config: RstestConfig; configFilePath?: string };
 
-export type ProjectContext = {
+export type InternalProjectContext = {
   name: string;
   environmentName: string;
   _environmentGroup?: {
@@ -64,7 +66,7 @@ export type RstestTestState = {
   getTestFiles: () => string[] | undefined;
 };
 
-export type RstestContext = {
+export type InternalContext = {
   /** The Rstest core version. */
   version: string;
   /** The root path of rstest. */
@@ -94,7 +96,7 @@ export type RstestContext = {
   /**
    * Run tests from one or more projects.
    */
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
 
   /**
    * The test state
@@ -117,6 +119,18 @@ export type RstestContext = {
   trace: boolean;
   /** See the `embedded` option on `createRstest`. */
   embedded: boolean;
+  /** Run-local exit status. CLI code may mirror it to the host process. */
+  exitCode: RstestExitCode;
+  /** Environment changes produced by this context's global setup hooks. */
+  workerEnv: Record<string, string | undefined>;
+  /** Global teardown callbacks owned by this context. */
+  globalTeardownCallbacks: Array<
+    () => boolean | void | Promise<boolean | void>
+  >;
+  /** CLI-owned confirmation hook for optional dependency installation. */
+  packageInstallerConfirm?: PackageInstallerConfirm;
+  /** Active watch-session closer for programmatic hosts. */
+  closeWatchSession?: () => Promise<void>;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;
@@ -148,7 +162,7 @@ export type ListCommandResult = {
 };
 
 export type RstestInstance = {
-  context: RstestContext;
+  context: InternalContext;
   runTests: () => Promise<void>;
   listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
   mergeReports: (options?: {

@@ -189,6 +189,7 @@ tinyexec
 tinyglobby
 tinyrainbow
 tinyspy
+Trae
 transpiling
 treeshaking
 tsbuildinfo

@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "2.9.0",
-    "@rsbuild/core": "~2.2.0",
+    "@rsbuild/core": "~2.2.2",
     "serve": "14.2.6"
   }
 }

@@ -5,9 +5,9 @@ import {
   executorCapabilities,
 } from '../../src/core/executorCapabilities';
 import { projectRuntimeConfig } from '../../src/core/runtimeConfigProjection';
-import type { ProjectContext, RuntimeConfig } from '../../src/types';
+import type { InternalProjectContext, RuntimeConfig } from '../../src/types';
 
-const makeProject = (): ProjectContext =>
+const makeProject = (): InternalProjectContext =>
   ({
     normalizedConfig: {
       testNamePattern: undefined,
@@ -37,7 +37,7 @@ const makeProject = (): ProjectContext =>
       includeTaskLocation: false,
       silent: false,
     },
-  }) as unknown as ProjectContext;
+  }) as unknown as InternalProjectContext;
 
 describe('executorCapabilities', () => {
   it('assigns a valid status to every RuntimeConfig field for both executors', () => {

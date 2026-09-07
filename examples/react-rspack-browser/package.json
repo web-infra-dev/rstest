@@ -14,15 +14,15 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@rspack/cli": "~2.2.0",
-    "@rspack/core": "~2.2.0",
-    "@rspack/dev-server": "~2.2.0",
+    "@rspack/cli": "~2.2.2",
+    "@rspack/core": "~2.2.2",
+    "@rspack/dev-server": "~2.2.1",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "playwright": "^1.62.1",
     "typescript": "^6.0.3"
   }

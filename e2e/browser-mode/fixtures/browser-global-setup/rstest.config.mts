@@ -6,9 +6,9 @@ import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 process.stdin.isTTY = true;
 process.stdin.setRawMode = () => process.stdin;
 
-// Phase 5 step 5 gate: a browser-only run must execute `globalSetup` on the
-// host and propagate its `process.env` changes into the browser runtime env
-// store, with explicit `test.env` config still taking precedence.
+// A browser-only run propagates the isolated `globalSetup` worker's env changes
+// into the browser runtime store, with explicit `test.env` config still taking
+// precedence.
 export default defineConfig({
   browser: {
     enabled: true,

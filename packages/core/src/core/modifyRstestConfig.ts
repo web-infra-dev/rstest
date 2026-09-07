@@ -8,11 +8,11 @@ import type {
 import { mergeRstestConfig } from '../config';
 import type {
   EnvironmentWithOptions,
+  InternalContext,
+  InternalProjectContext,
   ModifyRstestConfigCallback,
   NormalizedConfig,
   NormalizedProjectConfig,
-  ProjectContext,
-  RstestContext,
   RstestExposeAPI,
 } from '../types';
 import {
@@ -34,7 +34,9 @@ type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 type InitModifyRstestConfigHooksOptions = {
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: (applied: boolean) => Promise<void>;
-  getEnvironmentConfig?: (project: ProjectContext) => RstestEnvironmentConfig;
+  getEnvironmentConfig?: (
+    project: InternalProjectContext,
+  ) => RstestEnvironmentConfig;
   appliedEnvironmentNames?: Set<string>;
 };
 
@@ -336,7 +338,7 @@ const normalizeMutableConfigFields = (
   config: NormalizedProjectConfig,
   previousConfig: NormalizedProjectConfig,
   environmentName: string,
-  context: RstestContext,
+  context: InternalContext,
   configFilePath: string | undefined,
 ): void => {
   const configWithDistPath = config as NormalizedProjectConfigWithDistPath;
@@ -434,7 +436,7 @@ const normalizeMutableConfigFields = (
   );
 };
 
-const syncProjectDerivedFields = (project: ProjectContext): void => {
+const syncProjectDerivedFields = (project: InternalProjectContext): void => {
   project.rootPath = project.normalizedConfig.root || project.rootPath;
   project.outputModule = project.normalizedConfig.federation
     ? false
@@ -460,20 +462,20 @@ const isUserRstestConfigPlugin = (plugin: unknown): boolean => {
 };
 
 export const getUserRstestConfigPluginProjects = (
-  projects: ProjectContext[],
-): ProjectContext[] =>
+  projects: InternalProjectContext[],
+): InternalProjectContext[] =>
   projects.filter((project) =>
     project.normalizedConfig.plugins?.some(isUserRstestConfigPlugin),
   );
 
 export const hasUserRstestConfigPlugins = (
-  projects: ProjectContext[],
+  projects: InternalProjectContext[],
 ): boolean => getUserRstestConfigPluginProjects(projects).length > 0;
 
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
-  context: RstestContext,
-  project: ProjectContext,
+  context: InternalContext,
+  project: InternalProjectContext,
   callbacks: ModifyRstestConfigCallback[],
 ): Promise<NormalizedProjectConfig> => {
   let currentConfig = config;
@@ -523,8 +525,8 @@ const applyModifyRstestConfig = async (
 };
 
 const applyProjectModifyRstestConfig = async (
-  context: RstestContext,
-  project: ProjectContext,
+  context: InternalContext,
+  project: InternalProjectContext,
   callbacks: ModifyRstestConfigCallback[] | undefined,
 ): Promise<void> => {
   if (!callbacks?.length) {
@@ -542,7 +544,7 @@ const applyProjectModifyRstestConfig = async (
 };
 
 export const getRsbuildEnvironmentConfig = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): RstestEnvironmentConfig => ({
   plugins: project.normalizedConfig.plugins,
   root: project.rootPath,
@@ -552,8 +554,8 @@ export const getRsbuildEnvironmentConfig = (
 });
 
 const createRstestExposeAPI = (
-  context: RstestContext,
-  project: ProjectContext,
+  context: InternalContext,
+  project: InternalProjectContext,
   modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
 ): RstestExposeAPI => ({
   getRstestConfig: () =>
@@ -591,10 +593,10 @@ const createRstestExposeAPI = (
 });
 
 export const initModifyRstestConfigHooks = (
-  context: RstestContext,
+  context: InternalContext,
   rsbuildInstance: RsbuildInstance,
-  projects: ProjectContext[],
-  exposeProjects: ProjectContext[] = projects,
+  projects: InternalProjectContext[],
+  exposeProjects: InternalProjectContext[] = projects,
   options: InitModifyRstestConfigHooksOptions = {},
 ): void => {
   const {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 
 describe(`browser globalSetup env propagation (${import.meta.env.RSTEST_E2E_GS})`, () => {
-  it('reads env changes made by globalSetup on the host', () => {
+  it('reads env changes made by globalSetup', () => {
     console.log('[browser-global-setup-test] running');
 
     expect(import.meta.env.RSTEST_E2E_GS).toBe('from-global-setup');

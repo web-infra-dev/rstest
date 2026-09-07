@@ -1,4 +1,4 @@
-import type { ProjectContext, ProjectEntries } from '../types';
+import type { InternalProjectContext, ProjectEntries } from '../types';
 import { groupProjectEntriesByEnvironment } from './environmentGroups';
 import { isBrowserProject } from './isBrowserProject';
 
@@ -18,17 +18,17 @@ export const resolveRunnableProjectsByEntries = async ({
   ignoreInvalidEnvironmentComments = false,
   skipEmptyProjects = true,
 }: {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   globTestSourceEntries: GlobTestSourceEntries;
   groupEnvironmentComments?: boolean;
   ignoreInvalidEnvironmentComments?: boolean;
   skipEmptyProjects?: boolean;
 }): Promise<{
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
-  browserProjectsToRun: ProjectContext[];
-  nodeProjectsToRun: ProjectContext[];
+  browserProjectsToRun: InternalProjectContext[];
+  nodeProjectsToRun: InternalProjectContext[];
 }> => {
   await Promise.all(
     projects.map((project) => globTestSourceEntries(project.environmentName)),
@@ -36,7 +36,7 @@ export const resolveRunnableProjectsByEntries = async ({
 
   const browserProjects = projects.filter(isBrowserProject);
   if (!groupEnvironmentComments) {
-    const shouldRunProject = (project: ProjectContext): boolean =>
+    const shouldRunProject = (project: InternalProjectContext): boolean =>
       !skipEmptyProjects || hasEntries(entriesCache, project.environmentName);
 
     return {
@@ -70,7 +70,7 @@ export const resolveRunnableProjectsByEntries = async ({
   const resolvedProjects = grouped.changed
     ? [...browserProjects, ...grouped.projects]
     : projects;
-  const shouldRunProject = (project: ProjectContext): boolean =>
+  const shouldRunProject = (project: InternalProjectContext): boolean =>
     !skipEmptyProjects ||
     hasEntries(resolvedEntriesCache, project.environmentName);
 

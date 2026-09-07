@@ -7,9 +7,9 @@ import {
   type ExecutorCycleOutcome,
   type ExecutorInvalidationCallback,
   type ExecutorRunCycleOptions,
+  type InternalContext,
   type ListCommandResult,
   logger,
-  type RstestContext,
   type TestFileResult,
 } from '@rstest/core/internal/browser';
 import { listBrowserTests, runBrowserController } from './hostController';
@@ -37,7 +37,7 @@ const emptyOutcome = (): ExecutorCycleOutcome => ({
  * finalizes, so this adapter never touches reporters or the exit code.
  */
 export async function createBrowserExecutor(
-  context: RstestContext,
+  context: InternalContext,
   options: CreateBrowserExecutorOptions,
 ): Promise<BrowserTestExecutor> {
   const {

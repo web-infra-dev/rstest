@@ -1,6 +1,6 @@
 ---
 name: api-doc-sync
-description: Verify hand-written API doc signatures match the exported types. Use after changing a public type in packages/core/src/types/, editing a `**Type:**`/`**类型：**` block in website/docs, or reviewing signature drift.
+description: Verify hand-written API doc signatures match the exported types. Use after changing a public type in packages/core/src/types/ or packages/core/src/api/types.ts, editing a `**Type:**`/`**类型：**` block in website/docs, or reviewing signature drift.
 metadata:
   internal: true
 ---
@@ -15,13 +15,14 @@ both: it grounds every documented signature in the actual source type and the
 `tsc` oracle instead of trusting the prose.
 
 > **Core rule — verify, never recall.** Read the type from
-> `packages/core/src/types/*.ts` (and, when built, the emitted `.d.ts`) and let
-> `tsc` decide. Never judge a signature from memory or from the doc's own prose.
+> `packages/core/src/types/*.ts` or `packages/core/src/api/types.ts` (and, when
+> built, the emitted `.d.ts`) and let `tsc` decide. Never judge a signature from
+> memory or from the doc's own prose.
 
 ## When to run
 
-- A public type in `packages/core/src/types/` changed (e.g. `api.ts`,
-  `config.ts`, `mock.ts`, `runner.ts`).
+- A public type in `packages/core/src/types/` (e.g. `api.ts`, `config.ts`,
+  `mock.ts`, `runner.ts`) or `packages/core/src/api/types.ts` changed.
 - A `**Type:**` / `**类型：**` block, or the prose describing a type's fields,
   was edited in `website/docs/**/api/**`.
 - Reviewing a PR that touches either side.
@@ -48,11 +49,11 @@ machine-readable inventory of all blocks.
 For each documented symbol whose page changed (or whose type changed):
 
 1. **Find the source of truth.** Locate the exported type in
-   `packages/core/src/types/` (start from `types/index.ts` re-exports). Read its
-   real shape: every overload, parameter order, optionality, generics, and
-   union members. Prefer the built `dist/**/*.d.ts` when available — it is the
-   exact surface users consume; build with `pnpm --filter @rstest/core build`
-   if needed.
+   `packages/core/src/types/` (start from `types/index.ts` re-exports) or
+   `packages/core/src/api/types.ts`. Read its real shape: every overload,
+   parameter order, optionality, generics, and union members. Prefer the built
+   `dist/**/*.d.ts` when available — it is the exact surface users consume;
+   build with `pnpm --filter @rstest/core build` if needed.
 
 2. **Turn the doc into compile assertions.** Write a throwaway `.ts` file
    **inside the repo** (e.g. the repo root or `packages/core/`, with a temp name
@@ -83,7 +84,12 @@ For each documented symbol whose page changed (or whose type changed):
    (`timeout`, `retry`, …), confirm each exists on the type with the stated
    optionality and meaning, and that no real field is omitted.
 
-5. **Check named-type linkability.** A signature that names another type
+5. **Check entrypoint exports.** For every named type in a `**Type:**` /
+   `**类型：**` block, confirm it is exported from the package entrypoint that
+   the page documents. A type that exists only in source or another entrypoint
+   is not available to readers of that page.
+
+6. **Check named-type linkability.** A signature that names another type
    (`TestContext`, `TestOptions`, `RstestUtilities`, …) can be a bare, unlinked
    black box. For each named type a signature references, confirm the page
    either links it to its canonical definition or documents it inline. Only add

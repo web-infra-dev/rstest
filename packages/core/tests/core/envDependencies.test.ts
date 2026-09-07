@@ -5,15 +5,6 @@ import { afterEach, describe, expect, it, rs } from '@rstest/core';
 import { withTempDir } from '../helpers/tempDir';
 import { ensureTestEnvironmentDependencies } from '../../src/core/envDependencies';
 
-const originalStdinIsTTY = process.stdin.isTTY;
-
-const restoreStdinIsTTY = () => {
-  Object.defineProperty(process.stdin, 'isTTY', {
-    configurable: true,
-    value: originalStdinIsTTY,
-  });
-};
-
 const isMockPackageInstalled = (packageName: string, root: string) => {
   return fs.existsSync(path.join(root, 'node_modules', packageName));
 };
@@ -39,7 +30,6 @@ const createProject = (rootPath: string, environmentName: string) => ({
 
 describe('ensureTestEnvironmentDependencies', () => {
   afterEach(() => {
-    restoreStdinIsTTY();
     rs.resetAllMocks();
   });
 
@@ -56,9 +46,7 @@ describe('ensureTestEnvironmentDependencies', () => {
       await ensureTestEnvironmentDependencies(
         [createProject(projectRoot, 'jsdom')],
         root,
-        {},
-        installer,
-        isMockPackageInstalled,
+        { installer, isInstalled: isMockPackageInstalled },
       );
 
       expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
@@ -75,10 +63,11 @@ describe('ensureTestEnvironmentDependencies', () => {
       await ensureTestEnvironmentDependencies(
         [createProject(projectRoot, 'jsdom')],
         root,
-        {},
-        installer,
-        (_packageName, resolutionRoot) =>
-          resolutionRoot !== root && resolutionRoot !== projectRoot,
+        {
+          installer,
+          isInstalled: (_packageName, resolutionRoot) =>
+            resolutionRoot !== root && resolutionRoot !== projectRoot,
+        },
       );
 
       expect(installer).not.toHaveBeenCalled();
@@ -97,9 +86,7 @@ describe('ensureTestEnvironmentDependencies', () => {
         await ensureTestEnvironmentDependencies(
           [createProject(projectRoot, 'jsdom')],
           root,
-          {},
-          installer,
-          () => false,
+          { installer, isInstalled: () => false },
         );
       } catch (err) {
         error = err;
@@ -127,9 +114,7 @@ describe('ensureTestEnvironmentDependencies', () => {
       await ensureTestEnvironmentDependencies(
         [createProject(projectRoot, 'happy-dom')],
         root,
-        {},
-        installer,
-        isMockPackageInstalled,
+        { installer, isInstalled: isMockPackageInstalled },
       );
 
       expect(installer).toHaveBeenCalledWith(

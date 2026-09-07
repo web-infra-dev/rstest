@@ -1,6 +1,6 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import path from 'pathe';
-import type { RstestContext } from '../../types';
+import type { InternalContext } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 import type { TestEntryPathState } from './moduleCacheControl';
 
@@ -29,7 +29,7 @@ class TestFileWatchPlugin {
 }
 
 export const pluginEntryWatch: (params: {
-  context: RstestContext;
+  context: InternalContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;

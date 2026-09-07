@@ -1,4 +1,7 @@
-import type { BrowserTestRunOptions, ProjectContext } from '../../types';
+import type {
+  BrowserTestRunOptions,
+  InternalProjectContext,
+} from '../../types';
 import {
   isFilterInsideProject,
   isFuzzyBasenameFilter,
@@ -18,7 +21,7 @@ import type { Rstest } from '../rstest';
  */
 export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
-  getBrowserProjectsToRun(): ProjectContext[];
+  getBrowserProjectsToRun(): InternalProjectContext[];
   /**
    * Whether the discovery boot completed the config-validation barrier after
    * browser `modifyRstestConfig` hooks ran. Each command's standalone
@@ -35,7 +38,7 @@ export interface BrowserRunPlan {
    * real run.
    */
   getExecutorRunOptions(
-    projects: ProjectContext[],
+    projects: InternalProjectContext[],
   ): Omit<BrowserExecutorLoadOptions, 'filesOnly'>;
 }
 
@@ -67,8 +70,8 @@ export function createBrowserRunPlanner({
   getPlan: () => ProjectPlan;
   /** Re-resolve after the discovery boot's hooks changed project configs. */
   refreshPlan: () => Promise<void>;
-  browserProjects: ProjectContext[];
-  nodeProjects: ProjectContext[];
+  browserProjects: InternalProjectContext[];
+  nodeProjects: InternalProjectContext[];
   onTraceEvents?: (events: TraceEvent[]) => void;
 }): BrowserRunPlanner {
   const { rootPath } = context;
@@ -77,7 +80,7 @@ export function createBrowserRunPlanner({
   const isFuzzyFilter = (filter: string) =>
     isFuzzyBasenameFilter(filter, context.fileFilterMode);
 
-  const isInsideProject = (filter: string, project: ProjectContext) =>
+  const isInsideProject = (filter: string, project: InternalProjectContext) =>
     isFilterInsideProject(filter, project.rootPath, rootPath);
 
   const isBrowserProjectPathFilter = (filter: string) =>
@@ -104,7 +107,7 @@ export function createBrowserRunPlanner({
       return false;
     }
 
-    if (!context.fileFilters?.length) {
+    if (context.fileFilters === undefined) {
       return true;
     }
 
@@ -125,7 +128,7 @@ export function createBrowserRunPlanner({
     !context.fileFilters?.some(isBrowserProjectPathFilter);
 
   const getBrowserProjectsForDiscovery = () => {
-    if (!context.fileFilters?.length) {
+    if (context.fileFilters === undefined) {
       return browserConfigHookProjects;
     }
 
@@ -158,7 +161,7 @@ export function createBrowserRunPlanner({
   };
 
   const getBrowserShardedEntries = (
-    projects: ProjectContext[],
+    projects: InternalProjectContext[],
   ): BrowserTestRunOptions['shardedEntries'] => {
     if (!shard) {
       return undefined;
@@ -182,7 +185,7 @@ export function createBrowserRunPlanner({
   const freezeShardedEntries = Boolean(shard && nodeProjects.length);
 
   const getExecutorRunOptions = (
-    projects: ProjectContext[],
+    projects: InternalProjectContext[],
   ): Omit<BrowserExecutorLoadOptions, 'filesOnly'> => ({
     shardedEntries: getBrowserShardedEntries(projects),
     freezeShardedEntries,

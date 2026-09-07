@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { runRstest } from '@rstest/core/api';
+import { createRstest } from '@rstest/core/api';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'disk');
@@ -8,9 +8,9 @@ let reporterFileMeta;
 const reporterCaseMeta = [];
 const suiteMeta = [];
 
-const result = await runRstest({
+const rstest = await createRstest({
   cwd,
-  inlineConfig: {
+  config: {
     include: ['sum.test.ts'],
     reporters: [
       {
@@ -29,12 +29,14 @@ const result = await runRstest({
     ],
   },
 });
+const result = await rstest.run();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
-    ok: result.ok,
+    status: result.status,
+    contextProjects: rstest.context.projects,
     fileMeta: result.files[0]?.meta,
-    caseMeta: result.files[0]?.results.map((r) => r.meta),
+    caseMeta: result.files[0]?.tests.map((r) => r.meta),
     reporterFileMeta,
     reporterCaseMeta,
     suiteMeta,

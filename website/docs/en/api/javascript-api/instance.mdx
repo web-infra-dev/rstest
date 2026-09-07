@@ -1,0 +1,455 @@
+---
+description: 'Reference for the Rstest instance API: createRstest, rstest.context, rstest.run, rstest.watch, rstest.listTests, rstest.mergeReports and runCLI.'
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Rstest instance
+
+<ApiMeta addedVersion="0.12.0" />
+
+Everything on this page is exported from the `@rstest/core/api` entry of [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core). Use these APIs to create Rstest instances, run or list tests, start watch sessions, and merge blob reports.
+
+```ts
+import { createRstest } from '@rstest/core/api';
+```
+
+:::warning
+All exports are currently experimental and may change before Rstest 1.0.0. Pin `@rstest/core` to an exact version for now to ensure API stability.
+:::
+
+## createRstest
+
+The `createRstest` function creates and returns an Rstest instance. It resolves `config` once during instance creation and reuses it as the instance's base config. Options passed to instance methods apply to the current operation without mutating the base config.
+
+`cwd` defaults to `process.cwd()` and is the base for resolving a relative `config.root`; omitting `config` uses an empty inline config and does not discover a config file in `cwd`.
+
+`createRstest` sets `RSTEST=true`, sets `NODE_ENV=test` only when it is unset, and never restores either environment variable.
+
+### Example
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.status);
+```
+
+### Load a config file
+
+Use [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) from the main entry to load a config file, then pass its return value (`{ content, filePath }`) directly as `config`.
+
+```ts
+import { loadConfig } from '@rstest/core';
+import { createRstest } from '@rstest/core/api';
+
+const loaded = await loadConfig();
+const rstest = await createRstest({ config: loaded });
+```
+
+### CreateRstestOptions
+
+- **Type:**
+
+```ts
+interface LoadedRstestConfig {
+  content: RstestConfig; // Loaded config content.
+  filePath: string | null; // Source config file path returned by `loadConfig`, or `null`.
+}
+
+interface CreateRstestOptions {
+  cwd?: string;
+  config?: RstestConfig | LoadedRstestConfig;
+}
+
+function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
+```
+
+## rstest.context
+
+`rstest.context` is a read-only object resolved once when the instance is created. You can inspect the resolved state without running tests: use `rootPath` to map `testPath` values from results back to the workspace, `projects` to render or filter a multi-project setup, `config` to inspect the effective configuration, and `version` for compatibility checks.
+
+### Example
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    projects: [
+      {
+        name: 'unit',
+        include: ['tests/**/*.test.ts'],
+      },
+    ],
+  },
+});
+
+console.log(rstest.context.version);
+console.log(rstest.context.rootPath);
+
+for (const project of rstest.context.projects) {
+  console.log(project.name, project.rootPath);
+}
+```
+
+### RstestContext
+
+- **Type:**
+
+```ts
+interface ProjectContext {
+  name: string; // Project name.
+  rootPath: string; // Absolute project root path.
+  configFilePath?: string; // Project config file path, when one is associated with the project.
+}
+
+interface RstestContext {
+  readonly version: string;
+  readonly rootPath: string;
+  readonly config: Readonly<NormalizedConfig>;
+  readonly projects: readonly ProjectContext[];
+}
+```
+
+### context.version
+
+The version of `@rstest/core` currently in use.
+
+- **Type:** `string`
+
+### context.rootPath
+
+The absolute root path of the Rstest instance. It is resolved from `config.root`, using `cwd` as the base for a relative value.
+
+- **Type:** `string`
+
+### context.config
+
+The normalized config of the Rstest instance.
+
+- **Type:** `Readonly<NormalizedConfig>`
+
+### context.projects
+
+The resolved project contexts. Without an explicit `projects` config, the array contains the default project named by `config.name` (`'rstest'` by default).
+
+- **Type:** `readonly ProjectContext[]`
+
+## rstest.run
+
+`rstest.run()` runs one test cycle and returns a `TestRunResult`. Failures are reported through `status` and never reject the promise; see [TestRunResult](#testrunresult).
+
+### Example
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+const result = await rstest.run({
+  filters: ['src/foo.test.ts'],
+  filterMode: 'exact',
+});
+
+console.log(result.status);
+console.log(result.summary.tests);
+```
+
+### Select test files
+
+The following options select test files:
+
+- `filters` uses case-insensitive substring matching by default. Omit `filters` to select all files; an explicit empty array selects none in either mode.
+- `filterMode` uses normalized path equality when set to `'exact'`.
+- `related` interprets `filters` as source files and selects their related tests.
+- `changed` selects tests related to working tree changes, optionally since a Git ref. `changed: false` disables changed-file selection.
+- `shard` accepts the CLI-style `"1/3"` form or `{ index: 1, count: 3 }`.
+- `project` supports project names, `*` wildcards, and `!` exclusions.
+
+The remaining options control execution behavior for this run:
+
+- `testNamePattern` selects tests by name using a `RegExp` or string pattern.
+- `update` controls the snapshot update mode. `update: false` explicitly disables snapshot updates; omitting `update` keeps the configured or default mode.
+- `bail` is the number of test failures allowed before stopping this run; boolean `true` means one.
+- `passWithNoTests` controls whether this run succeeds when no tests match.
+
+### RunOptions
+
+- **Type:**
+
+```ts
+interface RunOptions {
+  filters?: string[];
+  filterMode?: FileFilterMode;
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+
+interface RstestInstance {
+  run(options?: RunOptions): Promise<TestRunResult>;
+}
+```
+
+### TestRunResult
+
+- **Type:**
+
+```ts
+interface SerializedError {
+  name: string; // Error class name.
+  message: string; // Error message.
+  stack?: string; // Serialized stack trace.
+  diff?: string; // Formatted assertion diff.
+  actual?: string; // Serialized actual assertion value.
+  expected?: string; // Serialized expected assertion value.
+  retryCount?: number; // Retry attempt that produced this error.
+  cause?: SerializedError; // Serialized error cause.
+}
+
+interface TestCaseResult {
+  status: TestResultStatus; // Final result status.
+  name: string; // Display name of the test or test file.
+  testPath: string; // Path of the owning test file.
+  parentNames?: string[]; // Names of the enclosing suites.
+  duration?: number; // Execution duration in milliseconds.
+  errors?: SerializedError[]; // Errors from the final attempt.
+  retryErrors?: SerializedError[]; // Errors from earlier retry attempts.
+  retryCount?: number; // Number of retry attempts performed.
+  project: string; // Project name.
+  meta?: TaskMeta; // Serializable metadata attached to the task.
+}
+
+interface TestFileRunResult extends TestCaseResult {
+  tests: TestCaseResult[]; // Results of tests declared in this file.
+}
+
+type TestRunStatus = 'pass' | 'fail' | 'error';
+
+interface TestRunResult {
+  status: TestRunStatus; // Overall status of the run.
+  files: TestFileRunResult[]; // Results of test files executed in this cycle.
+  summary: {
+    tests: {
+      total: number; // Total number of tests.
+      passed: number; // Number of passed tests.
+      failed: number; // Number of failed tests.
+      skipped: number; // Number of skipped tests.
+      todo: number; // Number of todo tests.
+    };
+    files: {
+      total: number; // Total number of test files.
+      failed: number; // Number of failed test files.
+    };
+  };
+  unhandledErrors: SerializedError[]; // Errors not attributed to an individual test.
+  duration: {
+    total: number; // Total duration in milliseconds.
+  };
+  snapshot?: SnapshotSummary;
+  coverage?: CoverageMapData;
+}
+```
+
+`status` is `'error'` when `unhandledErrors` is non-empty. It is `'fail'` when the run completed with a non-zero exit status, such as from failing tests or test files, a coverage threshold violation, no tests being found without `passWithNoTests`, or a `globalSetup` teardown failure. Otherwise, it is `'pass'`.
+
+`snapshot` is absent only when execution stops before a run begins. `coverage` is present when coverage is enabled.
+
+`SerializedError` values are plain JSON-safe objects, not error class instances.
+
+## rstest.watch
+
+`rstest.watch()` starts a Node watch session and returns a watcher that closes it.
+
+### Example
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+const watcher = await rstest.watch({
+  onResult(result) {
+    console.log(
+      result.status,
+      result.files.map((file) => file.testPath),
+    );
+  },
+});
+
+await watcher.close();
+```
+
+`onResult` runs after every completed cycle, including the initial cycle. Its result is cycle-scoped: `files` and `summary` contain only files that actually ran in that cycle. To maintain session state, merge results by `testPath` yourself.
+
+Errors thrown by `onResult` are isolated and do not stop the watch session. Calling `watcher.close()` releases the compiler, workers, file watchers, and pending `globalSetup` teardown. It is idempotent, repeated calls observe the same result, and it rejects if teardown fails.
+
+`rstest.watch()` rejects `related` and `changed` because they select a fixed file set, while a watch session must pick up newly related tests. Use `rstest.run()` for these options. `related: false` and `changed: false` are ignored.
+
+Browser projects are not supported by `rstest.watch()` yet, so startup rejects. Use `rstest.run()` for browser projects.
+
+### WatchOptions
+
+- **Type:**
+
+```ts
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
+
+interface RstestWatcher {
+  close(): Promise<void>;
+}
+
+interface RstestInstance {
+  watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+}
+```
+
+## rstest.listTests
+
+`rstest.listTests()` collects test files and test declarations without running test bodies.
+
+### Example
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  config: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+const tests = await rstest.listTests({
+  includeSuites: true,
+  includeLocation: true,
+});
+
+console.log(tests);
+```
+
+Set `filesOnly` to skip collecting declarations. `includeSuites` includes named suites as separate entries. `includeLocation` adds source locations.
+
+Every entry includes `testPath` and `project`. Entries from the implicit default project use `config.name` (`'rstest'` by default). Declaration entries include their own `name`, a suite-prefixed `fullName`, and `parentNames` for the hierarchy; file entries omit `name` and `fullName`. Skipped and todo declarations are included with `runMode` set to `skip` or `todo`; runnable declarations omit `runMode`.
+
+Entries are returned in depth-first declaration order. A suite immediately precedes its descendants, and all entries from one file stay contiguous.
+
+`rstest.listTests()` rejects when collection fails instead of returning a partial or empty list.
+
+`rstest.listTests()` ignores `shard` and always lists every file, unlike `rstest list --shard`, which lists only the selected shard.
+
+### ListOptions
+
+- **Type:**
+
+```ts
+interface ListOptions {
+  filesOnly?: boolean;
+  includeSuites?: boolean;
+  includeLocation?: boolean;
+}
+
+interface ListedTest {
+  testPath: string; // Path of the test file.
+  name?: string; // Declaration's own name; absent for file entries.
+  fullName?: string; // Suite-prefixed display name; absent for file entries.
+  parentNames?: string[]; // Names of the enclosing suites.
+  project: string; // Project name.
+  location?: TestLocation; // Source location when requested.
+  runMode?: 'skip' | 'todo'; // Skip or todo mode for non-runnable declarations.
+  type: 'file' | 'suite' | 'case'; // Entry kind.
+}
+
+interface RstestInstance {
+  listTests(options?: ListOptions & RunOptions): Promise<ListedTest[]>;
+}
+```
+
+## rstest.mergeReports
+
+`rstest.mergeReports()` merges blob reports and returns the same result model as `rstest.run()`.
+
+### Example
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest();
+
+const result = await rstest.mergeReports({
+  path: './.rstest-reports',
+  cleanup: true,
+});
+
+console.log(result.status);
+```
+
+`path` selects the blob-report directory. `cleanup` removes consumed reports after a successful merge.
+
+### MergeReportsOptions
+
+- **Type:**
+
+```ts
+interface MergeReportsOptions {
+  path?: string;
+  cleanup?: boolean;
+}
+
+interface RstestInstance {
+  mergeReports(options?: MergeReportsOptions): Promise<TestRunResult>;
+}
+```
+
+## runCLI
+
+`runCLI` runs the Rstest command line in the current process. It parses `argv`, sets `process.exitCode`, and installs the CLI's signal handling. Use it when you want the CLI's process behavior; instance methods do not set `process.exitCode` or install signal handlers.
+
+### Example
+
+```ts
+import { runCLI } from '@rstest/core/api';
+
+runCLI({
+  argv: ['run', 'src/foo.test.ts', '--update'],
+});
+```
+
+`argv` contains the command, filters, and flags exactly as you would type them after `rstest` on the command line. It defaults to `process.argv.slice(2)`.
+
+See the [CLI documentation](/guide/basic/cli) for all available commands and flags.
+
+### RunCLIOptions
+
+- **Type:**
+
+```ts
+interface RunCLIOptions {
+  argv?: string[];
+}
+
+function runCLI(options?: RunCLIOptions): void;
+```

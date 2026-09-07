@@ -168,7 +168,7 @@ type TraceServerHandle = {
   close: () => Promise<void>;
   /**
    * Block until SIGINT/SIGTERM/SIGTSTP arrives, then close the server and
-   * exit with the current `process.exitCode`. Use this after tests have
+   * exit with the process's current status. Use this after tests have
    * finished so Ctrl+C is treated as a clean shutdown — without it, the
    * default 128+SIGINT exit code makes pnpm/npm surface ELIFECYCLE.
    */
@@ -276,7 +276,7 @@ export interface TraceController {
   close: () => Promise<void>;
   /**
    * If a trace was produced this session, print a Ctrl+C hint and block
-   * until the user signals; then exit with the current `process.exitCode`.
+   * until the user signals; then preserve the process's current status.
    */
   waitForExit: () => Promise<void>;
   /**

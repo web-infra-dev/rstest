@@ -1,4 +1,9 @@
-import type { ProjectEntries, RstestContext, ShardConfig } from '../types';
+import type {
+  FileFilterMode,
+  InternalContext,
+  ProjectEntries,
+  ShardConfig,
+} from '../types';
 import { color, logger } from './logger';
 import { getTestEntries } from './testFiles';
 
@@ -48,13 +53,19 @@ export function logShardMessage({
  * once after its init barrier; this only reports them via `onShardCounts`.
  */
 export async function resolveShardedEntries(
-  context: RstestContext,
+  context: InternalContext,
   {
     onShardCounts,
-    getFileFilters = () => context.fileFilters || [],
+    getFileFilters = () => context.fileFilters,
+    getFileFilterMode = () => context.fileFilterMode,
   }: {
     onShardCounts?: (counts: ShardCounts) => void;
-    getFileFilters?: (project: RstestContext['projects'][number]) => string[];
+    getFileFilters?: (
+      project: InternalContext['projects'][number],
+    ) => string[] | undefined;
+    getFileFilterMode?: (
+      project: InternalContext['projects'][number],
+    ) => FileFilterMode | undefined;
   } = {},
 ): Promise<Map<string, ProjectEntries> | undefined> {
   const { normalizedConfig, projects: allProjects, rootPath } = context;
@@ -76,7 +87,7 @@ export async function resolveShardedEntries(
           rootPath,
           projectRoot: root,
           fileFilters,
-          fileFilterMode: context.fileFilterMode,
+          fileFilterMode: getFileFilterMode(p),
         });
         return Object.entries(entries).map(([alias, testPath]) => ({
           project: p.environmentName,

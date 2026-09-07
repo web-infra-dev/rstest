@@ -240,6 +240,7 @@ export function createNodeExecutor(
     runDependencyValidationPromise ??= ensureTestEnvironmentDependencies(
       getPlan().nodeProjectsToRun,
       rootPath,
+      { confirm: context.packageInstallerConfirm },
     );
     return runDependencyValidationPromise;
   };
@@ -423,7 +424,7 @@ export function createNodeExecutor(
               'host:global-setup',
               'host',
               () =>
-                runGlobalSetup({
+                runGlobalSetup(context, {
                   globalSetupEntries,
                   assetFiles,
                   sourceMaps,
@@ -483,9 +484,8 @@ export function createNodeExecutor(
       }),
     );
 
-    const isExplicitlyScoped = !!(
-      fileFilters?.length || context.fileFilters?.length
-    );
+    const isExplicitlyScoped =
+      fileFilters !== undefined || context.fileFilters !== undefined;
     if (
       context.normalizedConfig.onlyFailures &&
       !isWatchMode &&

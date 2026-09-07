@@ -1,5 +1,12 @@
 import { Writable } from 'node:stream';
-import type { Reporter } from '@rstest/core';
+import type {
+  Reporter,
+  TestCaseInfo,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+  TestSuiteInfo,
+} from '@rstest/core';
 import type {
   Context,
   ReportBase,
@@ -12,15 +19,18 @@ import { masterApi } from '.';
 export class ProgressReporter implements Reporter {
   readonly flushOutputStreams = false;
 
-  onTestRunStart = masterApi.onTestRunStart.asEvent;
-  onTestRunEnd = () => masterApi.onTestRunEnd.asEvent();
-  onTestFileStart = masterApi.onTestFileStart.asEvent;
-  onTestFileReady = masterApi.onTestFileReady.asEvent;
-  onTestFileResult = masterApi.onTestFileResult.asEvent;
-  onTestSuiteStart = masterApi.onTestSuiteStart.asEvent;
-  onTestSuiteResult = masterApi.onTestSuiteResult.asEvent;
-  onTestCaseStart = masterApi.onTestCaseStart.asEvent;
-  onTestCaseResult = masterApi.onTestCaseResult.asEvent;
+  onTestRunStart = () => masterApi.onTestRunStart();
+  onTestRunEnd = () => masterApi.onTestRunEnd();
+  onTestFileStart = (test: TestFileInfo) => masterApi.onTestFileStart(test);
+  onTestFileReady = (test: TestFileInfo) => masterApi.onTestFileReady(test);
+  onTestFileResult = (test: TestFileResult) => masterApi.onTestFileResult(test);
+  onTestSuiteStart = (test: TestSuiteInfo) => masterApi.onTestSuiteStart(test);
+  // TestRunReporter delegates suite results to this async method without
+  // returning its promise, so call it directly to preserve acknowledgement.
+  onTestSuiteResult = (result: TestResult) =>
+    masterApi.onTestCaseResult(result);
+  onTestCaseStart = (test: TestCaseInfo) => masterApi.onTestCaseStart(test);
+  onTestCaseResult = (result: TestResult) => masterApi.onTestCaseResult(result);
 }
 
 export class ProgressLogger {

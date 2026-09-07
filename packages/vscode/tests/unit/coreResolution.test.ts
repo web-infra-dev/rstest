@@ -6,6 +6,7 @@ import {
   formatConfiguredCoreNotFoundMessage,
   formatCoreNotFoundMessage,
   isModuleNotFoundError,
+  isPackagePathNotExportedError,
 } from '../../src/coreResolution';
 
 // Resolve for real rather than hand-building an error object: the predicate
@@ -52,6 +53,28 @@ describe('isModuleNotFoundError', () => {
     expect(isModuleNotFoundError(new Error('boom'), 'boom')).toBe(false);
     expect(isModuleNotFoundError('MODULE_NOT_FOUND', 'x')).toBe(false);
     expect(isModuleNotFoundError(undefined, 'x')).toBe(false);
+  });
+});
+
+describe('isPackagePathNotExportedError', () => {
+  it('should detect a package with no api export', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-vscode-'));
+    const pkgDir = path.join(root, 'node_modules', '@rstest', 'core');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({
+        name: '@rstest/core',
+        exports: { '.': './index.js' },
+      }),
+    );
+    fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};');
+
+    expect(
+      isPackagePathNotExportedError(resolveError('@rstest/core/api', root)),
+    ).toBe(true);
+
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });
 

@@ -1,10 +1,10 @@
 ---
-description: The Rstest VS Code extension keeps your project’s tests in sync inside the editor so you can browse, run, and debug them in VS Code.
+description: The Rstack VS Code extension keeps your project’s tests in sync inside the editor so you can browse, run, and debug them in VS Code.
 ---
 
 # VS Code extension
 
-The Rstest VS Code extension keeps your project’s tests in sync inside the editor so you can browse, run, and debug them in VS Code.
+The [Rstack](https://github.com/rstackjs/rstack-editor) VS Code extension keeps your project’s tests in sync inside the editor so you can browse, run, and debug them in VS Code. It covers the whole Rstack toolchain in a single install: testing, linting, and formatting.
 
 <img
   src="https://assets.rspack.rs/rstest/assets/rstest-vscode-extension.gif"
@@ -14,8 +14,20 @@ The Rstest VS Code extension keeps your project’s tests in sync inside the edi
 
 ## Installation
 
-You can visit the extension’s [Visual Studio Code Marketplace page](https://marketplace.visualstudio.com/items?itemName=rstack.rstest), or install it directly inside VS Code:
+You can visit the extension’s [Visual Studio Code Marketplace page](https://marketplace.visualstudio.com/items?itemName=rstack.rstack), or install it directly inside VS Code:
 
-- Open the _Extensions_ view (<kbd>Ctrl</kbd>/<kbd title="Cmd">⌘</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd>) and search for `rstack.rstest`.
-- Open the _Quick Open_ panel (<kbd>Ctrl</kbd>/<kbd title="Cmd">⌘</kbd> + <kbd>P</kbd>), enter `ext install rstack.rstest`, and press Enter.
-- You can also run `code --install-extension rstack.rstest` in the terminal.
+- Open the _Extensions_ view (<kbd>Ctrl</kbd>/<kbd title="Cmd">⌘</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd>) and search for `rstack.rstack`.
+- Open the _Quick Open_ panel (<kbd>Ctrl</kbd>/<kbd title="Cmd">⌘</kbd> + <kbd>P</kbd>), enter `ext install rstack.rstack`, and press Enter.
+- You can also run `code --install-extension rstack.rstack` in the terminal.
+
+For Cursor, Trae, VSCodium, and other VS Code forks, install it from the [Open VSX Registry](https://open-vsx.org/extension/rstack/rstack).
+
+:::tip Coming from the standalone Rstest extension
+
+The standalone `rstack.rstest` extension is retired and receives no new features. It stays published and keeps working while the transition is underway, but we recommend switching now:
+
+1. Install `rstack.rstack` as described above.
+2. Disable or uninstall `rstack.rstest` so only one copy of Rstest runs.
+3. Re-enter your settings under the `rstack.rstest.*` keys and re-bind any keybindings to the new `rstack.rstest.*` command ids. Settings are not migrated automatically. See the [migration notes](https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions) for details.
+
+:::

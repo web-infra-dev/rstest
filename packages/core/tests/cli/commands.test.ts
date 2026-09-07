@@ -4,14 +4,17 @@ import { join } from 'node:path';
 import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
-  createCli,
   getForceRerunTriggerFiles,
   getForceRerunTriggers,
   hasForceRerunTrigger,
-  normalizeCliFilters,
-  requiredDotOptions,
+  isRelatedRun,
+  normalizeRunnerFilters,
   resolveChangedFiles,
-  validateRelatedCliOptions,
+  validateRelatedOptions,
+} from '../../src/core/buildRunner';
+import {
+  createCli,
+  requiredDotOptions,
   valueTakingOptions,
 } from '../../src/cli/commands';
 
@@ -640,12 +643,17 @@ describe('CLI help output', () => {
   });
 });
 
-describe('normalizeCliFilters', () => {
+describe('normalizeRunnerFilters', () => {
   it('coerces numeric filters to strings before normalizing them', () => {
-    expect(normalizeCliFilters([1, 'tests\\foo.test.ts'])).toEqual([
+    expect(normalizeRunnerFilters([1, 'tests\\foo.test.ts'])).toEqual([
       '1',
       'tests/foo.test.ts',
     ]);
+  });
+
+  it('preserves omitted and explicit empty filters', () => {
+    expect(normalizeRunnerFilters(undefined)).toBeUndefined();
+    expect(normalizeRunnerFilters([])).toEqual([]);
   });
 });
 
@@ -779,26 +787,33 @@ describe('getForceRerunTriggerFiles', () => {
 describe('related CLI options', () => {
   it('rejects related aliases used together', () => {
     expect(() =>
-      validateRelatedCliOptions({ related: true, findRelatedTests: true }),
+      validateRelatedOptions({ related: true, findRelatedTests: true }),
     ).toThrow(
       'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
     );
 
     expect(() =>
-      validateRelatedCliOptions({ related: true, changed: true }),
+      validateRelatedOptions({ related: true, changed: true }),
     ).toThrow(
       'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
     );
   });
 
   it('treats changed commit values as related runs', () => {
-    validateRelatedCliOptions({ changed: 'HEAD' });
+    validateRelatedOptions({ changed: 'HEAD' });
 
     expect(() =>
-      validateRelatedCliOptions({ changed: 'HEAD', related: true }),
+      validateRelatedOptions({ changed: 'HEAD', related: true }),
     ).toThrow(
       'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
     );
+  });
+
+  it('treats changed false as a disabled selector', () => {
+    expect(isRelatedRun({ changed: false })).toBe(false);
+    expect(() =>
+      validateRelatedOptions({ related: true, changed: false }),
+    ).not.toThrow();
   });
 
   it('wraps git errors when resolving changed files', async () => {

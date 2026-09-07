@@ -8,6 +8,10 @@ import type {
 } from '../types';
 import { Rstest } from './rstest';
 
+export type CoreRstestInstance = Omit<RstestInstance, 'context'> & {
+  context: Rstest;
+};
+
 export function createRstest(
   {
     config,
@@ -16,6 +20,7 @@ export function createRstest(
     trace,
     cwd = process.cwd(),
     embedded = false,
+    initializeReporters,
   }: {
     config: RstestConfig;
     configFilePath?: string;
@@ -27,16 +32,18 @@ export function createRstest(
     /**
      * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
      * and config errors throw instead of calling `process.exit()`, so a
-     * programmatic run can't kill the host process. (`process.exitCode` is
-     * still written; `runRstest` restores it via try/finally.) Set by the
-     * `@rstest/core/api` adapter.
+     * programmatic run can't kill the host process. Set by the
+     * `@rstest/core/api` adapter; only CLI contexts mirror the context-local
+     * status to the host process.
      */
     embedded?: boolean;
+    /** Internal metadata contexts normalize config without creating reporters. */
+    initializeReporters?: boolean;
   },
   command: RstestCommand,
-  fileFilters: string[],
+  fileFilters?: string[],
   fileFilterMode?: FileFilterMode,
-): RstestInstance {
+): CoreRstestInstance {
   const context = new Rstest(
     {
       cwd,
@@ -47,6 +54,7 @@ export function createRstest(
       projects,
       trace,
       embedded,
+      initializeReporters,
     },
     config,
   );

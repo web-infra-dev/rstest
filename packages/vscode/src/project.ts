@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { TestInfo } from '@rstest/core';
+import type { ListedTest } from '@rstest/core/api';
 import picomatch from 'picomatch';
 import { glob } from 'tinyglobby';
 import vscode from 'vscode';
@@ -7,7 +8,13 @@ import { watchConfigValue } from './config';
 import { logger } from './logger';
 import { RstestApi } from './master';
 import { type ChildProjectRef, computeCoveredConfigs } from './projectCoverage';
-import { ProjectFolder, TestFile, TestFolder, testData } from './testTree';
+import {
+  groupListedTestsByFile,
+  ProjectFolder,
+  TestFile,
+  TestFolder,
+  testData,
+} from './testTree';
 
 // The default config file name at the workspace root. A lone project using it
 // is shown without a project node (its test files sit directly under the root).
@@ -387,7 +394,7 @@ export class Project implements vscode.Disposable {
   }
   dispose() {
     this.#watch?.dispose();
-    this.api.dispose();
+    void this.api.dispose();
     this.cancellationSource.cancel();
   }
   get collection() {
@@ -422,12 +429,7 @@ export class Project implements vscode.Disposable {
                   files.map((file) => ({ uri: vscode.Uri.file(file) })),
                 )
               : // runtime
-                await this.api.listTests().then((files) =>
-                  files.map((file) => ({
-                    uri: vscode.Uri.file(file.testPath),
-                    tests: file.tests,
-                  })),
-                );
+                await this.api.listTests().then(groupListedTestsByFile);
 
           if (token.isCancellationRequested) return;
 
@@ -457,11 +459,13 @@ export class Project implements vscode.Disposable {
           const updateOrCreateByRuntime = (uri: vscode.Uri) => {
             void this.api
               .listTests([uri.fsPath])
-              .then((files) => {
+              .then((listedTests) => {
                 if (token.isCancellationRequested) return;
-                for (const { testPath, tests } of files) {
-                  const uri = vscode.Uri.file(testPath);
-                  this.updateOrCreateFile(uri, tests);
+                for (const { uri: listedUri, tests } of groupListedTestsByFile(
+                  listedTests,
+                  [uri.fsPath],
+                )) {
+                  this.updateOrCreateFile(listedUri, tests);
                 }
                 this.buildTree();
               })
@@ -512,7 +516,10 @@ export class Project implements vscode.Disposable {
     return watcher;
   }
   // TODO pass cancellation token to updateFromDisk
-  private updateOrCreateFile(uri: vscode.Uri, tests?: TestInfo[]) {
+  private updateOrCreateFile(
+    uri: vscode.Uri,
+    tests?: TestInfo[] | ListedTest[],
+  ) {
     let data = this.testFiles.get(uri.toString());
     if (!data) {
       data = new TestFile(this.api, uri, this.testController);

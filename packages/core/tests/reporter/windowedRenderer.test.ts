@@ -11,6 +11,47 @@ const createWritable = () =>
   });
 
 describe('WindowRenderer', () => {
+  it('restores overlapping stream hooks when stopped out of order', () => {
+    const output: string[] = [];
+    const outputStream = new Writable({
+      write(chunk, _encoding, callback) {
+        output.push(chunk.toString());
+        callback();
+      },
+    });
+    const errorStream = createWritable();
+    const stdoutWrite = process.stdout.write;
+    const stderrWrite = process.stderr.write;
+    const options = {
+      getWindow: () => [],
+      logger: {
+        outputStream,
+        errorStream,
+        getColumns: () => 80,
+      },
+    };
+    const first = new WindowRenderer(options);
+    const second = new WindowRenderer(options);
+
+    onTestFinished(() => {
+      first.stop();
+      second.stop();
+      process.stdout.write = stdoutWrite;
+      process.stderr.write = stderrWrite;
+    });
+
+    first.start();
+    second.start();
+    first.stop();
+    process.stdout.write('visible between stops');
+    second.finish();
+    second.stop();
+
+    expect(output).toEqual(['visible between stops']);
+    expect(process.stdout.write).toBe(stdoutWrite);
+    expect(process.stderr.write).toBe(stderrWrite);
+  });
+
   it('does not block stream flushing when write callback is the second argument', async () => {
     const renderer = new WindowRenderer({
       getWindow: () => [],

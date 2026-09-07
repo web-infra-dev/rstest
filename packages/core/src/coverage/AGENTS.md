@@ -13,7 +13,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 - Coverage stripping differs by path. Node strips at the pool before reporters or state see results. Browser results carry `result.coverage` through the sink during the run and are stripped retroactively when the cycle map is folded (the browser executor's outcome assembly, or the host's per-rerun outcome assembly in watch) — reporters DO observe browser coverage at `onTestFileResult` time.
 - Worker provider `cleanup()` runs in `finally` per file; istanbul's cleanup deletes `globalThis.__coverage__` — skipping it double-counts hits on non-isolated reruns.
-- Report-stage failures are caught and downgraded to `process.exitCode = 1`, but the raw-resolution seam inside `finalizeRunCycle` rethrows — a resource-load rejection propagates out of finalize instead of downgrading.
+- Report-stage failures are caught and raise the context-local exit status, but the raw-resolution seam inside `finalizeRunCycle` rethrows — a resource-load rejection propagates out of finalize instead of downgrading.
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
 - Blob coverage from capable providers is deliberately pre-finalization: shards never scan the same untested files or check thresholds independently. `merge-reports` is the sole owner of filtering, backfill, reports, and thresholds for that unified blob workflow; providers without the capability retain the legacy per-run finalization path.
