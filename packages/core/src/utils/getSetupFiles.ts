@@ -30,9 +30,8 @@ const parseJavaScriptDataUrl = (
     return undefined;
   }
 
-  const fragmentIndex = request.indexOf('#');
-  const dataUrl =
-    fragmentIndex === -1 ? request : request.slice(0, fragmentIndex);
+  const suffixIndex = request.search(/[?#]/);
+  const dataUrl = suffixIndex === -1 ? request : request.slice(0, suffixIndex);
   const commaIndex = dataUrl.indexOf(',');
   if (commaIndex === -1) {
     return undefined;

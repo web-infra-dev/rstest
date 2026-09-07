@@ -64,12 +64,18 @@ describe('getSetupFiles', () => {
     ).toThrow();
   });
 
-  it('does not include data URL fragments in the virtual module source', () => {
-    const result = materializeVirtualSetupFiles(
-      getSetupFiles(['data:text/javascript;base64,dm9pZCAw#v1'], '/project'),
-      '/project',
-    );
+  it.each(['#v1', '?AAAA', '?AAAA#v1', '#v1?AAAA'])(
+    'does not include the URL suffix %s in the virtual module source',
+    (suffix) => {
+      const result = materializeVirtualSetupFiles(
+        getSetupFiles(
+          [`data:text/javascript;base64,dm9pZCAw${suffix}`],
+          '/project',
+        ),
+        '/project',
+      );
 
-    expect(Object.values(result.virtualModules)).toEqual(['void 0']);
-  });
+      expect(Object.values(result.virtualModules)).toEqual(['void 0']);
+    },
+  );
 });

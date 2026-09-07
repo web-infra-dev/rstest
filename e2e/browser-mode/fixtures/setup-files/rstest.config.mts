@@ -15,6 +15,7 @@ export default defineConfig({
   },
   include: ['tests/**/*.test.ts'],
   setupFiles: [
+    'data:text/javascript;base64,dm9pZCAw?AAAA#v1',
     `data:text/javascript;base64,${Buffer.from(setupSource).toString('base64')}`,
   ],
   testTimeout: BROWSER_TEST_TIMEOUT,
