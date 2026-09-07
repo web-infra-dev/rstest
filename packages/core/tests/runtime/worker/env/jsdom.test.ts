@@ -225,12 +225,19 @@ test('clears pending Node timers during jsdom teardown', async () => {
     expect(timeout).toBeInstanceOf(Object);
     expect(timeout.refresh).toBeTypeOf('function');
     expect(interval).toBeInstanceOf(Object);
-    expect(promisify(testGlobal.setTimeout)).toBe(
-      promisify(nativeTimers.setTimeout),
+    await expect(promisify(testGlobal.setTimeout)(0, 'value')).resolves.toBe(
+      'value',
     );
+    const cancelled = expect(
+      promisify(testGlobal.setTimeout)(60_000),
+    ).rejects.toMatchObject({
+      name: 'AbortError',
+      code: 'ABORT_ERR',
+    });
 
     await teardown(testGlobal);
     tornDown = true;
+    await cancelled;
 
     expect(clearedTimeouts).toEqual([timeout]);
     expect(clearedIntervals).toEqual([interval]);

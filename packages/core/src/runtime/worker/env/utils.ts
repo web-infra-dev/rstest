@@ -1,5 +1,6 @@
 import { promisify } from 'node:util';
 import type { TestEnvironmentContext } from '../../../types';
+import { createVmTimersPromisesLoader } from '../vm/timers';
 import { KEYS } from './jsdomKeys';
 
 export type NodeTimerPrimitives = Pick<
@@ -301,16 +302,33 @@ export function installTimerTracking(
       nodeTimers.clearImmediate as (timer: unknown) => void,
     )) as unknown as NodeTimerPrimitives['setImmediate'];
 
-  for (const [tracked, original] of [
-    [setTimeout, nodeTimers.setTimeout],
-    [setImmediate, nodeTimers.setImmediate],
+  const loadPromiseTimers = createVmTimersPromisesLoader({
+    Promise: global.Promise ?? Promise,
+    Error: global.Error ?? Error,
+  });
+  const nativePromiseTimers = {
+    setTimeout: promisify(nodeTimers.setTimeout),
+    setImmediate: promisify(nodeTimers.setImmediate),
+  };
+  // The loader preserves the module shape while owning cancellation of its promises.
+  const promiseTimers = loadPromiseTimers(
+    nativePromiseTimers,
+  ) as typeof nativePromiseTimers;
+
+  for (const [name, tracked, original] of [
+    ['setTimeout', setTimeout, nodeTimers.setTimeout],
+    ['setImmediate', setImmediate, nodeTimers.setImmediate],
   ] as const) {
     const descriptor = Object.getOwnPropertyDescriptor(
       original,
       promisify.custom,
     );
     if (descriptor) {
-      Object.defineProperty(tracked, promisify.custom, descriptor);
+      Object.defineProperty(tracked, promisify.custom, {
+        configurable: descriptor.configurable,
+        enumerable: descriptor.enumerable,
+        value: promiseTimers[name],
+      });
     }
   }
 
@@ -325,6 +343,7 @@ export function installTimerTracking(
 
   return () => {
     active = false;
+    loadPromiseTimers.dispose();
     for (const [timer, clearTimer] of pending) {
       clearTimer(timer);
     }

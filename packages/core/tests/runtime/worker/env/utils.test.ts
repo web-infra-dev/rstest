@@ -39,6 +39,86 @@ test('preserves custom promisify on tracked timers', async () => {
   }
 });
 
+test('cancels pending promisified timeout and immediate during file cleanup', async () => {
+  const testGlobal = { Promise, Error } as typeof globalThis;
+  const cleanup = installTimerTracking(
+    testGlobal,
+    {
+      setImmediate,
+      setTimeout,
+      setInterval,
+      clearImmediate,
+      clearTimeout,
+      clearInterval,
+    },
+    { scope: 'file' },
+  );
+  const results = Promise.allSettled([
+    promisify(testGlobal.setTimeout)(30, 'timeout'),
+    promisify(testGlobal.setImmediate)('immediate'),
+  ]);
+
+  cleanup();
+
+  expect(await results).toEqual([
+    {
+      status: 'rejected',
+      reason: expect.objectContaining({
+        name: 'AbortError',
+        code: 'ABORT_ERR',
+      }),
+    },
+    {
+      status: 'rejected',
+      reason: expect.objectContaining({
+        name: 'AbortError',
+        code: 'ABORT_ERR',
+      }),
+    },
+  ]);
+});
+
+test('preserves AbortSignal and ref options on promisified timers', async () => {
+  const testGlobal = { Promise, Error } as typeof globalThis;
+  const cleanup = installTimerTracking(
+    testGlobal,
+    {
+      setImmediate,
+      setTimeout,
+      setInterval,
+      clearImmediate,
+      clearTimeout,
+      clearInterval,
+    },
+    { scope: 'file' },
+  );
+  const controller = new AbortController();
+  try {
+    const timeout = promisify(testGlobal.setTimeout)(60_000, 'value', {
+      signal: controller.signal,
+      ref: false,
+    });
+    controller.abort();
+    await expect(timeout).rejects.toMatchObject({
+      name: 'AbortError',
+      code: 'ABORT_ERR',
+    });
+    await expect(
+      promisify(testGlobal.setImmediate)('value', {
+        signal: controller.signal,
+        ref: false,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
+    await expect(
+      promisify(testGlobal.setTimeout)(0, 'value', {
+        ref: true,
+      }),
+    ).resolves.toBe('value');
+  } finally {
+    cleanup();
+  }
+});
+
 test('should not record timers for a worker-scoped environment', () => {
   const cleared: unknown[] = [];
   const nodeTimers = {
