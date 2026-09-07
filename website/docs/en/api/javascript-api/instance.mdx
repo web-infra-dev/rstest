@@ -434,11 +434,12 @@ interface RstestInstance {
 import { runCLI } from '@rstest/core/api';
 
 runCLI({
-  argv: ['run', 'src/foo.test.ts', '--update'],
+  argv: [...process.argv.slice(0, 2), 'run', 'src/foo.test.ts', '--update'],
 });
 ```
 
-`argv` contains the command, filters, and flags exactly as you would type them after `rstest` on the command line. It defaults to `process.argv.slice(2)`.
+`argv` matches the shape of Node.js `process.argv` and defaults to `process.argv`: the first two entries are the executable and script paths and are ignored, while the command, filters, and flags start at index 2.
+This is the same shape used by Rsbuild's and Rspress's `runCLI`.
 
 See the [CLI documentation](/guide/basic/cli) for all available commands and flags.
 
