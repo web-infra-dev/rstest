@@ -98,6 +98,7 @@ describe('threads pool e2e', () => {
 
     const output = `${cli.stdout}\n${cli.stderr}`;
     expect(output.match(/VM_SETUP_FILE/g)).toHaveLength(2);
+    expect(output.match(/VM_OBJECT_URL_REVOKED/g)).toHaveLength(1);
     expect(output.match(/VM_WORKER_FIXTURE_SETUP/g)).toHaveLength(2);
     expect(readFileSync(cleanupMarker, 'utf8').trim().split('\n')).toHaveLength(
       2,

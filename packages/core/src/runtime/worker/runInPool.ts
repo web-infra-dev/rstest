@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { pathToFileURL } from 'node:url';
 import { setFlagsFromString } from 'node:v8';
 import { createContext, runInContext, Script, type Context } from 'node:vm';
 import { isMainThread, threadId } from 'node:worker_threads';
@@ -30,7 +31,11 @@ import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
-import { installTimerTracking, type NodeTimerPrimitives } from './env/utils';
+import {
+  installObjectURLTracker,
+  installTimerTracking,
+  type NodeTimerPrimitives,
+} from './env/utils';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { loadCachedAssets, workerAssetCache } from './vm/assetCache';
@@ -47,6 +52,7 @@ import {
 import { workerCache } from './vm/cache';
 
 let sourceMaps: Record<string, string> = {};
+let currentEnvironmentBundle: { path: string; url: string } | undefined;
 let vmCompilationCacheDisabled = false;
 
 const disableVmCompilationCache = (): void => {
@@ -81,6 +87,19 @@ install({
       return {
         url: source,
         map: JSON.parse(sourceMaps[source]),
+      };
+    }
+    // Stack frames may identify the same ESM file as either a filesystem path
+    // or a file URL, and source-map-support passes that value through unchanged.
+    if (
+      source === currentEnvironmentBundle?.path ||
+      source === currentEnvironmentBundle?.url
+    ) {
+      // Environment bundles are built without sourcemaps. Returning null would
+      // let source-map-support read and scan the entire bundle on first use.
+      return {
+        url: source,
+        map: { version: 3, sources: [], names: [], mappings: '' },
       };
     }
     return null;
@@ -482,6 +501,7 @@ const prepareVmRuntimeRealm = async (
     };
     cleanupFns.push(
       installTimerTracking(runtimeGlobal, nodeTimers, { scope: 'file' }),
+      installObjectURLTracker(runtimeGlobal.URL, { scope: 'file' }),
     );
   }
   return {
@@ -503,6 +523,14 @@ const preparePool = async (
   tracker?: PhaseTracker,
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ) => {
+  const environmentBundlePath = context.testEnvironmentModule?.bundlePath;
+  currentEnvironmentBundle = environmentBundlePath
+    ? {
+        path: environmentBundlePath,
+        url: pathToFileURL(environmentBundlePath).href,
+      }
+    : undefined;
+
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   runGlobalCleanups();
 

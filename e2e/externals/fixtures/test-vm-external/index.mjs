@@ -88,6 +88,8 @@ export const inspectCommonJsPaths = () => ({
   expected: path.dirname(commonJsPaths.filename),
 });
 
+export const inspectFailedChild = () => commonJsPaths.inspectFailedChild();
+
 export const verifyNodeGlobals = async () => {
   const pendingResponse = fetch('data:text/plain,vm');
   const response = await pendingResponse;

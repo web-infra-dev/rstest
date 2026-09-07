@@ -8,12 +8,23 @@ const {
   createStaticTimerPromise,
   inspectRealm,
   inspectCommonJsPaths,
+  inspectFailedChild,
   importedImportMetaMain,
   verifyImportAttributeErrorRealm,
   verifyNodeGlobals,
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('removes failed CommonJS children before a retry', () => {
+  expect(inspectFailedChild()).toEqual({
+    failed: true,
+    cachedAfterFailure: false,
+    childrenAfterFailure: 0,
+    childrenAfterRetry: 1,
+    result: 'retried',
+  });
+});
 
 it('executes external modules in the test VM realm', async () => {
   expect(inspectRealm({ from: 'vm' })).toEqual({

@@ -301,16 +301,17 @@ export function installTimerTracking(
       nodeTimers.clearImmediate as (timer: unknown) => void,
     )) as unknown as NodeTimerPrimitives['setImmediate'];
 
-  const customPromisifyDescriptor = Object.getOwnPropertyDescriptor(
-    nodeTimers.setTimeout,
-    promisify.custom,
-  );
-  if (customPromisifyDescriptor) {
-    Object.defineProperty(
-      setTimeout,
+  for (const [tracked, original] of [
+    [setTimeout, nodeTimers.setTimeout],
+    [setImmediate, nodeTimers.setImmediate],
+  ] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      original,
       promisify.custom,
-      customPromisifyDescriptor,
     );
+    if (descriptor) {
+      Object.defineProperty(tracked, promisify.custom, descriptor);
+    }
   }
 
   install({

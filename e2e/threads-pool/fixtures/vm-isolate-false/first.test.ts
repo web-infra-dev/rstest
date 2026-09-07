@@ -1,9 +1,14 @@
 import { threadId } from 'node:worker_threads';
+import { promisify } from 'node:util';
 import { expect, it, rs } from '@rstest/core';
 import { getCount, increment } from './shared';
 import { workerTest } from './workerFixture';
 
 const FILE_MARKER = '__RSTEST_VM_FILE_MARKER__';
+
+it('preserves custom promisify for tracked immediate timers', async () => {
+  await expect(promisify(setImmediate)('value')).resolves.toBe('value');
+});
 
 workerTest('isolates the first file', ({ workerValue }) => {
   const fileGlobal = globalThis as typeof globalThis & {

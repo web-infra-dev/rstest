@@ -560,6 +560,40 @@ describe('loadEsModule', () => {
     });
   });
 
+  it.for([
+    "throw new Error('failed')",
+    "module.loaded = true; throw new Error('failed')",
+    'const =',
+  ])('removes failed CommonJS children for %s', (source) => {
+    const directory = mkdtempSync(join(tmpdir(), 'rstest-failed-child-'));
+    const parentPath = join(directory, 'parent.cjs');
+    const childPath = join(directory, 'child.cjs');
+    writeFileSync(
+      parentPath,
+      `module.exports = () => {
+      const childPath = require.resolve('./child.cjs');
+      let result;
+      try { result = require(childPath); } catch { result = 'failed'; }
+      return { result, cached: Boolean(require.cache[childPath]), children: module.children.length };
+    };`,
+    );
+    writeFileSync(childPath, source);
+    const executor = getVmExternalModules(vm.createContext({}));
+    try {
+      const run = executor.require(parentPath, __filename) as () => {
+        result: string;
+        cached: boolean;
+        children: number;
+      };
+      expect(run()).toEqual({ result: 'failed', cached: false, children: 0 });
+      writeFileSync(childPath, "module.exports = 'recovered';");
+      expect(run()).toEqual({ result: 'recovered', cached: true, children: 1 });
+    } finally {
+      executor.dispose();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('should reject ESM imports of native addons', async () => {
     const vmContext = vm.createContext({});
     const executor = getVmExternalModules(vmContext);

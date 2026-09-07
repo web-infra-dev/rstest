@@ -1,9 +1,43 @@
 import { expect, test } from '@rstest/core';
 import {
+  setImmediate,
+  setTimeout,
+  setInterval,
+  clearImmediate,
+  clearTimeout,
+  clearInterval,
+} from 'node:timers';
+import { promisify } from 'node:util';
+import {
   installObjectURLTracker,
   installTimerTracking,
   type NodeTimerPrimitives,
 } from '../../../../src/runtime/worker/env/utils';
+
+test('preserves custom promisify on tracked timers', async () => {
+  const nodeTimers = {
+    setImmediate,
+    setTimeout,
+    setInterval,
+    clearImmediate,
+    clearTimeout,
+    clearInterval,
+  };
+  const testGlobal = {} as typeof globalThis;
+  const cleanup = installTimerTracking(testGlobal, nodeTimers, {
+    scope: 'file',
+  });
+  try {
+    await expect(promisify(testGlobal.setImmediate)('immediate')).resolves.toBe(
+      'immediate',
+    );
+    await expect(promisify(testGlobal.setTimeout)(0, 'timeout')).resolves.toBe(
+      'timeout',
+    );
+  } finally {
+    cleanup();
+  }
+});
 
 test('should not record timers for a worker-scoped environment', () => {
   const cleared: unknown[] = [];

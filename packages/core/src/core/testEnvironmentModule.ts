@@ -2,6 +2,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   stat,
   writeFile,
@@ -298,6 +299,8 @@ const createTestEnvironmentBuildConfig = ({
       config.plugins.push(
         new rspack.experiments.RstestPlugin({
           ...getMockRstestPluginOptions({ rootPath: projectRoot }),
+          // Environment bundles contain no test mocks, so skip the mock-hoist asset scan.
+          hoistMockModule: false,
           injectDynamicImportOrigin: true,
           injectRequireResolveOrigin: {
             functionName: importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK),
@@ -359,7 +362,11 @@ const buildTestEnvironmentModule = async ({
 
   const result = await rsbuild.build();
   await result.close();
-  return join(outputPath, 'environment.mjs');
+  const bundlePath = join(outputPath, 'environment.mjs');
+  // The OS temp path can contain an alias (macOS exposes /var as /private/var),
+  // while Node's ESM stack uses the canonical path. Resolve it once here so
+  // workers and source-map-support identify the generated file consistently.
+  return realpath(bundlePath);
 };
 
 const shouldPrebundle = async ({

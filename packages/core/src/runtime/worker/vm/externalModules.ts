@@ -1094,62 +1094,63 @@ class VmExternalModules {
     this.requireCache[filePath] = module;
     this.attachChild(parentModule, module);
 
-    const code = stripCommonJsPrefix(readSource(filePath));
-    const wrappedCode = Module.wrap(code);
-    const cached = getCommonJsCompilationCache(filePath);
-    const cachedData = cached?.code === code ? cached.cachedData : undefined;
-    const compile = (data?: Buffer): CommonJsScript => {
-      const script = new vm.Script(wrappedCode, {
-        filename: filePath,
-        ...(data ? { cachedData: data } : {}),
-        importModuleDynamically: staticCommonJsImportModuleDynamically,
-      }) as CommonJsScript;
-      script.identifier = filePath;
-      return script;
-    };
-
-    let script: CommonJsScript;
-    let shouldCacheCompilation = cachedData === undefined;
+    let completed = false;
     try {
-      script = compile(cachedData);
-      if (cachedData && script.cachedDataRejected) {
-        script = compile();
-        shouldCacheCompilation = true;
-      }
-      scriptExecutors.set(script, this);
-      this.scripts.add(script);
-    } catch (error) {
-      this.commonJsCache.delete(filePath);
-      Reflect.deleteProperty(this.requireCache, filePath);
-      if (
-        supportsSyncEsmEvaluate &&
-        extname(filePath) === '.js' &&
-        isAmbiguousJavaScriptModule(filePath) &&
-        isSyntaxError(error)
-      ) {
-        try {
-          const exports = this.requireEsm(filePath, true);
-          this.esmSyntaxFallbackFiles.add(filePath);
-          return exports;
-        } catch (esmError) {
-          if (!isSyntaxError(esmError)) {
-            throw esmError;
+      const code = stripCommonJsPrefix(readSource(filePath));
+      const wrappedCode = Module.wrap(code);
+      const cached = getCommonJsCompilationCache(filePath);
+      const cachedData = cached?.code === code ? cached.cachedData : undefined;
+      const compile = (data?: Buffer): CommonJsScript => {
+        const script = new vm.Script(wrappedCode, {
+          filename: filePath,
+          ...(data ? { cachedData: data } : {}),
+          importModuleDynamically: staticCommonJsImportModuleDynamically,
+        }) as CommonJsScript;
+        script.identifier = filePath;
+        return script;
+      };
+
+      let script: CommonJsScript;
+      let shouldCacheCompilation = cachedData === undefined;
+      try {
+        script = compile(cachedData);
+        if (cachedData && script.cachedDataRejected) {
+          script = compile();
+          shouldCacheCompilation = true;
+        }
+        scriptExecutors.set(script, this);
+        this.scripts.add(script);
+      } catch (error) {
+        this.commonJsCache.delete(filePath);
+        Reflect.deleteProperty(this.requireCache, filePath);
+        if (
+          supportsSyncEsmEvaluate &&
+          extname(filePath) === '.js' &&
+          isAmbiguousJavaScriptModule(filePath) &&
+          isSyntaxError(error)
+        ) {
+          try {
+            const exports = this.requireEsm(filePath, true);
+            this.esmSyntaxFallbackFiles.add(filePath);
+            return exports;
+          } catch (esmError) {
+            if (!isSyntaxError(esmError)) {
+              throw esmError;
+            }
           }
         }
+        if (
+          onCompileSyntaxError &&
+          !supportsSyncEsmEvaluate &&
+          extname(filePath) === '.js' &&
+          isAmbiguousJavaScriptModule(filePath) &&
+          isSyntaxError(error)
+        ) {
+          return onCompileSyntaxError(error);
+        }
+        throw error;
       }
-      if (
-        onCompileSyntaxError &&
-        !supportsSyncEsmEvaluate &&
-        extname(filePath) === '.js' &&
-        isAmbiguousJavaScriptModule(filePath) &&
-        isSyntaxError(error)
-      ) {
-        return onCompileSyntaxError(error);
-      }
-      throw error;
-    }
 
-    try {
       const fn = script.runInContext(this.context) as (
         exports: unknown,
         require: NodeJS.Require,
@@ -1172,11 +1173,19 @@ class VmExternalModules {
           cachedData: script.createCachedData(),
         });
       }
+      completed = true;
       return module.exports;
-    } catch (error) {
-      this.commonJsCache.delete(filePath);
-      Reflect.deleteProperty(this.requireCache, filePath);
-      throw error;
+    } finally {
+      if (!completed) {
+        this.commonJsCache.delete(filePath);
+        Reflect.deleteProperty(this.requireCache, filePath);
+        if (parentModule) {
+          const childIndex = parentModule.children.indexOf(module);
+          if (childIndex !== -1) {
+            parentModule.children.splice(childIndex, 1);
+          }
+        }
+      }
     }
   }
 
