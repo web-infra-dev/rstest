@@ -13,7 +13,6 @@ import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   BuiltInReporterNames,
-  FileFilterMode,
   InternalContext,
   InternalProjectContext,
   NormalizedConfig,
@@ -95,7 +94,6 @@ type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
-  fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
@@ -108,7 +106,6 @@ export class Rstest implements InternalContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
-  public fileFilterMode?: FileFilterMode;
   public relatedFilters?: string[];
   public relatedMode?: 'related' | 'changed';
   public relatedResolutionEmpty?: boolean;
@@ -160,7 +157,6 @@ export class Rstest implements InternalContext {
       cwd = process.cwd(),
       command,
       fileFilters,
-      fileFilterMode,
       configFilePath,
       projects,
       trace = false,
@@ -173,7 +169,6 @@ export class Rstest implements InternalContext {
     this.command = command;
     this.trace = trace;
     this.fileFilters = fileFilters;
-    this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
     this.embedded = embedded;
 

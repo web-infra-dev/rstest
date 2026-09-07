@@ -361,7 +361,7 @@ describe('programmatic createRstest', () => {
       files: ['first.test.ts'],
       tests: 1,
     });
-    expect(result.emptyFilterCycles).toEqual({ fuzzy: [], exact: [] });
+    expect(result.emptyFilterFiles).toEqual([]);
     expect(result.zeroMatchCycles[0]).toEqual([]);
     expect(result.zeroMatchCycles.at(-1)).toEqual(['added.test.ts']);
     expect(result.emptyProjectCycles[0]).toEqual([]);

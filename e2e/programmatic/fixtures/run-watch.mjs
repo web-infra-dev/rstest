@@ -74,23 +74,19 @@ try {
     cwd: emptyFilterRoot,
     config: { include: ['*.test.ts'], reporters: [] },
   });
-  const emptyFilterCycles = {};
-  for (const filterMode of ['fuzzy', 'exact']) {
-    let firstResult;
-    const emptyFilterWatcher = await emptyFilterRstest.watch({
-      filters: [],
-      filterMode,
-      onResult(result) {
-        firstResult ??= result;
-      },
-    });
-    openWatchers.add(emptyFilterWatcher);
-    emptyFilterCycles[filterMode] = firstResult.files.map((file) =>
-      file.testPath.split('/').pop(),
-    );
-    await emptyFilterWatcher.close();
-    openWatchers.delete(emptyFilterWatcher);
-  }
+  let firstResult;
+  const emptyFilterWatcher = await emptyFilterRstest.watch({
+    filters: [],
+    onResult(result) {
+      firstResult ??= result;
+    },
+  });
+  openWatchers.add(emptyFilterWatcher);
+  const emptyFilterFiles = firstResult.files.map((file) =>
+    file.testPath.split('/').pop(),
+  );
+  await emptyFilterWatcher.close();
+  openWatchers.delete(emptyFilterWatcher);
 
   await mkdir(zeroMatchRoot, { recursive: true });
   const zeroMatchCycles = [];
@@ -103,8 +99,7 @@ try {
     config: { include: ['*.test.ts'], reporters: [] },
   });
   const zeroMatchWatcher = await zeroMatchRstest.watch({
-    filters: ['added.test.ts'],
-    filterMode: 'exact',
+    filters: ['"added.test.ts"'],
     onResult(result) {
       const files = result.files.map((file) => file.testPath.split('/').pop());
       zeroMatchCycles.push(files);
@@ -283,7 +278,7 @@ it('does not create a snapshot', () => {
   console.log(
     `__RSTEST_API_RESULT__${JSON.stringify({
       cycles,
-      emptyFilterCycles,
+      emptyFilterFiles,
       zeroMatchCycles,
       emptyProjectCycles,
       updateOptions: {

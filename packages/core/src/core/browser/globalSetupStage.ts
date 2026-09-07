@@ -112,7 +112,6 @@ export async function runBrowserGlobalSetupStage(
               context,
               project,
               fileFilters: context.fileFilters,
-              fileFilterMode: context.fileFilterMode,
             });
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;

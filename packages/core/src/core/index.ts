@@ -1,5 +1,4 @@
 import type {
-  FileFilterMode,
   ListCommandCollectOptions,
   Project,
   RstestCommand,
@@ -42,14 +41,12 @@ export function createRstest(
   },
   command: RstestCommand,
   fileFilters?: string[],
-  fileFilterMode?: FileFilterMode,
 ): CoreRstestInstance {
   const context = new Rstest(
     {
       cwd,
       command,
       fileFilters,
-      fileFilterMode,
       configFilePath,
       projects,
       trace,

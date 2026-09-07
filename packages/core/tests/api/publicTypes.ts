@@ -12,7 +12,6 @@ import {
 } from '@rstest/core/api';
 export type {
   CoverageMapData,
-  FileFilterMode,
   NormalizedConfig,
   ProjectContext,
   RstestContext,

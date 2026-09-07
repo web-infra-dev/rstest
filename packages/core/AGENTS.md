@@ -42,6 +42,7 @@ Contracts between modules or processes — not readable from any single file.
 ### Run cycle (`src/core`)
 
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
+- File filters are plain strings everywhere: a filter wrapped in matching quotes is an exact path, and `--related`/`--changed` express their resolved paths that way.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchCycleState` ahead of every watch cycle, a session's first included) — executors never reset it, so bail reads stay cycle-scoped even where two executors' first cycles bracket one startup. The snapshot summary is the one half a first cycle keeps, because the update-snapshot shortcut reads whatever the last cycle produced and the browser's first cycle would otherwise clear what the node's just left.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.

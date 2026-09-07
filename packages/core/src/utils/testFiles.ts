@@ -2,8 +2,14 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import pathe from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { FileFilterMode, Project } from '../types';
-import { castArray, parsePosix } from './helper';
+import type { Project } from '../types';
+import {
+  castArray,
+  isQuotedFilter,
+  normalizeExactPathMatch,
+  parsePosix,
+  unquoteFilter,
+} from './helper';
 import { color } from './logger';
 
 /**
@@ -16,8 +22,9 @@ export const isFilterInsideProject = (
   projectRootPath: string,
   rootPath: string,
 ): boolean => {
+  const path = unquoteFilter(filter);
   const absoluteFilter = pathe.normalize(
-    pathe.isAbsolute(filter) ? filter : pathe.resolve(rootPath, filter),
+    pathe.isAbsolute(path) ? path : pathe.resolve(rootPath, path),
   );
   const relativeFilter = pathe.normalize(
     pathe.relative(projectRootPath, absoluteFilter),
@@ -30,14 +37,11 @@ export const isFilterInsideProject = (
 };
 
 /**
- * Whether a CLI file filter is a bare basename fragment (no path separator, no
- * leading `.`) that `fuzzy` mode matches against every project.
+ * Whether a CLI file filter is an unquoted basename fragment (no path separator,
+ * no leading `.`) that substring matching applies to every project.
  */
-export const isFuzzyBasenameFilter = (
-  filter: string,
-  mode: FileFilterMode | undefined,
-): boolean => {
-  if (mode === 'exact' || pathe.isAbsolute(filter)) {
+export const isFuzzyBasenameFilter = (filter: string): boolean => {
+  if (isQuotedFilter(filter) || pathe.isAbsolute(filter)) {
     return false;
   }
 
@@ -53,7 +57,6 @@ export const filterFiles = (
   testFiles: string[],
   filters: string[],
   dir: string,
-  mode: FileFilterMode = 'fuzzy',
 ): string[] => {
   if (!filters.length) {
     return [];
@@ -64,31 +67,30 @@ export const filterFiles = (
       ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
 
-  if (mode === 'exact') {
-    const normalizeExactMatchPath = (filePath: string) => {
-      const normalizedPath = pathe.normalize(filePath);
-      return process.platform === 'win32'
-        ? normalizedPath.toLocaleLowerCase()
-        : normalizedPath;
-    };
-
-    const exactFilters = new Set(
-      fileFilters.map((filter) => normalizeExactMatchPath(filter)),
-    );
-
-    return testFiles.filter((testFilePath) => {
-      const absolutePath = normalizeExactMatchPath(testFilePath);
-      const relativePath = normalizeExactMatchPath(
-        pathe.relative(dir, testFilePath),
-      );
-
-      return exactFilters.has(absolutePath) || exactFilters.has(relativePath);
-    });
+  const exactFilters = new Set<string>();
+  const fuzzyFilters: string[] = [];
+  for (const filter of fileFilters) {
+    if (isQuotedFilter(filter)) {
+      exactFilters.add(normalizeExactPathMatch(unquoteFilter(filter)));
+    } else {
+      fuzzyFilters.push(filter);
+    }
   }
 
   return testFiles.filter((t) => {
-    const testFile = pathe.relative(dir, t).toLocaleLowerCase();
-    return fileFilters.some((f) => {
+    const relativePath = pathe.relative(dir, t);
+    if (
+      exactFilters.size > 0 &&
+      (exactFilters.has(normalizeExactPathMatch(t)) ||
+        exactFilters.has(normalizeExactPathMatch(relativePath)))
+    ) {
+      return true;
+    }
+    if (fuzzyFilters.length === 0) {
+      return false;
+    }
+    const testFile = relativePath.toLocaleLowerCase();
+    return fuzzyFilters.some((f) => {
       // if filter is a full file path, we should include it if it's in the same folder
       if (pathe.isAbsolute(f) && t.startsWith(f)) {
         return true;
@@ -144,7 +146,6 @@ export const getTestEntries = async ({
   rootPath,
   projectRoot,
   fileFilters,
-  fileFilterMode,
   includeSource,
 }: {
   rootPath: string;
@@ -152,7 +153,6 @@ export const getTestEntries = async ({
   exclude: string[];
   includeSource: string[];
   fileFilters?: string[];
-  fileFilterMode?: FileFilterMode;
   projectRoot: string;
 }): Promise<Record<string, string>> => {
   const globOptions = {
@@ -207,7 +207,7 @@ export const getTestEntries = async ({
   return Object.fromEntries(
     (fileFilters === undefined
       ? testFiles
-      : filterFiles(testFiles, fileFilters, rootPath, fileFilterMode)
+      : filterFiles(testFiles, fileFilters, rootPath)
     ).map((entry) => {
       const relativePath = pathe.relative(rootPath, entry);
       return [formatTestEntryName(relativePath), entry];

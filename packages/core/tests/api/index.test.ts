@@ -207,9 +207,9 @@ describe('createRstest', () => {
         config: { reporters: [] },
       });
 
-      await expect(
-        rstest.run({ shard: { index: 1.5, count: 2 } }),
-      ).rejects.toThrow('Invalid shard option: 1.5/2');
+      await expect(rstest.run({ shard: '1.5/2' })).rejects.toThrow(
+        'Invalid shard option: 1.5/2',
+      );
     });
   });
 

@@ -358,7 +358,7 @@ describe('RstestApi test listing', () => {
     rs.restoreAllMocks();
   });
 
-  it('uses exact filters for targeted runtime discovery', async () => {
+  it('quotes file paths for targeted runtime discovery', async () => {
     const api = createApi();
     const worker = mockWorker(api);
 
@@ -366,8 +366,7 @@ describe('RstestApi test listing', () => {
 
     expect(worker.listTests).toHaveBeenCalledWith(
       expect.objectContaining({
-        fileFilterMode: 'exact',
-        fileFilters: ['/x/file.test.ts'],
+        fileFilters: ['"/x/file.test.ts"'],
       }),
     );
   });
@@ -388,7 +387,6 @@ describe('RstestApi test listing', () => {
     );
     const worker = new Worker();
     rs.spyOn(worker as any, 'init').mockResolvedValue({
-      fileFilterMode: undefined,
       fileFilters: undefined,
       rstest: { listTests },
     });
@@ -399,7 +397,6 @@ describe('RstestApi test listing', () => {
     ]);
     expect(listTests).toHaveBeenCalledWith({
       filesOnly: true,
-      filterMode: undefined,
       filters: undefined,
     });
   });
@@ -417,8 +414,7 @@ describe('RstestApi test listing', () => {
     const listTests = rs.fn(async () => [declaration]);
     const worker = new Worker();
     rs.spyOn(worker as any, 'init').mockResolvedValue({
-      fileFilterMode: 'exact',
-      fileFilters: [testPath],
+      fileFilters: [`"${testPath}"`],
       rstest: { listTests },
     });
 
@@ -427,8 +423,7 @@ describe('RstestApi test listing', () => {
     ]);
     expect(listTests).toHaveBeenCalledTimes(1);
     expect(listTests).toHaveBeenCalledWith({
-      filterMode: 'exact',
-      filters: [testPath],
+      filters: [`"${testPath}"`],
       includeLocation: true,
       includeSuites: true,
     });
@@ -554,9 +549,9 @@ describe('RstestApi test-run completion', () => {
   };
 
   it.each([
-    { filterMode: 'fuzzy' as const, kind: 'folder' },
-    { filterMode: 'exact' as const, kind: 'file' },
-  ])('forwards a $kind filter in $filterMode mode', async ({ filterMode }) => {
+    { filter: '/x/tests', kind: 'folder' },
+    { filter: '"/x/tests/file.test.ts"', kind: 'file' },
+  ])('forwards the $kind path without a filter mode', async ({ filter }) => {
     const api = createApi();
     const engineRun = rs.fn(async () => ({
       status: 'pass',
@@ -565,29 +560,25 @@ describe('RstestApi test-run completion', () => {
     const coreWorker = new Worker();
     rs.spyOn(coreWorker as any, 'init').mockResolvedValue({
       command: 'run',
-      fileFilterMode: filterMode,
-      fileFilters: ['/x/tests'],
+      fileFilters: [filter],
       rstest: { run: engineRun },
     });
     const worker = mockWorker(api, (data) => coreWorker.runTest(data));
     const { run, token } = createRunContext();
 
     await api.runTest({
-      fileFilter: '/x/tests',
-      fileFilterMode: filterMode,
+      fileFilter: filter,
       run,
       token,
     });
 
     expect(worker.runTest).toHaveBeenCalledWith(
       expect.objectContaining({
-        fileFilterMode: filterMode,
-        fileFilters: ['/x/tests'],
+        fileFilters: [filter],
       }),
     );
     expect(engineRun).toHaveBeenCalledWith({
-      filterMode,
-      filters: ['/x/tests'],
+      filters: [filter],
     });
   });
 

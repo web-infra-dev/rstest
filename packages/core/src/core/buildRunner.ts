@@ -3,13 +3,12 @@ import picomatch from 'picomatch';
 import type { CommonOptions } from '../cli/init';
 import { exitReporters } from '../reporter';
 import type {
-  FileFilterMode,
   Project,
   RstestCommand,
   RstestConfig,
   RstestInstance,
 } from '../types';
-import { logger } from '../utils';
+import { logger, quoteFilter } from '../utils';
 import type { ResolvedRunnerInputs } from './resolveConfig';
 
 export type CreateRstestContextFn<
@@ -25,7 +24,6 @@ export type CreateRstestContextFn<
   },
   command: RstestCommand,
   fileFilters?: string[],
-  fileFilterMode?: FileFilterMode,
 ) => Instance;
 
 export const normalizeRunnerFilters = (
@@ -191,14 +189,12 @@ const getCoverageChangedOption = (options: CommonOptions) =>
 const resolveEffectiveFilters = async ({
   options,
   filters,
-  filterMode,
   createRstestContext,
   inputs,
   embedded,
 }: {
   options: CommonOptions;
   filters?: ReadonlyArray<string | number>;
-  filterMode?: FileFilterMode;
   createRstestContext: CreateRstestContextFn;
   inputs: ResolvedRunnerInputs;
   embedded: boolean;
@@ -207,7 +203,6 @@ const resolveEffectiveFilters = async ({
   if (!isRelatedRun(options)) {
     return {
       effectiveFilters: normalizedFilters,
-      fileFilterMode: filterMode ?? ('fuzzy' as const),
     };
   }
 
@@ -245,7 +240,6 @@ const resolveEffectiveFilters = async ({
   if (forceRerunFiles.length) {
     return {
       effectiveFilters: undefined,
-      fileFilterMode: undefined,
       relatedFilters: sourceFilters,
       relatedMode: 'changed' as const,
       relatedResolutionEmpty: false,
@@ -264,8 +258,8 @@ const resolveEffectiveFilters = async ({
   });
 
   return {
-    effectiveFilters: relatedFiles,
-    fileFilterMode: 'exact' as const,
+    // Fuzzy absolute paths also match .tsx siblings and same-suffix paths in other packages.
+    effectiveFilters: relatedFiles.map(quoteFilter),
     relatedFilters: sourceFilters,
     relatedMode: changedRun ? ('changed' as const) : ('related' as const),
     relatedResolutionEmpty: relatedFiles.length === 0,
@@ -306,7 +300,6 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   options,
   command,
   filters,
-  filterMode,
   createRstestContext,
   embedded = false,
 }: {
@@ -314,7 +307,6 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   options: CommonOptions;
   command: RstestCommand;
   filters?: ReadonlyArray<string | number>;
-  filterMode?: FileFilterMode;
   createRstestContext: CreateRstestContextFn<Instance>;
   embedded?: boolean;
 }): Promise<Instance> {
@@ -338,7 +330,6 @@ ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n
   const selection = await resolveEffectiveFilters({
     options,
     filters,
-    filterMode,
     createRstestContext,
     inputs,
     embedded,
@@ -354,7 +345,6 @@ ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n
     },
     command,
     selection.effectiveFilters,
-    selection.fileFilterMode,
   );
 
   try {

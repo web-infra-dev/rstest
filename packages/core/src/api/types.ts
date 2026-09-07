@@ -2,7 +2,6 @@ import type { LoadConfigOptions } from '@rsbuild/core';
 import type {
   BrowserName,
   CoverageMapData,
-  FileFilterMode,
   FormattedError,
   Location as TestLocation,
   NormalizedConfig,
@@ -17,7 +16,6 @@ import type { LoadedRstestConfig } from '../config';
 /** @experimental Subject to change until 1.0.0. */
 export type {
   CoverageMapData,
-  FileFilterMode,
   NormalizedConfig,
   RstestConfig,
   SnapshotSummary,
@@ -56,10 +54,9 @@ export interface RstestContext {
 /** @experimental Subject to change until 1.0.0. */
 export interface RunOptions {
   filters?: string[];
-  filterMode?: FileFilterMode;
   related?: boolean;
   changed?: boolean | string;
-  shard?: string | { index: number; count: number };
+  shard?: string;
   project?: string[];
   testNamePattern?: RegExp | string;
   update?: boolean;
