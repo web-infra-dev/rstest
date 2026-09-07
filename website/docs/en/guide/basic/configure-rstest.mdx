@@ -27,6 +27,59 @@ export default defineConfig({
 
 If you are developing a non-TypeScript project, you can use the `.mjs` format for the configuration file.
 
+### Configure Rslint
+
+[Rslint](https://github.com/web-infra-dev/rslint) is an ESLint-compatible linter for JavaScript and TypeScript. Its built-in `rstestPlugin` adds rules for common mistakes in Rstest test definitions, assertions, mocks, and snapshots.
+
+Install [@rslint/core](https://github.com/web-infra-dev/rslint) in your project, then enable the recommended preset in `rslint.config.ts`:
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rslint/core -D" />
+
+#### Dedicated test files
+
+If your tests use filenames such as `*.test.ts` or `*.spec.ts`, scope the preset to those files:
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([
+  {
+    ...rstestPlugin.configs.recommended,
+    files: ['**/*.{test,spec}.{js,mjs,jsx,ts,tsx,mts}'],
+  },
+]);
+```
+
+The recommended preset does not declare a `files` pattern. Adding one keeps Rstest-specific rules focused on test files and leaves production files to your other Rslint configuration items.
+
+#### In-source tests
+
+With [in-source testing](/config/test/include-source), tests live alongside production code and use `import.meta.rstest`. Apply the preset to every linted file so it can check both in-source tests and dedicated test files:
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([rstestPlugin.configs.recommended]);
+```
+
+No additional Rslint globals are required for `import.meta.rstest`.
+
+#### Run Rslint
+
+Run Rslint from your project root:
+
+```bash
+pnpm exec rslint
+```
+
+You can also add the command to the `scripts` section of `package.json` and run it through your package manager's lint script.
+
+#### Explore the rules
+
+The [Rslint `rstestPlugin` preset](https://rslint.rs/api/presets/rstest-plugin) documents the available configuration and usage patterns. To see which rules are included in the recommended preset, open the [Rstest rules list](https://rslint.rs/rules/?preset=rstestPlugin.configs.recommended).
+
 ### Specify config file
 
 Rstest CLI uses the `--config` option to specify the config file, which can be set to a relative path or an absolute path.

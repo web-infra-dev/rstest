@@ -27,6 +27,59 @@ export default defineConfig({
 
 如果你在开发一个非 TypeScript 项目，可以使用 `.mjs` 格式的配置文件。
 
+### 配置 Rslint
+
+[Rslint](https://github.com/web-infra-dev/rslint) 是一个兼容 ESLint 的 JavaScript 和 TypeScript linter。它内置的 `rstestPlugin` 提供了针对 Rstest 测试定义、断言、mock 和 snapshot 的规则，可以帮助你发现常见问题。
+
+在项目中安装 [@rslint/core](https://github.com/web-infra-dev/rslint)，然后在 `rslint.config.ts` 中启用 recommended preset：
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rslint/core -D" />
+
+#### 独立的测试文件
+
+如果测试文件使用 `*.test.ts` 或 `*.spec.ts` 这样的文件名，可以将 preset 限定到这些文件：
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([
+  {
+    ...rstestPlugin.configs.recommended,
+    files: ['**/*.{test,spec}.{js,mjs,jsx,ts,tsx,mts}'],
+  },
+]);
+```
+
+recommended preset 本身没有声明 `files` 匹配模式。加上这个模式后，Rstest 专用规则只会检查测试文件，生产代码仍然可以由其他 Rslint 配置项负责。
+
+#### In-source tests
+
+使用 [in-source testing](/config/test/include-source) 时，测试代码与生产代码写在同一个文件中，并通过 `import.meta.rstest` 使用测试 API。将 preset 应用到所有需要 lint 的文件，才能同时检查 in-source tests 和独立的测试文件：
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([rstestPlugin.configs.recommended]);
+```
+
+对于 `import.meta.rstest`，不需要额外声明 Rslint globals。
+
+#### 运行 Rslint
+
+在项目根目录运行 Rslint：
+
+```bash
+pnpm exec rslint
+```
+
+也可以把这条命令加入 `package.json` 的 `scripts`，再通过 package manager 的 lint script 运行。
+
+#### 查看规则
+
+[Rslint 的 `rstestPlugin` preset](https://rslint.rs/api/presets/rstest-plugin) 介绍了配置方式和使用场景。要查看 recommended preset 包含哪些规则，请打开 [Rstest rules 列表](https://rslint.rs/rules/?preset=rstestPlugin.configs.recommended)。
+
 ### 指定配置文件
 
 Rstest CLI 通过 `--config` 选项来指定配置文件，可以设置为相对路径或绝对路径。
