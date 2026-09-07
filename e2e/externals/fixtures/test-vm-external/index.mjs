@@ -1,4 +1,6 @@
 import { createRequire } from 'node:module';
+import { builtinModules } from 'node:module';
+import { readFile, readFileSync } from 'node:fs';
 import path from 'node:path';
 import timers, { setTimeout } from 'node:timers';
 import helper from './helper.cjs';
@@ -96,6 +98,12 @@ export const importAddonGraph = () => import('./import-addon.mjs');
 export const verifyNodeGlobals = async () => {
   const pendingResponse = fetch('data:text/plain,vm');
   const response = await pendingResponse;
+  let fetchError;
+  try {
+    await fetch('not a url');
+  } catch (error) {
+    fetchError = error;
+  }
   const clonedBlob = structuredClone(new Blob(['blob']));
   const clonedTypeError = structuredClone(new TypeError('type-error'));
   const clonedError = structuredClone(
@@ -112,12 +120,34 @@ export const verifyNodeGlobals = async () => {
     clonedTypedArray: clonedTypedArray instanceof Uint8Array,
     clonedTypedArrayBuffer: clonedTypedArray.buffer instanceof ArrayBuffer,
     fetchPromise: pendingResponse instanceof Promise,
+    fetchError: fetchError instanceof TypeError,
     responseText: await response.text(),
     structuredCloneObject: structuredClone({}) instanceof Object,
     structuredCloneNestedObject:
       structuredClone({ nested: {} }).nested instanceof Object,
   };
 };
+
+export const verifyBuiltinCallback = () =>
+  new Promise((resolve) => {
+    readFile('/rstest-file-that-does-not-exist', (error) => {
+      resolve(error instanceof Error);
+    });
+  });
+
+export const verifyBuiltinSyncError = () => {
+  try {
+    readFileSync('/rstest-file-that-does-not-exist');
+    return false;
+  } catch (error) {
+    return error instanceof Error;
+  }
+};
+
+export const verifyModuleBuiltin = () => ({
+  builtinModulesArray: builtinModules instanceof Array,
+  builtinModulesObject: builtinModules instanceof Object,
+});
 
 export const createTimerPromise = () =>
   require('node:timers/promises').setTimeout(0, 'timer');

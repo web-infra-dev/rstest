@@ -14,6 +14,9 @@ const {
   importedImportMetaMain,
   verifyImportAttributeErrorRealm,
   verifyNodeGlobals,
+  verifyBuiltinCallback,
+  verifyBuiltinSyncError,
+  verifyModuleBuiltin,
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
@@ -73,6 +76,12 @@ it('executes external modules in the test VM realm', async () => {
     wasm: 42,
     wasmFunction: true,
   });
+  await expect(verifyBuiltinCallback()).resolves.toBe(true);
+  expect(verifyBuiltinSyncError()).toBe(true);
+  expect(verifyModuleBuiltin()).toEqual({
+    builtinModulesArray: true,
+    builtinModulesObject: true,
+  });
   expect(await verifyUnsupportedImportAttribute()).toBe(
     'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
   );
@@ -108,6 +117,7 @@ it('executes external modules in the test VM realm', async () => {
     clonedTypedArray: true,
     clonedTypedArrayBuffer: true,
     fetchPromise: true,
+    fetchError: true,
     responseText: 'vm',
     structuredCloneNestedObject: true,
     structuredCloneObject: true,

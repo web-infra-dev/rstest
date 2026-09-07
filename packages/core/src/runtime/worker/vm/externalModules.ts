@@ -389,6 +389,7 @@ class VmExternalModules {
   private readonly vmPromise: PromiseConstructor;
   private readonly isVmError: (value: unknown) => boolean;
   private readonly isVmValue: (value: unknown) => boolean;
+  private readonly wrappedBuiltinCallbacks = new WeakMap<object, unknown>();
   private readonly wrappedBuiltinValues = new WeakMap<object, unknown>();
   private readonly unwrappedBuiltinValues = new WeakMap<object, object>();
 
@@ -1660,13 +1661,13 @@ class VmExternalModules {
       defaultExport = timers;
     } else if (normalized === 'module') {
       const moduleBuiltin = this.loadBuiltin(resolvedId);
-      exports = {
-        ...imported,
+      exports = this.wrapBuiltinExports(imported as Record<string, unknown>);
+      Object.assign(exports, {
         Module: this.getVmModuleClass(),
         createRequire: this.createRequire,
         syncBuiltinESMExports: this.syncBuiltinESMExports,
         default: moduleBuiltin,
-      };
+      });
       overrides.add('Module');
       overrides.add('createRequire');
       overrides.add('syncBuiltinESMExports');
@@ -1700,7 +1701,6 @@ class VmExternalModules {
       wrapExports:
         normalized !== 'timers' &&
         normalized !== 'timers/promises' &&
-        normalized !== 'module' &&
         normalized !== 'process',
     });
     return module;
@@ -1732,15 +1732,39 @@ class VmExternalModules {
         return cached;
       }
       const wrapped = new Proxy(value, {
-        apply: (target, thisArg, args) =>
-          this.wrapBuiltinResult(
-            Reflect.apply(target, this.unwrapBuiltinValue(thisArg), args),
-          ),
+        apply: (target, thisArg, args) => {
+          try {
+            return this.wrapBuiltinResult(
+              Reflect.apply(
+                target,
+                this.unwrapBuiltinValue(thisArg),
+                this.unwrapBuiltinArguments(args),
+              ),
+            );
+          } catch (error) {
+            throw this.wrapBuiltinError(error);
+          }
+        },
         construct: (target, args, newTarget) =>
           Reflect.construct(target, args, newTarget),
       });
       this.wrappedBuiltinValues.set(value, wrapped);
       this.unwrappedBuiltinValues.set(wrapped, value);
+      return wrapped;
+    }
+    if (Array.isArray(value)) {
+      const cached = this.wrappedBuiltinValues.get(value);
+      if (cached) {
+        return cached;
+      }
+      const wrapped = this.wrapBuiltinResultValue(value);
+      this.wrappedBuiltinValues.set(value, wrapped);
+      if (
+        wrapped !== null &&
+        (typeof wrapped === 'object' || typeof wrapped === 'function')
+      ) {
+        this.unwrappedBuiltinValues.set(wrapped, value);
+      }
       return wrapped;
     }
     if (value === null || typeof value !== 'object') {
@@ -1820,6 +1844,37 @@ class VmExternalModules {
       });
     }
     return this.wrapBuiltinResultValue(value);
+  }
+
+  private wrapBuiltinCallback(
+    value: (...args: unknown[]) => unknown,
+  ): (...args: unknown[]) => unknown {
+    const cached = this.wrappedBuiltinCallbacks.get(value);
+    if (cached) {
+      return cached as (...args: unknown[]) => unknown;
+    }
+    const wrapped = new Proxy(value, {
+      apply: (target, thisArg, args) => {
+        const wrappedArgs = args.map((arg, index) =>
+          index === 0
+            ? this.wrapBuiltinError(arg)
+            : this.wrapBuiltinResultValue(arg),
+        );
+        return Reflect.apply(target, thisArg, wrappedArgs);
+      },
+    });
+    this.wrappedBuiltinCallbacks.set(value, wrapped);
+    this.wrappedBuiltinCallbacks.set(wrapped, wrapped);
+    return wrapped;
+  }
+
+  private unwrapBuiltinArguments(args: unknown[]): unknown[] {
+    return args.map((arg) => {
+      if (typeof arg === 'function' && this.isVmValue(arg)) {
+        return this.wrapBuiltinCallback(arg as (...args: unknown[]) => unknown);
+      }
+      return this.unwrapBuiltinValue(arg);
+    });
   }
 
   private wrapBuiltinError(error: unknown): unknown {
