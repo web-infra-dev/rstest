@@ -111,6 +111,30 @@ describe('require.resolve origin runtime helper', () => {
     expect(exports).toEqual({ foo: 'bar' });
   });
 
+  it('associates a VM CJS bundle with its external children', () => {
+    const testPath = path.resolve(
+      __dirname,
+      'fixtures/vm-external/module-semantics/parent.cjs',
+    );
+    const exports = loadModule({
+      codeContent:
+        'module.exports = { child: require("./child.cjs"), again: require("./child.cjs"), self: module };',
+      distPath: testPath,
+      testPath,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+      vmContext: vm.createContext({}),
+    });
+    expect(exports.child).toMatchObject({
+      hasParent: true,
+      parentHasChild: true,
+    });
+    expect(exports.again).toBe(exports.child);
+    expect(exports.self.children).toHaveLength(1);
+    expect(exports.self.loaded).toBe(true);
+  });
+
   it('keeps the CommonJS wrapper source stable when context parameters change', () => {
     const compileFunctionSpy = rs.spyOn(vm, 'compileFunction');
     onTestFinished(() => {

@@ -48,12 +48,12 @@ export const createVmTimersPromisesLoader = (
   const wrappedMethods = new WeakMap<object, Map<PropertyKey, unknown>>();
   const pending = new Set<{ cancel: () => void }>();
 
-  const createAbortError = (): Error => {
+  const createAbortError = (options?: ErrorOptions): Error => {
     const ErrorConstructor = runtimeGlobal.Error as
-      (new (message?: string) => Error) | undefined;
+      (new (message?: string, options?: ErrorOptions) => Error) | undefined;
     const error = ErrorConstructor
-      ? new ErrorConstructor('The operation was aborted')
-      : new Error('The operation was aborted');
+      ? new ErrorConstructor('The operation was aborted', options)
+      : new Error('The operation was aborted', options);
     error.name = 'AbortError';
     (error as Error & { code?: string }).code = 'ABORT_ERR';
     return error;
@@ -105,7 +105,6 @@ export const createVmTimersPromisesLoader = (
     let settled = false;
     let removeSignalListener: (() => void) | undefined;
     let rejectPromise!: (reason: unknown) => void;
-    let cancel = (): void => {};
     const record = { cancel: () => cancel() };
     const settle = (callback: (value: unknown) => void, value: unknown) => {
       if (settled) {
@@ -116,21 +115,21 @@ export const createVmTimersPromisesLoader = (
       removeSignalListener?.();
       callback(value);
     };
-    cancel = () => {
+    const cancel = (options?: ErrorOptions) => {
       controller.abort();
-      settle(rejectPromise, createAbortError());
+      settle(rejectPromise, createAbortError(options));
     };
 
     const promise = new PromiseConstructor((resolve, reject) => {
       rejectPromise = reject;
       const signal = externalOptions?.signal;
       if (signal?.aborted) {
-        cancel();
+        cancel({ cause: signal.reason });
         return;
       }
       if (signal) {
         const onAbort = () => {
-          cancel();
+          cancel({ cause: signal.reason });
         };
         signal.addEventListener('abort', onAbort, { once: true });
         removeSignalListener = () =>

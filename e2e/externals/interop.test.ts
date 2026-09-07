@@ -118,6 +118,28 @@ describe('test interop', () => {
     await expectExecSuccess();
   });
 
+  it.each(['true', 'false'])(
+    'preserves VM interop with output module %s',
+    async (outputModule) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          './fixtures/vmInteropEdges.test.ts',
+          '-c',
+          './fixtures/rstest.vmExternal.config.mts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: { RSTEST_OUTPUT_MODULE: outputModule },
+          },
+        },
+      });
+      await expectExecSuccess();
+    },
+  );
+
   it.each([
     { flags: [] },
     { flags: ['--no-addons'] },

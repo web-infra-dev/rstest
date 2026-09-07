@@ -88,7 +88,7 @@ Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironmen
 
 跨过 Node builtin 边界时，Rstest 会将直接返回值和 Promise 结果中的普通对象、数组及 Error rejection reason 适配到当前 VM。callback 参数，以及 native builtin 同步抛出的异常，不在转换范围内。这不是对所有值的通用 realm 转换：Buffer、stream、typed array、native handle 等 Node 原生对象会保留原生 backing 和 prototype；jsdom 与 happy-dom 创建的 DOM 对象也会保留各自 provider realm 的 prototype。需要跨 realm 传值时，不要依赖不同 realm 之间的 constructor identity。
 
-在 Node 环境中，`fetch()` 返回 VM Promise，但保留原生 `Response`。它的 `json()`、`text()` 等 body 方法仍返回原生 Promise、结果和异常；转换不会延伸到返回的原生对象的方法。`structuredClone()` 失败时也会保留 Node 原生 `DOMException`（`name: 'DataCloneError'`、`code: 25`）。对于这些值，请使用 `await`，并按内容或错误的 `name`／`code` 断言，避免用 VM constructor 做 `instanceof Promise`、`Object` 或 `Error` 检查。
+在 Node 环境中，`fetch()` 返回 VM Promise，但保留原生 `Response`。它的 `json()`、`text()` 等 body 方法仍返回原生 Promise、结果和异常；转换不会延伸到返回的原生对象的方法。错误转换只针对普通错误，不包含原生 `DOMException`：使用 signal 的默认 reason 取消 `fetch()` 时，会保留同一个 `DOMException` 对象（`name: 'AbortError'`、`code: 20`）。`structuredClone()` 失败时也会保留 Node 原生 `DOMException`（`name: 'DataCloneError'`、`code: 25`）。对于这些值，请使用 `await`，并按内容或错误的 `name`／`code` 断言，避免用 VM constructor 做 `instanceof Promise`、`Object` 或 `Error` 检查。
 
 #### 支持的模块加载方式
 

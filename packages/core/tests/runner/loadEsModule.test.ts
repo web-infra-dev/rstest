@@ -213,6 +213,7 @@ describe('loadEsModule', () => {
       code: 'ABORT_ERR',
       name: 'AbortError',
     });
+    await expect(pending).rejects.not.toHaveProperty('cause');
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(resolved).toBe(false);
   });
@@ -241,6 +242,35 @@ describe('loadEsModule', () => {
 
     expect(unhandled).toBeUndefined();
   });
+
+  it.each(['before', 'after'] as const)(
+    'preserves promise timer abort causes %s scheduling',
+    async (timing) => {
+      const executor = getVmExternalModules(vm.createContext({}));
+      const timers = executor.require(
+        'node:timers/promises',
+        __filename,
+      ) as typeof import('node:timers/promises');
+      const controller = new AbortController();
+      const reason = { source: 'caller' };
+      if (timing === 'before') controller.abort(reason);
+      const pending = timers.setTimeout(1000, undefined, {
+        signal: controller.signal,
+      });
+      controller.abort(reason);
+      try {
+        await expect(pending).rejects.toSatisfy((error) => {
+          expect(error.cause).toBe(reason);
+          expect(Object.getOwnPropertyDescriptor(error, 'cause')).toMatchObject(
+            { enumerable: false },
+          );
+          return true;
+        });
+      } finally {
+        executor.dispose();
+      }
+    },
+  );
 
   it('should bridge promises returned by builtin modules into the VM realm', async () => {
     const vmContext = vm.createContext({});
@@ -380,7 +410,7 @@ describe('loadEsModule', () => {
     const externalPath = join(directory, 'default-and-named.mjs');
     writeFileSync(
       externalPath,
-      "export default 'default';\nexport const named = 'named';\n",
+      'export let named = 1; export { named as default }; export const increment = () => named++;',
     );
 
     try {
@@ -396,6 +426,45 @@ describe('loadEsModule', () => {
       expect(namespace.__esModule).toBe(true);
       expect(Object.isExtensible(namespace)).toBe(false);
       expect(Object.getPrototypeOf(namespace)).toBe(null);
+      for (const name of ['default', 'named', '__esModule']) {
+        expect(Object.getOwnPropertyDescriptor(namespace, name)).toEqual({
+          value: name === '__esModule' ? true : 1,
+          writable: true,
+          enumerable: true,
+          configurable: false,
+        });
+        expect(Reflect.set(namespace, name, 'replacement')).toBe(false);
+      }
+      (namespace.increment as () => void)();
+      expect(namespace.default).toBe(2);
+      expect(Object.getOwnPropertyDescriptor(namespace, 'named')?.value).toBe(
+        2,
+      );
+      expect(executor.require(externalPath, __filename)).toBe(namespace);
+    } finally {
+      executor.dispose();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps an explicitly exported __esModule unchanged', () => {
+    if (!('hasAsyncGraph' in vm.SourceTextModule.prototype)) return;
+    const directory = mkdtempSync(join(tmpdir(), 'rstest-require-marker-'));
+    const externalPath = join(directory, 'marker.mjs');
+    writeFileSync(
+      externalPath,
+      'export default 1; export const __esModule = false;',
+    );
+    const executor = getVmExternalModules(vm.createContext({}));
+    try {
+      const namespace = executor.require(externalPath, __filename);
+      expect(namespace).toMatchObject({ default: 1, __esModule: false });
+      expect(Object.getOwnPropertyDescriptor(namespace, '__esModule')).toEqual({
+        value: false,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+      });
     } finally {
       executor.dispose();
       rmSync(directory, { recursive: true, force: true });

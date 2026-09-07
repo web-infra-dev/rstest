@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { createRequire as createNativeRequire } from 'node:module';
+import { createRequire as createNativeRequire, Module } from 'node:module';
 import type { ImportAttributes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -84,6 +84,7 @@ const createRequire = (
   interopDefault: boolean,
   vmContext?: vm.Context,
   cacheCompilation = false,
+  parentModule?: Module,
 ): NodeJS.Require => {
   const _require = (() => {
     try {
@@ -135,7 +136,11 @@ const createRequire = (
       }
     }
     if (vmContext) {
-      return getVmExternalModules(vmContext).require(id, filename);
+      return getVmExternalModules(vmContext).require(
+        id,
+        filename,
+        parentModule,
+      );
     }
     const resolved = _require.resolve(id);
     return _require(resolved);
@@ -234,15 +239,15 @@ export const loadModule = ({
   const assetFiles = accumulatedAssetFiles;
   const fileDir = path.dirname(testPath);
 
-  const localModule = {
+  const vmParentModule = vmContext ? new Module(testPath) : undefined;
+  const localModule = Object.assign(vmParentModule ?? { isPreloading: false }, {
     children: [],
     exports: {},
     filename: testPath,
     id: testPath,
-    isPreloading: false,
     loaded: false,
     path: fileDir,
-  };
+  });
 
   const context = {
     module: localModule,
@@ -255,6 +260,7 @@ export const loadModule = ({
       interopDefault,
       vmContext,
       cacheCompilation,
+      vmParentModule,
     ),
     [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
@@ -270,6 +276,10 @@ export const loadModule = ({
     __filename: testPath,
     ...rstestContext,
   };
+
+  if (vmParentModule) {
+    vmParentModule.require = context.require;
+  }
 
   const code = `'use strict';return function(){\n${codeContent}\n}`;
 
@@ -320,6 +330,7 @@ export const loadModule = ({
     compilationCache.set(distPath, { code, params, cachedData: fn.cachedData });
   }
   fn(...Object.values(context)).call(localModule.exports);
+  localModule.loaded = true;
 
   return localModule.exports;
 };

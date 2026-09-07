@@ -1204,42 +1204,29 @@ class VmExternalModules {
       return cachedNamespace;
     }
     const namespace = module.namespace as Record<PropertyKey, unknown>;
-    const forwardedNamespace = Reflect.has(namespace, 'default')
-      ? this.createRequireEsmNamespace(namespace)
-      : namespace;
+    const forwardedNamespace =
+      Reflect.has(namespace, 'default') && !Reflect.has(namespace, '__esModule')
+        ? this.createRequireEsmNamespace(module)
+        : namespace;
     this.esmRequireNamespaceCache.set(identifier, forwardedNamespace);
     return forwardedNamespace;
   }
 
   private createRequireEsmNamespace(
-    namespace: Record<PropertyKey, unknown>,
+    module: SyncSourceTextModule,
   ): Record<PropertyKey, unknown> {
-    const forwardedNamespace = vm.runInContext(
-      'Object.create(null)',
-      this.context,
-    ) as Record<PropertyKey, unknown>;
-
-    for (const property of Reflect.ownKeys(namespace)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(namespace, property);
-      if (!descriptor) {
-        continue;
-      }
-      Object.defineProperty(forwardedNamespace, property, {
-        configurable: descriptor.configurable,
-        enumerable: descriptor.enumerable,
-        get: () => Reflect.get(namespace, property),
-      });
-    }
-
-    if (!Reflect.has(namespace, '__esModule')) {
-      Object.defineProperty(forwardedNamespace, '__esModule', {
-        configurable: false,
-        enumerable: true,
-        value: true,
-        writable: true,
-      });
-    }
-    return Object.preventExtensions(forwardedNamespace);
+    // A real namespace retains both live bindings and data descriptors, unlike
+    // a plain object with copied values or forwarding getters.
+    const facade = new vm.SourceTextModule(
+      'export * from "original"; export { default } from "original"; export const __esModule = true;',
+      { context: this.context },
+    ) as SyncSourceTextModule;
+    facade.linkRequests(facade.moduleRequests.map(() => module));
+    facade.instantiate();
+    // The original graph has already been evaluated synchronously; this module
+    // only reexports it and initializes the marker, with no user code to run.
+    void facade.evaluate();
+    return facade.namespace as Record<PropertyKey, unknown>;
   }
 
   private requireEsModuleSync(
