@@ -9,12 +9,28 @@ const {
   inspectRealm,
   inspectCommonJsPaths,
   inspectFailedChild,
+  requireAddonGraph,
+  importAddonGraph,
   importedImportMetaMain,
   verifyImportAttributeErrorRealm,
   verifyNodeGlobals,
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('rejects native addon imports in synchronous and asynchronous ESM graphs', async () => {
+  expect(requireAddonGraph).toThrow(
+    expect.objectContaining({
+      code:
+        'hasAsyncGraph' in vm.SourceTextModule.prototype
+          ? 'ERR_UNKNOWN_FILE_EXTENSION'
+          : 'ERR_REQUIRE_ESM',
+    }),
+  );
+  await expect(importAddonGraph()).rejects.toMatchObject({
+    code: 'ERR_UNKNOWN_FILE_EXTENSION',
+  });
+});
 
 it('removes failed CommonJS children before a retry', () => {
   expect(inspectFailedChild()).toEqual({

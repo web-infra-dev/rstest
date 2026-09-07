@@ -87,6 +87,9 @@ export const createRstestRuntime = async (
   const rstest = await createRstestUtilities();
 
   // Injected surface: build-once members only (see the contract above).
+  // Async helpers retain worker-realm promises and internally created errors.
+  // VM consumers can await them; publishing this surface does not promise
+  // VM constructor identity or convert user callback values/errors.
   const runtime = {
     runner,
     api: {

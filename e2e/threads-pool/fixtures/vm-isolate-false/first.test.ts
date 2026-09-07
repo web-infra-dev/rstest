@@ -6,6 +6,50 @@ import { workerTest } from './workerFixture';
 
 const FILE_MARKER = '__RSTEST_VM_FILE_MARKER__';
 
+it('supports awaiting runtime helpers without promising VM constructor identity', async () => {
+  const value = { from: 'test VM' };
+  const waiting = rs.waitFor(() => value);
+  expect(waiting).not.toBeInstanceOf(Promise);
+  expect(await waiting).toBe(value);
+
+  const timeout = rs.waitUntil(() => false, { timeout: 1, interval: 1 });
+  expect(timeout).not.toBeInstanceOf(Promise);
+  await expect(timeout).rejects.toMatchObject({
+    name: 'Error',
+    message: 'waitUntil timed out in 1ms',
+  });
+  await timeout.catch((error) => expect(error).not.toBeInstanceOf(Error));
+
+  const userError = new TypeError('user callback');
+  await expect(
+    rs.waitFor(
+      () => {
+        throw userError;
+      },
+      { timeout: 1, interval: 1 },
+    ),
+  ).rejects.toBe(userError);
+  await expect(
+    rs.waitUntil(() => {
+      throw userError;
+    }),
+  ).rejects.toBe(userError);
+
+  rs.useFakeTimers();
+  try {
+    let called = false;
+    setTimeout(() => {
+      called = true;
+    }, 10);
+    const running = rs.runAllTimersAsync();
+    expect(running).not.toBeInstanceOf(Promise);
+    await running;
+    expect(called).toBe(true);
+  } finally {
+    rs.useRealTimers();
+  }
+});
+
 it('preserves custom promisify for tracked immediate timers', async () => {
   await expect(promisify(setImmediate)('value')).resolves.toBe('value');
 });

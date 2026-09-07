@@ -629,10 +629,7 @@ class VmExternalModules {
       case 'json':
         return this.getJsonModule(resolvedId);
       case 'native':
-        if (
-          !isBuiltin(resolvedId.replace(/^node:/, '')) &&
-          extname(getFilePath(resolvedId)) === '.node'
-        ) {
+        if (!isBuiltin(resolvedId)) {
           throw createUnsupportedFormatError(getFilePath(resolvedId));
         }
         return this.loadNativeModule(resolvedId);
@@ -1013,13 +1010,17 @@ class VmExternalModules {
         };
       }
       case 'native': {
-        const nativePath = getFilePath(identifier);
-        const exports = isBuiltin(identifier)
-          ? this.loadBuiltin(identifier)
-          : createNativeRequire(import.meta.url)(nativePath);
+        // require(esm) still follows ESM import rules for its dependencies.
+        // Direct CommonJS require of an addon uses the separate require path.
+        if (!isBuiltin(identifier)) {
+          throw createUnsupportedFormatError(getFilePath(identifier));
+        }
         return {
           kind: 'ready',
-          module: this.getCommonJsSyntheticModule(identifier, exports),
+          module: this.getCommonJsSyntheticModule(
+            identifier,
+            this.loadBuiltin(identifier),
+          ),
         };
       }
       case 'wasm':
