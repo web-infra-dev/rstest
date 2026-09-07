@@ -1,7 +1,6 @@
 [
   "cli",
   "configure-rstest",
-  "configure-rslint",
   "css",
   "test-filter",
   "mock",
