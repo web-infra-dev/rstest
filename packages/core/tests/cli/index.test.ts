@@ -20,20 +20,21 @@ afterEach(() => {
 });
 
 describe('runCLI', () => {
-  it('accepts arguments written after the rstest command', () => {
-    runCLI({ argv: ['run', 'sum.test.ts', '--watch'] });
-
-    expect(prepareCliSpy).toHaveBeenCalledOnce();
-    expect(setupCommandsSpy).toHaveBeenCalledWith([
-      'node',
-      'rstest',
+  it('passes caller-supplied full-shape argv through unchanged', () => {
+    const argv = [
+      '/usr/local/bin/node',
+      '/project/node_modules/.bin/rstest',
       'run',
       'sum.test.ts',
       '--watch',
-    ]);
+    ];
+    runCLI({ argv });
+
+    expect(prepareCliSpy).toHaveBeenCalledOnce();
+    expect(setupCommandsSpy).toHaveBeenCalledWith(argv);
   });
 
-  it('defaults to the arguments after the executable and script', () => {
+  it('passes process.argv through unchanged by default', () => {
     process.argv = [
       '/usr/local/bin/node',
       '/project/node_modules/.bin/rstest',
@@ -43,11 +44,6 @@ describe('runCLI', () => {
 
     runCLI();
 
-    expect(setupCommandsSpy).toHaveBeenCalledWith([
-      'node',
-      'rstest',
-      'run',
-      'sum.test.ts',
-    ]);
+    expect(setupCommandsSpy).toHaveBeenCalledWith(process.argv);
   });
 });

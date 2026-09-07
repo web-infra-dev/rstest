@@ -434,11 +434,12 @@ interface RstestInstance {
 import { runCLI } from '@rstest/core/api';
 
 runCLI({
-  argv: ['run', 'src/foo.test.ts', '--update'],
+  argv: [...process.argv.slice(0, 2), 'run', 'src/foo.test.ts', '--update'],
 });
 ```
 
-`argv` 包含在命令行中写在 `rstest` 之后的命令、过滤条件和选项。默认值为 `process.argv.slice(2)`。
+`argv` 的结构与 Node.js 的 `process.argv` 一致，默认值为 `process.argv`：前两项是 executable 和 script 的路径，会被忽略，命令、filters 和 flags 从索引 2 开始。
+这与 Rsbuild 和 Rspress 的 `runCLI` 使用的结构相同。
 
 所有可用的命令和选项，请参阅 [CLI 文档](/guide/basic/cli)。
 
