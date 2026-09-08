@@ -1,5 +1,9 @@
 import { expect, it } from '@rstest/core';
 import vm from 'node:vm';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import Module, { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 // @ts-expect-error: the package is copied into node_modules by the e2e harness
 import * as vmExternal from 'test-vm-external/index.mjs';
 
@@ -24,6 +28,52 @@ const {
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('uses the file require cache through Module._cache and keeps compile errors in the VM', () => {
+  const directory = realpathSync(
+    mkdtempSync(join(tmpdir(), 'rstest-vm-module-cache-')),
+  );
+  try {
+    const child = join(directory, 'child.cjs');
+    const invalid = join(directory, 'invalid.cjs');
+    const json = join(directory, 'data.json');
+    writeFileSync(child, 'module.exports = {};');
+    writeFileSync(invalid, 'module.exports = ;');
+    writeFileSync(json, '{"value":1}');
+    const load = createRequire(join(directory, 'parent.cjs'));
+    // Node exposes this private alias; accessing it must not reach worker state.
+    const cache = Reflect.get(Module, '_cache');
+    expect(cache).toBe(load.cache);
+    expect(Object.getOwnPropertyDescriptor(Module, '_cache')?.value).toBe(
+      cache,
+    );
+    expect(Reflect.set(Module, '_cache', {})).toBe(false);
+    expect(Reflect.defineProperty(Module, '_cache', { value: {} })).toBe(false);
+    expect(Reflect.deleteProperty(Module, '_cache')).toBe(false);
+    const first = load(child);
+    expect(cache[child].exports).toBe(first);
+    delete cache[child];
+    expect(load(child)).not.toBe(first);
+    const firstJson = load(json);
+    expect(cache[json].exports).toBe(firstJson);
+    delete cache[json];
+    expect(load(json)).not.toBe(firstJson);
+    expect(() => load(invalid)).toThrow(SyntaxError);
+    expect(() => load(invalid)).toThrow(Error);
+    expect(load.cache[invalid]).toBeUndefined();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+it('reports malformed data URLs as VM TypeErrors', async () => {
+  await expect(
+    importMissingDependency('data:text/javascript;base64,%%%'),
+  ).rejects.toThrow(TypeError);
+  await expect(
+    importMissingDependency('data:text/javascript;base64,%%%'),
+  ).rejects.toMatchObject({ code: 'ERR_INVALID_URL' });
+});
 
 it('gives createRequire in external ESM a stable synthetic parent', () => {
   expect(inspectCreateRequireParent()).toEqual({

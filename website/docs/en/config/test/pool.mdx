@@ -106,7 +106,9 @@ CommonJS path and export-condition selection are delegated to Node's native `req
 
 For example, on Node.js 22 a package's `module-sync` condition may select an ESM entry that the VM cannot require synchronously. This throws `ERR_REQUIRE_ESM` rather than selecting the package's CommonJS fallback. Use dynamic `import()` or bundle the dependency instead.
 
-Custom Node loaders and external TypeScript execution are outside this scope; compile or bundle those files first. The supported loading paths do not imply universal cross-realm value conversion or cancellation of arbitrary asynchronous work. Failures within a supported path are compatibility bugs, not additional implicit limitations.
+`Module._cache` exposes the file's `require.cache` for CommonJS and JSON entry inspection and deletion; replacing or deleting the `_cache` property itself is unsupported. Synchronous `require(esm)` uses the VM's ESM cache and does not currently publish CommonJS cache records or `module.children` links. Do not rely on those APIs to traverse or invalidate an ESM graph.
+
+Custom Node loaders and external TypeScript execution are outside this scope; compile or bundle those files first. The supported loading paths do not imply complete Node loader-internal metadata compatibility, universal cross-realm value conversion, or cancellation of arbitrary asynchronous work. Failures within the supported execution paths remain compatibility bugs.
 
 ## Choose a pool type
 

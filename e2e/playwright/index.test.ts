@@ -40,45 +40,53 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
-  it('only resolves directly destructured test.for fixtures', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        '--pool.maxWorkers=1',
-        'for-fixtures.test.ts',
-        'config-second.test.ts',
-      ],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
+  it.for(['forks', 'vmThreads'])(
+    'only resolves directly destructured test.for fixtures (%s)',
+    async (pool) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--pool.maxWorkers=1',
+          '--pool',
+          pool,
+          'for-fixtures.test.ts',
+          'config-second.test.ts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_OK');
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_SECOND_FILE_OK');
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
-  });
+      await expectExecSuccess();
+      expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+      expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_OK');
+      expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_SECOND_FILE_OK');
+      expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
+    },
+  );
 
-  it('cleans Playwright config between projects with isolate false', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '--pool.maxWorkers=1'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures', 'project-config'),
+  it.for(['forks', 'vmThreads'])(
+    'cleans Playwright config between projects with isolate false (%s)',
+    async (pool) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '--pool.maxWorkers=1', '--pool', pool],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures', 'project-config'),
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-    expect(cli.stdout).toContain(
-      'RSTEST_PLAYWRIGHT_CONFIG_PROJECT_ISOLATED_OK',
-    );
-  });
+      await expectExecSuccess();
+      expect(cli.stdout).toContain(
+        'RSTEST_PLAYWRIGHT_CONFIG_PROJECT_ISOLATED_OK',
+      );
+    },
+  );
 
   it('preserves Playwright assertion errors at the timeout deadline', async () => {
     const { cli, expectExecFailed } = await runRstestCli({

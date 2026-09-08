@@ -9,6 +9,23 @@ const __dirname = dirname(__filename);
 const fixtureDir = join(__dirname, 'fixtures');
 
 describe('test worker behavior', () => {
+  it.for(['run', 'list'])(
+    'does not swallow an uncaught error during VM handler handoff (%s)',
+    async (command) => {
+      const { expectExecFailed, cli } = await runRstestCli({
+        command: 'rstest',
+        args: [command, 'unhandledRejection.test.ts', '--pool', 'vmThreads'],
+        options: {
+          nodeOptions: {
+            cwd: fixtureDir,
+            env: { RSTEST_VM_TEARDOWN_ERROR: 'true' },
+          },
+        },
+      });
+      await expectExecFailed();
+      expect(cli.log).toContain('VM_TEARDOWN_UNCAUGHT');
+    },
+  );
   it('should output node warnings correctly', async () => {
     const { expectExecSuccess, expectStderrLog, cli } = await runRstestCli({
       command: 'rstest',

@@ -644,7 +644,7 @@ class VmExternalModules {
     const format =
       moduleFormat === 'data'
         ? (() => {
-            const { mime } = parseDataUri(resolvedId);
+            const { mime } = this.parseDataUri(resolvedId);
             return mime === 'application/json'
               ? 'json'
               : mime === 'application/wasm'
@@ -854,7 +854,7 @@ class VmExternalModules {
     identifier: string,
     loadingWebAssemblyIds?: ReadonlySet<string>,
   ): Promise<vm.Module> {
-    const { code, mime } = parseDataUri(identifier);
+    const { code, mime } = this.parseDataUri(identifier);
     if (mime === 'application/wasm') {
       return this.loadWebAssemblyModule(
         identifier,
@@ -969,7 +969,7 @@ class VmExternalModules {
     const format = getModuleFormat(identifier);
     switch (format) {
       case 'data': {
-        const { code, mime } = parseDataUri(identifier);
+        const { code, mime } = this.parseDataUri(identifier);
         if (mime === 'application/wasm') {
           throw createRequireAsyncModuleError(
             this.context,
@@ -1154,7 +1154,7 @@ class VmExternalModules {
             }
           }
         }
-        throw error;
+        throw this.wrapBuiltinError(error);
       }
 
       const fn = script.runInContext(this.context) as (
@@ -1544,11 +1544,30 @@ class VmExternalModules {
           if (property === 'createRequire') {
             return this.createRequire;
           }
+          if (property === '_cache') {
+            return this.requireCache;
+          }
           if (property === 'syncBuiltinESMExports') {
             return this.syncBuiltinESMExports;
           }
           return this.getBuiltinProperty(target, property);
         },
+        getOwnPropertyDescriptor: (target, property) =>
+          property === '_cache'
+            ? {
+                configurable: true,
+                enumerable: true,
+                writable: false,
+                value: this.requireCache,
+              }
+            : Reflect.getOwnPropertyDescriptor(target, property),
+        set: (target, property, value) =>
+          property !== '_cache' && Reflect.set(target, property, value),
+        defineProperty: (target, property, descriptor) =>
+          property !== '_cache' &&
+          Reflect.defineProperty(target, property, descriptor),
+        deleteProperty: (target, property) =>
+          property !== '_cache' && Reflect.deleteProperty(target, property),
         construct: (target, args, newTarget) => {
           const instance = Reflect.construct(target, args, newTarget);
           Object.defineProperty(instance, 'constructor', {
@@ -1797,6 +1816,14 @@ class VmExternalModules {
       });
     }
     return this.wrapBuiltinResultValue(value);
+  }
+
+  private parseDataUri(identifier: string): ReturnType<typeof parseDataUri> {
+    try {
+      return parseDataUri(identifier);
+    } catch (error) {
+      throw this.wrapBuiltinError(error);
+    }
   }
 
   private wrapBuiltinError(error: unknown): unknown {

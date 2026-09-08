@@ -36,7 +36,9 @@ const base64Pattern =
 const createInvalidDataUrlError = (
   identifier: string,
 ): NodeJS.ErrnoException => {
-  const error: NodeJS.ErrnoException = new Error(`Invalid URL: ${identifier}`);
+  const error: NodeJS.ErrnoException = new TypeError(
+    `Invalid URL: ${identifier}`,
+  );
   error.code = 'ERR_INVALID_URL';
   return error;
 };

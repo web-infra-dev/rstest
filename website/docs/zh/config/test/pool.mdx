@@ -105,7 +105,9 @@ CommonJS 路径和 export condition 的选择交给 Node 原生 `require.resolve
 
 例如在 Node.js 22 上，package 的 `module-sync` condition 可能选中 VM 无法同步 require 的 ESM 入口。此时会抛出 `ERR_REQUIRE_ESM`，不会改选该 package 的 CommonJS fallback。请改用动态 `import()`，或将依赖 bundle 后运行。
 
-自定义 Node loader 和 external TypeScript 执行不在支持范围内，请先编译或 bundle。支持上述加载方式不代表提供通用跨 realm 转换，也不代表能取消任意异步工作。已支持路径上的错误属于兼容性 bug，不应被视为额外的隐含限制。
+`Module._cache` 指向当前文件的 `require.cache`，支持查看和删除 CommonJS、JSON 缓存条目；不支持替换或删除 `_cache` 属性本身。同步 `require(esm)` 使用 VM 的 ESM 缓存，目前不会创建 CommonJS 缓存记录或 `module.children` 关联。请勿依赖这些 API 遍历 ESM 模块图或使其缓存失效。
+
+自定义 Node loader 和 external TypeScript 执行不在支持范围内，请先编译或 bundle。支持上述加载方式不代表完整兼容 Node loader 的内部元数据，也不代表提供通用跨 realm 转换或取消任意异步工作。已支持执行路径上的错误仍属于兼容性 bug。
 
 ## 如何选择 pool 类型
 

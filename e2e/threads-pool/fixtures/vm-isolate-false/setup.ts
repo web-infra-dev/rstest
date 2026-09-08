@@ -4,6 +4,20 @@ import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { promisify } from 'node:util';
 import { afterAll, expect, registerFileCleanup, rs } from '@rstest/core';
 
+expect(typeof globalThis.crypto.subtle.digest).toBe('function');
+expect(globalThis.crypto.randomUUID()).toMatch(/^[0-9a-f-]{36}$/);
+const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+if (cryptoDescriptor?.get && !cryptoDescriptor.set) {
+  Reflect.set(globalThis, 'crypto', 'file-only');
+  expect(typeof globalThis.crypto.randomUUID).toBe('function');
+}
+Object.defineProperty(globalThis, 'crypto', {
+  configurable: true,
+  value: 'file-only',
+  writable: true,
+});
+expect(globalThis.crypto).toBe('file-only');
+
 if (process.env.RSTEST_VM_PROMISIFIED_TIMERS_STARTED) {
   expect(process.env.RSTEST_VM_PROMISIFIED_TIMERS_CANCELLED).toBe('2');
   expect(process.env.RSTEST_VM_PROMISIFIED_TIMER_ERROR).toBe(

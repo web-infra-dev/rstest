@@ -378,6 +378,22 @@ describe('loadEsModule', () => {
     expect(module.default).toBe(true);
   });
 
+  it('keeps CommonJS compilation errors in the VM realm', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'rstest-vm-compile-error-'));
+    const invalid = join(directory, 'invalid.cjs');
+    try {
+      writeFileSync(invalid, 'module.exports = ;');
+      const context = vm.createContext({});
+      const load = getVmExternalModules(context).createRequire(__filename);
+      expect(() => load(invalid)).toThrow(
+        vm.runInContext('SyntaxError', context),
+      );
+      expect(load.cache[invalid]).toBeUndefined();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('should create missing require resolution errors in the VM realm', () => {
     const vmContext = vm.createContext({});
     const executor = getVmExternalModules(vmContext);

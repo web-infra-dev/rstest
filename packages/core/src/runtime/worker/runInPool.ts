@@ -237,7 +237,7 @@ const createVmFunction = <T>(
   return createFunction(hostFunction);
 };
 
-const installVmNodeGlobals = (
+export const installVmNodeGlobals = (
   runtimeGlobal: VmRuntimeGlobal,
   vmContext: Context,
 ): void => {
@@ -255,7 +255,27 @@ const installVmNodeGlobals = (
     }
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
     if (descriptor) {
-      Object.defineProperty(runtimeGlobal, key, descriptor);
+      if ('get' in descriptor || 'set' in descriptor) {
+        const { get, set } = descriptor;
+        let assigned = false;
+        let localValue: unknown;
+        Object.defineProperty(runtimeGlobal, key, {
+          ...descriptor,
+          // Node accessors can require the host global as their receiver.
+          get: get
+            ? () => (assigned ? localValue : get.call(globalThis))
+            : undefined,
+          // Never invoke a host setter: replacements belong to this file only.
+          set: set
+            ? (value: unknown) => {
+                assigned = true;
+                localValue = value;
+              }
+            : undefined,
+        });
+      } else {
+        Object.defineProperty(runtimeGlobal, key, descriptor);
+      }
     }
   }
 
@@ -523,6 +543,7 @@ const preparePool = async (
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
+  onTaskErrorHandlingChange?: (active: boolean) => void,
 ) => {
   const environmentBundlePath = context.testEnvironmentModule?.bundlePath;
   currentEnvironmentBundle = environmentBundlePath
@@ -557,6 +578,7 @@ const preparePool = async (
       return;
     }
     preparedPoolCleaned = true;
+    onTaskErrorHandlingChange?.(false);
 
     const errors: unknown[] = [];
     // File callbacks may still use timers and environment resources.
@@ -772,8 +794,10 @@ const preparePool = async (
 
     process.on('uncaughtException', uncaughtException);
     process.on('unhandledRejection', unhandledRejection);
+    onTaskErrorHandlingChange?.(true);
 
     globalCleanups.push(() => {
+      onTaskErrorHandlingChange?.(false);
       process.off('uncaughtException', uncaughtException);
       process.off('unhandledRejection', unhandledRejection);
     });
@@ -964,6 +988,7 @@ const loadFiles = async ({
 export const runInPool = async (
   options: RunWorkerOptions['options'],
   lifecycleHooks: FileCleanupHooks & {
+    onTaskErrorHandlingChange?: (active: boolean) => void;
     onWorkerCleanupStart?: () => MaybePromise<void>;
     onWorkerCleanupEnd?: (error?: unknown) => MaybePromise<void>;
     onTestEnvironmentFallback?: (
@@ -1155,6 +1180,7 @@ export const runInPool = async (
         options,
         undefined,
         lifecycleHooks.onTestEnvironmentFallback,
+        lifecycleHooks.onTaskErrorHandlingChange,
       );
       cleanups.push(cleanup);
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
@@ -1176,6 +1202,7 @@ export const runInPool = async (
         runtimeGlobal: rstestContext.global,
       });
       const tests = await runner.collectTests();
+      lifecycleHooks.onTaskErrorHandlingChange?.(false);
       collectResult = {
         project,
         testPath,
@@ -1190,6 +1217,7 @@ export const runInPool = async (
         errors: await formatTestError(err),
       };
     } finally {
+      lifecycleHooks.onTaskErrorHandlingChange?.(false);
       try {
         if (isolate || isVmPool) {
           const workerCleanupError = await cleanupWorkerFixtureScope();
@@ -1247,6 +1275,7 @@ export const runInPool = async (
       options,
       tracker,
       lifecycleHooks.onTestEnvironmentFallback,
+      lifecycleHooks.onTaskErrorHandlingChange,
     );
     taskContext = preparedTaskContext;
     cleanups.push(cleanup);
@@ -1439,6 +1468,7 @@ export const runInPool = async (
       }
     }
 
+    lifecycleHooks.onTaskErrorHandlingChange?.(false);
     if (unhandledErrors.length > 0) {
       results.status = 'fail';
       results.errors = (results.errors || []).concat(
@@ -1468,6 +1498,7 @@ export const runInPool = async (
     };
     return runResult;
   } finally {
+    lifecycleHooks.onTaskErrorHandlingChange?.(false);
     tracker.transition('teardown');
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
