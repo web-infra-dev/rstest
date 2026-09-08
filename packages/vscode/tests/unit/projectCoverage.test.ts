@@ -87,7 +87,7 @@ describe('computeCoveredConfigs', () => {
 
   it('suppresses a nested intermediate config the root also aggregates', () => {
     // A root aggregates `sub` (which itself has `projects`) plus another
-    // project. `initCli` flattens `sub` to its leaf projects, so `sub`'s own
+    // project. `resolveRunnerInputs` flattens `sub` to its leaf projects, so `sub`'s own
     // config file never appears in the root's child list — but its leaves do.
     const covered = computeCoveredConfigs([
       p('/repo/rstest.config.ts', '/repo', [

@@ -526,7 +526,7 @@ Module._resolveFilename = function (request, ...args) {
     }
   }, 60_000);
 
-  it('waits for an in-flight browser-only globalSetup before config restart', async () => {
+  it('waits for the in-flight browser-only first cycle before config restart', async () => {
     const fixturesTargetPath = path.join(
       __dirname,
       'fixtures/fixtures-test-browser-global-setup-inflight-restart',
@@ -550,9 +550,9 @@ Module._resolveFilename = function (request, ...args) {
       fs.update(configPath, (content) => `${content}\n// trigger restart`);
 
       await cli.waitForStdout('restarting Rstest');
-      await cli.waitForStdout('[browser-global-teardown] executed');
-      await cli.waitForStdout('Test Files 1 passed');
-      await cli.waitForStdout('Waiting for file changes...');
+      await cli.waitForStdout(
+        /\[browser-global-teardown\] executed[\s\S]*\[browser-global-setup\] executed[\s\S]*Test Files 1 passed[\s\S]*Waiting for file changes\.\.\./,
+      );
 
       const setupMatches = cli.stdout.match(
         /\[browser-global-setup\] executed/g,
@@ -629,7 +629,7 @@ Module._resolveFilename = function (request, ...args) {
     }
   }, 60_000);
 
-  it('waits for an in-flight browser globalSetup before mixed config restart', async () => {
+  it('waits for the in-flight mixed first cycle before config restart', async () => {
     const fixturesTargetPath = path.join(
       __dirname,
       'fixtures/fixtures-test-browser-global-setup-mixed-inflight-restart',
@@ -655,11 +655,9 @@ Module._resolveFilename = function (request, ...args) {
       fs.update(configPath, (content) => `${content}\n// trigger restart`);
 
       await cli.waitForStdout('restarting Rstest');
-      await cli.waitForStdout('[mixed-browser-global-teardown] executed');
-      await cli.waitForStdout('[mixed-node-global-setup] executed');
-      await cli.waitForStdout(/✓ .*node\.test\.ts/);
-      await cli.waitForStdout(/✓ .*browserOnly\.test\.ts/);
-      await cli.waitForStdout('Waiting for file changes...');
+      await cli.waitForStdout(
+        /\[mixed-browser-global-teardown\] executed[\s\S]*\[mixed-browser-global-setup\] executed(?=[\s\S]*\[mixed-node-global-setup\] executed[\s\S]*✓ .*node\.test\.ts[\s\S]*Waiting for file changes\.\.\.)[\s\S]*✓ .*browserOnly\.test\.ts[\s\S]*Waiting for file changes\.\.\./,
+      );
 
       expect(
         cli.stdout.match(/\[mixed-browser-global-setup\] executed/g),

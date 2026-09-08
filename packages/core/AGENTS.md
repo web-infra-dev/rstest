@@ -19,11 +19,11 @@ Core testing framework for Rstest.
 
 `resolveRunnerInputs` owns configuration-source resolution and `buildResolvedRunner` owns selection plus context construction. The public instance API is the CLI's target driver; commands not migrated yet may call this shared chain directly. Every change must narrow the gap between those drivers: expose new CLI needs as public observations or capabilities rather than adding CLI-only execution paths.
 
-When a CLI command migrates to the public `createRstest` (as `merge-reports` already has), config discovery, the CLI → config merge, the agent reporter default, host exit code, and error printing stay in `src/cli`; never add them to the engine or the public API to make a migration easier.
+When a CLI command migrates to the public `createRstest`, config discovery, the CLI → config merge, the agent reporter default, host exit code, and error printing stay in `src/cli`; never add them to the engine or the public API to make a migration easier.
 
 `NormalizedConfig` is exported from `@rstest/core/api` as the type of `RstestContext.config`, so changing its shape is a public API change.
 
-The CLI carries process-level behavior (`embedded`, `trace`, installer confirmation, and exit-code mirroring) through `createRstestInstance` in `src/api/createRstest.ts`; these never enter the public `CreateRstestOptions`.
+The CLI carries process-level behavior (`embedded`, `trace`, installer confirmation, and exit-code mirroring) through `createRstestInstance` in `src/api/createRstest.ts`; these never enter the public `CreateRstestOptions`. The CLI config-restart watcher (`src/cli/restart.ts`) is armed before `watch()` resolves — otherwise an edit during the first cycle is dropped — at the accepted cost that such an edit restarts only after that cycle; it watches only the projects `--project` selected, and tears down through the returned watcher, never the engine.
 
 `CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`) and `trace`; a new `rstest run` flag is added to `RunOptions` and becomes a CLI flag through that derivation.
 
