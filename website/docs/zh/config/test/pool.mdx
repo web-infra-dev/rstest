@@ -64,13 +64,13 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 ### vmForks
 
-<ApiMeta addedVersion="0.11.14" />
+<ApiMeta addedVersion="0.12.0" />
 
 `vmForks` 使用 `child_process.fork` 提供进程级隔离，并为每个测试文件创建新的 `vm.Context`。它与 `vmThreads` 具有相同的 VM 模块加载和 cross realm 行为，同时保留 worker 内的 `process.chdir()` 等进程 API。worker 回收通过退出子进程完成。
 
 ### vmThreads
 
-<ApiMeta addedVersion="0.11.13" />
+<ApiMeta addedVersion="0.12.0" />
 
 `vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。`vmForks` 使用独立子进程提供相同的 VM 隔离。
 
@@ -174,7 +174,7 @@ npx rstest --pool.maxWorkers 1
 
 ### `pool.memoryLimit`
 
-<ApiMeta addedVersion="0.11.13" />
+<ApiMeta addedVersion="0.12.0" />
 
 设置 `vmForks` 或 `vmThreads` worker 的 V8 heap 回收阈值。每个测试文件运行结束后，Rstest 会读取 worker 的 `heapUsed`；达到阈值时，会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 或 OOM 的硬上限。
 
