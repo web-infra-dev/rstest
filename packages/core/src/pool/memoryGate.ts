@@ -247,7 +247,7 @@ export const createDefaultMemoryGate = (): MemoryGate | undefined => {
 /**
  * Decide whether the memory-aware spawn gate applies to a given pool transport.
  *
- * Only `forks` is supported. The gate's per-worker RSS sampling assumes each
+ * Only `forks` and `vmForks` are supported. The gate's per-worker RSS sampling assumes each
  * worker reports its own resident memory — which holds for `child_process.fork`
  * but not for `worker_threads`, where `process.memoryUsage().rss` returns the
  * *entire host process* RSS shared across all threads. Feeding those inflated
@@ -261,5 +261,7 @@ export const selectMemoryGate = (
   workerKind: RstestPoolType,
   makeGate: () => MemoryGate | undefined = createDefaultMemoryGate,
 ): MemoryGate | undefined => {
-  return workerKind === 'forks' ? makeGate() : undefined;
+  return workerKind === 'forks' || workerKind === 'vmForks'
+    ? makeGate()
+    : undefined;
 };

@@ -68,7 +68,7 @@ export type ExpectConfig = {
   poll?: ExpectPollConfig;
 };
 
-export type RstestPoolType = 'forks' | 'threads' | 'vmThreads';
+export type RstestPoolType = 'forks' | 'threads' | 'vmForks' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
@@ -76,12 +76,12 @@ export type RstestPoolOptions = {
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /**
-   * V8 heap threshold used to recycle a `vmThreads` worker after it finishes a test file.
+   * V8 heap threshold used to recycle a `vmForks` or `vmThreads` worker after it finishes a test file.
    * This is a worker-recycling threshold, not a hard process RSS limit.
    * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
    * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
-   * Currently supported only by `vmThreads`.
-   * @default undefined (`system memory / maxWorkers` for `vmThreads`)
+   * Currently supported only by `vmForks` and `vmThreads`.
+   * @default undefined (`system memory / maxWorkers` for VM pools)
    */
   memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
@@ -411,7 +411,8 @@ export interface RstestConfig {
   pool?: RstestPoolType | RstestPoolOptions;
   /**
    * Run tests in an isolated environment. This option has no effect on the
-   * `vmThreads` pool, which always creates a fresh VM context for every file.
+   * `vmForks` and `vmThreads` pools, which always create a fresh VM context
+   * for every file.
    *
    * @default true
    */

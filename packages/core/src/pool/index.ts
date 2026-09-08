@@ -26,7 +26,12 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseMemoryLimit, parseWorkers } from '../utils/workers';
+import {
+  getNumCpus,
+  isVmPoolType,
+  parseMemoryLimit,
+  parseWorkers,
+} from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { assertWorkerEnvironmentOptions } from './workerOptions';
 import { getEnvironmentKey } from '../core/environmentGroups';
@@ -239,10 +244,10 @@ const buildTask = async ({
         setupEntries,
         updateSnapshot,
         // Bundle coverage needs the complete per-task asset map, so its debug
-        // mode deliberately bypasses the vmThreads cache. In normal runs,
-        // vmThreads uses the lazy path below and caches shared assets by name.
+        // mode deliberately bypasses the VM pool cache. In normal runs, VM
+        // pools use the lazy path below and cache shared assets by name.
         assets:
-          (workerKind !== 'vmThreads' || captureBundleCoverage) &&
+          (!isVmPoolType(workerKind) || captureBundleCoverage) &&
           isMemorySufficient() &&
           !project.normalizedConfig.federation
             ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
@@ -253,7 +258,7 @@ const buildTask = async ({
       },
       rpcMethods: {
         ...rpcMethods,
-        // vmThreads uses this path for its per-worker asset cache; other pools
+        // VM pools use this path for their per-worker asset cache; other pools
         // use it when eager host-side asset delivery is not safe.
         getAssetsByEntry: (requestedAssetNames, requestedSourceMapNames) =>
           traceSpan(
@@ -428,19 +433,19 @@ export const createPool = async ({
   // Internal idle-runner floor for `isolate: false`. It is not user-tunable
   // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
   const minWorkers = Math.min(maxWorkers, recommendCount);
-  const memoryLimit =
-    workerKind === 'vmThreads'
-      ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
-      : undefined;
-  const workerCacheLimit =
-    workerKind === 'vmThreads' ? getVmWorkerCacheLimit(memoryLimit) : undefined;
+  const memoryLimit = isVmPoolType(workerKind)
+    ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
+    : undefined;
+  const workerCacheLimit = isVmPoolType(workerKind)
+    ? getVmWorkerCacheLimit(memoryLimit)
+    : undefined;
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
-    // VM threads amortize worker startup while recreating the VM realm for
-    // every file, so host worker reuse is independent of the user's isolate
-    // setting. VM runtime lifecycle branches remain file-scoped by pool type.
-    isolate: workerKind === 'vmThreads' ? false : isolate,
+    // VM pools amortize worker startup while recreating the VM realm for every
+    // file, so host worker reuse is independent of the user's isolate setting.
+    // VM runtime lifecycle branches remain file-scoped by pool type.
+    isolate: isVmPoolType(workerKind) ? false : isolate,
     // VM contexts can retain module and realm allocations until their worker
     // exits. Recycle from the worker's own V8 heap report, like Jest and
     // Vitest, while keeping the worker alive below the limit. The default
@@ -487,7 +492,10 @@ export const createPool = async ({
         context,
         project,
       );
-      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
+      assertWorkerEnvironmentOptions(
+        runtimeConfig.testEnvironment.options,
+        workerKind,
+      );
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -638,7 +646,10 @@ export const createPool = async ({
         context,
         project,
       );
-      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
+      assertWorkerEnvironmentOptions(
+        runtimeConfig.testEnvironment.options,
+        workerKind,
+      );
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);

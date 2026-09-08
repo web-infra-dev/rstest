@@ -3,7 +3,7 @@ import { getCount, increment } from '../src/index';
 
 const FILE_MARKER = '__rstest_threads_pool_file_marker__';
 
-describe('threads pool - basic', () => {
+describe('node pool - basic', () => {
   it('runs sync tests', () => {
     expect(1 + 1).toBe(2);
   });
@@ -39,11 +39,10 @@ describe('threads pool - basic', () => {
     expect(getCount()).toBe(1);
   });
 
-  it('runs in a real worker_thread (parentPort is reachable)', async () => {
-    // `process.send` is a fork-only IPC channel; under threads it is
-    // undefined. This is the simplest invariant that distinguishes the two
-    // pool types from the test runtime.
-    expect(typeof process.send).toBe('undefined');
+  it('runs in the expected worker transport', () => {
+    expect(typeof process.send).toBe(
+      process.env.RSTEST_EXPECT_FORKS ? 'function' : 'undefined',
+    );
   });
 
   it('starts with a clean file global', () => {

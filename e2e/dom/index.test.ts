@@ -143,6 +143,13 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 
+  it('should run Rsbuild tests under vmForks without process shims', async () => {
+    const { expectExecSuccess } = await runCli('test/node', 'happy-dom', {
+      args: ['--pool', 'vmForks', '--pool.memoryLimit', '256MB'],
+    });
+    await expectExecSuccess();
+  });
+
   it('should run test correctly with custom externals', async () => {
     const { expectExecSuccess } = await runCli(appFilters, 'happy-dom', {
       args: externalConfigArgs,

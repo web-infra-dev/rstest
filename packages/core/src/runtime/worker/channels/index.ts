@@ -10,6 +10,7 @@ const kind: PoolWorkerKind =
 const createChannel = (kind: PoolWorkerKind): WorkerChannel => {
   switch (kind) {
     case 'forks':
+    case 'vmForks':
       return new ForksChannel();
     case 'threads':
     case 'vmThreads':

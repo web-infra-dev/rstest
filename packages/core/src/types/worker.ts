@@ -134,7 +134,7 @@ export type WorkerContext = {
    * its kept module cache before loading (#1373).
    */
   buildId: number;
-  /** Byte budget for immutable assets and compilation data kept by vmThreads. */
+  /** Byte budget for immutable assets and compilation data kept by VM pools. */
   workerCacheLimit?: number;
   outputModule: boolean;
   testEnvironmentModule?: TestEnvironmentModuleReference;
@@ -162,8 +162,8 @@ export type RunWorkerOptions = {
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
     /**
-     * Eager assets for forks/threads when host memory permits. vmThreads
-     * always pulls missing assets through getAssetsByEntry so its worker cache
+     * Eager assets for forks/threads when host memory permits. VM pools
+     * always pull missing assets through getAssetsByEntry so their worker cache
      * can survive fresh VM Contexts without retaining module instances.
      */
     assets?: {

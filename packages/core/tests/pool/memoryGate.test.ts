@@ -206,6 +206,11 @@ describe('selectMemoryGate', () => {
     expect(selectMemoryGate('forks', () => sentinel)).toBe(sentinel);
   });
 
+  it('should attach the gate for the vmForks pool', () => {
+    const sentinel = new MemoryGate();
+    expect(selectMemoryGate('vmForks', () => sentinel)).toBe(sentinel);
+  });
+
   it('should NOT attach the gate for the threads pool, even when one is available', () => {
     const sentinel = new MemoryGate();
     expect(selectMemoryGate('threads', () => sentinel)).toBeUndefined();

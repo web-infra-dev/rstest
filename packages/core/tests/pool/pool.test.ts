@@ -42,8 +42,9 @@ const createTask = (
   optionOverrides?: Record<string, unknown>,
   // A worker is only reused for tasks carrying the same key.
   environmentKey = 'node',
+  worker: PoolTask['worker'] = 'forks',
 ): PoolTask => ({
-  worker: 'forks',
+  worker,
   type,
   options: {
     context: { runtimeConfig: { env: {} } },
@@ -189,6 +190,38 @@ describe('Pool - VM worker memory limit', () => {
         createTask('run', { __testMode: 'memory-over-limit' }),
       );
       const second = await pool.runTest(createTask());
+
+      expect((first as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).not.toBe(
+        (first as any)._workerIdentity,
+      );
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('recycles a reusable vmForks worker after it reports heap over the limit', async () => {
+    const pool = new Pool(
+      createPoolOptions({
+        isolate: false,
+        maxWorkers: 1,
+        minWorkers: 1,
+        memoryLimit: 100,
+      }),
+    );
+    try {
+      const first = await pool.runTest(
+        createTask(
+          'run',
+          { __testMode: 'memory-over-limit' },
+          'node',
+          'vmForks',
+        ),
+      );
+      const second = await pool.runTest(
+        createTask('run', undefined, 'node', 'vmForks'),
+      );
 
       expect((first as any)._workerIdentity).toBeTypeOf('number');
       expect((second as any)._workerIdentity).toBeTypeOf('number');

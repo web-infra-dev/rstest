@@ -7,8 +7,8 @@ import { runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-describe('threads pool e2e', () => {
-  it.for(['threads', 'vmThreads'] as const)(
+describe('node pool e2e', () => {
+  it.for(['threads', 'vmThreads', 'vmForks'] as const)(
     'should run tests under the %s pool',
     async (pool, { onTestFinished }) => {
       const { expectExecSuccess } = await runRstestCli({
@@ -19,13 +19,18 @@ describe('threads pool e2e', () => {
           pool,
           '--isolate',
           'true',
-          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+          ...(pool === 'vmThreads' || pool === 'vmForks'
+            ? ['--pool.memoryLimit', '256MB']
+            : []),
         ],
         onTestFinished,
         options: {
           nodeOptions: {
             cwd: join(__dirname, './fixtures'),
-            env: { ISOLATE: undefined },
+            env: {
+              ISOLATE: undefined,
+              RSTEST_EXPECT_FORKS: pool === 'vmForks' ? '1' : undefined,
+            },
           },
         },
       });

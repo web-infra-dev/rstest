@@ -3,6 +3,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { InternalContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
+import { isVmPoolType } from '../../utils/workers';
 import { rstestCoreGlobalExternal } from './mockBuild';
 
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
@@ -303,7 +304,7 @@ export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
             // those externals through Rspack's async import path instead. Items
             // with an explicit external type keep their own semantics.
             if (
-              context.normalizedConfig.pool.type === 'vmThreads' &&
+              isVmPoolType(context.normalizedConfig.pool.type) &&
               !outputModule &&
               config.externalsType === undefined
             ) {

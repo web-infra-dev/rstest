@@ -1,4 +1,17 @@
-import { parseMemoryLimit } from '../../src/utils/workers';
+import { isVmPoolType, parseMemoryLimit } from '../../src/utils/workers';
+
+describe('isVmPoolType', () => {
+  it('recognizes both VM pools', () => {
+    expect(isVmPoolType('vmForks')).toBe(true);
+    expect(isVmPoolType('vmThreads')).toBe(true);
+  });
+
+  it('does not classify transport-only pools as VM pools', () => {
+    expect(isVmPoolType('forks')).toBe(false);
+    expect(isVmPoolType('threads')).toBe(false);
+    expect(isVmPoolType(undefined)).toBe(false);
+  });
+});
 
 describe('parseMemoryLimit', () => {
   const totalMemory = 8 * 1024 ** 3;
