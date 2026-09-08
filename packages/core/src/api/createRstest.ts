@@ -244,15 +244,6 @@ export async function createRstestInstance(
       const engine = await build('watch', watchOptions, commonOptions);
       let capture: ResultReporter;
       try {
-        if (
-          engine.context.projects.some(
-            (project) => project.normalizedConfig.browser.enabled,
-          )
-        ) {
-          throw new Error(
-            'watch() does not support browser mode yet. Use run() instead.',
-          );
-        }
         capture = createResultReporter(engine.context, {
           onResult: watchOptions.onResult,
         });

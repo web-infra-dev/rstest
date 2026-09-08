@@ -256,7 +256,7 @@ interface TestRunResult {
 
 ## rstest.watch
 
-`rstest.watch()` starts a Node watch session and returns a watcher that closes it.
+`rstest.watch()` starts a watch session and returns a watcher that closes it.
 
 ### Example
 
@@ -283,11 +283,11 @@ await watcher.close();
 
 `onResult` runs after every completed cycle, including the initial cycle. Its result is cycle-scoped: `files` and `summary` contain only files that actually ran in that cycle. To maintain session state, merge results by `testPath` yourself.
 
+Browser projects are supported. A rerun execution error is delivered through `onResult` with `status: 'error'` and does not close the session; startup failures, including a browser `globalSetup` failure, reject `watch()`.
+
 Errors thrown by `onResult` are isolated and do not stop the watch session. Calling `watcher.close()` releases the compiler, workers, file watchers, and pending `globalSetup` teardown. It is idempotent, repeated calls observe the same result, and it rejects if teardown fails.
 
 `rstest.watch()` rejects `related` and `changed` because they select a fixed file set, while a watch session must pick up newly related tests. Use `rstest.run()` for these options. `related: false` and `changed: false` are ignored.
-
-Browser projects are not supported by `rstest.watch()` yet, so startup rejects. Use `rstest.run()` for browser projects.
 
 ### WatchOptions
 

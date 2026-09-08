@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, rs } from '@rstest/core';
+import { createResultReporter } from '../../src/api/result';
 import { isCliShortcutsEnabled } from '../../src/core/cliShortcuts';
 import { Rstest } from '../../src/core/rstest';
 import {
@@ -543,8 +544,12 @@ describe('createWatchCycleDriver', () => {
     expect(runStarts).toBe(1);
   });
 
-  it('keeps a rejected cycle from wedging the queue', async () => {
+  it('delivers a rejected rerun as an error result and keeps the queue live', async () => {
     const context = createContext();
+    const onResult = rs.fn();
+    context.reporters.push(
+      createResultReporter(context, { onResult }).reporter,
+    );
     const driver = createDriver(context);
     const executor = createFakeExecutor('node', (options) => {
       if (options.mode === 'on-demand') {
@@ -553,13 +558,24 @@ describe('createWatchCycleDriver', () => {
     });
 
     await driver.runCycle(executor, { mode: 'all' });
-    await expect(
-      driver.runCycle(executor, { mode: 'on-demand' }),
-    ).rejects.toThrow('cycle blew up');
+    await driver.runCycle(executor, { mode: 'on-demand' });
+    expect(onResult).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        status: 'error',
+        unhandledErrors: [
+          expect.objectContaining({ message: 'cycle blew up' }),
+        ],
+      }),
+    );
 
     // The next trigger still runs.
     await driver.runCycle(executor, { mode: 'all' });
     expect(executor.cycles).toHaveLength(3);
+    expect(onResult).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ status: 'pass' }),
+    );
   });
 
   it('arms a shortcut only once every executor it reaches has settled', async () => {
@@ -582,13 +598,8 @@ describe('createWatchCycleDriver', () => {
     expect(driver.hasSettledCycle([node, browser])).toBe(true);
   });
 
-  it('arms an executor whose first cycle threw, so one failed side cannot lock the keys', async () => {
-    // Mixed watch swallows the browser initial cycle's rejection on purpose: the
-    // node side keeps the session alive and the boot failure is reported with an
-    // exit code. Arming on success rather than on settle then disarms every rerun
-    // key for the rest of the session — the banner keeps offering `a`/`f`/`u`,
-    // every one of them answers "initial run in progress", and the healthy node
-    // side can only be rerun by saving a file.
+  it('records settlement while propagating a first-cycle rejection', async () => {
+    // The startup caller owns closing the session after this rejection.
     const context = createContext();
     const driver = createDriver(context);
     const node = createFakeExecutor('node');

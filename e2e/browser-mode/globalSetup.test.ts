@@ -664,7 +664,6 @@ Module._resolveFilename = function (request, ...args) {
       expect(
         cli.stdout.match(/\[mixed-browser-global-setup\] executed/g),
       ).toHaveLength(2);
-      expect(cli.stdout).not.toContain('Browser Mode watch session failed');
 
       cli.exec.process!.stdin!.write('q');
       await result.expectExecSuccess();

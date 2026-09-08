@@ -117,9 +117,6 @@ export class Worker {
       const runOptions = {
         filters: fileFilters,
       } satisfies NonNullable<Parameters<typeof rstest.run>[0]>;
-      // TODO: Browser and mixed continuous runs intentionally fail through the
-      // public watch() guard until browser watch support lands in RFC PR4. Keep
-      // this path on the public API instead of restoring an internal bypass.
       if (command === 'watch') {
         const watcherStartupPromise = rstest.watch(runOptions);
         this.watcherStartupPromise = watcherStartupPromise;

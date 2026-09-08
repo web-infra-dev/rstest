@@ -1,16 +1,18 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { exitReporters } from '../reporter';
-import type { TestExecutor } from '../types';
+import type { ExecutorCycleOutcome, TestExecutor } from '../types';
 import type { CoverageProvider } from '../types/coverage';
 import {
   clearScreen,
   color,
   logger,
+  toError,
   type TraceController,
   type TraceEvent,
   type TraceRun,
 } from '../utils';
 import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+import { globalSetupFailureOutcome } from './browser/globalSetupStage';
 import { logWatchReadyMessage, type setupCliShortcuts } from './cliShortcuts';
 import {
   finalizeRunCycle,
@@ -95,11 +97,9 @@ export interface WatchCycleDriver {
    * cycle boots the runtime, so a shortcut is answerable only once every side of
    * the run is past startup.
    *
-   * Settled, not succeeded: a first cycle that threw is as done starting up as
-   * one that passed, and it reported itself. Waiting for it to succeed would
-   * gate every key on a side that can never answer — in a mixed run, a browser
-   * boot failure would leave the healthy node side with no key it answers at
-   * all, only a file save.
+   * Settled, not succeeded: a failed test result still leaves its executor ready
+   * for shortcuts. A first-cycle executor rejection instead rejects startup;
+   * the caller closes the session rather than accepting further shortcuts.
    */
   hasSettledCycle(executors: TestExecutor[]): boolean;
 }
@@ -247,15 +247,23 @@ export function createWatchCycleDriver({
     prepareWatchCycleState(context, { isFirstCycle });
     try {
       await notifyReportersOnTestRunStart(context);
-      const outcome = await executor.runCycle({
-        buildId,
-        mode,
-        fileFilters,
-        fromInvalidation: trigger === 'invalidation',
-        updateSnapshot,
-        env,
-        onTraceEvents,
-      });
+      let outcome: ExecutorCycleOutcome;
+      try {
+        outcome = await executor.runCycle({
+          buildId,
+          mode,
+          fileFilters,
+          fromInvalidation: trigger === 'invalidation',
+          updateSnapshot,
+          env,
+          onTraceEvents,
+        });
+      } catch (error) {
+        if (isFirstCycle) {
+          throw error;
+        }
+        outcome = globalSetupFailureOutcome([toError(error)]);
+      }
       if (isSessionClosing()) {
         return;
       }

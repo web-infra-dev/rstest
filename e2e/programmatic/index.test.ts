@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
+import { BROWSER_PORTS } from '../browser-mode/fixtures/ports';
 import { parseMarkerPayload, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -395,12 +396,52 @@ describe('programmatic createRstest', () => {
     expect(result.teardown).toEqual(['teardown']);
   });
 
-  it('runs browser tests and rejects browser watch', async ({
+  it('delivers executor rerun rejections as error results and recovers', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
       command: 'node',
-      args: ['run-browser.mjs'],
+      args: ['run-watch-error.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+    const execution = await cli.exec;
+    const { cycles } = parsePayload(cli.stdout);
+    expect(execution.exitCode).toBe(0);
+    expect(cycles.map((cycle: { status: string }) => cycle.status)).toEqual([
+      'pass',
+      'error',
+      'pass',
+    ]);
+    expect(cycles[1].errors).toHaveLength(1);
+    expect(cycles[1].errors[0].stack).toContain('getRsbuildStats');
+  });
+
+  it('rejects mixed watch when the browser cannot boot and closes the node server', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: [
+        'run-mixed-watch-startup-error.mjs',
+        String(BROWSER_PORTS['programmatic-runner']),
+      ],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+    expect(execution.exitCode).toBe(0);
+    expect(result.rejection).toContain('missing-browser');
+    expect(result.nodeServerClosed).toBe(true);
+  });
+
+  it('watches browser tests and rejects startup when globalSetup fails', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-browser.mjs', String(BROWSER_PORTS['programmatic-runner'])],
       onTestFinished,
       options: { nodeOptions: { cwd: fixturesDir } },
     });
@@ -414,8 +455,13 @@ describe('programmatic createRstest', () => {
       tests: 1,
       file: 'browser.test.ts',
       errors: [],
-      watchRejection:
-        'watch() does not support browser mode yet. Use run() instead.',
+      setupRejection: expect.stringContaining('Browser globalSetup failed'),
+      cycles: [
+        { status: 'pass', tests: 1, errors: [] },
+        { status: 'pass', tests: 1, errors: [] },
+      ],
     });
+    expect(cli.stdout).toContain('Waiting for file changes...');
+    expect(cli.stdout).not.toContain('press h');
   });
 });
