@@ -67,7 +67,7 @@ Each test file runs in a Node.js worker thread spawned via `node:worker_threads`
 
 <ApiMeta addedVersion="0.12.0" />
 
-`vmForks` uses `child_process.fork` for process-level isolation and creates a fresh `vm.Context` for every test file. It has the same VM module loading and cross-realm behavior as `vmThreads`, while keeping process APIs such as `process.chdir()` available inside the worker. Worker recycling is handled by letting the child process exit.
+`vmForks` uses `child_process.fork` to create isolated worker processes and a fresh `vm.Context` for every test file. The child process is reused across files assigned to it, so process-level state is not reset per file; use `forks` when that is required. It has the same VM module loading and cross-realm behavior as `vmThreads`, while keeping process APIs such as `process.chdir()` available inside the worker. Worker recycling is handled by letting the child process exit.
 
 ### vmThreads
 
@@ -134,14 +134,14 @@ Consider switching to `vmThreads` or `vmForks` when:
 - Your tests are compatible with cross-realm values and do not depend on process-level isolation.
 - A shared configuration sets `isolate: false`, but this suite must retain file-level JavaScript isolation.
 
-Consider `vmForks` when the suite needs VM isolation but also relies on process-level APIs or separate child-process heaps. Consider `vmThreads` when avoiding child-process startup is more important and the suite is compatible with worker-thread limitations.
+Consider `vmForks` when the suite needs VM isolation, relies on process APIs, and can tolerate process-level state being shared by files assigned to the same child. Consider `vmThreads` when avoiding child-process startup is more important and the suite is compatible with worker-thread limitations.
 
 Stick with `forks` when:
 
 - Your tests call `process.chdir()`, mutate worker-level state, or rely on per-file process isolation.
 - Your project uses native addons (e.g. `better-sqlite3`, `sharp`, `canvas`) — one not built for worker threads can abort the whole run under `threads` (`SIGSEGV` / `SIGABRT`, not a catchable error).
 - You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
-- You need strict process-level isolation. Use `forks` or `vmForks`; `vmThreads` deliberately shares the worker thread's process state.
+- You need strict process-level isolation for every test file. Use `forks`; `vmForks` reuses child processes and only creates a fresh VM context for each file.
 
 ## Configure worker concurrency and memory
 

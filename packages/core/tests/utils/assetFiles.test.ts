@@ -59,6 +59,24 @@ describe('asset files', () => {
     }
   });
 
+  it('keeps buffers for Bun VM threads', () => {
+    const originalBunVersion = process.versions.bun;
+    process.versions.bun = originalBunVersion ?? '1.0.0';
+    const assetFiles = {
+      '/asset.bin': Buffer.from([0, 0xff, 0x80, 0x41]),
+    };
+
+    try {
+      expect(prepareAssetFilesForIPC(assetFiles, 'vmThreads')).toBe(assetFiles);
+    } finally {
+      if (originalBunVersion === undefined) {
+        Reflect.deleteProperty(process.versions, 'bun');
+      } else {
+        process.versions.bun = originalBunVersion;
+      }
+    }
+  });
+
   it('normalizes thread and Bun payloads at the text or buffer consumer', () => {
     const backing = Uint8Array.from([1, 2, 0, 0xff, 0x80, 0x41, 3]);
     const threadContent = backing.subarray(2, 6);

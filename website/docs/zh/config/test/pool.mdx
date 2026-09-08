@@ -66,7 +66,7 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 <ApiMeta addedVersion="0.12.0" />
 
-`vmForks` 使用 `child_process.fork` 提供进程级隔离，并为每个测试文件创建新的 `vm.Context`。它与 `vmThreads` 具有相同的 VM 模块加载和 cross realm 行为，同时保留 worker 内的 `process.chdir()` 等进程 API。worker 回收通过退出子进程完成。
+`vmForks` 使用 `child_process.fork` 创建相互隔离的 worker 进程，并为每个测试文件创建新的 `vm.Context`。分配给同一个 worker 的文件会复用子进程，因此进程级状态不会按文件重置；如果需要按文件重置进程状态，请使用 `forks`。它与 `vmThreads` 具有相同的 VM 模块加载和 cross realm 行为，同时保留 worker 内的 `process.chdir()` 等进程 API。worker 回收通过退出子进程完成。
 
 ### vmThreads
 
@@ -133,12 +133,14 @@ CommonJS 路径和 export condition 的选择交给 Node 原生 `require.resolve
 - 测试可以兼容 cross-realm value，且不依赖进程级隔离。
 - 共享配置设置了 `isolate: false`，但当前测试套件仍需保持文件级 JavaScript 隔离。
 
+如果测试套件需要 VM 隔离，同时依赖进程 API，并且可以接受分配到同一个子进程的文件共享进程级状态，可以考虑 `vmForks`。如果不希望承担子进程启动开销，并且测试兼容 worker thread 的限制，可以考虑 `vmThreads`。
+
 下列情况建议继续使用 `forks`：
 
 - 测试里会调用 `process.chdir()`、修改 worker 级状态，或依赖按文件维度的进程隔离。
 - 项目使用 native addon（如 `better-sqlite3`、`sharp`、`canvas`）—— 未针对 worker thread 设计的 addon 在 `threads` 下可能让整个运行直接 abort（`SIGSEGV` / `SIGABRT`，且无法捕获）。
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
-- 需要严格的进程级隔离。此时应使用 `forks` 或 `vmForks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
+- 需要每个测试文件都具备严格的进程级隔离。此时应使用 `forks`；`vmForks` 会复用子进程，只为每个文件创建新的 VM context。
 
 ## 配置 worker 并行度和内存
 
