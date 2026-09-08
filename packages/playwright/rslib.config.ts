@@ -18,6 +18,12 @@ export default defineConfig({
       },
     },
   ],
+  source: {
+    entry: {
+      index: './src/index.ts',
+      config: './src/config.ts',
+    },
+  },
   tools: {
     rspack: {
       ...rslibRspackConfig,
