@@ -1,0 +1,54 @@
+---
+description: This guide covers how to integrate Rstest with Rslib for seamless testing in your Rslib projects.
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# Rslib
+
+Use Rstest with [Rslib](https://rslib.rs) while reusing the configuration that already defines your library build.
+
+## Quick start
+
+### New project
+
+Create a new Rslib + Rstest project with the `--tools rstest` flag:
+
+```bash
+npx create-rslib --template react-ts --tools rstest --dir my-project
+```
+
+The scaffold includes Rstest and demo tests. Run them with `npm run test`.
+
+### Existing project
+
+To add Rstest to an existing project, follow the [Quick Start](/guide/start/quick-start) to install and set up test scripts.
+
+## Reuse Rslib config
+
+[@rstest/adapter-rslib](https://www.npmjs.com/package/@rstest/adapter-rslib) loads your Rslib config and converts the test-relevant parts into Rstest configuration.
+
+### Install adapter
+
+<PackageManagerTabs command="add @rstest/adapter-rslib -D" />
+
+### Extend your config
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+});
+```
+
+The adapter loads `rslib.config.ts`, maps options used by test compilation, merges them with your Rstest config, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes.
+
+It does not copy build-only settings such as `dev`, `server`, or `html`. Use `cwd`, `config`, or `libId` when the default config location or library selection does not match your project.
+
+For all options, configuration mapping, cache behavior, and debug instructions, see the [configuration reference](./reference).
+
+## Related documentation
+
+- [Rslib configuration overview](https://rslib.rs/config)

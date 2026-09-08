@@ -2,14 +2,9 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
+import type { RunOptions } from '../api/types';
 import { loadConfig, plainDeepMerge, resolveExtends } from '../config';
-import type {
-  BrowserName,
-  Project,
-  ResolvedRstestConfig,
-  RstestConfig,
-  RstestOutputConfig,
-} from '../types';
+import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
 import {
   castArray,
   color,
@@ -20,100 +15,22 @@ import {
   logger,
 } from '../utils';
 
-export type CommonOptions = {
+export type CommonOptions = Omit<RunOptions, 'filters'> & {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
-  related?: boolean;
-  findRelatedTests?: boolean;
-  changed?: boolean | string;
-  globals?: boolean;
-  /**
-   * Pool options.
-   * - `string`: shorthand for `{ type: string }` (from `--pool` flag)
-   * - `object`: detailed pool config (from `--pool.*` options)
-   */
-  pool?:
-    | string
-    | {
-        type?: string;
-        maxWorkers?: string | number;
-        execArgv?: string[] | string;
-      };
-  /**
-   * Browser mode options.
-   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--browser` flag)
-   * - `object`: detailed browser config (from `--browser.*` options)
-   */
-  browser?:
-    | boolean
-    | {
-        enabled?: boolean;
-        name?: BrowserName;
-        headless?: boolean;
-        port?: number;
-        strictPort?: boolean;
-        providerOptions?: Record<string, unknown>;
-      };
-  isolate?: boolean;
-  include?: string[];
-  exclude?: string[];
-  reporters?: string | string[];
-  project?: string[];
-  /**
-   * Coverage options.
-   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--coverage` flag)
-   * - `object`: detailed coverage config (from `--coverage.*` options)
-   */
-  coverage?:
-    | boolean
-    | {
-        enabled?: boolean | string;
-        allowExternal?: boolean;
-        provider?: 'istanbul' | 'v8';
-        include?: string | string[];
-        changed?: boolean | string;
-        exclude?: string | string[];
-        reporters?: string | string[];
-        reportsDirectory?: string;
-        reportOnFailure?: boolean | string;
-        clean?: boolean | string;
-      };
-  passWithNoTests?: boolean;
-  onlyFailures?: boolean;
-  silent?: boolean | 'passed-only';
-  printConsoleTrace?: boolean;
-  logHeapUsage?: boolean;
-  detectAsyncLeaks?: boolean;
   trace?: boolean;
-  disableConsoleIntercept?: boolean;
-  update?: boolean;
-  testNamePattern?: RegExp | string;
-  testTimeout?: number;
-  hookTimeout?: number;
-  testEnvironment?: string;
-  clearMocks?: boolean;
-  resetMocks?: boolean;
-  restoreMocks?: boolean;
-  unstubGlobals?: boolean;
-  unstubEnvs?: boolean;
-  retry?: number;
-  maxConcurrency?: number;
-  slowTestThreshold?: number;
-  hideSkippedTests?: boolean;
-  hideSkippedTestFiles?: boolean;
-  bail?: number | boolean;
-  shard?: string;
-  includeTaskLocation?: boolean;
-  federation?: boolean;
-  source?: {
-    tsconfigPath?: string;
-  };
-  dev?: {
-    writeToDisk?: boolean;
-  };
-  output?: Pick<RstestOutputConfig, 'emitAssets' | 'cleanDistPath' | 'module'>;
 };
+
+export const loadCliConfig = (
+  options: CommonOptions,
+  cwd: string,
+): ReturnType<typeof loadConfig> =>
+  loadConfig({
+    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
+    path: options.config,
+    configLoader: options.configLoader,
+  });
 
 function coerceCliBoolean(value: unknown): boolean | undefined {
   if (typeof value === 'boolean') {
@@ -185,7 +102,11 @@ export function mergeWithCLIOptions(
     }
   }
 
-  if (options.changed !== undefined && options.passWithNoTests === undefined) {
+  if (
+    options.changed !== undefined &&
+    options.changed !== false &&
+    options.passWithNoTests === undefined
+  ) {
     config.passWithNoTests ??= true;
   }
 
@@ -208,13 +129,13 @@ export function mergeWithCLIOptions(
     if (
       !index ||
       !count ||
-      Number.isNaN(index) ||
-      Number.isNaN(count) ||
+      !Number.isInteger(index) ||
+      !Number.isInteger(count) ||
       index < 1 ||
       index > count
     ) {
       throw new Error(
-        `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
+        `Invalid shard option: ${options.shard}. It must use positive integers in the format <index>/<count> and be 1-based.`,
       );
     }
     config.shard = {
@@ -434,6 +355,20 @@ async function resolveConfig(
   };
 }
 
+export const formatNoProjectsFoundError = (
+  config: Pick<RstestConfig, 'projects'>,
+  projectFilter?: CommonOptions['project'],
+): string => {
+  let message = `No projects found, please make sure you have at least one valid project.
+${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
+
+  if (projectFilter) {
+    message += `\n${color.gray('projectName filter:')} ${JSON.stringify(projectFilter, null, 2)}`;
+  }
+
+  return message;
+};
+
 export async function resolveProjects({
   config,
   root,
@@ -585,50 +520,16 @@ export async function resolveProjects({
   );
 
   if (!projects.length) {
-    let errorMsg = `No projects found, please make sure you have at least one valid project.
-${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
-
-    if (options.project) {
-      errorMsg += `\n${color.gray('projectName filter:')} ${JSON.stringify(options.project, null, 2)}`;
-    }
-
-    throw errorMsg;
+    throw formatNoProjectsFoundError(config, options.project);
   }
-
-  const names = new Set<string>();
-
-  projects.forEach((project) => {
-    if (names.has(project.config.name!)) {
-      const conflictProjects = projects.filter(
-        (p) => p.config.name === project.config.name,
-      );
-      throw `Project name "${project.config.name}" is already used. Please ensure all projects have unique names.
-Conflicting projects:
-${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n')}
-        `;
-    }
-
-    names.add(project.config.name!);
-  });
 
   return projects;
 }
 
-export async function initCli(options: CommonOptions): Promise<{
-  config: RstestConfig;
-  configFilePath?: string;
-  projects: Project[];
-}> {
-  const cwd = process.cwd();
-  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
-
-  const { config, configFilePath } = await resolveConfig({
-    ...options,
-    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
-  });
-
-  // In agent environments, default to markdown output when the user didn't
-  // explicitly set reporters (no `reporters` in config and no `--reporters`).
+export function applyAgentReporterDefault(
+  config: RstestConfig,
+  options: CommonOptions,
+): void {
   if (
     determineAgent().isAgent &&
     !options.reporters &&
@@ -636,12 +537,27 @@ export async function initCli(options: CommonOptions): Promise<{
   ) {
     config.reporters = ['md'];
   }
+}
 
-  const projects = await resolveProjects({ config, root, options });
+export async function initCli(options: CommonOptions): Promise<{
+  config: RstestConfig;
+  configFilePath?: string;
+  projects: Project[];
+  cwd: string;
+}> {
+  const cwd = process.cwd();
+  const { resolveRunnerInputs } = await import('../core/resolveConfig');
+  const { config, configFilePath, projects } = await resolveRunnerInputs({
+    source: { type: 'discover' },
+    options,
+    cwd,
+    tweakConfig: (config) => applyAgentReporterDefault(config, options),
+  });
 
   return {
     config,
     configFilePath,
     projects,
+    cwd,
   };
 }

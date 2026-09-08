@@ -527,7 +527,7 @@ export const createFixtureResolver = (
 
       if (mode === 'return') {
         let registeredCleanup: (() => Promise<void>) | undefined;
-        let cleanupPromise: Promise<void> | undefined;
+        let cleanupExecutionPromise: Promise<void> | undefined;
         let resolveCancellationCleanup: (() => void) | undefined;
         let rejectCancellationCleanup: ((error: unknown) => void) | undefined;
         const cancellationCleanup = new Promise<void>((resolve, reject) => {
@@ -584,20 +584,22 @@ export const createFixtureResolver = (
             );
           }
           cleanupRegistered = true;
-          const wrappedCleanup = wrapNamedFixtureCleanup(async () => {
+          const cleanupOperation = async () => {
+            notifyTeardownStarted();
             await cleanup();
-          });
+          };
+          const timeoutWrappedCleanup =
+            wrapNamedFixtureCleanup(cleanupOperation);
           registeredCleanup = () => {
-            if (!cleanupPromise) {
-              notifyTeardownStarted();
-              cleanupPromise = Promise.resolve().then(wrappedCleanup);
-              cleanupPromise.catch(() => undefined);
+            if (!cleanupExecutionPromise) {
+              cleanupExecutionPromise = timeoutWrappedCleanup();
+              cleanupExecutionPromise.catch(() => undefined);
             }
-            return cleanupPromise;
+            return cleanupExecutionPromise;
           };
           if (cancelledFixtures.has(name)) {
             if (setupTimedOut) {
-              if (!resolveLateCleanup(registeredCleanup)) {
+              if (!resolveLateCleanup(cleanupOperation)) {
                 runRegisteredCleanup(false);
               }
             } else {
@@ -658,22 +660,27 @@ export const createFixtureResolver = (
         await new Promise<void>((fixtureResolve, fixtureReject) => {
           let useDone: (() => void) | undefined;
           let blockSettled = false;
+          let useCalled = false;
+          let block: Promise<void>;
+          const timeoutWrappedCleanup = wrapNamedFixtureCleanup(async () => {
+            useDone?.();
+            await block;
+          });
           cancelFixtureSetups.set(name, () => {
             if (blockSettled) {
               fixtureResolve();
             }
           });
-          const block = Promise.resolve().then(() =>
+          block = Promise.resolve().then(() =>
             fixtureValue(context, async (value: any) => {
+              useCalled = true;
               if (cancelledFixtures.has(name)) {
                 cancelledFixtureTeardownStarts.get(name)?.();
+                timeoutWrappedCleanup().then(fixtureResolve, fixtureReject);
                 return;
               }
               setFixtureContextValue(context, name, value);
-              cleanups.unshift(() => {
-                useDone?.();
-                return block;
-              });
+              cleanups.unshift(timeoutWrappedCleanup);
               fixtureResolve();
               return new Promise<void>((useFnResolve) => {
                 useDone = useFnResolve;
@@ -682,7 +689,7 @@ export const createFixtureResolver = (
           );
           block.then(() => {
             blockSettled = true;
-            if (cancelledFixtures.has(name)) {
+            if (cancelledFixtures.has(name) && !useCalled) {
               fixtureResolve();
             }
           }, fixtureReject);

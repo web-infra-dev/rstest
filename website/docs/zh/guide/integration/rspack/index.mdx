@@ -1,0 +1,48 @@
+---
+description: 本指南介绍如何在 Rspack 项目中集成 Rstest，并复用已有的 Rspack 构建配置。
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# Rspack
+
+在 [Rspack](https://rspack.rs) 项目中使用 Rstest，并复用已有的应用构建配置。
+
+## 快速开始
+
+已有项目可以参考[快速开始](/guide/start/quick-start)，完成 Rstest 的安装和测试脚本配置。
+
+## 复用 Rspack 配置
+
+[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) 会读取 Rspack 配置，并将兼容的选项转换到 Rstest test compiler。
+
+### 安装适配器
+
+<PackageManagerTabs command="add @rstest/adapter-rspack -D" />
+
+### 扩展配置
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { withRspackConfig } from '@rstest/adapter-rspack';
+
+export default defineConfig({
+  extends: withRspackConfig(),
+});
+```
+
+适配器会读取 `rspack.config.ts`，将兼容的 compiler 选项与生成的测试构建合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此当该配置发生变化时，`--changed` 会运行完整测试套件。
+
+:::warning
+Rstest 内部使用 Rsbuild，因此适配器会保留 Rstest 自己负责的测试结构，并始终移除内置的 `rsbuild:css`、`rsbuild:less` 和 `rsbuild:sass` CSS plugin。这样会导致部分 Rsbuild 专属 CSS 选项（例如 `output.cssModules`）不可用。
+:::
+
+如果默认的 Rspack 配置不适合当前项目，可以使用 `cwd`、`configPath`、`configName` 或 environment 相关选项。选项详情、映射规则和调试方法请查看[配置参考](./reference)。
+
+## 示例项目
+
+完整的 React 项目示例请查看 [Rspack adapter example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/rspack-adapter)。
+
+## 相关文档
+
+- [Rspack 配置概览](https://rspack.rs/config)

@@ -29,6 +29,12 @@ describe('test filterFiles', () => {
 
     expect(filterFiles(testFiles, ['index'], __dirname)).toEqual(testFiles);
   });
+
+  it('treats an explicit empty filter list as matching no files', () => {
+    const testFiles = [path.join(__dirname, 'index.test.ts')];
+
+    expect(filterFiles(testFiles, [], __dirname)).toEqual([]);
+  });
 });
 
 test('formatTestEntryName', () => {
@@ -54,7 +60,6 @@ describe('getTestEntries literal/glob handling', () => {
   const baseArgs = (projectRoot: string) => ({
     exclude: [],
     includeSource: [],
-    fileFilters: [],
     rootPath: projectRoot,
     projectRoot,
   });

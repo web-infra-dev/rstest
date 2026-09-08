@@ -62,6 +62,37 @@ describe('related test filtering', () => {
     `);
   });
 
+  it('should include tests related through a virtual setup file', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '--config',
+        'rstest.virtual.config.mts',
+        '--related',
+        'src/virtualDependency.ts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = collectRunTestFileLogs(cli.stdout);
+
+    expect(logs).toHaveLength(3);
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('index.test.ts'),
+        expect.stringContaining('other.test.ts'),
+        expect.stringContaining('fallback.ts.test.ts'),
+      ]),
+    );
+  });
+
   it('should resolve async dependencies and the Jest alias', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

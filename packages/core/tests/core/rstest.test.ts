@@ -11,6 +11,54 @@ process.env.DEBUG = 'false';
 const rootPath = join(__dirname, '../..');
 
 describe('rstest context', () => {
+  it('uses a longer default test timeout for browser projects', () => {
+    const browserContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [],
+      },
+      { browser: { enabled: true, provider: 'playwright' } },
+    );
+    const nodeContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [],
+      },
+      {},
+    );
+    const explicitContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [],
+      },
+      { browser: { enabled: true, provider: 'playwright' }, testTimeout: 2000 },
+    );
+
+    expect(browserContext.normalizedConfig.testTimeout).toBe(15000);
+    expect(browserContext.normalizedConfig.expect.poll.timeout).toBe(5000);
+    expect(nodeContext.normalizedConfig.testTimeout).toBe(5000);
+    expect(nodeContext.normalizedConfig.expect.poll.timeout).toBe(1000);
+    expect(explicitContext.normalizedConfig.testTimeout).toBe(2000);
+    expect(explicitContext.normalizedConfig.expect.poll.timeout).toBe(5000);
+
+    const explicitPollContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [],
+      },
+      {
+        browser: { enabled: true, provider: 'playwright' },
+        expect: { poll: { timeout: 2000 } },
+      },
+    );
+
+    expect(explicitPollContext.normalizedConfig.expect.poll.timeout).toBe(2000);
+  });
+
   it('should generate rstest context correctly', async () => {
     const rstestContext = new Rstest(
       {

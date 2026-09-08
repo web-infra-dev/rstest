@@ -39,6 +39,7 @@ const createTask = (
   worker: 'threads',
   type,
   options: {
+    context: { runtimeConfig: { env: {} } },
     // A worker is only reused for tasks carrying the same key.
     environmentKey: 'node',
     ...optionOverrides,

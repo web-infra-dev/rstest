@@ -36,6 +36,9 @@ export default defineConfig({
     exclude: ['**/zh/shared/**', '**/en/shared/**', './theme'],
   },
   themeConfig: {
+    llmsUI: {
+      placement: 'outline',
+    },
     socialLinks: [
       {
         icon: 'github',
@@ -97,6 +100,14 @@ export default defineConfig({
           to: '/guide/advanced/scoped-cleanup',
         },
         {
+          from: '/guide/integration/adapters',
+          to: '/guide/advanced/adapters',
+        },
+        {
+          from: '/guide/advanced/playwright',
+          to: '/guide/integration/playwright',
+        },
+        {
           from: '/zh/guide/advanced/debugging',
           to: '/zh/guide/debug/debugging',
         },
@@ -115,6 +126,14 @@ export default defineConfig({
         {
           from: '/zh/guide/basic/scoped-cleanup',
           to: '/zh/guide/advanced/scoped-cleanup',
+        },
+        {
+          from: '/zh/guide/integration/adapters',
+          to: '/zh/guide/advanced/adapters',
+        },
+        {
+          from: '/zh/guide/advanced/playwright',
+          to: '/zh/guide/integration/playwright',
         },
       ],
     }),

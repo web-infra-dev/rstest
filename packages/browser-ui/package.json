@@ -27,19 +27,19 @@
     "lint": "rslint ."
   },
   "dependencies": {
-    "antd": "^6.6.1",
+    "antd": "^6.6.2",
     "birpc": "^4.2.0",
-    "lucide-react": "^1.33.0",
+    "lucide-react": "^1.41.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.2.0-beta.2",
+    "@rsbuild/core": "~2.2.3",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rsbuild/plugin-svgr": "^2.0.5",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.7",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },

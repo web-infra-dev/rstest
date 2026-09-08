@@ -77,11 +77,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve as nodeResolve } from 'node:path';
-import {
-  originalPositionFor,
-  type SourceMapInput,
-  TraceMap,
-} from '@jridgewell/trace-mapping';
+import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { relative, resolve } from 'pathe';
 import { parse as parseStackTrace } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
@@ -93,6 +89,7 @@ import type {
   Reporter,
   RstestTestState,
   SnapshotSummary,
+  SourceMapInput,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -653,9 +650,7 @@ const parseErrorStacktrace = async ({
         };
       }
 
-      const sourcemap = (await getSourcemap(
-        file,
-      )) as unknown as SourceMapInput | null;
+      const sourcemap: SourceMapInput | null = await getSourcemap(file);
       if (!sourcemap) {
         return {
           ...frame,

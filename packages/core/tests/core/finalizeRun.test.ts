@@ -1,7 +1,8 @@
 import { withDefaultConfig } from '../../src/config';
+import { createExitCode } from '../../src/core/exitCode';
 import { finalizeRunCycle } from '../../src/core/finalizeRun';
 import { BlobReporter } from '../../src/reporter/blob';
-import type { RstestContext } from '../../src/types';
+import type { InternalContext } from '../../src/types';
 import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
 import { noopTraceSpan } from '../../src/utils';
 
@@ -43,26 +44,22 @@ describe('finalizeRunCycle', () => {
       reporters: [blobReporter],
       reporterResults: { results: [], testResults: [] },
       snapshotManager: { summary: {} },
+      exitCode: createExitCode(),
       updateReporterResultState() {},
-    } as unknown as RstestContext;
+    } as unknown as InternalContext;
 
-    const previousExitCode = process.exitCode;
-    try {
-      await finalizeRunCycle(context, {
-        outcomes: [],
-        mode: 'all',
-        isWatchMode: false,
-        coverageProvider,
-        reportOnFailure: false,
-        traceRun: {
-          onEvents: undefined,
-          span: noopTraceSpan,
-          finalize: async () => {},
-        },
-      });
-    } finally {
-      process.exitCode = previousExitCode;
-    }
+    await finalizeRunCycle(context, {
+      outcomes: [],
+      mode: 'all',
+      isWatchMode: false,
+      coverageProvider,
+      reportOnFailure: false,
+      traceRun: {
+        onEvents: undefined,
+        span: noopTraceSpan,
+        finalize: async () => {},
+      },
+    });
 
     expect(generatedReports).toEqual([1]);
   });

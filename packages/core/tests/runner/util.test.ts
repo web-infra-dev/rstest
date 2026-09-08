@@ -1,4 +1,41 @@
-import { formatName, formatTestError } from '../../src/runtime/util';
+import {
+  formatName,
+  formatTestError,
+  resolveEachArgs,
+} from '../../src/runtime/util';
+
+describe('resolveEachArgs', () => {
+  it('spreads every row when the whole table is arrays', () => {
+    expect(
+      resolveEachArgs([
+        [1, 2],
+        [3, 4],
+      ]),
+    ).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+  });
+
+  it('passes each row whole once any row is not an array', () => {
+    expect(resolveEachArgs([null, 42, ['a']])).toEqual([[null], [42], [['a']]]);
+    expect(resolveEachArgs([{ a: 1 }, { a: 2 }])).toEqual([
+      [{ a: 1 }],
+      [{ a: 2 }],
+    ]);
+  });
+
+  it('treats a hole as a single undefined argument', () => {
+    const sparse: (number[] | undefined)[] = [];
+    sparse[0] = [1];
+    sparse[2] = [2];
+    expect(resolveEachArgs(sparse)).toEqual([[[1]], [undefined], [[2]]]);
+  });
+
+  it('returns no rows for an empty table', () => {
+    expect(resolveEachArgs([])).toEqual([]);
+  });
+});
 
 it('test formatName', () => {
   expect(formatName('test index %#', [1, 2, 3], 1)).toBe('test index 1');

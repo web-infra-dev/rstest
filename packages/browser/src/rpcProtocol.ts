@@ -85,6 +85,8 @@ export type BrowserRpcRequest = {
   isNot?: boolean;
   /** Optional assertion timeout override (ms). Falls back to the host-provided assertion timeout. */
   timeout?: number;
+  /** Whether timeout was explicitly supplied to the element matcher. */
+  timeoutIsExplicit?: boolean;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -170,6 +172,16 @@ export const validateBrowserRpcRequest = (
       throw new Error('Invalid browser RPC request: timeout must be a number');
     }
     request.timeout = timeout;
+  }
+
+  const timeoutIsExplicit = payload.timeoutIsExplicit;
+  if (timeoutIsExplicit !== undefined) {
+    if (typeof timeoutIsExplicit !== 'boolean') {
+      throw new Error(
+        'Invalid browser RPC request: timeoutIsExplicit must be a boolean',
+      );
+    }
+    request.timeoutIsExplicit = timeoutIsExplicit;
   }
 
   return request;

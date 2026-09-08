@@ -133,7 +133,16 @@ export function withRslibConfig(
       root: finalLibConfig.root,
       name: libId,
       forceRerunTriggers: filePath ? [normalize(filePath)] : undefined,
-      plugins: finalLibConfig.plugins,
+      plugins: [
+        ...(finalLibConfig.plugins || []),
+        // Remove build-only plugins from the test environment.
+        // Rslib's declaration/type-check plugins are not needed for tests.
+        {
+          name: 'rslib-adapter:remove-useless-plugins',
+          remove: ['rsbuild:dts', 'rsbuild:type-check'],
+          setup: () => {},
+        },
+      ],
       source: {
         assetsInclude,
         decorators: {

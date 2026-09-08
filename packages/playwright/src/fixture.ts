@@ -52,6 +52,7 @@ import type {
   LaunchOptions,
   Page,
 } from 'playwright';
+import { getPlaywrightConfig } from './config';
 
 export type PlaywrightBrowserName = 'chromium';
 
@@ -826,7 +827,14 @@ const defaultPlaywrightFixture = async (
   _context: TestContext,
   use: (options: PlaywrightOptions) => Promise<void>,
 ) => {
-  await use({ browserName: DEFAULT_BROWSER_NAME });
+  const configuredPlaywright = getPlaywrightConfig();
+  const options = configuredPlaywright
+    ? structuredClone(configuredPlaywright)
+    : undefined;
+  await use({
+    ...options,
+    browserName: options?.browserName ?? DEFAULT_BROWSER_NAME,
+  });
 };
 
 const cleanupBrowserFixture = [

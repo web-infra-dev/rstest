@@ -147,24 +147,22 @@ export default defineConfig({
 pnpm add @rstest/playwright playwright -D
 ```
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 通过 `playwright` fixture 配置启动选项。定义一个共享的扩展 `test`，然后在浏览器测试文件中导入：
+可以在 `rstest.config.ts` 中配置 [@rstest/playwright](/guide/integration/playwright) 的默认启动选项：
 
-```ts title="tests/fixtures.ts"
-import { expect, test as base } from '@rstest/playwright';
-import type { PlaywrightOptions } from '@rstest/playwright';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
 
-export { expect };
-
-export const test = base.extend({
-  playwright: {
+export default defineConfig({
+  extends: definePlaywrightConfig({
     browserName: 'chromium',
     launchOptions:
       process.env.GITHUB_ACTIONS === 'true' ? { channel: 'chrome' } : undefined,
-  } satisfies PlaywrightOptions,
+  }),
 });
 ```
 
-使用该 fixture 后，标准 GitHub-hosted workflow 只需要安装 npm 依赖并运行 Rstest，不要再添加 `playwright install` 步骤。fixture 用法和 trace artifact 请查看 [@rstest/playwright 指南](/guide/advanced/playwright)。
+使用该 fixture 后，标准 GitHub-hosted workflow 只需要安装 npm 依赖并运行 Rstest，不要再添加 `playwright install` 步骤。fixture 用法和 trace artifact 请查看 [@rstest/playwright 指南](/guide/integration/playwright)。
 
 ## 使用分片拆分测试 \{#split-tests-with-shards}
 

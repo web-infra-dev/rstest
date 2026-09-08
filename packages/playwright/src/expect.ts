@@ -301,16 +301,19 @@ const createPlaywrightMatcher =
       message,
     );
 
-const runWithTimeout = async (check: () => Promise<void>, timeout: number) => {
+const runWithTimeout = async (
+  check: () => Promise<void>,
+  timeout: number,
+): Promise<Error | undefined> => {
   const timers = getRealTimers();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    await Promise.race([
-      check(),
-      new Promise<never>((_, reject) => {
+    return await Promise.race([
+      check().then(() => undefined),
+      new Promise<Error>((resolve) => {
         timeoutId = timers.setTimeout(() => {
-          reject(
+          resolve(
             new Error(`Playwright assertion timed out after ${timeout}ms.`),
           );
         }, timeout);
@@ -330,21 +333,36 @@ const waitForExpectation = async (
   const timeout = options?.timeout ?? DEFAULT_EXPECT_TIMEOUT;
   const deadline = getRealNow() + timeout;
   let lastError: unknown;
+  let firstAttempt = true;
 
-  while (getRealNow() <= deadline) {
+  while (true) {
+    const remaining = deadline - getRealNow();
+    if (!firstAttempt && remaining <= 0) {
+      break;
+    }
+
+    firstAttempt = false;
     try {
-      await runWithTimeout(check, Math.max(deadline - getRealNow(), 0));
-      return;
-    } catch (error) {
-      lastError = error;
+      const timeoutError = await runWithTimeout(
+        check,
+        Number.isFinite(remaining) ? Math.max(remaining, 0) : 0,
+      );
 
-      const remaining = deadline - getRealNow();
-      if (remaining <= 0) {
-        break;
+      if (!timeoutError) {
+        return;
       }
 
-      await waitForRealTime(Math.min(EXPECT_POLL_INTERVAL, remaining));
+      lastError ??= timeoutError;
+    } catch (error) {
+      lastError = error;
     }
+
+    const remainingAfterCheck = deadline - getRealNow();
+    if (!Number.isFinite(remainingAfterCheck) || remainingAfterCheck <= 0) {
+      break;
+    }
+
+    await waitForRealTime(Math.min(EXPECT_POLL_INTERVAL, remainingAfterCheck));
   }
 
   if (lastError instanceof Error) {

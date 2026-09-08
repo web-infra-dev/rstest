@@ -147,24 +147,22 @@ Install the Rstest fixtures and the Playwright API:
 pnpm add @rstest/playwright playwright -D
 ```
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) configures launch options through its `playwright` fixture. Define a shared extended `test`, then import it from browser test files:
+Configure [@rstest/playwright](/guide/integration/playwright) launch defaults in `rstest.config.ts`:
 
-```ts title="tests/fixtures.ts"
-import { expect, test as base } from '@rstest/playwright';
-import type { PlaywrightOptions } from '@rstest/playwright';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
 
-export { expect };
-
-export const test = base.extend({
-  playwright: {
+export default defineConfig({
+  extends: definePlaywrightConfig({
     browserName: 'chromium',
     launchOptions:
       process.env.GITHUB_ACTIONS === 'true' ? { channel: 'chrome' } : undefined,
-  } satisfies PlaywrightOptions,
+  }),
 });
 ```
 
-With this fixture, a standard GitHub-hosted workflow only needs to install npm dependencies and run Rstest; do not add a `playwright install` step. See the [@rstest/playwright guide](/guide/advanced/playwright) for fixture usage and trace artifacts.
+With this fixture, a standard GitHub-hosted workflow only needs to install npm dependencies and run Rstest; do not add a `playwright install` step. See the [@rstest/playwright guide](/guide/integration/playwright) for fixture usage and trace artifacts.
 
 ## Split tests with shards
 

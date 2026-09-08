@@ -1,4 +1,8 @@
-import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
+import type {
+  InternalContext,
+  InternalProjectContext,
+  ProjectEntries,
+} from '../types';
 import {
   getTestEntries,
   logShardMessage,
@@ -12,10 +16,10 @@ import { isNodeProject } from './isBrowserProject';
 export const getProjectEntries = async ({
   context,
   project,
-  fileFilters = context.fileFilters || [],
+  fileFilters,
 }: {
-  context: RstestContext;
-  project: ProjectContext;
+  context: InternalContext;
+  project: InternalProjectContext;
   fileFilters?: string[];
 }): Promise<Record<string, string>> => {
   const { include, exclude, includeSource, root } = project.normalizedConfig;
@@ -27,27 +31,26 @@ export const getProjectEntries = async ({
     rootPath: context.rootPath,
     projectRoot: root,
     fileFilters,
-    fileFilterMode: context.fileFilterMode,
   });
 };
 
 export type ProjectPlan = {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
-  browserProjectsToRun: ProjectContext[];
-  nodeProjectsToRun: ProjectContext[];
+  browserProjectsToRun: InternalProjectContext[];
+  nodeProjectsToRun: InternalProjectContext[];
 };
 
 export const syncNodeProjects = (
-  target: ProjectContext[],
-  projects: ProjectContext[],
+  target: InternalProjectContext[],
+  projects: InternalProjectContext[],
 ): void => {
   target.splice(0, target.length, ...projects.filter(isNodeProject));
 };
 
 const isSameProjectList = (
-  left: ProjectContext[],
-  right: ProjectContext[],
+  left: InternalProjectContext[],
+  right: InternalProjectContext[],
 ): boolean =>
   left.length === right.length &&
   left.every((project, index) => {
@@ -66,7 +69,7 @@ export const createProjectPlanState = ({
   context,
   isWatchMode,
 }: {
-  context: RstestContext;
+  context: InternalContext;
   isWatchMode: boolean;
 }): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -79,11 +82,12 @@ export const createProjectPlanState = ({
 } => {
   let allProjects = context.projects;
   let entriesCache: Map<string, ProjectEntries> = new Map();
-  let browserProjectsToRun: ProjectContext[] = [];
-  let nodeProjectsToRun: ProjectContext[] = [];
+  let browserProjectsToRun: InternalProjectContext[] = [];
+  let nodeProjectsToRun: InternalProjectContext[] = [];
   let environmentGroupsResolved = false;
   let environmentGroupsChanged = false;
   let pendingStrictEnvironmentCommentValidation = false;
+  let environmentPartitionRefresh: Promise<void> | undefined;
   // Resolution never logs the shard banner — it can run several times per init
   // (pre-hook, post-hook, post-discovery) and each pass would print its own
   // interim counts. Every resolve records the freshest counts here and the
@@ -97,8 +101,34 @@ export const createProjectPlanState = ({
     nodeProjectsToRun,
   });
 
-  const getProjectFileFilters = (project: ProjectContext): string[] =>
-    isWatchMode && isNodeProject(project) ? [] : context.fileFilters || [];
+  // The node watch compiler owns an unfiltered graph; startup filters scope
+  // executor cycles instead.
+  const getProjectEntryFilter = (
+    project: InternalProjectContext,
+  ): string[] | undefined =>
+    isWatchMode && isNodeProject(project) ? undefined : context.fileFilters;
+
+  const refreshEnvironmentPartitions = (): Promise<void> => {
+    environmentPartitionRefresh ??= (async () => {
+      const refreshed = await refreshEnvironmentPartitionEntries({
+        context,
+        projects: allProjects,
+        getProjectEntries: (project) =>
+          getProjectEntries({
+            context,
+            project,
+            fileFilters: getProjectEntryFilter(project),
+          }),
+      });
+      allProjects = refreshed.projects;
+      entriesCache = refreshed.entriesCache;
+      lastShardCounts = refreshed.shardCounts ?? lastShardCounts;
+      context.projects = allProjects;
+    })().finally(() => {
+      environmentPartitionRefresh = undefined;
+    });
+    return environmentPartitionRefresh;
+  };
 
   const globTestSourceEntries = async (
     name: string,
@@ -106,8 +136,19 @@ export const createProjectPlanState = ({
     if (context.relatedResolutionEmpty) {
       return {};
     }
-    if (entriesCache.has(name)) {
+    if (
+      (!isWatchMode || context.normalizedConfig.shard) &&
+      entriesCache.has(name)
+    ) {
       return entriesCache.get(name)!.entries;
+    }
+
+    if (environmentGroupsResolved && environmentGroupsChanged) {
+      // Environment-comment projects share one source glob. Refresh and regroup
+      // that source as a unit so a dynamic watch entry never crosses the
+      // environment partition that owns it.
+      await refreshEnvironmentPartitions();
+      return entriesCache.get(name)?.entries ?? {};
     }
 
     const project =
@@ -117,7 +158,10 @@ export const createProjectPlanState = ({
       return {};
     }
 
-    const fileFilters = getProjectFileFilters(project);
+    // A watch compiler re-evaluates its dynamic entry on every rebuild. Re-glob
+    // here instead of serving the planning snapshot so newly created matching
+    // tests become entries and deleted tests leave the compilation.
+    const fileFilters = getProjectEntryFilter(project);
     const entries = await getProjectEntries({
       context,
       project,
@@ -138,23 +182,11 @@ export const createProjectPlanState = ({
       environmentGroupsResolved && environmentGroupsChanged;
 
     if (shouldPreserveEnvironmentPartitions) {
-      const refreshed = await refreshEnvironmentPartitionEntries({
-        context,
-        projects: allProjects,
-        getProjectEntries: (project) =>
-          getProjectEntries({
-            context,
-            project,
-            fileFilters: getProjectFileFilters(project),
-          }),
-      });
-      allProjects = refreshed.projects;
-      entriesCache = refreshed.entriesCache;
-      lastShardCounts = refreshed.shardCounts ?? lastShardCounts;
+      await refreshEnvironmentPartitions();
     } else if (context.normalizedConfig.shard) {
       entriesCache =
         (await resolveShardedEntries(context, {
-          getFileFilters: getProjectFileFilters,
+          getFileFilters: getProjectEntryFilter,
           onShardCounts: (counts) => {
             lastShardCounts = counts;
           },
@@ -190,7 +222,7 @@ export const createProjectPlanState = ({
     nodeProjectsToRun = runnable.nodeProjectsToRun;
 
     if (isWatchMode && context.normalizedConfig.shard) {
-      const hasShardedEntries = (project: ProjectContext): boolean =>
+      const hasShardedEntries = (project: InternalProjectContext): boolean =>
         Object.keys(entriesCache.get(project.environmentName)?.entries || {})
           .length > 0;
 

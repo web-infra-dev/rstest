@@ -43,7 +43,12 @@ describe('@rstest/playwright', () => {
   it('only resolves directly destructured test.for fixtures', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'for-fixtures.test.ts'],
+      args: [
+        'run',
+        '--pool.maxWorkers=1',
+        'for-fixtures.test.ts',
+        'config-second.test.ts',
+      ],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -53,6 +58,44 @@ describe('@rstest/playwright', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CONFIG_SECOND_FILE_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RUNTIME_EXTEND_OK');
+  });
+
+  it('cleans Playwright config between projects with isolate false', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--pool.maxWorkers=1'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures', 'project-config'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      'RSTEST_PLAYWRIGHT_CONFIG_PROJECT_ISOLATED_OK',
+    );
+  });
+
+  it('preserves Playwright assertion errors at the timeout deadline', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'expect-timeout.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(cli.stdout).toContain('Expected locator to be visible.');
+    expect(cli.stdout).not.toContain(
+      'Playwright assertion timed out after 0ms.',
+    );
   });
 
   it('reuses and cleans up a browser across worker files', async () => {

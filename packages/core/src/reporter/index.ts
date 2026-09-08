@@ -3,6 +3,7 @@ import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
+  InternalContext,
   NormalizedConfig,
   NormalizedProjectConfig,
   Reporter,
@@ -12,7 +13,8 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { flushOutputStreams, isTTY } from '../utils';
+import { runLifecycleStep } from '../core/finalizeRun';
+import { color, flushOutputStreams, isTTY, logger } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
@@ -135,6 +137,7 @@ export class DefaultReporter implements Reporter {
 
   onExit(): void {
     this.statusRenderer?.clear();
+    this.statusRenderer?.stop();
     this.nonTTYProgressNotifier?.stop();
   }
 
@@ -183,4 +186,24 @@ export class DefaultReporter implements Reporter {
       snapshotSummary,
     });
   }
+}
+
+export function exitReporters(
+  context: Pick<InternalContext, 'reporters'>,
+): Promise<void> {
+  const exits: Promise<void>[] = [];
+  for (const reporter of context.reporters.splice(0)) {
+    const { onExit } = reporter;
+    if (!onExit) {
+      continue;
+    }
+    exits.push(
+      runLifecycleStep('reporter onExit', async () => {
+        await onExit.call(reporter);
+      }).catch((error) => {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }),
+    );
+  }
+  return Promise.all(exits).then(() => {});
 }

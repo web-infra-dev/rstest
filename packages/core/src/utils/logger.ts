@@ -30,6 +30,38 @@ export const isDebug = (): boolean => {
   );
 };
 
+type ColorEnvSource = Readonly<Record<string, string | undefined>>;
+type ColorEnv = Partial<Record<'FORCE_COLOR' | 'NO_COLOR', string>>;
+
+interface ForceColorEnvOptions {
+  userSetColorEnv?: boolean;
+  isAgent?: boolean;
+  isColorSupported?: boolean;
+}
+
+export const hasUserColorEnv = (env: ColorEnvSource): boolean =>
+  env.FORCE_COLOR !== undefined || env.NO_COLOR !== undefined;
+
+export const pickColorEnv = (env: ColorEnvSource): ColorEnv => {
+  const colorEnv: ColorEnv = {};
+  if (env.FORCE_COLOR !== undefined) {
+    colorEnv.FORCE_COLOR = env.FORCE_COLOR;
+  }
+  if (env.NO_COLOR !== undefined) {
+    colorEnv.NO_COLOR = env.NO_COLOR;
+  }
+  return colorEnv;
+};
+
+export const omitColorEnv = (
+  env: ColorEnvSource,
+): Record<string, string | undefined> => {
+  const remainingEnv = { ...env };
+  delete remainingEnv.FORCE_COLOR;
+  delete remainingEnv.NO_COLOR;
+  return remainingEnv;
+};
+
 /**
  * Determine color env vars (`FORCE_COLOR` / `NO_COLOR`) to inject into
  * worker and child processes (e.g. globalSetup, pool workers).
@@ -45,20 +77,12 @@ export const isDebug = (): boolean => {
  *
  * @param options - Override runtime values for unit-testing without mocks.
  */
-export function getForceColorEnv(options?: {
-  userSetColorEnv?: boolean;
-  isAgent?: boolean;
-  isColorSupported?: boolean;
-}): {
+export function getForceColorEnv(options?: ForceColorEnvOptions): {
   FORCE_COLOR?: '0' | '1';
   NO_COLOR?: '1';
 } {
   const userSetColorEnv =
-    options?.userSetColorEnv ??
-    (process.env.FORCE_COLOR !== undefined ||
-      process.env.NO_COLOR !== undefined);
-  const agent = options?.isAgent ?? determineAgent().isAgent;
-  const colorSupported = options?.isColorSupported ?? isColorSupported;
+    options?.userSetColorEnv ?? hasUserColorEnv(process.env);
 
   // User explicitly set FORCE_COLOR or NO_COLOR — respect their intent.
   // These vars are already in process.env and will be inherited by workers.
@@ -66,12 +90,16 @@ export function getForceColorEnv(options?: {
     return {};
   }
 
+  const agent = options?.isAgent ?? determineAgent().isAgent;
+
   // Agent environments (AI coding assistants) consume stdout as plain text.
   // ANSI escapes become noise in their output, so disable colors entirely.
   // Set both standards — some tools only check NO_COLOR, others FORCE_COLOR.
   if (agent) {
     return { NO_COLOR: '1', FORCE_COLOR: '0' };
   }
+
+  const colorSupported = options?.isColorSupported ?? isColorSupported;
 
   // Normal terminal session with color support — propagate to workers
   // so their piped stdio doesn't suppress colors.
@@ -81,6 +109,29 @@ export function getForceColorEnv(options?: {
 
   return {};
 }
+
+/**
+ * Task-time color env for a project. A worker is spawned from the creating
+ * task's env and reusable workers are color-env-affine, so import-time color
+ * detection matches the project. Both keys are still stated so `setupEnv` can
+ * retract stale values within a matched worker as a safeguard. Bun forks may
+ * drop `undefined` through JSON IPC, but reuse affinity makes those omitted
+ * markers irrelevant to import-time detection.
+ */
+export const resolveTaskColorEnv = (
+  resolvedEnv: ColorEnvSource,
+  options?: Omit<ForceColorEnvOptions, 'userSetColorEnv'>,
+): {
+  FORCE_COLOR: '0' | '1' | undefined;
+  NO_COLOR: '1' | undefined;
+} => ({
+  FORCE_COLOR: undefined,
+  NO_COLOR: undefined,
+  ...getForceColorEnv({
+    ...options,
+    userSetColorEnv: hasUserColorEnv(resolvedEnv),
+  }),
+});
 
 /**
  * Create a picocolors instance using default runtime detection.

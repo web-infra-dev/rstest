@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { TestEnvironmentModuleFallback } from '../../../pool/protocol';
 import type { TestEnvironmentModuleReference } from '../../../types';
@@ -68,8 +69,18 @@ const validateBuiltinDependency = (
   );
 };
 
-const probeBundledDependency = (loaded: LoadedTestEnvironmentModule): void => {
+const probeBundledDependency = (
+  loaded: LoadedTestEnvironmentModule,
+  bundlePath: string,
+): void => {
   if (loaded.name !== 'jsdom') {
+    return;
+  }
+
+  // Share successful probes through a marker.
+  const markerPath = `${bundlePath}.probe-ok`;
+  if (fs.existsSync(markerPath)) {
+    logger.debug('Reusing successful bundled jsdom compatibility probe');
     return;
   }
 
@@ -81,6 +92,12 @@ const probeBundledDependency = (loaded: LoadedTestEnvironmentModule): void => {
     dom.window.getComputedStyle(dom.window.document.documentElement);
   } finally {
     dom.window.close();
+  }
+
+  try {
+    fs.writeFileSync(markerPath, '');
+  } catch (error) {
+    logger.debug(`Failed to share bundled jsdom compatibility probe: ${error}`);
   }
 };
 
@@ -95,7 +112,7 @@ const loadModule = async (
         reference.bundlePath,
         await importModule(reference.bundlePath),
       );
-      probeBundledDependency(loaded);
+      probeBundledDependency(loaded, reference.bundlePath);
       logger.debug(`loaded bundled test environment ${reference.packageName}`);
       return loaded;
     } catch (error) {

@@ -31,16 +31,13 @@ import {
   ROOT_SUITE_NAME,
   SYNTHETIC_STACK_ERROR_MESSAGE,
 } from '../../utils/constants';
-import {
-  castArray,
-  generateFilePathHash,
-  isPlainObject,
-} from '../../utils/helper';
+import { generateFilePathHash, isPlainObject } from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import {
   formatName,
   isTemplateStringsArray,
   parseTemplateTable,
+  resolveEachArgs,
   resolveTestArgs,
   TestRegisterError,
 } from '../util';
@@ -88,7 +85,8 @@ export class RunnerRuntime {
    * - running: collect it immediately.
    */
   private collectStatus: CollectStatus = 'lazy';
-  private currentCollectList: (() => MaybePromise<void>)[] = [];
+  private currentCollectList: Array<(() => MaybePromise<void>) | undefined> =
+    [];
   private suiteCollectionDepth = 0;
   private readonly runtimeConfig;
   private readonly project: string;
@@ -323,6 +321,10 @@ export class RunnerRuntime {
         test.concurrent = true;
       }
 
+      if (current.concurrent || current.inConcurrentScope) {
+        test.inConcurrentScope = true;
+      }
+
       if (current.sequential && test.concurrent !== true) {
         test.sequential = true;
       }
@@ -356,9 +358,11 @@ export class RunnerRuntime {
     const currentCollectList = this.currentCollectList;
     // reset currentCollectList
     this.currentCollectList = [];
-    while (currentCollectList.length > 0) {
+    let collectIndex = 0;
+    while (collectIndex < currentCollectList.length) {
       this.collectStatus = 'running';
-      const fn = currentCollectList.shift()!;
+      const fn = currentCollectList[collectIndex++]!;
+      currentCollectList[collectIndex - 1] = undefined;
       await fn();
     }
   }
@@ -501,9 +505,10 @@ export class RunnerRuntime {
     return (name, arg2, arg3) => {
       const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
       const { timeout, retry, repeats, meta } = suiteOptions;
+      const argsByRow = resolveEachArgs(cases);
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
-        const params = castArray(param) as any[];
+        const params = argsByRow[i]!;
 
         this.describe({
           name: formatName(name, param, i),
@@ -571,9 +576,10 @@ export class RunnerRuntime {
     return (name, arg2, arg3) => {
       const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
       const { timeout, retry, repeats, meta } = testOptions;
+      const argsByRow = resolveEachArgs(cases);
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
-        const params = castArray(param) as any[];
+        const params = argsByRow[i]!;
 
         const shouldPassContext =
           typeof fn === 'function' && TEST_EACH_CONTEXT_SYMBOL in fn;

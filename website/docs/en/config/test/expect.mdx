@@ -9,9 +9,9 @@ import { ApiMeta } from '@components/ApiMeta';
 <ApiMeta addedVersion="0.11.6" />
 
 - **Type:** `ExpectConfig`
-- **Default:** `{ poll: { interval: 50, timeout: 1000 } }`
+- **Default:** `{ poll: { interval: 50, timeout: 1000 } }` (`timeout: 5000` in Browser Mode)
 
-Configure the defaults used by [`expect.poll()`](/api/runtime-api/test-api/expect#expectpoll). Options passed directly to `expect.poll()` take precedence over this configuration.
+Configure the defaults used by [`expect.poll()`](/api/runtime-api/test-api/expect#expectpoll). Browser Mode uses a `5000ms` default poll timeout, while Node Mode uses `1000ms`. An implicit default is limited by the remaining current test phase; options passed directly to `expect.poll()` take precedence and are not capped by this calculation. `expect.poll()` remains test-only: it can use the active timeout of per-test hooks and fixtures, but it is not available in `beforeAll` or `afterAll`.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -40,6 +40,6 @@ The interval between retry attempts, in milliseconds.
 ### expect.poll.timeout
 
 - **Type:** `number`
-- **Default:** `1000`
+- **Default:** `1000` (`5000` in Browser Mode)
 
-The maximum total polling time before the assertion fails, in milliseconds.
+The maximum total polling time before the assertion fails, in milliseconds. When omitted at the call site, the configured value is also capped by the remaining current test phase.
