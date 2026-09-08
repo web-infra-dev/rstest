@@ -9,6 +9,7 @@ const {
   inspectRealm,
   inspectLoaderBoundaries,
   inspectCommonJsPaths,
+  inspectCreateRequireParent,
   inspectCommonJsGetters,
   inspectFailedChild,
   requireAddonGraph,
@@ -23,6 +24,17 @@ const {
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('gives createRequire in external ESM a stable synthetic parent', () => {
+  expect(inspectCreateRequireParent()).toEqual({
+    filename: true,
+    linked: true,
+    repeated: true,
+    children: 1,
+    parentRequire: true,
+    jsonChildLinked: true,
+  });
+});
 
 it('snapshots CJS named getters using the original exports receiver', async () => {
   expect(await inspectCommonJsGetters()).toEqual({

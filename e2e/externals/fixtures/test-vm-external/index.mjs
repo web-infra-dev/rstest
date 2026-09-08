@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import moduleBuiltin, {
   builtinModules,
   syncBuiltinESMExports,
@@ -25,6 +26,24 @@ const require = createRequire(import.meta.url);
 const requiredMetadata = require('./data.json');
 
 const commonJsPaths = require('./path-helper.cjs');
+
+export const inspectCreateRequireParent = () => {
+  const child = require('./bundle-child.cjs');
+  const parent = child.parent;
+  const jsonModule = require.cache[require.resolve('./data.json')];
+  jsonModule.require('./bundle-child.cjs');
+  return {
+    filename: parent?.filename === fileURLToPath(import.meta.url),
+    linked: child.linked,
+    repeated: require('./bundle-child.cjs') === child,
+    children: parent?.children.filter((entry) => entry.exports === child)
+      .length,
+    parentRequire: parent?.require('./bundle-child.cjs') === child,
+    jsonChildLinked: jsonModule.children.some(
+      (entry) => entry.exports === child,
+    ),
+  };
+};
 
 export const inspectCommonJsGetters = async () => {
   const readsBefore = nonEnumerableModule.getterReads;

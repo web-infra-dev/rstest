@@ -8,8 +8,8 @@ import {
   isBuiltin,
   Module,
 } from 'node:module';
-import { dirname as nativeDirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname as nativeDirname, isAbsolute, join, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { extname } from 'pathe';
 import {
@@ -400,8 +400,35 @@ class VmExternalModules {
     getParentModule?: () => CommonJsModule,
   ): NodeJS.Require => {
     const nativeRequire = createNativeRequire(filename);
+    let syntheticParent: CommonJsModule | undefined;
+    if (!getParentModule) {
+      // Node's createRequire owns a synthetic module even for an ESM origin.
+      // Keep it local to this require function, outside the evaluated-module cache.
+      const filePath =
+        typeof filename === 'string' && isAbsolute(filename)
+          ? filename
+          : fileURLToPath(filename);
+      const parentPath =
+        filePath.endsWith('/') || filePath.endsWith(sep)
+          ? join(filePath, 'noop.js')
+          : filePath;
+      syntheticParent = new (this.getVmModuleClass())(parentPath);
+      syntheticParent.filename = parentPath;
+      syntheticParent.paths = getNodeModulePaths(parentPath);
+      syntheticParent.exports = vm.runInContext(
+        'Object.create(Object.prototype)',
+        this.context,
+      );
+    }
     const require = ((specifier: string) =>
-      this.require(specifier, filename, getParentModule?.())) as NodeJS.Require;
+      this.require(
+        specifier,
+        filename,
+        getParentModule?.() ?? syntheticParent,
+      )) as NodeJS.Require;
+    if (syntheticParent) {
+      syntheticParent.require = require;
+    }
 
     require.resolve = Object.assign(
       (specifier: string, options?: { paths?: string[] }) => {
@@ -1183,7 +1210,7 @@ class VmExternalModules {
     module.loaded = true;
     module.path = nativeDirname(filePath);
     module.paths = getNodeModulePaths(filePath);
-    module.require = this.createRequire(filePath);
+    module.require = this.createRequire(filePath, () => module);
     this.jsonCache.set(filePath, module);
     this.requireCache[filePath] = module;
     this.attachChild(parentModule, module);

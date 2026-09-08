@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { createRequire } from 'node:module';
+import { createRequire, type Module } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
@@ -654,6 +654,79 @@ describe('loadEsModule', () => {
       },
     });
   });
+
+  it.each(['path', 'url', 'url-string', 'directory'])(
+    'matches native createRequire parent relationships for %s origins',
+    (kind) => {
+      const directory = realpathSync(
+        mkdtempSync(join(tmpdir(), 'rstest-require-parent-')),
+      );
+      const entryPath = join(directory, 'entry.mjs');
+      const childPath = join(directory, 'child.cjs');
+      const siblingPath = join(directory, 'sibling.cjs');
+      const anotherPath = join(directory, 'another.cjs');
+      const jsonPath = join(directory, 'data.json');
+      writeFileSync(childPath, 'module.exports = module;');
+      writeFileSync(siblingPath, 'module.exports = module;');
+      writeFileSync(anotherPath, 'module.exports = module;');
+      writeFileSync(jsonPath, '{}');
+      const origin =
+        kind === 'url'
+          ? pathToFileURL(entryPath)
+          : kind === 'url-string'
+            ? pathToFileURL(entryPath).href
+            : kind === 'directory'
+              ? `${directory}/`
+              : entryPath;
+      const executor = getVmExternalModules(vm.createContext({}));
+      const nativeRequire = createRequire(origin);
+      const inspect = (
+        load: NodeJS.Require,
+        anotherRequire: NodeJS.Require,
+      ) => {
+        const child = load('./child.cjs') as Module;
+        const parent = child.parent;
+        expect(parent).not.toBeNull();
+        expect(load('./child.cjs')).toBe(child);
+        expect(parent?.require('./child.cjs')).toBe(child);
+        const sibling = parent?.require('./sibling.cjs') as Module;
+        expect(sibling.parent).toBe(parent);
+        expect(parent?.children).toEqual([child, sibling]);
+        load('./data.json');
+        const jsonModule = load.cache[load.resolve('./data.json')]!;
+        expect(jsonModule.require('./child.cjs')).toBe(child);
+        expect(jsonModule.children).toEqual([child]);
+        expect(child.parent).toBe(parent);
+        expect(anotherRequire('./child.cjs')).toBe(child);
+        const another = anotherRequire('./another.cjs') as Module;
+        expect(another.parent).not.toBe(parent);
+        expect(another.parent?.children).toEqual([child, another]);
+        expect(child.parent).toBe(parent);
+        return {
+          filename: parent?.filename,
+          id: parent?.id,
+          path: parent?.path,
+          loaded: parent?.loaded,
+          cachedParent: Object.hasOwn(load.cache, parent!.filename),
+        };
+      };
+      try {
+        expect(
+          inspect(
+            executor.createRequire(origin),
+            executor.createRequire(origin),
+          ),
+        ).toEqual(inspect(nativeRequire, createRequire(origin)));
+      } finally {
+        executor.dispose();
+        delete nativeRequire.cache[childPath];
+        delete nativeRequire.cache[siblingPath];
+        delete nativeRequire.cache[anotherPath];
+        delete nativeRequire.cache[jsonPath];
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   it.for([
     "throw new Error('failed')",
