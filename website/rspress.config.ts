@@ -12,16 +12,6 @@ const siteUrl = 'https://rstest.rs';
 const description =
   'Rstest is a JavaScript testing framework powered by Rspack';
 
-/**
- * Pages that are still being stabilized: authored and served by `rspress dev`,
- * but dropped from the production route table so they are never emitted,
- * linked, or listed in the sitemap. `ConfigOverview` gates its own entries on
- * the same `NODE_ENV` check — keep the two lists in sync.
- */
-const unreleasedRoutes = ['**/config/test/federation.mdx'];
-
-const isProduction = process.env.NODE_ENV === 'production';
-
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
   title: 'Rstest',
@@ -43,12 +33,7 @@ export default defineConfig({
   route: {
     cleanUrls: true,
     // exclude document fragments from routes
-    exclude: [
-      '**/zh/shared/**',
-      '**/en/shared/**',
-      './theme',
-      ...(isProduction ? unreleasedRoutes : []),
-    ],
+    exclude: ['**/zh/shared/**', '**/en/shared/**', './theme'],
   },
   themeConfig: {
     llmsUI: {

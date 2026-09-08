@@ -1,0 +1,80 @@
+---
+description: Learn how to load and test real Module Federation remotes with Rstest in Node, JSDOM, and Browser Mode.
+---
+
+# Module Federation
+
+[Module Federation](https://module-federation.io/) lets separately built applications expose and consume modules at runtime. Test the federation boundary with Rstest when you need confidence that a host can load a real remote, resolve its shared dependencies, and execute the exposed module correctly.
+
+[@module-federation/rstest](https://github.com/module-federation/core) configures Module Federation for the Rstest build. It supports Node and JSDOM test environments as well as Browser Mode, so the same test project can cover server and browser consumers.
+
+## Requirements
+
+For Node and JSDOM tests, use `@rstest/core@0.11.4` or newer. Browser Mode support requires `@rstest/core@0.11.10` or newer.
+
+## Install the integration
+
+Add `@module-federation/rstest` to an existing Rstest project. This package configures the test host that consumes federated modules; build or serve the remote application with its own Module Federation build plugin.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @module-federation/rstest -D" />
+
+## Configure the test host
+
+Register the `federation` plugin with the same remote name that application code imports:
+
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  plugins: [
+    federation({
+      name: 'host',
+      remotes: {
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
+      },
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    }),
+  ],
+});
+```
+
+The plugin automatically enables Rstest's compatibility mode for Node-based test environments. Do not also set `federation: true` when using this plugin.
+
+JSDOM tests still use Rstest's Node-based runner, so this configuration points to a Node-targeted remote entry. Build that remote for Node and expose it as a CommonJS entry such as `remoteEntry.cjs`. Browser Mode instead consumes the browser build's `remoteEntry.js`.
+
+## Start remotes before testing
+
+The remote entry must be available before test workers import the host application. Use [`globalSetup`](/config/test/global-setup) to build or start remote servers once, then stop them in the returned teardown or exported `teardown` function. This avoids starting the same server from every test file.
+
+## Test an exposed module
+
+Import an exposed module through its federated specifier, just as application code does:
+
+```ts title="remote.test.ts"
+import { expect, it } from '@rstest/core';
+
+it('loads a federated remote', async () => {
+  const remote = await import('component-app/Button');
+
+  expect(remote.default).toBeDefined();
+});
+```
+
+This exercises remote loading and the Module Federation runtime instead of replacing the federation boundary with a mock.
+
+## Use browser mode
+
+Set up [Browser Mode](/guide/browser-testing/getting-started) when the remote must run in a real browser, then keep the same `federation` plugin in that project's Rstest configuration. The plugin detects `browser.enabled` from the resolved configuration and uses the web federation runtime instead of Node-specific defaults.
+
+## Learn more
+
+- See the [`federation`](/config/test/federation) reference for the standalone config option, CLI flag, and Rstest runtime behavior.
+- See the [official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration, plugin options, and producer builds.
+- Explore the complete [Rstest federation example](https://github.com/web-infra-dev/rstest/tree/main/examples/federation), which covers HTTP and local CommonJS remotes across Node, JSDOM, and Browser Mode.

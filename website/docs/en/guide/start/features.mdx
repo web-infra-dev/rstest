@@ -22,6 +22,12 @@ By default, Rstest uses Rspack's built-in SWC loader to transform JavaScript and
 
 Learn more about [Configuring SWC](/guide/basic/configure-rstest#configure-swc).
 
+## Test Module Federation applications
+
+Rstest can load real [Module Federation](https://module-federation.io/) remotes in Node, JSDOM, and Browser Mode tests. With [@module-federation/rstest](https://github.com/module-federation/core), tests exercise remote loading and shared dependencies instead of replacing the federation boundary with mocks.
+
+Learn more about [Module Federation testing](/guide/integration/module-federation).
+
 ## Multi-project testing
 
 Rstest can run multiple test projects in one process, with each project keeping its own configuration and environment. This is useful for monorepos, multi-app workspaces, and projects that need separate Node, DOM, or Browser Mode test targets.

@@ -6,7 +6,7 @@ description: 启用 Module Federation 支持。
 
 import { ApiMeta } from '@components/ApiMeta';
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.11.4" />
 
 - **类型：** `boolean`
 - **默认值：** `false`
@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 是否启用 [Module Federation](https://module-federation.io/) 支持。
 
-Rstest 在 Node Mode 和 Browser Mode 中均支持 Module Federation。基于 Node 的 runner，包括 `testEnvironment: 'node'` 以及 `jsdom`、`happy-dom` 等 DOM 模拟环境，会使用 Rstest 的兼容垫片来支持通过 Node API 加载 chunk 的 federation runtime；Browser Mode 则使用 bundler 的 Web federation runtime。
+Rstest 在 Node Mode 和 Browser Mode 中均支持 Module Federation。基于 Node 的 runner，包括 `testEnvironment: 'node'` 以及 `jsdom`、`happy-dom` 等 DOM 模拟环境，会使用 Rstest 的兼容垫片来支持通过 Node API 加载 chunk 的 federation runtime；Node Mode 支持从 Rstest `0.11.4` 开始提供。Browser Mode 则使用 bundler 的 Web federation runtime，并需要 Rstest `0.11.10` 或更高版本。
 
 Rstest 在单个 worker 运行时中执行测试产物，以保证模块 mock 始终生效。而 Module Federation 运行时会自行加载远程入口和 chunk —— 通过 Node 的 `fs`/`vm`/`eval` 或 HTTP —— 这发生在该运行时之外。启用 `federation` 后，Rstest 会安装额外的运行时垫片，让两者协同工作：
 
@@ -44,19 +44,20 @@ export default defineConfig({
 
 ## 测试联邦化应用
 
-`federation` 只负责准备测试运行时。Module Federation 构建本身（remotes、exposes、共享模块）通过 bundler 插件配置，例如 [@module-federation/rstest](https://github.com/module-federation/core)，它会将 federation 配置应用到 Rstest 的构建中：
+`federation` 只负责准备测试运行时，不会配置 remotes、exposes 或共享模块。使用 [@module-federation/rstest](https://github.com/module-federation/core) 时，该插件会配置 Module Federation 构建，并为基于 Node 的测试环境自动启用 Rstest 兼容模式，因此不要再设置 `federation: true`。
+
+安装方式和 Rstest 测试流程，请先阅读 [Module Federation 指南](/guide/integration/module-federation)。复用已有 Rsbuild federation 配置以及完整插件选项，请参考 [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)。
 
 ```ts title="rstest.config.ts"
 import { federation } from '@module-federation/rstest';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  federation: true,
   plugins: [
     federation({
       name: 'main_app',
       remotes: {
-        'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
       },
       shared: {
         react: { singleton: true },
@@ -66,4 +67,4 @@ export default defineConfig({
 });
 ```
 
-包含 Browser Mode、HTTP 远程、本地 CommonJS 远程以及 SSR 测试的完整配置可参考 [federation 示例](https://github.com/web-infra-dev/rstest/tree/main/examples/federation)。
+该 Node 示例消费面向 Node 的 `remoteEntry.cjs`，Browser Mode 应消费浏览器构建的 `remoteEntry.js`。两者的区别请参考 [Module Federation 指南](/guide/integration/module-federation)；包含 Browser Mode、HTTP remote、本地 CommonJS remote 以及 SSR 测试的完整配置可参考 [federation 示例](https://github.com/web-infra-dev/rstest/tree/main/examples/federation)。

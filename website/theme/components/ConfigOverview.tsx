@@ -12,9 +12,6 @@ export interface BasicGroup {
   items?: string[];
 }
 
-const isProduction = process.env.NODE_ENV === 'production';
-const UNRELEASED_TEST_CONFIG_PAGES = ['federation'];
-
 const OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'basic',
@@ -59,15 +56,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   },
   {
     name: 'environment',
-    items: [
-      'pool',
-      'isolate',
-      'testEnvironment',
-      // Unreleased: its page is excluded from the production route table by
-      // `unreleasedRoutes` in rspress.config.ts, so linking it in a production
-      // build would be a dead link.
-      ...(isProduction ? [] : UNRELEASED_TEST_CONFIG_PAGES),
-    ],
+    items: ['pool', 'isolate', 'testEnvironment', 'federation'],
   },
   {
     name: 'browser',
@@ -119,9 +108,7 @@ const overviewTestConfigPages = new Set(
   ),
 );
 const missingTestConfigPages = testConfigPages.filter(
-  (page) =>
-    !(isProduction && UNRELEASED_TEST_CONFIG_PAGES.includes(page)) &&
-    !overviewTestConfigPages.has(page),
+  (page) => !overviewTestConfigPages.has(page),
 );
 
 if (missingTestConfigPages.length > 0) {
