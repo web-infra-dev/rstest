@@ -45,7 +45,7 @@ type Node = {
   include: Set<string>;
 };
 
-// Whether `parent` aggregates a nested intermediate config `child`. `initCli`
+// Whether `parent` aggregates a nested intermediate config `child`. `resolveRunnerInputs`
 // flattens such a child to its leaf projects, so the child's own config file
 // never appears in `parent`'s footprint — but its leaves do. So the child is
 // covered when its own footprint is a subset of the parent's. When the two
@@ -75,7 +75,7 @@ const aggregatesNestedConfig = (child: Node, parent: Node): boolean => {
 //     config as a leaf — exact identity, so a directory holding several
 //     configs is disambiguated for free);
 //   - aggregates this config's own leaves (a nested intermediate config, whose
-//     own file `initCli` flattens away; see `aggregatesNestedConfig`).
+//     own file `resolveRunnerInputs` flattens away; see `aggregatesNestedConfig`).
 // In both cases the parent must also be able to *display* the child's files:
 // in AST mode a project only globs its own `include`, so a child whose include
 // patterns the parent does not also match is kept visible (its tests would

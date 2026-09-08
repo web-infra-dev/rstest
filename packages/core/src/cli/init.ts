@@ -542,26 +542,3 @@ export function applyAgentReporterDefault(
     config.reporters = ['md'];
   }
 }
-
-export async function initCli(options: CommonOptions): Promise<{
-  config: RstestConfig;
-  configFilePath?: string;
-  projects: Project[];
-  cwd: string;
-}> {
-  const cwd = process.cwd();
-  const { resolveRunnerInputs } = await import('../core/resolveConfig');
-  const { config, configFilePath, projects } = await resolveRunnerInputs({
-    source: { type: 'discover' },
-    options,
-    cwd,
-    tweakConfig: (config) => applyAgentReporterDefault(config, options),
-  });
-
-  return {
-    config,
-    configFilePath,
-    projects,
-    cwd,
-  };
-}

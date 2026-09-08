@@ -46,6 +46,32 @@ describe('test projects', () => {
       expect(cli.stdout).toContain('Test Files no tests');
     });
 
+    it('replays timeout overrides onto every file-based project in watch', async () => {
+      const { cli, expectLog } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'watch',
+          '--project',
+          'node',
+          '--project',
+          'client-jsdom',
+          '--globals',
+          '--include',
+          'test/slow.test.ts',
+          '--testTimeout',
+          '1',
+        ],
+        options: { nodeOptions: { cwd: join(__dirname, 'fixtures') } },
+      });
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.stdout).toContain('Tests 2 failed');
+      const logs = cli.stdout.split('\n').filter(Boolean);
+      expectLog('[node]', logs);
+      expectLog('[client-jsdom]', logs);
+      expect(cli.stderr.match(/test timed out in 1ms/g)).toHaveLength(2);
+      await cli.killProcessTree();
+    });
+
     it('should run projects correctly with cli options', async () => {
       const { cli, expectExecSuccess, expectLog } = await runRstestCli({
         command: 'rstest',

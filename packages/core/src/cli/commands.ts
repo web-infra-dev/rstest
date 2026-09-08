@@ -1,7 +1,6 @@
 import cac, { type CAC, type Command } from 'cac';
 import { relative } from 'pathe';
-import type { RstestInstance } from '../types';
-import type { RunOptions } from '../api/types';
+import type { RstestWatcher, RunOptions } from '../api/types';
 import {
   bgColor,
   color,
@@ -11,8 +10,7 @@ import {
   isTTY,
   logger,
 } from '../utils';
-import { buildResolvedRunner, isRelatedRun } from '../core/buildRunner';
-import { exitReporters } from '../reporter';
+import { isRelatedRun } from '../core/buildRunner';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { setHostExitCode } from './exitCode';
 import type { CommonOptions } from './init';
@@ -579,34 +577,29 @@ const filterHelpOptions = (
     };
   });
 
-const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
+const handleUnexpectedExit = (err: unknown) => {
   logger.error('Failed to run Rstest.');
   logger.error(formatError(err));
-  if (rstest) {
-    void exitReporters(rstest.context).finally(() => process.exit(1));
-    return;
-  }
   process.exit(1);
 };
 
-const resolveCliRuntime = async (options: CommonOptions) => {
-  const [{ initCli }, { createRstest }] = await Promise.all([
-    import('./init'),
-    import('../core'),
-  ]);
-  const inputs = await initCli(options);
-  const runtime = cliHostRuntime();
-  const buildCliRunner: typeof createRstest = (...args) => {
-    const rstest = createRstest(...args);
-    rstest.context.exitCode.onChange(runtime.onExitCodeChange);
-    rstest.context.packageInstallerConfirm = runtime.packageInstallerConfirm;
-    return rstest;
-  };
-
-  return {
-    inputs,
-    createRstest: buildCliRunner,
-  };
+const createCliRstest = async (options: CommonOptions) => {
+  const [
+    { loadCliConfig, applyAgentReporterDefault },
+    { createRstestInstance },
+  ] = await Promise.all([import('./init'), import('../api/createRstest')]);
+  const cwd = process.cwd();
+  const loaded = await loadCliConfig(options, cwd);
+  // Every other flag replays per project through run().
+  if (options.root !== undefined) {
+    loaded.content.root = options.root;
+  }
+  applyAgentReporterDefault(loaded.content, options);
+  const rstest = await createRstestInstance(
+    { cwd, config: loaded, configLoader: options.configLoader },
+    { embedded: false, trace: options.trace, ...cliHostRuntime() },
+  );
+  return { rstest, loaded };
 };
 
 const toRunOptions = (options: CommonOptions): RunOptions => {
@@ -627,28 +620,9 @@ const runOnce = async ({
   options: CommonOptions;
   filters: string[];
 }): Promise<void> => {
-  const unexpectedlyExitHandler = (err: unknown) =>
-    handleUnexpectedExit(undefined, err);
+  const unexpectedlyExitHandler = (err: unknown) => handleUnexpectedExit(err);
   try {
-    const [
-      { loadCliConfig, applyAgentReporterDefault },
-      { createRstestInstance },
-    ] = await Promise.all([import('./init'), import('../api/createRstest')]);
-    const cwd = process.cwd();
-    const loaded = await loadCliConfig(options, cwd);
-    // Every other flag replays per project through run().
-    if (options.root !== undefined) {
-      loaded.content.root = options.root;
-    }
-    applyAgentReporterDefault(loaded.content, options);
-    const rstest = await createRstestInstance(
-      { cwd, config: loaded, configLoader: options.configLoader },
-      {
-        embedded: false,
-        trace: options.trace,
-        ...cliHostRuntime(),
-      },
-    );
+    const { rstest } = await createCliRstest(options);
     process.on('uncaughtException', unexpectedlyExitHandler);
     process.on('unhandledRejection', unexpectedlyExitHandler);
     await rstest.run({
@@ -656,7 +630,7 @@ const runOnce = async ({
       ...toRunOptions(options),
     });
   } catch (err) {
-    handleUnexpectedExit(undefined, err);
+    handleUnexpectedExit(err);
   }
 };
 
@@ -678,39 +652,47 @@ export const runWatch = async ({
     process.exit(1);
   }
 
-  let rstest: RstestInstance | undefined;
-  const unexpectedlyExitHandler = (err: any) => {
-    handleUnexpectedExit(rstest, err);
-  };
-
   try {
-    const { inputs, createRstest } = await resolveCliRuntime(options);
-    rstest = await buildResolvedRunner({
-      inputs,
-      options,
-      command: 'watch',
-      filters: filters.length ? filters : undefined,
-      createRstestContext: createRstest,
-    });
-
-    process.on('uncaughtException', unexpectedlyExitHandler);
-
-    process.on('unhandledRejection', unexpectedlyExitHandler);
-
-    const { watchFilesForRestart } = await import('../core/restart');
+    const [{ rstest, loaded }, { watchFilesForRestart }] = await Promise.all([
+      createCliRstest(options),
+      import('./restart'),
+    ]);
+    process.on('uncaughtException', handleUnexpectedExit);
+    process.on('unhandledRejection', handleUnexpectedExit);
+    let startup: Promise<RstestWatcher> | undefined;
     await watchFilesForRestart({
-      rstest,
-      options,
-      filters,
-      beforeRestart: () => {
-        process.off('uncaughtException', unexpectedlyExitHandler);
-        process.off('unhandledRejection', unexpectedlyExitHandler);
+      configFilePaths: [
+        loaded.filePath,
+        ...filterProjects(
+          rstest.context.projects.map((project) => ({
+            config: { name: project.name },
+            configFilePath: project.configFilePath,
+          })),
+          options,
+        ).map((project) => project.configFilePath),
+      ].filter((filePath): filePath is string => !!filePath),
+      rootPath: rstest.context.rootPath,
+      restart: async () => {
+        process.off('uncaughtException', handleUnexpectedExit);
+        process.off('unhandledRejection', handleUnexpectedExit);
+        await startup
+          ?.then(
+            (watcher) => watcher.close(),
+            () => {},
+          )
+          .catch((error) =>
+            logger.log(color.red(`Error during cleanup: ${error}`)),
+          );
+        await runWatch({ options, filters });
       },
     });
-
-    await rstest.runTests();
+    startup = rstest.watch({
+      filters: filters.length ? filters : undefined,
+      ...toRunOptions(options),
+    });
+    await startup;
   } catch (err) {
-    handleUnexpectedExit(rstest, err);
+    handleUnexpectedExit(err);
   }
 };
 
@@ -795,22 +777,7 @@ export function createCli(): CAC {
       const cwd = process.cwd();
       let rootPath = cwd;
       try {
-        const [
-          { loadCliConfig, applyAgentReporterDefault },
-          { createRstestInstance },
-        ] = await Promise.all([
-          import('./init'),
-          import('../api/createRstest'),
-        ]);
-        const loaded = await loadCliConfig(options, cwd);
-        if (options.root !== undefined) {
-          loaded.content.root = options.root;
-        }
-        applyAgentReporterDefault(loaded.content, options);
-        const rstest = await createRstestInstance(
-          { cwd, config: loaded, configLoader: options.configLoader },
-          { embedded: false, trace: options.trace, ...cliHostRuntime() },
-        );
+        const { rstest } = await createCliRstest(options);
         rootPath = rstest.context.rootPath;
         const {
           filesOnly,
