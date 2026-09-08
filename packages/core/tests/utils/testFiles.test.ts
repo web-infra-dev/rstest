@@ -33,8 +33,7 @@ describe('test filterFiles', () => {
   it('treats an explicit empty filter list as matching no files', () => {
     const testFiles = [path.join(__dirname, 'index.test.ts')];
 
-    expect(filterFiles(testFiles, [], __dirname, 'fuzzy')).toEqual([]);
-    expect(filterFiles(testFiles, [], __dirname, 'exact')).toEqual([]);
+    expect(filterFiles(testFiles, [], __dirname)).toEqual([]);
   });
 });
 

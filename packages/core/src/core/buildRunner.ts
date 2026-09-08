@@ -3,13 +3,12 @@ import picomatch from 'picomatch';
 import type { CommonOptions } from '../cli/init';
 import { exitReporters } from '../reporter';
 import type {
-  FileFilterMode,
   Project,
   RstestCommand,
   RstestConfig,
   RstestInstance,
 } from '../types';
-import { logger } from '../utils';
+import { logger, quoteFilter } from '../utils';
 import type { ResolvedRunnerInputs } from './resolveConfig';
 
 export type CreateRstestContextFn<
@@ -25,7 +24,6 @@ export type CreateRstestContextFn<
   },
   command: RstestCommand,
   fileFilters?: string[],
-  fileFilterMode?: FileFilterMode,
 ) => Instance;
 
 export const normalizeRunnerFilters = (
@@ -36,14 +34,11 @@ const isChangedRun = (changed: CommonOptions['changed']): boolean =>
   changed !== undefined && changed !== false;
 
 export const isRelatedRun = (options: CommonOptions): boolean =>
-  options.related === true ||
-  options.findRelatedTests === true ||
-  isChangedRun(options.changed);
+  options.related === true || isChangedRun(options.changed);
 
 export const validateRelatedOptions = (options: CommonOptions): void => {
   const count = [
     options.related === true,
-    options.findRelatedTests === true,
     isChangedRun(options.changed),
   ].filter(Boolean).length;
 
@@ -194,14 +189,12 @@ const getCoverageChangedOption = (options: CommonOptions) =>
 const resolveEffectiveFilters = async ({
   options,
   filters,
-  filterMode,
   createRstestContext,
   inputs,
   embedded,
 }: {
   options: CommonOptions;
   filters?: ReadonlyArray<string | number>;
-  filterMode?: FileFilterMode;
   createRstestContext: CreateRstestContextFn;
   inputs: ResolvedRunnerInputs;
   embedded: boolean;
@@ -210,7 +203,6 @@ const resolveEffectiveFilters = async ({
   if (!isRelatedRun(options)) {
     return {
       effectiveFilters: normalizedFilters,
-      fileFilterMode: filterMode ?? ('fuzzy' as const),
     };
   }
 
@@ -248,7 +240,6 @@ const resolveEffectiveFilters = async ({
   if (forceRerunFiles.length) {
     return {
       effectiveFilters: undefined,
-      fileFilterMode: undefined,
       relatedFilters: sourceFilters,
       relatedMode: 'changed' as const,
       relatedResolutionEmpty: false,
@@ -267,8 +258,8 @@ const resolveEffectiveFilters = async ({
   });
 
   return {
-    effectiveFilters: relatedFiles,
-    fileFilterMode: 'exact' as const,
+    // Fuzzy absolute paths also match .tsx siblings and same-suffix paths in other packages.
+    effectiveFilters: relatedFiles.map(quoteFilter),
     relatedFilters: sourceFilters,
     relatedMode: changedRun ? ('changed' as const) : ('related' as const),
     relatedResolutionEmpty: relatedFiles.length === 0,
@@ -309,7 +300,6 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   options,
   command,
   filters,
-  filterMode,
   createRstestContext,
   embedded = false,
 }: {
@@ -317,14 +307,29 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   options: CommonOptions;
   command: RstestCommand;
   filters?: ReadonlyArray<string | number>;
-  filterMode?: FileFilterMode;
   createRstestContext: CreateRstestContextFn<Instance>;
   embedded?: boolean;
 }): Promise<Instance> {
+  const { projects } = inputs;
+  const names = new Set<string>();
+
+  projects.forEach((project) => {
+    if (names.has(project.config.name!)) {
+      const conflictProjects = projects.filter(
+        (p) => p.config.name === project.config.name,
+      );
+      throw `Project name "${project.config.name}" is already used. Please ensure all projects have unique names.
+Conflicting projects:
+${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n')}
+        `;
+    }
+
+    names.add(project.config.name!);
+  });
+
   const selection = await resolveEffectiveFilters({
     options,
     filters,
-    filterMode,
     createRstestContext,
     inputs,
     embedded,
@@ -340,7 +345,6 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
     },
     command,
     selection.effectiveFilters,
-    selection.fileFilterMode,
   );
 
   try {

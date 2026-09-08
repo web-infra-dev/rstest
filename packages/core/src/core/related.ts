@@ -6,7 +6,7 @@ import type {
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../types';
-import { getTestEntries } from '../utils';
+import { getTestEntries, normalizeExactPathMatch } from '../utils';
 import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
 
@@ -121,24 +121,31 @@ export const resolveStatsPathCandidate = ({
 const normalizeStatsPathCandidate = ({
   candidate,
   projectRoot,
+  virtualModulePaths,
 }: {
   candidate: string;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): string | null => {
   const absolutePath = resolveStatsPathCandidate({
     candidate,
     projectRoot,
   });
 
-  return absolutePath && existsSync(absolutePath) ? absolutePath : null;
+  return absolutePath &&
+    (virtualModulePaths?.has(absolutePath) || existsSync(absolutePath))
+    ? absolutePath
+    : null;
 };
 
 const normalizeStatsModulePath = ({
   module,
   projectRoot,
+  virtualModulePaths,
 }: {
   module: Rspack.StatsModule;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): string | null => {
   const candidate =
     typeof module.nameForCondition === 'string' && module.nameForCondition
@@ -148,15 +155,18 @@ const normalizeStatsModulePath = ({
   return normalizeStatsPathCandidate({
     candidate,
     projectRoot,
+    virtualModulePaths,
   });
 };
 
 const normalizeStatsReasonPath = ({
   reason,
   projectRoot,
+  virtualModulePaths,
 }: {
   reason: StatsModuleReason;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): string | null => {
   const candidate =
     reason.moduleIdentifier || reason.moduleName || reason.module || '';
@@ -164,15 +174,18 @@ const normalizeStatsReasonPath = ({
   return normalizeStatsPathCandidate({
     candidate,
     projectRoot,
+    virtualModulePaths,
   });
 };
 
 const collectModuleGraph = ({
   modules,
   projectRoot,
+  virtualModulePaths,
 }: {
   modules: Rspack.StatsModule[] | undefined;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): ModuleGraph => {
   const allSources = new Set<string>();
   const dependentsBySource = new Map<string, Set<string>>();
@@ -182,6 +195,7 @@ const collectModuleGraph = ({
       const sourcePath = normalizeStatsModulePath({
         module,
         projectRoot,
+        virtualModulePaths,
       });
 
       if (sourcePath) {
@@ -191,6 +205,7 @@ const collectModuleGraph = ({
           const dependentPath = normalizeStatsReasonPath({
             reason,
             projectRoot,
+            virtualModulePaths,
           });
 
           if (!dependentPath) {
@@ -300,14 +315,6 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
     });
   },
 });
-
-const normalizeExactPathMatch = (filePath: string): string => {
-  const normalizedPath = normalize(filePath);
-
-  return process.platform === 'win32'
-    ? normalizedPath.toLocaleLowerCase()
-    : normalizedPath;
-};
 
 const collectDirectlyMatchedFiles = ({
   files,
@@ -428,6 +435,11 @@ export async function resolveRelatedTestFiles(
       const moduleGraph = collectModuleGraph({
         modules,
         projectRoot: project.rootPath,
+        virtualModulePaths: new Set(
+          Object.keys(
+            setupFileState.virtualModules[project.environmentName] || {},
+          ),
+        ),
       });
       const testPaths = Object.values(
         projectEntries.get(project.environmentName) || {},

@@ -2,10 +2,10 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import net from 'node:net';
 import path, { dirname } from 'node:path';
-import type { FileFilterMode } from '@rstest/core/api';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
+import { quoteFilter } from '../../core/src/utils/helper';
 import { getConfigValue } from './config';
 import {
   formatConfiguredCoreNotFoundMessage,
@@ -331,9 +331,7 @@ export class RstestApi {
       return await worker.listTests({
         ...paths,
         configFilePath: this.configFilePath,
-        // Runtime discovery filters always target concrete files.
-        fileFilterMode: fileFilters ? 'exact' : undefined,
-        fileFilters,
+        fileFilters: fileFilters?.map(quoteFilter),
         includeTaskLocation: true,
       });
     } catch (error) {
@@ -349,7 +347,6 @@ export class RstestApi {
     token,
     updateSnapshot,
     fileFilter,
-    fileFilterMode,
     testCaseNamePath,
     isSuite,
     kind,
@@ -362,7 +359,6 @@ export class RstestApi {
     token: vscode.CancellationToken;
     updateSnapshot?: boolean;
     fileFilter?: string;
-    fileFilterMode?: FileFilterMode;
     testCaseNamePath?: string[];
     isSuite?: boolean;
     kind?: vscode.TestRunProfileKind;
@@ -416,7 +412,6 @@ export class RstestApi {
     try {
       workerRun = worker.runTest({
         command: continuous ? 'watch' : 'run',
-        fileFilterMode,
         fileFilters: fileFilter ? [fileFilter] : undefined,
         testNamePattern: testCaseNamePath
           ? new RegExp(this.buildTestNamePattern(testCaseNamePath, isSuite))

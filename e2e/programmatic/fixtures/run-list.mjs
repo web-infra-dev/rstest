@@ -38,7 +38,7 @@ try {
   const listed = await rstest.listTests({
     includeSuites: true,
     includeLocation: true,
-    shard: { index: 1, count: 2 },
+    shard: '1/2',
   });
   const files = await rstest.listTests({
     filesOnly: true,
@@ -46,8 +46,7 @@ try {
   });
   const filtered = await rstest.listTests({
     filesOnly: true,
-    filters: ['alpha/alpha.test.ts'],
-    filterMode: 'exact',
+    filters: ['"alpha/alpha.test.ts"'],
   });
   const skippedRoot = join(root, 'skipped');
   await mkdir(skippedRoot);

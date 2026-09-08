@@ -19,7 +19,13 @@ Core testing framework for Rstest.
 
 `resolveRunnerInputs` owns configuration-source resolution and `buildResolvedRunner` owns selection plus context construction. The public instance API is the CLI's target driver; commands not migrated yet may call this shared chain directly. Every change must narrow the gap between those drivers: expose new CLI needs as public observations or capabilities rather than adding CLI-only execution paths.
 
+When a CLI command migrates to the public `createRstest` (as `merge-reports` already has), config discovery, the CLI → config merge, the agent reporter default, host exit code, and error printing stay in `src/cli`; never add them to the engine or the public API to make a migration easier.
+
 `NormalizedConfig` is exported from `@rstest/core/api` as the type of `RstestContext.config`, so changing its shape is a public API change.
+
+The CLI carries process-level behavior (`embedded`, `trace`, installer confirmation, and exit-code mirroring) through `createRstestInstance` in `src/api/createRstest.ts`; these never enter the public `CreateRstestOptions`.
+
+`CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`) and `trace`; a new `rstest run` flag is added to `RunOptions` and becomes a CLI flag through that derivation.
 
 ## Executor contract (node + browser isomorphism)
 
@@ -36,6 +42,7 @@ Contracts between modules or processes — not readable from any single file.
 ### Run cycle (`src/core`)
 
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
+- File filters are plain strings everywhere: a filter wrapped in matching quotes is an exact path, and `--related`/`--changed` express their resolved paths that way.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchCycleState` ahead of every watch cycle, a session's first included) — executors never reset it, so bail reads stay cycle-scoped even where two executors' first cycles bracket one startup. The snapshot summary is the one half a first cycle keeps, because the update-snapshot shortcut reads whatever the last cycle produced and the browser's first cycle would otherwise clear what the node's just left.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
@@ -75,6 +82,7 @@ Contracts between modules or processes — not readable from any single file.
 
 - `rs.mock` hoisting/rewriting happens at build time inside rspack's native `RstestPlugin`; registration happens at runtime inside the injected `mockRuntimeCode.js` registry. The `rstest_*` member names are the wire contract between the two — renaming either side alone breaks mocking.
 - Setup files and test files must share one webpack runtime chunk — mock state lives on that runtime's `__webpack_require__`.
+- Base64 JavaScript `data:` URL setup entries are materialized as absolute virtual modules before entry assembly; setup state, cache control, `VirtualModulesPlugin`, and coverage excludes must use that same materialized path. Virtual setup code executes but is intentionally not collected as coverage. Derive these automatic coverage exclusions only from registered virtual modules; adding real setup paths here leaves stale exclusions when config hooks replace setup entries.
 - `@rstest/core` must stay external to the runtime-published global: hoisted callbacks run above bundled imports, so a bundled provider module would load too late.
 - Under `isolate: false`, cache control invalidates only the test entry currently being dispatched. Clearing every discovered entry before every file breaks once-per-worker dependency state.
 - Raw runtime/loader files resolved via `__dirname` at build time ↔ the dist copy list in `rslib.config.ts` — adding/renaming one requires updating both.

@@ -173,6 +173,20 @@ export const plainDeepMerge = <T>(base: T, override: T): T =>
     isMergeableObject: isPlainObject,
   }) as T;
 
+export const clonePlainConfig = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePlainConfig(item)) as T;
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
+    ) as T;
+  }
+
+  return value;
+};
+
 export const mergeProjectConfig = (
   ...configs: ProjectConfig[]
 ): ProjectConfig => {

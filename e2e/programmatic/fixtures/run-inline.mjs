@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'disk');
 const discoveredConfig = join(cwd, 'rstest.config.mjs');
 let reporterFiles = 0;
+let effectivePool;
 
 await writeFile(
   discoveredConfig,
@@ -26,9 +27,24 @@ try {
           },
         },
       ],
+      plugins: [
+        {
+          name: 'capture-run-pool',
+          setup(api) {
+            effectivePool = api.useExposed('rstest').getRstestConfig().pool;
+          },
+        },
+      ],
     },
   });
-  const result = await rstest.run({ changed: false });
+  const result = await rstest.run({
+    changed: false,
+    pool: {
+      type: process.argv[2],
+      maxWorkers: 1,
+      memoryLimit: '256MB',
+    },
+  });
 
   const buildFailure = await createRstest({
     cwd,
@@ -42,7 +58,12 @@ try {
       },
     },
   });
-  const buildFailureResult = await buildFailure.run();
+  let buildFailureResult;
+  try {
+    buildFailureResult = await buildFailure.run();
+  } catch (error) {
+    buildFailureResult = { status: 'rejected', message: error.message };
+  }
 
   console.log(
     `__RSTEST_API_RESULT__${JSON.stringify({
@@ -52,6 +73,7 @@ try {
         projects: rstest.context.projects,
       },
       reporterFiles,
+      pool: effectivePool,
       status: result.status,
       summary: result.summary,
       files: result.files.map((f) => ({
@@ -62,10 +84,7 @@ try {
       unhandledErrors: result.unhandledErrors,
       duration: { hasTotal: typeof result.duration.total === 'number' },
       snapshotPresent: typeof result.snapshot === 'object',
-      buildFailure: {
-        status: buildFailureResult.status,
-        message: buildFailureResult.unhandledErrors[0]?.message,
-      },
+      buildFailure: buildFailureResult,
     })}__END__`,
   );
 } finally {

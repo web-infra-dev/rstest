@@ -8,7 +8,7 @@
     "@rstest/core": "workspace:*",
     "marked": "^18.0.11",
     "path-serializer": "0.7.0",
-    "rsbuild-plugin-arethetypeswrong": "^0.3.1",
+    "rsbuild-plugin-arethetypeswrong": "^0.4.0",
     "rsbuild-plugin-publint": "^1.0.0",
     "shell-quote": "^1.10.0"
   }

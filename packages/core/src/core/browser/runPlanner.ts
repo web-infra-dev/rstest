@@ -77,18 +77,15 @@ export function createBrowserRunPlanner({
   const { rootPath } = context;
   const { shard } = context.normalizedConfig;
 
-  const isFuzzyFilter = (filter: string) =>
-    isFuzzyBasenameFilter(filter, context.fileFilterMode);
-
   const isInsideProject = (filter: string, project: InternalProjectContext) =>
     isFilterInsideProject(filter, project.rootPath, rootPath);
 
   const isBrowserProjectPathFilter = (filter: string) =>
-    !isFuzzyFilter(filter) &&
+    !isFuzzyBasenameFilter(filter) &&
     browserProjects.some((project) => isInsideProject(filter, project));
 
   const isNodeProjectPathFilter = (filter: string) =>
-    !isFuzzyFilter(filter) &&
+    !isFuzzyBasenameFilter(filter) &&
     nodeProjects.some((project) => isInsideProject(filter, project));
 
   const browserConfigHookProjects =
@@ -113,7 +110,7 @@ export function createBrowserRunPlanner({
 
     return context.fileFilters.some(
       (filter) =>
-        isFuzzyFilter(filter) ||
+        isFuzzyBasenameFilter(filter) ||
         browserConfigHookProjects.some((project) =>
           isInsideProject(filter, project),
         ) ||
@@ -132,7 +129,7 @@ export function createBrowserRunPlanner({
       return browserConfigHookProjects;
     }
 
-    if (context.fileFilters.some(isFuzzyFilter)) {
+    if (context.fileFilters.some(isFuzzyBasenameFilter)) {
       return browserConfigHookProjects;
     }
 

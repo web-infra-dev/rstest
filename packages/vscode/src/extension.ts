@@ -1,4 +1,5 @@
 import vscode from 'vscode';
+import { quoteFilter } from '../../core/src/utils/helper';
 import { RstestDiagnostics } from './diagnostics';
 import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
@@ -346,14 +347,15 @@ class Rstest {
         } else if (data instanceof TestFile || data instanceof TestFolder) {
           await data.api.runTest({
             ...commonOptions,
-            fileFilter: data.uri.fsPath,
-            fileFilterMode: data instanceof TestFolder ? 'fuzzy' : 'exact',
+            fileFilter:
+              data instanceof TestFolder
+                ? data.uri.fsPath
+                : quoteFilter(data.uri.fsPath),
           });
         } else if (data instanceof TestCase) {
           await data.api.runTest({
             ...commonOptions,
-            fileFilter: data.uri.fsPath,
-            fileFilterMode: 'exact',
+            fileFilter: quoteFilter(data.uri.fsPath),
             testCaseNamePath: data.parentNames.concat(test.label),
             isSuite: data.type === 'suite',
           });

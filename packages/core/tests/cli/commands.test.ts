@@ -804,13 +804,7 @@ describe('getForceRerunTriggerFiles', () => {
 });
 
 describe('related CLI options', () => {
-  it('rejects related aliases used together', () => {
-    expect(() =>
-      validateRelatedOptions({ related: true, findRelatedTests: true }),
-    ).toThrow(
-      'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
-    );
-
+  it('rejects related and changed used together', () => {
     expect(() =>
       validateRelatedOptions({ related: true, changed: true }),
     ).toThrow(

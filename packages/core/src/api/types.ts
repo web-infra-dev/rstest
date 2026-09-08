@@ -1,10 +1,12 @@
+import type { LoadConfigOptions } from '@rsbuild/core';
 import type {
+  BrowserName,
   CoverageMapData,
-  FileFilterMode,
   FormattedError,
   Location as TestLocation,
   NormalizedConfig,
   RstestConfig,
+  RstestOutputConfig,
   SnapshotSummary,
   TaskMeta,
   TestResultStatus,
@@ -14,7 +16,6 @@ import type { LoadedRstestConfig } from '../config';
 /** @experimental Subject to change until 1.0.0. */
 export type {
   CoverageMapData,
-  FileFilterMode,
   NormalizedConfig,
   RstestConfig,
   SnapshotSummary,
@@ -30,6 +31,8 @@ export interface CreateRstestOptions {
   cwd?: string;
   /** Inline or loaded configuration. */
   config?: RstestConfig | LoadedRstestConfig;
+  /** The loader used for config files discovered through `projects`; defaults to `auto`. */
+  configLoader?: LoadConfigOptions['loader'];
 }
 
 /** @experimental Subject to change until 1.0.0. */
@@ -51,15 +54,84 @@ export interface RstestContext {
 /** @experimental Subject to change until 1.0.0. */
 export interface RunOptions {
   filters?: string[];
-  filterMode?: FileFilterMode;
   related?: boolean;
   changed?: boolean | string;
-  shard?: string | { index: number; count: number };
+  shard?: string;
   project?: string[];
   testNamePattern?: RegExp | string;
   update?: boolean;
   bail?: number | boolean;
   passWithNoTests?: boolean;
+
+  // Config overrides: see the config option of the same name.
+  // file selection
+  include?: string[];
+  exclude?: string[];
+  // runtime environment
+  globals?: boolean;
+  testEnvironment?: string;
+  browser?:
+    | boolean
+    | {
+        enabled?: boolean;
+        name?: BrowserName;
+        headless?: boolean;
+        port?: number;
+        strictPort?: boolean;
+        providerOptions?: Record<string, unknown>;
+      };
+  federation?: boolean;
+  // timeouts / retries / concurrency
+  testTimeout?: number;
+  hookTimeout?: number;
+  retry?: number;
+  maxConcurrency?: number;
+  slowTestThreshold?: number;
+  // mock lifecycle
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
+  unstubGlobals?: boolean;
+  unstubEnvs?: boolean;
+  // output / diagnostics
+  silent?: boolean | 'passed-only';
+  printConsoleTrace?: boolean;
+  disableConsoleIntercept?: boolean;
+  logHeapUsage?: boolean;
+  detectAsyncLeaks?: boolean;
+  hideSkippedTests?: boolean;
+  hideSkippedTestFiles?: boolean;
+  includeTaskLocation?: boolean;
+  reporters?: string | string[];
+  onlyFailures?: boolean;
+  // build
+  source?: { tsconfigPath?: string };
+  dev?: { writeToDisk?: boolean };
+  output?: Pick<RstestOutputConfig, 'emitAssets' | 'cleanDistPath' | 'module'>;
+  // root-only (applied to the root config; the engine forwards isolate and coverage to every project)
+  pool?:
+    | string
+    | {
+        type?: string;
+        maxWorkers?: string | number;
+        memoryLimit?: string | number;
+        execArgv?: string[] | string;
+      };
+  isolate?: boolean;
+  coverage?:
+    | boolean
+    | {
+        enabled?: boolean | string;
+        allowExternal?: boolean;
+        provider?: 'istanbul' | 'v8';
+        include?: string | string[];
+        changed?: boolean | string;
+        exclude?: string | string[];
+        reporters?: string | string[];
+        reportsDirectory?: string;
+        reportOnFailure?: boolean | string;
+        clean?: boolean | string;
+      };
 }
 
 /** @experimental Subject to change until 1.0.0. */

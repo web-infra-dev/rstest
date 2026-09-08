@@ -112,7 +112,6 @@ export async function runBrowserGlobalSetupStage(
               context,
               project,
               fileFilters: context.fileFilters,
-              fileFilterMode: context.fileFilterMode,
             });
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;
@@ -163,6 +162,7 @@ export async function runBrowserGlobalSetupStage(
           globTestSourceEntries: emptyEntries,
           setupFiles: setupFileState.setupFiles,
           globalSetupFiles: setupFileState.globalSetupFiles,
+          virtualModules: setupFileState.virtualModules,
           context,
           isWatch: false,
         }),
@@ -262,5 +262,8 @@ export async function runBrowserGlobalSetupStage(
     }
   }
 
-  return { env: ranAnySetup ? envOverlay : undefined, errors };
+  return {
+    env: ranAnySetup ? envOverlay : undefined,
+    errors,
+  };
 }

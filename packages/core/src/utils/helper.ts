@@ -13,6 +13,23 @@ import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
 import { wrapRegex } from './regexpWireFormat';
 
+export const isQuotedFilter = (filter: string): boolean =>
+  filter.length >= 2 &&
+  (filter[0] === '"' || filter[0] === "'") &&
+  filter.at(-1) === filter[0];
+
+export const quoteFilter = (path: string): string => `"${path}"`;
+
+export const unquoteFilter = (filter: string): string =>
+  isQuotedFilter(filter) ? filter.slice(1, -1) : filter;
+
+export const normalizeExactPathMatch = (filePath: string): string => {
+  const normalizedPath = normalize(filePath);
+  return process.platform === 'win32'
+    ? normalizedPath.toLocaleLowerCase()
+    : normalizedPath;
+};
+
 /**
  * Generate a stable hash for a file path.
  * Uses FNV-1a to produce a 10-char hex string.

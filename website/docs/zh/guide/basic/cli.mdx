@@ -51,6 +51,12 @@ $ npx rstest
     Duration 189 ms (build 22 ms, tests 167 ms)
 ```
 
+用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径；shell 会去掉一层引号，因此需要两层：
+
+```bash
+rstest run '"src/foo.test.ts"'
+```
+
 ### Watch 模式
 
 如果你希望在文件更改时自动重新运行测试，可以使用 `--watch` 或 `rstest watch` 命令：

@@ -68,6 +68,7 @@ interface LoadedRstestConfig {
 interface CreateRstestOptions {
   cwd?: string;
   config?: RstestConfig | LoadedRstestConfig;
+  configLoader?: 'auto' | 'jiti' | 'native'; // 通过 `projects` 发现的配置文件所使用的 loader；默认为 `auto`。
 }
 
 function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
@@ -146,7 +147,7 @@ Rstest 实例规范化后的配置。
 
 ## rstest.run
 
-`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。失败会通过 `status` 报告，不会导致 Promise 被拒绝；具体规则见 [TestRunResult](#testrunresult)。
+`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。当无效选项、配置或 compiler 错误导致运行无法启动时，Promise 会被拒绝；测试失败仍通过 `status` 报告，不会导致 Promise 被拒绝，具体规则见 [TestRunResult](#testrunresult)。
 
 ### 示例
 
@@ -160,48 +161,26 @@ const rstest = await createRstest({
 });
 
 const result = await rstest.run({
-  filters: ['src/foo.test.ts'],
-  filterMode: 'exact',
+  filters: ['"src/foo.test.ts"'],
 });
 
 console.log(result.status);
 console.log(result.summary.tests);
 ```
 
-### 选择测试文件
-
-以下选项用于选择测试文件：
-
-- `filters` 默认使用不区分大小写的子字符串匹配。省略 `filters` 时选择所有文件；显式传入空数组时，两种模式都不会选择任何文件。
-- `filterMode` 设为 `'exact'` 后会使用规范化路径全等匹配。
-- `related` 将 `filters` 作为源文件输入，并选择与其关联的测试。
-- `changed` 选择与工作区变更相关的测试，也可以指定一个起始 Git 引用。`changed: false` 会禁用 `changed` 文件选择。
-- `shard` 接受 CLI 风格的 `"1/3"` 或 `{ index: 1, count: 3 }`。
-- `project` 支持项目名称、`*` 通配符和 `!` 排除项。
-
-其余选项控制本次运行的执行行为：
-
-- `testNamePattern` 使用 `RegExp` 或字符串模式按测试名称选择测试。
-- `update` 控制快照更新模式。`update: false` 会显式禁用快照更新；省略 `update` 时会保留配置或默认模式。
-- `bail` 表示停止本次运行前允许的测试失败数；布尔值 `true` 表示 1。
-- `passWithNoTests` 控制没有匹配测试时本次运行是否成功。
-
 ### RunOptions
+
+`RunOptions` 接受除 `config`、`configLoader`、`root` 和 `trace` 之外的所有 `rstest run` flag。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
+
+`filters` 仅用于 API；CLI 通过位置参数传入 filter。它默认使用不区分大小写的子字符串匹配。用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径，例如 `filters: ['"src/foo.test.ts"', 'utils']`；带引号和不带引号的 filter 可以混用。省略 `filters` 时选择所有文件；显式传入空数组时不会选择任何文件。
 
 - **类型：**
 
 ```ts
 interface RunOptions {
   filters?: string[];
-  filterMode?: FileFilterMode;
-  related?: boolean;
-  changed?: boolean | string;
-  shard?: string | { index: number; count: number };
-  project?: string[];
-  testNamePattern?: RegExp | string;
-  update?: boolean;
-  bail?: number | boolean;
-  passWithNoTests?: boolean;
+  // ……以及其余所有 `rstest run` flag，用于覆盖同名配置项，
+  // 例如 `testTimeout`、`coverage`、`reporters`。
 }
 
 interface RstestInstance {
@@ -391,6 +370,8 @@ interface RstestInstance {
 ## rstest.mergeReports
 
 `rstest.mergeReports()` 用于合并 blob 报告，并返回与 `rstest.run()` 相同的结果模型。
+
+当本次操作无法产生运行结果时，Promise 会被拒绝；合并的测试结果中若有测试失败，仍通过 `status` 报告，不会导致 Promise 被拒绝。
 
 ### 示例
 

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
-import { type CommonOptions, runRest } from '../cli/commands';
+import { type CommonOptions, runWatch } from '../cli/commands';
 import { exitReporters } from '../reporter';
 import type { RstestInstance } from '../types';
 import { color, isColorSupported, isTTY, logger } from '../utils';
@@ -69,7 +69,7 @@ const restart = async ({
   rstest: RstestInstance;
   beforeRestart?: () => void | Promise<void>;
   options: CommonOptions;
-  filters: Array<string | number>;
+  filters: string[];
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
@@ -80,7 +80,7 @@ const restart = async ({
     clear,
   });
 
-  await runRest({ options, filters, command: 'watch' });
+  await runWatch({ options, filters });
 
   return true;
 };
@@ -93,7 +93,7 @@ export async function watchFilesForRestart({
   filters,
 }: {
   options: CommonOptions;
-  filters: Array<string | number>;
+  filters: string[];
   rstest: RstestInstance;
   beforeRestart?: () => void | Promise<void>;
   watchOptions?: ChokidarOptions;

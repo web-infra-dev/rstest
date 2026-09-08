@@ -1,10 +1,11 @@
 import {
   type CommonOptions,
   formatNoProjectsFoundError,
+  loadCliConfig,
   mergeWithCLIOptions,
   resolveProjects,
 } from '../cli/init';
-import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
+import { clonePlainConfig, resolveExtends } from '../config';
 import type { Project, RstestConfig } from '../types';
 import { filterProjects, getAbsolutePath } from '../utils';
 
@@ -30,10 +31,7 @@ export function resolveRunnerOperationInputs({
   inputs: ResolvedRunnerInputs;
   options: CommonOptions;
 }): ResolvedRunnerInputs {
-  const config = mergeWithCLIOptions(
-    mergeRstestConfig({}, inputs.config),
-    options,
-  );
+  const config = mergeWithCLIOptions(clonePlainConfig(inputs.config), options);
   config.root = config.root
     ? getAbsolutePath(inputs.cwd, config.root)
     : inputs.cwd;
@@ -41,10 +39,7 @@ export function resolveRunnerOperationInputs({
   const projects = filterProjects(
     inputs.projects.map((project) => ({
       ...project,
-      config: mergeWithCLIOptions(
-        mergeRstestConfig({}, project.config),
-        options,
-      ),
+      config: mergeWithCLIOptions(clonePlainConfig(project.config), options),
     })),
     options,
   );
@@ -76,18 +71,12 @@ export async function resolveRunnerInputs({
   let configFilePath: string | undefined;
 
   if (source.type === 'discover') {
-    const discoveryRoot = options.root
-      ? getAbsolutePath(cwd, options.root)
-      : cwd;
-    const loaded = await loadConfig({
-      cwd: discoveryRoot,
-      path: options.config,
-      configLoader: options.configLoader,
-    });
+    const loaded = await loadCliConfig(options, cwd);
     config = loaded.content;
     configFilePath = loaded.filePath ?? undefined;
   } else {
-    config = await resolveExtends(mergeRstestConfig({}, source.config));
+    // Cloning must preserve exclude.override until defaults are applied.
+    config = await resolveExtends(clonePlainConfig(source.config));
     configFilePath = source.configFilePath;
   }
 

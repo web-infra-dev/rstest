@@ -1,5 +1,4 @@
 import type {
-  FileFilterMode,
   InternalContext,
   InternalProjectContext,
   ProjectEntries,
@@ -18,12 +17,10 @@ export const getProjectEntries = async ({
   context,
   project,
   fileFilters,
-  fileFilterMode,
 }: {
   context: InternalContext;
   project: InternalProjectContext;
   fileFilters?: string[];
-  fileFilterMode?: FileFilterMode;
 }): Promise<Record<string, string>> => {
   const { include, exclude, includeSource, root } = project.normalizedConfig;
 
@@ -34,7 +31,6 @@ export const getProjectEntries = async ({
     rootPath: context.rootPath,
     projectRoot: root,
     fileFilters,
-    fileFilterMode,
   });
 };
 
@@ -109,16 +105,8 @@ export const createProjectPlanState = ({
   // executor cycles instead.
   const getProjectEntryFilter = (
     project: InternalProjectContext,
-  ): {
-    fileFilters: string[] | undefined;
-    fileFilterMode: FileFilterMode | undefined;
-  } =>
-    isWatchMode && isNodeProject(project)
-      ? { fileFilters: undefined, fileFilterMode: undefined }
-      : {
-          fileFilters: context.fileFilters,
-          fileFilterMode: context.fileFilterMode,
-        };
+  ): string[] | undefined =>
+    isWatchMode && isNodeProject(project) ? undefined : context.fileFilters;
 
   const refreshEnvironmentPartitions = (): Promise<void> => {
     environmentPartitionRefresh ??= (async () => {
@@ -129,7 +117,7 @@ export const createProjectPlanState = ({
           getProjectEntries({
             context,
             project,
-            ...getProjectEntryFilter(project),
+            fileFilters: getProjectEntryFilter(project),
           }),
       });
       allProjects = refreshed.projects;
@@ -173,12 +161,11 @@ export const createProjectPlanState = ({
     // A watch compiler re-evaluates its dynamic entry on every rebuild. Re-glob
     // here instead of serving the planning snapshot so newly created matching
     // tests become entries and deleted tests leave the compilation.
-    const { fileFilters, fileFilterMode } = getProjectEntryFilter(project);
+    const fileFilters = getProjectEntryFilter(project);
     const entries = await getProjectEntries({
       context,
       project,
       fileFilters,
-      fileFilterMode,
     });
     entriesCache.set(name, {
       entries,
@@ -199,10 +186,7 @@ export const createProjectPlanState = ({
     } else if (context.normalizedConfig.shard) {
       entriesCache =
         (await resolveShardedEntries(context, {
-          getFileFilters: (project) =>
-            getProjectEntryFilter(project).fileFilters,
-          getFileFilterMode: (project) =>
-            getProjectEntryFilter(project).fileFilterMode,
+          getFileFilters: getProjectEntryFilter,
           onShardCounts: (counts) => {
             lastShardCounts = counts;
           },

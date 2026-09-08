@@ -11,44 +11,68 @@ const parsePayload = (stdout: string) =>
   parseMarkerPayload<Record<string, any>>(stdout, '__RSTEST_API_RESULT__');
 
 describe('programmatic createRstest', () => {
-  it('uses inline config and contains build failures in run results', async ({
+  it('validates duplicate names only among selected projects', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
       command: 'node',
-      args: ['run-inline.mjs'],
+      args: ['run-duplicate-projects.mjs'],
       onTestFinished,
       options: { nodeOptions: { cwd: fixturesDir } },
     });
-
     await cli.exec;
     const result = parsePayload(cli.stdout);
-
-    expect(result.context).toEqual({
-      rootPath: join(fixturesDir, 'disk'),
-      include: ['*.test.ts'],
-      projects: [
-        {
-          name: 'rstest',
-          rootPath: join(fixturesDir, 'disk'),
-        },
-      ],
-    });
-    expect(result.reporterFiles).toBe(1);
     expect(result.status).toBe('pass');
-    expect(result.summary).toEqual({
-      tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
-      files: { total: 1, failed: 0 },
-    });
-    expect(result.files).toEqual([{ status: 'pass', testPath: 'sum.test.ts' }]);
-    expect(result.unhandledErrors).toEqual([]);
-    expect(result.duration.hasTotal).toBe(true);
-    expect(result.snapshotPresent).toBe(true);
-    expect(result.buildFailure.status).toBe('error');
-    expect(result.buildFailure.message).toContain(
-      'programmatic build exploded',
-    );
+    expect(result.passed).toBe(1);
+    expect(result.error).toContain('Project name "beta" is already used');
   });
+
+  it.for(['forks', 'vmThreads'] as const)(
+    'uses inline config and rejects build failures with %s',
+    async (pool, { onTestFinished }) => {
+      const { cli } = await runRstestCli({
+        command: 'node',
+        args: ['run-inline.mjs', pool],
+        onTestFinished,
+        options: { nodeOptions: { cwd: fixturesDir } },
+      });
+
+      await cli.exec;
+      const result = parsePayload(cli.stdout);
+
+      expect(result.context).toEqual({
+        rootPath: join(fixturesDir, 'disk'),
+        include: ['*.test.ts'],
+        projects: [
+          {
+            name: 'rstest',
+            rootPath: join(fixturesDir, 'disk'),
+          },
+        ],
+      });
+      expect(result.reporterFiles).toBe(1);
+      expect(result.pool).toMatchObject({
+        type: pool,
+        maxWorkers: 1,
+        memoryLimit: '256MB',
+      });
+      expect(result.status).toBe('pass');
+      expect(result.summary).toEqual({
+        tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
+        files: { total: 1, failed: 0 },
+      });
+      expect(result.files).toEqual([
+        { status: 'pass', testPath: 'sum.test.ts' },
+      ]);
+      expect(result.unhandledErrors).toEqual([]);
+      expect(result.duration.hasTotal).toBe(true);
+      expect(result.snapshotPresent).toBe(true);
+      expect(result.buildFailure.status).toBe('rejected');
+      expect(result.buildFailure.message).toContain(
+        'programmatic build exploded',
+      );
+    },
+  );
 
   it('accepts config + virtual modules plugin (Midscene shape)', async ({
     onTestFinished,
@@ -180,12 +204,29 @@ describe('programmatic createRstest', () => {
       'Failed to load coverage provider module: @rstest/coverage-istanbul';
 
     expect(execution.exitCode).toBe(0);
-    expect(result.run).toMatchObject({ status: 'error' });
+    expect(result.run).toMatchObject({ status: 'rejected' });
     expect(result.run.message).toContain(dependencyMessage);
     expect(result.watch.message).toContain(dependencyMessage);
-    expect(result.mergeReports).toMatchObject({ status: 'error' });
+    expect(result.mergeReports).toMatchObject({ status: 'rejected' });
     expect(result.mergeReports.message).toContain(dependencyMessage);
     expect(cli.log).not.toContain('Install it now?');
+    expect(cli.log).not.toContain('Installing ');
+  });
+
+  it('prompts for missing coverage dependencies through runCLI in a TTY host', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'node',
+      args: ['run-cli-missing-dependencies.mjs'],
+      onTestFinished,
+      unsetEnv: ['CI'],
+      options: { nodeOptions: { cwd: fixturesDir, env: { NO_COLOR: '1' } } },
+    });
+    await cli.waitForStdout('Install it now?');
+    expect(cli.stdout).toContain('@rstest/coverage-istanbul');
+    cli.exec.process!.stdin!.write('n\r');
+    await expectExecFailed();
     expect(cli.log).not.toContain('Installing ');
   });
 
@@ -328,7 +369,7 @@ describe('programmatic createRstest', () => {
       files: ['first.test.ts'],
       tests: 1,
     });
-    expect(result.emptyFilterCycles).toEqual({ fuzzy: [], exact: [] });
+    expect(result.emptyFilterFiles).toEqual([]);
     expect(result.zeroMatchCycles[0]).toEqual([]);
     expect(result.zeroMatchCycles.at(-1)).toEqual(['added.test.ts']);
     expect(result.emptyProjectCycles[0]).toEqual([]);

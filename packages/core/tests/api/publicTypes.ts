@@ -13,7 +13,6 @@ import {
 } from '@rstest/core/api';
 export type {
   CoverageMapData,
-  FileFilterMode,
   NormalizedConfig,
   ProjectContext,
   RstestContext,
@@ -21,7 +20,6 @@ export type {
   TaskMeta,
   TestLocation,
 } from '@rstest/core/api';
-import type { CommonOptions } from '../../src/cli/init';
 import type {
   FormattedError,
   TestFileResult as InternalTestFileResult,
@@ -44,15 +42,6 @@ type SameKeys<Left, Right> = [Left] extends [Right]
     : false
   : false;
 type Assert<Condition extends true> = Condition;
-
-export type RunOptionsCommonFieldsAreForwarded = Assert<
-  Exclude<
-    keyof RunOptions,
-    'filters' | 'filterMode'
-  > extends keyof CommonOptions
-    ? true
-    : false
->;
 
 // `projected` promises a same-named field; another public key records a rename.
 export const testResultDisposition = {
@@ -126,6 +115,9 @@ export const listOptionFields = {
 } satisfies Record<keyof ListOptions, true>;
 
 export const configOptions: CreateRstestOptions = { config };
+export const vmRunOptions: RunOptions = {
+  pool: { type: 'vmThreads', maxWorkers: 1, memoryLimit: '256MB' },
+};
 export const createFromLoadedConfig = async (): Promise<void> => {
   const loaded = await loadConfig();
   const loadedConfig: LoadedRstestConfig = loaded;
