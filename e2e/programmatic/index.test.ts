@@ -458,7 +458,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: 'pass',
       tests: 1,
       file: 'browser.test.ts',
@@ -468,6 +468,16 @@ describe('programmatic createRstest', () => {
         { status: 'pass', tests: 1, errors: [] },
         { status: 'pass', tests: 1, errors: [] },
       ],
+    });
+    expect(result.emptyProjectCycles[0]).toEqual({
+      status: 'pass',
+      files: [],
+      errors: [],
+    });
+    expect(result.emptyProjectCycles.at(-1)).toEqual({
+      status: 'pass',
+      files: ['added.test.ts'],
+      errors: [],
     });
     expect(cli.stdout).toContain('Waiting for file changes...');
     expect(cli.stdout).not.toContain('press h');

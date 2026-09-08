@@ -90,6 +90,35 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
     setupRejection = error.message;
   }
 
+  const emptyRoot = join(root, 'empty');
+  await mkdir(emptyRoot, { recursive: true });
+  const emptyProjectCycles = [];
+  const emptyRstest = await createRstest({
+    cwd: emptyRoot,
+    config: { ...config, include: ['*.test.ts'] },
+  });
+  await watcher?.close();
+  watcher = undefined;
+  watcher = await emptyRstest.watch({
+    onResult(result) {
+      emptyProjectCycles.push({
+        status: result.status,
+        files: result.files.map((file) => file.testPath.split('/').pop()),
+        errors: result.unhandledErrors.map((error) => error.message),
+      });
+      resolveNextCycle?.();
+    },
+  });
+  await waitForCycle(() =>
+    writeFile(
+      join(emptyRoot, 'added.test.ts'),
+      `import { expect, it } from '@rstest/core';
+it('runs after an empty start', () => expect(document.createElement('main').tagName).toBe('MAIN'));`,
+    ),
+  );
+  await watcher.close();
+  watcher = undefined;
+
   console.log(
     `__RSTEST_API_RESULT__${JSON.stringify({
       status: result.status,
@@ -98,6 +127,7 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
       errors: result.unhandledErrors.map((error) => error.message),
       cycles,
       setupRejection,
+      emptyProjectCycles,
     })}__END__`,
   );
 } finally {

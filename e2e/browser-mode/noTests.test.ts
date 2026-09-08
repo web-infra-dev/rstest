@@ -2,11 +2,14 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { sleep } from '../scripts';
+import { prepareFixtures } from '../scripts';
+import { BROWSER_PORTS } from './fixtures/ports';
 import {
+  deleteFixtureTarget,
+  killCliProcessTree,
   runBrowserCli,
   runBrowserCliWithCwd,
-  runBrowserWatchCli,
+  runBrowserWatchCliWithCwd,
 } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -85,16 +88,36 @@ describe('browser mode - no tests', () => {
     expect(report.summary.tests).toBe(0);
   });
 
-  // A watch launch with no test files opens no session, so nothing can ever
-  // trigger a rerun: core's finalize reports it (once — the host does not print
-  // its own copy) and no ready banner is offered, because nothing could answer
-  // it. The session process is left for the harness to kill.
-  it('reports a watch launch with no test files exactly once', async () => {
-    const { cli } = await runBrowserWatchCli('no-tests');
-
-    await cli.waitForStdout('No test files found');
-    await sleep(1000);
-    expect(countMarkers(cli.log, 'No test files found')).toBe(1);
-    expect(cli.log).not.toContain('Waiting for file changes...');
+  it('runs added files after an empty watch start', async () => {
+    const fixturesTargetPath = join(
+      __dirname,
+      'fixtures',
+      'fixtures-test-empty-watch',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures', 'watch'),
+      fixturesTargetPath,
+    });
+    fixtureFs.delete(join(fixturesTargetPath, 'tests/index.test.ts'));
+    fixtureFs.delete(join(fixturesTargetPath, 'tests/another.test.ts'));
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+      args: [`--browser.port=${BROWSER_PORTS['no-tests-watch']}`],
+    });
+    try {
+      await cli.waitForStdout('No test files found');
+      await cli.waitForStdout('Waiting for file changes...');
+      fixtureFs.create(
+        join(fixturesTargetPath, 'tests/added.test.ts'),
+        `import { expect, it } from '@rstest/core';
+it('runs the added file', () => expect(document.createElement('main').tagName).toBe('MAIN'));`,
+      );
+      await cli.waitForStdout('Test file set changed');
+      await cli.waitForStdout('Test Files 1 passed');
+      expect(cli.stdout).toContain('added.test.ts');
+      expect(countMarkers(cli.stdout, 'No test files found')).toBe(1);
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+    }
   });
 });

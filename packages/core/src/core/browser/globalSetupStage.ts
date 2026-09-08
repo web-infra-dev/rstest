@@ -54,8 +54,8 @@ export const globalSetupFailureOutcome = (
  *
  * Browser projects never flow through the node Rsbuild instance, so their
  * `globalSetup` files get a dedicated one-shot node-target compile here —
- * created only when a browser project both declares `globalSetup` and has at
- * least one test entry (the cold-start gate stays intact for everyone else).
+ * created only when a browser project declares `globalSetup` and either has
+ * at least one test entry or starts a watch session.
  * Setups run host-side in the same forked worker node projects use; teardown
  * callbacks queue into the shared `runGlobalTeardown` drain.
  *
@@ -76,7 +76,10 @@ export async function runBrowserGlobalSetupStage(
   browserProjects: InternalProjectContext[],
   {
     entriesCache,
+    watch,
   }: {
+    /** Watch sessions outlive the initial file set; non-watch keeps the no-entries gate. */
+    watch?: boolean;
     /**
      * The plan's entries, already narrowed to the shard slice, so the "no
      * running tests -> no globalSetup" gate reuses the plan's glob instead of
@@ -88,7 +91,7 @@ export async function runBrowserGlobalSetupStage(
     entriesCache?: Map<string, ProjectEntries>;
   },
 ): Promise<BrowserGlobalSetupStageResult> {
-  // Shard-aware in every run shape: the run path passes the plan's
+  // Shard-aware outside watch: the run path passes the plan's
   // shard-narrowed cache; a list without one resolves the same sharded map the
   // browser controller will use, so a project whose shard slice is empty never
   // runs its globalSetup. Only an unsharded list falls back to a per-project
@@ -104,7 +107,7 @@ export async function runBrowserGlobalSetupStage(
         ) {
           return undefined;
         }
-        // Same "no running tests -> no globalSetup" gate as the node path,
+        // Non-watch keeps the "no running tests -> no globalSetup" gate,
         // honoring include/exclude, CLI file filters, and sharding.
         const entries = gateEntries
           ? (gateEntries.get(project.environmentName)?.entries ?? {})
@@ -114,7 +117,7 @@ export async function runBrowserGlobalSetupStage(
               fileFilters: context.fileFilters,
             });
         const entryCount = Object.keys(entries).length;
-        return entryCount > 0 ? { project, entryCount } : undefined;
+        return watch || entryCount > 0 ? { project, entryCount } : undefined;
       }),
     )
   ).filter((candidate) => candidate !== undefined);
@@ -236,7 +239,7 @@ export async function runBrowserGlobalSetupStage(
     if (
       !claimGlobalSetupOnce(
         item.project,
-        item.entryCount,
+        watch ? Math.max(1, item.entryCount) : item.entryCount,
         item.globalSetupEntries.length,
       )
     ) {

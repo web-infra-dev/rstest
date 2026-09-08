@@ -116,37 +116,6 @@ let nextBrowserFilePid = 1_000_000_000;
 // Utility Functions
 // ============================================================================
 
-/**
- * The exit code a launch that found no test files at all must leave behind.
- *
- * Core's `reportNoTestFiles` owns the message and the no-test reporter
- * lifecycle for such a launch, but in watch mode its report deliberately leaves
- * the exit code alone — a rerun matching nothing is not a failure. Such a launch
- * opened no session, so no later cycle can raise the code either. That makes
- * this the only launch path that raises the context exit code directly: a boot
- * failure rides the outcome out of `failWithError` and core raises it from
- * there. One-shot runs keep going through the cycle, and a caller that passed
- * `allowEmptyRun` reads the outcome instead of the context status.
- */
-const resolveEmptyLaunchExitCode = (
-  current: number,
-  {
-    allowEmptyRun,
-    isWatchMode,
-    passWithNoTests,
-  }: {
-    allowEmptyRun: boolean;
-    isWatchMode: boolean;
-    passWithNoTests: boolean;
-  },
-): number => {
-  if (allowEmptyRun || !isWatchMode || passWithNoTests) {
-    return current;
-  }
-  // Never downgrade: a code already raised by an earlier failure stands.
-  return Math.max(current, 1);
-};
-
 const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
   Math.max(
     ...projects.map(
@@ -395,9 +364,6 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
-  const shouldInitializeEmptyBrowserHooks =
-    totalTests === 0 && hasUserRstestConfigPlugins(browserProjects);
-
   const createEmptyRunResult = (): BrowserTestRunResult => {
     const elapsed = Math.max(0, Date.now() - buildStart);
     return {
@@ -414,18 +380,11 @@ export const runBrowserController = async (
     };
   };
 
-  const writeEmptyLaunchExitCode = (): void => {
-    context.exitCode.raise(
-      resolveEmptyLaunchExitCode(context.exitCode.current, {
-        allowEmptyRun,
-        isWatchMode,
-        passWithNoTests: context.normalizedConfig.passWithNoTests,
-      }),
-    );
-  };
-
-  if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
-    writeEmptyLaunchExitCode();
+  if (
+    totalTests === 0 &&
+    !isWatchMode &&
+    !hasUserRstestConfigPlugins(browserProjects)
+  ) {
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
   const enableCliShortcuts = isWatchMode && !context.embedded && isTTY('stdin');
@@ -640,8 +599,7 @@ export const runBrowserController = async (
     };
   }
 
-  if (totalTests === 0) {
-    writeEmptyLaunchExitCode();
+  if (totalTests === 0 && !isWatchMode) {
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
