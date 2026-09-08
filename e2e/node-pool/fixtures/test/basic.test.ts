@@ -3,7 +3,7 @@ import { getCount, increment } from '../src/index';
 
 const FILE_MARKER = '__rstest_threads_pool_file_marker__';
 
-describe('threads pool - basic', () => {
+describe('node pool - basic', () => {
   it('runs sync tests', () => {
     expect(1 + 1).toBe(2);
   });

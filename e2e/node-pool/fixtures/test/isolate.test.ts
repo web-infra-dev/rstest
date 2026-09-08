@@ -6,7 +6,7 @@ const FILE_MARKER = '__rstest_threads_pool_file_marker__';
 // Sibling file: also calls `increment`. With `isolate: true` (default), each
 // file runs in a fresh worker, so this file's count starts at 0 regardless
 // of basic.test.ts's mutation.
-describe('threads pool - isolate', () => {
+describe('node pool - isolate', () => {
   it('starts source-module state from zero', () => {
     expect(getCount()).toBe(0);
     increment();

@@ -7,7 +7,7 @@ import { runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-describe('threads pool e2e', () => {
+describe('node pool e2e', () => {
   it.for(['threads', 'vmThreads', 'vmForks'] as const)(
     'should run tests under the %s pool',
     async (pool, { onTestFinished }) => {
