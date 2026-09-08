@@ -428,7 +428,7 @@ export const runBrowserController = async (
     writeEmptyLaunchExitCode();
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
-  const enableCliShortcuts = isWatchMode && isTTY('stdin');
+  const enableCliShortcuts = isWatchMode && !context.embedded && isTTY('stdin');
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
     isWatchMode && watchContext.runtime

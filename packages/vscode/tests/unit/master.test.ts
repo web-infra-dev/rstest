@@ -758,8 +758,7 @@ describe('RstestApi test-run completion', () => {
 
   it('finishes a rejected browser continuous run and surfaces its error', async () => {
     const api = createApi();
-    const errorMessage =
-      'watch() does not support browser mode yet. Use run() instead.';
+    const errorMessage = 'Browser launch failed';
     const worker = mockWorker(api, async () => {
       throw new Error(errorMessage);
     });

@@ -256,7 +256,7 @@ interface TestRunResult {
 
 ## rstest.watch
 
-`rstest.watch()` 会启动 Node.js 监听会话，并返回用于关闭它的监听器。
+`rstest.watch()` 会启动监听会话，并返回用于关闭它的监听器。
 
 ### 示例
 
@@ -283,11 +283,11 @@ await watcher.close();
 
 每个已完成的轮次（包括初始轮次）之后，都会调用 `onResult`。结果按当前轮次统计：`files` 和 `summary` 只包含该轮次实际执行的文件。如需维护会话状态，请自行按 `testPath` 合并结果。
 
+支持浏览器项目。重跑执行出错会通过 `onResult` 以 `status: 'error'` 交付，不会关闭会话；启动失败（包括浏览器 `globalSetup` 失败）会使 `watch()` 被拒绝。
+
 `onResult` 抛出的错误会被隔离，不会停止监听会话。调用 `watcher.close()` 会释放编译器、worker、文件监听器，并运行待处理的 `globalSetup` 清理函数。该方法是幂等的，重复调用会得到相同结果；清理失败时，它返回的 Promise 会被拒绝。
 
 `rstest.watch()` 会拒绝 `related` 和 `changed`，因为它们会选择固定的文件集合，而监听会话必须能够发现新的关联测试。使用这些选项时请调用 `rstest.run()`。`related: false` 和 `changed: false` 会被忽略。
-
-`rstest.watch()` 暂不支持浏览器项目，启动时会拒绝。浏览器项目请使用 `rstest.run()`。
 
 ### WatchOptions
 

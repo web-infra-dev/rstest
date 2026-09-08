@@ -632,16 +632,7 @@ export async function runTests(context: Rstest): Promise<void> {
         mode: 'all',
         env: browserWatchEnv,
       });
-      if (nodeExecutorToRun) {
-        // The node side already keeps the process alive, so the browser session
-        // boots in the background; a failed boot must still be reported.
-        initialBrowserCycle.catch((error) => {
-          logger.error(color.red('Browser Mode watch session failed:'), error);
-          context.exitCode.raise(1);
-        });
-      } else {
-        await initialBrowserCycle;
-      }
+      await initialBrowserCycle;
     }
   } catch (error) {
     // A close already under way owns the exit; re-throwing its victim's
