@@ -210,7 +210,7 @@ const createRequireEsmError = (
 ): NodeJS.ErrnoException => {
   return createVmError(
     context,
-    `require() of ES Module ${filePath} is not supported in the vmThreads pool. Use dynamic import() instead.`,
+    `require() of ES Module ${filePath} is not supported in VM pools. Use dynamic import() instead.`,
     'ERR_REQUIRE_ESM',
   );
 };
@@ -293,7 +293,7 @@ const createUnsupportedFormatError = (
   const extension = extname(filePath) || '(no extension)';
   return createVmError(
     context,
-    `External module ${filePath} has unsupported format ${extension} in the vmThreads pool. Bundle this module instead of externalizing it.`,
+    `External module ${filePath} has unsupported format ${extension} in VM pools. Bundle this module instead of externalizing it.`,
     'ERR_UNKNOWN_FILE_EXTENSION',
   );
 };

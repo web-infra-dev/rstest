@@ -1,5 +1,8 @@
 import os from 'node:os';
-import type { RstestCommand } from '../types';
+import type { RstestCommand, RstestPoolType } from '../types';
+
+export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
+  pool === 'vmForks' || pool === 'vmThreads';
 
 export const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;

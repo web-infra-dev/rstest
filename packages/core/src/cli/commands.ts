@@ -202,7 +202,7 @@ const poolOptionDefinitions: OptionDefinition[] = [
   ['--pool <type>', 'Shorthand for --pool.type'],
   [
     '--pool.type <type>',
-    'Specify the test pool type (forks | threads | vmThreads)',
+    'Specify the test pool type (forks | threads | vmForks | vmThreads)',
   ],
   [
     '--pool.maxWorkers <value>',
@@ -210,7 +210,7 @@ const poolOptionDefinitions: OptionDefinition[] = [
   ],
   [
     '--pool.memoryLimit <limit>',
-    'Memory limit for vmThreads workers before recycling (e.g. 256MB or 50%); currently only supported by vmThreads',
+    'Memory limit for VM workers before recycling (e.g. 256MB or 50%); currently only supported by vmForks and vmThreads',
   ],
   [
     '--pool.execArgv <arg>',

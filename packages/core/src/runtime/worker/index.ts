@@ -7,6 +7,7 @@ import {
   wrapWorkerResponse,
 } from '../../pool/protocol';
 import { ENV } from '../../utils/env';
+import { isVmPoolType } from '../../utils/workers';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
@@ -134,12 +135,14 @@ const runTask = async (
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
-      memory:
-        request.options.context.pool === 'vmThreads'
-          ? { heapUsed: process.memoryUsage().heapUsed }
-          : MEMORY_REPORTING_ENABLED
-            ? { rss: process.memoryUsage().rss }
-            : undefined,
+      memory: isVmPoolType(request.options.context.pool)
+        ? {
+            heapUsed: process.memoryUsage().heapUsed,
+            ...(isMainThread ? { rss: process.memoryUsage().rss } : {}),
+          }
+        : MEMORY_REPORTING_ENABLED
+          ? { rss: process.memoryUsage().rss }
+          : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into

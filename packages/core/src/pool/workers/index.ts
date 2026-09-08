@@ -31,7 +31,8 @@ export function createPoolWorker(
   workerId: number,
 ): PoolWorker {
   switch (task.worker) {
-    case 'forks': {
+    case 'forks':
+    case 'vmForks': {
       return new ForksPoolWorker({
         name: `forks-${workerId}`,
         filename: options.workerEntry,

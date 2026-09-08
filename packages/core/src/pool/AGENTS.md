@@ -1,6 +1,6 @@
 # Node worker pool
 
-`packages/core/src/pool/` — the node-side worker pool that runs and collects test files in child processes (`forks`, the default) or worker threads (`threads` and `vmThreads`). `createPool` is the only public seam; its callers are the node executor and `rstest list`. One pool per run, one `runTests` call per project.
+`packages/core/src/pool/` — the node-side worker pool that runs and collects test files in fork-based pools (`forks` and `vmForks`) or worker threads (`threads` and `vmThreads`). `createPool` is the only public seam; its callers are the node executor and `rstest list`. One pool per run, one `runTests` call per project.
 
 ## Layering and data flow
 
@@ -14,7 +14,7 @@
 - A caller's pool slot is claimed synchronously before the first `await` in `acquireRunner`; the sequential dispatch gate in `runTests` relies on this to preserve perf-sorted enqueue order. Do not add an early `await` there.
 - `crashed` is set before rejecting a task so `isUsable()` stops `releaseRunner` from recycling a poisoned runner under `isolate: false`. Symmetrically, a worker that hits an internal fatal error must exit (it sends `fatal_error`, then re-throws through Node's default handler) — otherwise `isolate: false` would reuse a poisoned process.
 - The host owns termination: there is no stop handshake over IPC, and the worker must not install a SIGTERM handler that defers exit — violating this reintroduces the rstest#1275 hang.
-- `MemoryGate` is forks-only — thread RSS is host-wide and collapses parallelism (rstest#1301) — and must always admit at least one worker.
+- `MemoryGate` applies only to fork-based pools — thread RSS is host-wide and collapses parallelism (rstest#1301) — and must always admit at least one worker.
 - Worker ids are bounded `[1, maxWorkers]` and reused; consumers depend on `RSTEST_WORKER_ID` for resource partitioning. A slot and its id free only after the child actually exits.
 - birpc's timeout is disabled: a host rpc method that never resolves hangs the worker task indefinitely.
 - `buildId` threaded into the task context drives the worker-side rebuild-boundary cache flush; changing its scoping breaks `isolate: false` cross-project cache sharing (rstest#1376).
@@ -25,7 +25,7 @@
 - `WorkerRequest`/`WorkerResponse` in `protocol.ts` ↔ worker-side dispatch in `../runtime/worker/index.ts` and host-side handling in `poolRunner.ts`.
 - A new `PoolWorkerKind` → `createPoolWorker`'s switch (exhaustiveness-checked) and `selectMemoryGate`.
 - The `--require` path for `rstestSuppressWarnings.cjs` in `index.ts` ↔ the `.cjs` copy list in `../../rslib.config.ts` — the path resolves relative to dist, so renaming/moving the `.cjs` needs both sides.
-- Assets have two delivery paths that must both stay alive: eager on the task for forks/threads when host memory suffices, else lazily pulled by the worker via `rpc.getAssetsByEntry`. Normal `vmThreads` runs use the lazy path so each worker can retain immutable asset bytes across fresh VM Contexts; the same `workerCacheLimit` also bounds external source and V8 compilation data. Bundle-coverage debug runs bypass that cache because every result needs its complete asset-size map. Lazy requests carry only missing asset names after the first task, and `buildId`/worker disposal invalidate the cache. Both paths pass Rspack output bytes through `prepareAssetFilesForIPC`; worker consumers must use `getAssetText` or `getAssetBuffer` rather than assuming a transport-specific value shape.
+- Assets have two delivery paths that must both stay alive: eager on the task for forks/threads when host memory suffices, else lazily pulled by the worker via `rpc.getAssetsByEntry`. Normal VM-pool runs use the lazy path so each worker can retain immutable asset bytes across fresh VM Contexts; the same `workerCacheLimit` also bounds external source and V8 compilation data. Bundle-coverage debug runs bypass that cache because every result needs its complete asset-size map. Lazy requests carry only missing asset names after the first task, and `buildId`/worker disposal invalidate the cache. Both paths pass Rspack output bytes through `prepareAssetFilesForIPC`; worker consumers must use `getAssetText` or `getAssetBuffer` rather than assuming a transport-specific value shape.
 
 ## Gotchas
 

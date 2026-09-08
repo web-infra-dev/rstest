@@ -21,11 +21,7 @@ export const prepareAssetFilesForIPC = (
   assetFiles: Record<string, Buffer>,
   workerKind: PoolWorkerKind,
 ): AssetFiles => {
-  if (
-    workerKind === 'threads' ||
-    workerKind === 'vmThreads' ||
-    process.versions.bun === undefined
-  ) {
+  if (workerKind === 'threads' || process.versions.bun === undefined) {
     return assetFiles;
   }
 

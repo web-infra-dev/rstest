@@ -23,6 +23,7 @@ import {
 } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
+import { isVmPoolType } from '../../utils/workers';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { clearFileContext } from '../fileContext';
 import { disposeRstestUtilities } from '../api/utilities';
@@ -61,7 +62,7 @@ const disableVmCompilationCache = (): void => {
     return;
   }
   // V8's isolate-wide compilation cache is unbounded and retains scripts from
-  // every disposed Context. vmThreads uses the bounded worker cache instead.
+  // every disposed Context. VM pools use the bounded worker cache instead.
   setFlagsFromString('--no-compilation-cache');
   vmCompilationCacheDisabled = true;
 };
@@ -174,14 +175,14 @@ const loadTaskAssets = async (
   rpc: Pick<RuntimeRPC, 'getAssetsByEntry'>,
 ): Promise<NonNullable<RunWorkerOptions['options']['assets']>> => {
   const { assetNames, context } = options;
-  if (context.pool === 'vmThreads') {
+  if (isVmPoolType(context.pool)) {
     workerCache.configure(context.workerCacheLimit ?? 0);
   }
   if (assets) {
     return assets;
   }
 
-  if (context.pool !== 'vmThreads' || context.workerCacheLimit === undefined) {
+  if (!isVmPoolType(context.pool) || context.workerCacheLimit === undefined) {
     return rpc.getAssetsByEntry(assetNames);
   }
 
@@ -561,7 +562,7 @@ const preparePool = async (
   setRealTimers();
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
-  const isVmPool = context.pool === 'vmThreads';
+  const isVmPool = isVmPoolType(context.pool);
   let vmContext: Context | undefined;
   let initialVmContextKeys: Set<string | symbol> | undefined;
   let runtimeGlobal = globalThis as VmRuntimeGlobal;
@@ -1038,7 +1039,7 @@ export const runInPool = async (
   // build's cache. Fully flush every loader on the rebuild boundary before
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
-  const isVmPool = options.context.pool === 'vmThreads';
+  const isVmPool = isVmPoolType(options.context.pool);
   if (isVmPool) {
     disableVmCompilationCache();
   }

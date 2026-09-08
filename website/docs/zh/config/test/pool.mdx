@@ -10,7 +10,7 @@ import { ApiMeta } from '@components/ApiMeta';
 - **类型：**
 
 ```ts
-export type RstestPoolType = 'forks' | 'threads' | 'vmThreads';
+export type RstestPoolType = 'forks' | 'threads' | 'vmForks' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** 用于运行测试的线程池 */
@@ -18,11 +18,11 @@ export type RstestPoolOptions = {
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
   /**
-   * `vmThreads` worker 完成一个测试文件后，如果报告的 V8 `heapUsed` 达到该阈值，
+   * `vmForks` 或 `vmThreads` worker 完成一个测试文件后，如果报告的 V8 `heapUsed` 达到该阈值，
    * 则会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 的硬上限。
    * 支持字节数、百分比和单位字符串。
-   * 当前仅由 `vmThreads` 支持。
-   * @default undefined（`vmThreads` 使用 `系统内存 / maxWorkers`）
+   * 当前仅由 `vmForks` 和 `vmThreads` 支持。
+   * @default undefined（VM pool 使用 `系统内存 / maxWorkers`）
    */
   memoryLimit?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
@@ -62,17 +62,23 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。每个 worker 都拥有独立的 V8 isolate 和 heap，但所有 worker 共享同一个操作系统进程，内存会汇总到该进程的 RSS。Rstest 会将各 worker 的 stdout 和 stderr 传回主进程。
 
+### vmForks
+
+<ApiMeta addedVersion="0.11.14" />
+
+`vmForks` 使用 `child_process.fork` 提供进程级隔离，并为每个测试文件创建新的 `vm.Context`。它与 `vmThreads` 具有相同的 VM 模块加载和 cross realm 行为，同时保留 worker 内的 `process.chdir()` 等进程 API。worker 回收通过退出子进程完成。
+
 ### vmThreads
 
 <ApiMeta addedVersion="0.11.13" />
 
-`vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
+`vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。`vmForks` 使用独立子进程提供相同的 VM 隔离。
 
 核心保证是文件级 VM 隔离和编译资源复用，不是与独立 Node.js 进程完全等价，也不是替代 Node module loader。支持范围以下文列出的加载方式和跨 realm 行为为准。
 
 #### 隔离与跨 realm 限制
 
-[`isolate`](/config/test/isolate) 选项对 `vmThreads` 不生效。为了保持配置兼容性，Rstest 会接受 `isolate: false`，但每个文件仍会获得新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。
+[`isolate`](/config/test/isolate) 选项对 `vmForks` 和 `vmThreads` 不生效。为了保持配置兼容性，Rstest 会接受 `isolate: false`，但每个文件仍会获得新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。
 
 `rs.waitFor()`、`rs.waitUntil()`、`rs.runAllTimersAsync()` 等异步 runtime helper 在 worker realm 执行。它们返回的 Promise 和内部创建的错误，不保证通过针对 VM constructor 的 `instanceof Promise` 或 `instanceof Error` 检查。请使用 `await`，并按值或错误消息断言。用户 callback 的返回值和错误会原样传递，不做 realm 转换；API 引用仍保持稳定，并在调用时读取当前文件的状态。
 
@@ -82,9 +88,11 @@ Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。为兼容 Node.js 而从 worker realm 复制进来的 global（例如 `Buffer`）使用共享的 constructor，直接修改这些 constructor 可能跨文件保留；`ArrayBuffer` 和 `Uint8Array` 等 VM 原生 global 则会随每个文件重新创建。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。在 `happy-dom` 环境中，DOM 实现对象由 `happy-dom` 自身的 provider realm 创建；不要假设所有 DOM 值都能通过 VM intrinsic 的 `Object` 或 `Array` 的 `instanceof` 检查，应使用环境提供的 DOM constructor。
 
-Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironment.options`，因此这些配置必须支持 structured clone。包含函数的选项（例如 `beforeParse`、自定义 callback hook），以及内部包含函数的实例，会在 dispatch 前被拒绝。如果环境依赖 host 侧 callback，请改用可克隆配置，或把等价的初始化逻辑移到 setup file。这个限制适用于 `forks`、`threads` 和 `vmThreads`。
+Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironment.options`，因此这些配置必须支持 structured clone。包含函数的选项（例如 `beforeParse`、自定义 callback hook），以及内部包含函数的实例，会在 dispatch 前被拒绝。如果环境依赖 host 侧 callback，请改用可克隆配置，或把等价的初始化逻辑移到 setup file。这个限制适用于 `forks`、`threads`、`vmForks` 和 `vmThreads`。
 
-每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
+每个 VM worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
+
+在内存压力较大或并发较高时，`vmForks` 的内存占用通常更容易控制。每个 fork worker 都能报告自己的 RSS，Rstest 可以使用 fork 专用的 `MemoryGate`，在可用内存紧张时延后创建新的 worker。`vmThreads` 的所有 worker thread 共享宿主进程的 RSS，直接套用同样的按 worker RSS gate 会把整个进程的内存误算到每个 worker，导致并行度明显下降。这不表示 `vmForks` 在所有场景都更省内存：子进程有额外的启动开销，而且两种 VM pool 的 `memoryLimit` 都只是 worker heap 的回收阈值。
 
 跨过 Node builtin 边界时，Rstest 会将直接返回值和 Promise 结果中的普通对象、数组及 Error rejection reason 适配到当前 VM。callback 参数，以及 native builtin 同步抛出的异常，不在转换范围内。这不是对所有值的通用 realm 转换：Buffer、stream、typed array、native handle 等 Node 原生对象会保留原生 backing 和 prototype；jsdom 与 happy-dom 创建的 DOM 对象也会保留各自 provider realm 的 prototype。需要跨 realm 传值时，不要依赖不同 realm 之间的 constructor identity。
 
@@ -119,7 +127,7 @@ CommonJS 路径和 export condition 的选择交给 Node 原生 `require.resolve
 - Worker 启动是主要瓶颈，且测试套件可以共享同一个操作系统进程。各 worker 的 heap 仍然独立，并会计入同一个进程的 RSS。
 - 测试代码不调用 `process.chdir()`、不修改 worker 级状态，也不依赖在文件之间重置这些状态。
 
-下列情况可以考虑切换到 `vmThreads`：
+下列情况可以考虑切换到 `vmThreads` 或 `vmForks`：
 
 - 每个文件都需要新的 global 或 DOM 环境，但每文件创建 worker thread 的成本占比明显。
 - 测试可以兼容 cross-realm value，且不依赖进程级隔离。
@@ -130,7 +138,7 @@ CommonJS 路径和 export condition 的选择交给 Node 原生 `require.resolve
 - 测试里会调用 `process.chdir()`、修改 worker 级状态，或依赖按文件维度的进程隔离。
 - 项目使用 native addon（如 `better-sqlite3`、`sharp`、`canvas`）—— 未针对 worker thread 设计的 addon 在 `threads` 下可能让整个运行直接 abort（`SIGSEGV` / `SIGABRT`，且无法捕获）。
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
-- 需要严格的进程级隔离。此时应使用 `forks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
+- 需要严格的进程级隔离。此时应使用 `forks` 或 `vmForks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
 
 ## 配置 worker 并行度和内存
 
@@ -168,9 +176,9 @@ npx rstest --pool.maxWorkers 1
 
 <ApiMeta addedVersion="0.11.13" />
 
-设置 `vmThreads` worker 的 V8 heap 回收阈值。每个测试文件运行结束后，Rstest 会读取 worker 的 `heapUsed`；达到阈值时，会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 或 OOM 的硬上限。
+设置 `vmForks` 或 `vmThreads` worker 的 V8 heap 回收阈值。每个测试文件运行结束后，Rstest 会读取 worker 的 `heapUsed`；达到阈值时，会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 或 OOM 的硬上限。
 
-该配置当前仅作用于 `vmThreads`，传给 `forks` 或 `threads` 时会被忽略。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`KB`、`KiB`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认使用等额的系统内存（`系统内存 / maxWorkers`）。
+该配置当前仅作用于 `vmForks` 和 `vmThreads`，传给 `forks` 或 `threads` 时会被忽略。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`KB`、`KiB`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认使用等额的系统内存（`系统内存 / maxWorkers`）。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
