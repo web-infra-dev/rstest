@@ -30,10 +30,7 @@ export function createRstest(
     cwd?: string;
     /**
      * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
-     * and config errors throw instead of calling `process.exit()`, so a
-     * programmatic run can't kill the host process. Set by the
-     * `@rstest/core/api` adapter; only CLI contexts mirror the context-local
-     * status to the host process.
+     * or stdin shortcuts. Set by the `@rstest/core/api` adapter.
      */
     embedded?: boolean;
     /** Internal metadata contexts normalize config without creating reporters. */
