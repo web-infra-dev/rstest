@@ -243,7 +243,7 @@ describe('programmatic createRstest', () => {
     });
   });
 
-  it('lists tests with project metadata and ignores shard', async ({
+  it('lists tests with project metadata and honors explicit shard', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -257,8 +257,12 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    // Pin that listTests() writes nothing to host stdout for either healthy or broken projects.
-    expect(cli.stdout.trim()).toBe(
+    const outputWithoutShardBanners = cli.stdout
+      .split('\n')
+      .filter((line) => !line.startsWith('Running shard '))
+      .filter(Boolean)
+      .join('\n');
+    expect(outputWithoutShardBanners).toBe(
       `__RSTEST_API_RESULT__${JSON.stringify(result)}__END__`,
     );
     expect(result.context).toEqual({
@@ -269,11 +273,31 @@ describe('programmatic createRstest', () => {
       ],
     });
     expect(result.files).toEqual([
-      { testPath: 'alpha.test.ts', project: 'alpha', type: 'file' },
       { testPath: 'beta.test.ts', project: 'beta', type: 'file' },
     ]);
     expect(result.filtered).toEqual(['alpha.test.ts']);
-    expect(result.collectionError).toBe('Failed to list tests.');
+    expect(result.teardownError).toEqual({
+      isListTestsError: false,
+      message: 'Failed to list tests.',
+    });
+    expect(result.collectionError).toMatchObject({
+      isListTestsError: true,
+      name: 'ListTestsError',
+      message: 'Failed to list tests.',
+      files: [
+        {
+          testPath: 'collection-error.test.ts',
+          errors: [{ message: 'collection failed from helper' }],
+        },
+      ],
+      unhandledErrors: [],
+    });
+    expect(result.collectionError.files[0].errors[0].stack).toContain(
+      'error-source.ts:1',
+    );
+    expect(
+      result.collectionError.files[0].errors[0].stack.split('\n')[1],
+    ).toContain(`${join('fixtures-collection-error', 'error-source.ts')}:1:7)`);
     expect(result.skippedDeclarations).toEqual([
       {
         testPath: 'only-skipped.test.ts',
@@ -311,24 +335,6 @@ describe('programmatic createRstest', () => {
         fullName: 'shared suite > shared case',
         parentNames: ['shared suite'],
         project: 'alpha',
-        location: { line: 5, column: 5 },
-        type: 'case',
-      },
-      {
-        testPath: 'beta.test.ts',
-        name: 'shared suite',
-        fullName: 'shared suite',
-        parentNames: [],
-        project: 'beta',
-        location: { line: 4, column: 9 },
-        type: 'suite',
-      },
-      {
-        testPath: 'beta.test.ts',
-        name: 'shared case',
-        fullName: 'shared suite > shared case',
-        parentNames: ['shared suite'],
-        project: 'beta',
         location: { line: 5, column: 5 },
         type: 'case',
       },

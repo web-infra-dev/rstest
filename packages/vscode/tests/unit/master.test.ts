@@ -424,7 +424,7 @@ describe('RstestApi test listing', () => {
     expect(listTests).toHaveBeenCalledTimes(1);
     expect(listTests).toHaveBeenCalledWith({
       filters: [`"${testPath}"`],
-      includeLocation: true,
+      includeTaskLocation: true,
       includeSuites: true,
     });
   });

@@ -110,7 +110,6 @@ export const testRunResultFields = {
 export const listOptionFields = {
   filesOnly: true,
   includeSuites: true,
-  includeLocation: true,
 } satisfies Record<keyof ListOptions, true>;
 
 export const configOptions: CreateRstestOptions = { config };

@@ -141,7 +141,7 @@ describe('browser mode - globalSetup', () => {
     expect(teardownIndex).toBeGreaterThan(serverCloseIndex);
   });
 
-  it('runs globalSetup and teardown around browser test collection', async () => {
+  it('closes browser collection before rendering the collected tests', async () => {
     const { cli, expectExecSuccess } = await runBrowserCli(
       'browser-global-setup',
       { command: 'list' },
@@ -161,9 +161,9 @@ describe('browser mode - globalSetup', () => {
     );
 
     expect(setupIndex).toBeGreaterThanOrEqual(0);
-    expect(testIndex).toBeGreaterThan(setupIndex);
-    expect(serverCloseIndex).toBeGreaterThan(testIndex);
+    expect(serverCloseIndex).toBeGreaterThan(setupIndex);
     expect(teardownIndex).toBeGreaterThan(serverCloseIndex);
+    expect(testIndex).toBeGreaterThan(teardownIndex);
   });
 
   it('skips globalSetup when the shard slice has no files for the project', async () => {

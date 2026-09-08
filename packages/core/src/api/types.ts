@@ -151,7 +151,6 @@ export interface RstestWatcher {
 export interface ListOptions {
   filesOnly?: boolean;
   includeSuites?: boolean;
-  includeLocation?: boolean;
 }
 
 /** @experimental Subject to change until 1.0.0. */

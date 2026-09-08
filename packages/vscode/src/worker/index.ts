@@ -198,7 +198,7 @@ export class Worker {
     const declarations = await rstest.listTests({
       ...filterOptions,
       includeSuites: true,
-      includeLocation: true,
+      includeTaskLocation: true,
     });
     // A second call rebuilds the list engine, including planner/config/glob work.
     // Filtered refreshes are covered by the caller's requestedFiles seed.

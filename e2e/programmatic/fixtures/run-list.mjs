@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRstest } from '@rstest/core/api';
+import { createRstest, ListTestsError } from '@rstest/core/api';
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
 const root = join(fixtureDir, `.list-${process.pid}`);
@@ -37,7 +37,7 @@ try {
   });
   const listed = await rstest.listTests({
     includeSuites: true,
-    includeLocation: true,
+    includeTaskLocation: true,
     shard: '1/2',
   });
   const files = await rstest.listTests({
@@ -74,16 +74,11 @@ it.todo('todo case');
     },
   });
   const skippedDeclarations = await skippedRstest.listTests();
-  const brokenRoot = join(root, 'broken');
-  await mkdir(brokenRoot);
-  await writeFile(
-    join(brokenRoot, 'broken.test.ts'),
-    `throw new Error('collection failed intentionally');\n`,
-  );
+  const brokenRoot = join(fixtureDir, '../../list/fixtures-collection-error');
   const brokenRstest = await createRstest({
     cwd: brokenRoot,
     config: {
-      include: ['broken.test.ts'],
+      include: ['collection-error.test.ts'],
       reporters: [],
     },
   });
@@ -91,7 +86,38 @@ it.todo('todo case');
   try {
     await brokenRstest.listTests();
   } catch (error) {
-    collectionError = error.message;
+    collectionError = {
+      isListTestsError: error instanceof ListTestsError,
+      name: error.name,
+      message: error.message,
+      files: error.files.map((file) => ({
+        testPath: file.testPath.split('/').pop(),
+        errors: file.errors,
+      })),
+      unhandledErrors: error.unhandledErrors,
+    };
+  }
+
+  await writeFile(
+    join(root, 'globalSetup.ts'),
+    `export default () => () => { throw new Error('List teardown failed'); };`,
+  );
+  const teardownRstest = await createRstest({
+    cwd: root,
+    config: {
+      include: ['alpha/*.test.ts'],
+      globalSetup: ['./globalSetup.ts'],
+      reporters: [],
+    },
+  });
+  let teardownError;
+  try {
+    await teardownRstest.listTests();
+  } catch (error) {
+    teardownError = {
+      isListTestsError: error instanceof ListTestsError,
+      message: error.message,
+    };
   }
 
   console.log(
@@ -123,6 +149,7 @@ it.todo('todo case');
         testPath: test.testPath.split('/').pop(),
       })),
       collectionError,
+      teardownError,
     })}__END__`,
   );
 } finally {
