@@ -27,44 +27,52 @@ describe('programmatic createRstest', () => {
     expect(result.error).toContain('Project name "beta" is already used');
   });
 
-  it('uses inline config and rejects build failures', async ({
-    onTestFinished,
-  }) => {
-    const { cli } = await runRstestCli({
-      command: 'node',
-      args: ['run-inline.mjs'],
-      onTestFinished,
-      options: { nodeOptions: { cwd: fixturesDir } },
-    });
+  it.for(['forks', 'vmThreads'] as const)(
+    'uses inline config and rejects build failures with %s',
+    async (pool, { onTestFinished }) => {
+      const { cli } = await runRstestCli({
+        command: 'node',
+        args: ['run-inline.mjs', pool],
+        onTestFinished,
+        options: { nodeOptions: { cwd: fixturesDir } },
+      });
 
-    await cli.exec;
-    const result = parsePayload(cli.stdout);
+      await cli.exec;
+      const result = parsePayload(cli.stdout);
 
-    expect(result.context).toEqual({
-      rootPath: join(fixturesDir, 'disk'),
-      include: ['*.test.ts'],
-      projects: [
-        {
-          name: 'rstest',
-          rootPath: join(fixturesDir, 'disk'),
-        },
-      ],
-    });
-    expect(result.reporterFiles).toBe(1);
-    expect(result.status).toBe('pass');
-    expect(result.summary).toEqual({
-      tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
-      files: { total: 1, failed: 0 },
-    });
-    expect(result.files).toEqual([{ status: 'pass', testPath: 'sum.test.ts' }]);
-    expect(result.unhandledErrors).toEqual([]);
-    expect(result.duration.hasTotal).toBe(true);
-    expect(result.snapshotPresent).toBe(true);
-    expect(result.buildFailure.status).toBe('rejected');
-    expect(result.buildFailure.message).toContain(
-      'programmatic build exploded',
-    );
-  });
+      expect(result.context).toEqual({
+        rootPath: join(fixturesDir, 'disk'),
+        include: ['*.test.ts'],
+        projects: [
+          {
+            name: 'rstest',
+            rootPath: join(fixturesDir, 'disk'),
+          },
+        ],
+      });
+      expect(result.reporterFiles).toBe(1);
+      expect(result.pool).toMatchObject({
+        type: pool,
+        maxWorkers: 1,
+        memoryLimit: '256MB',
+      });
+      expect(result.status).toBe('pass');
+      expect(result.summary).toEqual({
+        tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
+        files: { total: 1, failed: 0 },
+      });
+      expect(result.files).toEqual([
+        { status: 'pass', testPath: 'sum.test.ts' },
+      ]);
+      expect(result.unhandledErrors).toEqual([]);
+      expect(result.duration.hasTotal).toBe(true);
+      expect(result.snapshotPresent).toBe(true);
+      expect(result.buildFailure.status).toBe('rejected');
+      expect(result.buildFailure.message).toContain(
+        'programmatic build exploded',
+      );
+    },
+  );
 
   it('accepts config + virtual modules plugin (Midscene shape)', async ({
     onTestFinished,

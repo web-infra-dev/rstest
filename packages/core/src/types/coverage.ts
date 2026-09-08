@@ -160,6 +160,15 @@ export type CoverageCollectOptions = {
 };
 
 /**
+ * Runtime state exposed to a worker-side coverage provider.
+ *
+ * @internal
+ */
+export type CoverageInitOptions = {
+  global: typeof globalThis;
+};
+
+/**
  * Core-to-provider contract for resolving raw coverage payloads.
  *
  * @internal
@@ -191,7 +200,7 @@ export declare class CoverageProvider {
   /**
    * Initialize coverage collection
    */
-  init(): void | Promise<void>;
+  init(options?: CoverageInitOptions): void | Promise<void>;
 
   /**
    * Collect coverage data into an Istanbul coverage map.

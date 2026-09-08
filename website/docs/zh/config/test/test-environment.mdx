@@ -88,6 +88,8 @@ export default defineConfig({
 
 `options` 对象会直接传递给环境的构造函数。
 
+当使用 Node worker pool（`forks`、`threads` 或 `vmThreads`）时，`options` 必须支持 structured clone，因为它们会传递到 worker。像 `beforeParse` 这样的函数选项不支持在这些 pool 中使用，并会在 dispatch 测试文件前被拒绝。
+
 - 对于 `jsdom`，它会传递给 `JSDOM` 构造函数。你可以在 [jsdom 文档](https://github.com/jsdom/jsdom#customizing-jsdom)中找到可用的选项。
 - 对于 `happy-dom`，它会传递给 `Window` 构造函数。你可以在 [happy-dom 文档](https://github.com/capricorn86/happy-dom/wiki/Window)中找到可用的选项。
 

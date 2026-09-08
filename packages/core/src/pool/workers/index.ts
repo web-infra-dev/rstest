@@ -40,9 +40,10 @@ export function createPoolWorker(
         forwardStdio: options.forwardStdio,
       });
     }
-    case 'threads': {
+    case 'threads':
+    case 'vmThreads': {
       return new ThreadsPoolWorker({
-        name: `threads-${workerId}`,
+        name: `${task.worker}-${workerId}`,
         filename: options.workerEntry,
         env: composeSpawnEnv(task),
         execArgv: options.execArgv,

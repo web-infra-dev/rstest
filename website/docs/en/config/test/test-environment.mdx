@@ -88,6 +88,8 @@ export default defineConfig({
 
 The `options` object is passed directly to the environment's constructor.
 
+When using a Node worker pool (`forks`, `threads`, or `vmThreads`), the options must be structured-cloneable because they are sent to a worker. Function-valued options such as `beforeParse` are not supported in these pools and are rejected before a test file is dispatched.
+
 - For `jsdom`, it's passed to the `JSDOM` constructor. You can find available options in the [jsdom documentation](https://github.com/jsdom/jsdom#customizing-jsdom).
 - For `happy-dom`, it's passed to the `Window` constructor. You can find available options in the [happy-dom documentation](https://github.com/capricorn86/happy-dom/wiki/Window).
 

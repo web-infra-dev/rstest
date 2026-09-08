@@ -47,6 +47,12 @@ import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
 
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  'then' in value &&
+  typeof value.then === 'function';
+
 export type RootSuiteListeners = {
   beforeAllListeners: BeforeAllListener[];
   afterAllListeners: AfterAllListener[];
@@ -265,7 +271,7 @@ export class RunnerRuntime {
       this.suiteCollectionDepth++;
       try {
         const result = fn();
-        if (result instanceof Promise) {
+        if (isPromiseLike(result)) {
           await result;
         }
         // call current collect immediately

@@ -18,7 +18,7 @@ const send = (response: WorkerResponse): void => {
   channel.send(wrapWorkerResponse(response));
 };
 
-let currentTaskId: number | undefined;
+let taskHandlesErrors = false;
 /**
  * Set when a task handler has reported `fatal_error` and is on its way to
  * exit. Suppresses the bottom-of-the-stack `fatalExit` from racing in with a
@@ -42,10 +42,9 @@ const sendFatalError = (err: unknown): void => {
  * surfaced via `worker.on('error')`).
  *
  * Why clear *all* listeners, not just `fatalExit`: `runInPool` installs its
- * own per-task uncaughtException handler that silently absorbs errors into
- * `unhandledErrors` (see `runInPool.ts` ~ line 230). That handler is removed
- * only when the *next* `preparePool` runs, so for `isolate: true` it stays
- * installed forever after the first task. If we leave it attached, the
+ * own per-task uncaughtException handler that absorbs errors into
+ * `unhandledErrors`. Non-VM pools retain that handler until the next
+ * `preparePool`, while VM pools remove it during teardown. If left attached, the
  * re-thrown error gets absorbed and Node's default never runs — the worker
  * neither prints a stack nor exits, and `PoolRunner.stopTimer` eventually
  * SIGTERMs it 60s later with no diagnostic info.
@@ -67,15 +66,13 @@ const handOffToNodeDefault = (err: unknown): void => {
  * Last-resort handlers. The runtime's `runInPool` registers its own
  * uncaught/unhandled handlers that capture errors thrown WHILE a test is
  * running and feed them into the test result. These bottom-of-the-stack
- * handlers fire only when no task is active (e.g., during worker bootstrap,
- * teardown after the result has been flushed, or async leak after the
- * test completes).
+ * handlers take over whenever the runtime cannot include further errors in
+ * its result, including bootstrap, teardown and idle worker time.
  */
 const fatalExit = (err: unknown): void => {
   if (dyingFromFatal) return;
-  if (currentTaskId !== undefined) {
-    // A task is in progress — let runInPool's own handlers absorb the error
-    // into the test result.
+  if (taskHandlesErrors) {
+    // Delegate only while the runtime can still include errors in its result.
     return;
   }
   dyingFromFatal = true;
@@ -108,10 +105,11 @@ const runTask = async (
   kind: TaskKind,
   request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
 ): Promise<void> => {
-  currentTaskId = request.taskId;
-
   try {
     const result = await runInPool(request.options, {
+      onTaskErrorHandlingChange: (active) => {
+        taskHandlesErrors = active;
+      },
       onFileCleanupStart: (result) => {
         send({ type: 'fileCleanupStarted', taskId: request.taskId, result });
       },
@@ -136,9 +134,12 @@ const runTask = async (
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
-      memory: MEMORY_REPORTING_ENABLED
-        ? { rss: process.memoryUsage().rss }
-        : undefined,
+      memory:
+        request.options.context.pool === 'vmThreads'
+          ? { heapUsed: process.memoryUsage().heapUsed }
+          : MEMORY_REPORTING_ENABLED
+            ? { rss: process.memoryUsage().rss }
+            : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into
@@ -148,12 +149,12 @@ const runTask = async (
     // reuse this poisoned process for the next file.
     dyingFromFatal = true;
     sendFatalError(err);
-    currentTaskId = undefined;
+    taskHandlesErrors = false;
     handOffToNodeDefault(err);
     return;
   }
 
-  currentTaskId = undefined;
+  taskHandlesErrors = false;
 };
 
 const cleanupWorker = async (): Promise<void> => {

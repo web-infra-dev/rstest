@@ -64,6 +64,7 @@ let nextTaskSeq = 0;
 type PoolRunnerOptions = {
   workerId: number;
   environmentKey: string;
+  memoryLimit?: number;
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
 
@@ -108,10 +109,13 @@ export class PoolRunner {
   private readonly onTestEnvironmentFallback?: (
     fallback: TestEnvironmentModuleFallback,
   ) => void;
+  private readonly memoryLimit: number | undefined;
+  private memoryLimitReached = false;
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
     this.environmentKey = options.environmentKey;
+    this.memoryLimit = options.memoryLimit;
     this.onTestEnvironmentFallback = options.onTestEnvironmentFallback;
     this.worker = worker;
 
@@ -126,6 +130,10 @@ export class PoolRunner {
 
   isUsable(): boolean {
     return this.state === 'STARTED' && !this.crashed;
+  }
+
+  shouldRecycle(): boolean {
+    return this.memoryLimitReached;
   }
 
   start(): Promise<void> {
@@ -440,9 +448,11 @@ export class PoolRunner {
         }
         return;
       case 'runFinished':
+        this.recordMemoryUsage(response.memory?.heapUsed);
         this.resolveTask('run', response.taskId, response.result);
         return;
       case 'collectFinished':
+        this.recordMemoryUsage(response.memory?.heapUsed);
         this.resolveTask('collect', response.taskId, response.result);
         return;
       case 'testEnvironmentFallback':
@@ -475,6 +485,16 @@ export class PoolRunner {
     this.currentTask = undefined;
     this.clearFixtureCleanupTimer();
     task.resolve(result);
+  }
+
+  private recordMemoryUsage(heapUsed: number | undefined): void {
+    if (
+      this.memoryLimit !== undefined &&
+      heapUsed !== undefined &&
+      heapUsed >= this.memoryLimit
+    ) {
+      this.memoryLimitReached = true;
+    }
   }
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {

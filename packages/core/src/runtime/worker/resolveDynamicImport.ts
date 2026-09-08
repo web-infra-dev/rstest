@@ -5,12 +5,14 @@ import {
 } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type vm from 'node:vm';
 import {
   asModule,
   createInteropProxy,
   interopModule,
   shouldInterop,
 } from './interop';
+import { getVmExternalModules } from './vm/externalModules';
 
 /**
  * Shared dynamic-import resolution + interop policy for both worker loaders.
@@ -86,17 +88,20 @@ export const resolveImportSpecifier = ({
   // re-resolves as `D:\D:\...` (double drive letter).
   return isAbsolute(specifier)
     ? pathToFileURL(specifier).href
-    : isBuiltinSpecifier(specifier)
-      ? toNodeBuiltin(specifier)
-      : resolveModule(specifier, resolveBase);
+    : specifier.startsWith('data:')
+      ? specifier
+      : isBuiltinSpecifier(specifier)
+        ? toNodeBuiltin(specifier)
+        : resolveModule(specifier, resolveBase);
 };
 
 /**
- * Compile and instantiate a `.wasm` module from its on-disk source, with no
- * importObject. This is the runtime path for `import(new URL('./x.wasm',
- * import.meta.url).href)` and other non-literal `.wasm` specifiers (#1455);
- * direct `import './x.wasm'` is instead turned into a self-contained module by
- * `wasmLoader.mjs`, which builds its own importObject and never reaches here.
+ * Compile and instantiate a `.wasm` module from its on-disk source. VM imports
+ * use the external-module loader so WebAssembly dependencies are resolved in
+ * the same realm; the native path remains the fallback for non-VM execution.
+ * This is the runtime path for `import(new URL('./x.wasm', import.meta.url).href)`
+ * and other non-literal `.wasm` specifiers (#1455); direct `import './x.wasm'`
+ * is instead turned into a self-contained module by `wasmLoader.mjs`.
  *
  * `Buffer.from` normalizes the read to an `ArrayBuffer`-backed buffer so it
  * satisfies `WebAssembly.compile`'s `BufferSource` (a raw `readFile` result is
@@ -105,7 +110,16 @@ export const resolveImportSpecifier = ({
 export const loadWasm = async (
   filePath: string,
   returnModule?: boolean,
+  vmContext?: vm.Context,
 ): Promise<any> => {
+  if (vmContext) {
+    return getVmExternalModules(vmContext).import(
+      pathToFileURL(filePath).href,
+      true,
+      returnModule === true,
+    );
+  }
+
   const wasmModule = await WebAssembly.compile(
     Buffer.from(await readFile(filePath)),
   );
@@ -117,7 +131,9 @@ export const loadWasm = async (
   // with no synthetic `default` (`'default' in ns === false`), so pass no
   // default export — `returnModule` then matches that shape unless the wasm
   // itself exports a member named `default`.
-  return returnModule ? asModule(exports, filePath) : exports;
+  return returnModule
+    ? asModule(exports, filePath, undefined, vmContext)
+    : exports;
 };
 
 /**
@@ -142,34 +158,52 @@ export const finalizeDynamicImport = async ({
   importAttributes,
   interopDefault,
   returnModule,
+  vmContext,
 }: {
   modulePath: string;
   importAttributes: ImportCallOptions;
   interopDefault: boolean;
   returnModule?: boolean;
+  vmContext?: vm.Context;
 }): Promise<any> => {
   // Rstest importAttributes is used internally to distinguish `importActual`
   // and normal imports, and should not be passed to Node.js side, otherwise it
   // will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-  if (importAttributes?.with?.rstest) {
-    delete importAttributes.with.rstest;
+  const attributes = Object.fromEntries(
+    Object.entries(importAttributes?.with ?? importAttributes ?? {}).filter(
+      ([name]) => name !== 'rstest',
+    ),
+  );
+
+  if (vmContext) {
+    return getVmExternalModules(vmContext).import(
+      modulePath,
+      interopDefault,
+      returnModule === true,
+      attributes,
+    );
   }
 
   if (modulePath.endsWith('.json')) {
     // `await import(jsonPath)` should return `{ default: jsonExports, ...jsonExports }`.
     const importedModule = await import(modulePath, {
-      with: { type: 'json' },
+      with: { type: 'json', ...attributes },
     });
 
     return returnModule
-      ? asModule(importedModule.default, modulePath, importedModule.default)
+      ? asModule(
+          importedModule.default,
+          modulePath,
+          importedModule.default,
+          vmContext,
+        )
       : {
           ...importedModule.default,
           default: importedModule.default,
         };
   }
 
-  const importedModule = await import(modulePath, importAttributes);
+  const importedModule = await import(modulePath, { with: attributes });
 
   if (
     shouldInterop({
@@ -181,14 +215,19 @@ export const finalizeDynamicImport = async ({
   ) {
     const { mod, defaultExport } = interopModule(importedModule);
     if (returnModule) {
-      return asModule(mod, modulePath, defaultExport);
+      return asModule(mod, modulePath, defaultExport, vmContext);
     }
 
     return createInteropProxy(mod, defaultExport);
   }
 
   if (returnModule) {
-    return asModule(importedModule, modulePath, importedModule.default);
+    return asModule(
+      importedModule,
+      modulePath,
+      importedModule.default,
+      vmContext,
+    );
   }
   return importedModule;
 };

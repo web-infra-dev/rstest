@@ -1,0 +1,1 @@
+import './native-addon.node';

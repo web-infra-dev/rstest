@@ -174,6 +174,33 @@ describe('Pool - environment prebundle fallback', () => {
   });
 });
 
+describe('Pool - VM worker memory limit', () => {
+  it('recycles a reusable worker after it reports heap over the limit', async () => {
+    const pool = new Pool(
+      createPoolOptions({
+        isolate: false,
+        maxWorkers: 1,
+        minWorkers: 1,
+        memoryLimit: 100,
+      }),
+    );
+    try {
+      const first = await pool.runTest(
+        createTask('run', { __testMode: 'memory-over-limit' }),
+      );
+      const second = await pool.runTest(createTask());
+
+      expect((first as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).not.toBe(
+        (first as any)._workerIdentity,
+      );
+    } finally {
+      await pool.close();
+    }
+  });
+});
+
 // ── fatal_error attribution ─────────────────────────────────────────────────
 
 describe('Pool - fatal error', () => {

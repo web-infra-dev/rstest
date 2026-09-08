@@ -1,6 +1,7 @@
 import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { EnvironmentName } from './config';
+import type { RstestPoolType } from './config';
 import type { InternalContext, InternalProjectContext } from './core';
 import type {
   TestCaseInfo,
@@ -42,7 +43,10 @@ export type ServerRPC = object;
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
   onTestFileReady: (test: TestFileInfo) => Promise<void>;
-  getAssetsByEntry: () => Promise<{
+  getAssetsByEntry: (
+    assetNames?: string[],
+    sourceMapNames?: string[],
+  ) => Promise<{
     assetFiles: AssetFiles;
     sourceMaps: Record<string, string>;
   }>;
@@ -117,6 +121,8 @@ export type CurrentTaskInfo = Pick<
 >;
 
 export type WorkerContext = {
+  /** Set by the node pool; browser runtimes do not have a node worker pool. */
+  pool?: RstestPoolType;
   rootPath: InternalContext['rootPath'];
   projectRoot: InternalProjectContext['rootPath'];
   project: string;
@@ -128,6 +134,8 @@ export type WorkerContext = {
    * its kept module cache before loading (#1373).
    */
   buildId: number;
+  /** Byte budget for immutable assets and compilation data kept by vmThreads. */
+  workerCacheLimit?: number;
   outputModule: boolean;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   /** When true, the worker emits Perfetto trace events alongside phase totals. */
@@ -138,6 +146,8 @@ export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
+    /** All bundle assets needed by this task, including setup dependencies. */
+    assetNames: string[];
     context: WorkerContext;
     /** Env deletions use a separate JSON-safe wire field because JSON drops `undefined`. */
     deletedEnvKeys: string[];
@@ -151,7 +161,11 @@ export type RunWorkerOptions = {
     environmentKey: string;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
-    /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
+    /**
+     * Eager assets for forks/threads when host memory permits. vmThreads
+     * always pulls missing assets through getAssetsByEntry so its worker cache
+     * can survive fresh VM Contexts without retaining module instances.
+     */
     assets?: {
       assetFiles: AssetFiles;
       sourceMaps: Record<string, string>;

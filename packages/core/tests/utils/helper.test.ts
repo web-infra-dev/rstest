@@ -1,12 +1,23 @@
 import { sep } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import {
   getFileTaskId,
   getWorkerSerialization,
+  isPlainObject,
   needFlagExperimentalDetectModule,
   parsePosix,
   prettyTime,
   toNativePath,
 } from '../../src/utils/helper';
+
+it('isPlainObject accepts objects created in another realm', () => {
+  expect(isPlainObject({ scope: 'worker' })).toBe(true);
+  expect(isPlainObject(runInNewContext('({ scope: "worker" })'))).toBe(true);
+  expect(
+    isPlainObject(runInNewContext('new (class FixtureOptions {})()')),
+  ).toBe(false);
+  expect(isPlainObject(Object.create(null))).toBe(false);
+});
 
 it('getFileTaskId builds the file: task-id grammar', () => {
   // Locks the single source of truth so the worker/pool/runner consumers and

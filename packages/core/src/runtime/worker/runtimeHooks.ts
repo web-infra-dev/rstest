@@ -44,8 +44,9 @@ let retainedDynamicImportHook: unknown;
 export const setFederationDynamicImportOrigin = (
   federation: boolean,
   origin: string,
+  target: Record<string, unknown> = globalThis,
 ): void => {
-  const runtimeGlobal = globalThis as Record<string, unknown>;
+  const runtimeGlobal = target;
   if (federation) {
     if (
       runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK] === undefined &&

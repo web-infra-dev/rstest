@@ -78,3 +78,16 @@ You can tune the memory benchmark worker count locally or in CI with:
 ```bash
 RSTEST_BENCH_MEMORY_WORKERS=6 pnpm bench:memory
 ```
+
+The workload defaults to `forks`. Run the same generated project under
+`vmThreads`, optionally with dependency prebundle enabled, using:
+
+```bash
+RSTEST_BENCH_MEMORY_POOL=vmThreads pnpm bench:memory
+RSTEST_BENCH_MEMORY_POOL=vmThreads RSTEST_BENCH_MEMORY_PREBUNDLE=auto pnpm bench:memory
+```
+
+`RSTEST_BENCH_MEMORY_LIMIT` controls the `vmThreads` recycle threshold and
+defaults to `256MB`. Each benchmark invocation uses a fresh generated project
+and an empty persistent-cache directory, so changing the pool does not reuse a
+previous run's build cache.

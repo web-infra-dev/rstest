@@ -1,5 +1,7 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
 import { getCount, increment } from '../src/index';
+
+const FILE_MARKER = '__rstest_threads_pool_file_marker__';
 
 describe('threads pool - basic', () => {
   it('runs sync tests', () => {
@@ -9,6 +11,27 @@ describe('threads pool - basic', () => {
   it('runs async tests', async () => {
     const value = await Promise.resolve(42);
     expect(value).toBe(42);
+  });
+
+  it('reuses the timers shim for both builtin spellings', () => {
+    const timers = require('timers');
+    const nodeTimers = require('node:timers');
+
+    expect(timers).toBe(nodeTimers);
+    const hostGlobal = require('node:vm').runInThisContext('globalThis');
+    if (hostGlobal !== globalThis) {
+      expect(timers.setTimeout).toBe(globalThis.setTimeout);
+    }
+  });
+
+  it('records settled results from the test realm', async () => {
+    const mock = rs.fn(async () => 42);
+
+    await mock();
+
+    expect(mock.mock.settledResults).toEqual([
+      { type: 'fulfilled', value: 42 },
+    ]);
   });
 
   it('can import source modules and observe local mutation', () => {
@@ -21,5 +44,13 @@ describe('threads pool - basic', () => {
     // undefined. This is the simplest invariant that distinguishes the two
     // pool types from the test runtime.
     expect(typeof process.send).toBe('undefined');
+  });
+
+  it('starts with a clean file global', () => {
+    expect(document.body).toBeDefined();
+    const fileGlobal = globalThis as typeof globalThis &
+      Record<string, unknown>;
+    expect(fileGlobal[FILE_MARKER]).toBeUndefined();
+    fileGlobal[FILE_MARKER] = 'basic';
   });
 });

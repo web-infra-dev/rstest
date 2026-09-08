@@ -1,15 +1,131 @@
 import { expect, test } from '@rstest/core';
 import {
+  setImmediate,
+  setTimeout,
+  setInterval,
+  clearImmediate,
+  clearTimeout,
+  clearInterval,
+} from 'node:timers';
+import { promisify } from 'node:util';
+import {
   installObjectURLTracker,
   installTimerTracking,
   type NodeTimerPrimitives,
 } from '../../../../src/runtime/worker/env/utils';
 
+test('preserves custom promisify on tracked timers', async () => {
+  const nodeTimers = {
+    setImmediate,
+    setTimeout,
+    setInterval,
+    clearImmediate,
+    clearTimeout,
+    clearInterval,
+  };
+  const testGlobal = {} as typeof globalThis;
+  const cleanup = installTimerTracking(testGlobal, nodeTimers, {
+    scope: 'file',
+  });
+  try {
+    await expect(promisify(testGlobal.setImmediate)('immediate')).resolves.toBe(
+      'immediate',
+    );
+    await expect(promisify(testGlobal.setTimeout)(0, 'timeout')).resolves.toBe(
+      'timeout',
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('cancels pending promisified timeout and immediate during file cleanup', async () => {
+  const testGlobal = { Promise, Error } as typeof globalThis;
+  const cleanup = installTimerTracking(
+    testGlobal,
+    {
+      setImmediate,
+      setTimeout,
+      setInterval,
+      clearImmediate,
+      clearTimeout,
+      clearInterval,
+    },
+    { scope: 'file' },
+  );
+  const results = Promise.allSettled([
+    promisify(testGlobal.setTimeout)(30, 'timeout'),
+    promisify(testGlobal.setImmediate)('immediate'),
+  ]);
+
+  cleanup();
+
+  expect(await results).toEqual([
+    {
+      status: 'rejected',
+      reason: expect.objectContaining({
+        name: 'AbortError',
+        code: 'ABORT_ERR',
+      }),
+    },
+    {
+      status: 'rejected',
+      reason: expect.objectContaining({
+        name: 'AbortError',
+        code: 'ABORT_ERR',
+      }),
+    },
+  ]);
+});
+
+test('preserves AbortSignal and ref options on promisified timers', async () => {
+  const testGlobal = { Promise, Error } as typeof globalThis;
+  const cleanup = installTimerTracking(
+    testGlobal,
+    {
+      setImmediate,
+      setTimeout,
+      setInterval,
+      clearImmediate,
+      clearTimeout,
+      clearInterval,
+    },
+    { scope: 'file' },
+  );
+  const controller = new AbortController();
+  try {
+    const timeout = promisify(testGlobal.setTimeout)(60_000, 'value', {
+      signal: controller.signal,
+      ref: false,
+    });
+    controller.abort();
+    await expect(timeout).rejects.toMatchObject({
+      name: 'AbortError',
+      code: 'ABORT_ERR',
+    });
+    await expect(
+      promisify(testGlobal.setImmediate)('value', {
+        signal: controller.signal,
+        ref: false,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
+    await expect(
+      promisify(testGlobal.setTimeout)(0, 'value', {
+        ref: true,
+      }),
+    ).resolves.toBe('value');
+  } finally {
+    cleanup();
+  }
+});
+
 test('should not record timers for a worker-scoped environment', () => {
   const cleared: unknown[] = [];
   const nodeTimers = {
+    setImmediate: () => ({}) as NodeJS.Timeout,
     setTimeout: () => ({}) as NodeJS.Timeout,
     setInterval: () => ({}) as NodeJS.Timeout,
+    clearImmediate: (timer: unknown) => cleared.push(timer),
     clearTimeout: (timer: unknown) => cleared.push(timer),
     clearInterval: (timer: unknown) => cleared.push(timer),
   } as unknown as NodeTimerPrimitives;
@@ -20,11 +136,33 @@ test('should not record timers for a worker-scoped environment', () => {
   });
   testGlobal.setTimeout(() => {}, 1000);
   testGlobal.setInterval(() => {}, 1000);
+  testGlobal.setImmediate(() => {});
   cleanup();
 
   // Nothing to clear proves nothing was recorded — the worker-scoped
   // environment must not retain timers it will never tear down (#1644).
   expect(cleared).toEqual([]);
+});
+
+test('should clear pending immediate callbacks for a file-scoped environment', () => {
+  const cleared: unknown[] = [];
+  const nodeTimers = {
+    setImmediate: () => ({ kind: 'immediate' }) as unknown as NodeJS.Timeout,
+    setTimeout: () => ({ kind: 'timeout' }) as unknown as NodeJS.Timeout,
+    setInterval: () => ({ kind: 'interval' }) as unknown as NodeJS.Timeout,
+    clearImmediate: (timer: unknown) => cleared.push(timer),
+    clearTimeout: (timer: unknown) => cleared.push(timer),
+    clearInterval: (timer: unknown) => cleared.push(timer),
+  } as unknown as NodeTimerPrimitives;
+  const testGlobal = {} as typeof globalThis;
+
+  const cleanup = installTimerTracking(testGlobal, nodeTimers, {
+    scope: 'file',
+  });
+  const immediate = testGlobal.setImmediate(() => {});
+  cleanup();
+
+  expect(cleared).toEqual([immediate]);
 });
 
 const createTestURL = () => {

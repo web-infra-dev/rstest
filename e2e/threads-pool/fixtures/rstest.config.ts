@@ -1,5 +1,10 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  pool: 'threads',
+  include: ['./test/**/*.test.ts'],
+  pool: {
+    type: 'threads',
+    maxWorkers: 1,
+  },
+  testEnvironment: 'jsdom',
 });

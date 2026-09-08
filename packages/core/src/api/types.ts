@@ -114,6 +114,7 @@ export interface RunOptions {
     | {
         type?: string;
         maxWorkers?: string | number;
+        memoryLimit?: string | number;
         execArgv?: string[] | string;
       };
   isolate?: boolean;

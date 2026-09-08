@@ -1,4 +1,8 @@
-import { restoreScopedEntry } from '../../../src/runtime/api/utilities';
+import {
+  createRstestUtilities,
+  disposeRstestUtilities,
+  restoreScopedEntry,
+} from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
 import { createUtilities } from './helpers';
 
@@ -134,6 +138,78 @@ describe('rstest utilities wait APIs', () => {
 
     rs.useRealTimers();
   });
+
+  it('cancels abandoned waits when the file state is reset', async () => {
+    const rs = await createUtilities();
+    let untilAttempts = 0;
+    const pendingUntil = rs.waitUntil(
+      () => {
+        untilAttempts += 1;
+        return false;
+      },
+      { timeout: 1_000, interval: 1_000 },
+    );
+    let forAttempts = 0;
+    const pendingFor = rs.waitFor(
+      () => {
+        forAttempts += 1;
+        throw new Error('still pending');
+      },
+      { timeout: 1_000, interval: 1_000 },
+    );
+
+    const reactions: string[] = [];
+    for (const pending of [pendingUntil, pendingFor]) {
+      void pending
+        .then(
+          () => reactions.push('fulfilled'),
+          () => reactions.push('rejected'),
+        )
+        .finally(() => reactions.push('finally'));
+    }
+    await createRstestUtilities();
+    await sleep(0);
+
+    expect(reactions).toEqual([]);
+    expect(untilAttempts).toBe(1);
+    expect(forAttempts).toBe(1);
+  });
+
+  it.each(['waitFor', 'waitUntil'] as const)(
+    '%s stays pending when an in-flight callback settles after disposal',
+    async (method) => {
+      const rs = await createUtilities();
+      const reactions: string[] = [];
+      const finishCallbacks: (() => void)[] = [];
+      for (const rejectCallback of [false, true]) {
+        const pending = rs[method](
+          () =>
+            new Promise<string>((resolve, reject) => {
+              finishCallbacks.push(() =>
+                rejectCallback
+                  ? reject(new Error('late callback'))
+                  : resolve('late value'),
+              );
+            }),
+          { timeout: 0 },
+        );
+        void pending
+          .then(
+            () => reactions.push('fulfilled'),
+            () => reactions.push('rejected'),
+          )
+          .finally(() => reactions.push('finally'));
+      }
+      // Let the deadline expire while both user callbacks are still in flight.
+      await sleep(0);
+      disposeRstestUtilities();
+      expect(finishCallbacks).toHaveLength(2);
+      finishCallbacks.forEach((finish) => finish());
+      await sleep(0);
+      expect(reactions).toEqual([]);
+      await expect(rs.waitUntil(() => 'new wait')).resolves.toBe('new wait');
+    },
+  );
 
   it('returns real timers when fake timers are enabled', async () => {
     const rs = await createUtilities();

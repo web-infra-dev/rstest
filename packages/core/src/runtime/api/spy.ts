@@ -21,6 +21,7 @@ export const initSpy = (
   // bucket for callers (and unit tests) that don't run multiple projects.
   // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
   getProjectKey: () => string = () => '',
+  getRuntimeGlobal: () => Record<string, unknown> = () => globalThis,
 ): Pick<RstestUtilities, 'isMockFunction' | 'spyOn' | 'fn'> & {
   /**
    * Run `callback` against every live registered mock of the running file's
@@ -47,6 +48,50 @@ export const initSpy = (
   // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132
   // and https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
   const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
+  const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
+
+  const getRealmPromise = (): PromiseConstructor => {
+    const promise = getRuntimeGlobal().Promise;
+    if (typeof promise !== 'function') {
+      throw new TypeError('The runtime global does not provide Promise.');
+    }
+    return promise as PromiseConstructor;
+  };
+
+  const getRealmArray = (): ArrayConstructor => {
+    const array = getRuntimeGlobal().Array;
+    if (typeof array !== 'function') {
+      throw new TypeError('The runtime global does not provide Array.');
+    }
+    return array as ArrayConstructor;
+  };
+
+  const getRealmObject = (): ObjectConstructor => {
+    const object = getRuntimeGlobal().Object;
+    if (typeof object !== 'function') {
+      throw new TypeError('The runtime global does not provide Object.');
+    }
+    return object as ObjectConstructor;
+  };
+
+  const toRealmArray = <T>(values: readonly T[]): T[] => {
+    const array = getRealmArray();
+    return array === Array ? (values as T[]) : array.from(values);
+  };
+
+  const toRealmCall = <T extends readonly unknown[]>(call: T): T =>
+    toRealmArray(call) as unknown as T;
+
+  const toRealmResult = <T>(
+    type: 'return' | 'throw' | 'fulfilled' | 'rejected',
+    value: T,
+  ): { type: typeof type; value: T } => {
+    const object = getRealmObject();
+    if (object === Object) {
+      return { type, value };
+    }
+    return object.assign(new object(), { type, value });
+  };
 
   const projectMocks = (): Set<WeakRef<MockInstance>> => {
     const key = getProjectKey();
@@ -55,11 +100,106 @@ export const initSpy = (
     return set;
   };
 
+  const wrapRealmMock = <T extends FunctionLike>(spyFn: Mock<T>): Mock<T> => {
+    const realmFunction = getRuntimeGlobal().Function;
+    if (typeof realmFunction !== 'function' || realmFunction === Function) {
+      return spyFn;
+    }
+
+    const createFactory = realmFunction as unknown as (
+      ...args: string[]
+    ) => (implementation: FunctionLike) => FunctionLike;
+    const factory = createFactory(
+      'implementation',
+      'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
+    );
+    const realmSpy = factory(spyFn) as Mock<T>;
+
+    for (const key of Reflect.ownKeys(spyFn)) {
+      if (key === 'caller' || key === 'callee' || key === 'arguments') {
+        continue;
+      }
+      if (key === 'length' || key === 'name' || key === 'prototype') {
+        continue;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(spyFn, key);
+      if (!descriptor) {
+        continue;
+      }
+      if (typeof descriptor.value === 'function') {
+        const value = descriptor.value;
+        descriptor.value = (...args: unknown[]) => {
+          const result = Reflect.apply(value, spyFn, args);
+          if (result === spyFn) {
+            return realmSpy;
+          }
+          if (
+            key === 'withImplementation' &&
+            result !== null &&
+            (typeof result === 'object' || typeof result === 'function') &&
+            typeof Reflect.get(result, 'then') === 'function'
+          ) {
+            return getRealmPromise()
+              .resolve(result)
+              .then((resolved) => (resolved === spyFn ? realmSpy : resolved));
+          }
+          return result;
+        };
+      }
+      Object.defineProperty(realmSpy, key, descriptor);
+    }
+
+    Object.defineProperty(realmSpy, 'name', {
+      configurable: true,
+      value: spyFn.name,
+    });
+    Object.defineProperty(realmSpy, 'length', {
+      configurable: true,
+      value: spyFn.length,
+    });
+    // A bare tinyspy mock gets a host-realm default prototype. Keep the
+    // wrapper's VM-realm prototype unless the original spy carries a custom
+    // prototype that must be preserved for constructor mocks.
+    if (
+      spyFn.prototype &&
+      Object.getPrototypeOf(spyFn.prototype) !== Object.prototype
+    ) {
+      realmSpy.prototype = spyFn.prototype;
+    }
+    return realmSpy;
+  };
+
   const wrapSpy = <T extends FunctionLike>(
     obj: Record<string, any>,
-    methodName: string,
+    methodName: string | { getter: string } | { setter: string },
     mockFn?: NormalizedProcedure<T>,
   ): Mock<T> => {
+    const propertyName =
+      typeof methodName === 'string'
+        ? methodName
+        : Object.values(methodName)[0]!;
+    let descriptor: PropertyDescriptor | undefined;
+    let current: object | null = obj;
+    while (current) {
+      descriptor = Object.getOwnPropertyDescriptor(current, propertyName);
+      if (descriptor) {
+        break;
+      }
+      current = Object.getPrototypeOf(current);
+    }
+    const existing =
+      typeof methodName === 'string'
+        ? descriptor?.value
+        : 'getter' in methodName
+          ? descriptor?.get
+          : descriptor?.set;
+    if (typeof existing === 'function') {
+      const realmSpy = realmSpies.get(existing);
+      if (realmSpy) {
+        return realmSpy as Mock<T>;
+      }
+    }
+
     const spyImpl = internalSpyOn(obj, methodName, mockFn) as SpyInternalImpl<
       Parameters<T>,
       ReturnType<T>
@@ -81,7 +221,7 @@ export const initSpy = (
 
     const spyState = getInternalState(spyImpl);
 
-    spyFn.getMockName = () => mockName || methodName;
+    spyFn.getMockName = () => mockName || propertyName;
 
     spyFn.mockName = (name: string) => {
       mockName = name;
@@ -181,19 +321,23 @@ export const initSpy = (
     };
 
     spyFn.mockResolvedValue = (value) => {
-      return spyFn.mockImplementation((() => Promise.resolve(value)) as T);
+      return spyFn.mockImplementation((() =>
+        getRealmPromise().resolve(value)) as T);
     };
 
     spyFn.mockResolvedValueOnce = (value) => {
-      return spyFn.mockImplementationOnce((() => Promise.resolve(value)) as T);
+      return spyFn.mockImplementationOnce((() =>
+        getRealmPromise().resolve(value)) as T);
     };
 
     spyFn.mockRejectedValue = (value) => {
-      return spyFn.mockImplementation((() => Promise.reject(value)) as T);
+      return spyFn.mockImplementation((() =>
+        getRealmPromise().reject(value)) as T);
     };
 
     spyFn.mockRejectedValueOnce = (value) => {
-      return spyFn.mockImplementationOnce((() => Promise.reject(value)) as T);
+      return spyFn.mockImplementationOnce((() =>
+        getRealmPromise().reject(value)) as T);
     };
 
     spyFn.mockReturnThis = () => {
@@ -210,7 +354,26 @@ export const initSpy = (
       if (mockImplementationOnce.length) {
         impl = mockImplementationOnce.shift()!;
       }
-      return impl?.apply(this, args);
+      const result = impl?.apply(this, args);
+      if (
+        result !== null &&
+        typeof result === 'object' &&
+        Object.prototype.toString.call(result) === '[object Promise]' &&
+        'then' in result &&
+        typeof result.then === 'function' &&
+        !(result instanceof Promise)
+      ) {
+        const resultIndex = spyState.results.length;
+        void result.then(
+          (value: unknown) => {
+            spyState.resolves[resultIndex] = ['ok', value];
+          },
+          (error: unknown) => {
+            spyState.resolves[resultIndex] = ['error', error];
+          },
+        );
+      }
+      return result;
     }
 
     spyState.willCall(willCall);
@@ -218,35 +381,46 @@ export const initSpy = (
     Object.defineProperty(spyFn, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
-          return spyState.calls;
+          return toRealmArray(
+            spyState.calls.map((call) => toRealmCall(call)),
+          ) as MockContext<T>['calls'];
         },
         get lastCall() {
-          return spyState.calls[spyState.callCount - 1];
+          const lastCall = spyState.calls[spyState.callCount - 1];
+          return lastCall
+            ? (toRealmCall(lastCall) as MockContext<T>['lastCall'])
+            : undefined;
         },
         get instances() {
-          return mockState.instances;
+          return toRealmArray(mockState.instances);
         },
         get contexts() {
-          return mockState.contexts;
+          return toRealmArray(mockState.contexts);
         },
         get invocationCallOrder() {
-          return mockState.invocationCallOrder;
+          return toRealmArray(mockState.invocationCallOrder);
         },
         get results() {
-          return spyState.results.map(([resultType, value]) => {
-            const type =
-              resultType === 'error' ? ('throw' as const) : ('return' as const);
-            return { type: type, value };
-          });
+          return toRealmArray(
+            spyState.results.map(([resultType, value]) => {
+              const type =
+                resultType === 'error'
+                  ? ('throw' as const)
+                  : ('return' as const);
+              return toRealmResult(type, value);
+            }),
+          ) as MockContext<T>['results'];
         },
         get settledResults() {
-          return spyState.resolves.map(([resultType, value]) => {
-            const type =
-              resultType === 'error'
-                ? ('rejected' as const)
-                : ('fulfilled' as const);
-            return { type, value };
-          });
+          return toRealmArray(
+            spyState.resolves.map(([resultType, value]) => {
+              const type =
+                resultType === 'error'
+                  ? ('rejected' as const)
+                  : ('fulfilled' as const);
+              return toRealmResult(type, value);
+            }),
+          ) as MockContext<T>['settledResults'];
         },
       }),
     });
@@ -281,9 +455,27 @@ export const initSpy = (
       });
     }
 
-    projectMocks().add(new WeakRef(spyFn));
+    const realmSpy = wrapRealmMock(spyFn);
+    realmSpies.set(spyFn, realmSpy);
+    realmSpies.set(realmSpy, realmSpy);
+    projectMocks().add(new WeakRef(realmSpy));
+    if (realmSpy !== spyFn) {
+      descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+      if (descriptor) {
+        if (typeof methodName === 'string') {
+          descriptor.value = realmSpy;
+        } else if ('getter' in methodName) {
+          descriptor.get = realmSpy;
+        } else {
+          descriptor.set = realmSpy as unknown as NonNullable<
+            PropertyDescriptor['set']
+          >;
+        }
+        Object.defineProperty(obj, propertyName, descriptor);
+      }
+    }
 
-    return spyFn;
+    return realmSpy;
   };
 
   const forEachMock = (callback: (mock: MockInstance) => void): void => {
@@ -363,7 +555,10 @@ export const initSpy = (
       ? { [accessTypeMap[accessType]]: methodName }
       : methodName;
 
-    return wrapSpy(obj, method as string);
+    return wrapSpy(
+      obj,
+      method as string | { getter: string } | { setter: string },
+    );
   };
 
   /**
@@ -442,7 +637,13 @@ export const initSpy = (
       );
 
       // Make sure the mock can be used with 'new'
-      Object.setPrototypeOf(mock, Function.prototype);
+      const realmFunction = getRuntimeGlobal().Function;
+      Object.setPrototypeOf(
+        mock,
+        typeof realmFunction === 'function'
+          ? realmFunction.prototype
+          : Function.prototype,
+      );
       mock.prototype = originalImplementation.prototype;
 
       return mock;

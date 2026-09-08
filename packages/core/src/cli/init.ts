@@ -322,6 +322,10 @@ export function mergeWithCLIOptions(
         pool.maxWorkers = poolFromCli.maxWorkers as any;
       }
 
+      if (poolFromCli.memoryLimit !== undefined) {
+        pool.memoryLimit = poolFromCli.memoryLimit;
+      }
+
       if (poolFromCli.execArgv !== undefined) {
         pool.execArgv = castArray(poolFromCli.execArgv);
       }

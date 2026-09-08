@@ -12,6 +12,7 @@ const createChannel = (kind: PoolWorkerKind): WorkerChannel => {
     case 'forks':
       return new ForksChannel();
     case 'threads':
+    case 'vmThreads':
       return new ThreadsChannel();
     default: {
       const _exhaustive: never = kind;

@@ -1,13 +1,28 @@
 import { promisify } from 'node:util';
 import type { TestEnvironmentContext } from '../../../types';
+import { createVmTimersPromisesLoader } from '../vm/timers';
 import { KEYS } from './jsdomKeys';
 
 export type NodeTimerPrimitives = Pick<
   typeof globalThis,
-  'clearInterval' | 'clearTimeout' | 'setInterval' | 'setTimeout'
+  | 'clearImmediate'
+  | 'clearInterval'
+  | 'clearTimeout'
+  | 'setImmediate'
+  | 'setInterval'
+  | 'setTimeout'
 >;
 
-const TIMER_KEYS = ['setInterval', 'setTimeout'] as const;
+const TIMER_KEYS = [
+  'setImmediate',
+  'clearImmediate',
+  'setInterval',
+  'clearInterval',
+  'setTimeout',
+  'clearTimeout',
+] as const;
+
+type NodeTimerHandle = NodeJS.Immediate | NodeJS.Timeout;
 
 const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
@@ -15,11 +30,15 @@ function getWindowKeys(
   global: any,
   win: any,
   additionalKeys: string[] = [],
+  preserveExistingKeys = false,
 ): Set<string> {
   const keysArray = [...additionalKeys, ...KEYS];
 
   return new Set(
     keysArray.concat(Object.getOwnPropertyNames(win)).filter((k) => {
+      if (preserveExistingKeys && k in global) {
+        return false;
+      }
       if (SKIP_KEYS.includes(k)) {
         return false;
       }
@@ -118,10 +137,16 @@ export function installGlobal(
      */
     bindFunctions?: boolean;
     additionalKeys?: string[];
+    preserveExistingKeys?: boolean;
   } = {},
 ): () => void {
-  const { bindFunctions = true } = options || {};
-  const keys = getWindowKeys(global, win, options.additionalKeys);
+  const { bindFunctions = true, preserveExistingKeys = false } = options || {};
+  const keys = getWindowKeys(
+    global,
+    win,
+    options.additionalKeys,
+    preserveExistingKeys,
+  );
 
   const originals = new Map<string | symbol, PropertyDescriptor>();
 
@@ -200,7 +225,8 @@ export function installGlobal(
 /**
  * Shadow the DOM timers `installGlobal` just exposed with Node's, so tests get
  * real `NodeJS.Timeout` handles. A file-scoped environment gets wrappers that
- * record every timer created, so the returned cleanup can clear the stragglers;
+ * record every timeout, interval, and immediate created, so the returned
+ * cleanup can clear the stragglers;
  * a worker-scoped one gets the Node primitives unwrapped — its teardown never
  * runs, so recording would retain every timer and its callback closure for the
  * worker's whole life (see `TestEnvironmentReturn.teardown`).
@@ -247,13 +273,13 @@ export function installTimerTracking(
     return restore;
   }
 
-  const pending = new Map<NodeJS.Timeout, (timer: NodeJS.Timeout) => void>();
+  const pending = new Map<NodeTimerHandle, (timer: unknown) => void>();
   let active = true;
 
   const record = (
-    timer: NodeJS.Timeout,
-    clearTimer: (timer: NodeJS.Timeout) => void,
-  ): NodeJS.Timeout => {
+    timer: NodeTimerHandle,
+    clearTimer: (timer: unknown) => void,
+  ): NodeTimerHandle => {
     if (active) {
       pending.set(timer, clearTimer);
     }
@@ -263,30 +289,61 @@ export function installTimerTracking(
   const setTimeout = ((...args: unknown[]) =>
     record(
       Reflect.apply(nodeTimers.setTimeout, global, args) as NodeJS.Timeout,
-      nodeTimers.clearTimeout,
+      nodeTimers.clearTimeout as (timer: unknown) => void,
     )) as NodeTimerPrimitives['setTimeout'];
   const setInterval = ((...args: unknown[]) =>
     record(
       Reflect.apply(nodeTimers.setInterval, global, args) as NodeJS.Timeout,
-      nodeTimers.clearInterval,
+      nodeTimers.clearInterval as (timer: unknown) => void,
     )) as NodeTimerPrimitives['setInterval'];
+  const setImmediate = ((...args: unknown[]) =>
+    record(
+      Reflect.apply(nodeTimers.setImmediate, global, args) as NodeJS.Immediate,
+      nodeTimers.clearImmediate as (timer: unknown) => void,
+    )) as unknown as NodeTimerPrimitives['setImmediate'];
 
-  const customPromisifyDescriptor = Object.getOwnPropertyDescriptor(
-    nodeTimers.setTimeout,
-    promisify.custom,
-  );
-  if (customPromisifyDescriptor) {
-    Object.defineProperty(
-      setTimeout,
+  const loadPromiseTimers = createVmTimersPromisesLoader({
+    Promise: global.Promise ?? Promise,
+    Error: global.Error ?? Error,
+  });
+  const nativePromiseTimers = {
+    setTimeout: promisify(nodeTimers.setTimeout),
+    setImmediate: promisify(nodeTimers.setImmediate),
+  };
+  // The loader preserves the module shape while owning cancellation of its promises.
+  const promiseTimers = loadPromiseTimers(
+    nativePromiseTimers,
+  ) as typeof nativePromiseTimers;
+
+  for (const [name, tracked, original] of [
+    ['setTimeout', setTimeout, nodeTimers.setTimeout],
+    ['setImmediate', setImmediate, nodeTimers.setImmediate],
+  ] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      original,
       promisify.custom,
-      customPromisifyDescriptor,
     );
+    if (descriptor) {
+      Object.defineProperty(tracked, promisify.custom, {
+        configurable: descriptor.configurable,
+        enumerable: descriptor.enumerable,
+        value: promiseTimers[name],
+      });
+    }
   }
 
-  install({ setInterval, setTimeout });
+  install({
+    clearImmediate: nodeTimers.clearImmediate,
+    clearInterval: nodeTimers.clearInterval,
+    clearTimeout: nodeTimers.clearTimeout,
+    setImmediate,
+    setInterval,
+    setTimeout,
+  });
 
   return () => {
     active = false;
+    loadPromiseTimers.dispose();
     for (const [timer, clearTimer] of pending) {
       clearTimer(timer);
     }

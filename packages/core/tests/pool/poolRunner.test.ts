@@ -197,6 +197,79 @@ class WorkerCleanupErrorWorker implements PoolWorker {
   }
 }
 
+class MemoryReportingWorker implements PoolWorker {
+  readonly name = 'memory-reporting-worker';
+  private readonly events = new EventEmitter();
+  private live = true;
+
+  async start(): Promise<void> {}
+
+  async stop(): Promise<void> {
+    this.live = false;
+    queueMicrotask(() => this.events.emit('exit', 0, null));
+  }
+
+  send(request: WorkerRequest): void {
+    if (request.type === 'start') {
+      queueMicrotask(() => {
+        this.events.emit(
+          'message',
+          wrapWorkerResponse({ type: 'started', pid: 1 }),
+        );
+      });
+      return;
+    }
+    if (request.type === 'run') {
+      queueMicrotask(() => {
+        this.events.emit(
+          'message',
+          wrapWorkerResponse({
+            type: 'runFinished',
+            taskId: request.taskId,
+            result: {
+              name: '',
+              project: 'default',
+              results: [],
+              status: 'pass',
+              testId: 'file:/test.ts',
+              testPath: '/test.ts',
+            },
+            memory: { heapUsed: 101 },
+          }),
+        );
+      });
+    }
+  }
+
+  sendRaw(_envelope: Envelope): void {}
+
+  on<E extends PoolWorkerEventName>(
+    event: E,
+    listener: PoolWorkerEvents[E],
+  ): void {
+    this.events.on(event, listener);
+  }
+
+  off<E extends PoolWorkerEventName>(
+    event: E,
+    listener: PoolWorkerEvents[E],
+  ): void {
+    this.events.off(event, listener);
+  }
+
+  getCapturedStderr(): string {
+    return '';
+  }
+
+  resetCapturedStderr(): void {}
+
+  async waitForStderrSettle(): Promise<void> {}
+
+  hasLiveChild(): boolean {
+    return this.live;
+  }
+}
+
 const createTask = (): PoolTask =>
   ({
     options: {},
@@ -270,5 +343,21 @@ describe('PoolRunner worker fixture cleanup', () => {
     await Promise.all([cleanupPromise, stopPromise]);
 
     expect(worker.cleanupRequests).toBe(1);
+  });
+});
+
+describe('PoolRunner VM worker memory limit', () => {
+  it('marks a runner for recycling after a worker reports heap over the limit', async () => {
+    const runner = new PoolRunner(new MemoryReportingWorker(), {
+      environmentKey: 'jsdom',
+      memoryLimit: 100,
+      workerId: 1,
+    });
+
+    await runner.start();
+    expect(runner.shouldRecycle()).toBe(false);
+    await runner.runTest(createTask());
+    expect(runner.shouldRecycle()).toBe(true);
+    await runner.stop({ force: true });
   });
 });

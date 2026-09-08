@@ -5,6 +5,7 @@ import {
   type ListOptions,
   type LoadedRstestConfig,
   type RstestConfig,
+  type RunOptions,
   type SerializedError,
   type TestCaseResult,
   type TestFileRunResult,
@@ -113,6 +114,9 @@ export const listOptionFields = {
 } satisfies Record<keyof ListOptions, true>;
 
 export const configOptions: CreateRstestOptions = { config };
+export const vmRunOptions: RunOptions = {
+  pool: { type: 'vmThreads', maxWorkers: 1, memoryLimit: '256MB' },
+};
 export const createFromLoadedConfig = async (): Promise<void> => {
   const loaded = await loadConfig();
   const loadedConfig: LoadedRstestConfig = loaded;

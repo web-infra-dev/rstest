@@ -29,7 +29,7 @@ function createPackageJson() {
   );
 }
 
-function createConfigFile() {
+function createConfigFile({ maxWorkers, memoryLimit, pool, prebundle }) {
   return `import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rstest/core';
 
@@ -38,7 +38,17 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root,
   include: ['tests/**/*.test.ts'],
-  testEnvironment: 'jsdom',
+  performance: {
+    buildCache: {
+      cacheDirectory: process.env.RSTEST_BENCH_MEMORY_CACHE,
+    },
+  },
+  pool: ${JSON.stringify({
+    maxWorkers,
+    ...(pool === 'vmThreads' ? { memoryLimit } : {}),
+    type: pool,
+  })},
+  testEnvironment: ${JSON.stringify({ name: 'jsdom', prebundle })},
 });
 `;
 }
@@ -198,7 +208,12 @@ describe('synthetic frontend test ${index}', () => {
 `;
 }
 
-export async function createFrontendMemoryFixture() {
+export async function createFrontendMemoryFixture({
+  maxWorkers = 4,
+  memoryLimit = '256MB',
+  pool = 'forks',
+  prebundle = false,
+} = {}) {
   const fixtureRoot = fixturesMemoryDir;
 
   await rm(fixtureRoot, { force: true, recursive: true });
@@ -214,7 +229,7 @@ export async function createFrontendMemoryFixture() {
     );
     await writeGeneratedFile(
       join(fixtureRoot, 'rstest.config.mts'),
-      createConfigFile(),
+      createConfigFile({ maxWorkers, memoryLimit, pool, prebundle }),
     );
     await writeGeneratedFile(
       join(fixtureRoot, 'src/heavy/antdBridge.ts'),

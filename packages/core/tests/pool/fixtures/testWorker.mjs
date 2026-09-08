@@ -12,6 +12,7 @@
  *   - 'environment-fallback' → report an environment prebundle fallback,
  *                                then succeed.
  *   - 'asset-transport'     → echo the received asset byte shape.
+ *   - 'memory-over-limit'   → report heap usage above the configured limit.
  *   - 'spawn-orphan'       → spawn a long-lived grandchild that inherits
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
@@ -92,11 +93,12 @@ const handleRun = (request) => {
   const mode = request.options?.__testMode;
   cleanupShouldFail = mode === 'cleanup-error';
 
-  const finish = (extra) => {
+  const finish = (extra, memory) => {
     send({
       type: 'runFinished',
       taskId: request.taskId,
       result: makeRunResult(request, extra),
+      ...(memory ? { memory } : {}),
     });
   };
 
@@ -179,6 +181,11 @@ const handleRun = (request) => {
       _assetBytes: Array.from(content),
       _assetConstructor: content.constructor.name,
     });
+    return;
+  }
+
+  if (mode === 'memory-over-limit') {
+    finish({}, { heapUsed: 101 });
     return;
   }
 
