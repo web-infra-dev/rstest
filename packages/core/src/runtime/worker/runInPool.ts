@@ -28,6 +28,7 @@ import { clearFileContext } from '../fileContext';
 import { disposeRstestUtilities } from '../api/utilities';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
+import { takeFileCleanups } from '../runner/fileCleanup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
@@ -558,6 +559,15 @@ const preparePool = async (
     preparedPoolCleaned = true;
 
     const errors: unknown[] = [];
+    // File callbacks may still use timers and environment resources.
+    const fileCleanupResults = await Promise.allSettled(
+      takeFileCleanups().map(async (cleanup) => cleanup()),
+    );
+    for (const result of fileCleanupResults) {
+      if (result.status === 'rejected') {
+        errors.push(result.reason);
+      }
+    }
     if (isVmPool) {
       disposeRstestUtilities();
     }

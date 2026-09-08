@@ -2,7 +2,7 @@ import { resolveObjectURL } from 'node:buffer';
 import { appendFileSync } from 'node:fs';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { promisify } from 'node:util';
-import { afterAll, expect, rs } from '@rstest/core';
+import { afterAll, expect, registerFileCleanup, rs } from '@rstest/core';
 
 if (process.env.RSTEST_VM_PROMISIFIED_TIMERS_STARTED) {
   expect(process.env.RSTEST_VM_PROMISIFIED_TIMERS_CANCELLED).toBe('2');
@@ -62,6 +62,19 @@ if (previousObjectURL) {
 const objectURL = URL.createObjectURL(new Blob(['file-scoped']));
 expect(resolveObjectURL(objectURL)).toBeDefined();
 process.env.RSTEST_VM_PREVIOUS_OBJECT_URL = objectURL;
+
+if (process.env.RSTEST_VM_FILE_CLEANUP_FAIL === 'true') {
+  registerFileCleanup(() => {
+    throw new Error('VM_FILE_CLEANUP_FAILURE');
+  });
+}
+registerFileCleanup(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(resolveObjectURL(objectURL)).toBeDefined();
+  const marker = process.env.RSTEST_VM_FILE_CLEANUP_MARKER;
+  if (!marker) throw new Error('RSTEST_VM_FILE_CLEANUP_MARKER is required');
+  appendFileSync(marker, 'cleaned\n');
+});
 
 const setupGlobal = globalThis as typeof globalThis & {
   __RSTEST_VM_SETUP_COUNT__?: number;
