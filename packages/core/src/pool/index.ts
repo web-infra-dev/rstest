@@ -492,7 +492,10 @@ export const createPool = async ({
         context,
         project,
       );
-      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
+      assertWorkerEnvironmentOptions(
+        runtimeConfig.testEnvironment.options,
+        workerKind,
+      );
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -643,7 +646,10 @@ export const createPool = async ({
         context,
         project,
       );
-      assertWorkerEnvironmentOptions(runtimeConfig.testEnvironment.options);
+      assertWorkerEnvironmentOptions(
+        runtimeConfig.testEnvironment.options,
+        workerKind,
+      );
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);

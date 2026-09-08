@@ -90,6 +90,8 @@ VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、
 
 Node worker pool 会通过 IPC 的 structured-clone 边界传递 `testEnvironment.options`，因此这些配置必须支持 structured clone。包含函数的选项（例如 `beforeParse`、自定义 callback hook），以及内部包含函数的实例，会在 dispatch 前被拒绝。如果环境依赖 host 侧 callback，请改用可克隆配置，或把等价的初始化逻辑移到 setup file。这个限制适用于 `forks`、`threads`、`vmForks` 和 `vmThreads`。
 
+Bun 下的 `forks` 和 `vmForks` 使用 JSON IPC，因此环境选项还必须兼容 JSON。`Map`、`Set`、`Date`、class 实例和 `BigInt` 等值会因为 JSON IPC 改变数据形状或无法序列化而被拒绝。
+
 每个 VM worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text、解析结果和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析、加载和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用编译资源。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance、与 context 绑定的 script 和 setup 执行状态不会跨 VM Context 缓存。
 
 在内存压力较大或并发较高时，`vmForks` 的内存占用通常更容易控制。每个 fork worker 都能报告自己的 RSS，Rstest 可以使用 fork 专用的 `MemoryGate`，在可用内存紧张时延后创建新的 worker。`vmThreads` 的所有 worker thread 共享宿主进程的 RSS，直接套用同样的按 worker RSS gate 会把整个进程的内存误算到每个 worker，导致并行度明显下降。这不表示 `vmForks` 在所有场景都更省内存：子进程有额外的启动开销，而且两种 VM pool 的 `memoryLimit` 都只是 worker heap 的回收阈值。
@@ -140,7 +142,7 @@ CommonJS 路径和 export condition 的选择交给 Node 原生 `require.resolve
 - 测试里会调用 `process.chdir()`、修改 worker 级状态，或依赖按文件维度的进程隔离。
 - 项目使用 native addon（如 `better-sqlite3`、`sharp`、`canvas`）—— 未针对 worker thread 设计的 addon 在 `threads` 下可能让整个运行直接 abort（`SIGSEGV` / `SIGABRT`，且无法捕获）。
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
-- 需要每个测试文件都具备严格的进程级隔离。此时应使用 `forks`；`vmForks` 会复用子进程，只为每个文件创建新的 VM context。
+- 需要每个测试文件都具备严格的进程级隔离。此时应使用 `forks` 并设置 `isolate: true`；`forks` 在 `isolate: false` 时也会复用子进程，而 `vmForks` 始终会复用子进程，只为每个文件创建新的 VM context。
 
 ## 配置 worker 并行度和内存
 
