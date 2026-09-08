@@ -8,8 +8,7 @@ import type {
   TestExecutor,
 } from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
-import { color, logger } from '../../utils';
-import { exitAfterReporting } from '../../utils/signals';
+import { color } from '../../utils';
 
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../../types';
 
@@ -92,17 +91,10 @@ export interface BrowserHostModule {
   ) => Promise<BrowserTestRunResult | void>;
 }
 
-interface LoadBrowserModuleOptions {
-  /**
-   * List of project root directories to try resolving @rstest/browser from.
-   * This allows resolving from project-specific node_modules in monorepo setups.
-   */
-  projectRoots?: string[];
-  /**
-   * When true, a missing or version-mismatched `@rstest/browser` throws instead
-   * of calling `process.exit(1)`. See the `embedded` option on `createRstest`.
-   */
-  embedded?: boolean;
+function createLoadError(message: string): Error {
+  const error = new Error(message);
+  error.stack = '';
+  return error;
 }
 
 /**
@@ -115,19 +107,15 @@ interface LoadBrowserModuleOptions {
  * 3. Fall back to resolve from @rstest/core's location (for workspace setups)
  */
 export async function loadBrowserModule(
-  options: LoadBrowserModuleOptions = {},
+  browserProjects: InternalProjectContext[],
 ): Promise<BrowserHostModule> {
   const coreVersion = RSTEST_VERSION;
-  const { projectRoots = [], embedded = false } = options;
-
-  let browserModule: BrowserHostModule;
-  let browserVersion: string;
 
   // Build resolution bases list with project roots first
   const resolutionBases = [
     // Strategy 1: Resolve from each project root (for monorepo with per-project dependencies)
-    ...projectRoots.map(
-      (projectRoot) => pathToFileURL(`${projectRoot}/package.json`).href,
+    ...browserProjects.map(
+      (project) => pathToFileURL(`${project.rootPath}/package.json`).href,
     ),
     // Strategy 2: Resolve from user's cwd (for standalone projects)
     pathToFileURL(`${process.cwd()}/package.json`).href,
@@ -148,35 +136,20 @@ export async function loadBrowserModule(
 
       // The dynamic import namespace is unknown-shaped; the runtime contract is
       // guaranteed on the `@rstest/browser` side via `satisfies BrowserHostModule`.
-      browserModule = (await import(
+      const browserModule = (await import(
         pathToFileURL(browserPath).href
       )) as BrowserHostModule;
       const browserPkg = userRequire(browserPkgPath);
-      browserVersion = browserPkg.version;
+      const browserVersion: string = browserPkg.version;
 
       // Successfully resolved, validate version and return
       if (browserVersion !== coreVersion) {
-        if (embedded) {
-          throw new Error(
-            `Version mismatch between @rstest/core (${coreVersion}) and ` +
-              `@rstest/browser (${browserVersion}). Install matching versions: ` +
-              `npm install @rstest/browser@${coreVersion}`,
-          );
-        }
-        logger.error(
-          `\n${color.red('Error:')} Version mismatch between ${color.cyan('@rstest/core')} and ${color.cyan('@rstest/browser')}.\n`,
+        throw createLoadError(
+          `Version mismatch between ${color.cyan('@rstest/core')} and ${color.cyan('@rstest/browser')}: @rstest/core is ${color.yellow(coreVersion)}, @rstest/browser is ${color.yellow(browserVersion)}. Install matching versions: ${color.cyan(`npm install @rstest/browser@${coreVersion}`)}`,
         );
-        logger.error(
-          `  @rstest/core version:    ${color.yellow(coreVersion)}\n` +
-            `  @rstest/browser version: ${color.yellow(browserVersion)}\n`,
-        );
-        logger.error(
-          `Please ensure both packages have the same version:\n\n  ${color.cyan(`npm install @rstest/browser@${coreVersion}`)}\n`,
-        );
-        exitAfterReporting(1);
       }
 
-      return browserModule!;
+      return browserModule;
     } catch (error: unknown) {
       const err = error as NodeJS.ErrnoException;
       if (
@@ -190,32 +163,16 @@ export async function loadBrowserModule(
   }
 
   // All resolution strategies failed
-  if (embedded) {
-    throw new Error(
-      `Browser mode requires @rstest/browser to be installed: ` +
-        `npm install @rstest/browser@${coreVersion}`,
-    );
-  }
-  logger.error(
-    `\n${color.red('Error:')} Browser mode requires ${color.cyan('@rstest/browser')} to be installed.\n`,
+  throw createLoadError(
+    `Browser mode requires ${color.cyan('@rstest/browser')} to be installed: ${color.cyan(`npm install @rstest/browser@${coreVersion}`)}`,
   );
-  logger.error(
-    `Please install it with:\n\n  ${color.cyan(`npm install @rstest/browser@${coreVersion}`)}\n`,
-  );
-  logger.error(
-    `Or if using pnpm:\n\n  ${color.cyan(`pnpm add @rstest/browser@${coreVersion}`)}\n`,
-  );
-  exitAfterReporting(1);
 }
 
 export async function loadAndValidateBrowserModule(
   context: InternalContext,
   browserProjects: InternalProjectContext[],
 ): Promise<BrowserHostModule> {
-  const browserModule = await loadBrowserModule({
-    projectRoots: browserProjects.map((project) => project.rootPath),
-    embedded: context.embedded,
-  });
+  const browserModule = await loadBrowserModule(browserProjects);
   browserModule.validateBrowserConfig(context);
   return browserModule;
 }
@@ -231,10 +188,7 @@ export async function runBrowserDiscovery(
   browserProjects: InternalProjectContext[],
   options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
-  const browserModule = await loadBrowserModule({
-    projectRoots: browserProjects.map((project) => project.rootPath),
-    embedded: context.embedded,
-  });
+  const browserModule = await loadBrowserModule(browserProjects);
   const result = await browserModule.runBrowserTests(context, {
     ...options,
     projects: browserProjects,
@@ -270,11 +224,7 @@ export async function validateBrowserRunConfig(
   context: InternalContext,
   browserProjects: InternalProjectContext[],
 ): Promise<void> {
-  const { validateBrowserConfig } = await loadBrowserModule({
-    projectRoots: browserProjects.map((p) => p.rootPath),
-    embedded: context.embedded,
-  });
-  validateBrowserConfig(context);
+  await loadAndValidateBrowserModule(context, browserProjects);
 }
 
 /**
@@ -291,10 +241,7 @@ export async function loadBrowserExecutor(
 ): Promise<BrowserTestExecutor> {
   const { configAlreadyValidated = false, ...runOptions } = loadOptions ?? {};
   const { createBrowserExecutor } = configAlreadyValidated
-    ? await loadBrowserModule({
-        projectRoots: browserProjects.map((project) => project.rootPath),
-        embedded: context.embedded,
-      })
+    ? await loadBrowserModule(browserProjects)
     : await loadAndValidateBrowserModule(context, browserProjects);
   return createBrowserExecutor(context, {
     projects: browserProjects,

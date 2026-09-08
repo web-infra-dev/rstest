@@ -32,7 +32,6 @@ import {
   DEFAULT_BROWSER_TEST_TIMEOUT,
   ENV,
   getAbsolutePath,
-  logger,
   normalizeBuildCache,
   resolveBuildCacheDependencyPaths,
   TS_CONFIG_FILE,
@@ -45,19 +44,6 @@ import { TestStateManager } from './stateManager';
  */
 function formatEnvironmentName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
-}
-
-/**
- * Report a fatal configuration error. In embedded (programmatic) mode the
- * caller owns the process, so throw and let the instance API surface it;
- * otherwise log and exit the CLI process.
- */
-function failConfig(embedded: boolean, message: string): never {
-  if (embedded) {
-    throw new Error(message);
-  }
-  logger.error(message);
-  process.exit(1);
 }
 
 type OutputModuleConfig = {
@@ -190,7 +176,7 @@ export class Rstest implements InternalContext {
     );
 
     if (command === 'watch' && rstestConfig.shard) {
-      failConfig(embedded, 'Test sharding is not supported in watch mode.');
+      throw new Error('Test sharding is not supported in watch mode.');
     }
 
     const snapshotManager = new SnapshotManager({
@@ -308,20 +294,15 @@ export class Rstest implements InternalContext {
     // Like sharding above: blob reports feed the one-shot `merge-reports` CI
     // workflow, and recording across watch reruns has no coherent semantics
     // (a rerun replaces results the recorded events no longer match).
-    try {
-      if (
-        command === 'watch' &&
-        reporters.some((r) => r instanceof BlobReporter)
-      ) {
-        failConfig(
-          embedded,
-          'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
-        );
-      }
-    } catch (error) {
+    if (
+      command === 'watch' &&
+      reporters.some((r) => r instanceof BlobReporter)
+    ) {
       // Sync scope; sync onExit hooks run eagerly, async ones never reject.
       void exitReporters({ reporters });
-      throw error;
+      throw new Error(
+        'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
+      );
     }
 
     this.reporters = reporters;

@@ -21,11 +21,7 @@ import {
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
-import {
-  FATAL_SIGNALS,
-  getSignalExitCode,
-  hasReportedFatalExit,
-} from '../utils/signals';
+import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
@@ -255,7 +251,7 @@ export async function runTests(context: Rstest): Promise<void> {
     //
     // The run owns the shared globalSetup queue: every executor must close
     // before user teardown starts, including on the signal path. The exit
-    // handler is registered unconditionally so a mid-run unexpected exit
+    // handler is registered for non-embedded runs so a mid-run unexpected exit
     // prints and sets a failing code rather than ending quietly.
     let didCloseExecutors = false;
     const closeExecutors = async () => {
@@ -298,23 +294,6 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const unExpectedExit = (code?: number) => {
-      // A reported fatal exit is the one thing this net must stay out of. The
-      // browser loader exits this way on a missing or version-mismatched
-      // `@rstest/browser`, after printing the install command — and it exits
-      // from inside the `try` below, so the `finally` that would remove this
-      // handler never runs. Without the check the user gets an actionable error
-      // followed by a red "exited unexpectedly", plus a global teardown fired
-      // out of an exit handler.
-      //
-      // Unpinned, though not for want of a `process.exit` spy (`utils/signals`
-      // is pinned with one). What blocks a pin here is that this is a closure
-      // reachable only by emitting a real `'exit'` event — which would fire
-      // every other listener the worker has — and that `reportedFatalExit` is a
-      // sticky module-level flag with no reset, so setting it would leak into
-      // every later test in the file.
-      if (hasReportedFatalExit()) {
-        return;
-      }
       if (isTeardown) {
         logger.log(
           color.yellow(
@@ -430,7 +409,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const enableCliShortcuts = isCliShortcutsEnabled(context);
   // Constructed (not launched) below so its invalidation subscriber, the shared
   // teardown, and the stdin owner — all three closing over it — are in place
-  // before either side's first cycle. Loading it can exit on a version mismatch,
+  // before either side's first cycle. Loading it can fail on a version mismatch,
   // which is why that runs ahead of the node env-dependency validation
   // `ensureRunResources()` does further down; the ordering that matters is the
   // launch, and the launch is the first browser cycle, deferred until those node
