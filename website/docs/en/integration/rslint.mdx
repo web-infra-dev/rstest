@@ -14,7 +14,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## Dedicated test files
 
-If your tests use filenames such as `*.test.ts` or `*.spec.ts`, scope the preset to test and spec files with extensions that Rslint can lint:
+If your tests use filenames such as `*.test.ts` or `*.spec.ts`, scope the preset to test and spec files:
 
 ```ts title="rslint.config.ts"
 import { defineConfig, rstestPlugin } from '@rslint/core';
@@ -27,7 +27,7 @@ export default defineConfig([
 ]);
 ```
 
-This pattern covers the `.js`, `.jsx`, `.ts`, `.tsx`, `.cjs`, `.cts`, `.mjs`, and `.mts` extensions supported by Rslint. The recommended preset does not declare a `files` pattern, so adding one keeps Rstest-specific rules focused on test files and leaves production files to your other Rslint configuration items.
+This pattern covers JavaScript and TypeScript files with `.js`, `.jsx`, `.ts`, `.tsx`, `.cjs`, `.cts`, `.mjs`, and `.mts` extensions. The recommended preset does not declare a `files` pattern, so adding one keeps Rstest-specific rules focused on test files and leaves production files to your other Rslint configuration items.
 
 ## In-source tests
 

@@ -14,7 +14,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## 独立的测试文件
 
-如果测试文件使用 `*.test.ts` 或 `*.spec.ts` 这样的文件名，可以将 preset 限定到使用 Rslint 支持扩展名的 test 和 spec 文件：
+如果测试文件使用 `*.test.ts` 或 `*.spec.ts` 这样的文件名，可以将 preset 限定到 test 和 spec 文件：
 
 ```ts title="rslint.config.ts"
 import { defineConfig, rstestPlugin } from '@rslint/core';
@@ -27,7 +27,7 @@ export default defineConfig([
 ]);
 ```
 
-这个模式覆盖 Rslint 支持的 `.js`、`.jsx`、`.ts`、`.tsx`、`.cjs`、`.cts`、`.mjs` 和 `.mts` 扩展名。recommended preset 本身没有声明 `files` 匹配模式。加上这个模式后，Rstest 专用 rules 只会检查测试文件，生产代码仍然可以由其他 Rslint 配置项负责。
+这个模式覆盖 `.js`、`.jsx`、`.ts`、`.tsx`、`.cjs`、`.cts`、`.mjs` 和 `.mts` 文件。recommended preset 本身没有声明 `files` 匹配模式。加上这个模式后，Rstest 专用 rules 只会检查测试文件，生产代码仍然可以由其他 Rslint 配置项负责。
 
 ## In-source tests
 
