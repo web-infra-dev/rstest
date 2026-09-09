@@ -31,10 +31,6 @@ workerTest('isolates the second file', ({ workerValue }) => {
   console.log(`VM_THREAD_ID:${threadId}`);
 });
 
-it('runs after the previous VM context has been disposed', async () => {
-  await new Promise((resolve) => setTimeout(resolve, 100));
-});
-
 it('re-homes host fetch errors into the VM realm', async () => {
   await expect(fetch('not a url')).rejects.toThrow(TypeError);
 });

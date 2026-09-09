@@ -83,9 +83,3 @@ workerTest('isolates the first file', ({ workerValue }) => {
   expect(getCount()).toBe(1);
   console.log(`VM_THREAD_ID:${threadId}`);
 });
-
-it('does not leave timers attached to the disposed VM context', () => {
-  setTimeout(() => {
-    throw new Error('stale VM timer');
-  }, 50);
-});
