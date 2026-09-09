@@ -26,11 +26,6 @@
   },
   {
     "type": "dir-section-header",
-    "name": "integration",
-    "label": "Integration"
-  },
-  {
-    "type": "dir-section-header",
     "name": "migration",
     "label": "Migration"
   },

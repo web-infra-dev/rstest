@@ -76,10 +76,10 @@ export default defineConfig({
 });
 ```
 
-If your project reuses an Rsbuild config through [`@rstest/adapter-rsbuild`](/guide/integration/rsbuild), configure these plugins in `rsbuild.config.ts` instead of duplicating them in `rstest.config.ts`.
+If your project reuses an Rsbuild config through [`@rstest/adapter-rsbuild`](/integration/rsbuild), configure these plugins in `rsbuild.config.ts` instead of duplicating them in `rstest.config.ts`.
 
 :::warning
-If you use [`@rstest/adapter-rspack`](/guide/integration/rspack), the Rsbuild plugin and `output.cssModules` examples above do not apply. This adapter uses the CSS rules from `rspack.config.ts`, so configure Less, Sass, and CSS Modules there.
+If you use [`@rstest/adapter-rspack`](/integration/rspack), the Rsbuild plugin and `output.cssModules` examples above do not apply. This adapter uses the CSS rules from `rspack.config.ts`, so configure Less, Sass, and CSS Modules there.
 :::
 
 ### Browser mode

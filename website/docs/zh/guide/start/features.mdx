@@ -26,7 +26,7 @@ Rstest 基于 Rspack 的 bundling pipeline 运行测试，因此可以利用 Tre
 
 Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的 [Module Federation](https://module-federation.io/) remote。配合 [@module-federation/rstest](https://github.com/module-federation/core)，测试会实际覆盖 remote 加载和共享依赖，而不是使用 mock 替换 federation 边界。
 
-了解更多关于 [Module Federation 测试](/guide/integration/module-federation)。
+了解更多关于 [Module Federation 测试](/integration/module-federation)。
 
 ## 多项目测试
 
@@ -68,7 +68,7 @@ Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromi
 
 Rstest 可以通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 对完整页面或应用运行 E2E 测试。测试会在 Node.js worker 中运行，并使用 Playwright 驱动本地 dev server、preview server 或线上 URL，同时与其他测试共享 Rstest runner、配置和报告工作流。
 
-了解更多关于 [Playwright](/guide/integration/playwright)。
+了解更多关于 [Playwright](/integration/playwright)。
 
 ## 代码覆盖率
 

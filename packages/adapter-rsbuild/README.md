@@ -24,7 +24,7 @@ export default defineConfig({
 
 Automatically loads Rsbuild config from the current working directory and converts it to Rstest config.
 
-More advanced usage examples can be found in the [Rsbuild integration guide](https://rstest.rs/guide/integration/rsbuild).
+More advanced usage examples can be found in the [Rsbuild integration guide](https://rstest.rs/integration/rsbuild).
 
 ### `toRstestConfig`
 
