@@ -1,4 +1,7 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
+import type {
+  SourceMapInput as UpstreamSourceMapInput,
+  TraceMap,
+} from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
@@ -18,7 +21,11 @@ export type Duration = {
   testTime: number;
 };
 
-export type { SnapshotSummary, SourceMapInput };
+export type { SnapshotSummary };
+
+// Deliberately omit the nominal TraceMap class so declarations inlined by the
+// main and /api entries remain structurally assignable.
+export type SourceMapInput = Exclude<UpstreamSourceMapInput, TraceMap>;
 
 export type GetSourcemap = (
   sourcePath: string,
@@ -134,8 +141,7 @@ export type MdReporterOptions = {
    * @default { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }
    */
   console?:
-    | boolean
-    | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number };
+    boolean | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number };
 
   /**
    * Error section controls.
@@ -151,10 +157,22 @@ type GithubActionsReporterOptions = {
    */
   annotations?: boolean;
   /**
-   * Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`.
+   * Markdown summary controls.
+   * - `false`: do not append a summary to `GITHUB_STEP_SUMMARY`
+   * - `true`: append a summary with default limits
+   * - object form: append a summary with customized limits
    * @default true
    */
-  summary?: boolean;
+  summary?:
+    | boolean
+    | {
+        /**
+         * Maximum characters for each failure message and diff, and each
+         * unhandled error message and stack.
+         * @default 400
+         */
+        maxCharsPerField?: number;
+      };
 };
 
 export type BlobReporterOptions = {
@@ -190,6 +208,11 @@ export type ReporterWithOptions<
   : [Name, Record<string, unknown>];
 
 export interface Reporter {
+  /**
+   * Set to `false` when the reporter does not write to process stdout/stderr.
+   * @default true
+   */
+  flushOutputStreams?: boolean;
   /**
    * Called before test file run.
    */
@@ -252,7 +275,7 @@ export interface Reporter {
   onUserConsoleLog?: (log: UserConsoleLog) => void;
 
   /**
-   * Called when rstest exit abnormally
+   * Called when the reporter's owning context is released.
    */
-  onExit?: () => void;
+  onExit?: () => MaybePromise<void>;
 }

@@ -1,25 +1,90 @@
-import { createRequire as createNativeRequire } from 'node:module';
-import { isAbsolute } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { existsSync } from 'node:fs';
+import { createRequire as createNativeRequire, Module } from 'node:module';
+import type { ImportAttributes } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
+import type { AssetFiles } from '../../types/worker';
+import { getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
+import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
-  asModule,
-  clearSyntheticModuleCache,
-  createInteropProxy,
-  interopModule,
-  shouldInterop,
-} from './interop';
+  finalizeDynamicImport,
+  loadWasm,
+  resolveImportSpecifier,
+} from './resolveDynamicImport';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from './runtimeHooks';
+import { workerCache } from './vm/cache';
+import { getVmExternalModules } from './vm/externalModules';
+import { createVmTimersLoader } from './vm/timers';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const getAssetName = (
+  assetFiles: AssetFiles,
+  filePath: unknown,
+): string | undefined => {
+  if (typeof filePath === 'string') {
+    const name = path.normalize(filePath);
+    return assetFiles[name] === undefined ? undefined : name;
+  }
+  if (filePath instanceof URL && filePath.protocol === 'file:') {
+    const name = path.normalize(fileURLToPath(filePath));
+    return assetFiles[name] === undefined ? undefined : name;
+  }
+  return undefined;
+};
+
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: AssetFiles;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    // `origin` is the absolute path of the source module that produced the
+    // `require.resolve()` call, injected by rspack's `RstestPlugin` when
+    // `injectRequireResolveOrigin` is enabled. Falling back keeps native
+    // `require.resolve` semantics for un-rewritten calls.
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(joinedPath);
+
+    if (assetFiles[normalizedPath] !== undefined) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
 
 const createRequire = (
   filename: string,
   distPath: string,
   rstestContext: Record<string, any>,
-  assetFiles: Record<string, string>,
+  assetFiles: AssetFiles,
   interopDefault: boolean,
+  vmContext?: vm.Context,
+  cacheCompilation = false,
+  parentModule?: Module,
 ): NodeJS.Require => {
   const _require = (() => {
     try {
@@ -29,25 +94,39 @@ const createRequire = (
       return createNativeRequire(distPath);
     }
   })();
+  const loadTimersModule = vmContext
+    ? createVmTimersLoader(
+        vm.runInContext('globalThis', vmContext) as Record<
+          PropertyKey,
+          unknown
+        >,
+      )
+    : undefined;
 
   const require = ((id: string) => {
+    if (loadTimersModule && (id === 'timers' || id === 'node:timers')) {
+      return loadTimersModule(_require(id) as Record<PropertyKey, unknown>);
+    }
+
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(id)
       ? path.join(currentDirectory, id)
       : id;
 
-    const content = assetFiles[joinedPath];
+    const assetName = getAssetName(assetFiles, joinedPath);
 
-    if (content) {
+    if (assetName !== undefined) {
       try {
         return cacheableLoadModule({
-          codeContent: content,
+          codeContent: getAssetText(assetFiles, assetName),
           testPath: joinedPath,
           distPath: joinedPath,
           rstestContext,
           assetFiles,
           interopDefault,
+          vmContext,
+          cacheCompilation,
         });
       } catch (err) {
         logger.error(
@@ -56,10 +135,23 @@ const createRequire = (
         );
       }
     }
+    if (vmContext) {
+      return getVmExternalModules(vmContext).require(
+        id,
+        filename,
+        parentModule,
+      );
+    }
     const resolved = _require.resolve(id);
     return _require(resolved);
   }) as NodeJS.Require;
-  require.resolve = _require.resolve;
+  const requireResolve = defineRstestRequireResolve({
+    testPath: filename,
+    distPath,
+    assetFiles,
+  }) as NodeJS.RequireResolve;
+  requireResolve.paths = _require.resolve.paths.bind(_require.resolve);
+  require.resolve = requireResolve;
   require.main = _require.main;
   return require;
 };
@@ -69,119 +161,93 @@ const defineRstestDynamicImport =
     testPath,
     interopDefault,
     returnModule = false,
-    assetFiles,
+    vmContext,
   }: {
     returnModule?: boolean;
     testPath: string;
     interopDefault: boolean;
-    assetFiles: Record<string, string>;
+    vmContext?: vm.Context;
   }) =>
   async (
     specifier: string,
     importAttributes: ImportCallOptions,
     origin?: string,
   ) => {
-    // `origin` is the absolute path of the source module that produced the
-    // `import()` call, injected by rspack's `RstestPlugin` when
-    // `injectDynamicImportOrigin` is enabled. Falling back to `testPath`
-    // keeps the vm `importModuleDynamically` callback (which has no origin
-    // to pass) working as before.
-    const resolveBase = origin ?? testPath;
-    const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
-      : import.meta.resolve(specifier, pathToFileURL(resolveBase));
+    const modulePath = resolveImportSpecifier({ specifier, origin, testPath });
 
-    // Use `.href` rather than `.pathname` so Windows absolute specifiers
-    // round-trip through Node's ESM loader as valid `file:///D:/...` URLs
-    // instead of `/D:/...`, which Node re-resolves as `D:\D:\...`.
-    const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.href;
-
+    // `.wasm` always resolves to an on-disk source file (wasmLoader.mjs rewrites
+    // direct imports; `new URL(...)` resolves source-relative, #1455). rstest
+    // instantiates it itself so the pattern is flag-free on every Node version.
     if (modulePath.endsWith('.wasm')) {
       const normalizedPath = path.normalize(
         modulePath.startsWith('file://')
           ? fileURLToPath(modulePath)
           : modulePath,
       );
-      const content = assetFiles[normalizedPath];
 
-      if (content) {
-        const wasmBuffer = Buffer.from(content, 'base64');
-        const wasmModule = await WebAssembly.compile(wasmBuffer);
-        const wasmInstance = await WebAssembly.instantiate(wasmModule);
-        const exports = wasmInstance.exports as Record<string, any>;
-        return returnModule ? asModule(exports, modulePath, exports) : exports;
+      if (existsSync(normalizedPath)) {
+        return loadWasm(normalizedPath, returnModule, vmContext);
       }
     }
 
-    // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
-    // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-    if (importAttributes?.with?.rstest) {
-      delete importAttributes.with.rstest;
-    }
-
-    if (modulePath.endsWith('.json')) {
-      // const json = await import(jsonPath);
-      // should return { default: jsonExports, ...jsonExports }
-      const importedModule = await import(modulePath, {
-        with: { type: 'json' },
-      });
-
-      return returnModule
-        ? asModule(importedModule.default, modulePath, importedModule.default)
-        : {
-            ...importedModule.default,
-            default: importedModule.default,
-          };
-    }
-
-    const importedModule = await import(modulePath, importAttributes);
-
-    if (
-      shouldInterop({
-        interopDefault,
-        modulePath,
-        mod: importedModule,
-      })
-    ) {
-      const { mod, defaultExport } = interopModule(importedModule);
-
-      if (returnModule) {
-        return asModule(mod, modulePath, defaultExport);
-      }
-
-      return createInteropProxy(mod, defaultExport);
-    }
-    return importedModule;
+    return finalizeDynamicImport({
+      modulePath,
+      importAttributes,
+      interopDefault,
+      returnModule,
+      vmContext,
+    });
   };
 
-// setup and rstest module should not be cached
+// Persistent asset map for the kept runtime chunk under `isolate: false` (the
+// per-module hooks closed over this reference). Mirrors the ESM loader — see
+// `loadEsModule.ts` for the full rationale.
+const accumulatedAssetFiles: AssetFiles = {};
+
+// Every shared runtime chunk this (possibly reused) worker has loaded under
+// `isolate: false`. Mirrors the ESM loader — a reused worker can serve multiple
+// projects (the pool has no environment affinity), so keeping a single id would
+// let one project's teardown evict another's runtime chunk. Accumulate all and
+// reset only on a full clear; see `loadEsModule.ts` for the full rationale.
+const keptRuntimeChunks = new Set<string>();
+
+// Keep module instances per file; only setup compilation metadata is shared.
 export const loadModule = ({
   codeContent,
   distPath,
   testPath,
   rstestContext,
-  assetFiles,
+  assetFiles: assetFilesArg,
   interopDefault,
+  vmContext,
+  cacheCompilation = false,
 }: {
   interopDefault: boolean;
   codeContent: string;
   distPath: string;
   testPath: string;
   rstestContext: Record<string, any>;
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
+  vmContext?: vm.Context;
+  cacheCompilation?: boolean;
 }): any => {
+  // Fold this file's assets into the persistent map. Recursive loads (require /
+  // dynamic imports) re-pass that same map, so skip the no-op self-merge.
+  if (assetFilesArg !== accumulatedAssetFiles) {
+    Object.assign(accumulatedAssetFiles, assetFilesArg);
+  }
+  const assetFiles = accumulatedAssetFiles;
   const fileDir = path.dirname(testPath);
 
-  const localModule = {
+  const vmParentModule = vmContext ? new Module(testPath) : undefined;
+  const localModule = Object.assign(vmParentModule ?? { isPreloading: false }, {
     children: [],
     exports: {},
     filename: testPath,
     id: testPath,
-    isPreloading: false,
     loaded: false,
     path: fileDir,
-  };
+  });
 
   const context = {
     module: localModule,
@@ -192,27 +258,18 @@ export const loadModule = ({
       rstestContext,
       assetFiles,
       interopDefault,
+      vmContext,
+      cacheCompilation,
+      vmParentModule,
     ),
-    readWasmFile: (
-      wasmPath: string,
-      callback: (err: Error | null, data?: Buffer) => void,
-    ) => {
-      const joinedPath = isRelativePath(wasmPath)
-        ? path.join(path.dirname(distPath), wasmPath)
-        : wasmPath;
-      const content = assetFiles[path.normalize(joinedPath)];
-
-      if (content) {
-        callback(null, Buffer.from(content, 'base64'));
-      } else {
-        callback(
-          new Error(`WASM file ${joinedPath} not found in asset files.`),
-        );
-      }
-    },
-    __rstest_dynamic_import__: defineRstestDynamicImport({
+    [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
       interopDefault,
+      vmContext,
+    }),
+    [RSTEST_REQUIRE_RESOLVE_HOOK]: defineRstestRequireResolve({
+      testPath,
+      distPath,
       assetFiles,
     }),
     __dirname: fileDir,
@@ -220,29 +277,94 @@ export const loadModule = ({
     ...rstestContext,
   };
 
-  const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
-  const code = `${codeDefinition}${codeContent}\n}`;
+  if (vmParentModule) {
+    vmParentModule.require = context.require;
+  }
 
-  const fn = vm.runInThisContext(code, {
+  const code = `'use strict';return function(){\n${codeContent}\n}`;
+
+  const params = Object.keys(context);
+  const cached = cacheCompilation ? compilationCache.get(distPath) : undefined;
+  const cachedData =
+    cached?.code === code &&
+    cached.params.length === params.length &&
+    cached.params.every((param, index) => param === params[index])
+      ? cached.cachedData
+      : undefined;
+  const importModuleDynamically = (
+    specifier: string,
+    _referencer: unknown,
+    importAttributes: ImportAttributes,
+  ) => {
+    return defineRstestDynamicImport({
+      testPath,
+      interopDefault,
+      returnModule: true,
+      vmContext,
+    })(specifier, importAttributes as ImportCallOptions);
+  };
+  let fn = vm.compileFunction(code, params, {
     // Used in stack traces produced by this script.
     filename: distPath,
-    lineOffset: 0,
-    columnOffset: -codeDefinition.length,
-    importModuleDynamically: (specifier, _referencer, importAttributes) => {
-      return defineRstestDynamicImport({
-        testPath,
-        interopDefault,
-        returnModule: true,
-        assetFiles,
-      })(specifier, importAttributes as ImportCallOptions);
-    },
+    lineOffset: -1,
+    columnOffset: 0,
+    ...(vmContext ? { parsingContext: vmContext } : {}),
+    ...(cachedData
+      ? { cachedData }
+      : cacheCompilation
+        ? { produceCachedData: true }
+        : {}),
+    importModuleDynamically,
   });
-  fn(...Object.values(context));
+  if (cachedData && fn.cachedDataRejected) {
+    fn = vm.compileFunction(code, params, {
+      filename: distPath,
+      lineOffset: -1,
+      columnOffset: 0,
+      ...(vmContext ? { parsingContext: vmContext } : {}),
+      produceCachedData: true,
+      importModuleDynamically,
+    });
+  }
+  if (cacheCompilation && fn.cachedDataProduced && fn.cachedData) {
+    compilationCache.set(distPath, { code, params, cachedData: fn.cachedData });
+  }
+  fn(...Object.values(context)).call(localModule.exports);
+  localModule.loaded = true;
 
   return localModule.exports;
 };
 
 const moduleCache = new Map<string, any>();
+const vmModuleCaches = new WeakMap<vm.Context, Map<string, any>>();
+
+const getModuleCache = (vmContext?: vm.Context): Map<string, any> => {
+  if (!vmContext) {
+    return moduleCache;
+  }
+
+  let cache = vmModuleCaches.get(vmContext);
+  if (!cache) {
+    cache = new Map();
+    vmModuleCaches.set(vmContext, cache);
+  }
+  return cache;
+};
+
+// V8 cached data is safe to instantiate in multiple realms; module exports are
+// deliberately not stored here, so setup dependencies keep file isolation.
+type CommonJsCompilationCacheEntry = {
+  code: string;
+  params: string[];
+  cachedData: Buffer;
+};
+const compilationCache = workerCache.namespace<CommonJsCompilationCacheEntry>(
+  'commonjs-compilation',
+  ({ code, params, cachedData }) =>
+    Buffer.byteLength(code) +
+    params.reduce((size, param) => size + Buffer.byteLength(param), 0) +
+    cachedData.byteLength,
+);
 
 export const cacheableLoadModule = ({
   codeContent,
@@ -251,16 +373,21 @@ export const cacheableLoadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
+  vmContext,
+  cacheCompilation = false,
 }: {
   interopDefault: boolean;
   codeContent: string;
   distPath: string;
   testPath: string;
   rstestContext: Record<string, any>;
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
+  vmContext?: vm.Context;
+  cacheCompilation?: boolean;
 }): any => {
-  if (moduleCache.has(testPath)) {
-    return moduleCache.get(testPath);
+  const cache = getModuleCache(vmContext);
+  if (cache.has(testPath)) {
+    return cache.get(testPath);
   }
   const mod = loadModule({
     codeContent,
@@ -269,12 +396,43 @@ export const cacheableLoadModule = ({
     rstestContext,
     assetFiles,
     interopDefault,
+    vmContext,
+    cacheCompilation,
   });
-  moduleCache.set(testPath, mod);
+  cache.set(testPath, mod);
   return mod;
 };
 
-export const clearModuleCache = (): void => {
-  moduleCache.clear();
+/**
+ * Reset the per-worker module cache between test files.
+ *
+ * Mirrors the ESM loader: with `isolate: false` the shared runtime chunk owns
+ * the only `__webpack_module_cache__`, so keeping it (via `keep`) preserves the
+ * module-scope state of every already-evaluated non-entry module across files.
+ * A reused worker can serve more than one project, so every project's runtime
+ * chunk is accumulated and kept — see `keptRuntimeChunks`.
+ * See https://github.com/web-infra-dev/rstest/issues/1373.
+ */
+export const clearModuleCache = (keep?: string): void => {
+  if (keep) {
+    keptRuntimeChunks.add(keep);
+    for (const key of moduleCache.keys()) {
+      if (!keptRuntimeChunks.has(key)) {
+        moduleCache.delete(key);
+      }
+    }
+  } else {
+    moduleCache.clear();
+    keptRuntimeChunks.clear();
+    // Nothing is kept, so no hook holds a reference to the accumulated assets.
+    for (const key of Object.keys(accumulatedAssetFiles)) {
+      delete accumulatedAssetFiles[key];
+    }
+    clearCacheCleaners();
+  }
   clearSyntheticModuleCache();
+};
+
+export const clearCompilationCache = (): void => {
+  compilationCache.clear();
 };

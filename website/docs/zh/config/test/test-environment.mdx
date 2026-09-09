@@ -4,7 +4,7 @@ description: Rstest 默认使用 Node.js 作为测试环境。如果你在开发
 
 # testEnvironment
 
-- **类型：** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions }`
+- **类型：** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions, prebundle?: 'auto' | boolean }`
 - **默认值：** `'node'`
 - **CLI：** `--testEnvironment=node`
 
@@ -13,6 +13,7 @@ description: Rstest 默认使用 Node.js 作为测试环境。如果你在开发
 Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 `jsdom` 或 `happy-dom`。
 
 import { Tab, Tabs } from '@theme';
+import { ApiMeta } from '@components/ApiMeta';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -87,8 +88,73 @@ export default defineConfig({
 
 `options` 对象会直接传递给环境的构造函数。
 
+当使用 Node worker pool（`forks`、`threads`、`vmForks` 或 `vmThreads`）时，`options` 必须支持 structured clone，因为它们会传递到 worker。像 `beforeParse` 这样的函数选项不支持在这些 pool 中使用，并会在 dispatch 测试文件前被拒绝。
+
+Bun 下的 `forks` 和 `vmForks` 使用 JSON IPC，因此这些选项还必须兼容 JSON。`Map`、`Set`、`Date`、class 实例和 `BigInt` 等值会因为 JSON IPC 改变数据形状或无法序列化而被拒绝。
+
 - 对于 `jsdom`，它会传递给 `JSDOM` 构造函数。你可以在 [jsdom 文档](https://github.com/jsdom/jsdom#customizing-jsdom)中找到可用的选项。
 - 对于 `happy-dom`，它会传递给 `Window` 构造函数。你可以在 [happy-dom 文档](https://github.com/capricorn86/happy-dom/wiki/Window)中找到可用的选项。
+
+#### 环境预打包
+
+<ApiMeta addedVersion="0.11.6" />
+
+Rstest 可以在 worker 加载测试环境前对其进行预打包。当大量测试文件使用相同的 DOM 环境时，这可以减少重复的模块解析和初始化开销。从 0.12.0 开始，这项优化默认以 `auto` 模式开启。
+
+`prebundle` 支持以下值：
+
+- `'auto'`：预打包经过 Rstest 验证的内置 `jsdom` 和 `happy-dom` 版本。未知版本使用原生加载。
+- `true`：强制预打包选中的内置环境。
+- `false`：关闭预打包，原生加载环境。
+
+当前自动兼容矩阵覆盖 jsdom 15–26、29–30 和 happy-dom 20。其他大版本默认保留原生加载路径，除非显式设置 `prebundle: true`。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    prebundle: 'auto',
+  },
+});
+```
+
+如果 Rstest 无法构建、加载或验证预打包产物，会在设置测试环境前回退到环境的原生入口。环境包会优先从当前 project 的依赖树解析，再回退到 Rstest workspace 根目录，最后通过 `@rstest/core` 的原生依赖解析保持向后兼容。
+
+预打包只是一项性能优化，并不是 DOM 测试的必要条件。即使生成的 bundle 可以正常导入，打包第三方 Node.js 包仍可能改变其解析运行时资源、可执行辅助文件以及可选依赖或原生依赖的方式。例如，jsdom 27 和 28 在打包后可能以不同方式解析可选的 CSS 实现，导致 `getComputedStyle()` 在运行时失败。因此，`auto` 模式会对这些版本使用原生加载。使用 `prebundle: true` 时，Rstest 会探测这个已知路径，并在验证失败时回退到原生加载。该探测无法覆盖所有 API；如果环境在预打包后的行为与原生加载不同，请设置 `prebundle: false`。
+
+如果 jsdom 或 happy-dom 后续提供与 Node.js 兼容的官方 bundled entry，Rstest 可以优先使用该入口，而不再自行生成预打包产物。届时，这些环境可能不再需要启用 Rstest 的预打包。
+
+### 环境注释
+
+<ApiMeta addedVersion="0.10.5" />
+
+你可以在测试文件顶部附近添加环境注释，为单个测试文件覆盖测试环境：
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+
+test('DOM test', () => {
+  document.body.innerHTML = '<p>hello world</p>';
+  expect(document.querySelector('p')?.textContent).toBe('hello world');
+});
+```
+
+使用 `@rstest-environment-options` 可以为当前文件传递环境选项。选项必须是单行 JSON 对象：
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+// @rstest-environment-options { "url": "https://example.com/" }
+
+test('sets the jsdom url', () => {
+  expect(window.location.href).toBe('https://example.com/');
+});
+```
+
+Rstest 也识别 `@vitest-environment` 和 `@jest-environment` 别名，以及它们对应的 `-options` 变体，方便从 Vitest 或 Jest 迁移。
+
+环境注释支持 Node runner 内置环境：`node`、`jsdom` 和 `happy-dom`。它不会应用到 browser mode。如果大多数文件使用同一个环境，建议优先在 `rstest.config.ts` 中配置 `testEnvironment` 或拆分 `projects`。
 
 ### 示例
 

@@ -77,11 +77,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve as nodeResolve } from 'node:path';
-import {
-  originalPositionFor,
-  type SourceMapInput,
-  TraceMap,
-} from '@jridgewell/trace-mapping';
+import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { relative, resolve } from 'pathe';
 import { parse as parseStackTrace } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
@@ -93,6 +89,8 @@ import type {
   Reporter,
   RstestTestState,
   SnapshotSummary,
+  SourceMapInput,
+  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -100,6 +98,7 @@ import type {
 import {
   buildPackageManagerReproCommand,
   collectFailures,
+  deriveRunCounts,
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
@@ -107,6 +106,9 @@ import {
   getErrorType,
   pushFencedBlock,
   pushHeading,
+  reportedTestPaths,
+  reporterFileKey,
+  reporterFileKeyPath,
   stringifyJson,
 } from './utils';
 
@@ -648,9 +650,7 @@ const parseErrorStacktrace = async ({
         };
       }
 
-      const sourcemap = (await getSourcemap(
-        file,
-      )) as unknown as SourceMapInput | null;
+      const sourcemap: SourceMapInput | null = await getSourcemap(file);
       if (!sourcemap) {
         return {
           ...frame,
@@ -733,7 +733,7 @@ export class MdReporter implements Reporter {
   protected config: NormalizedConfig;
   private readonly fileFilters: string[];
   private readonly options: ResolvedOptions;
-  private readonly logsByTestPath = new Map<string, string[]>();
+  private logsByFile = new Map<string, string[]>();
 
   constructor({
     rootPath,
@@ -803,12 +803,18 @@ export class MdReporter implements Reporter {
     }
   }
 
+  // A watch rerun replays the whole file, so its previous logs are stale.
+  onTestFileStart(test: TestFileInfo): void {
+    this.logsByFile.delete(reporterFileKey(test.project, test.testPath));
+  }
+
   onUserConsoleLog(log: UserConsoleLog): void {
     if (!this.options.console.enabled) return;
 
-    const logs = this.logsByTestPath.get(log.testPath) || [];
+    const key = reporterFileKey(log.project, log.testPath);
+    const logs = this.logsByFile.get(key) || [];
     logs.push(formatConsoleLog(log, this.options));
-    this.logsByTestPath.set(log.testPath, logs);
+    this.logsByFile.set(key, logs);
   }
 
   private renderFrontMatter(lines: string[]): void {
@@ -888,7 +894,6 @@ export class MdReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     unhandledErrors,
-    filterRerunTestPaths,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
@@ -896,30 +901,32 @@ export class MdReporter implements Reporter {
     getSourcemap: GetSourcemap;
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
-    const failures = collectFailures({
-      results,
-      testResults,
-      filterRerunTestPaths,
-    });
+    // A watch session drops deleted files from the result snapshot; the buffered
+    // logs have no such signal of their own, so the reported file set prunes
+    // them and the buffer stays bounded across a long session.
+    if (this.logsByFile.size) {
+      const reportedPaths = reportedTestPaths(results);
+      for (const key of this.logsByFile.keys()) {
+        if (!reportedPaths.has(reporterFileKeyPath(key))) {
+          this.logsByFile.delete(key);
+        }
+      }
+    }
+    // Deliberately unfiltered by `filterRerunTestPaths`: the summary counts are
+    // derived from the whole session snapshot, so scoping failures to the
+    // current watch rerun would report the two sections at different scopes.
+    const failures = collectFailures({ results, testResults });
 
-    const packageManagerAgent = this.options.reproduction
-      ? await detectPackageManagerAgent(rootPath)
-      : 'npm';
-
-    const failedTests = testResults.filter(
-      (result) => result.status === 'fail',
-    );
-    const passedTests = testResults.filter(
-      (result) => result.status === 'pass',
-    );
-    const skippedTests = testResults.filter(
-      (result) => result.status === 'skip',
-    );
-    const todoTests = testResults.filter((result) => result.status === 'todo');
-    const failedFiles = results.filter((result) => result.status === 'fail');
+    const {
+      failedTests,
+      passedTests,
+      skippedTests,
+      todoTests,
+      failedFiles,
+      counts,
+    } = deriveRunCounts({ results, testResults });
     const status =
       failedTests.length || failedFiles.length || unhandledErrors?.length
         ? 'fail'
@@ -929,15 +936,7 @@ export class MdReporter implements Reporter {
 
     const summaryPayload: Record<string, unknown> = {
       status,
-      counts: {
-        testFiles: results.length,
-        failedFiles: failedFiles.length,
-        tests: testResults.length,
-        failedTests: failedTests.length,
-        passedTests: passedTests.length,
-        skippedTests: skippedTests.length,
-        todoTests: todoTests.length,
-      },
+      counts,
       durationMs: {
         total: duration.totalTime,
         build: duration.buildTime,
@@ -977,6 +976,9 @@ export class MdReporter implements Reporter {
         lines.push('Note: all tests passed. Lists omitted for brevity.');
       }
     } else {
+      const packageManagerAgent = this.options.reproduction
+        ? await detectPackageManagerAgent(rootPath)
+        : 'npm';
       const maxFailures = Math.max(0, this.options.failures.max);
       const shouldTruncate = failures.length > maxFailures;
       const displayedFailures = shouldTruncate
@@ -1188,7 +1190,9 @@ export class MdReporter implements Reporter {
 
         if (this.options.console.enabled) {
           const consoleLogs =
-            this.logsByTestPath.get(failure.test.testPath) || [];
+            this.logsByFile.get(
+              reporterFileKey(failure.test.project, failure.test.testPath),
+            ) || [];
           const limitedLogs = consoleLogs.slice(
             Math.max(
               0,

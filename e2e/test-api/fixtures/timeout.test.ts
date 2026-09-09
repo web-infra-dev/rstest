@@ -9,7 +9,7 @@ describe('level A', () => {
 
   it('it in level B', async ({ expect }) => {
     expect(1 + 1).toBe(2);
-    await sleep(5100);
+    await sleep(100);
     expect(1 + 1).toBe(2);
   });
 });

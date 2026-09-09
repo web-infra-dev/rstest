@@ -2,29 +2,31 @@
 description: 使用 Rstest mock 函数、对象方法、ESM 模块、CommonJS 模块，并区分 mock 状态和模块状态。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Mocking
 
 Mocking 用于在测试中替换依赖、控制返回值，并断言函数或模块的调用行为。Rstest 提供了多组 mock API，分别适用于函数、对象方法、ESM 模块、CommonJS 模块和对象树。
 
 ## Mock 模块
 
-如果依赖是通过模块系统加载的，可以根据模块类型和 mock 方式选择不同的 API。
+如果依赖是通过模块系统加载的，可以根据模块类型和 mock 方式选择不同的 API。模块 mock 在 Node 模式与[浏览器模式](/guide/browser-testing)下的行为一致。
 
 ### Mock ESM 模块
 
-如果依赖是通过 `import` 加载的，可以使用 [rstest.mock()](/api/runtime-api/rstest/mock-modules#rsmock) 或 [rstest.doMock()](/api/runtime-api/rstest/mock-modules#rsdomock)。
+如果依赖是通过 `import` 加载的，可以使用 [rs.mock()](/api/runtime-api/rstest/mock-modules#rsmock) 或 [rs.doMock()](/api/runtime-api/rstest/mock-modules#rsdomock)。
 
-#### 使用 `rstest.mock()`
+#### 使用 `rs.mock()`
 
-`rstest.mock()` 会被提升到文件顶部，适用于在被测模块执行前就替换依赖的场景。
+`rs.mock()` 会被提升到文件顶部，适用于在被测模块执行前就替换依赖的场景。
 
 ```ts title="user-service.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import { loadUserName } from './user-service';
 import { fetchUser } from './api';
 
-rstest.mock('./api', () => ({
-  fetchUser: rstest.fn().mockResolvedValue({ id: '1', name: 'Alice' }),
+rs.mock('./api', () => ({
+  fetchUser: rs.fn().mockResolvedValue({ id: '1', name: 'Alice' }),
 }));
 
 test('returns the fetched user name', async () => {
@@ -33,18 +35,18 @@ test('returns the fetched user name', async () => {
 });
 ```
 
-#### 使用 `rstest.doMock()`
+#### 使用 `rs.doMock()`
 
-需要注意的是，`rstest.doMock()` 不会被提升，只会在执行之后生效。它适用于前面的 `import` 保持真实实现，后面的再切换成 mock 的场景。
+需要注意的是，`rs.doMock()` 不会被提升，只会在执行之后生效。它适用于前面的 `import` 保持真实实现，后面的再切换成 mock 的场景。
 
 ```ts title="feature.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import { readFeatureFlag } from './feature';
 
 test('only mocks later imports', async () => {
   expect(readFeatureFlag()).toBe('real');
 
-  rstest.doMock('./feature', () => ({
+  rs.doMock('./feature', () => ({
     readFeatureFlag: () => 'mocked',
   }));
 
@@ -53,19 +55,41 @@ test('only mocks later imports', async () => {
 });
 ```
 
+### 与提升的 mock factory 共享值
+
+由于 `rs.mock()` 会被提升，它的 factory 无法读取模块按正常顺序执行时才初始化的变量。当 factory 和测试断言需要共享同一个 mock 函数或值时，可以使用 [rs.hoisted()](/api/runtime-api/rstest/mock-modules#rshoisted)。
+
+```ts title="api.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { fetchUser } from './api';
+
+const mocks = rs.hoisted(() => ({
+  fetchUser: rs.fn().mockResolvedValue({ id: '1', name: 'Alice' }),
+}));
+
+rs.mock('./api', () => ({ fetchUser: mocks.fetchUser }));
+
+test('shares the mock with the factory', async () => {
+  await fetchUser('1');
+  expect(mocks.fetchUser).toHaveBeenCalledWith('1');
+});
+```
+
 ### Mock CommonJS 模块
 
-如果依赖是通过 `require()` 加载的，可以使用 [rstest.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) 或 [rstest.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire)。
+如果依赖是通过 `require()` 加载的，可以使用 [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) 或 [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire)。
 
-#### 使用 `rstest.mockRequire()`
+这些 API 面向 CommonJS 互操作场景。它们在浏览器测试中同样可用，但编写浏览器测试时优先使用 ESM API（`rs.mock` / `rs.doMock`）。
 
-`rstest.mockRequire()` 会被提升到文件顶部，适用于 CommonJS 模块的文件级 mock 设置。
+#### 使用 `rs.mockRequire()`
+
+`rs.mockRequire()` 会被提升到文件顶部，适用于 CommonJS 模块的文件级 mock 设置。
 
 ```js title="math.test.cjs"
-const { expect, rstest, test } = require('@rstest/core');
+const { expect, rs, test } = require('@rstest/core');
 const { sum } = require('./math.cjs');
 
-rstest.mockRequire('./math.cjs', () => ({
+rs.mockRequire('./math.cjs', () => ({
   sum: (a, b) => a + b + 100,
 }));
 
@@ -74,56 +98,73 @@ test('mocks a CommonJS module loaded with require', () => {
 });
 ```
 
-#### 使用 `rstest.doMockRequire()`
+#### 使用 `rs.doMockRequire()`
 
-需要注意的是，`rstest.doMockRequire()` 不会被提升，只会影响后续的 `require()` 调用。
+需要注意的是，`rs.doMockRequire()` 不会被提升，只会影响后续的 `require()` 调用。
 
 需要注意的是，如果一个包同时提供 ESM 和 CJS 入口，这个区分尤其重要。mock ESM 入口并不会自动影响 CJS 入口，反过来也一样。
 
 ### 自动 mock 模块
 
-如果你希望先把模块中的函数导出替换成 mock 函数，再由测试补充少数导出的行为，可以使用 `{ mock: true }`。
+如果你希望先把模块中的函数导出替换成 mock 函数，再由测试补充少数导出的行为，可以只传模块路径调用 `rs.mock()`。Rstest 会先检查 `__mocks__` 中是否存在匹配的手写 mock；如果不存在，则回退为自动 mock 该模块。你也可以显式传入 `{ mock: true }`，直接请求自动 mock，并跳过手写 mock 查找。
 
 ```ts title="math.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import { add } from './math';
 
-rstest.mock('./math', { mock: true });
+rs.mock('./math');
 
 test('overrides one export', () => {
-  rstest.mocked(add).mockReturnValue(100);
+  rs.mocked(add).mockReturnValue(100);
   expect(add(1, 2)).toBe(100);
 });
 ```
+
+### 加载 mock 的模块
+
+`rs.mock()` 用于配置通过 import 加载时获得的模块。如果测试需要直接获得自动 mock 的模块对象，可以使用下面这些 API：
+
+- [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) 异步加载 ESM 模块并返回 Promise。对于通过 `import` 使用的模块，需要配合 `await` 使用。
+- [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) 同步加载 CommonJS 模块。它适用于通过 `require()` 使用的模块。
+
+这两个 API 都会将导出的函数和嵌套函数替换为 mock。原始值会保留，数组则会变为空数组。在 TypeScript 中，调用 `mockReturnValue` 等 mock 控制方法之前，需要先将返回的模块传给 `rs.mocked(module, true)`。选择 API 时应匹配代码实际使用的模块 entry，尤其是一个包分别提供 ESM 和 CommonJS entry 时。
 
 ### Spy 整个模块
 
 如果你希望保留真实实现，同时提供调用断言能力，可以使用 `{ spy: true }`。
 
 ```ts title="calculator.test.ts"
-import { expect, rstest, test } from '@rstest/core';
-import { add, calculate } from './calculator';
+import { expect, rs, test } from '@rstest/core';
+import { calculate } from './calculator';
 
-rstest.mock('./calculator', { spy: true });
+rs.mock('./calculator', { spy: true });
 
-test('tracks the internal call to add', () => {
+test('keeps the real implementation while tracking calls', () => {
   expect(calculate(1, 2)).toBe(3);
-  expect(add).toHaveBeenCalledWith(1, 2);
+  expect(calculate).toHaveBeenCalledWith(1, 2);
 });
 ```
 
+注意，spy 只能追踪通过 export 发起的调用 —— 同一模块内部函数之间的互相调用不会被追踪。
+
 ### 部分 mock 模块
 
-如果你要做部分 mock，让一个导出保留真实实现、另一个导出被替换，可以使用 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual)。
+当被 mock 的模块仍需要部分或全部真实导出时，应根据模块的加载方式选择对应的 API：
+
+- 当提升的同步 `rs.mock()` factory 需要真实导出时，为静态 ESM import 添加 `with { rstest: 'importActual' }`。
+- 使用 [rs.importActual()](/api/runtime-api/rstest/mock-modules#rsimportactual) 在测试中异步加载原始 ESM 模块。
+- 使用 [rs.requireActual()](/api/runtime-api/rstest/mock-modules#rsrequireactual) 同步加载原始 CommonJS 模块，也可以在同步 mock factory 中使用。
+
+静态 ESM 形式适合只替换一个导出，同时保留其余导出的场景：
 
 ```ts title="date-utils.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import * as actualDateUtils from './date-utils' with { rstest: 'importActual' };
 import { formatDate, parseDate } from './date-utils';
 
-rstest.mock('./date-utils', () => ({
+rs.mock('./date-utils', () => ({
   ...actualDateUtils,
-  formatDate: rstest.fn().mockReturnValue('2026-03-19'),
+  formatDate: rs.fn().mockReturnValue('2026-03-19'),
 }));
 
 test('keeps parseDate real', () => {
@@ -132,11 +173,11 @@ test('keeps parseDate real', () => {
 });
 ```
 
-需要注意的是，由于 factory 会被提升，factory 内不应该访问同文件中稍后才初始化的值。
+需要注意的是，由于 factory 会被提升，与 factory 共享的值必须来自静态 `importActual` import 或 [`rs.hoisted()`](#与提升的-mock-factory-共享值)。
 
 ### 复用 `__mocks__` 里的手写 mock
 
-如果多个测试会复用同一个 fake 实现，可以把它放进 `__mocks__` 目录，并在不传 factory 的情况下直接加载。
+如果多个测试会复用同一个 fake 实现，可以把它放进 `__mocks__` 目录，并在不传 factory 的情况下直接加载。手写 mock 的优先级高于自动 mock 回退。
 
 ```txt
 src/
@@ -148,32 +189,32 @@ tests/
 ```
 
 ```ts title="user-service.test.ts"
-import { rstest } from '@rstest/core';
+import { rs } from '@rstest/core';
 
-rstest.mock('../src/api');
+rs.mock('../src/api');
 ```
 
 ### 重置模块状态
 
 如果你希望后续的 `import` 或 `require()` 返回原始模块，可以使用下面这些 API：
 
-- [rstest.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rstest.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock)：停止 mock 通过 `import` 加载的模块。
-- [rstest.unmockRequire()](/api/runtime-api/rstest/mock-modules#rsunmockrequire) / [rstest.doUnmockRequire()](/api/runtime-api/rstest/mock-modules#rsdounmockrequire)：停止 mock 通过 `require()` 加载的模块。
-- [rstest.resetModules()](/api/runtime-api/rstest/mock-modules#rsresetmodules)：清空模块缓存，让下一次 import 或 require 重新执行模块。
+- [rs.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rs.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock)：停止 mock 通过 `import` 加载的模块。
+- [rs.unmockRequire()](/api/runtime-api/rstest/mock-modules#rsunmockrequire) / [rs.doUnmockRequire()](/api/runtime-api/rstest/mock-modules#rsdounmockrequire)：停止 mock 通过 `require()` 加载的模块。
+- [rs.resetModules()](/api/runtime-api/rstest/mock-modules#rsresetmodules)：清空模块缓存，让下一次 import 或 require 重新执行模块。
 
-需要注意的是，`rstest.resetModules()` 不会取消模块 mock。要取消模块 mock，需要根据模块的加载方式选择对应的 `unmock` API。
+需要注意的是，`rs.resetModules()` 不会取消模块 mock。要取消模块 mock，需要根据模块的加载方式选择对应的 `unmock` API。
 
 关于完整 API 和更多示例，可以参考 [Mock modules](/api/runtime-api/rstest/mock-modules)。
 
 ## Mock 函数
 
-如果依赖是以回调或注入实现的形式传入的，可以使用 [rstest.fn()](/api/runtime-api/rstest/mock-functions#rstestfn) 创建 mock 函数。
+如果依赖是以回调或注入实现的形式传入的，可以使用 [rs.fn()](/api/runtime-api/rstest/mock-functions#rsfn) 创建 mock 函数。
 
 ```ts title="user.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 
 test('passes the selected id to the callback', () => {
-  const onSelect = rstest.fn();
+  const onSelect = rs.fn();
 
   onSelect('user-1');
 
@@ -185,7 +226,7 @@ test('passes the selected id to the callback', () => {
 你也可以通过 mock 实例方法覆盖行为，例如为某一次调用返回不同的结果：
 
 ```ts
-const fetchUser = rstest.fn(async (id: string) => ({ id, role: 'guest' }));
+const fetchUser = rs.fn(async (id: string) => ({ id, role: 'guest' }));
 
 fetchUser.mockResolvedValueOnce({ id: '1', role: 'admin' });
 ```
@@ -194,15 +235,13 @@ fetchUser.mockResolvedValueOnce({ id: '1', role: 'admin' });
 
 ## Spy 现有方法
 
-如果你希望保留真实对象，同时跟踪调用或临时覆盖行为，可以使用 [rstest.spyOn()](/api/runtime-api/rstest/mock-functions#rstestspyon)。
+如果你希望保留真实对象，同时跟踪调用或临时覆盖行为，可以使用 [rs.spyOn()](/api/runtime-api/rstest/mock-functions#rsspyon)。
 
 ```ts title="logger.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 
 test('logs a warning when validation fails', () => {
-  const warn = rstest
-    .spyOn(console, 'warn')
-    .mockImplementation(() => undefined);
+  const warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
 
   console.warn('invalid payload');
 
@@ -211,17 +250,39 @@ test('logs a warning when validation fails', () => {
 });
 ```
 
+### `using` 语法
+
+<ApiMeta addedVersion="0.10.2" />
+
+Rstest 支持使用 `using` 语法在代码块退出时自动恢复 spy：
+
+```ts title="logger.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('logs a warning when validation fails', () => {
+  {
+    using warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    console.warn('invalid payload');
+
+    expect(warn).toHaveBeenCalledWith('invalid payload');
+  }
+
+  // console.warn 在这里已恢复
+});
+```
+
 这类写法常用于 `console`、`Date` 这类全局对象，以及测试里已经存在的共享对象。
 
 ## 深度 mock 对象
 
-如果依赖已经存在于内存中，并且你希望把嵌套方法转换成 mock，可以使用 [rstest.mockObject()](/api/runtime-api/rstest/mock-functions#rstestmockobject)。
+如果依赖已经存在于内存中，并且你希望把嵌套方法转换成 mock，可以使用 [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject)。
 
 ```ts title="service.test.ts"
-import { expect, rstest, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 
 test('mocks nested methods', async () => {
-  const service = rstest.mockObject({
+  const service = rs.mockObject({
     user: {
       fetch: async (id: string) => ({ id, name: 'real' }),
     },
@@ -242,6 +303,12 @@ test('mocks nested methods', async () => {
 
 关于完整 API 和更多示例，可以参考 [Mock functions](/api/runtime-api/rstest/mock-functions) 和 [MockInstance](/api/runtime-api/rstest/mock-instance)。
 
+## 标注与识别 mock 函数
+
+[rs.mocked()](/api/runtime-api/rstest/mock-functions#rsmocked) 在运行时返回同一个值，只用于告诉 TypeScript 将其视为 mock。自动 mock 的模块或对象仍保留原始静态类型时，可以使用它。
+
+[rs.isMockFunction()](/api/runtime-api/rstest/mock-functions#rsismockfunction) 会执行运行时检查。当测试逻辑需要判断一个函数当前是否为 mock 时，可以使用它；在 TypeScript 中，它也会将函数类型收窄为 `MockInstance`。
+
 ## 清理 mock 状态
 
 如果你要处理调用记录残留或 mock 实现残留，可以使用下面这些 API：
@@ -250,7 +317,7 @@ test('mocks nested methods', async () => {
 - [resetMocks](/config/test/reset-mocks)：清空调用记录并重置 mock 实现。
 - [restoreMocks](/config/test/restore-mocks)：恢复真实对象上被 spy 的描述符。
 
-如果你想手动调用，对应的 API 是 `rstest.clearAllMocks()`、`rstest.resetAllMocks()` 和 `rstest.restoreAllMocks()`。
+如果你想手动调用，对应的 API 是 `rs.clearAllMocks()`、`rs.resetAllMocks()` 和 `rs.restoreAllMocks()`。
 
 ## 延伸阅读
 

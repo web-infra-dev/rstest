@@ -1,4 +1,6 @@
-import { describe, it } from '@rstest/core';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from '@rstest/core';
+import { runRstestCli } from '../scripts';
 import { runCli } from './utils';
 
 const appFilters = 'test/App';
@@ -7,9 +9,87 @@ const jestDomFilters = 'test/jestDom';
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
 describe('jsdom', () => {
+  it('should run test correctly with environment comment', async () => {
+    const { expectExecSuccess } = await runCli(
+      'test/environmentComment',
+      undefined,
+      {
+        args: ['--config', 'rstest.environmentComment.config.mts'],
+      },
+    );
+    await expectExecSuccess();
+  });
+
+  it('should keep automatic JSX runtime with an environment comment', async () => {
+    const { expectExecSuccess } = await runCli(
+      ['test/environmentCommentNode', 'test/vitestEnvironmentReact'],
+      undefined,
+      {
+        args: ['--config', 'rstest.environmentComment.config.mts'],
+      },
+    );
+    await expectExecSuccess();
+  });
+
+  it('should list tests correctly with an environment comment', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--config',
+        'rstest.environmentComment.config.mts',
+        'test/environmentCommentNode',
+        'test/vitestEnvironmentReact',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fileURLToPath(new URL('./fixtures', import.meta.url)),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
   it('should run test correctly', async () => {
     const { expectExecSuccess } = await runCli(appFilters, 'jsdom');
     await expectExecSuccess();
+  });
+
+  it('should accept Node AbortSignal in DOM event listeners', async () => {
+    const { expectExecSuccess } = await runCli('test/abortSignal', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should prebundle by default and allow opting out', async ({
+    onTestFinished,
+  }) => {
+    const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
+    const run = (config?: string) =>
+      runRstestCli({
+        command: 'rstest',
+        args: ['run', ...(config ? ['--config', config] : [])],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd,
+            env: { DEBUG: 'rstest' },
+          },
+        },
+      });
+
+    const defaultConfig = await run();
+    await defaultConfig.expectExecSuccess();
+    expect(defaultConfig.cli.stdout).toContain(
+      'bundled test environment jsdom',
+    );
+
+    const native = await run('rstest.native.config.mts');
+    await native.expectExecSuccess();
+    expect(native.cli.stdout).not.toContain('bundled test environment jsdom');
+
+    const explicitAuto = await run('rstest.prebundle.config.mts');
+    await explicitAuto.expectExecSuccess();
+    expect(explicitAuto.cli.stdout).toContain('bundled test environment jsdom');
   });
 
   it('should run test correctly with custom externals', async () => {
@@ -30,6 +110,26 @@ describe('jsdom', () => {
     });
     await expectExecSuccess();
   });
+
+  it('should run web storage test correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/storage', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should create object URLs from jsdom Blob and File', async () => {
+    const { expectExecSuccess } = await runCli('test/objectUrl', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should expose object URLs to scripts in the jsdom realm', async () => {
+    const { expectExecSuccess } = await runCli('test/domScriptUrl', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should clean up pending timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'jsdom');
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {
@@ -40,6 +140,13 @@ describe('happy-dom', () => {
 
   it('should load node built-in modules correctly', async () => {
     const { expectExecSuccess } = await runCli('test/node', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should run Rsbuild tests under vmForks without process shims', async () => {
+    const { expectExecSuccess } = await runCli('test/node', 'happy-dom', {
+      args: ['--pool', 'vmForks', '--pool.memoryLimit', '256MB'],
+    });
     await expectExecSuccess();
   });
 
@@ -55,8 +162,23 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 
+  it('should run web storage test correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/storage', 'happy-dom');
+    await expectExecSuccess();
+  });
+
   it('should run TextEncoder correctly in happy-dom', async () => {
     const { expectExecSuccess } = await runCli('test/textEncoder', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should create object URLs from happy-dom Blob and File', async () => {
+    const { expectExecSuccess } = await runCli('test/objectUrl', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should clean up pending timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'happy-dom');
     await expectExecSuccess();
   });
 });

@@ -4,7 +4,7 @@ import { runRstestCli } from '../scripts';
 it('junit', async () => {
   const { cli, expectLog } = await runRstestCli({
     command: 'rstest',
-    args: ['run', 'junit', '--reporter', 'junit'],
+    args: ['run', 'junit', '--reporters', 'junit'],
     options: {
       nodeOptions: {
         cwd: __dirname,

@@ -32,6 +32,12 @@ const enhancedPathSerializer = {
     // `pathSerializer.serialize` returns a snapshot-ready string (including quotes).
     let serialized = pathSerializer.serialize(value);
 
+    // Keep snapshots stable when @rsbuild/core is linked from a local checkout.
+    serialized = serialized.replace(
+      /<HOME>\/(?:[^/]+\/)*rsbuild\/packages\/core(?=\/|")/g,
+      '<PNPM_INNER>/@rsbuild/core',
+    );
+
     // Normalize pnpm global store paths (macOS/Linux and Windows) into the same
     // placeholder used by existing snapshots.
     //

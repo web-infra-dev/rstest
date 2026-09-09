@@ -1,29 +1,51 @@
-import { createRuntimeAPI } from '../../src/runtime/runner/runtime';
-import type { RuntimeConfig, TestSuite } from '../../src/types';
+import {
+  type FileContext,
+  setFileContext,
+} from '../../src/runtime/fileContext';
+import { RunnerRuntime, runtimeAPI } from '../../src/runtime/runner/runtime';
+import type { RuntimeConfig, TestCase, TestSuite } from '../../src/types';
 import { generateFilePathHash } from '../../src/utils/helper';
 
+// Constructing a `RunnerRuntime` is a pure factory; production code publishes
+// the instance as the file context via `createRunner`. Publish it here so the
+// stable `runtimeAPI` forwarders resolve it.
+const createPublishedRuntimeAPI = (
+  options: ConstructorParameters<typeof RunnerRuntime>[0],
+) => {
+  const instance = new RunnerRuntime(options);
+  setFileContext({ runnerRuntime: instance } as FileContext);
+  return instance;
+};
+
 describe('RunnerRuntime', () => {
+  const createApi = (testTimeout = 5000) =>
+    createPublishedRuntimeAPI({
+      testPath: __filename,
+      runtimeConfig: { testTimeout } as RuntimeConfig,
+      project: 'rstest',
+    });
+
   it('should add test correctly', async () => {
-    const { api: runtime, instance } = createRuntimeAPI({
+    const instance = createPublishedRuntimeAPI({
       testPath: __filename,
       runtimeConfig: { testTimeout: 100 } as RuntimeConfig,
       project: 'rstest',
     });
 
-    runtime.describe('suite - 0', () => {
-      runtime.it('test - 0', () => {});
-      runtime.describe('test - 1', async () => {
+    runtimeAPI.describe('suite - 0', () => {
+      runtimeAPI.it('test - 0', () => {});
+      runtimeAPI.describe('test - 1', async () => {
         await new Promise<void>((resolve) => {
           setTimeout(() => {
             resolve();
           }, 100);
         });
-        runtime.it('test - 1 - 1', () => {});
+        runtimeAPI.it('test - 1 - 1', () => {});
       });
     });
 
-    runtime.describe('suite - 1', () => {});
-    runtime.it('test - 2', () => {});
+    runtimeAPI.describe('suite - 1', () => {});
+    runtimeAPI.it('test - 2', () => {});
 
     const tests = await instance.getTests();
 
@@ -64,27 +86,53 @@ describe('RunnerRuntime', () => {
     ).toEqual(['test - 1 - 1']);
   });
 
+  it('tracks concurrent suite scope for sequential children', async () => {
+    const instance = createApi();
+
+    runtimeAPI.describe.concurrent('concurrent suite', () => {
+      runtimeAPI.it.sequential('sequential child', () => {});
+      runtimeAPI.describe.sequential('sequential nested suite', () => {
+        runtimeAPI.it('nested child', () => {});
+      });
+    });
+
+    const [suite] = await instance.getTests();
+    const concurrentSuite = suite as TestSuite;
+    const [sequentialChild, nestedSuite] = concurrentSuite.tests;
+
+    if (!nestedSuite) {
+      throw new Error('expected the nested sequential suite to be collected');
+    }
+
+    expect((sequentialChild as TestCase).concurrent).toBeUndefined();
+    expect((sequentialChild as TestCase).inConcurrentScope).toBe(true);
+    expect(nestedSuite.inConcurrentScope).toBe(true);
+    expect(
+      ((nestedSuite as TestSuite).tests[0] as TestCase).inConcurrentScope,
+    ).toBe(true);
+  });
+
   it('should add test correctly when describe fn undefined', async () => {
-    const { api: runtime, instance } = createRuntimeAPI({
+    const instance = createPublishedRuntimeAPI({
       testPath: __filename,
       runtimeConfig: { testTimeout: 100 } as RuntimeConfig,
       project: 'rstest',
     });
 
-    runtime.describe('suite - 0');
+    runtimeAPI.describe('suite - 0');
 
-    runtime.describe('suite - 1', () => {
-      runtime.it('test - 0', () => {});
-      runtime.describe('test - 1', async () => {
+    runtimeAPI.describe('suite - 1', () => {
+      runtimeAPI.it('test - 0', () => {});
+      runtimeAPI.describe('test - 1', async () => {
         await new Promise<void>((resolve) => {
           setTimeout(() => {
             resolve();
           }, 100);
         });
-        runtime.it('test - 1 - 1', () => {});
+        runtimeAPI.it('test - 1 - 1', () => {});
       });
     });
-    runtime.it('test - 2', () => {});
+    runtimeAPI.it('test - 2', () => {});
 
     const tests = await instance.getTests();
 
@@ -106,5 +154,293 @@ describe('RunnerRuntime', () => {
         (test) => test.name,
       ),
     ).toEqual(['test - 1 - 1']);
+  });
+
+  describe('TestOptions second argument', () => {
+    it('treats a numeric third arg as timeout shorthand', async () => {
+      const instance = createApi();
+      runtimeAPI.it('case', () => {}, 250);
+
+      const [first] = await instance.getTests();
+      const testCase = first as TestCase;
+      expect(testCase.type).toBe('case');
+      expect(testCase.timeout).toBe(250);
+      expect(testCase.retry).toBeUndefined();
+      expect(testCase.repeats).toBeUndefined();
+    });
+
+    it('reads timeout/retry/repeats from a TestOptions object', async () => {
+      const instance = createApi();
+      runtimeAPI.it('case', { timeout: 250, retry: 2, repeats: 3 }, () => {});
+
+      const testCase = (await instance.getTests())[0] as TestCase;
+      expect(testCase.timeout).toBe(250);
+      expect(testCase.retry).toBe(2);
+      expect(testCase.repeats).toBe(3);
+    });
+
+    it('reads metadata from a TestOptions object', async () => {
+      const instance = createApi();
+      runtimeAPI.it('case', { meta: { custom: 'value', count: 42 } }, () => {});
+
+      const testCase = (await instance.getTests())[0] as TestCase;
+      expect(testCase.meta).toEqual({ custom: 'value', count: 42 });
+    });
+
+    it('rejects a non-numeric third argument for tests and suites', () => {
+      createApi();
+      const invalidOptions = { timeout: 250, retry: 2 } as never;
+      const expectedError =
+        'The third argument must be a number when the second argument is a function. Use (name, fn, timeout) or (name, options, fn).';
+      const declarations = [
+        () => runtimeAPI.it('case', () => {}, invalidOptions),
+        () => runtimeAPI.test('case', () => {}, invalidOptions),
+        () => runtimeAPI.it.each([1])('case %s', () => {}, invalidOptions),
+        () => runtimeAPI.it.for([1])('case %s', () => {}, invalidOptions),
+        () => runtimeAPI.describe('suite', () => {}, invalidOptions),
+        () =>
+          runtimeAPI.describe.each([1])('suite %s', () => {}, invalidOptions),
+        () =>
+          runtimeAPI.describe.for([1])('suite %s', () => {}, invalidOptions),
+      ];
+
+      for (const declare of declarations) {
+        expect(declare).toThrowError(expectedError);
+      }
+    });
+
+    it('falls back to config.testTimeout when timeout omitted', async () => {
+      const instance = createApi(123);
+      runtimeAPI.it('case', { retry: 1 }, () => {});
+
+      const testCase = (await instance.getTests())[0] as TestCase;
+      expect(testCase.timeout).toBe(123);
+      expect(testCase.retry).toBe(1);
+    });
+
+    it('propagates options through test.each', async () => {
+      const instance = createApi();
+      runtimeAPI.it.each([1, 2])(
+        'case %s',
+        { timeout: 50, retry: 1, meta: { source: 'each' } },
+        () => {},
+      );
+
+      const cases = (await instance.getTests()) as TestCase[];
+      expect(cases).toHaveLength(2);
+      for (const c of cases) {
+        expect(c.timeout).toBe(50);
+        expect(c.retry).toBe(1);
+        expect(c.meta).toEqual({ source: 'each' });
+      }
+    });
+
+    it('propagates options through test.for', async () => {
+      const instance = createApi();
+      runtimeAPI.it.for([1, 2])(
+        'case %s',
+        { timeout: 50, repeats: 2 },
+        () => {},
+      );
+
+      const cases = (await instance.getTests()) as TestCase[];
+      expect(cases).toHaveLength(2);
+      for (const c of cases) {
+        expect(c.timeout).toBe(50);
+        expect(c.repeats).toBe(2);
+      }
+    });
+
+    it('still accepts numeric shorthand on test.each / test.for', async () => {
+      const instance = createApi();
+      runtimeAPI.it.each([1])('a %s', () => {}, 99);
+      runtimeAPI.it.for([2])('b %s', () => {}, 88);
+
+      const [a, b] = (await instance.getTests()) as TestCase[];
+      expect(a!.timeout).toBe(99);
+      expect(b!.timeout).toBe(88);
+    });
+  });
+
+  describe('describe TestOptions second argument', () => {
+    const firstCase = async (instance: RunnerRuntime): Promise<TestCase> => {
+      const suite = (await instance.getTests())[0] as TestSuite;
+      return suite.tests[0] as TestCase;
+    };
+
+    it('propagates suite-level options to inner tests', async () => {
+      const instance = createApi(123);
+      runtimeAPI.describe(
+        'suite',
+        { timeout: 250, retry: 2, repeats: 3, meta: { suiteOnly: true } },
+        () => {
+          runtimeAPI.it('case', () => {});
+        },
+      );
+
+      const suite = (await instance.getTests())[0] as TestSuite;
+      expect(suite.meta).toEqual({ suiteOnly: true });
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(250);
+      expect(testCase.retry).toBe(2);
+      expect(testCase.repeats).toBe(3);
+      expect(testCase.meta).toEqual({ suiteOnly: true });
+    });
+
+    it('lets an inner test override the suite-level options and metadata', async () => {
+      const instance = createApi(123);
+      runtimeAPI.describe(
+        'suite',
+        { timeout: 250, retry: 2, meta: { shared: 'suite', suiteOnly: true } },
+        () => {
+          runtimeAPI.it(
+            'case',
+            { timeout: 999, retry: 5, meta: { shared: 'case', caseOnly: 1 } },
+            () => {},
+          );
+        },
+      );
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(999);
+      expect(testCase.retry).toBe(5);
+      expect(testCase.meta).toEqual({
+        shared: 'case',
+        suiteOnly: true,
+        caseOnly: 1,
+      });
+    });
+
+    it('falls back to config.testTimeout when neither suite nor test set timeout', async () => {
+      const instance = createApi(123);
+      runtimeAPI.describe('suite', { retry: 1 }, () => {
+        runtimeAPI.it('case', () => {});
+      });
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(123);
+      expect(testCase.retry).toBe(1);
+    });
+
+    it('inherits options and metadata through nested describe, nearest wins', async () => {
+      const instance = createApi();
+      runtimeAPI.describe(
+        'outer',
+        { timeout: 100, retry: 1, meta: { outer: true, shared: 'outer' } },
+        () => {
+          runtimeAPI.describe(
+            'inner',
+            { timeout: 200, meta: { inner: true, shared: 'inner' } },
+            () => {
+              runtimeAPI.it('case', () => {});
+            },
+          );
+        },
+      );
+
+      const outer = (await instance.getTests())[0] as TestSuite;
+      const inner = outer.tests[0] as TestSuite;
+      const testCase = inner.tests[0] as TestCase;
+      // nearest suite wins for timeout, retry inherited from the outer suite
+      expect(testCase.timeout).toBe(200);
+      expect(testCase.retry).toBe(1);
+      expect(inner.meta).toEqual({ outer: true, shared: 'inner', inner: true });
+      expect(testCase.meta).toEqual({
+        outer: true,
+        shared: 'inner',
+        inner: true,
+      });
+    });
+
+    it('does not share inherited metadata objects between siblings', async () => {
+      const instance = createApi();
+      runtimeAPI.describe('suite', { meta: { inherited: true } }, () => {
+        runtimeAPI.it('a', { meta: { name: 'a' } }, () => {});
+        runtimeAPI.it('b', { meta: { name: 'b' } }, () => {});
+      });
+
+      const suite = (await instance.getTests())[0] as TestSuite;
+      const [a, b] = suite.tests as TestCase[];
+      a!.meta!.runtime = 'changed';
+
+      expect(a!.meta).toEqual({
+        inherited: true,
+        name: 'a',
+        runtime: 'changed',
+      });
+      expect(b!.meta).toEqual({ inherited: true, name: 'b' });
+    });
+
+    it('does not share inherited nested metadata values between descendants', async () => {
+      const instance = createApi();
+      runtimeAPI.describe(
+        'suite',
+        { meta: { nested: { labels: ['suite'] } } },
+        () => {
+          runtimeAPI.it('a', () => {});
+          runtimeAPI.it('b', () => {});
+        },
+      );
+
+      const suite = (await instance.getTests())[0] as TestSuite;
+      const [a, b] = suite.tests as TestCase[];
+      const aNested = a!.meta!.nested as { labels: string[] };
+      const bNested = b!.meta!.nested as { labels: string[] };
+      const suiteNested = suite.meta!.nested as { labels: string[] };
+
+      aNested.labels.push('a');
+
+      expect(aNested).toEqual({ labels: ['suite', 'a'] });
+      expect(bNested).toEqual({ labels: ['suite'] });
+      expect(suiteNested).toEqual({ labels: ['suite'] });
+      expect(aNested).not.toBe(bNested);
+      expect(aNested.labels).not.toBe(bNested.labels);
+    });
+
+    it('inherits metadata through describe.each', async () => {
+      const instance = createApi();
+      runtimeAPI.describe.each([1, 2])(
+        'suite %s',
+        { timeout: 50, meta: { source: 'each' } },
+        () => {
+          runtimeAPI.it('case', () => {});
+        },
+      );
+
+      const suites = (await instance.getTests()) as TestSuite[];
+      expect(suites).toHaveLength(2);
+      for (const suite of suites) {
+        expect(suite.meta).toEqual({ source: 'each' });
+        expect((suite.tests[0] as TestCase).timeout).toBe(50);
+        expect((suite.tests[0] as TestCase).meta).toEqual({ source: 'each' });
+      }
+    });
+
+    it('accepts the numeric timeout shorthand as the third argument', async () => {
+      const instance = createApi();
+      runtimeAPI.describe(
+        'suite',
+        () => {
+          runtimeAPI.it('case', () => {});
+        },
+        321,
+      );
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(321);
+    });
+
+    it('propagates options through describe.each', async () => {
+      const instance = createApi();
+      runtimeAPI.describe.each([1, 2])('suite %s', { timeout: 50 }, () => {
+        runtimeAPI.it('case', () => {});
+      });
+
+      const suites = (await instance.getTests()) as TestSuite[];
+      expect(suites).toHaveLength(2);
+      for (const suite of suites) {
+        expect((suite.tests[0] as TestCase).timeout).toBe(50);
+      }
+    });
   });
 });

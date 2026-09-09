@@ -29,7 +29,7 @@ import { Prompt } from '@rspress/core/theme';
 node -v
 ```
 
-如果你的环境中尚未安装 Node.js，或是版本太低，可以通过 [nvm](https://github.com/nvm-sh/nvm) 或 [fnm](https:///github.com/Schniz/fnm) 安装。
+如果你的环境中尚未安装 Node.js，或是版本太低，可以通过 [nvm](https://github.com/nvm-sh/nvm) 或 [fnm](https://github.com/Schniz/fnm) 安装。
 
 下面是通过 nvm 安装的例子：
 
@@ -51,16 +51,16 @@ import { PackageManagerTabs } from '@theme';
 <Prompt
   title="设置 Rstest"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Set up Rstest in this project by following the instructions here:
+  prompt={`Set up Rstest, the JavaScript testing framework, in this project by following the instructions here:
 https://rstest.rs/guide/start/agent-install.md`}
 />
 
-如果要从已有的 Jest 或 Vitest 项目迁移，请使用这个 prompt：
+如果要从已有的 Jest、Vitest 或 Playwright Test 项目迁移，请使用这个 prompt。Playwright Test 项目会迁移到 `@rstest/playwright`：
 
 <Prompt
   title="迁移到 Rstest"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this project to Rstest by following the instructions here:
+  prompt={`Migrate this project to Rstest, the JavaScript testing framework. Detect whether it uses Jest, Vitest, or Playwright Test; for Playwright Test, migrate to @rstest/playwright. Follow the instructions here:
 https://rstest.rs/guide/start/agent-migrate.md`}
 />
 
@@ -110,3 +110,14 @@ test('should sayHi correctly', () => {
       Tests 1 passed
    Duration 140 ms (build 17 ms, tests 123 ms)
 ```
+
+## 下一步
+
+如果你想查看完整项目结构，可以参考以下常用示例：
+
+- [node](https://github.com/web-infra-dev/rstest/tree/main/examples/node)：Node.js 测试与覆盖率收集。
+- [react](https://github.com/web-infra-dev/rstest/tree/main/examples/react)：使用 happy-dom 的 React 组件、Hook 和 SSR 测试。
+- [vue](https://github.com/web-infra-dev/rstest/tree/main/examples/vue)：Vue 组件与 SSR 测试。
+- [browser-react](https://github.com/web-infra-dev/rstest/tree/main/examples/browser-react)：Browser Mode 下的 React 组件测试。
+
+更多示例请参考 [Rstest examples](https://github.com/web-infra-dev/rstest/tree/main/examples)。

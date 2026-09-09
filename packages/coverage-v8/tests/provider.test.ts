@@ -1,0 +1,2142 @@
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+import type { NormalizedCoverageOptions } from '@rstest/core';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { parse } from 'yuku-parser';
+import { CoverageProvider } from '../src/provider';
+import type { IstanbulFileCoverageData } from '../src/utils';
+import { convertV8CoverageWithAst } from '../src/v8AstConverter';
+
+const createOptions = (
+  overrides: Partial<NormalizedCoverageOptions> = {},
+): NormalizedCoverageOptions => ({
+  enabled: true,
+  exclude: [],
+  provider: 'v8',
+  reporters: [],
+  reportsDirectory: 'coverage',
+  clean: true,
+  reportOnFailure: false,
+  allowExternal: false,
+  ...overrides,
+});
+
+const createFileCoverage = (file: string) => ({
+  path: file,
+  statementMap: {
+    0: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
+  },
+  fnMap: {
+    0: {
+      name: 'fn',
+      decl: { start: { line: 1, column: 0 }, end: { line: 1, column: 2 } },
+      loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
+      line: 1,
+    },
+  },
+  branchMap: {
+    0: {
+      type: 'if',
+      loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
+      locations: [
+        { start: { line: 1, column: 0 }, end: { line: 1, column: 5 } },
+        { start: { line: 1, column: 5 }, end: { line: 1, column: 10 } },
+      ],
+      line: 1,
+    },
+  },
+  s: { 0: 1 },
+  f: { 0: 2 },
+  b: { 0: [3, 4] },
+  hash: 'same',
+});
+
+const createUnhashedFileCoverage = (file: string) => {
+  const coverage = createFileCoverage(file);
+  return {
+    ...coverage,
+    hash: undefined,
+  };
+};
+
+const trackNativeMerge = (
+  coverageMap: ReturnType<CoverageProvider['createCoverageMap']>,
+  file: string,
+) => {
+  const fileCoverage = coverageMap.fileCoverageFor(file);
+  const merge = fileCoverage.merge.bind(fileCoverage);
+  let mergeCalls = 0;
+
+  fileCoverage.merge = (coverage) => {
+    mergeCalls++;
+    merge(coverage);
+  };
+
+  return () => mergeCalls;
+};
+
+// `Omit`, not a plain intersection: the class declares these as private
+// members, and intersecting a private member with a public one collapses the
+// whole type to `never`.
+type ProviderInternals = Omit<
+  CoverageProvider,
+  | 'findInDict'
+  | 'convertWithAst'
+  | 'takeRawCoverage'
+  | 'shouldKeepOriginalSource'
+> & {
+  findInDict: (
+    dict: Record<string, string> | undefined,
+    filePath: string,
+  ) => string | undefined;
+  convertWithAst: (
+    filePath: string,
+    entry: {
+      url: string;
+      scriptId: string;
+      functions: {
+        functionName: string;
+        isBlockCoverage: boolean;
+        ranges: { startOffset: number; endOffset: number; count: number }[];
+      }[];
+    },
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+      outputModule?: boolean;
+    },
+    transformedSource?: { code: string },
+  ) => Promise<Record<string, FileCoverageData>>;
+  takeRawCoverage: () => Promise<unknown[]>;
+  shouldKeepOriginalSource: (filePath: string, root?: string) => boolean;
+};
+
+function getProviderInternals(provider: CoverageProvider): ProviderInternals {
+  // Access private helpers in tests to lock compatibility without exporting
+  // test-only APIs from the package.
+  return provider as unknown as ProviderInternals;
+}
+
+function parseModule(code: string) {
+  return parse(code, {
+    preserveParens: false,
+    sourceType: 'module',
+  });
+}
+
+describe('coverage-v8 provider', () => {
+  it('reads charset base64 inline source maps in the AST converter', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-map-charset');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const sourceMap = {
+      version: 3,
+      file: generatedFile,
+      sources: ['../src/original.ts'],
+      sourcesContent: ['const value = 1;'],
+      names: [],
+      mappings: 'AAAA',
+    };
+    const code = `const value = 1;\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${Buffer.from(
+      JSON.stringify(sourceMap),
+    ).toString('base64')}`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:inline-charset`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('reads non-base64 inline data source maps in the AST converter', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-map-data-url');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const sourceMap = {
+      version: 3,
+      file: generatedFile,
+      sources: ['../src/original.ts'],
+      sourcesContent: ['const value = 1;'],
+      names: [],
+      mappings: 'AAAA',
+    };
+    const code = `const value = 1;\n//# sourceMappingURL=data:application/json;charset=UTF-8,${encodeURIComponent(
+      JSON.stringify(sourceMap),
+    )}`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:inline-data-url`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('uses the final inline sourceMappingURL comment in the AST converter', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-final-inline-map');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const staleOriginalFile = join(root, 'src', 'stale.ts');
+    const finalOriginalFile = join(root, 'src', 'final.ts');
+    const createSourceMap = (source: string) => ({
+      version: 3,
+      file: generatedFile,
+      sources: [source],
+      sourcesContent: ['const value = 1;'],
+      names: [],
+      mappings: 'AAAA',
+    });
+    const staleMap = Buffer.from(
+      JSON.stringify(createSourceMap('../src/stale.ts')),
+    ).toString('base64');
+    const finalMap = Buffer.from(
+      JSON.stringify(createSourceMap('../src/final.ts')),
+    ).toString('base64');
+    const code = [
+      'const value = 1;',
+      `//# sourceMappingURL=data:application/json;base64,${staleMap}`,
+      `//# sourceMappingURL=data:application/json;base64,${finalMap}`,
+    ].join('\n');
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:final-inline-map`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([finalOriginalFile]);
+    expect(Object.keys(coverage)).not.toEqual([staleOriginalFile]);
+  });
+
+  it('uses value offsets for object property function coverage', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-property-function.js');
+    const code = 'const o = { a: function () {} };\no.a;';
+    const functionStart = code.indexOf('function');
+    const functionEnd = functionStart + 'function () {}'.length;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:property-function`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+          {
+            functionName: 'a',
+            isBlockCoverage: true,
+            ranges: [
+              { startOffset: functionStart, endOffset: functionEnd, count: 0 },
+            ],
+          },
+        ],
+      },
+    });
+
+    const fileCoverage = coverage[file]!;
+    expect(fileCoverage.fnMap[0]?.name).toBe('a');
+    expect(fileCoverage.f).toEqual({ 0: 0 });
+  });
+
+  it('uses Yuku UTF-16 spans with V8 offsets', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-unicode.js');
+    const code = 'const label = "😀";\nconst value = () => 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-unicode`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.fnMap[0]?.decl.start).toEqual({
+      line: 2,
+      column: 14,
+    });
+  });
+
+  it('converts Yuku ESTree destructuring defaults and logical branches', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-branches.js');
+    const code = 'const { value = 1 } = input;\nconst result = (a && b) || c;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-branches`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.type).toBe('default-arg');
+    expect(coverage[file]?.branchMap[1]?.type).toBe('binary-expr');
+    expect(coverage[file]?.branchMap[1]?.locations).toHaveLength(3);
+  });
+
+  it('preserves non-file source map URLs as coverage filenames', async () => {
+    const generatedFile = join(
+      tmpdir(),
+      'rstest-coverage-v8-webpack-source.js',
+    );
+    const sourceUrl = 'webpack://rstest/src/original.ts';
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:webpack-source`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: [sourceUrl],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([sourceUrl]);
+  });
+
+  it('remaps browser coverage URLs to absolute source map paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-browser-source-map');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${root}:browser-source-map`,
+      code,
+      coverage: {
+        url: 'http://localhost:3000/static/js/tests.js',
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: [originalFile],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('resolves external source map sources relative to the map file', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-nested-external-map');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:nested-external-map`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../../src/original.ts'],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+      sourceMapUrl: join(root, 'dist', 'maps', 'bundle.js.map'),
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('filters source map paths after resolving relative sources', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-relative-filter');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:relative-filter`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceFilter: (filePath) => filePath.startsWith(root),
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('does not remap unmapped wrapper statements to the next source', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-unmapped-wrapper');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = '(function(){})();\nconst value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:unmapped-wrapper`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: ['const value = 1;'],
+        names: [],
+        mappings: ';AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+    expect(coverage[originalFile]?.statementMap).toEqual({
+      0: {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: Number.POSITIVE_INFINITY },
+      },
+    });
+  });
+
+  it('preserves the else branch when ignoring the if branch', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-if-else.js');
+    const code = `const flag = true;
+/* istanbul ignore if */ if (flag) { foo(); } else { bar(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:ignore-if-else`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('does not add an implicit else branch when ignoring an absent else branch', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-implicit-else.js');
+    const code = `const flag = true;
+/* istanbul ignore else */ if (flag) { foo(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:ignore-implicit-else`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('uses Yuku comments for ignore hints', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-comments.js');
+    const code = `const marker = "/* v8 ignore if */";
+if (first) { foo(); } else { bar(); }
+const label = "😀";
+/** v8 ignore if */ if (second) { foo(); } else { bar(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-comments`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(2);
+    expect(coverage[file]?.branchMap[1]?.locations).toHaveLength(1);
+  });
+
+  it('gives implicit else branches numeric locations', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-implicit-else-location.js');
+    const code = 'if (flag) { foo(); }';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:implicit-else-location`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toEqual([
+      {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: 19 },
+      },
+      {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: 19 },
+      },
+    ]);
+  });
+
+  it('allocates branch indexes for large files without depending on branch map scans', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-many-branches.js');
+    const code = Array.from(
+      { length: 1500 },
+      (_, index) => `if (flag${index}) { foo(); } else { bar(); }`,
+    ).join('\n');
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:many-branches`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage[file]?.branchMap ?? {})).toHaveLength(1500);
+    expect(Object.keys(coverage[file]?.b ?? {})).toHaveLength(1500);
+    expect(coverage[file]?.b[1499]).toEqual([1, 1]);
+  });
+
+  it('honors ignore-next comments before ternary separators', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-ternary-next.js');
+    const code = "const os = flag ? 'OSX' /* v8 ignore next */ : 'Windows';";
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:ignore-ternary-next`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('honors ignore-file comments before reporting parser errors', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-file.js');
+    const code = '/* c8 ignore file */ const =;';
+
+    const coverage = await convertV8CoverageWithAst({
+      ast: () => parseModule(code),
+      cacheKey: `${file}:ignore-file`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage).toEqual({});
+  });
+
+  it('invalidates prepared AST coverage when an external source map changes', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-external-map-cache');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const firstOriginalFile = join(root, 'src', 'first.ts');
+    const secondOriginalFile = join(root, 'src', 'second.ts');
+    const code = 'const value = 1;\n//# sourceMappingURL=bundle.js.map';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const entry = {
+      url: pathToFileURL(generatedFile).href,
+      scriptId: '1',
+      functions: [
+        {
+          functionName: '',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+        },
+      ],
+    };
+
+    const createSourceMap = (source: string) =>
+      JSON.stringify({
+        version: 3,
+        file: generatedFile,
+        sources: [source],
+        sourcesContent: ['const value = 1;'],
+        names: [],
+        mappings: 'AAAA',
+      });
+
+    try {
+      mkdirSync(join(root, 'dist'), { recursive: true });
+      writeFileSync(generatedFile, code);
+      writeFileSync(
+        join(root, 'dist', 'bundle.js.map'),
+        createSourceMap('../src/first.ts'),
+      );
+
+      const firstCoverage = await providerInternals.convertWithAst(
+        generatedFile,
+        entry,
+      );
+
+      writeFileSync(
+        join(root, 'dist', 'bundle.js.map'),
+        createSourceMap('../src/second.ts'),
+      );
+
+      const secondCoverage = await providerInternals.convertWithAst(
+        generatedFile,
+        entry,
+      );
+
+      expect(Object.keys(firstCoverage)).toEqual([firstOriginalFile]);
+      expect(Object.keys(secondCoverage)).toEqual([secondOriginalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the final sourceMappingURL comment for external source maps', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-final-source-map-url');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const staleOriginalFile = join(root, 'src', 'stale.ts');
+    const finalOriginalFile = join(root, 'src', 'final.ts');
+    const code = [
+      'const value = 1;',
+      '//# sourceMappingURL=stale.js.map',
+      '//# sourceMappingURL=final.js.map',
+    ].join('\n');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const entry = {
+      url: pathToFileURL(generatedFile).href,
+      scriptId: '1',
+      functions: [
+        {
+          functionName: '',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+        },
+      ],
+    };
+
+    const createSourceMap = (source: string) =>
+      JSON.stringify({
+        version: 3,
+        file: generatedFile,
+        sources: [source],
+        sourcesContent: ['const value = 1;'],
+        names: [],
+        mappings: 'AAAA',
+      });
+
+    try {
+      mkdirSync(join(root, 'dist'), { recursive: true });
+      writeFileSync(generatedFile, code);
+      writeFileSync(
+        join(root, 'dist', 'stale.js.map'),
+        createSourceMap('../src/stale.ts'),
+      );
+      writeFileSync(
+        join(root, 'dist', 'final.js.map'),
+        createSourceMap('../src/final.ts'),
+      );
+
+      const coverage = await providerInternals.convertWithAst(
+        generatedFile,
+        entry,
+      );
+
+      expect(Object.keys(coverage)).toEqual([finalOriginalFile]);
+      expect(Object.keys(coverage)).not.toEqual([staleOriginalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps branch counts aligned when an arm has no source mapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-branch-range-alignment');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = `if (flag)
+{
+  foo();
+}
+else { bar(); }`;
+    const ast = parseModule(code);
+    const consequentStart = code.indexOf('{');
+    const consequentEnd = code.indexOf('}') + 1;
+    const alternateStart = code.lastIndexOf('{');
+    const alternateEnd = code.lastIndexOf('}') + 1;
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:branch-range-alignment`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [
+              { startOffset: 0, endOffset: code.length, count: 1 },
+              {
+                startOffset: consequentStart,
+                endOffset: consequentEnd,
+                count: 0,
+              },
+              {
+                startOffset: alternateStart,
+                endOffset: alternateEnd,
+                count: 1,
+              },
+            ],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: ['if (flag) { bar(); }'],
+        names: [],
+        mappings: [[[0, 0, 0, 0]], [], [], [], [[0, 0, 0, 1]]],
+      },
+    });
+
+    expect(coverage[originalFile]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[originalFile]?.b[0]).toEqual([1]);
+  });
+
+  it('treats V8 end offsets as exclusive for adjacent ranges', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-exclusive-end-offset.js');
+    const code = 'function f(){}g();';
+    const ast = parseModule(code);
+    const functionEnd = code.indexOf('g();');
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:exclusive-end-offset`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+          {
+            functionName: 'f',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: functionEnd, count: 0 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.s).toEqual({ 0: 1 });
+  });
+
+  it('accumulates duplicate statement hits from the same source mapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-duplicate-statement-hit');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'foo();\nbar();';
+    const ast = parseModule(code);
+    const secondStatementStart = code.indexOf('bar();');
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:duplicate-statement-hit`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [
+              { startOffset: 0, endOffset: code.length, count: 1 },
+              {
+                startOffset: secondStatementStart,
+                endOffset: code.length,
+                count: 0,
+              },
+            ],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: ['call();'],
+        names: [],
+        mappings: [[[0, 0, 0, 0]], [[0, 0, 0, 0]]],
+      },
+    });
+
+    expect(coverage[originalFile]?.statementMap).toEqual({
+      0: {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: Number.POSITIVE_INFINITY },
+      },
+    });
+    expect(coverage[originalFile]?.s).toEqual({ 0: 1 });
+  });
+
+  it('loads custom coverage reporters from relative config paths', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rstest-coverage-reporter-'));
+    const outputFile = join(root, 'custom-reporter-output.json');
+
+    try {
+      writeFileSync(
+        join(root, 'custom-coverage-reporter.mjs'),
+        `import fs from 'node:fs';
+
+export default class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  execute() {
+    fs.writeFileSync(this.options.outputFile, JSON.stringify({ ok: true }));
+  }
+}
+`,
+      );
+
+      const provider = new CoverageProvider(
+        createOptions({
+          reporters: [['./custom-coverage-reporter.mjs', { outputFile }]],
+          reportsDirectory: join(root, 'coverage'),
+        }),
+        root,
+      );
+
+      await provider.generateReports(provider.createCoverageMap());
+
+      expect(existsSync(outputFile)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fast merges duplicate converted coverage shapes', () => {
+    const file = '/project/src/index.ts';
+    const provider = new CoverageProvider(createOptions());
+    const coverageMap = provider.createCoverageMap();
+
+    coverageMap.merge({
+      [file]: createFileCoverage(file),
+    });
+    coverageMap.merge({
+      [file]: {
+        ...createFileCoverage(file),
+        s: { 0: 5 },
+        f: { 0: 7 },
+        b: { 0: [11, 13] },
+      },
+    });
+
+    expect(coverageMap.fileCoverageFor(file).toJSON()).toMatchObject({
+      s: { 0: 6 },
+      f: { 0: 9 },
+      b: { 0: [14, 17] },
+    });
+  });
+
+  it('falls back when converted coverage metadata differs', () => {
+    const file = '/project/src/index.ts';
+    const provider = new CoverageProvider(createOptions());
+    const coverageMap = provider.createCoverageMap();
+
+    coverageMap.merge({
+      [file]: createUnhashedFileCoverage(file),
+    });
+    const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
+
+    coverageMap.merge({
+      [file]: {
+        ...createUnhashedFileCoverage(file),
+        fnMap: {
+          0: {
+            ...createFileCoverage(file).fnMap[0],
+            name: 'renamed',
+          },
+        },
+        branchMap: {
+          0: {
+            ...createFileCoverage(file).branchMap[0],
+            loc: {
+              start: { line: 1, column: 0 },
+              end: { line: 1, column: 11 },
+            },
+            line: 2,
+          },
+        },
+        s: { 0: 5 },
+        f: { 0: 7 },
+        b: { 0: [11, 13] },
+      },
+    });
+
+    expect(getNativeMergeCalls()).toBe(1);
+    expect(coverageMap.fileCoverageFor(file).toJSON()).toMatchObject({
+      s: { 0: 6 },
+      f: { 0: 9 },
+      b: { 0: [14, 17] },
+      fnMap: {
+        0: {
+          name: 'fn',
+        },
+      },
+      branchMap: {
+        0: {
+          line: 1,
+        },
+      },
+    });
+  });
+
+  it('falls back when converted branch truthiness shape differs', () => {
+    const file = '/project/src/index.ts';
+    const provider = new CoverageProvider(createOptions());
+    const coverageMap = provider.createCoverageMap();
+
+    coverageMap.merge({
+      [file]: createUnhashedFileCoverage(file),
+    });
+    const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
+
+    const incoming: IstanbulFileCoverageData = {
+      ...createUnhashedFileCoverage(file),
+      bT: { 0: [17, 19] },
+      s: { 0: 5 },
+      f: { 0: 7 },
+      b: { 0: [11, 13] },
+    };
+    coverageMap.merge({ [file]: incoming });
+
+    expect(getNativeMergeCalls()).toBe(1);
+    const fileCoverage = coverageMap.fileCoverageFor(file).toJSON();
+    expect(fileCoverage).not.toHaveProperty('bT');
+    expect(fileCoverage).toMatchObject({
+      s: { 0: 6 },
+      f: { 0: 9 },
+      b: { 0: [14, 17] },
+    });
+  });
+
+  it('finds dictionary entries through normalized path variants', () => {
+    const provider = getProviderInternals(
+      new CoverageProvider(createOptions()),
+    );
+    const dict = {
+      'src\\index.ts': 'slash-normalized',
+      '/Project/src/Case.ts': 'case-insensitive',
+      '/tmp/project/src/private.ts': 'private-prefix',
+    };
+
+    expect(provider.findInDict(dict, 'src/index.ts')).toBe('slash-normalized');
+    expect(provider.findInDict(dict, '/project/src/case.ts')).toBe(
+      'case-insensitive',
+    );
+    expect(
+      provider.findInDict(dict, '/private/tmp/project/src/private.ts'),
+    ).toBe('private-prefix');
+  });
+
+  it.each([
+    {
+      root: '/project',
+      excludedPath: '/project/.rstest-virtual/setup.mjs',
+      sourcePath: '/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
+    {
+      root: '/project',
+      excludedPath: '/Project/.rstest-virtual/Setup.mjs',
+      sourcePath: '/project/.rstest-virtual/setup.mjs',
+      matches: false,
+    },
+    {
+      root: 'C:/project',
+      excludedPath: 'C:/project/.rstest-virtual/setup.mjs',
+      sourcePath: 'c:/PROJECT/.rstest-virtual/SETUP.mjs',
+      matches: true,
+    },
+    {
+      root: 'C:/project',
+      excludedPath: 'C:\\Project\\.rstest-virtual\\Setup.mjs',
+      sourcePath: 'c:/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
+    {
+      root: '//server/share/project',
+      excludedPath: '//SERVER/SHARE/Project/.rstest-virtual/Setup.mjs',
+      sourcePath: '//server/share/project/.rstest-virtual/setup.mjs',
+      matches: true,
+    },
+  ])(
+    'matches a late absolute exclusion for $sourcePath',
+    ({ root, excludedPath, sourcePath, matches = true }) => {
+      const options = createOptions();
+      const provider = getProviderInternals(
+        new CoverageProvider(options, root),
+      );
+
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(true);
+      options.exclude = [excludedPath];
+
+      expect(provider.shouldKeepOriginalSource(sourcePath, root)).toBe(
+        !matches,
+      );
+      expect(
+        provider.shouldKeepOriginalSource(`${sourcePath}.other`, root),
+      ).toBe(true);
+    },
+  );
+
+  it('skips excluded no-sourcemap files before reading or converting them', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-early-filter');
+    const file = join(root, 'excluded.js');
+    const provider = new CoverageProvider(
+      createOptions({
+        exclude: ['excluded.js'],
+      }),
+      root,
+    );
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    let hasError = false;
+
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {
+        post: async (method: string) => {
+          if (method === 'Profiler.takePreciseCoverage') {
+            return {
+              result: [
+                {
+                  url: pathToFileURL(file).href,
+                  scriptId: '1',
+                  functions: [],
+                },
+              ],
+            };
+          }
+
+          return {};
+        },
+      },
+    });
+
+    console.error = () => {
+      hasError = true;
+    };
+
+    try {
+      mkdirSync(root, { recursive: true });
+      rmSync(file, { force: true });
+
+      const coverageMap = await provider.collect({
+        sourceMaps: {},
+      });
+
+      expect(coverageMap?.files()).toEqual([]);
+      expect(hasError).toBe(false);
+      expect(process.exitCode).toBe(originalExitCode);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('filters raw coverage entries before source lookup and conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-filter');
+    const includedFile = join(root, 'src', 'included.js');
+    const nodeModuleFile = join(root, 'node_modules', 'dep', 'index.js');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const fileCoverage = {
+      path: includedFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+    } satisfies FileCoverageData;
+    const convertedFiles: string[] = [];
+
+    Object.defineProperty(providerInternals, 'takeRawCoverage', {
+      configurable: true,
+      value: async () => [
+        {
+          url: pathToFileURL(nodeModuleFile).href,
+          filePath: nodeModuleFile,
+          scriptId: '1',
+          functions: [],
+        },
+        {
+          url: pathToFileURL(includedFile).href,
+          filePath: includedFile,
+          scriptId: '2',
+          functions: [],
+        },
+      ],
+    });
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {},
+    });
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        convertedFiles.push(filePath);
+        return { [includedFile]: fileCoverage };
+      },
+    });
+
+    try {
+      const coverageMap = await provider.collect({
+        assetFiles: {
+          [includedFile]: 'value();',
+          [nodeModuleFile]: 'dep();',
+        },
+        sourceMaps: {},
+      });
+
+      expect(convertedFiles).toEqual([includedFile]);
+      expect(coverageMap?.files()).toEqual([includedFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('omits compiled assets from raw coverage payload options', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-null-sourcemap');
+    const file = join(root, 'dist', 'covered.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+
+    Object.defineProperty(providerInternals, 'takeRawCoverage', {
+      configurable: true,
+      value: async () => [
+        {
+          url: pathToFileURL(file).href,
+          filePath: file,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      ],
+    });
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {},
+    });
+
+    const options = {
+      assetFiles: { [file]: code },
+      sourceMaps: { [file]: null },
+      outputModule: true,
+      // Rsbuild resource collection can return null for assets without maps;
+      // this locks the runtime boundary even though the public type is stricter.
+    } as unknown as Parameters<CoverageProvider['collectRaw']>[0];
+
+    const payload = await provider.collectRaw(options);
+
+    expect(payload?.options?.assetFiles).toBeUndefined();
+    expect(payload?.options?.sourceMaps).toBeUndefined();
+    expect(payload?.options?.outputModule).toBe(true);
+  });
+
+  it('collects raw v8 coverage before converting to Istanbul coverage', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-merge');
+    const file = join(root, 'src', 'covered.js');
+    const code = 'function covered() { return 1; }\ncovered();';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const convertedCounts: number[] = [];
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (
+        _filePath: string,
+        entry: { functions: { ranges: { count: number }[] }[] },
+      ) => {
+        const count = entry.functions[0]!.ranges[0]!.count;
+        convertedCounts.push(count);
+        return {
+          [file]: {
+            ...createFileCoverage(file),
+            s: { 0: count },
+            f: { 0: count },
+            b: { 0: [count, count] },
+          },
+        };
+      },
+    });
+
+    try {
+      const createEntry = (count: number) => ({
+        url: pathToFileURL(file).href,
+        filePath: file,
+        scriptId: String(count),
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count }],
+          },
+        ],
+      });
+
+      const loadedAssetFilenames: string[][] = [];
+      const loadedSourceMapFilenames: string[][] = [];
+      const loadAssetFiles = async (filenames: string[]) => {
+        loadedAssetFilenames.push(filenames);
+        return { [file]: code };
+      };
+      const loadSourceMaps = async (filenames: string[]) => {
+        loadedSourceMapFilenames.push(filenames);
+        return {};
+      };
+      const payloads = [
+        {
+          entries: [createEntry(1)],
+          options: { outputModule: true },
+        },
+        {
+          entries: [createEntry(2)],
+          options: { outputModule: true },
+        },
+      ];
+      const coverageMap = await provider.resolveRawCoverage(payloads, {
+        loadAssetFiles,
+        loadSourceMaps,
+      });
+
+      expect(loadedSourceMapFilenames).toEqual([[file]]);
+      expect(loadedAssetFilenames).toEqual([[file]]);
+      expect(payloads.map((payload) => payload.entries)).toEqual([[], []]);
+      expect(convertedCounts).toEqual([3]);
+      expect(
+        coverageMap?.fileCoverageFor(file).toSummary().statements.pct,
+      ).toBe(100);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('filters external original sources from browser raw coverage', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-browser-external-source');
+    const generatedFile = 'https://cdn.example.com/bundle.js';
+    const localSource = join(root, 'src', 'local.ts');
+    const externalSource = 'https://cdn.example.com/src/external.ts';
+    const runtimeSource =
+      'webpack://app/webpack/runtime/define_property_getters';
+    const dataSource = 'data:text/javascript,export default true';
+    const resolvedRstestRuntimeSource = join(
+      root,
+      'static',
+      'js',
+      'rstest runtime',
+    );
+    const resolvedDataSource = join(
+      root,
+      'data:text',
+      'data:text/javascript,export default true',
+    );
+    const resolvedBlobSource = join(
+      root,
+      'blob:http',
+      'blob:http/localhost/script-id',
+    );
+    const code = [
+      'const local = 1;',
+      'const external = 2;',
+      'const runtime = 3;',
+      'const data = 4;',
+      'const resolvedRstestRuntime = 5;',
+      'const resolvedData = 6;',
+      'const resolvedBlob = 7;',
+    ].join('\n');
+    const createPayload = () => ({
+      entries: [
+        {
+          url: generatedFile,
+          filePath: generatedFile,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      ],
+      options: {
+        assetFiles: { [generatedFile]: code },
+        sourceMaps: {
+          [generatedFile]: JSON.stringify({
+            version: 3,
+            names: [],
+            sources: [
+              localSource,
+              externalSource,
+              runtimeSource,
+              dataSource,
+              resolvedRstestRuntimeSource,
+              resolvedDataSource,
+              resolvedBlobSource,
+            ],
+            sourcesContent: [
+              'const local = 1;',
+              'const external = 2;',
+              'const runtime = 3;',
+              'const data = 4;',
+              'const resolvedRstestRuntime = 5;',
+              'const resolvedData = 6;',
+              'const resolvedBlob = 7;',
+            ],
+            // cspell:disable-next-line
+            mappings: 'AAAA;ACAA;ACAA;ACAA;ACAA;ACAA;ACAA',
+          }),
+        },
+      },
+      root,
+    });
+
+    const provider = new CoverageProvider(createOptions(), root);
+    const coverageMap = await provider.resolveRawCoverage([createPayload()]);
+
+    expect(coverageMap?.files()).toEqual([localSource]);
+
+    const externalProvider = new CoverageProvider(
+      createOptions({ allowExternal: true }),
+      root,
+    );
+    const externalCoverageMap = await externalProvider.resolveRawCoverage([
+      createPayload(),
+    ]);
+
+    expect(externalCoverageMap?.files()).toEqual([localSource, externalSource]);
+  });
+
+  it('filters raw assets by source map before loading compiled sources', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-sourcemap-first');
+    const includedAsset = join(root, 'dist', 'included.js');
+    const excludedAsset = join(root, 'dist', 'excluded.js');
+    const includedSource = join(root, 'src', 'included.ts');
+    const code = 'export const value = 1;';
+    const provider = new CoverageProvider(
+      createOptions({ include: ['src/**/*.ts'] }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+    const convertedFiles: string[] = [];
+    const convertedSourceMapFiles: string[][] = [];
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (
+        filePath: string,
+        _entry: unknown,
+        options: { sourceMaps?: Record<string, string> },
+      ) => {
+        convertedFiles.push(filePath);
+        convertedSourceMapFiles.push(Object.keys(options.sourceMaps ?? {}));
+        return { [includedSource]: createFileCoverage(includedSource) };
+      },
+    });
+
+    const createEntry = (filePath: string) => ({
+      url: pathToFileURL(filePath).href,
+      filePath,
+      scriptId: filePath,
+      functions: [
+        {
+          functionName: '',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+        },
+      ],
+    });
+    const createSourceMap = (source: string) =>
+      JSON.stringify({
+        version: 3,
+        names: [],
+        sources: [source],
+        sourcesContent: [code],
+        mappings: '',
+      });
+    const loadedAssetFilenames: string[][] = [];
+    const loadedSourceMapFilenames: string[][] = [];
+
+    try {
+      const coverageMap = await provider.resolveRawCoverage(
+        [
+          {
+            entries: [createEntry(includedAsset), createEntry(excludedAsset)],
+            options: { outputModule: true },
+            root,
+          },
+        ],
+        {
+          loadSourceMaps: async (filenames) => {
+            loadedSourceMapFilenames.push(filenames);
+            return {
+              [includedAsset]: createSourceMap('../src/included.ts'),
+              [excludedAsset]: createSourceMap('../test/excluded.ts'),
+            };
+          },
+          loadAssetFiles: async (filenames) => {
+            loadedAssetFilenames.push(filenames);
+            return Object.fromEntries(filenames.map((file) => [file, code]));
+          },
+        },
+      );
+
+      expect(loadedSourceMapFilenames).toEqual([
+        [includedAsset],
+        [excludedAsset],
+      ]);
+      expect(loadedAssetFilenames).toEqual([[includedAsset]]);
+      expect(convertedFiles).toEqual([includedAsset]);
+      expect(convertedSourceMapFiles).toEqual([[includedAsset]]);
+      expect(coverageMap?.files()).toEqual([includedSource]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('limits concurrent raw coverage conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-concurrency');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    let activeConversions = 0;
+    let peakConversions = 0;
+    const codeByFile: Record<string, string> = {};
+    const loadedAssetFilenames: string[][] = [];
+    const loadedSourceMapFilenames: string[][] = [];
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        activeConversions++;
+        peakConversions = Math.max(peakConversions, activeConversions);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        activeConversions--;
+        return {
+          [filePath]: createFileCoverage(filePath),
+        };
+      },
+    });
+
+    const payloads = Array.from({ length: 12 }, (_, index) => {
+      const file = join(root, 'src', `covered-${index}.js`);
+      const code = `function covered${index}() { return ${index}; }`;
+      codeByFile[file] = code;
+
+      return {
+        entries: [
+          {
+            url: pathToFileURL(file).href,
+            filePath: file,
+            scriptId: String(index),
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+        options: { outputModule: true },
+      };
+    });
+
+    try {
+      const coverageMap = await provider.resolveRawCoverage(payloads, {
+        loadSourceMaps: async (filenames) => {
+          loadedSourceMapFilenames.push(filenames);
+          return {};
+        },
+        loadAssetFiles: async (filenames) => {
+          loadedAssetFilenames.push(filenames);
+          return Object.fromEntries(
+            filenames.map((file) => [file, codeByFile[file]!]),
+          );
+        },
+      });
+
+      expect(coverageMap?.files()).toHaveLength(12);
+      expect(loadedSourceMapFilenames).toHaveLength(12);
+      expect(loadedAssetFilenames).toHaveLength(12);
+      expect(
+        [...loadedSourceMapFilenames, ...loadedAssetFilenames].every(
+          (filenames) => filenames.length === 1,
+        ),
+      ).toBe(true);
+      expect(peakConversions).toBeLessThanOrEqual(4);
+      expect(peakConversions).toBeGreaterThan(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('limits concurrent untested file coverage conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-untested-concurrency');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    let activeConversions = 0;
+    let peakConversions = 0;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        activeConversions++;
+        peakConversions = Math.max(peakConversions, activeConversions);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        activeConversions--;
+        return {
+          [filePath]: createFileCoverage(filePath),
+        };
+      },
+    });
+
+    const files = Array.from({ length: 12 }, (_, index) =>
+      join(root, 'src', `untested-${index}.ts`),
+    );
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      for (const [index, file] of files.entries()) {
+        writeFileSync(file, `export const value${index} = ${index};`);
+      }
+
+      const coverage = await provider.generateCoverageForUntestedFiles({
+        environmentName: 'test',
+        files,
+      });
+
+      expect(coverage).toHaveLength(12);
+      expect(peakConversions).toBeLessThanOrEqual(4);
+      expect(peakConversions).toBeGreaterThan(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps raw coverage groups separate when source identity differs', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-source-identity');
+    const file = join(root, 'dist', 'covered.js');
+    const firstCode = 'function covered() { return 1; }\ncovered();';
+    const secondCode = 'function covered() { return 2; }\ncovered();';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const convertedCodes: string[] = [];
+    const convertedCounts: number[] = [];
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (
+        _filePath: string,
+        entry: { functions: { ranges: { count: number }[] }[] },
+        _options: unknown,
+        transformedSource?: { code: string },
+      ) => {
+        const count = entry.functions[0]!.ranges[0]!.count;
+        convertedCodes.push(transformedSource!.code);
+        convertedCounts.push(count);
+        return {
+          [file]: {
+            ...createFileCoverage(file),
+            s: { 0: count },
+            f: { 0: count },
+            b: { 0: [count, count] },
+          },
+        };
+      },
+    });
+
+    try {
+      const createEntry = (count: number, code: string) => ({
+        url: pathToFileURL(file).href,
+        filePath: file,
+        scriptId: String(count),
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count }],
+          },
+        ],
+      });
+
+      const coverageMap = await provider.resolveRawCoverage([
+        {
+          entries: [createEntry(1, firstCode)],
+          options: { assetFiles: { [file]: firstCode }, outputModule: true },
+        },
+        {
+          entries: [createEntry(2, secondCode)],
+          options: { assetFiles: { [file]: secondCode }, outputModule: true },
+        },
+      ]);
+
+      expect(convertedCodes).toEqual([firstCode, secondCode]);
+      expect(convertedCounts).toEqual([1, 2]);
+      expect(
+        coverageMap?.fileCoverageFor(file).toSummary().statements.pct,
+      ).toBe(100);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('continues resolving raw coverage when a source lookup fails', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-source-error');
+    const missingFile = join(root, 'missing.js');
+    const validFile = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }\ncovered();';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    let hasError = false;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => ({
+        [filePath]: createFileCoverage(filePath),
+      }),
+    });
+
+    console.error = () => {
+      hasError = true;
+    };
+
+    try {
+      mkdirSync(root, { recursive: true });
+
+      const createEntry = (filePath: string) => ({
+        url: pathToFileURL(filePath).href,
+        filePath,
+        scriptId: filePath,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      });
+
+      const coverageMap = await provider.resolveRawCoverage([
+        {
+          entries: [createEntry(missingFile)],
+          options: { outputModule: true },
+        },
+        {
+          entries: [createEntry(validFile)],
+          options: { assetFiles: { [validFile]: code }, outputModule: true },
+        },
+      ]);
+
+      expect(coverageMap?.files()).toEqual([validFile]);
+      expect(hasError).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('skips malformed raw coverage payloads during main-process resolution', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-malformed');
+    const file = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }\ncovered();';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    let hasError = false;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => ({
+        [filePath]: createFileCoverage(filePath),
+      }),
+    });
+
+    console.error = () => {
+      hasError = true;
+    };
+
+    try {
+      const coverageMap = await provider.resolveRawCoverage([
+        { entries: [{ filePath: file }] },
+        {
+          entries: [
+            {
+              url: pathToFileURL(file).href,
+              filePath: file,
+              scriptId: 'valid',
+              functions: [
+                {
+                  functionName: '',
+                  isBlockCoverage: true,
+                  ranges: [
+                    { startOffset: 0, endOffset: code.length, count: 1 },
+                  ],
+                },
+              ],
+            },
+          ],
+          options: { assetFiles: { [file]: code }, outputModule: true },
+        },
+      ]);
+
+      expect(coverageMap?.files()).toEqual([file]);
+      expect(hasError).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports raw coverage payload shape errors with invalid field paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-malformed-message');
+    const file = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    const errors: string[] = [];
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(' '));
+    };
+
+    try {
+      await expect(
+        provider.resolveRawCoverage([
+          {
+            entries: [
+              {
+                url: pathToFileURL(file).href,
+                filePath: file,
+                scriptId: 'valid',
+                functions: [
+                  {
+                    functionName: '',
+                    isBlockCoverage: true,
+                    ranges: [
+                      { startOffset: 0, endOffset: code.length, count: 1 },
+                    ],
+                  },
+                ],
+              },
+            ],
+            options: { sourceMaps: { [file]: null }, outputModule: true },
+          },
+        ]),
+      ).resolves.toBeNull();
+
+      expect(errors[0]).toContain(
+        'Failed to resolve malformed raw V8 coverage payload at index 0',
+      );
+      expect(errors[0]).toContain('options.sourceMaps');
+      expect(errors[0]).toContain(JSON.stringify(file));
+      expect(errors[0]).toContain('received null');
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns null when all raw coverage payloads are malformed', async () => {
+    const provider = new CoverageProvider(createOptions());
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    let hasError = false;
+
+    console.error = () => {
+      hasError = true;
+    };
+
+    try {
+      await expect(
+        provider.resolveRawCoverage([
+          { entries: [{ filePath: 'invalid.js' }] },
+        ]),
+      ).resolves.toBeNull();
+      expect(hasError).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+    }
+  });
+
+  it('uses raw coverage project root for include matching', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-project-root');
+    const projectRoot = join(root, 'packages', 'app');
+    const generatedFile = join(projectRoot, 'dist', 'counter.js');
+    const originalFile = join(projectRoot, 'src', 'counter.ts');
+    const code = 'function double(value) { return value * 2; }';
+    const provider = new CoverageProvider(
+      createOptions({ include: ['src/**/*.ts'] }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async () => ({
+        [originalFile]: createFileCoverage(originalFile),
+      }),
+    });
+
+    const coverageMap = await provider.resolveRawCoverage([
+      {
+        entries: [
+          {
+            url: pathToFileURL(generatedFile).href,
+            filePath: generatedFile,
+            scriptId: generatedFile,
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+        options: { assetFiles: { [generatedFile]: code }, outputModule: true },
+        root: projectRoot,
+      },
+    ]);
+
+    expect(coverageMap?.files()).toEqual([originalFile]);
+  });
+
+  it('keeps excluded asset files with inline source maps for remapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-asset-map');
+    const file = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const provider = new CoverageProvider(
+      createOptions({
+        include: ['src/**/*.ts'],
+        exclude: ['dist/**'],
+      }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+    const fileCoverage = {
+      path: originalFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+    } satisfies FileCoverageData;
+
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {
+        post: async (method: string) => {
+          if (method === 'Profiler.takePreciseCoverage') {
+            return {
+              result: [
+                {
+                  url: pathToFileURL(file).href,
+                  scriptId: '1',
+                  functions: [],
+                },
+              ],
+            };
+          }
+
+          return {};
+        },
+      },
+    });
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async () => ({
+        [originalFile]: fileCoverage,
+      }),
+    });
+
+    try {
+      mkdirSync(root, { recursive: true });
+
+      const coverageMap = await provider.collect({
+        assetFiles: {
+          [file]:
+            'value();\n//# sourceMappingURL=data:application/json;charset=UTF-8,%7B%7D',
+        },
+        sourceMaps: {},
+      });
+
+      expect(coverageMap?.files()).toEqual([originalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps excluded disk files with inline source maps for remapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-disk-map');
+    const file = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const provider = new CoverageProvider(
+      createOptions({
+        include: ['src/**/*.ts'],
+        exclude: ['dist/**'],
+      }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+    const fileCoverage = {
+      path: originalFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+    } satisfies FileCoverageData;
+
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {
+        post: async (method: string) => {
+          if (method === 'Profiler.takePreciseCoverage') {
+            return {
+              result: [
+                {
+                  url: pathToFileURL(file).href,
+                  scriptId: '1',
+                  functions: [],
+                },
+              ],
+            };
+          }
+
+          return {};
+        },
+      },
+    });
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async () => ({
+        [originalFile]: fileCoverage,
+      }),
+    });
+
+    try {
+      mkdirSync(join(root, 'dist'), { recursive: true });
+      writeFileSync(
+        file,
+        'value();\n//# sourceMappingURL=data:application/json,%7B%7D',
+      );
+
+      const coverageMap = await provider.collect({
+        assetFiles: {},
+        sourceMaps: {},
+      });
+
+      expect(coverageMap?.files()).toEqual([originalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

@@ -13,17 +13,19 @@ import { ApiMeta } from '@components/ApiMeta';
 ```ts
 type CoverageOptions = {
   enabled?: boolean;
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
   include?: string[];
   changed?: boolean | string;
   exclude?: string[];
-  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reporters?: CoverageReporter[];
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
   allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
+
+type CoverageReporter = string | [string, Record<string, unknown>] | ReportBase;
 ```
 
 - **Default:** `undefined`
@@ -74,10 +76,38 @@ export default defineConfig({
 
 ### provider
 
-- **Type:** `'istanbul'`
+- **Type:** `'istanbul' | 'v8'`
 - **Default:** `'istanbul'`
+- **CLI:** `--coverage.provider <provider>`
 
-The coverage provider to use. Currently, only [istanbul](https://istanbul.js.org/) is supported.
+The coverage provider to use. Rstest supports both [istanbul](https://istanbul.js.org/) and `v8`. Choose `istanbul` when you want SWC-based instrumentation performance and stable Istanbul semantics. Choose `v8` when coverage is mainly limited by memory pressure; it usually has lower runtime memory usage because it does not inject coverage counters into every executed module.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'v8',
+  },
+});
+```
+
+#### Istanbul provider
+
+[Istanbul](https://istanbul.js.org/) is a widely used JavaScript code coverage tool that collects coverage through instrumentation.
+
+To enable istanbul coverage, install `@rstest/coverage-istanbul` first.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+
+`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument). Rstest instruments source files through SWC during transform, so this provider has good transform-time performance. It can use more runtime memory because executed modules keep the injected coverage counters.
+
+##### Excluding code
+
+Use `coverage.exclude` when a whole file, generated file group, or injected script should not be instrumented:
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -86,28 +116,123 @@ export default defineConfig({
   coverage: {
     enabled: true,
     provider: 'istanbul',
+    exclude: ['**/src/injected-script.ts', '**/src/**/*.{worker,evaluate}.ts'],
   },
 });
 ```
 
-#### Istanbul provider
+You can also pass the same patterns from the CLI for a one-off run:
 
-[Istanbul](https://istanbul.js.org/) is a widely used JavaScript code coverage tool that collects code coverage information through instrumentation.
+```bash
+npx rstest run --coverage --coverage.exclude "**/src/injected-script.ts" --coverage.exclude "**/src/**/*.{worker,evaluate}.ts"
+```
 
-To enable istanbul coverage, you need to install the `@rstest/coverage-istanbul` package first.
+Use Istanbul ignore comments only for small snippets that must stay in an otherwise covered file:
 
-import { PackageManagerTabs } from '@theme';
+```ts title='src/injected-script.ts'
+/* istanbul ignore file */
 
-<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+export function createInjectedScript() {
+  return `globalThis.__APP_READY__ = true;`;
+}
+```
 
-`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument).
+```ts
+/* istanbul ignore next */
+function browserEvaluateFn() {
+  return window.location.href;
+}
+
+/* istanbul ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* istanbul ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
+```
+
+If an ignored snippet still receives an injected `cov_*` call, use `coverage.exclude` for the source file instead.
+
+##### Serialized functions and other realms
+
+Istanbul injects `cov_*` coverage counter calls into instrumented files. Those counters are scoped to the transformed module that Rstest executes. If code from an instrumented file is serialized and executed somewhere else, the new scope or realm may not have the matching `cov_*` helper, and the test can fail with `ReferenceError: cov_... is not defined`.
+
+This can happen when a function is serialized with `fn.toString()` or executed through APIs such as `page.evaluate`, `Worker`, `node:vm`, `eval`, or `new Function`.
+
+To avoid the failure, prefer one of these approaches:
+
+- exclude the source file with `coverage.exclude`;
+- switch to `coverage.provider: 'v8'` for Node or headless, non-watch Chromium Browser Mode tests;
+- avoid serializing Istanbul-instrumented functions.
+
+In headless, non-watch Chromium Browser Mode runs, the `v8` provider avoids injected counters as well. Firefox and WebKit Browser Mode tests should use `coverage.exclude` or avoid serializing instrumented functions.
+
+#### V8 provider
+
+<ApiMeta addedVersion="0.10.2" />
+
+The `v8` provider collects precise coverage from the Node.js inspector or Chromium's native coverage API, then remaps it to Istanbul format. Compared with Istanbul instrumentation, V8 coverage usually has lower runtime memory usage because executed modules do not need extra coverage counters. It is a better fit for large test suites where coverage memory pressure is the bottleneck.
+
+To enable V8 coverage, install [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8) first.
+
+<PackageManagerTabs command="add @rstest/coverage-v8 -D" />
+
+Because the underlying coverage data comes from Node.js / Chromium V8 itself, remapped branch coverage and uncovered line details can vary slightly across engine versions.
+
+##### Ignore hints
+
+The `v8` provider honors ignore hints when converting V8 coverage to Istanbul format. The hint prefix can be any of the following forms:
+
+```ts
+/* istanbul ignore next */
+/* c8 ignore next */
+/* v8 ignore next */
+/* node:coverage ignore next */
+```
+
+Prefer using one prefix consistently in a project. The supported hint forms are:
+
+```ts
+/* v8 ignore next */
+const value = optionalExpensivePath();
+
+/* v8 ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* v8 ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
+
+/* v8 ignore start */
+const generatedLookup = createGeneratedLookup();
+/* v8 ignore stop */
+```
+
+`ignore file` is also recognized, but it applies to the generated coverage entry before source-map remapping. In normal Rstest output, one generated chunk can contain multiple source files, so prefer `coverage.exclude` when a source file or generated file group should be excluded.
+
+The `v8` provider works in `node`, `jsdom`, and `happy-dom` test environments. Stable Browser Mode support is limited to headless, non-watch Chromium runs with the Playwright provider. Chromium coverage is collected from executed scripts with HTTP(S) identities in the page renderer and remapped through source maps, without instrumenting application code. Query-bearing script URLs and both classic and module scripts are supported.
+
+Headed and watch Browser Mode coverage is experimental. Reports may include execution from the container or inactive runner frames, and watch rebuilds may not preserve exact script/source-map pairing. Use the default `istanbul` provider when those modes require stable coverage semantics. Firefox and WebKit do not expose the required native coverage API and must also use `istanbul`.
+
+Native browser V8 coverage does not collect scripts identified only by `blob:`, `data:`, another non-HTTP source URL, or no URL, including anonymous `eval` and `new Function` calls. It also does not collect code that runs exclusively in dedicated `Worker` or `SharedWorker` targets. Use `istanbul` when these scripts must contribute coverage.
 
 ### include
 
 - **Type:** `string[]`
 - **Default:** `undefined`
+- **CLI:** `--coverage.include <pattern>`
 
-A list of glob patterns that should be included for coverage collection.
+A list of glob patterns that should be included for coverage collection. Repeat the CLI flag to specify multiple patterns.
 
 By default, rstest will only collect coverage for files that are tested. If you want to include untested files in the coverage report, you can use the `include` option to specify the files or patterns to include.
 
@@ -197,12 +322,12 @@ npx rstest run --coverage.changed=origin/main
 ### exclude
 
 - **Type:** `string[]`
+- **CLI:** `--coverage.exclude <pattern>`
 - **Default:**
 
 ```ts
 [
   '**/node_modules/**',
-  '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
   '**/*.d.ts',
@@ -213,9 +338,11 @@ npx rstest run --coverage.changed=origin/main
 ];
 ```
 
-A glob pattern array to exclude files from test coverage collection.
+A glob pattern array to exclude files from test coverage collection. Repeat the CLI flag to specify multiple patterns.
 
 Any patterns specified here will be merged with default values.
+
+Rstest does not exclude directories named `test` by default. This avoids accidentally dropping source files from packages or workspaces whose path contains a `test` segment, such as `packages/test/src/index.ts`. To exclude those directories from coverage, add an explicit pattern such as `test/**` or `**/test/**`.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -230,13 +357,22 @@ export default defineConfig({
 
 ### reporters
 
-- **Type:** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **Type:** `CoverageReporter[]`
 - **Default:** `['text', 'html', 'clover', 'json']`
+- **CLI:** `--coverage.reporters <reporter>`
 
-The reporters to use for coverage collection. Each reporter can be either a string (the reporter name) or a tuple with the reporter name and its options.
+The reporters to use for coverage collection. Rstest uses the standard [Istanbul reporter API](https://istanbul.js.org/docs/advanced/alternative-reporters/) instead of a Rstest-specific coverage reporter API.
+
+Each reporter can be either a string (the reporter name), a tuple with the reporter name and its options, or an Istanbul-compatible reporter object with an `execute(context)` method.
+
+The CLI supports reporter names only. Repeat the flag to specify multiple reporters:
+
+```bash
+npx rstest run --coverage.reporters text --coverage.reporters=json
+```
 
 - See [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/) for available reporters.
-- See [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts) for details about reporter specific options.
+- See [@types/istanbul-reports](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts) for details about reporter specific options.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -253,10 +389,71 @@ export default defineConfig({
 });
 ```
 
+#### Custom coverage reporters
+
+Custom coverage reporters should follow the Istanbul reporter contract. A reporter package or file is loaded by Rstest's coverage provider (using [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) when possible), constructed with the options from `coverage.reporters`, and then called with an Istanbul report context.
+
+For example, an ESM reporter can export a class with an `execute` method. The `context` parameter is Istanbul's `Context` type from `istanbul-lib-report`:
+
+```js title='custom-coverage-reporter.mjs'
+export default class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  /** @param {import('istanbul-lib-report').Context} context */
+  execute(context) {
+    // Use the standard Istanbul report context.
+    const summary = context.getTree('flat').getRoot().getCoverageSummary();
+    console.log('Coverage summary:', summary.toJSON());
+  }
+}
+```
+
+Then reference the reporter by package name or file path in `rstest.config.ts`:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'text',
+      ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
+    ],
+  },
+});
+```
+
+You can also pass an Istanbul-compatible reporter object directly when the reporter is created in config:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      {
+        execute(context) {
+          const summary = context
+            .getTree('flat')
+            .getRoot()
+            .getCoverageSummary();
+          console.log(summary.toJSON());
+        },
+      },
+    ],
+  },
+});
+```
+
 ### reportsDirectory
 
 - **Type:** `string`
 - **Default:** `'./coverage'`
+- **CLI:** `--coverage.reportsDirectory <dir>`
 
 The directory to store coverage reports.
 
@@ -275,6 +472,7 @@ export default defineConfig({
 
 - **Type:** `boolean`
 - **Default:** `false`
+- **CLI:** `--coverage.reportOnFailure`
 
 Whether to report coverage and check thresholds when tests fail.
 
@@ -315,6 +513,7 @@ export default defineConfig({
 
 - **Type:** `boolean`
 - **Default:** `true`
+- **CLI:** `--coverage.clean`, `--coverage.clean=false`
 
 Whether to clean the coverage directory before running tests.
 

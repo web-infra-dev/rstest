@@ -12,7 +12,6 @@
   "exclude": [
     "vue/",
     "projects/fixtures/",
-    "projects/fixtures-shard/",
     "globals/fixtures/",
     "browser-mode/fixtures/react/"
   ]

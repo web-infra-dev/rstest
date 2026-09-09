@@ -1,0 +1,714 @@
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
+import { expect as coreExpect } from '@rstest/core';
+import { afterEach, beforeEach, expect, test } from '../src';
+import {
+  getDebugOptions,
+  resolveLaunchOptions,
+  shouldCaptureTrace,
+} from '../src/fixture';
+import type { Browser, BrowserContext, Page } from 'playwright';
+import type {
+  PlaywrightFixture,
+  PlaywrightFixtures,
+  PlaywrightOptions,
+  PlaywrightTest,
+  PlaywrightUse,
+} from '../src';
+
+const debugOptions = {
+  debug: {
+    enabled: true,
+    slowMo: 25,
+    devtools: false,
+  },
+} satisfies PlaywrightOptions;
+
+const execFileAsync = promisify(execFile);
+
+const createPlaywrightTempRoot = () =>
+  mkdtemp(join(__dirname, '../.tmp-rstest-playwright-'));
+
+const writeNodeImportablePlaywrightSource = async (root: string) => {
+  await mkdir(root, { recursive: true });
+  const source = await readFile(join(__dirname, '../src/fixture.ts'), 'utf-8');
+  const expectSource = await readFile(
+    join(__dirname, '../src/expect.ts'),
+    'utf-8',
+  );
+  const configSource = await readFile(
+    join(__dirname, '../src/config.ts'),
+    'utf-8',
+  );
+
+  await writeFile(
+    join(root, 'fixture.ts'),
+    source
+      .replace("from './expect';", "from './expect.ts';")
+      .replace("from './config';", "from './config.ts';"),
+  );
+  await writeFile(join(root, 'expect.ts'), expectSource);
+  await writeFile(join(root, 'config.ts'), configSource);
+};
+
+const supportsIpv6Loopback = async () => {
+  const server = createServer();
+
+  return new Promise<boolean>((resolve) => {
+    server.once('error', () => {
+      resolve(false);
+    });
+    server.listen(0, '::1', () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+  });
+};
+
+const ciPlaywrightOptions = {
+  browserName: 'chromium',
+  // These package tests use the CI-provided Chrome binary to avoid installing
+  // Playwright Chromium. This does not change @rstest/playwright defaults.
+  launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
+} satisfies PlaywrightOptions;
+
+const browserTest = test.extend({
+  playwright: ciPlaywrightOptions,
+});
+
+let sharedBrowser: Browser | undefined;
+
+const createPage = (title: string) =>
+  ({
+    goto: async () => null,
+    locator: () => null,
+    title: async () => title,
+  }) as unknown as Page;
+
+test('provides an isolated request fixture', async ({ request }) => {
+  expect(request).toBeTruthy();
+});
+
+test('can be imported outside a rstest worker', async () => {
+  const root = await createPlaywrightTempRoot();
+
+  try {
+    await writeNodeImportablePlaywrightSource(root);
+
+    await execFileAsync(process.execPath, [
+      '--input-type=module',
+      '-e',
+      `import { test } from ${JSON.stringify(pathToFileURL(join(root, 'fixture.ts')).href)}; console.log(typeof test, typeof test.extend);`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('does not force a local expect for core expect users', async () => {
+  coreExpect.assertions(1);
+  await expect(createPage('core expect')).toHaveTitle('core expect');
+});
+
+test('exposes playwright options fixture overrides', async ({ playwright }) => {
+  expect(playwright.browserName).toBe('chromium');
+});
+
+test.sequential(
+  'allows local mutation of default playwright options',
+  ({ playwright }) => {
+    playwright.launchOptions = { headless: false };
+
+    expect(playwright.launchOptions).toEqual({ headless: false });
+  },
+);
+
+test.sequential(
+  'provides fresh default playwright options',
+  ({ playwright }) => {
+    expect(playwright.launchOptions).toBeUndefined();
+  },
+);
+
+browserTest.sequential('stores the shared browser', ({ browser }) => {
+  sharedBrowser = browser;
+});
+
+browserTest.sequential('reuses the shared browser', ({ browser }) => {
+  expect(browser).toBe(sharedBrowser);
+});
+
+let disconnectedBrowser: Browser | undefined;
+
+browserTest.sequential(
+  'relaunches the browser after it disconnects',
+  async ({ browser }) => {
+    disconnectedBrowser = browser;
+    await browser.close();
+    expect(browser.isConnected()).toBe(false);
+  },
+);
+
+browserTest.sequential(
+  'evicts disconnected browsers from the cache',
+  ({ browser }) => {
+    expect(browser).not.toBe(disconnectedBrowser);
+    expect(browser.isConnected()).toBe(true);
+  },
+);
+
+browserTest.extend({
+  playwright: {
+    ...ciPlaywrightOptions,
+    contextOptions: {
+      viewport: {
+        width: 390,
+        height: 844,
+      },
+    },
+  } satisfies PlaywrightOptions,
+})('applies context options', async ({ page }) => {
+  expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
+});
+
+browserTest(
+  'includes shadow DOM text in locator assertions',
+  async ({ page }) => {
+    await page.setContent(`
+    <div id="host">Light text</div>
+    <script>
+      const root = document.querySelector('#host').attachShadow({ mode: 'open' });
+      root.innerHTML = '<span>Shadow text</span>';
+    </script>
+  `);
+
+    const host = page.locator('#host');
+    await expect(host).toContainText('Shadow text');
+    await expect(host).toHaveText('Shadow textLight text');
+  },
+);
+
+browserTest.extend({
+  customFixture: async ({ page }, use) => {
+    await use(`viewport-${page.viewportSize()?.width ?? 0}`);
+  },
+})('preserves extended fixture types', async ({ customFixture }) => {
+  expect(customFixture).toContain('viewport');
+});
+
+browserTest
+  .extend({
+    customFixture: async ({ page }, use) => {
+      await use(`viewport-${page.viewportSize()?.width ?? 0}`);
+    },
+  })
+  .concurrent(
+    'keeps the shared browser alive for concurrent tests',
+    async ({ customFixture }) => {
+      expect(customFixture).toContain('viewport');
+    },
+  );
+
+browserTest.extend<{ createLabel: () => Promise<string> }>({
+  createLabel: async ({ page }, use) => {
+    await use(async () => `viewport-${page.viewportSize()?.width ?? 0}`);
+  },
+})('preserves function-valued fixture types', async ({ createLabel }) => {
+  await expect(createLabel()).resolves.toContain('viewport');
+});
+
+type Agent = {
+  page: Page;
+};
+
+const createAgentTest = (baseTest: PlaywrightTest) =>
+  baseTest.extend<{ agent: Agent }>({
+    agent: async ({ page }, use) => {
+      await use({ page });
+    },
+  });
+
+const agentTest = createAgentTest(browserTest);
+
+agentTest('supports third-party fixture wrappers', async ({ agent, page }) => {
+  expect(agent.page).toBe(page);
+});
+
+test.extend({
+  playwright: async (_, use: PlaywrightUse<PlaywrightOptions>) => {
+    await use({
+      browserName: 'chromium',
+      launchOptions: {
+        headless: true,
+      },
+    });
+  },
+})('allows overriding the playwright fixture', async ({ playwright }) => {
+  expect(playwright.launchOptions).toEqual({ headless: true });
+});
+
+// Overriding a base fixture while adding a new one has to name the overridden
+// fixture in the added set, or `page` is not assignable here.
+browserTest.extend<{ url: string } & Pick<PlaywrightFixture, 'page'>>({
+  url: 'about:blank',
+  page: async ({ context, url }, use) => {
+    const page = await context.newPage();
+    await page.goto(url);
+
+    try {
+      await use(page);
+    } finally {
+      await page.close();
+    }
+  },
+})('allows overriding the page fixture', async ({ page, url }) => {
+  expect(page.url()).toBe(url);
+});
+
+const thirdPartyFixtures = {
+  customContext: async ({ browser }, use) => {
+    const context = await browser.newContext();
+
+    try {
+      await use(context);
+    } finally {
+      await context.close();
+    }
+  },
+} satisfies PlaywrightFixtures<
+  { customContext: BrowserContext },
+  PlaywrightFixture
+>;
+
+browserTest.extend(thirdPartyFixtures)(
+  'exposes fixture and use types for third-party packages',
+  async ({ customContext }) => {
+    expect(customContext.pages()).toEqual([]);
+  },
+);
+
+const customUse: PlaywrightUse<string> = async (value) => {
+  expect(value).toBe('ok');
+};
+
+test('exposes the fixture use type', async () => {
+  await customUse('ok');
+});
+
+test.extend({
+  playwright: debugOptions,
+})('accepts headed debug options', async ({ playwright }) => {
+  expect(playwright.debug).toEqual(debugOptions.debug);
+});
+
+test('enables headed debug mode from PWDEBUG', () => {
+  const original = process.env.PWDEBUG;
+  process.env.PWDEBUG = '1';
+
+  try {
+    expect(getDebugOptions(undefined)).toEqual({});
+    expect(resolveLaunchOptions({})).toEqual({
+      headless: false,
+      slowMo: 100,
+      devtools: true,
+    });
+  } finally {
+    if (original === undefined) {
+      delete process.env.PWDEBUG;
+    } else {
+      process.env.PWDEBUG = original;
+    }
+  }
+});
+
+test('selects Playwright trace attempts by mode', () => {
+  const retryCounts = [0, 1, 2];
+
+  expect(retryCounts.map((count) => shouldCaptureTrace('off', count))).toEqual([
+    false,
+    false,
+    false,
+  ]);
+  expect(retryCounts.map((count) => shouldCaptureTrace('on', count))).toEqual([
+    true,
+    true,
+    true,
+  ]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('retain-on-failure', count)),
+  ).toEqual([true, true, true]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('on-first-retry', count)),
+  ).toEqual([false, true, false]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('on-all-retries', count)),
+  ).toEqual([false, true, true]);
+});
+
+test.extend({}).describe('extended test API', () => {
+  const hookExpectTest = test.extend<{ hookTitle: string }>({
+    hookTitle: 'hook title',
+  });
+
+  hookExpectTest.describe('wrapped hooks', () => {
+    const hookEvents: string[] = [];
+
+    beforeEach<{ hookTitle: string }>(async ({ hookTitle }) => {
+      expect.assertions(2);
+      expect(hookTitle).toBe('hook title');
+      await expect(createPage(hookTitle)).toHaveTitle('hook title');
+      hookEvents.push(`beforeEach:${hookTitle}`);
+
+      return ({ hookTitle }) => {
+        hookEvents.push(`cleanup:${hookTitle}`);
+      };
+    });
+
+    afterEach<{ hookTitle: string }>(({ hookTitle }) => {
+      hookEvents.push(`afterEach:${hookTitle}`);
+    });
+
+    hookExpectTest('counts Playwright assertions in extended hooks', () => {});
+
+    hookExpectTest.afterAll(() => {
+      expect(hookEvents).toEqual([
+        'beforeEach:hook title',
+        'afterEach:hook title',
+        'cleanup:hook title',
+      ]);
+    });
+  });
+
+  test.extend({}).beforeEach(() => {});
+
+  const assertExtendedHookTypes = () => {
+    const typedHookTest = test.extend<{ hookTitle: string }>({
+      hookTitle: 'hook title',
+    });
+
+    typedHookTest.beforeEach(({ hookTitle }) => {
+      void hookTitle;
+
+      return ({ hookTitle }) => {
+        void hookTitle;
+      };
+    });
+    typedHookTest.afterEach(({ hookTitle }) => {
+      void hookTitle;
+    });
+
+    const typedWorkerHookTest = test.extend(
+      'workerHookTitle',
+      { scope: 'worker' },
+      () => 'worker hook title',
+    );
+    typedWorkerHookTest.beforeEach(({ workerHookTitle }) => {
+      void workerHookTitle;
+    });
+    typedWorkerHookTest.afterEach(({ workerHookTitle }) => {
+      void workerHookTitle;
+    });
+  };
+  void assertExtendedHookTypes;
+
+  test.extend({}).for<{ value: string }>`
+    value
+    ${'ok'}
+  `('preserves tagged-template test.for types', ({ value }) => {
+    expect(value).toBe('ok');
+  });
+
+  test.extend({}).concurrent.each(['each title'])(
+    'counts Playwright assertions in test.each callbacks',
+    async (title) => {
+      expect.assertions(1);
+      await expect(createPage(title)).toHaveTitle(title);
+    },
+  );
+
+  test.extend({}).each([[1, 2]])(
+    'does not expose test.each context to user callbacks',
+    (...args) => {
+      expect(args).toEqual([1, 2]);
+    },
+  );
+
+  test.extend({
+    fixtureTitle: async ({ expect: localExpect }, use) => {
+      localExpect.assertions(1);
+      await expect(createPage('fixture title')).toHaveTitle('fixture title');
+      await use('fixture title');
+    },
+  })(
+    'counts Playwright assertions in extended fixtures',
+    ({ fixtureTitle }) => {
+      void fixtureTitle;
+    },
+  );
+
+  browserTest.for([{ path: 'about:blank' }])(
+    'detects fixtures from test.for callback context',
+    async ({ path }, { page }) => {
+      await page.goto(path);
+
+      expect(page.url()).toBe(path);
+    },
+  );
+
+  browserTest.for([{ path: 'about:blank' }])(
+    'allows named test.for callback context',
+    ({ path }, testContext) => {
+      expect(testContext.task.name).toBe(
+        'allows named test.for callback context',
+      );
+      expect(path).toBe('about:blank');
+    },
+  );
+
+  let fixtureSetupCount = 0;
+  const namedForTest = test.extend<{ shadowedValue: string }>({
+    shadowedValue: async (_, use) => {
+      fixtureSetupCount++;
+      await use('fixture value');
+    },
+  });
+
+  namedForTest.for([{ rows: [{ shadowedValue: 'local value' }] }])(
+    'ignores fixtures from a shadowed named test.for context',
+    ({ rows }, context) => {
+      expect(rows.map((context) => context.shadowedValue)).toEqual([
+        'local value',
+      ]);
+      expect(context.task.name).toBe(
+        'ignores fixtures from a shadowed named test.for context',
+      );
+      expect(fixtureSetupCount).toBe(0);
+    },
+  );
+
+  test.extend<{ pair: [() => string, number] }>({
+    pair: [() => 'static value', 1],
+  })('preserves static array fixture values', ({ pair }) => {
+    expect(pair[0]()).toBe('static value');
+    expect(pair[1]).toBe(1);
+  });
+
+  test.extend({})('preserves playwright-style helpers', () => {
+    const extendedTest = test.extend({});
+
+    expect(typeof extendedTest.fail).toBe('function');
+    expect(typeof extendedTest.describe).toBe('function');
+    expect(typeof extendedTest.beforeAll).toBe('function');
+    expect(typeof extendedTest.afterAll).toBe('function');
+    expect(typeof extendedTest.beforeEach).toBe('function');
+    expect(typeof extendedTest.afterEach).toBe('function');
+  });
+});
+
+test.describe('imported hooks', () => {
+  beforeEach(async ({ expect: localExpect }) => {
+    localExpect.assertions(1);
+    await expect(createPage('imported hook')).toHaveTitle('imported hook');
+  });
+
+  test('counts Playwright assertions in imported hooks', () => {});
+});
+
+test(
+  'starts a static server from the serve fixture',
+  { timeout: 30_000 },
+  async ({ request, serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const { url } = await serve(join(root, 'index.html'));
+    const response = await request.get(url);
+    expect(response.ok()).toBe(true);
+    expect(await response.text()).toBe('<h1>ok</h1>');
+  },
+);
+
+const namedFixtureEvents: string[] = [];
+const predicate = (value: string) => value.length > 0;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const broadlyTypedFunction: Function = predicate;
+const broadlyTypedCallable: CallableFunction = predicate;
+class NamedFixtureService {
+  name = 'service';
+}
+
+const checkNamedFixtureTypes = (
+  fixtureName: string,
+  patternName: `slot${string}`,
+  unionName: 'left' | 'right',
+) => {
+  // @ts-expect-error callable values must be returned by named fixture functions
+  test.extend('predicate', predicate);
+
+  // @ts-expect-error broadly typed functions are still callable at runtime
+  test.extend('broadFunction', broadlyTypedFunction);
+
+  // @ts-expect-error broadly typed callable values are fixture functions at runtime
+  test.extend('broadCallable', broadlyTypedCallable);
+
+  // @ts-expect-error constructable values must be returned by named fixture functions
+  test.extend('service', NamedFixtureService);
+
+  // @ts-expect-error named fixture names must be statically known
+  test.extend('prefix', 'prefix').extend(fixtureName, 42);
+
+  // @ts-expect-error patterned names do not identify one context field
+  test.extend(patternName, 42);
+
+  // @ts-expect-error named fixture names must be JavaScript identifiers
+  test.extend('base-url', 'https://example.com');
+
+  // @ts-expect-error named fixture names cannot replace TestContext fields
+  test.extend('expect', 'fixture');
+
+  // @ts-expect-error named fixture names cannot replace internal context fields
+  test.extend('_useLocalExpect', false);
+
+  test.extend('name', 'fixture')('supports Function property names', (ctx) => {
+    expect(ctx.name).toBe('fixture');
+  });
+
+  const unionFixtureTest = test
+    .extend('prefix', 'prefix')
+    .extend(unionName, 42);
+  unionFixtureTest('models union names as alternative contexts', (ctx) => {
+    const prefix: string = ctx.prefix;
+    void prefix;
+    // @ts-expect-error neither union member is guaranteed to be registered
+    void ctx.left;
+  });
+
+  const fileFixtureTest = test
+    .extend('fileValue', { scope: 'file' }, (_context, { onCleanup }) => {
+      onCleanup(() => Promise.resolve());
+      // @ts-expect-error file fixtures cannot use Playwright test fixtures
+      void _context.page;
+      return 42;
+    })
+    .extend('testValue', ({ fileValue, page }) => `${fileValue}:${page.url()}`);
+
+  fileFixtureTest.extend(
+    'invalidFile',
+    { scope: 'file' },
+    // @ts-expect-error file fixtures cannot depend on test-scoped fixtures
+    ({ testValue }) => testValue.length,
+  );
+
+  // @ts-expect-error file-scoped fixtures cannot be overridden
+  fileFixtureTest.extend('fileValue', () => 1);
+};
+void checkNamedFixtureTypes;
+
+const namedFixtureTest = test
+  .extend('title', (_context, { onCleanup }) => {
+    expect('named fixture setup').toContain('setup');
+    onCleanup(() => {
+      expect('named fixture cleanup').toContain('cleanup');
+      namedFixtureEvents.push('cleanup');
+    });
+    return 'named fixture title';
+  })
+  .extend('predicate', () => predicate)
+  .extend('service', () => NamedFixtureService)
+  .extend('name', () => 'playwright fixture');
+
+namedFixtureTest(
+  'supports the named fixture form',
+  ({ name, predicate, service, title }) => {
+    expect(name).toBe('playwright fixture');
+    expect(title).toBe('named fixture title');
+    expect(predicate('value')).toBe(true);
+    expect(new service().name).toBe('service');
+    namedFixtureEvents.push('test');
+  },
+);
+
+namedFixtureTest.afterAll(() => {
+  expect(namedFixtureEvents).toEqual(['test', 'cleanup']);
+});
+
+test(
+  'encodes static server entry filenames in returned URLs',
+  { timeout: 30_000 },
+  async ({ request, serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    const filename = 'entry #%.html';
+    await writeFile(join(root, filename), '<h1>encoded</h1>');
+
+    const { url } = await serve(join(root, filename));
+    const response = await request.get(url);
+
+    expect(url).toContain(encodeURIComponent(filename));
+    expect(response.ok()).toBe(true);
+    expect(await response.text()).toBe('<h1>encoded</h1>');
+  },
+);
+
+test(
+  'resolves relative static server entries from the project root',
+  { timeout: 30_000 },
+  async ({ request, serve }) => {
+    const { url } = await serve('./package.json');
+    const response = await request.get(url);
+
+    expect(await response.json()).toMatchObject({
+      name: '@rstest/playwright',
+    });
+  },
+);
+
+test(
+  'formats IPv6 static server hosts as valid URLs',
+  { timeout: 30_000 },
+  async ({ serve, skip }) => {
+    if (!(await supportsIpv6Loopback())) {
+      skip();
+    }
+
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const { url } = await serve(join(root, 'index.html'), { host: '::1' });
+
+    expect(url).toMatch(/^http:\/\/\[::1\]:\d+$/);
+  },
+);
+
+test(
+  'returns 404 for malformed static server paths',
+  { timeout: 30_000 },
+  async ({ request, serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const { url } = await serve(join(root, 'index.html'));
+    const response = await request.get(`${url}/%E0%A4%A`);
+
+    expect(response.status()).toBe(404);
+  },
+);
+
+test(
+  'allows closing a served static server multiple times',
+  { timeout: 30_000 },
+  async ({ serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const server = await serve(join(root, 'index.html'));
+
+    await server.close();
+    await server.close();
+  },
+);

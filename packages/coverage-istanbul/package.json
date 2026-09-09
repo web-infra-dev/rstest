@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.10.1",
+  "version": "0.11.12",
   "description": "Istanbul coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/coverage-istanbul"
   },
   "license": "MIT",
@@ -31,17 +31,18 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/coverage-istanbul/tsconfig.json"
+    "lint": "rslint ."
   },
   "dependencies": {
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-lib-source-maps": "^5.0.6",
     "istanbul-reports": "^3.2.0",
-    "swc-plugin-coverage-instrument": "0.0.32"
+    "swc-plugin-coverage-instrument": "0.0.33"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.5",
+    "@rsbuild/core": "~2.2.4",
+    "@rslib/core": "~1.0.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",
@@ -52,6 +53,6 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@rstest/core": "workspace:^"
+    "@rstest/core": "^0.11.0"
   }
 }

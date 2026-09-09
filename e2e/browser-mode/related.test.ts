@@ -1,26 +1,45 @@
 import { dirname, join } from 'node:path';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { BROWSER_PORTS } from './fixtures/ports';
+import { runBrowserCliWithCwd } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - related', () => {
-  it('should filter browser tests by related source files', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['list', '--related', 'tests/src/index.ts', '--filesOnly'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures', 'related'),
-          env: {
-            CI: '',
-            GITHUB_ACTIONS: '',
-          },
-        },
-      },
+  it('should list matched files without starting the browser server', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(BROWSER_PORTS.related, '127.0.0.1', resolve);
     });
+
+    try {
+      const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+        join(__dirname, 'fixtures', 'related'),
+        { command: 'list', args: ['--filesOnly'] },
+      );
+
+      await expectExecSuccess();
+      expect(cli.stdout).toContain('tests/index.test.ts');
+      expect(cli.stdout).toContain('tests/other.test.ts');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('should filter browser tests by related source files', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'related'),
+      {
+        command: 'list',
+        args: ['--related', 'tests/src/index.ts', '--filesOnly'],
+      },
+    );
 
     await expectExecSuccess();
 
@@ -30,19 +49,10 @@ describe('browser mode - related', () => {
   });
 
   it('should not run the full browser suite when related finds no tests', async () => {
-    const { cli, expectExecFailed } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '--related', 'tests/src/missing.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures', 'related'),
-          env: {
-            CI: '',
-            GITHUB_ACTIONS: '',
-          },
-        },
-      },
-    });
+    const { cli, expectExecFailed } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'related'),
+      { args: ['--related', 'tests/src/missing.ts'] },
+    );
 
     await expectExecFailed();
 

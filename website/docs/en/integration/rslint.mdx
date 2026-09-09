@@ -1,0 +1,76 @@
+---
+description: This page introduces Rslint's built-in Rstest rules.
+---
+
+# Rslint
+
+[Rslint](https://rslint.rs/) is an ESLint-compatible linter for JavaScript and TypeScript. Its built-in `rstestPlugin` adds rules for common mistakes in Rstest test definitions, assertions, mocks, and snapshots.
+
+Install [@rslint/core](https://github.com/web-infra-dev/rslint) in your project, then enable the recommended preset in `rslint.config.ts`:
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rslint/core -D" />
+
+## Dedicated test files
+
+If your tests use filenames such as `*.test.ts` or `*.spec.ts`, scope the preset to test and spec files:
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([
+  {
+    ...rstestPlugin.configs.recommended,
+    files: ['**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cts,mjs,mts}'],
+  },
+]);
+```
+
+This pattern covers JavaScript and TypeScript files with `.js`, `.jsx`, `.ts`, `.tsx`, `.cjs`, `.cts`, `.mjs`, and `.mts` extensions. The recommended preset does not declare a `files` pattern, so adding one keeps Rstest-specific rules focused on test files and leaves production files to your other Rslint configuration items.
+
+## In-source tests
+
+With [in-source testing](/config/test/include-source), tests live alongside production code and use `import.meta.rstest`. Apply the preset to every linted file so it can check both in-source tests and dedicated test files:
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([rstestPlugin.configs.recommended]);
+```
+
+No additional Rslint globals are required for `import.meta.rstest`.
+
+## Run Rslint
+
+Run Rslint from your project root:
+
+<PackageManagerTabs command="exec rslint" />
+
+A successful run prints a summary similar to this:
+
+```text
+start   Linting...
+success Lint passed in 92ms (1 file, 14 rules, 14 threads)
+```
+
+When Rslint finds a problem, it reports the rule name, source location, code frame, and failure summary:
+
+```text
+start   Linting...
+
+  rstest/no-identical-title  — [error] Test title is used multiple times in the same describe block
+  ╭─┴──────────( invalid.test.ts:8:8 )─────
+  │ 7 │
+  │ 8 │  test('same title', () => {
+  │ 9 │    expect(false).toBeFalsy();
+  ╰────────────────────────────────
+
+error   Lint failed with 1 error in 31ms (1 file, 14 rules, 14 threads)
+```
+
+You can also add the command to the `scripts` section of `package.json` and run it through your package manager's lint script.
+
+## Explore the rules
+
+The [Rslint `rstestPlugin` preset](https://rslint.rs/api/presets/rstest-plugin) documents the available configuration and usage patterns. To see which rules are included in the recommended preset, open the [Rstest rules list](https://rslint.rs/rules/?preset=rstestPlugin.configs.recommended).

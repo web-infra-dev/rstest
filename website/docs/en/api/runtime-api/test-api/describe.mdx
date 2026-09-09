@@ -3,18 +3,26 @@ title: Describe
 description: describe defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Describe
 
 `describe` defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
 
 ## describe
 
-- **Type:** `(name: string, fn: () => void | Promise<void>) => void`
-
-Defines a test suite that can contain multiple test cases or nested describe blocks.
+- **Type:**
 
 ```ts
-import { describe, test } from '@rstest/core';
+(name: string, fn?: () => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: () => void | Promise<void>): void;
+```
+
+Defines a test suite that can contain multiple test cases or nested describe blocks.
+The callback can be asynchronous; Rstest waits for it during collection before running the tests declared inside it.
+
+```ts
+import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {
@@ -24,6 +32,85 @@ describe('math', () => {
     // ...
   });
 });
+```
+
+```ts
+describe('async setup', async () => {
+  const data = await loadFixtureData();
+
+  test('uses collected data', () => {
+    expect(data).toBeDefined();
+  });
+});
+```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.11.0" />
+
+Pass a `TestOptions` object as the **second argument** (before the suite function) to set defaults for every test inside the suite:
+
+```ts
+describe('flaky integration', { retry: 3, timeout: 10000 }, () => {
+  test('reaches the server', async () => {
+    /* inherits retry: 3 and timeout: 10000 */
+  });
+});
+```
+
+As a shorthand, you can still pass a number as the **last argument** to set only the timeout (equivalent to `{ timeout: n }`):
+
+```ts
+describe('slow suite', () => {
+  test('within budget', async () => {
+    /* ... */
+  });
+}, 10000);
+```
+
+`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, `repeats`, and `meta` (`meta` is added in 0.11.1). These propagate to descendant suites and tests as **inheritable defaults**:
+
+- A test-level option always wins over the suite-level value.
+- A nested `describe` inherits its parent's options, and the nearest enclosing value applies.
+- A test without its own `timeout` falls back to the nearest suite's `timeout`, then to [`test.testTimeout`](/config/test/test-timeout).
+- Metadata is merged from parent suite to child suite or test; child top-level keys override keys from the parent, and inherited values are copied per descendant.
+
+```ts
+describe('parent', { retry: 2, timeout: 100 }, () => {
+  test('a', () => {
+    /* retry: 2, timeout: 100 */
+  });
+
+  describe('child', { timeout: 200 }, () => {
+    test('b', () => {
+      /* retry: 2 (inherited), timeout: 200 (nearest wins) */
+    });
+
+    test('c', { retry: 0 }, () => {
+      /* retry: 0 (own value wins), timeout: 200 */
+    });
+  });
+});
+```
+
+```ts
+describe(
+  'mutation run',
+  { meta: { runner: 'stryker', shared: 'suite' } },
+  () => {
+    test('inherits suite metadata', ({ task }) => {
+      // task.meta is { runner: 'stryker', shared: 'suite' }
+    });
+
+    test(
+      'overrides suite metadata',
+      { meta: { shared: 'test' } },
+      ({ task }) => {
+        // task.meta is { runner: 'stryker', shared: 'test' }
+      },
+    );
+  },
+);
 ```
 
 ## describe.only
@@ -68,9 +155,18 @@ describe.todo('should implement this suite');
 
 ## describe.each
 
-- **Type:** `describe.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **Type:**
 
-Creates a describe block for each item in the provided array.
+```ts
+// Every row is an array: the row is spread into the arguments
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+Creates a describe block for each item in the provided array. Like `describe`, it accepts an optional [`TestOptions`](#testoptions) object as its second argument and applies it to every generated suite.
 
 ```ts
 describe.each([
@@ -82,6 +178,8 @@ describe.each([
   });
 });
 ```
+
+Rows are spread into the suite function arguments only when every row of the table is an array. Once any row is not an array, every row is passed whole, so an array row of a mixed table arrives as the array itself.
 
 You can also use a tagged template literal table syntax:
 
@@ -113,15 +211,20 @@ describe.each<{ a: number; b: number; expected: number }>`
 
 ## describe.for
 
-- **Type:** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **Type:**
 
-Alternative to `describe.each` for more flexible parameter types.
+```ts
+describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+Alternative to `describe.each` for more flexible parameter types. It accepts the same optional [`TestOptions`](#testoptions) second argument.
 
 ```ts
 describe.for([
   [1, 2],
   [2, 3],
-])('math $0 + $1', ([a, b]) => {
+])('math %i + %i', ([a, b]) => {
   test('add', () => {
     // ...
   });

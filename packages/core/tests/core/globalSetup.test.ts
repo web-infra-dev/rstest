@@ -1,7 +1,61 @@
 import type { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { describe, expect, it } from '@rstest/core';
-import { GlobalSetupWorker } from '../../src/core/globalSetup';
+import { afterAll, describe, expect, it, rs } from '@rstest/core';
+import {
+  GlobalSetupWorker,
+  runGlobalSetup,
+  runGlobalTeardown,
+} from '../../src/core/globalSetup';
+import { createExitCode } from '../../src/core/exitCode';
+import type { InternalContext } from '../../src/types';
+
+// Self-contained fake of the globalSetup IPC child: replies to every `setup`
+// message with a successful result carrying a fixed env change-set, so
+// `runGlobalSetup` (which forks internally) is testable without a real child.
+rs.mock('node:child_process', () => {
+  const fork = () => {
+    const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
+    return {
+      stdout: undefined,
+      stderr: undefined,
+      // Non-null exit code so `killAndWait` treats the child as already gone.
+      exitCode: 0,
+      on(event: string, cb: (...args: unknown[]) => void) {
+        listeners.set(event, [...(listeners.get(event) ?? []), cb]);
+        return this;
+      },
+      send(
+        message: { id: number; type: 'setup' | 'teardown' },
+        callback?: (error: Error | null) => void,
+      ) {
+        callback?.(null);
+        queueMicrotask(() => {
+          for (const cb of listeners.get('message') ?? []) {
+            cb({
+              __rstest_global_setup__: true,
+              id: message.id,
+              result:
+                message.type === 'setup'
+                  ? {
+                      success: true,
+                      hasTeardown: false,
+                      envChanges: { RSTEST_GS_UNIT: 'from-worker' },
+                    }
+                  : { success: true },
+            });
+          }
+        });
+        return true;
+      },
+    };
+  };
+  return { fork };
+});
+
+afterAll(() => {
+  rs.doUnmock('node:child_process');
+  delete process.env.RSTEST_GS_UNIT;
+});
 
 class MockChildProcess extends EventEmitter {
   stdout = new EventEmitter();
@@ -15,7 +69,7 @@ class MockChildProcess extends EventEmitter {
 }
 
 const createWorker = (child: MockChildProcess): GlobalSetupWorker =>
-  new GlobalSetupWorker(() => child as unknown as ChildProcess);
+  new GlobalSetupWorker({}, () => child as unknown as ChildProcess);
 
 describe('GlobalSetupWorker', () => {
   it('should reject when IPC send reports an error', async () => {
@@ -37,5 +91,64 @@ describe('GlobalSetupWorker', () => {
     child.emit('error', new Error('worker error'));
 
     await expect(promise).rejects.toThrow('worker error');
+  });
+});
+
+describe('runGlobalSetup', () => {
+  it('stores the worker env change-set without changing the host env', async () => {
+    process.env.RSTEST_GS_UNIT = 'before-setup';
+    const context = {
+      workerEnv: {},
+      globalTeardownCallbacks: [],
+      exitCode: createExitCode(),
+    } as unknown as InternalContext;
+
+    try {
+      const result = await runGlobalSetup(
+        context,
+        { _globalSetups: false },
+        {
+          globalSetupEntries: [],
+          assetFiles: {},
+          sourceMaps: {},
+          federation: false,
+          interopDefault: true,
+          outputModule: false,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.envChanges).toEqual({ RSTEST_GS_UNIT: 'from-worker' });
+      expect(context.workerEnv).toEqual({ RSTEST_GS_UNIT: 'from-worker' });
+      expect(process.env.RSTEST_GS_UNIT).toBe('before-setup');
+
+      await expect(runGlobalTeardown(context)).resolves.toBe(true);
+      expect(process.env.RSTEST_GS_UNIT).toBe('before-setup');
+    } finally {
+      delete process.env.RSTEST_GS_UNIT;
+    }
+  });
+});
+
+describe('runGlobalTeardown', () => {
+  it('returns failure after draining every callback in reverse order', async () => {
+    const calls: string[] = [];
+    const context = {
+      globalTeardownCallbacks: [
+        () => {
+          calls.push('first');
+        },
+        () => {
+          calls.push('second');
+          return false;
+        },
+      ],
+      exitCode: createExitCode(),
+    } as unknown as InternalContext;
+
+    await expect(runGlobalTeardown(context)).resolves.toBe(false);
+    expect(calls).toEqual(['second', 'first']);
+    expect(context.globalTeardownCallbacks).toEqual([]);
+    expect(context.exitCode.current).toBe(1);
   });
 });

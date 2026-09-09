@@ -62,7 +62,6 @@ const createRequest = (
   return {
     id: 'rpc-1',
     testPath: '/tests/example.test.ts',
-    runId: 'run-1',
     kind: 'locator',
     locator: { steps: [{ type: 'locator', selector: '#root' }] },
     method: 'click',
@@ -112,6 +111,44 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.expectCalls[0]?.options).toEqual({
       isNot: false,
       timeout: 900,
+    });
+  });
+
+  it('normalizes zero expect timeouts for Playwright', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toBeVisible',
+        timeout: 0,
+        timeoutIsExplicit: false,
+      }),
+      timeoutFallbackMs: 900,
+    });
+
+    expect(fakeLocator.expectCalls[0]?.options).toEqual({
+      isNot: false,
+      timeout: 1,
+    });
+  });
+
+  it('preserves an explicit zero expect timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toBeVisible',
+        timeout: 0,
+        timeoutIsExplicit: true,
+      }),
+      timeoutFallbackMs: 900,
+    });
+
+    expect(fakeLocator.expectCalls[0]?.options).toEqual({
+      isNot: false,
+      timeout: 0,
     });
   });
 

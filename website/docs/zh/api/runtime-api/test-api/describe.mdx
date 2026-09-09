@@ -3,18 +3,26 @@ title: Describe
 description: describe 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Describe
 
 `describe` 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
 
 ## describe
 
-- **类型：** `(name: string, fn: () => void | Promise<void>) => void`
-
-定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
+- **类型：**
 
 ```ts
-import { describe, test } from '@rstest/core';
+(name: string, fn?: () => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: () => void | Promise<void>): void;
+```
+
+定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
+回调可以是异步函数；Rstest 会在收集阶段等待它完成，然后再运行其中声明的测试。
+
+```ts
+import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {
@@ -24,6 +32,85 @@ describe('math', () => {
     // ...
   });
 });
+```
+
+```ts
+describe('async setup', async () => {
+  const data = await loadFixtureData();
+
+  test('uses collected data', () => {
+    expect(data).toBeDefined();
+  });
+});
+```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.11.0" />
+
+将 `TestOptions` 对象作为**第二个参数**（位于套件函数之前）传入，用于为套件内的所有测试设置默认值：
+
+```ts
+describe('flaky integration', { retry: 3, timeout: 10000 }, () => {
+  test('reaches the server', async () => {
+    /* 继承 retry: 3 与 timeout: 10000 */
+  });
+});
+```
+
+作为简写，你仍可以将数字作为**最后一个参数**传入，仅用于设置超时（等价于 `{ timeout: n }`）：
+
+```ts
+describe('slow suite', () => {
+  test('within budget', async () => {
+    /* ... */
+  });
+}, 10000);
+```
+
+`TestOptions` 支持的字段与 [`test`](/api/runtime-api/test-api/test#testoptions) 上一致：`timeout`、`retry`、`repeats`、`meta`（`meta` 为 0.11.1 新增）。这些选项会作为**可继承的默认值**向子套件和测试传播：
+
+- 测试级别的选项始终优先于套件级别的值。
+- 嵌套的 `describe` 会继承父级选项，最终以最近一层的值为准。
+- 未单独设置 `timeout` 的测试，回退到最近一层套件的 `timeout`，再回退到 [`test.testTimeout`](/config/test/test-timeout)。
+- 元数据会从父套件向子套件或测试合并；子级顶层同名字段会覆盖父级字段，继承值会为每个子级复制。
+
+```ts
+describe('parent', { retry: 2, timeout: 100 }, () => {
+  test('a', () => {
+    /* retry: 2, timeout: 100 */
+  });
+
+  describe('child', { timeout: 200 }, () => {
+    test('b', () => {
+      /* retry: 2（继承），timeout: 200（最近一层优先） */
+    });
+
+    test('c', { retry: 0 }, () => {
+      /* retry: 0（自身值优先），timeout: 200 */
+    });
+  });
+});
+```
+
+```ts
+describe(
+  'mutation run',
+  { meta: { runner: 'stryker', shared: 'suite' } },
+  () => {
+    test('inherits suite metadata', ({ task }) => {
+      // task.meta 为 { runner: 'stryker', shared: 'suite' }
+    });
+
+    test(
+      'overrides suite metadata',
+      { meta: { shared: 'test' } },
+      ({ task }) => {
+        // task.meta 为 { runner: 'stryker', shared: 'test' }
+      },
+    );
+  },
+);
 ```
 
 ## describe.only
@@ -68,9 +155,18 @@ describe.todo('should implement this suite');
 
 ## describe.each
 
-- **类型：** `describe.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **类型：**
 
-为数组中的每一项生成一个 describe 块。
+```ts
+// Every row is an array: the row is spread into the arguments
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+为数组中的每一项生成一个 describe 块。与 `describe` 一样，它的第二个参数可选地接受一个 [`TestOptions`](#testoptions) 对象，并作用于生成的每个套件。
 
 ```ts
 describe.each([
@@ -82,6 +178,8 @@ describe.each([
   });
 });
 ```
+
+只有当表格的每一行都是数组时，行才会展开成套件函数的多个参数。只要有一行不是数组，每一行都会整体作为单个参数传入，混合表中的数组行会原样传给套件函数。
 
 你也可以使用标签模板字面量的表格语法：
 
@@ -113,15 +211,20 @@ describe.each<{ a: number; b: number; expected: number }>`
 
 ## describe.for
 
-- **类型：** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **类型：**
 
-类似 each，但参数类型更灵活。
+```ts
+describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+类似 each，但参数类型更灵活。它同样接受可选的 [`TestOptions`](#testoptions) 第二个参数。
 
 ```ts
 describe.for([
   [1, 2],
   [2, 3],
-])('math $0 + $1', ([a, b]) => {
+])('math %i + %i', ([a, b]) => {
   test('add', () => {
     // ...
   });

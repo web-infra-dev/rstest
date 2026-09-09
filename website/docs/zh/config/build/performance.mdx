@@ -43,13 +43,13 @@ export default defineConfig({
 
 开启后，Rstest 会补上一些更适合测试场景的默认值，以保证缓存目录和失效条件更稳定：
 
-- `cacheDirectory` 默认使用当前 project 根目录下的 `node_modules/.cache/rstest-<project-name>`，即使多个 project 共用同一个 root，也能拥有独立缓存。
+- `cacheDirectory` 默认使用当前 project 根目录下的 `node_modules/.cache/rstest-<project-name>` 作为基目录。Rspack 会将缓存数据存放在 `<cacheDirectory>/<cache.name>` 下，即使多个 project 共用同一个 root，也能拥有独立缓存。
 - `cacheDigest` 会自动包含 Rstest 的运行输入，例如命令类型、环境名、browser / node 模式。
 - `buildDependencies` 会自动包含当前 Rstest 配置文件、各 project 配置文件，以及已解析到的 `tsconfig` 路径。
 
 你可以通过自定义配置来覆盖或扩展这些默认值：
 
-- `cacheDirectory`：**覆盖**。显式提供后，Rstest 会直接使用你的目录。
+- `cacheDirectory`：**覆盖**。显式提供后，Rstest 会将其作为基目录，最终缓存位置为 `<cacheDirectory>/<cache.name>`。
 - `cacheDigest`：**扩展**。Rstest 会保留自己的运行时摘要项，并把你的自定义值追加在后面。
 - `buildDependencies`：**扩展**。Rstest 会保留自己的依赖文件，并在把相对路径按当前配置文件目录解析后，再追加你的自定义文件。
 

@@ -1,7 +1,12 @@
 import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
-import type { EntryInfo, FormattedError } from '../types';
+import type {
+  EntryInfo,
+  FormattedError,
+  InternalContext,
+  InternalProjectContext,
+} from '../types';
 import {
   bgColor,
   color,
@@ -9,20 +14,28 @@ import {
   getWorkerSerialization,
   killAndWait,
 } from '../utils';
+import { prepareAssetFilesForIPC } from '../utils/assetFiles';
+import { composeWorkerEnv } from './workerEnv';
+
+/**
+ * Runs setup once per project, only when the project has running tests.
+ * The marker is set by runGlobalSetup on success, never by callers.
+ * A failed setup therefore retries on the next watch cycle.
+ */
+export function shouldRunGlobalSetup(
+  project: Pick<InternalProjectContext, '_globalSetups'>,
+  entriesLength: number,
+  globalSetupEntriesLength: number,
+): boolean {
+  if (!(entriesLength && globalSetupEntriesLength) || project._globalSetups) {
+    return false;
+  }
+  return true;
+}
 
 const CLOSE_TIMEOUT_MS = 10_000;
 
-let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
-
-function applyEnvChanges(changes: Record<string, string | undefined>) {
-  for (const key in changes) {
-    if (changes[key] === undefined) {
-      Reflect.deleteProperty(process.env, key);
-    } else {
-      process.env[key] = changes[key];
-    }
-  }
-}
+export const GLOBAL_TEARDOWN_ERROR = 'Global teardown failed.';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,7 +71,10 @@ export class GlobalSetupWorker {
     { resolve: (value: any) => void; reject: (err: Error) => void }
   >();
 
-  constructor(private readonly forkWorker: ForkWorker = fork) {}
+  constructor(
+    private readonly env: NodeJS.ProcessEnv,
+    private readonly forkWorker: ForkWorker = fork,
+  ) {}
 
   private rejectPending(id: number, error: Error): void {
     const handler = this.pending.get(id);
@@ -89,8 +105,9 @@ export class GlobalSetupWorker {
         ],
         env: {
           NODE_ENV: 'test',
+          // Config env is test-worker scoped; globalSetup uses host color env.
           ...getForceColorEnv(),
-          ...process.env,
+          ...this.env,
         } as NodeJS.ProcessEnv,
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         serialization: getWorkerSerialization(),
@@ -156,23 +173,35 @@ export class GlobalSetupWorker {
   }
 }
 
-export async function runGlobalSetup({
-  globalSetupEntries,
-  assetFiles,
-  sourceMaps,
-  interopDefault,
-  outputModule,
-}: {
-  globalSetupEntries: EntryInfo[];
-  assetFiles: Record<string, string>;
-  sourceMaps: Record<string, string>;
-  interopDefault: boolean;
-  outputModule: boolean;
-}): Promise<{
+export async function runGlobalSetup(
+  context: InternalContext,
+  project: Pick<InternalProjectContext, '_globalSetups'>,
+  {
+    globalSetupEntries,
+    assetFiles,
+    sourceMaps,
+    interopDefault,
+    outputModule,
+    federation,
+  }: {
+    globalSetupEntries: EntryInfo[];
+    assetFiles: Record<string, Buffer>;
+    sourceMaps: Record<string, string>;
+    interopDefault: boolean;
+    outputModule: boolean;
+    federation: boolean;
+  },
+): Promise<{
   success: boolean;
   errors?: any[];
+  /**
+   * Env change-set (including deletions as `undefined`) produced by the setup
+   * worker. Surfaced so the core pre-cycle stage can forward browser projects'
+   * changes onto the browser wire.
+   */
+  envChanges?: Record<string, string | undefined>;
 }> {
-  const worker = new GlobalSetupWorker();
+  const worker = new GlobalSetupWorker(composeWorkerEnv(context.workerEnv));
 
   const result = await worker.call<{
     success: boolean;
@@ -183,50 +212,67 @@ export async function runGlobalSetup({
     type: 'setup',
     payload: {
       entries: globalSetupEntries,
-      assetFiles,
+      assetFiles: prepareAssetFilesForIPC(assetFiles, 'forks'),
       interopDefault,
       outputModule,
+      federation,
       sourceMaps,
     },
   });
 
   if (result.success) {
-    // Apply environment variable changes to main process
+    project._globalSetups = true;
     if (result.envChanges) {
-      applyEnvChanges(result.envChanges);
+      Object.assign(context.workerEnv, result.envChanges);
     }
 
     if (result.hasTeardown) {
-      globalTeardownCallbacks.push(() => runWorkerTeardown(worker));
+      context.globalTeardownCallbacks.push(() =>
+        runWorkerTeardown(context, worker),
+      );
     } else {
       await worker.close();
     }
   } else {
-    await worker.close();
+    await runWorkerTeardown(context, worker);
   }
   return {
     success: result.success,
     errors: result.errors,
+    envChanges: result.envChanges,
   };
 }
 
-async function runWorkerTeardown(worker: GlobalSetupWorker): Promise<void> {
-  const result = await worker.call<{ success: boolean }>({ type: 'teardown' });
-  if (!result.success) {
-    process.exitCode = 1;
+async function runWorkerTeardown(
+  context: InternalContext,
+  worker: GlobalSetupWorker,
+): Promise<boolean> {
+  try {
+    const result = await worker.call<{ success: boolean }>({
+      type: 'teardown',
+    });
+    if (!result.success) {
+      context.exitCode.raise(1);
+    }
+    return result.success;
+  } finally {
+    await worker.close();
   }
-
-  await worker.close();
 }
 
-export async function runGlobalTeardown(): Promise<void> {
-  const teardownCallbacks = [...globalTeardownCallbacks];
-  globalTeardownCallbacks = [];
+export async function runGlobalTeardown(
+  context: InternalContext,
+): Promise<boolean> {
+  const teardownCallbacks = context.globalTeardownCallbacks.splice(0);
+  let success = true;
 
   // Run teardown in reverse order (LIFO - Last In, First Out)
   for (const teardown of teardownCallbacks.reverse()) {
     try {
-      await teardown();
+      if ((await teardown()) === false) {
+        success = false;
+        context.exitCode.raise(1);
+      }
     } catch (error) {
       console.error(bgColor('bgRed', 'Error during global teardown'));
       if (error instanceof Error) {
@@ -235,7 +281,10 @@ export async function runGlobalTeardown(): Promise<void> {
         console.error(color.red(String(error)));
       }
 
-      process.exitCode = 1;
+      success = false;
+      context.exitCode.raise(1);
     }
   }
+
+  return success;
 }

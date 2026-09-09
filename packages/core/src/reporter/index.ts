@@ -3,6 +3,7 @@ import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
+  InternalContext,
   NormalizedConfig,
   NormalizedProjectConfig,
   Reporter,
@@ -12,13 +13,16 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { isTTY } from '../utils';
+import { runLifecycleStep } from '../core/finalizeRun';
+import { color, flushOutputStreams, isTTY, logger } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 
 export class DefaultReporter implements Reporter {
+  readonly flushOutputStreams: boolean;
+
   protected rootPath: string;
   protected config: NormalizedConfig;
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
@@ -45,6 +49,7 @@ export class DefaultReporter implements Reporter {
     this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
     this.testState = testState;
+    this.flushOutputStreams = !options.logger;
     if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
         rootPath,
@@ -132,6 +137,7 @@ export class DefaultReporter implements Reporter {
 
   onExit(): void {
     this.statusRenderer?.clear();
+    this.statusRenderer?.stop();
     this.nonTTYProgressNotifier?.stop();
   }
 
@@ -159,7 +165,7 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -167,6 +173,10 @@ export class DefaultReporter implements Reporter {
       getSourcemap,
       filterRerunTestPaths,
     });
+
+    if (hasErrorLogs && this.flushOutputStreams) {
+      await flushOutputStreams();
+    }
 
     printSummaryLog({
       results,
@@ -176,4 +186,24 @@ export class DefaultReporter implements Reporter {
       snapshotSummary,
     });
   }
+}
+
+export function exitReporters(
+  context: Pick<InternalContext, 'reporters'>,
+): Promise<void> {
+  const exits: Promise<void>[] = [];
+  for (const reporter of context.reporters.splice(0)) {
+    const { onExit } = reporter;
+    if (!onExit) {
+      continue;
+    }
+    exits.push(
+      runLifecycleStep('reporter onExit', async () => {
+        await onExit.call(reporter);
+      }).catch((error) => {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }),
+    );
+  }
+  return Promise.all(exits).then(() => {});
 }

@@ -29,18 +29,6 @@ const getCurrentTestPath = (): string => {
   return testPath;
 };
 
-const getCurrentRunId = (): string => {
-  const runId =
-    window.__RSTEST_BROWSER_OPTIONS__?.runId ?? getUrlSearchParam('runId');
-  if (!runId) {
-    throw new Error(
-      'Browser RPC requires runId in __RSTEST_BROWSER_OPTIONS__. ' +
-        'This usually indicates the runner iframe URL/config is stale or incomplete.',
-    );
-  }
-  return runId;
-};
-
 const createBrowserDispatchRequest = (
   requestId: string,
   request: BrowserRpcRequest,
@@ -57,7 +45,7 @@ const createBrowserDispatchRequest = (
 };
 
 export const callBrowserRpc = async <T>(
-  payload: Omit<BrowserRpcRequest, 'id' | 'testPath' | 'runId'>,
+  payload: Omit<BrowserRpcRequest, 'id' | 'testPath'>,
 ): Promise<T> => {
   if (
     payload.kind === 'config' &&
@@ -71,7 +59,6 @@ export const callBrowserRpc = async <T>(
   const request: BrowserRpcRequest = {
     id,
     testPath: getCurrentTestPath(),
-    runId: getCurrentRunId(),
     ...payload,
   };
   const dispatchRequest = createBrowserDispatchRequest(id, request);

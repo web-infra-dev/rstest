@@ -1,3 +1,4 @@
+import type { BrowserProvider } from '@rstest/core/internal/browser';
 import type { BrowserRpcRequest } from '../rpcProtocol';
 import { playwrightProviderImplementation } from './playwright';
 
@@ -14,8 +15,14 @@ import { playwrightProviderImplementation } from './playwright';
  * - do not reference optional peer provider types from public declarations
  * - keep provider-specific behavior and config decoding inside provider implementations
  * - prefer direct passthrough to provider APIs over provider-specific translation
+ *
+ * The provider-name union is owned by `@rstest/core` (see `BROWSER_PROVIDERS`)
+ * because core's CLI `init` templates need it but cannot import this package
+ * (peer-dependency direction). `providerImplementations` below is keyed by the
+ * re-exported union, so a provider added in core without an implementation here
+ * is a compile error.
  */
-export type BrowserProvider = 'playwright';
+export type { BrowserProvider };
 
 /** Minimal console shape needed by host logging bridge. */
 export type BrowserConsoleMessage = {
@@ -42,8 +49,32 @@ export type BrowserProviderPage = {
       event: 'console',
       listener: (message: BrowserConsoleMessage) => void,
     ): void;
+    // Page died: renderer crash or unexpected close. Headless scheduling wires
+    // these to fail the file immediately. Listeners take no payload.
+    (event: 'crash' | 'close', listener: () => void): void;
   };
   close: () => Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void>;
+};
+
+export type BrowserV8CoverageEntry = {
+  url: string;
+  scriptId: string;
+  source?: string;
+  functions: {
+    functionName: string;
+    isBlockCoverage: boolean;
+    ranges: {
+      startOffset: number;
+      endOffset: number;
+      count: number;
+    }[];
+  }[];
+};
+
+export type BrowserV8CoverageCollector = {
+  start: (page: BrowserProviderPage) => Promise<void>;
+  take: (page: BrowserProviderPage) => Promise<BrowserV8CoverageEntry[]>;
 };
 
 /** Minimal browser context API surface required by hostController. */
@@ -51,11 +82,13 @@ export type BrowserProviderContext = {
   newPage: () => Promise<BrowserProviderPage>;
   on: (event: 'page', listener: (page: BrowserProviderPage) => void) => void;
   close: () => Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void>;
 };
 
 /** Minimal browser API surface required by hostController. */
 export type BrowserProviderBrowser = {
   close: () => Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void>;
   newContext: (options: {
     viewport: { width: number; height: number } | null;
     providerOptions?: Record<string, unknown>;
@@ -92,6 +125,9 @@ export type DispatchBrowserRpcInput = {
 export type BrowserProviderImplementation = {
   name: BrowserProvider;
   launchRuntime: (input: LaunchBrowserInput) => Promise<BrowserProviderRuntime>;
+  createV8CoverageCollector?: (input: {
+    browserName: LaunchBrowserInput['browserName'];
+  }) => BrowserV8CoverageCollector | null;
   dispatchRpc: (input: DispatchBrowserRpcInput) => Promise<unknown>;
 };
 

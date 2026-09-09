@@ -1,12 +1,18 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
+import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
 import { toError } from '../utils';
+import {
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  WORKER_CLEANUP_TIMEOUT_MS,
+} from '../utils/constants';
 import type { PoolWorker } from './poolWorker';
 import {
   type CollectTaskResult,
   deserializeError,
   isRpcEnvelope,
   isWorkerResponseEnvelope,
+  type TestEnvironmentModuleFallback,
   type WorkerResponse,
   wrapRpc,
 } from './protocol';
@@ -28,18 +34,14 @@ function formatCapturedStderr(text: string): string {
 }
 
 type RunnerState =
-  | 'IDLE'
-  | 'STARTING'
-  | 'STARTED'
-  | 'START_FAILURE'
-  | 'STOPPING'
-  | 'STOPPED';
+  'IDLE' | 'STARTING' | 'STARTED' | 'START_FAILURE' | 'STOPPING' | 'STOPPED';
 
 type TaskKind = 'run' | 'collect';
 
 type PendingTask = {
   kind: TaskKind;
   taskId: number;
+  provisionalResult?: TestFileResult;
   resolve: (result: TestFileResult | CollectTaskResult) => void;
   reject: (err: Error) => void;
 };
@@ -64,17 +66,9 @@ let nextTaskSeq = 0;
 
 type PoolRunnerOptions = {
   workerId: number;
-  /**
-   * Recycle this runner after it reports an RSS above this many bytes.
-   * Disabled when `0` or omitted. Only meaningful when the pool reuses
-   * runners (`isolate: false`); `isolate: true` workers are single-use.
-   *
-   * The worker reports its `process.memoryUsage().rss` at the end of
-   * each task. If a value exceeds the limit, `isUsable()` flips false
-   * and the pool's existing dispose path spawns a fresh runner instead
-   * of returning this one to the idle pool.
-   */
-  memoryLimitBytes?: number;
+  environmentKey: string;
+  memoryLimit?: number;
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
 
 /**
@@ -89,17 +83,23 @@ type PoolRunnerOptions = {
  */
 export class PoolRunner {
   readonly workerId: number;
+  /** Environment identity this worker holds for life — see `Pool.acquireRunner`. */
+  readonly environmentKey: string;
   readonly worker: PoolWorker;
   private state: RunnerState = 'IDLE';
   private operationChain: Promise<unknown> = Promise.resolve();
   private currentTask: PendingTask | undefined;
   private currentRpc: BirpcReturn<RuntimeRPC, ServerRPC> | undefined;
   private currentRpcDispatch:
-    | ((data: unknown, ...extras: unknown[]) => void)
-    | undefined;
+    ((data: unknown, ...extras: unknown[]) => void) | undefined;
   private startDeferred: Deferred | undefined;
+  private cleanupDeferred: Deferred | undefined;
+  private workerCleanupPromise: Promise<void> | undefined;
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
+  private cleanupTimer: NodeJS.Timeout | undefined;
+  private fixtureCleanupTimer: NodeJS.Timeout | undefined;
+  private workerCleanupCompleted = false;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -109,20 +109,17 @@ export class PoolRunner {
    * never recycles a poisoned runner. See review for rstest#1142.
    */
   private crashed = false;
-
-  /**
-   * Last RSS (bytes) reported by the worker. Updated on each
-   * `runFinished` / `collectFinished` response carrying a `memory`
-   * field. Compared against `memoryLimitBytes` in `isUsable()` so a
-   * bloated worker is recycled on next dispatch attempt instead of
-   * returning to the idle pool.
-   */
-  private lastReportedRssBytes = 0;
-  private readonly memoryLimitBytes: number;
+  private readonly onTestEnvironmentFallback?: (
+    fallback: TestEnvironmentModuleFallback,
+  ) => void;
+  private readonly memoryLimit: number | undefined;
+  private memoryLimitReached = false;
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
-    this.memoryLimitBytes = Math.max(0, options.memoryLimitBytes ?? 0);
+    this.environmentKey = options.environmentKey;
+    this.memoryLimit = options.memoryLimit;
+    this.onTestEnvironmentFallback = options.onTestEnvironmentFallback;
     this.worker = worker;
 
     this.handleMessage = this.handleMessage.bind(this);
@@ -135,14 +132,11 @@ export class PoolRunner {
   }
 
   isUsable(): boolean {
-    if (this.state !== 'STARTED' || this.crashed) return false;
-    if (
-      this.memoryLimitBytes > 0 &&
-      this.lastReportedRssBytes > this.memoryLimitBytes
-    ) {
-      return false;
-    }
-    return true;
+    return this.state === 'STARTED' && !this.crashed;
+  }
+
+  shouldRecycle(): boolean {
+    return this.memoryLimitReached;
   }
 
   start(): Promise<void> {
@@ -248,12 +242,79 @@ export class PoolRunner {
         return;
       }
 
+      let cleanupError: Error | undefined;
+      if (
+        !options?.force &&
+        !this.currentTask &&
+        !this.crashed &&
+        !this.workerCleanupCompleted
+      ) {
+        try {
+          await this.requestWorkerCleanup();
+        } catch (error) {
+          cleanupError = toError(error);
+          this.crashed = true;
+        }
+      }
+      if (!this.worker.hasLiveChild()) {
+        this.state = 'STOPPED';
+        if (cleanupError) throw cleanupError;
+        return;
+      }
+
       this.state = 'STOPPING';
-      this.stopDeferred = createDeferred();
+      const stopDeferred = createDeferred();
+      this.stopDeferred = stopDeferred;
 
       await this.worker.stop({ force: options?.force ?? false });
-      await this.stopDeferred.promise;
+      await stopDeferred.promise;
+      if (cleanupError) throw cleanupError;
     });
+  }
+
+  private requestWorkerCleanup(): Promise<void> {
+    if (this.workerCleanupPromise) {
+      return this.workerCleanupPromise;
+    }
+    const deferred = createDeferred();
+    this.cleanupDeferred = deferred;
+    this.cleanupTimer = setTimeout(() => {
+      this.rejectCleanup(
+        new Error(
+          `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
+        ),
+      );
+    }, WORKER_CLEANUP_TIMEOUT_MS);
+    this.cleanupTimer.unref();
+    try {
+      this.worker.send({ type: 'cleanup' });
+    } catch (error) {
+      this.rejectCleanup(toError(error));
+    }
+    const cleanupPromise = deferred.promise.finally(() => {
+      if (this.workerCleanupPromise === cleanupPromise) {
+        this.workerCleanupPromise = undefined;
+      }
+    });
+    this.workerCleanupPromise = cleanupPromise;
+    return cleanupPromise;
+  }
+
+  async cleanupWorkerFixtures(): Promise<void> {
+    if (
+      this.currentTask ||
+      this.workerCleanupCompleted ||
+      this.crashed ||
+      !this.worker.hasLiveChild()
+    ) {
+      return;
+    }
+    try {
+      await this.requestWorkerCleanup();
+    } catch (error) {
+      this.crashed = true;
+      throw error;
+    }
   }
 
   private async runOperation<T>(op: () => Promise<T>): Promise<T> {
@@ -353,13 +414,52 @@ export class PoolRunner {
         this.startDeferred?.resolve();
         this.startDeferred = undefined;
         return;
+      case 'cleanupFinished':
+        if (response.error) {
+          this.rejectCleanup(deserializeError(response.error));
+        } else {
+          this.workerCleanupCompleted = true;
+          this.resolveCleanup();
+        }
+        return;
+      case 'fileCleanupStarted':
+        if (this.currentTask?.taskId === response.taskId) {
+          this.currentTask.provisionalResult = response.result;
+        }
+        this.startFixtureCleanupTimer(response.taskId);
+        return;
+      case 'fileCleanupFinished':
+        if (this.currentTask?.taskId === response.taskId) {
+          this.clearFixtureCleanupTimer();
+        }
+        return;
+      case 'workerCleanupStarted':
+        this.startFixtureCleanupTimer(response.taskId, 'Worker');
+        return;
+      case 'workerCleanupFinished':
+        if (this.currentTask?.taskId === response.taskId) {
+          this.clearFixtureCleanupTimer();
+          if (response.error) {
+            // `runInPool` reports cleanup before its final run result. Do not
+            // reject the task here: that would discard the provisional result
+            // (coverage, trace events, metadata, and test results) and force
+            // `workerErrorToResult` to reconstruct a much smaller failure.
+            // The worker appends this error to `runResult` before sending
+            // `runFinished`; marking the runner crashed prevents reuse.
+            this.crashed = true;
+          }
+        }
+        return;
       case 'runFinished':
-        if (response.memory) this.lastReportedRssBytes = response.memory.rss;
+        this.recordMemoryUsage(response.memory?.heapUsed);
         this.resolveTask('run', response.taskId, response.result);
         return;
       case 'collectFinished':
-        if (response.memory) this.lastReportedRssBytes = response.memory.rss;
+        this.recordMemoryUsage(response.memory?.heapUsed);
         this.resolveTask('collect', response.taskId, response.result);
+        return;
+      case 'testEnvironmentFallback':
+        this.onTestEnvironmentFallback?.(response.fallback);
         return;
       case 'fatal_error': {
         const error = deserializeError(response.error);
@@ -386,11 +486,28 @@ export class PoolRunner {
     const task = this.currentTask;
     if (!task || task.kind !== kind || task.taskId !== taskId) return;
     this.currentTask = undefined;
+    this.clearFixtureCleanupTimer();
     task.resolve(result);
+  }
+
+  private recordMemoryUsage(heapUsed: number | undefined): void {
+    if (
+      this.memoryLimit !== undefined &&
+      heapUsed !== undefined &&
+      heapUsed >= this.memoryLimit
+    ) {
+      this.memoryLimitReached = true;
+    }
   }
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
     this.clearStartTimer();
+    this.clearFixtureCleanupTimer();
+    this.rejectCleanup(
+      new Error(
+        `Worker exited during fixture cleanup (code=${code}, signal=${signal})`,
+      ),
+    );
 
     const wasStopping = this.state === 'STOPPING';
     this.state = 'STOPPED';
@@ -433,6 +550,8 @@ export class PoolRunner {
     // responds — hanging the whole run. Mark as crashed so `isUsable()`
     // returns false and `Pool.releaseRunner` disposes instead of recycling.
     this.crashed = true;
+    this.clearFixtureCleanupTimer();
+    this.rejectCleanup(err);
     this.rejectStart(err);
     if (this.currentTask) {
       this.rejectCurrentTaskWithStderr(err);
@@ -451,6 +570,7 @@ export class PoolRunner {
     const task = this.currentTask;
     if (!task) return;
     this.currentTask = undefined;
+    this.clearFixtureCleanupTimer();
 
     // Defer rejection briefly so pending stderr `data` events drain before
     // reading the buffer. The worker's `exit` event fires before stderr's
@@ -474,5 +594,73 @@ export class PoolRunner {
     if (!this.startTimer) return;
     clearTimeout(this.startTimer);
     this.startTimer = undefined;
+  }
+
+  private startFixtureCleanupTimer(
+    taskId: number,
+    scope: 'File' | 'Worker' = 'File',
+  ): void {
+    if (this.currentTask?.taskId !== taskId) {
+      return;
+    }
+    this.clearFixtureCleanupTimer();
+    const timeoutMs =
+      scope === 'Worker'
+        ? WORKER_CLEANUP_TIMEOUT_MS
+        : FIXTURE_CLEANUP_TIMEOUT_MS;
+    this.fixtureCleanupTimer = setTimeout(() => {
+      if (this.currentTask?.taskId !== taskId) {
+        return;
+      }
+      this.crashed = true;
+      const error = new Error(
+        `${scope} fixture cleanup did not finish within ${timeoutMs}ms`,
+      );
+      const task = this.currentTask;
+      if (task.kind === 'run' && task.provisionalResult) {
+        this.currentTask = undefined;
+        this.clearFixtureCleanupTimer();
+        this.attachStderrToError(error);
+        task.resolve(
+          createFileCleanupTimeoutResult({
+            message: error.message,
+            projectName: task.provisionalResult.project,
+            result: task.provisionalResult,
+            testPath: task.provisionalResult.testPath,
+          }),
+        );
+        return;
+      }
+      this.rejectCurrentTaskWithStderr(error);
+    }, timeoutMs);
+    this.fixtureCleanupTimer.unref();
+  }
+
+  private clearFixtureCleanupTimer(): void {
+    if (!this.fixtureCleanupTimer) return;
+    clearTimeout(this.fixtureCleanupTimer);
+    this.fixtureCleanupTimer = undefined;
+  }
+
+  private resolveCleanup(): void {
+    const deferred = this.cleanupDeferred;
+    if (!deferred) return;
+    this.cleanupDeferred = undefined;
+    this.clearCleanupTimer();
+    deferred.resolve();
+  }
+
+  private rejectCleanup(error: Error): void {
+    const deferred = this.cleanupDeferred;
+    if (!deferred) return;
+    this.cleanupDeferred = undefined;
+    this.clearCleanupTimer();
+    deferred.reject(error);
+  }
+
+  private clearCleanupTimer(): void {
+    if (!this.cleanupTimer) return;
+    clearTimeout(this.cleanupTimer);
+    this.cleanupTimer = undefined;
   }
 }

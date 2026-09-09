@@ -40,8 +40,6 @@ describe('Async operations', () => {
 
     // Wait for next frame
     await new Promise((resolve) => globalThis.requestAnimationFrame(resolve));
-    await sleep(50);
-
     expect(called).toBe(true);
   });
 
@@ -61,12 +59,23 @@ describe('Async operations', () => {
   it('should handle setInterval', async () => {
     let count = 0;
 
-    const intervalId = globalThis.setInterval(() => {
-      count++;
-    }, 20);
+    await new Promise<void>((resolve, reject) => {
+      const intervalId = globalThis.setInterval(() => {
+        count++;
+        if (count >= 2) {
+          globalThis.clearTimeout(timeoutId);
+          globalThis.clearInterval(intervalId);
+          resolve();
+        }
+      }, 20);
 
-    await sleep(300);
-    globalThis.clearInterval(intervalId);
+      const timeoutId = globalThis.setTimeout(() => {
+        globalThis.clearInterval(intervalId);
+        reject(
+          new Error(`Expected interval to tick at least twice, got ${count}`),
+        );
+      }, 1000);
+    });
 
     expect(count).toBeGreaterThanOrEqual(2);
   });

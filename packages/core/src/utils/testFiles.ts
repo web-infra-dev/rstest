@@ -1,18 +1,65 @@
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import pathe from 'pathe';
-import { glob } from 'tinyglobby';
-import type { FileFilterMode, Project } from '../types';
-import { castArray, parsePosix } from './helper';
+import { glob, isDynamicPattern } from 'tinyglobby';
+import type { Project } from '../types';
+import {
+  castArray,
+  isQuotedFilter,
+  normalizeExactPathMatch,
+  parsePosix,
+  unquoteFilter,
+} from './helper';
 import { color } from './logger';
+
+/**
+ * Whether a CLI file filter points inside `projectRootPath`. Shared by the run
+ * path's browser-subset planning and `rstest list` so both commands classify a
+ * filter against the same project boundaries.
+ */
+export const isFilterInsideProject = (
+  filter: string,
+  projectRootPath: string,
+  rootPath: string,
+): boolean => {
+  const path = unquoteFilter(filter);
+  const absoluteFilter = pathe.normalize(
+    pathe.isAbsolute(path) ? path : pathe.resolve(rootPath, path),
+  );
+  const relativeFilter = pathe.normalize(
+    pathe.relative(projectRootPath, absoluteFilter),
+  );
+
+  return (
+    relativeFilter === '' ||
+    (!relativeFilter.startsWith('..') && !pathe.isAbsolute(relativeFilter))
+  );
+};
+
+/**
+ * Whether a CLI file filter is an unquoted basename fragment (no path separator,
+ * no leading `.`) that substring matching applies to every project.
+ */
+export const isFuzzyBasenameFilter = (filter: string): boolean => {
+  if (isQuotedFilter(filter) || pathe.isAbsolute(filter)) {
+    return false;
+  }
+
+  const normalizedFilter = pathe.normalize(filter);
+  return (
+    !normalizedFilter.startsWith('.') &&
+    !normalizedFilter.includes('/') &&
+    !normalizedFilter.includes('\\')
+  );
+};
 
 export const filterFiles = (
   testFiles: string[],
   filters: string[],
   dir: string,
-  mode: FileFilterMode = 'fuzzy',
 ): string[] => {
   if (!filters.length) {
-    return testFiles;
+    return [];
   }
 
   const fileFilters =
@@ -20,31 +67,30 @@ export const filterFiles = (
       ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
 
-  if (mode === 'exact') {
-    const normalizeExactMatchPath = (filePath: string) => {
-      const normalizedPath = pathe.normalize(filePath);
-      return process.platform === 'win32'
-        ? normalizedPath.toLocaleLowerCase()
-        : normalizedPath;
-    };
-
-    const exactFilters = new Set(
-      fileFilters.map((filter) => normalizeExactMatchPath(filter)),
-    );
-
-    return testFiles.filter((testFilePath) => {
-      const absolutePath = normalizeExactMatchPath(testFilePath);
-      const relativePath = normalizeExactMatchPath(
-        pathe.relative(dir, testFilePath),
-      );
-
-      return exactFilters.has(absolutePath) || exactFilters.has(relativePath);
-    });
+  const exactFilters = new Set<string>();
+  const fuzzyFilters: string[] = [];
+  for (const filter of fileFilters) {
+    if (isQuotedFilter(filter)) {
+      exactFilters.add(normalizeExactPathMatch(unquoteFilter(filter)));
+    } else {
+      fuzzyFilters.push(filter);
+    }
   }
 
   return testFiles.filter((t) => {
-    const testFile = pathe.relative(dir, t).toLocaleLowerCase();
-    return fileFilters.some((f) => {
+    const relativePath = pathe.relative(dir, t);
+    if (
+      exactFilters.size > 0 &&
+      (exactFilters.has(normalizeExactPathMatch(t)) ||
+        exactFilters.has(normalizeExactPathMatch(relativePath)))
+    ) {
+      return true;
+    }
+    if (fuzzyFilters.length === 0) {
+      return false;
+    }
+    const testFile = relativePath.toLocaleLowerCase();
+    return fuzzyFilters.some((f) => {
       // if filter is a full file path, we should include it if it's in the same folder
       if (pathe.isAbsolute(f) && t.startsWith(f)) {
         return true;
@@ -100,34 +146,50 @@ export const getTestEntries = async ({
   rootPath,
   projectRoot,
   fileFilters,
-  fileFilterMode,
   includeSource,
 }: {
   rootPath: string;
   include: string[];
   exclude: string[];
   includeSource: string[];
-  fileFilters: string[];
-  fileFilterMode?: FileFilterMode;
+  fileFilters?: string[];
   projectRoot: string;
 }): Promise<Record<string, string>> => {
-  const testFiles = await glob(include, {
+  const globOptions = {
     cwd: projectRoot,
     absolute: true,
     ignore: exclude,
     dot: true,
     expandDirectories: false,
-  });
+  };
 
-  if (includeSource?.length) {
-    const sourceFiles = await glob(includeSource, {
-      cwd: projectRoot,
-      absolute: true,
-      ignore: exclude,
-      dot: true,
-      expandDirectories: false,
-    });
+  // The include glob and the in-source glob are independent filesystem walks,
+  // so run them concurrently. Passing the full `include` (literal entries
+  // included) keeps `exclude` behaving exactly as before for real files.
+  const [globbedFiles, sourceFiles] = await Promise.all([
+    glob(include, globOptions),
+    includeSource?.length ? glob(includeSource, globOptions) : [],
+  ]);
 
+  // Virtual modules (backed by `experiments.VirtualModulesPlugin`) are listed
+  // as literal includes but don't exist on disk, so the glob above drops them
+  // — add those back. Real literal includes already flowed through the glob, so
+  // `exclude` applies to them; only genuinely-missing paths qualify as virtual
+  // here, and `exclude` does not apply to those. `isDynamicPattern` mirrors
+  // tinyglobby's own glob/literal split, so a glob that matches nothing is
+  // never mistaken for a virtual path.
+  const virtualFiles = include
+    .filter((pattern) => !isDynamicPattern(pattern))
+    .map((p) => pathe.resolve(projectRoot, p))
+    .filter((abs) => !existsSync(abs));
+
+  // glob already returns a unique list (as on `main`), so only build a Set to
+  // dedupe when virtual entries are actually present.
+  const testFiles = virtualFiles.length
+    ? Array.from(new Set([...globbedFiles, ...virtualFiles]))
+    : globbedFiles;
+
+  if (sourceFiles.length) {
     await Promise.all<void>(
       sourceFiles.map(async (file) => {
         try {
@@ -143,12 +205,13 @@ export const getTestEntries = async ({
   }
 
   return Object.fromEntries(
-    filterFiles(testFiles, fileFilters, rootPath, fileFilterMode).map(
-      (entry) => {
-        const relativePath = pathe.relative(rootPath, entry);
-        return [formatTestEntryName(relativePath), entry];
-      },
-    ),
+    (fileFilters === undefined
+      ? testFiles
+      : filterFiles(testFiles, fileFilters, rootPath)
+    ).map((entry) => {
+      const relativePath = pathe.relative(rootPath, entry);
+      return [formatTestEntryName(relativePath), entry];
+    }),
   );
 };
 

@@ -1,4 +1,5 @@
 import type {
+  MaybePromise,
   Rstest,
   RunnerAPI,
   RunnerHooks,
@@ -7,31 +8,62 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
+import { getFileTaskId } from '../../utils/helper';
+import { fileContext, setFileContext } from '../fileContext';
 import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
-import { createRuntimeAPI } from './runtime';
+import { RunnerRuntime, runtimeAPI, type RootSuiteListeners } from './runtime';
 import { traverseUpdateTest } from './task';
 
-export const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
+// The running file's execution-phase runner (see the live-binding contract in
+// `../api`; `createRunner` publishes the context per file).
+const currentRunner = (): TestRunner => fileContext().testRunner;
+
+export type FileCleanupHooks = {
+  onFileCleanupStart?: (result?: TestFileResult) => MaybePromise<void>;
+  onFileCleanupEnd?: () => MaybePromise<void>;
+};
+
+const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
+  const runner = currentRunner();
+  runner.onTestFinished(runner.getCurrentTest(), ...args);
+};
+
+const onTestFailed: RunnerAPI['onTestFailed'] = (...args) => {
+  const runner = currentRunner();
+  runner.onTestFailed(runner.getCurrentTest(), ...args);
+};
+
+/**
+ * The full stable `@rstest/core` runner surface, built once: the collection-phase
+ * `runtimeAPI` plus the execution-phase `onTestFinished`/`onTestFailed`
+ * forwarders. Spread into the injected api by `createRstestRuntime` (`../api`).
+ */
+export const runnerAPI: RunnerAPI = {
+  ...runtimeAPI,
+  onTestFinished,
+  onTestFailed,
 };
 
 export function createRunner({
   workerState,
   taskContext,
+  runtimeGlobal,
 }: {
   workerState: WorkerState;
   taskContext: TaskContext;
+  runtimeGlobal?: Record<string, unknown>;
 }): {
-  api: RunnerAPI;
   runner: {
     runTests: (
       testFilePath: string,
-      hooks: RunnerHooks,
+      hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
+    getRootSuiteListeners: () => RootSuiteListeners;
+    setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
 } {
   const {
@@ -39,56 +71,94 @@ export function createRunner({
     project,
     runtimeConfig: { testNamePattern },
   } = workerState;
-  const runtime = createRuntimeAPI({
+  const runtimeInstance = new RunnerRuntime({
     project,
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });
   const testRunner: TestRunner = new TestRunner(taskContext);
+  // Publish this file's context as one unit; every stable forwarder (runner
+  // surface, `expect`, `rstest` config methods) resolves it at call time.
+  setFileContext({
+    workerState,
+    runtimeGlobal,
+    runnerRuntime: runtimeInstance,
+    testRunner,
+  });
 
   return {
-    api: {
-      ...runtime.api,
-      onTestFinished: (fn, timeout) => {
-        testRunner.onTestFinished(testRunner.getCurrentTest(), fn, timeout);
-      },
-      onTestFailed: (fn, timeout) => {
-        testRunner.onTestFailed(testRunner.getCurrentTest(), fn, timeout);
-      },
-    },
     runner: {
-      runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
+      runTests: async (
+        testPath: string,
+        hooks: RunnerHooks & FileCleanupHooks,
+        api: Rstest,
+      ) => {
         const snapshotClient = workerState.snapshotClient!;
 
-        await snapshotClient.setup(testPath, workerState.snapshotOptions);
+        await hooks.onSnapshotSetupStart?.();
+        try {
+          await snapshotClient.setup(testPath, workerState.snapshotOptions);
+        } finally {
+          await hooks.onSnapshotSetupEnd?.();
+        }
 
-        const tests = await runtime.instance.getTests();
+        const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
           testPath,
+          project: workerState.project,
           tests: tests.map(toTestInfo),
         });
-        runtime.instance.updateStatus('running');
+        runtimeInstance.updateStatus('running');
 
-        const results = await testRunner.runTests({
-          tests,
-          testPath,
-          state: workerState,
-          hooks,
-          api,
-          snapshotClient,
-        });
+        try {
+          const results = await testRunner.runTests({
+            tests,
+            testPath,
+            state: workerState,
+            hooks,
+            api,
+            snapshotClient,
+          });
 
-        return results;
+          await hooks.onFileCleanupStart?.(results);
+          try {
+            return (await testRunner.cleanupFileFixtures(results))!;
+          } finally {
+            await hooks.onFileCleanupEnd?.();
+          }
+        } catch (error) {
+          try {
+            await hooks.onFileCleanupStart?.();
+            try {
+              await testRunner.cleanupFileFixtures();
+            } finally {
+              await hooks.onFileCleanupEnd?.();
+            }
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              [
+                'Test execution and file fixture cleanup both failed.',
+                `Test execution failed: ${error instanceof Error ? error.message : String(error)}`,
+                `File fixture cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+              ].join('\n'),
+            );
+          }
+          throw error;
+        }
       },
       collectTests: async () => {
-        const tests = await runtime.instance.getTests();
+        const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);
 
         return tests.map(toTestInfo);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
+      getRootSuiteListeners: () => runtimeInstance.getRootSuiteListeners(),
+      setRootSuiteListeners: (listeners) =>
+        runtimeInstance.setRootSuiteListeners(listeners),
     },
   };
 }
@@ -102,6 +172,7 @@ function toTestInfo(test: Test): TestInfo {
     project: test.project,
     type: test.type,
     location: test.location,
+    meta: test.meta,
     tests: test.type === 'suite' ? test.tests.map(toTestInfo) : [],
     runMode: test.runMode,
   };

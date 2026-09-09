@@ -1,4 +1,15 @@
 import fs from 'node:fs';
+import { normalize } from 'pathe';
+
+export const getCoverageSummaryEntry = <T>(
+  summary: Record<string, T>,
+  filePath: string,
+): T | undefined => {
+  const normalizedFilePath = normalize(filePath);
+  return Object.entries(summary).find(
+    ([reportedPath]) => normalize(reportedPath) === normalizedFilePath,
+  )?.[1];
+};
 
 export const getTestName = (log: string, prefix: string) =>
   log.slice(0, log.lastIndexOf('(')).split(prefix)[1]!.trim();
@@ -16,4 +27,19 @@ export const sleep = (ms: number) => {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+};
+
+/**
+ * Extracts a `<marker>...__END__` JSON payload that a fixture reporter or
+ * script printed to stdout. Each suite prints under its own marker.
+ */
+export const parseMarkerPayload = <T>(stdout: string, marker: string): T => {
+  const start = stdout.indexOf(marker);
+  const end = start === -1 ? -1 : stdout.indexOf('__END__', start);
+  if (start === -1 || end === -1) {
+    throw new Error(
+      `${marker} payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
+    );
+  }
+  return JSON.parse(stdout.slice(start + marker.length, end)) as T;
 };

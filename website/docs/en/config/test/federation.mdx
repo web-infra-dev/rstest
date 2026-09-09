@@ -1,0 +1,70 @@
+---
+description: Enable Module Federation support.
+---
+
+# federation
+
+import { ApiMeta } from '@components/ApiMeta';
+
+<ApiMeta addedVersion="0.11.4" />
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--federation`
+
+Whether to enable [Module Federation](https://module-federation.io/) support.
+
+Rstest supports Module Federation in both Node Mode and Browser Mode. Node-based runners, including `testEnvironment: 'node'` and DOM-simulated environments such as `jsdom` and `happy-dom`, use Rstest's compatibility shims for federation runtimes that load chunks through Node APIs. Node Mode support is available from Rstest `0.11.4`. Browser Mode uses the bundler's web federation runtime and requires Rstest `0.11.10` or newer.
+
+Rstest evaluates test bundles inside a single worker runtime so that module mocks stay effective. Module Federation runtimes load remote entries and chunks on their own — via Node `fs`/`vm`/`eval` or over HTTP — outside of that runtime. When `federation` is enabled, Rstest installs additional runtime shims to make the two work together:
+
+- Externalized dynamic imports get a `globalThis` fallback, so federation runtime chunks evaluated via `vm`/`eval` can still load modules with Node's native dynamic import.
+- Module Federation's placeholder chunk handlers (`consumes` / `remotes`) are kept from throwing before the federation runtime initializes.
+- Federation runtime plugins cannot replace Rstest's chunk-loading handlers, which would otherwise evaluate chunks outside the test runtime and lose mocks.
+- Node-targeted federation runs use Rstest's CommonJS worker loader; Rstest forces `output.chunkLoading: 'require'` so async chunks load through Rstest's module loader from the in-memory build output instead of the filesystem.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --federation
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  federation: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## Testing a federated app
+
+`federation` only prepares the test runtime; it does not configure remotes, exposes, or shared modules. When you use [@module-federation/rstest](https://github.com/module-federation/core), the plugin configures the Module Federation build and automatically enables Rstest's compatibility mode for Node-based test environments, so do not also set `federation: true`.
+
+Start with the [Module Federation guide](/integration/module-federation) for installation and the Rstest testing workflow. See the [official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration and the complete plugin options.
+
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [
+    federation({
+      name: 'main_app',
+      remotes: {
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
+      },
+      shared: {
+        react: { singleton: true },
+      },
+    }),
+  ],
+});
+```
+
+This Node-based example consumes a Node-targeted `remoteEntry.cjs`. Browser Mode should consume the browser build's `remoteEntry.js`. See the [Module Federation guide](/integration/module-federation) for the distinction and the [federation example](https://github.com/web-infra-dev/rstest/tree/main/examples/federation) for a complete setup with Browser Mode, HTTP remotes, local CommonJS remotes, and SSR tests.

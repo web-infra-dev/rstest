@@ -10,7 +10,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color } from '../utils';
+import { color, flushOutputStreams } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logUserConsoleLog } from './utils';
 
@@ -32,6 +32,8 @@ const COLOR_BY_STATUS: Record<
 };
 
 export class DotReporter implements Reporter {
+  readonly flushOutputStreams: boolean;
+
   private readonly rootPath: string;
   private readonly options: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
   private readonly outputStream: NonNullable<
@@ -53,6 +55,7 @@ export class DotReporter implements Reporter {
   }) {
     this.rootPath = rootPath;
     this.options = options;
+    this.flushOutputStreams = !options.logger;
     this.outputStream = options.logger?.outputStream ?? process.stdout;
     this.getColumns =
       options.logger?.getColumns ??
@@ -102,7 +105,7 @@ export class DotReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -110,6 +113,10 @@ export class DotReporter implements Reporter {
       getSourcemap,
       filterRerunTestPaths,
     });
+
+    if (hasErrorLogs && this.flushOutputStreams) {
+      await flushOutputStreams();
+    }
 
     printSummaryLog({
       results,

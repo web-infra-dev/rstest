@@ -4,19 +4,26 @@
  * without any Node.js or build tool dependencies.
  *
  * Used by:
- * - packages/browser/src/client/entry.ts (runtime APIs)
- * - packages/browser/src/client/public.ts (test APIs via alias)
+ * - packages/browser/src/client/runner.ts (runtime APIs)
+ *
+ * User test code importing '@rstest/core' is not aliased here; the browser
+ * build keeps that request external against `globalThis['@rstest/core']`
+ * (see `applyWebMockRspackConfig`), mirroring the node build's external.
  */
 
 // Runtime API for creating test runtime in browser
 export { createRstestRuntime } from './runtime/api';
+export { registerElementExpect } from './runtime/api/expect';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
-export { setRealTimers } from './runtime/util';
+export { getRealTimers, setRealTimers } from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
+export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
 export type { TaskContext } from './runtime/worker/taskContext';
+export type { FileCleanupHooks } from './runtime/runner';
 // Types for browser runtime
 export type {
+  BrowserRuntimeConfig,
   CoverageMapData,
   CurrentTaskInfo,
   RunnerHooks,
@@ -28,4 +35,17 @@ export type {
   WorkerState,
 } from './types';
 // Constants needed by browser client
-export { globalApis } from './utils/constants';
+export {
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  globalApis,
+  RSTEST_API_GLOBAL_KEY,
+  RSTEST_ENV_SYMBOL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
+} from './utils/constants';
+// Node-parity console argument formatting for the browser console relay.
+export { formatConsoleArgs } from './runtime/consoleFormat';
+// Shared snapshot header so browser-written `.snap` files match node's.
+export { SNAPSHOT_HEADER } from './utils/snapshotPath';
+// Browser-safe regexp wire-format decoder (mirrors the host-side encoder used
+// by `serializableConfig`). Kept here so the client never re-declares it.
+export { unwrapRegex } from './utils/regexpWireFormat';

@@ -1,0 +1,44 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { createRstest } from '@rstest/core/api';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const cwd = join(__dirname, 'disk');
+let reporterFileMeta;
+const reporterCaseMeta = [];
+const suiteMeta = [];
+
+const rstest = await createRstest({
+  cwd,
+  config: {
+    include: ['sum.test.ts'],
+    reporters: [
+      {
+        onTestSuiteResult(result) {
+          if (result.name === 'disk sum') {
+            suiteMeta.push(result.meta);
+          }
+        },
+        onTestCaseResult(result) {
+          reporterCaseMeta.push(result.meta);
+        },
+        onTestFileResult(result) {
+          reporterFileMeta = result.meta;
+        },
+      },
+    ],
+  },
+});
+const result = await rstest.run();
+
+console.log(
+  `__RSTEST_API_RESULT__${JSON.stringify({
+    status: result.status,
+    contextProjects: rstest.context.projects,
+    fileMeta: result.files[0]?.meta,
+    caseMeta: result.files[0]?.tests.map((r) => r.meta),
+    reporterFileMeta,
+    reporterCaseMeta,
+    suiteMeta,
+  })}__END__`,
+);

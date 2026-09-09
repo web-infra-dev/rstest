@@ -1,0 +1,133 @@
+---
+description: Common Rstest troubleshooting notes for migration and runtime differences.
+---
+
+# Troubleshooting
+
+This page explains common problems that come from Rstest's execution model. They are often not test failures caused by your assertions, but differences between Rstest, Jest, Vitest, and native Node.js runtime behavior.
+
+## Code outside the bundle graph uses native Node.js behavior
+
+Rstest runs tests with a bundle-based execution model. Files that are part of the bundle graph are transformed by Rstest's build pipeline, so TypeScript, JSX, aliases, and selected dependency transforms can work before the test worker executes them.
+
+Some code is still loaded by Node.js at runtime instead of by the bundler. Common examples include:
+
+- late dynamic `require()` or `import(dynamicPath)` calls,
+- modules externalized from the bundle,
+- code loaded by custom Node.js loaders or register hooks,
+- code loaded through Node.js APIs after the test bundle has started.
+
+For these parts, Rstest currently preserves Node.js native semantics. This makes Node.js flags, `--require`, `--import`, and `node:module` register hooks usable in test workers, but it also means Rstest does not emulate every transform-time convenience from Jest, `ts-jest`, or Vitest.
+
+A useful rule of thumb is:
+
+- Static imports and modules in the bundle graph → let Rstest transform or bundle them.
+- Late dynamic `require()` or `import(dynamicPath)` / Node.js loader hooks / externalized modules → expect Node.js native behavior unless you register a loader or change the bundling strategy.
+
+## Runtime `require()` of CommonJS-style TypeScript files fails in `type: module`
+
+### Symptom
+
+A package is configured as ESM with `"type": "module"`, but some runtime-loaded `.ts` files still contain CommonJS code:
+
+```json title="package.json"
+{
+  "type": "module"
+}
+```
+
+```ts title="plugin.ts"
+module.exports = {
+  name: 'plugin',
+};
+```
+
+```ts title="loader.ts"
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const plugin = require('./plugin.ts');
+```
+
+On Node.js versions that support running `.ts` files directly, `require('./plugin.ts')` follows Node.js native module classification. In a `type: module` package scope, Node.js treats `plugin.ts` as ESM rather than CommonJS, so CommonJS assignments such as `module.exports = ...` are not exported as a CommonJS value.
+
+### Cause
+
+Rstest transforms files that are part of the bundle graph. However, code that is loaded later by Node.js keeps Node.js native loader semantics.
+
+Modern Node.js can strip supported TypeScript syntax from `.ts` files, but it still uses the same module-system rules as JavaScript files. In a `type: module` package, `.ts` is treated like `.js`: it is ESM by default. If that `.ts` file contains CommonJS globals such as `module.exports`, `exports`, or `require`, Node.js does not rewrite it into CommonJS for you.
+
+This can be different from Jest setups that use `ts-jest`, because `ts-jest` can register a runtime loader hook and compile the file before Node.js applies the same native boundary. It can also be different from Vitest, because Vitest's transform/runtime model may hide some of these Node.js loader boundaries.
+
+### Solution
+
+Prefer making the runtime-loaded file match Node.js native module semantics:
+
+- Rename the CommonJS TypeScript file to `.cts` when it must stay CommonJS.
+- Or convert the file to ESM syntax when it lives under `type: module`.
+- Or move it into a package scope with `"type": "commonjs"`.
+
+If the dynamic load depends on a custom transform, register that transform explicitly. For migrated Jest projects, the simplest place is [`setupFiles`](/config/test/setup-files):
+
+Install the runtime loader you plan to register first. Rstest does not install these loaders for you; for example, [@swc-node/register](https://github.com/swc-project/swc-node) provides a SWC-based TypeScript require hook, while [ts-node](https://github.com/TypeStrong/ts-node) provides the `ts-node/register` hook:
+
+```bash
+npm add -D @swc-node/register
+# or: npm add -D ts-node
+```
+
+```ts title="test/rstest.setup.ts"
+import '@swc-node/register';
+// or: import 'ts-node/register';
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  setupFiles: ['./test/rstest.setup.ts'],
+});
+```
+
+If the hook must be active before worker runtime code starts, pass Node.js register flags through [`pool.execArgv`](/config/test/pool#pass-nodejs-flags-to-workers):
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    execArgv: ['--require', 'ts-node/register'],
+    // or: execArgv: ['--import', './register.mjs'],
+  },
+});
+```
+
+## Named imports from CommonJS dependencies fail
+
+### Symptom
+
+A test or source file imports named exports from a CommonJS dependency:
+
+```ts
+import { create } from 'enhanced-resolve';
+```
+
+When the dependency is executed by Node.js as native ESM, the import may fail because Node.js can only expose named exports that its CommonJS lexer can detect statically.
+
+### Cause
+
+Some CommonJS packages create exports dynamically, for example through getters or `Object.defineProperty`. TypeScript types may still declare named exports, and some tools may make those named imports work by transforming or wrapping the dependency at runtime. Native Node.js ESM interop is stricter: if Node.js cannot statically detect the named export, `import { create } from 'pkg'` fails even though `import pkg from 'pkg'` can work.
+
+This is not specific to Rstest. It is a consequence of letting Node.js execute code that stayed outside the bundle graph. It may become visible during migration from Vitest because Vitest may transform more of the dependency path and provide more permissive CommonJS interop.
+
+### Solution
+
+Prefer the import shape that matches Node.js native CommonJS interop:
+
+```ts
+import enhancedResolve from 'enhanced-resolve';
+
+const { create } = enhancedResolve;
+```
+
+If you need bundler interop for a specific dependency, bundle that dependency so Rstest's build pipeline can process it instead of leaving it to Node.js. In the `node` environment, third-party dependencies are externalized by default; use [`output.bundleDependencies`](/config/build/output#outputbundledependencies) to bundle selected packages that need transformation.

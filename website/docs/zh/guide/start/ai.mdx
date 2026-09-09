@@ -27,18 +27,18 @@ import { PackageManagerTabs } from '@theme';
 <Prompt
   title="设置 Rstest"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Set up Rstest in this project by following the instructions here:
+  prompt={`Set up Rstest, the JavaScript testing framework, in this project by following the instructions here:
 https://rstest.rs/guide/start/agent-install.md`}
 />
 
-### 从 Jest 或 Vitest 迁移
+### 从 Jest、Vitest 或 Playwright 迁移
 
-如果要将现有的 Jest 或 Vitest 项目迁移到 Rstest，使用这个 prompt。为方便使用，链接中的指令内联了完整的 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill，无需额外安装；你也可以[安装该 skill](#agent-skills) 后直接使用：
+如果要将现有的 Jest、Vitest 或 Playwright Test 项目迁移到 Rstest，使用这个 prompt。Playwright Test 项目会迁移到 `@rstest/playwright`。为方便使用，链接中的指令内联了完整的 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill，无需额外安装；你也可以[安装该 skill](#agent-skills) 后直接使用：
 
 <Prompt
   title="迁移到 Rstest"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this project to Rstest by following the instructions here:
+  prompt={`Migrate this project to Rstest, the JavaScript testing framework. Detect whether it uses Jest, Vitest, or Playwright Test; for Playwright Test, migrate to @rstest/playwright. Follow the instructions here:
 https://rstest.rs/guide/start/agent-migrate.md`}
 />
 
@@ -48,8 +48,9 @@ Agent Skills 是可安装到 Agent 中的领域知识包，能够让 Agent 在�
 
 我们在 [rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) 仓库中为 Rstack 生态提供了许多 Skills，其中关于 Rstest 的 Skills 包括：
 
-- [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest)：将 Jest 或 Vitest 项目迁移到 Rstest。
+- [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest)：将 Jest、Vitest 或 Playwright Test 项目迁移到 Rstest；Playwright E2E 测试使用 `@rstest/playwright`。
 - [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices)：Rstest 相关的最佳实践。
+- [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging)：系统化 Debug Rstest 问题，包括性能回归。适用于 Rstest 比预期更慢、比 Jest 或 Vitest 更慢，或需要在尝试配置或代码改动前判断瓶颈是在构建启动还是测试执行中的场景。
 
 在支持 Skills 的 Coding Agent 中，可以通过以下命令使用 [skills](https://www.npmjs.com/package/skills) 包安装指定的 Skill：
 
@@ -61,7 +62,7 @@ Agent Skills 是可安装到 Agent 中的领域知识包，能够让 Agent 在�
 安装完成后，用自然语言输入相关提示词即可触发对应 Skill，例如：
 
 ```
-帮我把这个 Jest 项目迁移到 Rstest
+帮我把这个 Playwright Test 项目迁移到 @rstest/playwright
 ```
 
 ## llms.txt
@@ -102,7 +103,7 @@ https://rstest.rs/guide/start/index.md
 在 Agent 环境中，当你没有显式配置 reporters 时，Rstest 会默认使用 `md`。
 
 ```bash
-npx rstest --reporter=md
+npx rstest --reporters=md
 ```
 
 你也可以在 `rstest.config.ts` 中配置它，并在本地或 CI 工作流中与其他报告器组合使用。

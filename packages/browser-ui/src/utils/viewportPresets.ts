@@ -2,7 +2,7 @@ import {
   BROWSER_VIEWPORT_PRESET_DIMENSIONS,
   BROWSER_VIEWPORT_PRESET_IDS,
 } from '@rstest/browser/viewport-presets';
-import type { DevicePreset } from '@rstest/core/browser';
+import type { DevicePreset } from '@rstest/core/internal/browser';
 
 export type { DevicePreset };
 

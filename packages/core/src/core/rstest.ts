@@ -3,7 +3,7 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
-import { DefaultReporter } from '../reporter';
+import { DefaultReporter, exitReporters } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
 import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
@@ -12,27 +12,31 @@ import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
-  FileFilterMode,
+  BuiltInReporterNames,
+  InternalContext,
+  InternalProjectContext,
   NormalizedConfig,
   NormalizedProjectConfig,
   Project,
-  ProjectContext,
   Reporter,
   RstestCommand,
   RstestConfig,
-  RstestContext,
   RstestTestState,
   TestFileResult,
   TestResult,
 } from '../types';
+import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import {
   castArray,
+  DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT,
+  DEFAULT_BROWSER_TEST_TIMEOUT,
+  ENV,
   getAbsolutePath,
-  logger,
   normalizeBuildCache,
   resolveBuildCacheDependencyPaths,
   TS_CONFIG_FILE,
 } from '../utils';
+import { createExitCode, type RstestExitCode } from './exitCode';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -42,21 +46,52 @@ function formatEnvironmentName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
 }
 
+type OutputModuleConfig = {
+  federation: boolean;
+  output?: {
+    module?: boolean;
+  };
+};
+
+const resolveOutputModule = (config: OutputModuleConfig): boolean =>
+  config.federation
+    ? false
+    : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');
+
+const applyBrowserDefaults = <
+  Config extends Pick<NormalizedConfig, 'browser' | 'testTimeout' | 'expect'>,
+>(
+  config: Config,
+  userConfig: RstestConfig,
+): Config => {
+  if (!config.browser.enabled) {
+    return config;
+  }
+  if (userConfig.testTimeout === undefined) {
+    config.testTimeout = DEFAULT_BROWSER_TEST_TIMEOUT;
+  }
+  if (userConfig.expect?.poll?.timeout === undefined) {
+    config.expect.poll.timeout = DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT;
+  }
+  return config;
+};
+
 type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
-  fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded?: boolean;
+  initializeReporters?: boolean;
 };
 
-export class Rstest implements RstestContext {
+export class Rstest implements InternalContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
-  public fileFilterMode?: FileFilterMode;
   public relatedFilters?: string[];
   public relatedMode?: 'related' | 'changed';
   public relatedResolutionEmpty?: boolean;
@@ -64,6 +99,14 @@ export class Rstest implements RstestContext {
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
+  public embedded: boolean;
+  public exitCode: RstestExitCode = createExitCode();
+  public workerEnv: Record<string, string | undefined> = {};
+  public globalTeardownCallbacks: Array<
+    () => boolean | void | Promise<boolean | void>
+  > = [];
+  public packageInstallerConfirm?: PackageInstallerConfirm;
+  public closeWatchSession?: () => Promise<void>;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
@@ -78,6 +121,7 @@ export class Rstest implements RstestContext {
     results: [],
     testResults: [],
   };
+  private reporterResultIndex = new Map<string, number>();
   public stateManager: TestStateManager = new TestStateManager();
 
   public testState: RstestTestState = {
@@ -92,17 +136,18 @@ export class Rstest implements RstestContext {
     },
   };
 
-  public projects: ProjectContext[] = [];
+  public projects: InternalProjectContext[] = [];
 
   public constructor(
     {
       cwd = process.cwd(),
       command,
       fileFilters,
-      fileFilterMode,
       configFilePath,
       projects,
       trace = false,
+      embedded = false,
+      initializeReporters = true,
     }: Options,
     userConfig: RstestConfig,
   ) {
@@ -110,26 +155,28 @@ export class Rstest implements RstestContext {
     this.command = command;
     this.trace = trace;
     this.fileFilters = fileFilters;
-    this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
+    this.embedded = embedded;
 
     const rootPath = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(
-      resolveBuildCacheDependencyPaths(
-        {
-          ...userConfig,
-          root: rootPath,
-        },
-        configFilePath,
+    const rstestConfig = applyBrowserDefaults(
+      withDefaultConfig(
+        resolveBuildCacheDependencyPaths(
+          {
+            ...userConfig,
+            root: rootPath,
+          },
+          configFilePath,
+        ),
       ),
+      userConfig,
     );
 
     if (command === 'watch' && rstestConfig.shard) {
-      logger.error('Test sharding is not supported in watch mode.');
-      process.exit(1);
+      throw new Error('Test sharding is not supported in watch mode.');
     }
 
     const snapshotManager = new SnapshotManager({
@@ -145,32 +192,26 @@ export class Rstest implements RstestContext {
       ? projects.map((project) => {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
 
-          if (
-            project.config.shard &&
-            (project.config.shard.count !== rstestConfig.shard?.count ||
-              project.config.shard.index !== rstestConfig.shard?.index)
-          ) {
-            logger.error(
-              'The `shard` option is a global option and cannot be set per-project.\n' +
-                'global `shard` option:\n' +
-                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
-                `project "${project.config.name}" shard option:\n` +
-                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
-            );
-            process.exit(1);
-          }
-
           // TODO: support extend projects config
-          const config = withDefaultConfig(
-            resolveBuildCacheDependencyPaths(
-              project.config,
-              project.configFilePath ?? configFilePath,
-            ),
-          ) as NormalizedProjectConfig;
+          const projectUserConfig = resolveBuildCacheDependencyPaths(
+            project.config,
+            project.configFilePath ?? configFilePath,
+          );
+          const config = applyBrowserDefaults(
+            withDefaultConfig(projectUserConfig) as NormalizedProjectConfig,
+            projectUserConfig,
+          );
           // some configs are global only
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;
           config.bail = rstestConfig.bail;
+          // `resolveSnapshotPath` and `onConsoleLog` are omitted from
+          // ProjectConfig (root-only), so they must be copied down; otherwise the
+          // per-project event pump reads `undefined` and silently drops the root
+          // behavior in multi-project mode (default snapshot paths / unfiltered
+          // console), diverging from the browser host which reads root config.
+          config.resolveSnapshotPath = rstestConfig.resolveSnapshotPath;
+          config.onConsoleLog = rstestConfig.onConsoleLog;
 
           config.source ??= {};
           if (!config.source.tsconfigPath) {
@@ -208,9 +249,7 @@ export class Rstest implements RstestContext {
             rootPath: config.root,
             name: config.name,
             _globalSetups: false,
-            outputModule:
-              config.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+            outputModule: resolveOutputModule(config),
             environmentName,
             normalizedConfig: config,
           };
@@ -221,9 +260,7 @@ export class Rstest implements RstestContext {
             rootPath,
             _globalSetups: false,
             name: rstestConfig.name,
-            outputModule:
-              rstestConfig.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+            outputModule: resolveOutputModule(rstestConfig),
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },
@@ -235,7 +272,7 @@ export class Rstest implements RstestContext {
     );
 
     const reporters =
-      command !== 'list'
+      initializeReporters && command !== 'list'
         ? createReporters(rstestConfig.reporters, {
             rootPath,
             config: rstestConfig,
@@ -254,6 +291,20 @@ export class Rstest implements RstestContext {
           })
         : [];
 
+    // Like sharding above: blob reports feed the one-shot `merge-reports` CI
+    // workflow, and recording across watch reruns has no coherent semantics
+    // (a rerun replaces results the recorded events no longer match).
+    if (
+      command === 'watch' &&
+      reporters.some((r) => r instanceof BlobReporter)
+    ) {
+      // Sync scope; sync onExit hooks run eagerly, async ones never reject.
+      void exitReporters({ reporters });
+      throw new Error(
+        'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
+      );
+    }
+
     this.reporters = reporters;
   }
 
@@ -264,12 +315,14 @@ export class Rstest implements RstestContext {
   ): void {
     // Update or add results
     results.forEach((item) => {
-      const existingIndex = this.reporterResults.results.findIndex(
-        (r) => r.testPath === item.testPath,
-      );
-      if (existingIndex !== -1) {
+      const existingIndex = this.reporterResultIndex.get(item.testPath);
+      if (existingIndex !== undefined) {
         this.reporterResults.results[existingIndex] = item;
       } else {
+        this.reporterResultIndex.set(
+          item.testPath,
+          this.reporterResults.results.length,
+        );
         this.reporterResults.results.push(item);
       }
     });
@@ -292,19 +345,31 @@ export class Rstest implements RstestContext {
           (r) => !deletedPathsSet.has(r.testPath),
         );
     }
+
+    // Reporter *presentation* order is deterministic by test path, decoupled
+    // from *execution* order (which is perf-first and cache/timing dependent —
+    // see testSequencer.ts). Without this, the order files appear in reports
+    // would shift run-to-run with the sequencer's scheduling. Sort is stable,
+    // so individual test cases keep their in-file declaration order.
+    const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
+      a.testPath.localeCompare(b.testPath);
+    this.reporterResults.results.sort(byTestPath);
+    this.reporterResultIndex.clear();
+    this.reporterResults.results.forEach((result, index) => {
+      this.reporterResultIndex.set(result.testPath, index);
+    });
+    this.reporterResults.testResults.sort(byTestPath);
   }
 }
 
-const reportersMap: {
-  default: typeof DefaultReporter;
-  dot: typeof DotReporter;
-  verbose: typeof VerboseReporter;
-  'github-actions': typeof GithubActionsReporter;
-  junit: typeof JUnitReporter;
-  json: typeof JsonReporter;
-  md: typeof MdReporter;
-  blob: typeof BlobReporter;
-} = {
+// `satisfies Record<BuiltInReporterNames, …>` keeps this map in lockstep with
+// the BuiltInReporterNames union (the single source of truth): a name added to
+// the union without a class here is a missing-key compile error, and a class
+// added here without a union entry is an excess-key error. The previous explicit
+// object-type annotation duplicated the key list and let the two drift, surfacing
+// only as a runtime "Reporter X not found". `satisfies` (not `:`) preserves each
+// value's concrete constructor type for the `new reportersMap[name](…)` call.
+const reportersMap = {
   default: DefaultReporter,
   dot: DotReporter,
   verbose: VerboseReporter,
@@ -313,36 +378,45 @@ const reportersMap: {
   json: JsonReporter,
   md: MdReporter,
   blob: BlobReporter,
-};
+} satisfies Record<BuiltInReporterNames, new (...args: any[]) => unknown>;
 
 function createReporters(
   reporters: RstestConfig['reporters'],
   initConfig: any = {},
 ): (Reporter | GithubActionsReporter | JUnitReporter)[] {
-  const result = castArray(reporters).map((reporter) => {
-    if (typeof reporter === 'string' || Array.isArray(reporter)) {
-      const [name, options = {}] =
-        typeof reporter === 'string' ? [reporter, {}] : reporter;
-      // built-in reporters
-      if (name in reportersMap) {
-        const Reporter = reportersMap[name];
-        return new Reporter({
-          ...initConfig,
-          options: {
-            ...(initConfig.options || {}),
-            ...options,
-          },
-        });
+  const result: (Reporter | GithubActionsReporter | JUnitReporter)[] = [];
+  try {
+    for (const reporter of castArray(reporters)) {
+      if (typeof reporter === 'string' || Array.isArray(reporter)) {
+        const [name, options = {}] =
+          typeof reporter === 'string' ? [reporter, {}] : reporter;
+        // built-in reporters
+        if (name in reportersMap) {
+          const Reporter = reportersMap[name];
+          result.push(
+            new Reporter({
+              ...initConfig,
+              options: {
+                ...(initConfig.options || {}),
+                ...options,
+              },
+            }),
+          );
+          continue;
+        }
+
+        // TODO: load third-party reporters
+        throw new Error(
+          `Reporter ${name} not found. Please install it or use a built-in reporter.`,
+        );
       }
 
-      // TODO: load third-party reporters
-      throw new Error(
-        `Reporter ${name} not found. Please install it or use a built-in reporter.`,
-      );
+      result.push(reporter);
     }
-
-    return reporter;
-  });
-
-  return result;
+    return result;
+  } catch (error) {
+    // Sync scope; sync onExit hooks run eagerly, async ones never reject.
+    void exitReporters({ reporters: result });
+    throw error;
+  }
 }

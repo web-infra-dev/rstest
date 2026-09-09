@@ -5,6 +5,7 @@ import stripAnsi from 'strip-ansi';
 import type {
   Duration,
   GetSourcemap,
+  ReporterWithOptions,
   SnapshotSummary,
   TestFileResult,
   TestResult,
@@ -25,16 +26,20 @@ import {
   type FailureItem,
   formatFullTestName,
   getErrorType,
+  getRetryErrorLabel,
   pushFencedBlock,
   pushHeading,
 } from './utils';
 
 export class GithubActionsReporter {
-  private readonly onWritePath: (path: string) => string;
+  readonly flushOutputStreams = true;
+
+  private readonly onWritePath?: (path: string) => string;
   private readonly rootPath: string;
   private readonly stepSummaryPath?: string;
   private readonly enableAnnotations: boolean;
   private readonly enableSummary: boolean;
+  private readonly summaryMaxCharsPerField: number;
   private readonly reportName?: string;
 
   constructor({
@@ -46,10 +51,9 @@ export class GithubActionsReporter {
     config?: {
       name?: string;
     };
-    options: {
-      onWritePath: (path: string) => string;
-      annotations?: boolean;
-      summary?: boolean;
+    options: ReporterWithOptions<'github-actions'>[1] & {
+      // `createReporters` never supplies this; only tests do. Optional is the truth.
+      onWritePath?: (path: string) => string;
     };
   }) {
     this.onWritePath = options.onWritePath;
@@ -57,6 +61,14 @@ export class GithubActionsReporter {
     this.stepSummaryPath = process.env.GITHUB_STEP_SUMMARY;
     this.enableAnnotations = options.annotations !== false;
     this.enableSummary = options.summary !== false;
+    this.summaryMaxCharsPerField =
+      typeof options.summary === 'object'
+        ? Math.max(
+            0,
+            options.summary.maxCharsPerField ??
+              STEP_SUMMARY_DEFAULT_MAX_CHARS_PER_FIELD,
+          )
+        : STEP_SUMMARY_DEFAULT_MAX_CHARS_PER_FIELD;
     this.reportName = config?.name;
   }
 
@@ -158,6 +170,7 @@ export class GithubActionsReporter {
           failures,
           getSourcemap,
           unhandledErrors,
+          maxCharsPerField: this.summaryMaxCharsPerField,
         }),
       );
     }
@@ -175,7 +188,7 @@ function escapeData(s: string): string {
 
 const STEP_SUMMARY_MAX_FAILURES = 20;
 const STEP_SUMMARY_MAX_FLAKY_TESTS = 20;
-const STEP_SUMMARY_MAX_MESSAGE_LENGTH = 400;
+const STEP_SUMMARY_DEFAULT_MAX_CHARS_PER_FIELD = 400;
 const STEP_SUMMARY_MAX_FLAKY_MESSAGE_LENGTH = 160;
 const ROOT_PATH_PLACEHOLDER = '<ROOT>';
 const DEFAULT_PROJECT_NAME = 'rstest';
@@ -270,6 +283,7 @@ async function renderStepSummary({
   failures,
   getSourcemap,
   unhandledErrors,
+  maxCharsPerField,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
@@ -279,6 +293,7 @@ async function renderStepSummary({
   failures: FailureItem[];
   getSourcemap: GetSourcemap;
   unhandledErrors?: Error[];
+  maxCharsPerField: number;
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
   const packageManagerAgent = await detectPackageManagerAgent(rootPath);
@@ -361,12 +376,19 @@ async function renderStepSummary({
 
       pushHeading(lines, 3, `❌ FAIL Unhandled Error ${index + 1}`);
       lines.push(
-        `**${error.name || 'Error'}**: ${trimForSummary(error.message)}`,
+        `**${error.name || 'Error'}**: ${trimForSummary(
+          error.message,
+          maxCharsPerField,
+        )}`,
       );
       lines.push('');
 
       if (error.stack) {
-        pushFencedBlock(lines, '', stripAnsi(trimForSummary(error.stack)));
+        pushFencedBlock(
+          lines,
+          '',
+          stripAnsi(trimForSummary(error.stack, maxCharsPerField)),
+        );
       }
     }
 
@@ -387,18 +409,26 @@ async function renderStepSummary({
       const relativePath = relative(rootPath, test.testPath);
       const fullName = formatFullTestName(test);
       const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
-      pushHeading(lines, 3, `❌ FAIL ${title}`);
+      const retrySuffix = test.retryCount ? ` (retry x${test.retryCount})` : '';
+      pushHeading(lines, 3, `❌ FAIL ${title}${retrySuffix}`);
 
       for (const error of errors.length
         ? errors
         : [{ message: 'Unknown error' }]) {
         const errorType = getErrorType(error);
-        const message = trimForSummary(error.message);
-        lines.push(`**${errorType}**: ${message}`);
+        const message = trimForSummary(error.message, maxCharsPerField);
+        const retryLabel = getRetryErrorLabel(error);
+        lines.push(
+          `**${retryLabel ? `${retryLabel} - ` : ''}${errorType}**: ${message}`,
+        );
         lines.push('');
 
         if (error.diff) {
-          pushFencedBlock(lines, 'diff', stripAnsi(trimForSummary(error.diff)));
+          pushFencedBlock(
+            lines,
+            'diff',
+            stripAnsi(trimForSummary(error.diff, maxCharsPerField)),
+          );
         }
 
         if (error.stack) {
@@ -441,12 +471,16 @@ async function renderStepSummary({
   return `${lines.join('\n')}\n`;
 }
 
-function trimForSummary(input: string): string {
-  if (input.length <= STEP_SUMMARY_MAX_MESSAGE_LENGTH) {
+function trimForSummary(input: string, maxChars: number): string {
+  if (input.length <= maxChars) {
     return input;
   }
 
-  return `${input.slice(0, STEP_SUMMARY_MAX_MESSAGE_LENGTH - 1)}…`;
+  if (maxChars === 0) {
+    return '';
+  }
+
+  return `${input.slice(0, maxChars - 1)}…`;
 }
 
 function collectFlakyTests(testResults: TestResult[]): TestResult[] {

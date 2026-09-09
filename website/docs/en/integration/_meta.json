@@ -1,0 +1,48 @@
+[
+  {
+    "type": "section-header",
+    "label": "Integrations"
+  },
+  "module-federation",
+  "playwright",
+  "rslint",
+  {
+    "type": "custom-link",
+    "label": "Rslib",
+    "collapsible": true,
+    "collapsed": true,
+    "items": [
+      { "label": "Overview", "link": "/integration/rslib/" },
+      {
+        "label": "Configuration reference",
+        "link": "/integration/rslib/reference"
+      }
+    ]
+  },
+  {
+    "type": "custom-link",
+    "label": "Rsbuild",
+    "collapsible": true,
+    "collapsed": true,
+    "items": [
+      { "label": "Overview", "link": "/integration/rsbuild/" },
+      {
+        "label": "Configuration reference",
+        "link": "/integration/rsbuild/reference"
+      }
+    ]
+  },
+  {
+    "type": "custom-link",
+    "label": "Rspack",
+    "collapsible": true,
+    "collapsed": true,
+    "items": [
+      { "label": "Overview", "link": "/integration/rspack/" },
+      {
+        "label": "Configuration reference",
+        "link": "/integration/rspack/reference"
+      }
+    ]
+  }
+]

@@ -5,7 +5,7 @@
       "source": "rstackjs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/create-draft-release-notes/SKILL.md",
-      "computedHash": "976322727110f876a069fbd2a3f8ee23fa2cd4b6bd5fa454e309062b0c9da608"
+      "computedHash": "ac0fd0bc0eb7abde798501f8915a87905125c67a52cee37fb1913f178dbe517d"
     },
     "pr-creator": {
       "source": "rstackjs/agent-skills",

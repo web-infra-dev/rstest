@@ -1,6 +1,9 @@
 import type { TestFileResult } from '../types';
 import { PoolRunner } from './poolRunner';
-import type { CollectTaskResult } from './protocol';
+import type {
+  CollectTaskResult,
+  TestEnvironmentModuleFallback,
+} from './protocol';
 import type { PoolOptions, PoolTask } from './types';
 import { createPoolWorker } from './workers';
 
@@ -9,7 +12,7 @@ import { createPoolWorker } from './workers';
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
  *   - parallel dispatch up to maxWorkers, slot-waiter blocks excess callers
  *   - isolate=true: fresh runner per task, stopped in the background
- *   - isolate=false: idle runners reused, lazy-spawned on demand
+ *   - isolate=false: idle runners reused (environment-matched), lazy-spawned
  */
 export class Pool {
   private readonly options: PoolOptions;
@@ -23,6 +26,7 @@ export class Pool {
    */
   private readonly stoppingRunners = new Set<PoolRunner>();
   private readonly stoppingPromises = new Set<Promise<void>>();
+  private readonly workerStopErrors: Error[] = [];
   private readonly slotWaiters: Array<() => void> = [];
   /**
    * Set of currently-assigned worker ids. Mirrors Jest's `JEST_WORKER_ID`
@@ -33,6 +37,7 @@ export class Pool {
    * motivated restoring this.
    */
   private readonly slotInUse = new Set<number>();
+  private readonly reportedEnvironmentFallbacks = new Set<string>();
   private isClosing = false;
   private isClosed = false;
 
@@ -40,8 +45,50 @@ export class Pool {
     this.options = options;
   }
 
+  private readonly handleTestEnvironmentFallback = (
+    fallback: TestEnvironmentModuleFallback,
+  ): void => {
+    const key = `${fallback.bundlePath}\0${fallback.resolvedPath}`;
+    if (this.reportedEnvironmentFallbacks.has(key)) {
+      return;
+    }
+    this.reportedEnvironmentFallbacks.add(key);
+    this.options.onTestEnvironmentFallback?.(fallback);
+  };
+
   async runTest(task: PoolTask): Promise<TestFileResult> {
     return this.dispatch(task, 'run') as Promise<TestFileResult>;
+  }
+
+  async cleanupWorkerFixtures(): Promise<Error[]> {
+    if (this.options.isolate) {
+      return [];
+    }
+
+    // A reusable runner can already be stopping when the idle floor sheds an
+    // environment-mismatched worker. Its stop path owns worker fixture
+    // cleanup, so drain those promises before finalizing the run and preserve
+    // any errors they reported.
+    const errors = await this.drainWorkerStopErrors();
+    const idleErrors = await Promise.all(
+      this.idleRunners.map(async (runner) => {
+        try {
+          await runner.cleanupWorkerFixtures();
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error(String(error));
+        }
+      }),
+    );
+    errors.push(
+      ...idleErrors.filter((error): error is Error => error !== undefined),
+    );
+    return errors;
+  }
+
+  async drainWorkerStopErrors(): Promise<Error[]> {
+    await Promise.all([...this.stoppingPromises]);
+    return this.workerStopErrors.splice(0);
   }
 
   async collectTests(task: PoolTask): Promise<CollectTaskResult> {
@@ -69,12 +116,28 @@ export class Pool {
     }
   }
 
+  /**
+   * Ordering invariant: a caller's slot is claimed synchronously before the
+   * first `await` in this method — either by reusing an idle runner, or by
+   * pushing onto `slotWaiters` inside the Promise executor below. The
+   * sequential dispatch gate in `pool/index.ts` relies on this to preserve
+   * perf-sorted enqueue order; do not introduce an `await` before the slot is
+   * claimed (idle-runner reuse or `slotWaiters` push) without revisiting it.
+   */
   private async acquireRunner(task: PoolTask): Promise<PoolRunner> {
+    const { environmentKey } = task.options;
+
     while (true) {
       // Prefer reuse of an idle runner (only meaningful when isolate=false,
-      // since isolate=true never returns runners to the idle pool).
-      const reuse = this.idleRunners.pop();
-      if (reuse) {
+      // since isolate=true never returns runners to the idle pool). Most
+      // recently returned first (LIFO) — hottest kept module cache — and
+      // restricted to runners already holding this task's environment, so a
+      // reused worker never has to swap environments mid-life.
+      const reuseIndex = this.idleRunners.findLastIndex(
+        (idle) => idle.environmentKey === environmentKey,
+      );
+      if (reuseIndex !== -1) {
+        const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
         if (reuse.isUsable()) {
           this.activeRunners.add(reuse);
           return reuse;
@@ -87,6 +150,13 @@ export class Pool {
 
       const inFlight = this.inFlightCount;
       if (inFlight >= this.options.maxWorkers) {
+        // No idle runner holds this environment. Idle runners still occupy
+        // slots, so shed the coldest one rather than parking behind workers
+        // that can never serve this task; its slot — and this waiter — is
+        // released once the child exits.
+        if (this.idleRunners.length > 0) {
+          this.disposeRunnerInBackground(this.idleRunners.shift()!);
+        }
         await new Promise<void>((resolve) => {
           this.slotWaiters.push(resolve);
         });
@@ -113,16 +183,11 @@ export class Pool {
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
-      // `memoryLimitBytes` only matters when runners are reused
-      // (`isolate: false`). For `isolate: true` the runner is single-use
-      // so the cap is irrelevant and we omit it to keep `isUsable()`
-      // hot-path free of the (cheap) comparison.
       const runner = new PoolRunner(worker, {
         workerId,
-        memoryLimitBytes:
-          this.options.isolate === false
-            ? this.options.memoryLimitBytes
-            : undefined,
+        environmentKey,
+        memoryLimit: this.options.memoryLimit,
+        onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
       });
       this.activeRunners.add(runner);
       try {
@@ -189,7 +254,8 @@ export class Pool {
       this.options.isolate !== false ||
       this.isClosing ||
       this.isClosed ||
-      !runner.isUsable()
+      !runner.isUsable() ||
+      runner.shouldRecycle()
     ) {
       // Background dispose. The slot stays accounted for in `stoppingRunners`
       // until the child actually exits, so `isolate: true` cannot transiently
@@ -209,10 +275,18 @@ export class Pool {
     //   2) There is no waiter, but the idle pool has not yet reached
     //      `minWorkers` — keep the runner around as steady-state capacity.
     // Otherwise the idle pool is already at the floor, so shed this runner.
+    //
+    // The floor is counted per environment, because reuse is environment-
+    // matched: idle runners holding a different environment can never serve
+    // this one, so counting them would let a cold environment's leftovers
+    // squat the floor and force this environment to respawn every task.
     const minWorkers = Math.max(this.options.minWorkers, 0);
     const hasWaiter = this.slotWaiters.length > 0;
+    const idleForEnvironment = this.idleRunners.filter(
+      (idle) => idle.environmentKey === runner.environmentKey,
+    ).length;
 
-    if (hasWaiter || this.idleRunners.length < minWorkers) {
+    if (hasWaiter || idleForEnvironment < minWorkers) {
       this.idleRunners.push(runner);
       if (hasWaiter) {
         // Idle slot is immediately consumable — wake one waiter now.
@@ -236,7 +310,11 @@ export class Pool {
     this.stoppingRunners.add(runner);
     const stopPromise: Promise<void> = runner
       .stop(options)
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        this.workerStopErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      })
       .finally(() => {
         this.stoppingRunners.delete(runner);
         this.stoppingPromises.delete(stopPromise);
@@ -260,12 +338,25 @@ export class Pool {
       this.slotWaiters.shift()?.();
     }
     const runners = [...this.activeRunners, ...this.idleRunners];
-    await Promise.all(runners.map((r) => r.stop().catch(() => undefined)));
+    await Promise.all(
+      runners.map((runner) =>
+        runner.stop().catch((error: unknown) => {
+          this.workerStopErrors.push(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }),
+      ),
+    );
     // Drain background-stopping runners — `isolate: true` releases hand
     // children off here, and `close()` must not return until they are gone.
     await Promise.all([...this.stoppingPromises]);
     this.idleRunners.length = 0;
     this.activeRunners.clear();
     this.isClosed = true;
+    const errors = this.workerStopErrors.splice(0);
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Failed to stop test workers.');
+    }
   }
 }

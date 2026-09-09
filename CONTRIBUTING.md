@@ -32,7 +32,13 @@ What this will do:
 
 - Install all dependencies.
 - Create symlinks between packages in the monorepo
-- Run the prepare script to build all packages.
+- Run the prepare script to set up Git hooks.
+
+Then build all packages before running tests or e2e, as they consume the built output:
+
+```bash
+pnpm run build
+```
 
 ## Making changes and building
 

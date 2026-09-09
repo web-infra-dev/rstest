@@ -148,7 +148,7 @@ Locator 的交互操作是严格的：如果一个 locator 匹配到多个元素
 以下是一个完整的表单提交测试示例，展示了常用的用户交互方法：
 
 ```tsx title="src/LoginForm.test.tsx"
-import { expect, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import { render } from '@rstest/browser-react';
 import { getByLabelText, getByRole } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -156,7 +156,7 @@ import { LoginForm } from './LoginForm';
 
 test('submits login form with user credentials', async () => {
   const user = userEvent.setup();
-  const onSubmit = rstest.fn();
+  const onSubmit = rs.fn();
 
   const { container } = await render(<LoginForm onSubmit={onSubmit} />);
 

@@ -11,6 +11,7 @@ describe('JUnitReporter', () => {
 
     const mockTestResults: TestResult[] = [
       {
+        testId: 'test-1',
         status: 'pass',
         name: 'should pass',
         testPath: '/test/root/test1.test.ts',
@@ -18,6 +19,7 @@ describe('JUnitReporter', () => {
         project: 'default',
       },
       {
+        testId: 'test-2',
         status: 'fail',
         name: 'should fail',
         testPath: '/test/root/test1.test.ts',
@@ -33,6 +35,7 @@ describe('JUnitReporter', () => {
         project: 'default',
       },
       {
+        testId: 'test-3',
         status: 'skip',
         name: 'should skip',
         testPath: '/test/root/test1.test.ts',
@@ -43,6 +46,7 @@ describe('JUnitReporter', () => {
 
     const mockFileResults: TestFileResult[] = [
       {
+        testId: 'test-4',
         status: 'fail',
         name: 'test1.test.ts',
         testPath: '/test/root/test1.test.ts',
@@ -73,7 +77,7 @@ describe('JUnitReporter', () => {
       results: mockFileResults,
       testResults: mockTestResults,
       duration: mockDuration,
-      getSourcemap: () => null,
+      getSourcemap: async () => null,
     });
 
     // Verify that XML was generated
@@ -119,7 +123,7 @@ describe('JUnitReporter', () => {
       results: [],
       testResults: [],
       duration: mockDuration,
-      getSourcemap: () => null,
+      getSourcemap: async () => null,
     });
 
     expect(logs.some((log) => log.includes('tests="0"'))).toBe(true);
@@ -140,6 +144,7 @@ describe('JUnitReporter', () => {
 
     const mockTestResults: TestResult[] = [
       {
+        testId: 'test-5',
         status: 'fail',
         name: 'test with <xml> & "quotes" & \'apos\'',
         testPath: '/test/root/test.test.ts',
@@ -157,6 +162,7 @@ describe('JUnitReporter', () => {
 
     const mockFileResults: TestFileResult[] = [
       {
+        testId: 'test-6',
         status: 'fail',
         name: 'test.test.ts',
         testPath: '/test/root/test.test.ts',
@@ -176,7 +182,7 @@ describe('JUnitReporter', () => {
       results: mockFileResults,
       testResults: mockTestResults,
       duration: mockDuration,
-      getSourcemap: () => null,
+      getSourcemap: async () => null,
     });
 
     // Verify XML is properly escaped

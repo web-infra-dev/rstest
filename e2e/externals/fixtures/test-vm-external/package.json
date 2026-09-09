@@ -1,0 +1,15 @@
+{
+  "name": "test-vm-external",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "custom condition": "./conditions/custom.cjs",
+      "node-addons": "./conditions/addon.cjs",
+      "module-sync": "./conditions/sync.cjs",
+      "require": "./conditions/fallback.cjs"
+    },
+    "./*": "./*"
+  }
+}

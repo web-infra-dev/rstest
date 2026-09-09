@@ -11,6 +11,7 @@ const RPC_TAG = '__rstest_rpc__' as const;
 
 export type WorkerRequest =
   | { type: 'start'; workerId: number }
+  | { type: 'cleanup' }
   | {
       type: 'run';
       taskId: number;
@@ -31,11 +32,30 @@ export type CollectTaskResult = {
 
 export type WorkerMemoryReport = {
   /** Resident set size (bytes) sampled just before the worker sent the response. */
-  rss: number;
+  rss?: number;
+  /** V8 heap used (bytes) sampled just before a VM worker sent the response. */
+  heapUsed?: number;
+};
+
+/** Worker-to-host notification that a test environment prebundle was rejected. */
+export type TestEnvironmentModuleFallback = {
+  packageName: string;
+  bundlePath: string;
+  resolvedPath: string;
+  reason: string;
 };
 
 export type WorkerResponse =
   | { type: 'started'; pid: number }
+  | { type: 'cleanupFinished'; error?: SerializedError }
+  | { type: 'workerCleanupStarted'; taskId: number }
+  | { type: 'workerCleanupFinished'; taskId: number; error?: SerializedError }
+  | {
+      type: 'fileCleanupStarted';
+      taskId: number;
+      result?: TestFileResult;
+    }
+  | { type: 'fileCleanupFinished'; taskId: number }
   | {
       type: 'runFinished';
       taskId: number;
@@ -47,6 +67,10 @@ export type WorkerResponse =
       taskId: number;
       result: CollectTaskResult;
       memory?: WorkerMemoryReport;
+    }
+  | {
+      type: 'testEnvironmentFallback';
+      fallback: TestEnvironmentModuleFallback;
     }
   | {
       type: 'fatal_error';
@@ -76,9 +100,7 @@ export type WorkerResponseEnvelope = {
 };
 
 export type Envelope =
-  | WorkerRequestEnvelope
-  | WorkerResponseEnvelope
-  | RpcEnvelope;
+  WorkerRequestEnvelope | WorkerResponseEnvelope | RpcEnvelope;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;

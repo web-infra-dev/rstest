@@ -1,0 +1,25 @@
+import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../../ports';
+
+export default defineConfig({
+  name: 'project-browser',
+  include: ['tests/**/*.test.ts'],
+  testTimeout: BROWSER_TEST_TIMEOUT,
+  globalSetup: ['./globalSetup.ts'],
+  plugins: [
+    {
+      name: 'test-browser-global-teardown-order',
+      setup(api) {
+        api.onCloseDevServer(() => {
+          console.log('[mixed-browser-dev-server] closed');
+        });
+      },
+    },
+  ],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+    port: BROWSER_PORTS['browser-global-setup-mixed'],
+  },
+});

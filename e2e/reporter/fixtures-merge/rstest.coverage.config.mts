@@ -5,5 +5,8 @@ export default defineConfig({
     enabled: true,
     provider: 'istanbul',
     include: ['src/**'],
+    thresholds: {
+      functions: 100,
+    },
   },
 });

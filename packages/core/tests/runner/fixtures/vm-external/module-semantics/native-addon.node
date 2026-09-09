@@ -1,0 +1,1 @@
+This fixture is intentionally not a native binary. ESM imports must reject the extension before loading it.

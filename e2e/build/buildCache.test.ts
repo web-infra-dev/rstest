@@ -13,6 +13,7 @@ describe('test build cache config', () => {
   }) => {
     const fixtureDir = join(__dirname, 'fixtures/buildCache');
     const cacheDir = join(fixtureDir, '.cache/build-cache-fixture');
+    const cacheLocation = join(cacheDir, 'rstest-development');
     const outputDir = join(fixtureDir, 'dist/.rstest-temp');
     const inspectDir = join(outputDir, '.rsbuild');
 
@@ -47,7 +48,7 @@ describe('test build cache config', () => {
     const warmRun = await runWithTiming();
     const rsbuildConfigPath = join(inspectDir, 'rsbuild.config.mjs');
 
-    expect(fs.existsSync(cacheDir)).toBe(true);
+    expect(fs.existsSync(cacheLocation)).toBe(true);
     expect(fs.existsSync(rsbuildConfigPath)).toBe(true);
 
     const inspectedConfig = fs.readFileSync(rsbuildConfigPath, 'utf8');

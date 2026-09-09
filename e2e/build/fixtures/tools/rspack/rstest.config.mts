@@ -5,6 +5,9 @@ export default defineConfig({
   name: 'node',
   tools: {
     rspack: {
+      experiments: {
+        runtimeMode: 'rspack',
+      },
       resolve: {
         alias: {
           './a': path.join(__dirname, './src/b'),

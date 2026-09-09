@@ -13,6 +13,5 @@ export default defineConfig({
   pool: {
     type: 'forks',
     maxWorkers: 1,
-    minWorkers: 1,
   },
 });

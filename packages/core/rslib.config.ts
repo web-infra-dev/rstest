@@ -1,26 +1,80 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
-import { defineConfig, rspack } from '@rslib/core';
+import { defineConfig, rspack, type Rsbuild } from '@rslib/core';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
-import { peerDependencies } from '../browser/package.json';
+import {
+  peerDependencies,
+  version as browserVersion,
+} from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
 
+// `RSTEST_VERSION` is build-injected into both @rstest/core and @rstest/browser
+// from each package's own package.json, and the browser-mode runtime gate
+// (core/src/core/browser/loader.ts) refuses to load a browser build whose version
+// differs from core's. Those two reads can only drift if the packages are
+// versioned independently — which a single build cannot otherwise detect — so
+// assert the peer pair is in lockstep here, surfacing a mismatch at build time
+// instead of as a runtime version-gate false negative for the user.
+if (version !== browserVersion) {
+  throw new Error(
+    `@rstest/core (${version}) and @rstest/browser (${browserVersion}) versions ` +
+      'are out of sync. They are published as a peer pair and must match; ' +
+      'bump packages/core/package.json and packages/browser/package.json together.',
+  );
+}
+
 const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');
+
+const readableMinifyConfig = {
+  jsOptions: {
+    minimizerOptions: {
+      mangle: false,
+      minify: false,
+      compress: {
+        defaults: false,
+        unused: true,
+        dead_code: true,
+        toplevel: true,
+        // Inline snapshots locate their call site through this function name.
+        keep_fnames: true,
+      },
+      format: {
+        comments: 'some',
+        preserve_annotations: true,
+      },
+    },
+  },
+} satisfies Rsbuild.Minify;
+
+const fullyMinifiedNodeChunks =
+  /(?:^|\/)(?:@babel\/code-frame|@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~0\.js$/;
+const fullyMinifiedBrowserChunks =
+  /(?:^|\/)(?:browser-runtime-vendor|fake-timers|magic-string\.es)~1\.js$/;
+
+// An allowlist preserves the existing lazy snapshot, fake-timers, and
+// magic-string chunk boundaries.
+const browserRuntimeVendorModules =
+  /[\\/]node_modules[\\/](?:@vitest[\\/](?:expect|pretty-format|spy|utils)|base64-js|buffer|chai|ieee754|pathe|path-browserify|process|stacktrace-parser|tinyrainbow|tinyspy|url-extras)(?:[\\/]|$)/;
+
+// API Extractor keeps this reference from bundled @vitest/expect but omits
+// the matching global augmentation that makes the declaration self-contained.
+const jestMatchersDtsBanner = `declare global {
+  namespace jest {
+    interface Matchers<R, T = {}> {}
+  }
+}`;
 
 export default defineConfig({
   plugins: publishCheckPlugins(),
   lib: [
     {
       id: 'rstest',
-      format: 'esm',
       syntax: 'es2023',
-      experiments: {
-        advancedEsm: true,
-      },
       dts: {
-        tsgo: true,
+        isolated: true,
         bundle: process.env.SOURCEMAP
           ? false
           : {
@@ -39,6 +93,9 @@ export default defineConfig({
               ],
             },
       },
+      banner: {
+        dts: jestMatchersDtsBanner,
+      },
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
@@ -50,25 +107,15 @@ export default defineConfig({
           path: 'node:path',
         },
         minify: {
-          jsOptions: {
-            minimizerOptions: {
-              mangle: false,
-              minify: false,
-              compress: {
-                defaults: false,
-                unused: true,
-                dead_code: true,
-                toplevel: true,
-                // fix `Couldn't infer stack frame for inline snapshot` error
-                // should keep function name used to filter stack trace
-                keep_fnames: true,
-              },
-              format: {
-                comments: 'some',
-                preserve_annotations: true,
-              },
+          jsOptions: [
+            {
+              include: fullyMinifiedNodeChunks,
             },
-          },
+            {
+              ...readableMinifyConfig.jsOptions,
+              exclude: fullyMinifiedNodeChunks,
+            },
+          ],
         },
       },
       shims: {
@@ -79,6 +126,8 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          'api/index': './src/api/index.ts',
+          adapter: './src/adapter.ts',
           browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
@@ -102,6 +151,10 @@ export default defineConfig({
                   from: 'src/core/plugins/importActualLoader.mjs',
                   to: 'importActualLoader.mjs',
                 },
+                {
+                  from: 'src/core/plugins/wasmLoader.mjs',
+                  to: 'wasmLoader.mjs',
+                },
               ],
             }),
             // only load & apply licensePlugin in lib build
@@ -112,35 +165,16 @@ export default defineConfig({
       },
     },
     {
-      id: 'rstest_loaders',
-      format: 'esm',
-      syntax: 'es2023',
-      dts: false,
-      source: {
-        entry: {
-          cssFilterLoader: './src/core/plugins/css-filter/loader.ts',
-        },
-      },
-      output: {
-        filename: {
-          js: '[name].mjs',
-        },
-      },
-      tools: {
-        rspack: {
-          plugins: [
-            rsdoctorCIPlugin({ reportDir: '.rsdoctor/loaders' }),
-          ].filter(Boolean),
-        },
-      },
-    },
-    {
       id: 'browser_runtime',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
-        tsgo: true,
-        bundle: true,
+        isolated: true,
+        bundle: {
+          bundledPackages: ['@vitest/spy', 'tinyrainbow'],
+        },
+      },
+      banner: {
+        dts: jestMatchersDtsBanner,
       },
       source: {
         entry: {
@@ -152,30 +186,37 @@ export default defineConfig({
         distPath: 'dist/browser-runtime',
         sourceMap: process.env.SOURCEMAP === 'true',
         minify: {
-          jsOptions: {
-            minimizerOptions: {
-              mangle: false,
-              minify: false,
-              compress: {
-                defaults: false,
-                unused: true,
-                dead_code: true,
-                toplevel: true,
-                // fix `Couldn't infer stack frame for inline snapshot` error
-                // should keep function name __INLINE_SNAPSHOT__ used to filter stack trace
-                keep_fnames: true,
-              },
-              format: {
-                comments: 'some',
-                preserve_annotations: true,
-              },
+          jsOptions: [
+            {
+              include: fullyMinifiedBrowserChunks,
             },
-          },
+            {
+              ...readableMinifyConfig.jsOptions,
+              exclude: fullyMinifiedBrowserChunks,
+            },
+          ],
         },
       },
       plugins: [pluginNodePolyfill()],
       tools: {
         rspack: {
+          optimization: {
+            // Split chunks register through the Rspack runtime. Leaving it in
+            // the entry chunk creates a circular ESM initialization dependency.
+            runtimeChunk: {
+              name: 'browser-runtime-runtime',
+            },
+            splitChunks: {
+              cacheGroups: {
+                browserRuntimeVendor: {
+                  chunks: 'initial',
+                  enforce: true,
+                  name: 'browser-runtime-vendor',
+                  test: browserRuntimeVendorModules,
+                },
+              },
+            },
+          },
           plugins: [
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/browser' }),
           ].filter(Boolean),
@@ -194,6 +235,19 @@ export default defineConfig({
   },
   tools: {
     rspack: {
+      ...rslibRspackConfig,
+      module: {
+        ...rslibRspackConfig.module,
+        rules: [
+          {
+            // `fakeTimers.ts` loads `@sinonjs/fake-timers` through
+            // `createRequire(import.meta.url)`; let Rspack bundle that call so
+            // the dependency stays in the chunk for the Node and browser targets.
+            test: /[\\/]runtime[\\/]api[\\/]fakeTimers\.ts$/,
+            parser: { createRequire: true },
+          },
+        ],
+      },
       watchOptions: {
         ignored: /\.git/,
       },

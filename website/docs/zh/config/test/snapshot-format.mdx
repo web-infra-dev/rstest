@@ -5,9 +5,11 @@ description: 使用 pretty-format 提供的选项自定义快照格式。
 # snapshotFormat
 
 - **类型：** `PrettyFormatOptions`
-- **默认值：** `undefined`
+- **默认值：** `{ printShadowRoot: false }`
 
 使用 [pretty-format](https://www.npmjs.com/package/pretty-format) 提供的选项自定义快照格式。
+
+Rstest 默认在快照中省略 Shadow Root。将 `printShadowRoot` 设置为 `true` 可在快照中包含它们。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

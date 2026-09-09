@@ -6,6 +6,14 @@ import type {
 } from './testSuite';
 
 export type RunnerHooks = {
+  /**
+   * Called around snapshot client setup and finish so transports can apply a
+   * framework-level watchdog to snapshot lifecycle RPCs.
+   */
+  onSnapshotSetupStart?: () => Promise<void>;
+  onSnapshotSetupEnd?: () => Promise<void>;
+  onSnapshotFinishStart?: () => Promise<void>;
+  onSnapshotFinishEnd?: () => Promise<void>;
   onTestSuiteStart?: (test: TestSuiteInfo) => Promise<void>;
   onTestSuiteResult?: (result: TestResult) => Promise<void>;
   /**

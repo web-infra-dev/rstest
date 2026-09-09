@@ -1,5 +1,7 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
-import type { GetSourcemap } from './reporter';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { InternalProjectContext } from './core';
+import type { RawCoverageResolveOptions } from './coverage';
+import type { GetSourcemap, SourceMapInput } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
 
@@ -17,10 +19,11 @@ export type ResolveBrowserSourcemap = (
  */
 export interface BrowserTestRunOptions {
   /**
-   * If true, browser mode will not call onTestRunEnd reporter hook.
-   * This allows the caller to unify reporter output with node mode tests.
+   * The explicit browser-project subset the executor was constructed with (plan
+   * output). The host keeps a stable reference to this instead of re-deriving
+   * `browser.enabled` projects from `context.projects` (which planning mutates).
    */
-  skipOnTestRunEnd?: boolean;
+  projects?: InternalProjectContext[];
   /**
    * Pre-calculated sharded entries for browser projects.
    * If provided, the browser controller will use these instead of collecting its own.
@@ -28,16 +31,63 @@ export interface BrowserTestRunOptions {
    */
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   /**
-   * Keep watch infrastructure alive even when the initial browser test set is empty.
+   * Treat the provided sharded entries as the authoritative core run plan.
+   * Mixed node+browser runs set this so Browser Mode does not recompute a
+   * different global shard after config hooks have run.
    */
-  allowEmptyWatchRun?: boolean;
+  freezeShardedEntries?: boolean;
+  /**
+   * Only initialize Browser Mode config hooks and refresh test files, without
+   * launching the browser provider to collect test declarations.
+   */
+  filesOnly?: boolean;
+  /**
+   * Treat an empty browser result as a no-op instead of a run failure.
+   * Used by mixed node+browser planning, where Browser Mode hooks may add
+   * entries after the node-side plan initially saw an empty browser project.
+   */
+  allowEmptyRun?: boolean;
+  /**
+   * Browser project environments whose `modifyRstestConfig` hooks already
+   * applied this run. Shared across the discovery boot and the real run so
+   * hooks stay single-shot.
+   */
+  appliedModifyRstestConfigEnvironments?: Set<string>;
   /**
    * When set, the browser host emits Perfetto trace events to this callback
    * (per-file `tests` slices + suite/case slices). Only invoked when the
    * caller has `--trace` enabled.
    */
   onTraceEvents?: (events: TraceEvent[]) => void;
+  /**
+   * Post-globalSetup env change-set from the core pre-cycle stage. The host
+   * merges it into the browser runtime env store between the static base
+   * (`NODE_ENV`/`RSTEST`) and the user `test.env` config.
+   */
+  env?: Record<string, string | undefined>;
+  /**
+   * The cycle's snapshot update state (`ExecutorRunCycleOptions.updateSnapshot`
+   * carrier). Absent only on the config-hook discovery boot, which runs no
+   * tests; the host falls back to reading `context.snapshotManager.options`
+   * there.
+   */
+  updateSnapshot?: SnapshotUpdateState;
 }
+
+/**
+ * Options for collecting browser tests without running them (`rstest list` and
+ * `TestExecutor.collect`). Single definition for the core↔browser boundary —
+ * the `@rstest/browser` public wrapper and the host implementation share it.
+ */
+export type ListBrowserTestsOptions = Pick<
+  BrowserTestRunOptions,
+  | 'shardedEntries'
+  | 'freezeShardedEntries'
+  | 'filesOnly'
+  | 'projects'
+  | 'appliedModifyRstestConfigEnvironments'
+  | 'env'
+>;
 
 /**
  * Result from running browser tests.
@@ -55,6 +105,11 @@ export interface BrowserTestRunResult {
   };
   /** Whether the test run had failures */
   hasFailure: boolean;
+  /** Raw coverage batches collected by a browser provider. */
+  rawCoverage?: unknown[];
+  /** Resources shared by browser raw coverage batches. */
+  loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'];
+  loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];
   /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
   unhandledErrors?: Error[];
   /** Source map resolver used when reporter output is unified in core */

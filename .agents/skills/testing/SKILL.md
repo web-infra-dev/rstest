@@ -1,11 +1,13 @@
 ---
 name: testing
-description: 'Testing workflow for the rstest monorepo. Use when running tests, writing test files, debugging test failures, or validating changes.'
+description: Testing workflow for the Rstest monorepo. Use when running unit tests, e2e tests, browser e2e, example tests, watch-mode checks, writing test fixtures, debugging local or CI test failures, validating code changes, or reproducing bugs from external projects.
 metadata:
   internal: true
 ---
 
 # Testing Workflow
+
+This skill owns the **mechanics**: how to run and write tests, fixtures, and builds. Whether a change needs test work is routed by the `development` skill; what counts as evidence that a change works is defined by the `verify` skill.
 
 ## Running tests
 
@@ -72,12 +74,40 @@ Important:
 - Headed smoke tests are skipped locally by default (CI only)
 - To opt in locally: `cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts`
 
+### Browser E2E debugging
+
+- Rebuild affected packages before retrying; stale `dist` is a common false signal.
+- Separate host/protocol/provider issues from UI issues before editing `@rstest/browser-ui`.
+- For flakes, check shared ports/cwd, persistent `dist/.rstest-temp/`, unawaited events, and order-dependent state before increasing timeouts.
+
+## Watch-mode and long-running tests
+
+- Use watch-mode tests only for file-change/rerun/invalidation behavior.
+- Assert stable events/final output, clean up watchers/processes, and inspect open handles before changing production code for hangs.
+
+## Test behavior, not source shape
+
+Protect runtime invariants at the narrowest existing interface that exposes their observable result. Use integration or E2E coverage for cross-module orchestration. Do not add a production seam or abstraction solely to make an isolated unit test possible; use fakes or spies only when the code already has a natural interface for them.
+
+- Treat first-party implementation source text as private. Do not add tests that read it and use regexes, strings, snapshots, or counts to pin helper names, call sites, imports, or control-flow shape; comments, formatting, and behavior-preserving refactors make those assertions lie.
+- Reading source is appropriate when that source is itself the runtime input under test, such as a raw injected module or a transform fixture. Inspecting emitted bundles and generated files as product outputs is also appropriate.
+
+## Unit tests are OS-agnostic
+
+CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in the e2e job's macOS/Windows rows. Enforced by the `rstest/os-agnostic-tests` rule in `rslint.config.mts` as part of `pnpm lint`; the rule itself is unit-tested by `scripts/lint/os-agnostic-rule.test.ts` (in the `lint` project).
+
+- Do not write unit tests whose behavior or expectations depend on the host OS (reading `process.platform`, `os.platform()`, etc.). CI would only ever exercise the Linux branch.
+- To cover platform-dependent code paths in a unit test, stub the platform for the test's duration so every branch runs deterministically on any host — see `withPlatform` in `packages/core/tests/core/related.test.ts`.
+- If the behavior cannot be stubbed (real filesystem case-sensitivity, native binaries, shell differences), cover it in `e2e/` instead.
+
 ## Fixture strategy
 
-- **Prefer reusing** an existing fixture when the scenario can be expressed by extending it
-- Add a new fixture only when the scenario truly needs different config, dependencies, or file layout
-- Keep fixtures minimal and representative of the behavior under test
-- Don't create near-duplicate fixtures just to add one extra test case
+Before adding a fixture, list existing ones in the same area (`ls e2e/<area>/fixtures`) and name the closest match. Prefer extending it:
+
+- Adding a project, config flag, or test file is additive reuse — "different config" alone does not justify a new fixture. **After extending, re-run every test using that fixture** to confirm none broke.
+- A new fixture is right when reuse would force an **incompatible** change to config other tests depend on, or contort the fixture's intent. Name the mechanism that blocks reuse; config expressible per file (environment docblocks, per-file options) does not make a difference incompatible.
+- The same rule applies **inside** a fixture: before adding a test file or helper module, look for one whose structure already matches — same shared module, same peer-file pairing — and extend it instead. Adding exports to an existing helper, or cases to an existing test file, is additive reuse.
+- Prefer **one consolidated regression fixture** that exercises the whole surface over many near-duplicate per-feature files. When several cases share a structural root cause, assert them together.
 
 ## E2E rstest spawns with persistent `dist/.rstest-temp/`
 
@@ -95,6 +125,14 @@ When your fixture enables persistent build output:
 - For package/unit tests from repository root, use `-u` / `--update`: `pnpm rstest -u packages/core/tests/core/rsbuild.test.ts`
 - Do **not** use snapshot updates as a default way to silence test failures — investigate first
 - When updating, review the snapshot diff to confirm it matches expected changes
+
+## External repro projects
+
+For external repos/fixtures: read README/scripts/deps, reproduce with the smallest command, classify the source, then port only the minimal regression case into this repo.
+
+## Performance and benchmark validation
+
+For performance work, compare like-for-like runs: same command/fixture/env/cache policy, enough samples to separate noise, and state whether the result covers startup, execution, transform/cache, browser startup, or reporter overhead.
 
 ## Validation before wrapping up
 

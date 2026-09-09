@@ -1,8 +1,15 @@
+import { isAbsolute, join } from 'node:path';
 import { loadConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfigFn } from '@rstest/core';
 import { toRstestConfig } from './toRstestConfig';
 
 export interface WithRsbuildConfigOptions {
+  /**
+   * Rsbuild config object to convert directly.
+   * When provided, `configPath` is only used as file metadata.
+   * @default undefined
+   */
+  config?: RsbuildConfig;
   /**
    * `cwd` passed to loadConfig of Rsbuild
    * @default process.cwd()
@@ -30,19 +37,36 @@ export function withRsbuildConfig(
 ): ExtendConfigFn {
   return async () => {
     const {
+      config: inlineConfig,
       configPath,
       modifyRsbuildConfig,
       environmentName,
       cwd = process.cwd(),
     } = options;
 
-    // Load rsbuild config
-    const { content: rsbuildConfig, filePath } = await loadConfig({
-      cwd,
-      path: configPath,
-    });
+    let rsbuildConfig: RsbuildConfig;
+    let filePath: string | undefined;
 
-    if (!filePath) {
+    if (inlineConfig) {
+      rsbuildConfig = inlineConfig;
+      if (configPath) {
+        filePath = configPath;
+        if (!isAbsolute(configPath)) {
+          filePath = join(cwd, configPath);
+        }
+      }
+    } else {
+      const loadedConfig = await loadConfig({
+        cwd,
+        path: configPath,
+      });
+      rsbuildConfig = loadedConfig.content;
+      if (loadedConfig.filePath) {
+        filePath = loadedConfig.filePath;
+      }
+    }
+
+    if (!filePath && !inlineConfig) {
       return {};
     }
 

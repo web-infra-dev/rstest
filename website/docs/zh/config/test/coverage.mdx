@@ -1,5 +1,5 @@
 ---
-description: 选择覆盖率收集方式。目前仅支持 istanbul。
+description: 选择覆盖率收集方式，支持 istanbul 和 v8。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -13,17 +13,19 @@ import { ApiMeta } from '@components/ApiMeta';
 ```ts
 type CoverageOptions = {
   enabled?: boolean;
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
   include?: string[];
   changed?: boolean | string;
   exclude?: string[];
-  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reporters?: CoverageReporter[];
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
   allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
+
+type CoverageReporter = string | [string, Record<string, unknown>] | ReportBase;
 ```
 
 - **默认值：** `undefined`
@@ -74,10 +76,38 @@ export default defineConfig({
 
 ### provider
 
-- **类型：** `'istanbul'`
+- **类型：** `'istanbul' | 'v8'`
 - **默认值：** `'istanbul'`
+- **CLI：** `--coverage.provider <provider>`
 
-选择覆盖率收集方式。目前仅支持 [istanbul](https://istanbul.js.org/)。
+选择覆盖率收集方式。Rstest 同时支持 [istanbul](https://istanbul.js.org/) 和 `v8`。如果你更关注基于 SWC 插桩的转换性能和稳定的 Istanbul 语义，可以选择 `istanbul`；如果开启 coverage 后主要受内存压力影响，可以选择 `v8`，它通常有更低的运行时内存占用，因为不会为每个执行模块注入覆盖率计数器。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'v8',
+  },
+});
+```
+
+#### Istanbul provider
+
+[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率工具，它通过插桩来收集覆盖率信息。
+
+要启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+
+`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。Rstest 会在 transform 阶段通过 SWC 对源文件插桩，因此该 provider 具有较好的 transform 性能。但执行模块中会保留用于收集覆盖率的计数器，因此运行时内存占用可能更高。
+
+##### 排除代码
+
+如果整个文件、一组生成文件或注入脚本都不应被插桩，请使用 `coverage.exclude`：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -86,28 +116,123 @@ export default defineConfig({
   coverage: {
     enabled: true,
     provider: 'istanbul',
+    exclude: ['**/src/injected-script.ts', '**/src/**/*.{worker,evaluate}.ts'],
   },
 });
 ```
 
-#### Istanbul provider
+也可以在临时执行时通过 CLI 传入相同的规则：
 
-[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率分析工具，它通过插桩的方式来收集代码覆盖率信息。
+```bash
+npx rstest run --coverage --coverage.exclude "**/src/injected-script.ts" --coverage.exclude "**/src/**/*.{worker,evaluate}.ts"
+```
 
-要启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
+Istanbul ignore 注释更适合在一个仍需要收集覆盖率的文件中跳过很小的片段：
 
-import { PackageManagerTabs } from '@theme';
+```ts title='src/injected-script.ts'
+/* istanbul ignore file */
 
-<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+export function createInjectedScript() {
+  return `globalThis.__APP_READY__ = true;`;
+}
+```
 
-`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。
+```ts
+/* istanbul ignore next */
+function browserEvaluateFn() {
+  return window.location.href;
+}
+
+/* istanbul ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* istanbul ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
+```
+
+如果被忽略的片段里仍然出现了注入的 `cov_*` 调用，请改用 `coverage.exclude` 排除对应源文件。
+
+##### 序列化函数和其他 realm
+
+Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这些计数器的作用域属于 Rstest 执行的 transformed module。如果来自插桩文件的代码被序列化后在其他位置执行，新的 scope 或 realm 可能没有对应的 `cov_*` helper，测试就可能以 `ReferenceError: cov_... is not defined` 失败。
+
+当函数通过 `fn.toString()` 序列化，或者通过 `page.evaluate`、`Worker`、`node:vm`、`eval`、`new Function` 等 API 执行时，可能触发这个问题。
+
+要避免该错误，优先使用以下方式之一：
+
+- 通过 `coverage.exclude` 排除对应源文件；
+- 在 Node 测试或 headless、非 watch 的 Chromium Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
+- 避免序列化经过 Istanbul 插桩的函数。
+
+在 headless、非 watch 的 Chromium Browser Mode 运行中，`v8` provider 同样不会注入计数器。Firefox 和 WebKit Browser Mode 测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
+
+#### V8 provider
+
+<ApiMeta addedVersion="0.10.2" />
+
+`v8` provider 基于 Node.js inspector 或 Chromium 原生 coverage API 收集数据，并重映射为 Istanbul 格式。相比 Istanbul 插桩，V8 coverage 通常有更低的运行时内存占用，因为执行模块中不需要额外的覆盖率计数器。它更适合 coverage 内存压力明显的大型测试套件。
+
+要启用 V8 覆盖率，需要先安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)。
+
+<PackageManagerTabs command="add @rstest/coverage-v8 -D" />
+
+由于底层覆盖率数据来自 Node.js / Chromium V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同引擎版本之间可能存在轻微差异。
+
+##### Ignore hints
+
+`v8` provider 在将 V8 coverage 转换为 Istanbul 格式时会识别 ignore hints。hint 前缀可以使用以下任意一种形式：
+
+```ts
+/* istanbul ignore next */
+/* c8 ignore next */
+/* v8 ignore next */
+/* node:coverage ignore next */
+```
+
+建议在同一个项目中保持前缀一致。支持的 hint 形式如下：
+
+```ts
+/* v8 ignore next */
+const value = optionalExpensivePath();
+
+/* v8 ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* v8 ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
+
+/* v8 ignore start */
+const generatedLookup = createGeneratedLookup();
+/* v8 ignore stop */
+```
+
+`ignore file` 也会被识别，但它会在 source map 重映射前作用于生成后的 coverage entry。正常的 Rstest 输出中，一个生成 chunk 可能包含多个源文件，因此如果需要排除某个源文件或一组生成文件，请优先使用 `coverage.exclude`。
+
+`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 的稳定支持范围仅限使用 Playwright provider 的 headless、非 watch Chromium 运行。Chromium coverage 从 page renderer 中实际执行且通过 HTTP(S) URL 标识的脚本收集，并通过 source map 重映射，无需对应用代码插桩。带 query 的脚本 URL、classic script 和 module script 均受支持。
+
+headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包含 container 或非活跃 runner frame 的执行数据，watch rebuild 也可能无法严格保持 script 与 source map 的版本配对。如果这些模式需要稳定的 coverage 语义，请使用默认的 `istanbul` provider。Firefox 和 WebKit 未暴露所需的原生 coverage API，也必须使用 `istanbul`。
+
+浏览器原生 V8 coverage 不会收集仅通过 `blob:`、`data:`、其他非 HTTP source URL 标识或没有 URL 的脚本，包括 anonymous `eval` 和 `new Function` 调用；也不会收集仅在独立 `Worker` 或 `SharedWorker` target 中运行的代码。如果这些脚本也必须计入 coverage，请使用 `istanbul`。
 
 ### include
 
 - **类型：** `string[]`
 - **默认值：** `undefined`
+- **CLI：** `--coverage.include <pattern>`
 
-对匹配 glob 规则的文件进行测试覆盖率收集。
+对匹配 glob 规则的文件进行测试覆盖率收集。重复传入 CLI 参数可以指定多个模式。
 
 默认情况下，Rstest 会收集已测试文件的覆盖率。如果你希望在覆盖率报告中包含未测试的文件，可以使用 `include` 选项指定要包含的文件或模式。
 
@@ -197,12 +322,12 @@ npx rstest run --coverage.changed=origin/main
 ### exclude
 
 - **类型：** `string[]`
+- **CLI：** `--coverage.exclude <pattern>`
 - **默认值：**
 
 ```ts
 [
   '**/node_modules/**',
-  '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
   '**/*.d.ts',
@@ -214,6 +339,8 @@ npx rstest run --coverage.changed=origin/main
 ```
 
 匹配 glob 规则的文件将从测试覆盖率收集中排除。自定义配置将与默认值合并。
+
+Rstest 默认不会排除名为 `test` 的目录。这样可以避免误排除路径中包含 `test` 片段的 package 或 workspace 源文件，例如 `packages/test/src/index.ts`。如果你希望从覆盖率中排除这些目录，可以显式添加 `test/**` 或 `**/test/**` 等规则。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -228,13 +355,22 @@ export default defineConfig({
 
 ### reporters
 
-- **类型：** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **类型：** `CoverageReporter[]`
 - **默认值：** `['text', 'html', 'clover', 'json']`
+- **CLI：** `--coverage.reporters <reporter>`
 
-用于覆盖率收集的报告器。每个报告器可以是字符串（报告器名称）或包含报告器名称及其选项的元组。
+用于覆盖率收集的报告器。Rstest 使用标准 [Istanbul reporter API](https://istanbul.js.org/docs/advanced/alternative-reporters/)，而不是 Rstest 专属的 coverage reporter API。
+
+每个 reporter 可以是字符串（reporter 名称）、包含 reporter 名称及其选项的元组，也可以是带有 `execute(context)` 方法且兼容 Istanbul 的 reporter 对象。
+
+CLI 仅支持传入报告器名称。如需指定多个报告器，可以重复使用该参数：
+
+```bash
+npx rstest run --coverage.reporters text --coverage.reporters=json
+```
 
 - 有关可用报告器，可参考 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
-- 有关报告器选项的详细信息，可参考 [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
+- 有关报告器选项的详细信息，可参考 [@types/istanbul-reports](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -251,10 +387,71 @@ export default defineConfig({
 });
 ```
 
+#### 自定义 coverage reporter
+
+自定义 coverage reporter 应遵循 Istanbul reporter 约定。reporter 包或文件会由 Rstest 的 coverage provider 加载（在可能的情况下会通过 [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) 创建），使用 `coverage.reporters` 中传入的选项创建实例，然后用 Istanbul report context 调用。
+
+例如，一个 ESM reporter 可以导出带有 `execute` 方法的 class。`context` 参数对应 `istanbul-lib-report` 中的 Istanbul `Context` 类型：
+
+```js title='custom-coverage-reporter.mjs'
+export default class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  /** @param {import('istanbul-lib-report').Context} context */
+  execute(context) {
+    // Use the standard Istanbul report context.
+    const summary = context.getTree('flat').getRoot().getCoverageSummary();
+    console.log('Coverage summary:', summary.toJSON());
+  }
+}
+```
+
+然后在 `rstest.config.ts` 中通过包名或文件路径引用该 reporter：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'text',
+      ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
+    ],
+  },
+});
+```
+
+如果在配置中直接创建 reporter，也可以传入兼容 Istanbul 的 reporter 对象：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      {
+        execute(context) {
+          const summary = context
+            .getTree('flat')
+            .getRoot()
+            .getCoverageSummary();
+          console.log(summary.toJSON());
+        },
+      },
+    ],
+  },
+});
+```
+
 ### reportsDirectory
 
 - **类型：** `string`
 - **默认值：** `'./coverage'`
+- **CLI：** `--coverage.reportsDirectory <dir>`
 
 存储覆盖率报告的目录。
 
@@ -273,6 +470,7 @@ export default defineConfig({
 
 - **类型：** `boolean`
 - **默认值：** `false`
+- **CLI：** `--coverage.reportOnFailure`
 
 在测试失败时是否生成覆盖率报告并检查阈值。
 
@@ -313,6 +511,7 @@ export default defineConfig({
 
 - **类型：** `boolean`
 - **默认值：** `true`
+- **CLI：** `--coverage.clean`、`--coverage.clean=false`
 
 是否在运行测试之前清理覆盖率目录。
 

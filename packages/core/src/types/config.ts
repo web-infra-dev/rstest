@@ -7,56 +7,96 @@ import type {
   Reporter,
   ReporterWithOptions,
 } from './reporter';
-import type { MaybePromise } from './utils';
+import type { ConsoleStreamType, MaybePromise } from './utils';
+import type { BrowserProvider } from '../utils/constants';
 
-// TODO: chaiConfig.includeStack seems not used
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => MaybePromise<RstestConfig | void>;
+
+export type RstestExposeAPI = {
+  /**
+   * Get the resolved Rstest config for the current Rsbuild environment.
+   *
+   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`
+   * in both Node Mode and Browser Mode projects.
+   * It combines the current project's config with the effective global and
+   * run-level config.
+   *
+   * The returned config uses a read-only type. Opaque values retain their
+   * original identity and behavior.
+   */
+  getRstestConfig: () => Readonly<ResolvedRstestConfig>;
+  /**
+   * Modify the Rstest config for the current Rsbuild environment.
+   *
+   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`
+   * in both Node Mode and Browser Mode projects.
+   * In multi-project mode, the callback only applies to the Rstest project
+   * that owns the current Rsbuild environment.
+   *
+   * This API is suitable for modifying existing project config, but it cannot
+   * be used to dynamically add or remove Rstest projects, switch Browser Mode,
+   * modify Browser Mode launch options, modify the project name, or modify
+   * global options such as reporters, pool, isolate, coverage, update,
+   * output.distPath, or plugins.
+   */
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+
 export type ChaiConfig = Partial<
-  Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
+  Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;
 
-export type RstestPoolType = 'forks' | 'threads';
+export type ExpectPollConfig = {
+  /**
+   * Polling interval in milliseconds.
+   * @default 50
+   */
+  interval?: number;
+  /**
+   * Polling timeout in milliseconds.
+   * @default 1000 (5000 in Browser Mode)
+   */
+  timeout?: number;
+};
+
+export type ExpectConfig = {
+  /**
+   * Default options for `expect.poll()`.
+   */
+  poll?: ExpectPollConfig;
+};
+
+export type RstestPoolType = 'forks' | 'threads' | 'vmForks' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Minimum number or percentage of workers to run tests in. */
-  minWorkers?: number | string;
-  /** Pass additional arguments to node process in the child processes. */
-  execArgv?: string[];
   /**
-   * Recycle a reused worker once its RSS exceeds this threshold. Only
-   * meaningful when `isolate: false` (workers are reused across files);
-   * a no-op under the default `isolate: true` since workers are
-   * single-use anyway.
-   *
-   * Accepts:
-   * - `number` >= 1 — bytes (e.g. `1_500_000_000` for 1.5 GB)
-   * - `number` in `(0, 1]` — fraction of total system memory
-   * - `string` with a unit suffix — `"512MB"`, `"1.5GB"`, `"20%"`,
-   *   `"1GiB"`, … (`%` is fraction of total system memory)
-   *
-   * After each test file the worker reports `process.memoryUsage().rss`
-   * to the host. When that exceeds the parsed limit, the pool disposes
-   * the worker and spawns a fresh one. Heap accumulated from prior
-   * files (vendor modules, JSDOM nodes, React fiber trees) is
-   * reclaimed by process exit.
-   *
-   * Useful for long suites under `isolate: false` where a single
-   * worker's heap can grow into GC-thrash territory.
+   * V8 heap threshold used to recycle a `vmForks` or `vmThreads` worker after it finishes a test file.
+   * This is a worker-recycling threshold, not a hard process RSS limit.
+   * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
+   * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
+   * Currently supported only by `vmForks` and `vmThreads`.
+   * @default undefined (`system memory / maxWorkers` for VM pools)
    */
   memoryLimit?: number | string;
+  /** Pass additional arguments to node process in the child processes. */
+  execArgv?: string[];
 };
 
 export type BundleDependencyPattern = string | RegExp;
 
 export type RstestBuildCacheConfig = {
   /**
-   * Directory used to store Rsbuild persistent cache files.
+   * Base directory used to store Rsbuild persistent cache files.
+   * Rspack stores the cache data under `<cacheDirectory>/<cache.name>`.
    *
-   * When omitted, rstest stores cache files under
-   * `node_modules/.cache/rstest-<project-name>`.
+   * When omitted, rstest uses
+   * `node_modules/.cache/rstest-<project-name>` as the base directory.
    */
   cacheDirectory?: string;
   /**
@@ -123,9 +163,7 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
-  | 'silent'
   | 'bail'
-  | 'shard'
   | 'output'
 > & {
   output?: Omit<RstestOutputConfig, 'distPath'>;
@@ -190,7 +228,7 @@ export type BrowserModeConfig = {
    *
    * Currently only 'playwright' is supported.
    */
-  provider: 'playwright';
+  provider: BrowserProvider;
   /**
    * Which browser to use for testing.
    *
@@ -259,9 +297,24 @@ export type ExtendConfigFn = (
 
 export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
 
+export type TestEnvironmentPrebundle = 'auto' | boolean;
+
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
+  /**
+   * Options passed to the environment constructor. Node worker pools send
+   * these options over IPC, so they must be structured-cloneable.
+   */
   options?: Record<string, any>;
+  /**
+   * Prebundle the environment before workers load it.
+   *
+   * - `'auto'`: prebundle supported built-in environments.
+   * - `true`: always prebundle the selected built-in environment.
+   * - `false`: load the environment natively.
+   * @default 'auto'
+   */
+  prebundle?: TestEnvironmentPrebundle;
 };
 
 export interface RstestConfig {
@@ -344,11 +397,22 @@ export interface RstestConfig {
    */
   passWithNoTests?: boolean;
   /**
+   * Run only the test files that failed in the previous run, backed by the
+   * persistent results cache. File-level granularity: the whole failed test
+   * file re-runs. When there are no previously-failed files (or no cache yet),
+   * all tests run with a notice.
+   *
+   * @default false
+   */
+  onlyFailures?: boolean;
+  /**
    * Pool used to run tests in.
    */
   pool?: RstestPoolType | RstestPoolOptions;
   /**
-   * Run tests in an isolated environment
+   * Run tests in an isolated environment. This option has no effect on the
+   * `vmForks` and `vmThreads` pools, which always create a fresh VM context
+   * for every file.
    *
    * @default true
    */
@@ -374,15 +438,6 @@ export interface RstestConfig {
    * @default 0
    */
   bail?: number;
-
-  /**
-   * Split tests into several shards.
-   * This is useful for running tests in parallel on multiple machines.
-   */
-  shard?: {
-    count: number;
-    index: number;
-  };
 
   /**
    * print console traces when calling any console method.
@@ -447,7 +502,7 @@ export interface RstestConfig {
 
   /**
    * Timeout of a test in milliseconds.
-   * @default 5000
+   * @default 5000 (15000 in Browser Mode)
    */
   testTimeout?: number;
 
@@ -509,9 +564,14 @@ export interface RstestConfig {
   logHeapUsage?: boolean;
 
   /**
-   * Custom handler for console log in tests
+   * Custom handler for console log in tests.
+   *
+   * Return `false` to silence the log.
+   *
+   * @param content - The console output text.
+   * @param type - Which stream the output came from.
    */
-  onConsoleLog?: (content: string) => boolean | void;
+  onConsoleLog?: (content: string, type: ConsoleStreamType) => boolean | void;
 
   /** Format snapshot output */
   snapshotFormat?: SnapshotFormat;
@@ -532,6 +592,16 @@ export interface RstestConfig {
   browser?: BrowserModeConfig;
 
   /**
+   * Enable Module Federation support.
+   *
+   * Node-based runners install compatibility shims for federation runtimes
+   * which load chunks through Node APIs. Browser Mode uses the bundler's web
+   * federation runtime.
+   * @default false
+   */
+  federation?: boolean;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;
@@ -540,6 +610,11 @@ export interface RstestConfig {
    * Performance-related Rsbuild options used by rstest.
    */
   performance?: RstestPerformanceConfig;
+
+  /**
+   * Configuration options for `expect`.
+   */
+  expect?: ExpectConfig;
 
   /**
    * chai configuration options
@@ -579,6 +654,20 @@ export interface RstestConfig {
   >;
 }
 
+/**
+ * Per-invocation test sharding, resolved from the `--shard <index/count>` CLI
+ * flag. It is intentionally not a user config field: the index/count must
+ * differ on every CI runner, so it cannot be expressed by a value committed to
+ * the shared config file. Kept on the resolved/normalized config only.
+ */
+export type ShardConfig = { count: number; index: number };
+
+/**
+ * `RstestConfig` after CLI options are merged in. Carries the resolved
+ * `shard` value, which the CLI injects but the public config type omits.
+ */
+export type ResolvedRstestConfig = RstestConfig & { shard?: ShardConfig };
+
 type OptionalKeys =
   | 'testNamePattern'
   | 'plugins'
@@ -592,12 +681,11 @@ type OptionalKeys =
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
-  | 'extends'
-  | 'shard';
+  | 'extends';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
-  provider: 'playwright';
+  provider: BrowserProvider;
   browser: BrowserName;
   headless: boolean;
   port?: number;
@@ -606,6 +694,7 @@ export type NormalizedBrowserModeConfig = {
   providerOptions: Record<string, unknown>;
 };
 
+// Exported from `/api` as `RstestContext.config`; shape changes are public API changes.
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
@@ -618,14 +707,19 @@ export type NormalizedConfig = Required<
     | 'exclude'
     | 'testEnvironment'
     | 'browser'
+    | 'expect'
     | 'output'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
+    shard?: ShardConfig;
     pool: RstestPoolOptions;
     testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
     browser: NormalizedBrowserModeConfig;
+    expect: {
+      poll: Required<ExpectPollConfig>;
+    };
     setupFiles: string[];
     globalSetup: string[];
     exclude: {
@@ -642,6 +736,7 @@ export type NormalizedProjectConfig = Required<
     | 'projects'
     | 'reporters'
     | 'pool'
+    | 'shard'
     | 'setupFiles'
     | 'globalSetup'
     | 'output'

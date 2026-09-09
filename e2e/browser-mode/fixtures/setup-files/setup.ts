@@ -14,4 +14,7 @@ beforeEach(() => {
   const globals = globalThis as Record<string, unknown>;
   globals.__SETUP_BEFORE_EACH_COUNT__ =
     (globals.__SETUP_BEFORE_EACH_COUNT__ as number) + 1;
+  console.log(
+    `RSTEST_SETUP_BEFORE_EACH_${globals.__SETUP_BEFORE_EACH_COUNT__}`,
+  );
 });

@@ -20,15 +20,17 @@ if (import.meta.env.NODE_ENV === 'test') {
 
 ## `RSTEST`
 
-`process.env.RSTEST` is set to `'true'` whenever the test runner is active. Use it to gate test-only branches in source code.
+Available as both `process.env.RSTEST` and `import.meta.env.RSTEST` across all test environments, including [browser mode](/guide/browser-testing/). The value is set to `'true'` whenever the test runner is active, so you can use it to gate test-only branches in source code.
+
+In browser mode, Rstest replaces these expressions at build time but does not add a global `process` object. Prefer `import.meta.env.RSTEST` in browser-compatible ESM source code, and do not guard access with `typeof process !== 'undefined'` because that condition remains `false` in the browser.
 
 ```ts
-if (process.env.RSTEST) {
+if (import.meta.env.RSTEST === 'true') {
   // running under Rstest
 }
 ```
 
-For production builds, define `process.env.RSTEST` as `false` so the bundler can eliminate the dead branch — see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
+For production builds, define the expression used by your source code as `false` so the bundler can eliminate the dead branch — see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
 
 For [in-source tests](/config/test/include-source), prefer `import.meta.rstest` — it exposes the Rstest test API directly and is `undefined` in production builds.
 

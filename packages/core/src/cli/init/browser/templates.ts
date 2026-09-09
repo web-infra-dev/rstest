@@ -1,8 +1,68 @@
 import type { Agent } from 'package-manager-detector';
 import { resolveCommand } from 'package-manager-detector/commands';
+import {
+  BROWSER_PROVIDERS,
+  type BrowserProvider,
+} from '../../../utils/constants';
 
 export type Framework = 'react' | 'vanilla';
-export type BrowserProvider = 'playwright';
+export type { BrowserProvider };
+
+/** Base name of the example component emitted by the init templates. */
+export const DEFAULT_COMPONENT_BASE_NAME = 'Counter';
+
+/**
+ * Collapses a detected framework (which may be undetected/`null`) into the
+ * concrete template family. Single owner of the `react ? react : vanilla`
+ * decision that the interactive, non-interactive, preview, and generate paths
+ * previously each re-encoded.
+ */
+export function resolveEffectiveFramework(
+  framework: 'react' | null,
+): Framework {
+  return framework === 'react' ? 'react' : 'vanilla';
+}
+
+/**
+ * Owns the framework + language → file-extension matrix shared by the file
+ * preview and the file generation step (previously duplicated verbatim in both).
+ */
+export function getFileExtensions(
+  framework: Framework,
+  language: 'ts' | 'js',
+): { componentExt: string; testExt: string } {
+  if (framework === 'react') {
+    return {
+      componentExt: language === 'ts' ? '.tsx' : '.jsx',
+      testExt: language === 'ts' ? '.test.tsx' : '.test.jsx',
+    };
+  }
+  return {
+    componentExt: language === 'ts' ? '.ts' : '.js',
+    testExt: language === 'ts' ? '.test.ts' : '.test.js',
+  };
+}
+
+/**
+ * Rewrites the example-component import in a generated test file to follow a
+ * deduplicated base name. The test templates always import from
+ * `./Counter.<ext>`; when the component is written under a non-default name
+ * (e.g. `Counter_1`), the import must track it. Owns the `Counter` literal and
+ * the extension-agnostic import grammar so {@link getReactTestTemplate} /
+ * {@link getVanillaTestTemplate} and the caller no longer re-encode either.
+ */
+export function rewriteComponentImport(
+  content: string,
+  baseName: string,
+): string {
+  if (baseName === DEFAULT_COMPONENT_BASE_NAME) {
+    return content;
+  }
+  return content.replace(
+    /from '\.\/Counter\.(tsx|jsx|ts|js)'/,
+    `from './${baseName}.$1'`,
+  );
+}
 
 /**
  * Get rstest.config.mts template content.
@@ -13,7 +73,7 @@ export function getConfigTemplate(): string {
 export default defineConfig({
   browser: {
     enabled: true,
-    provider: 'playwright',
+    provider: '${BROWSER_PROVIDERS[0]}',
   },
 });
 `;
@@ -218,13 +278,16 @@ export function getPlaywrightInstallCommand(
   return [resolved.command, ...resolved.args].join(' ');
 }
 
+/** package.json script key registered by the browser-mode init flow. */
+export const BROWSER_TEST_SCRIPT_KEY = 'test:browser';
+
 /**
  * Get run command for the package manager.
  */
 export function getRunCommand(agent: Agent): string {
-  const resolved = resolveCommand(agent, 'run', ['test:browser']);
+  const resolved = resolveCommand(agent, 'run', [BROWSER_TEST_SCRIPT_KEY]);
   if (!resolved) {
-    return 'npm run test:browser';
+    return `npm run ${BROWSER_TEST_SCRIPT_KEY}`;
   }
   return [resolved.command, ...resolved.args].join(' ');
 }
@@ -234,4 +297,13 @@ export function getRunCommand(agent: Agent): string {
  */
 export function getConfigFileName(): string {
   return 'rstest.browser.config.mts';
+}
+
+/**
+ * The `test:browser` package.json script command. Composed from
+ * {@link getConfigFileName} at call time so the config filename has exactly one
+ * owner — the script value can never drift from the file actually written.
+ */
+export function getBrowserTestScript(): string {
+  return `rstest --config=${getConfigFileName()}`;
 }

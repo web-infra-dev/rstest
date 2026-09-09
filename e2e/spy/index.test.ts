@@ -193,6 +193,20 @@ describe('test spy', () => {
     expect(sayHi()).toBeUndefined();
   });
 
+  it('rstest.fn -> mock throws', () => {
+    const sayHi = rstest
+      .fn(() => 'hi')
+      .mockThrow(new Error('default error'))
+      .mockThrowOnce(new Error('once error'));
+
+    expect(() => sayHi()).toThrowError('once error');
+    expect(() => sayHi()).toThrowError('default error');
+    expect(sayHi.mock.results).toEqual([
+      { type: 'throw', value: new Error('once error') },
+      { type: 'throw', value: new Error('default error') },
+    ]);
+  });
+
   it('rstest.fn -> mock async returns', async () => {
     const sayHi = rstest.fn(() => Promise.resolve(''));
 

@@ -90,9 +90,10 @@ export class ThreadsPoolWorker extends BasePoolWorker {
     if (!this.hasLiveChild()) return;
     // `worker.terminate()` is the single primitive: it stops the thread
     // immediately and resolves with the exit code. There is no SIGTERM/
-    // SIGKILL distinction for threads, so `force` is a no-op — the host's
-    // graceful path (sending the `stop` envelope and awaiting `stopped`)
-    // already runs in `PoolRunner.stop` before this is called as a fallback.
+    // SIGKILL distinction for threads, so `force` is a no-op — unlike forks,
+    // which escalate SIGTERM to SIGKILL when forced. The host owns
+    // termination outright; there is no graceful IPC stop handshake before
+    // this call (see `PoolRunner.stop`).
     await this.worker!.terminate().catch(() => undefined);
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rsbuild",
-  "version": "0.10.1",
+  "version": "0.11.12",
   "description": "Rstest adapter for rsbuild configuration",
   "keywords": [
     "rstest",
@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/adapter-rsbuild"
   },
   "license": "MIT",
@@ -32,17 +32,18 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
+    "lint": "rslint .",
     "test": "rstest"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.0.6",
-    "@rslib/core": "0.21.5",
+    "@rsbuild/core": "~2.2.4",
+    "@rslib/core": "~1.0.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },
   "peerDependencies": {
-    "@rsbuild/core": "*",
-    "@rstest/core": "workspace:^"
+    "@rsbuild/core": "^1.0.0 || ^2.0.0",
+    "@rstest/core": "^0.11.0"
   },
   "publishConfig": {
     "access": "public"

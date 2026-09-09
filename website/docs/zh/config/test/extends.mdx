@@ -4,17 +4,17 @@ description: extends 选项允许你从外部来源扩展 Rstest 配置，例如
 
 # extends
 
-- **类型:** `ExtendConfig | ExtendConfigFn | (ExtendConfig | ExtendConfigFn)[]`
-- **默认值:** `undefined`
+- **类型：** `ExtendConfig | ExtendConfigFn | (ExtendConfig | ExtendConfigFn)[]`
+- **默认值：** `undefined`
 
 `extends` 选项允许你从外部来源扩展 Rstest 配置，例如使用适配器将其他构建工具的配置转换为 Rstest 兼容格式。
 
 这样可以实现以下功能：
 
-- **适配器集成**: 通过 `@rstest/adapter-rslib` 等适配器从其他构建工具配置中扩展 Rstest 配置
-- **异步配置**: 从外部源异步加载配置
-- **配置合并**: 自动将扩展配置与本地 Rstest 配置合并
-- **可组合预设**: 通过 `extends` 数组组合多个共享配置
+- **适配器集成**：通过 `@rstest/adapter-rslib` 等适配器从其他构建工具配置中扩展 Rstest 配置
+- **异步配置**：从外部源异步加载配置
+- **配置合并**：自动将扩展配置与本地 Rstest 配置合并
+- **可组合预设**：通过 `extends` 数组组合多个共享配置
 
 ## 基本用法（对象）
 

@@ -1,8 +1,10 @@
 import { isBuiltin } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import type { RstestContext } from '../../types';
+import type { InternalContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
+import { isVmPoolType } from '../../utils/workers';
+import { rstestCoreGlobalExternal } from './mockBuild';
 
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
 const SCRIPT_EXTENSION_RE = /\.(?:[cm]?[jt]sx?)$/;
@@ -251,19 +253,25 @@ function autoExternalNodeBuiltin(
   }
 }
 
-export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
+export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
   context,
 ) => ({
   name: 'rstest:external',
   setup: (api) => {
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
+      const project = context.projects.find((p) => p.environmentName === name);
+
+      if (!project) {
+        return config;
+      }
+
       const {
         normalizedConfig: {
           testEnvironment,
           output: { bundleDependencies } = {},
         },
         outputModule,
-      } = context.projects.find((p) => p.environmentName === name)!;
+      } = project;
 
       const shouldExternalize =
         bundleDependencies === undefined
@@ -290,9 +298,20 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
             // Make sure that externals configuration is not modified by users
             config.externals = castArray(config.externals) || [];
 
-            config.externals.unshift({
-              '@rstest/core': 'global @rstest/core',
-            });
+            // A CommonJS bundle loads plain string externals with synchronous
+            // require() by default. VM contexts cannot synchronously link an
+            // ESM dependency graph on every supported Node version, so route
+            // those externals through Rspack's async import path instead. Items
+            // with an explicit external type keep their own semantics.
+            if (
+              isVmPoolType(context.normalizedConfig.pool.type) &&
+              !outputModule &&
+              config.externalsType === undefined
+            ) {
+              config.externalsType = 'import';
+            }
+
+            config.externals.unshift(rstestCoreGlobalExternal);
 
             config.externalsPresets ??= {};
             config.externalsPresets.node = false;

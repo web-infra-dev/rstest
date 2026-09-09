@@ -39,6 +39,79 @@ const expectRerun = (
 // TODO: The following error occurs only on Windows CI. It should appear in the Rspack version range from 1.5.0 to 1.6.0-beta.0.
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
+  it('invalidates vmThreads source and setup caches after rebuilds', async ({
+    onTestFinished,
+  }) => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-vm-threads${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath,
+    });
+    fs.update(path.join(fixturesTargetPath, 'rstest.setup.ts'), (content) =>
+      content.concat(
+        "\n(globalThis as typeof globalThis & { __RSTEST_SETUP_VALUE__: string }).__RSTEST_SETUP_VALUE__ = 'initial';\n",
+      ),
+    );
+    for (const testFile of allTestFiles) {
+      fs.update(path.join(fixturesTargetPath, testFile), (content) =>
+        content.concat(
+          "\nit('observes the latest setup module', () => {\n  expect((globalThis as typeof globalThis & { __RSTEST_SETUP_VALUE__: string }).__RSTEST_SETUP_VALUE__).toBe('initial');\n});\n",
+        ),
+      );
+    }
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'watch',
+        '--pool',
+        'vmThreads',
+        '--pool.maxWorkers',
+        '2',
+        '--pool.memoryLimit',
+        '256MB',
+        '--disableConsoleIntercept',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Tests 4 passed');
+
+    cli.resetStd();
+    fs.update(path.join(fixturesTargetPath, 'src/shared.ts'), (content) =>
+      content.replace('Hello,', 'Hi,'),
+    );
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Tests 2 failed');
+    expect(cli.stdout).toMatch('Hi, index!');
+    expect(cli.stdout).toMatch('Hi, other!');
+
+    cli.resetStd();
+    fs.update(path.join(fixturesTargetPath, 'src/shared.ts'), (content) =>
+      content.replace('Hi,', 'Hello,'),
+    );
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Tests 4 passed');
+
+    cli.resetStd();
+    fs.update(path.join(fixturesTargetPath, 'rstest.setup.ts'), (content) =>
+      content.replace("= 'initial'", "= 'modified'"),
+    );
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Tests 2 failed');
+    expect(cli.stdout).toMatch('modified');
+
+    cli.exec.kill();
+  });
+
   it('should rerun only affected test files when source changes', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures-test-0${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
@@ -62,6 +135,9 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 2 passed');
     expect(cli.stdout).toMatch('Run all tests in project');
+    expect(cli.stdout).toMatch('[beforeAll] setup');
+    expect(cli.stdout).toMatch('[afterAll] setup');
+    expect(cli.stdout).not.toMatch('Test files to re-run');
 
     // Modify src/index.ts (leaf): only index.test.ts reruns
     cli.resetStd();
@@ -90,6 +166,22 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     await cli.waitForStdout('Duration');
     expectRerun(cli.stdout, ['index.test.ts', 'other.test.ts']);
 
+    // Modify the setup file: everything reruns, and the setup hooks
+    // re-execute with the new content. (The shared edit above changed the
+    // greeting, so this cycle's tests fail — the rerun scope and the modified
+    // hook output are what this step pins, not the verdict.)
+    cli.resetStd();
+    fs.update(path.join(fixturesTargetPath, 'rstest.setup.ts'), (content) => {
+      return content.replace(
+        "console.log('[beforeAll] setup')",
+        "console.log('[beforeAll] setup - modified')",
+      );
+    });
+
+    await cli.waitForStdout('Duration');
+    expectRerun(cli.stdout, ['index.test.ts', 'other.test.ts']);
+    expect(cli.stdout).toMatch('[beforeAll] setup - modified');
+
     cli.exec.kill();
   });
 
@@ -97,7 +189,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     const fixturesTargetPath = `${__dirname}/fixtures-test-dynamic${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
     const { fs } = await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures-dynamic`,
+      fixturesPath: path.join(__dirname, '../fixtures/fan-out-dynamic'),
       fixturesTargetPath,
     });
 

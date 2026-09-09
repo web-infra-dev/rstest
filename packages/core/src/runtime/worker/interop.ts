@@ -1,4 +1,4 @@
-import type vm from 'node:vm';
+import vm from 'node:vm';
 
 export const shouldInterop = ({
   interopDefault = true,
@@ -59,6 +59,13 @@ export function createInteropProxy(mod: any, defaultExport: any): any {
       if (prop === 'default') {
         return defaultExport;
       }
+      if (
+        prop === 'then' &&
+        !('then' in mod) &&
+        typeof defaultExport?.then === 'function'
+      ) {
+        return undefined;
+      }
       /**
        * interop invalid named exports. eg:
        * exports: module.exports = { a: 1 }
@@ -110,6 +117,74 @@ export function createInteropProxy(mod: any, defaultExport: any): any {
 // races the V8 module-graph evaluation and segfaults the worker. One instance
 // per resolved id structurally eliminates the race (mirrors vitest#7741).
 const smCache = new Map<string, vm.SyntheticModule>();
+let vmSyntheticModuleCaches = new WeakMap<
+  object,
+  Map<string, vm.SyntheticModule>
+>();
+
+const getSyntheticModuleCache = (
+  context?: vm.Context,
+): Map<string, vm.SyntheticModule> => {
+  if (!context) {
+    return smCache;
+  }
+  let cache = vmSyntheticModuleCaches.get(context);
+  if (!cache) {
+    cache = new Map();
+    vmSyntheticModuleCaches.set(context, cache);
+  }
+  return cache;
+};
+
+export const getOrCreateSyntheticModule = (
+  something: Record<string, any>,
+  resolvedId: string,
+  defaultExport?: unknown,
+  context?: vm.Context,
+  moduleExports?: { value: unknown },
+): vm.SyntheticModule => {
+  const cache = getSyntheticModuleCache(context);
+  const cached = cache.get(resolvedId);
+  if (cached) {
+    return cached;
+  }
+
+  const hasDefault = defaultExport !== undefined || 'default' in something;
+  const namedKeys = Object.getOwnPropertyNames(something).filter(
+    (key) => key !== 'default' && (key !== 'module.exports' || !moduleExports),
+  );
+  const exports = [
+    ...(hasDefault ? ['default'] : []),
+    ...namedKeys,
+    ...(moduleExports ? ['module.exports'] : []),
+  ];
+  const resolvedDefault = hasDefault
+    ? (defaultExport ?? something.default)
+    : undefined;
+
+  const syntheticModule = new vm.SyntheticModule(
+    exports,
+    () => {
+      for (const name of exports) {
+        syntheticModule.setExport(
+          name,
+          name === 'default'
+            ? resolvedDefault
+            : name === 'module.exports'
+              ? moduleExports?.value
+              : something[name],
+        );
+      }
+    },
+    {
+      identifier: resolvedId,
+      ...(context ? { context } : {}),
+    },
+  );
+
+  cache.set(resolvedId, syntheticModule);
+  return syntheticModule;
+};
 
 /**
  * Wrap a plain exports object in a `vm.SyntheticModule` so it can participate
@@ -126,43 +201,58 @@ export const asModule = async (
   something: Record<string, any>,
   resolvedId: string,
   defaultExport?: unknown,
+  context?: vm.Context,
 ): Promise<vm.SyntheticModule> => {
-  const { SyntheticModule } = await import('node:vm');
-
-  const cached = smCache.get(resolvedId);
-  if (cached) return cached;
-
-  const hasDefault = defaultExport !== undefined || 'default' in something;
-  const namedKeys = Object.keys(something).filter((k) => k !== 'default');
-  const exports = hasDefault ? ['default', ...namedKeys] : namedKeys;
-  const resolvedDefault = hasDefault
-    ? (defaultExport ?? something.default)
-    : undefined;
-
-  const syntheticModule = new SyntheticModule(
-    exports,
-    () => {
-      for (const name of exports) {
-        syntheticModule.setExport(
-          name,
-          name === 'default' ? resolvedDefault : something[name],
-        );
-      }
-    },
-    { identifier: resolvedId },
+  const syntheticModule = getOrCreateSyntheticModule(
+    something,
+    resolvedId,
+    defaultExport,
+    context,
   );
-
-  smCache.set(resolvedId, syntheticModule);
-
-  await syntheticModule.link((() => undefined) as unknown as vm.ModuleLinker);
-
-  // @ts-expect-error copy from webpack
-  if (syntheticModule.instantiate) syntheticModule.instantiate();
-  await syntheticModule.evaluate();
+  if (syntheticModule.status === 'unlinked') {
+    await syntheticModule.link(() => {
+      throw new Error('Synthetic modules cannot have dependencies.');
+    });
+  }
+  if (syntheticModule.status === 'linked') {
+    await syntheticModule.evaluate();
+  }
 
   return syntheticModule;
 };
 
 export const clearSyntheticModuleCache = (): void => {
   smCache.clear();
+  vmSyntheticModuleCaches = new WeakMap();
+};
+
+/**
+ * Drop the per-chunk cache cleaners registered by the cache-control runtime
+ * module (see `core/plugins/moduleCacheControl.ts`). Call only on a full flush:
+ * the runtime chunks are evicted, so re-evaluating each one re-registers a fresh
+ * cleaner — keeping the old ones would pin stale chunk caches across rebuilds.
+ */
+export const clearCacheCleaners = (): void => {
+  (
+    globalThis as {
+      __rstest_cache_cleaners__?: Set<(testEntryPath: string) => void>;
+    }
+  ).__rstest_cache_cleaners__?.clear();
+};
+
+/**
+ * Fully flush every loader's module cache. A reused worker under `isolate: false`
+ * can serve both ESM- and CJS-output projects, each backed by a different loader
+ * (`loadEsModule` / `loadModule`) with its own cache. On a watch rebuild (bumped
+ * `buildId`) both must be cleared, or the loader not used by the first task to
+ * see the new build keeps serving its previous-build runtime cache. Centralized
+ * here so a new loader is wired in one place, not at every flush call site.
+ */
+export const flushAllLoaderCaches = async (): Promise<void> => {
+  const [esm, cjs] = await Promise.all([
+    import('./loadEsModule'),
+    import('./loadModule'),
+  ]);
+  esm.clearModuleCache();
+  cjs.clearModuleCache();
 };

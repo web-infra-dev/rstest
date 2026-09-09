@@ -20,25 +20,64 @@ import type {
   TestAPIs,
   TestCallbackFn,
   TestCase,
+  TaskMeta,
   TestEachFn,
   TestForFn,
+  TestOptions,
   TestRunMode,
   TestSuite,
 } from '../../types';
-import { ROOT_SUITE_NAME } from '../../utils/constants';
-import { castArray, generateFilePathHash } from '../../utils/helper';
+import {
+  ROOT_SUITE_NAME,
+  SYNTHETIC_STACK_ERROR_MESSAGE,
+} from '../../utils/constants';
+import { generateFilePathHash, isPlainObject } from '../../utils/helper';
+import { fileContext } from '../fileContext';
 import {
   formatName,
   isTemplateStringsArray,
   parseTemplateTable,
+  resolveEachArgs,
+  resolveTestArgs,
   TestRegisterError,
 } from '../util';
-import { normalizeFixtures } from './fixtures';
+import { normalizeFixtures, normalizeNamedFixture } from './fixtures';
+import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
 
-class RunnerRuntime {
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  'then' in value &&
+  typeof value.then === 'function';
+
+export type RootSuiteListeners = {
+  beforeAllListeners: BeforeAllListener[];
+  afterAllListeners: AfterAllListener[];
+  beforeEachListeners: BeforeEachListener[];
+  afterEachListeners: AfterEachListener[];
+};
+
+/**
+ * Run-mode / concurrency modifiers shared by the `test` and `describe` APIs.
+ * Both factories install these as chainable getters (`test.skip`,
+ * `describe.only`, …), so listing them once here keeps the two installs from
+ * drifting — a new shared modifier is added in a single place. API-specific
+ * modifiers (e.g. `test.fails`) stay inline at their call site.
+ */
+const SHARED_RUN_MODIFIERS = [
+  { name: 'only', overrides: { runMode: 'only' } },
+  { name: 'todo', overrides: { runMode: 'todo' } },
+  { name: 'skip', overrides: { runMode: 'skip' } },
+  { name: 'concurrent', overrides: { concurrent: true } },
+  { name: 'sequential', overrides: { sequential: true } },
+] as const;
+
+const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
+
+export class RunnerRuntime {
   /** all test cases */
   private readonly tests: Test[] = [];
   /** a calling stack of the current test suites and case */
@@ -52,7 +91,9 @@ class RunnerRuntime {
    * - running: collect it immediately.
    */
   private collectStatus: CollectStatus = 'lazy';
-  private currentCollectList: (() => MaybePromise<void>)[] = [];
+  private currentCollectList: Array<(() => MaybePromise<void>) | undefined> =
+    [];
+  private suiteCollectionDepth = 0;
   private readonly runtimeConfig;
   private readonly project: string;
   private readonly fileHash: string;
@@ -76,6 +117,31 @@ class RunnerRuntime {
     this.status = status;
   }
 
+  /**
+   * Resolve the source location of the current registration call within this
+   * file. Lives on the runner (not a per-file closure) so a late-bound test API
+   * computes the location against the current file's `testPath`.
+   */
+  getLocation(): Location | undefined {
+    if (!this.runtimeConfig.includeTaskLocation) return undefined;
+    const stack = new Error().stack;
+    if (stack) {
+      const frames = stackTraceParse(stack);
+      for (const frame of frames) {
+        let filename = frame.file ?? '';
+        if (filename.startsWith('file://')) filename = fileURLToPath(filename);
+        // testPath is always unix path style, so convert filename with same way
+        filename = normalize(filename);
+        if (filename === this.testPath) {
+          const line = frame.lineNumber;
+          const column = frame.column;
+          if (line != null && column != null) return { line, column };
+        }
+      }
+    }
+    return undefined;
+  }
+
   private checkStatus(name: string, type: 'case' | 'suite'): void {
     if (this.status === 'running') {
       const error = new TestRegisterError(
@@ -86,73 +152,55 @@ class RunnerRuntime {
     }
   }
 
-  afterAll(
-    fn: AfterAllListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
-    const currentSuite = this.getCurrentSuite();
+  /**
+   * Register a suite hook listener. The explicit `void` return keeps the body
+   * strictly checked — a contextual `void` would silently ignore an accidental
+   * `Promise` return.
+   */
+  private registerHook<ExtraContext = object>(
+    key: 'beforeAll' | 'afterAll' | 'beforeEach' | 'afterEach',
+    fn:
+      | AfterAllListener
+      | BeforeAllListener
+      | AfterEachListener<ExtraContext>
+      | BeforeEachListener<ExtraContext>,
+    timeout: number,
+  ): void {
     registerTestSuiteListener(
-      currentSuite,
-      'afterAll',
+      this.getCurrentSuite(),
+      key,
       wrapTimeout({
-        name: 'afterAll hook',
+        name: `${key} hook`,
         fn,
         timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
+        stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }
 
-  beforeAll(
-    fn: BeforeAllListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
-    const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(
-      currentSuite,
-      'beforeAll',
-      wrapTimeout({
-        name: 'beforeAll hook',
-        fn,
-        timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
-      }),
-    );
-  }
+  // Hook registration signatures derive from the public `RunnerAPI` contract so
+  // the implementation cannot drift from it. Arrow fields are used so the
+  // signature can be borrowed from a type (methods cannot) and so `this` stays
+  // bound without an explicit `.bind` at the call site.
+  afterAll: RunnerAPI['afterAll'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('afterAll', fn, timeout);
 
-  afterEach(
-    fn: AfterEachListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
-    const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(
-      currentSuite,
-      'afterEach',
-      wrapTimeout({
-        name: 'afterEach hook',
-        fn,
-        timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
-      }),
-    );
-  }
+  beforeAll: RunnerAPI['beforeAll'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('beforeAll', fn, timeout);
 
-  beforeEach(
-    fn: BeforeEachListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
-    const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(
-      currentSuite,
-      'beforeEach',
-      wrapTimeout({
-        name: 'beforeEach hook',
-        fn,
-        timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
-      }),
-    );
-  }
+  afterEach: RunnerAPI['afterEach'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('afterEach', fn, timeout);
+
+  beforeEach: RunnerAPI['beforeEach'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('beforeEach', fn, timeout);
 
   private getDefaultRootSuite(): Omit<TestSuite, 'testId'> {
     return {
@@ -162,6 +210,7 @@ class RunnerRuntime {
       name: ROOT_SUITE_NAME,
       tests: [],
       type: 'suite',
+      meta: {},
     };
   }
 
@@ -172,6 +221,10 @@ class RunnerRuntime {
     each = false,
     concurrent,
     sequential,
+    timeout,
+    retry,
+    repeats,
+    meta,
     location,
   }: {
     name: string;
@@ -180,6 +233,10 @@ class RunnerRuntime {
     each?: boolean;
     concurrent?: boolean;
     sequential?: boolean;
+    timeout?: number;
+    retry?: number;
+    repeats?: number;
+    meta?: TaskMeta;
     location?: Location;
   }): void {
     this.checkStatus(name, 'suite');
@@ -189,10 +246,14 @@ class RunnerRuntime {
       runMode,
       tests: [],
       type: 'suite',
+      meta: cloneTaskMeta(meta),
       each,
       testPath: this.testPath,
       concurrent,
       sequential,
+      timeout,
+      retry,
+      repeats,
       location,
     };
 
@@ -207,12 +268,17 @@ class RunnerRuntime {
 
     this.currentCollectList.push(async () => {
       this.addTest(currentSuite);
-      const result = fn();
-      if (result instanceof Promise) {
-        await result;
+      this.suiteCollectionDepth++;
+      try {
+        const result = fn();
+        if (isPromiseLike(result)) {
+          await result;
+        }
+        // call current collect immediately
+        await this.collectCurrentTest();
+      } finally {
+        this.suiteCollectionDepth--;
       }
-      // call current collect immediately
-      await this.collectCurrentTest();
       this.resetCurrentTest();
     });
   }
@@ -261,6 +327,10 @@ class RunnerRuntime {
         test.concurrent = true;
       }
 
+      if (current.concurrent || current.inConcurrentScope) {
+        test.inConcurrentScope = true;
+      }
+
       if (current.sequential && test.concurrent !== true) {
         test.sequential = true;
       }
@@ -270,7 +340,22 @@ class RunnerRuntime {
           'Calling the test function inside another test function is not allowed. Please put it inside "describe" so it can be properly collected.',
         );
       }
+
+      // Inherit suite-level `TestOptions` as defaults. An explicit value on the
+      // child (case or nested suite) always wins; a nested describe carries the
+      // inherited value onto its own descendants. Mirrors concurrent/sequential.
+      test.timeout ??= current.timeout;
+      test.retry ??= current.retry;
+      test.repeats ??= current.repeats;
+      test.meta = mergeTaskMeta(current.meta, test.meta);
+
       current.tests.push(test);
+    }
+
+    // Cases must carry a concrete timeout for the runner; fall back to the
+    // configured default once suite inheritance (above) has been resolved.
+    if (test.type === 'case' && test.timeout === undefined) {
+      test.timeout = this.runtimeConfig.testTimeout;
     }
 
     this._currentTest.push(test);
@@ -279,9 +364,11 @@ class RunnerRuntime {
     const currentCollectList = this.currentCollectList;
     // reset currentCollectList
     this.currentCollectList = [];
-    while (currentCollectList.length > 0) {
+    let collectIndex = 0;
+    while (collectIndex < currentCollectList.length) {
       this.collectStatus = 'running';
-      const fn = currentCollectList.shift()!;
+      const fn = currentCollectList[collectIndex++]!;
+      currentCollectList[collectIndex - 1] = undefined;
       await fn();
     }
   }
@@ -292,6 +379,32 @@ class RunnerRuntime {
     }
 
     return this.tests;
+  }
+
+  /**
+   * Capture hooks registered by a setup file so a browser worker can replay
+   * them on each per-file runtime while keeping the setup module cached.
+   */
+  getRootSuiteListeners(): RootSuiteListeners {
+    const root = this.tests.find(
+      (test): test is TestSuite =>
+        test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    );
+    return {
+      beforeAllListeners: [...(root?.beforeAllListeners ?? [])],
+      afterAllListeners: [...(root?.afterAllListeners ?? [])],
+      beforeEachListeners: [...(root?.beforeEachListeners ?? [])],
+      afterEachListeners: [...(root?.afterEachListeners ?? [])],
+    };
+  }
+
+  /** Replay setup-file hooks on a fresh file runtime. */
+  setRootSuiteListeners(listeners: RootSuiteListeners): void {
+    const root = this.getCurrentSuite();
+    root.beforeAllListeners = [...listeners.beforeAllListeners];
+    root.afterAllListeners = [...listeners.afterAllListeners];
+    root.beforeEachListeners = [...listeners.beforeEachListeners];
+    root.afterEachListeners = [...listeners.afterEachListeners];
   }
 
   addTestCase(test: Omit<TestCase, 'testPath' | 'context' | 'testId'>): void {
@@ -329,7 +442,12 @@ class RunnerRuntime {
     fn,
     originalFn = fn,
     fixtures,
-    timeout = this.runtimeConfig.testTimeout,
+    // Left undefined when the caller omits it; `addTest` resolves the effective
+    // timeout (explicit > enclosing suite > config.testTimeout).
+    timeout,
+    retry,
+    repeats,
+    meta,
     runMode = 'run',
     fails = false,
     each = false,
@@ -342,6 +460,9 @@ class RunnerRuntime {
     originalFn?: TestCallbackFn;
     fn?: TestCallbackFn;
     timeout?: number;
+    retry?: number;
+    repeats?: number;
+    meta?: TaskMeta;
     runMode?: TestRunMode;
     each?: boolean;
     fails?: boolean;
@@ -355,10 +476,13 @@ class RunnerRuntime {
       name,
       originalFn,
       fn,
-      stackTraceError: new Error('STACK_TRACE_ERROR'),
+      stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       runMode,
       type: 'case',
+      meta: cloneTaskMeta(meta),
       timeout,
+      retry,
+      repeats,
       fixtures,
       concurrent,
       sequential,
@@ -379,15 +503,26 @@ class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn: (...args: any[]) => any) => void {
-    return (name: string, fn) => {
+  }): (
+    name: string,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
+  ) => void {
+    return (name, arg2, arg3) => {
+      const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats, meta } = suiteOptions;
+      const argsByRow = resolveEachArgs(cases);
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
-        const params = castArray(param) as Parameters<typeof fn>;
+        const params = argsByRow[i]!;
 
         this.describe({
           name: formatName(name, param, i),
           fn: () => fn?.(...params),
+          timeout,
+          retry,
+          repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -404,14 +539,24 @@ class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn: (...args: any[]) => any) => void {
-    return (name: string, fn) => {
+  }): (
+    name: string,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
+  ) => void {
+    return (name, arg2, arg3) => {
+      const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats, meta } = suiteOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
         this.describe({
           name: formatName(name, param, i),
           fn: () => fn?.(param),
+          timeout,
+          retry,
+          repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -429,17 +574,31 @@ class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn?: (...args: any[]) => any, timeout?: number) => void {
-    return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
+  }): (
+    name: string,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
+  ) => void {
+    return (name, arg2, arg3) => {
+      const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats, meta } = testOptions;
+      const argsByRow = resolveEachArgs(cases);
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
-        const params = castArray(param) as any[];
+        const params = argsByRow[i]!;
+
+        const shouldPassContext =
+          typeof fn === 'function' && TEST_EACH_CONTEXT_SYMBOL in fn;
 
         this.it({
           name: formatName(name, param, i),
           originalFn: fn,
-          fn: () => fn?.(...params),
+          fn: (context) =>
+            shouldPassContext ? fn?.(...params, context) : fn?.(...params),
           timeout,
+          retry,
+          repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -457,8 +616,14 @@ class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn?: (...args: any[]) => any, timeout?: number) => void {
-    return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
+  }): (
+    name: string,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
+  ) => void {
+    return (name, arg2, arg3) => {
+      const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats, meta } = testOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
@@ -467,6 +632,9 @@ class RunnerRuntime {
           originalFn: fn,
           fn: (context) => fn?.(param, context),
           timeout,
+          retry,
+          repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -486,46 +654,27 @@ class RunnerRuntime {
 
     throw new Error('Expect to find a suite, but got undefined');
   }
+
+  isTopLevelCollection(): boolean {
+    return this.suiteCollectionDepth === 0;
+  }
 }
 
-export const createRuntimeAPI = ({
-  testPath,
-  runtimeConfig,
-  project,
-}: {
-  testPath: string;
-  runtimeConfig: RuntimeConfig;
-  project: string;
-}): {
-  api: Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
-  instance: RunnerRuntime;
-} => {
-  const runtimeInstance: RunnerRuntime = new RunnerRuntime({
-    project,
-    testPath,
-    runtimeConfig,
-  });
+// The running file's collection-phase registrar (see the live-binding
+// contract in `../api`; `createRunner` publishes the context per file).
+const currentRuntime = (): RunnerRuntime => fileContext().runnerRuntime;
 
-  const getLocation = (): Location | undefined => {
-    if (!runtimeConfig.includeTaskLocation) return undefined;
-    const stack = new Error().stack;
-    if (stack) {
-      const frames = stackTraceParse(stack);
-      for (const frame of frames) {
-        let filename = frame.file ?? '';
-        if (filename.startsWith('file://')) filename = fileURLToPath(filename);
-        // testPath is always unix path style, so convert filename with same way
-        filename = normalize(filename);
-        if (filename === testPath) {
-          const line = frame.lineNumber;
-          const column = frame.column;
-          if (line != null && column != null) return { line, column };
-        }
-      }
-    }
-    return undefined;
-  };
+/**
+ * The collection-phase subset of the runner API — everything except the
+ * execution-phase `onTestFinished`/`onTestFailed`, which are added in
+ * runner/index.ts to form the full `runnerAPI`.
+ */
+type CollectionAPI = Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
 
+// Build the collection-phase surface ONCE at module load (`runtimeAPI` below).
+// Every leaf registration resolves `currentRuntime()` at call time and closes
+// over nothing per-file (see the live-binding contract in `../api`).
+const buildRuntimeAPI = (): CollectionAPI => {
   const createTestAPI = (
     options: {
       concurrent?: boolean;
@@ -536,22 +685,25 @@ export const createRuntimeAPI = ({
       location?: Location;
     } = {},
   ): TestAPI => {
-    const testFn = ((name, fn, timeout) =>
-      runtimeInstance.it({
+    const testFn = ((name, arg2, arg3) => {
+      const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats, meta } = testOptions;
+      const rt = currentRuntime();
+      rt.it({
         name,
         fn,
         timeout,
+        retry,
+        repeats,
+        meta,
         ...options,
-        location: options.location ?? getLocation(),
-      })) as TestAPI;
+        location: options.location ?? rt.getLocation(),
+      });
+    }) as TestAPI;
 
     for (const { name, overrides } of [
       { name: 'fails', overrides: { fails: true } },
-      { name: 'concurrent', overrides: { concurrent: true } },
-      { name: 'sequential', overrides: { sequential: true } },
-      { name: 'skip', overrides: { runMode: 'skip' as const } },
-      { name: 'todo', overrides: { runMode: 'todo' as const } },
-      { name: 'only', overrides: { runMode: 'only' as const } },
+      ...SHARED_RUN_MODIFIERS,
     ]) {
       Object.defineProperty(testFn, name, {
         get: () => {
@@ -564,31 +716,33 @@ export const createRuntimeAPI = ({
     testFn.runIf = (condition: boolean) =>
       createTestAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? options.runMode : 'skip',
       });
 
     testFn.skipIf = (condition: boolean) =>
       createTestAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? 'skip' : options.runMode,
       });
 
     testFn.each = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.each({ cases, ...options, location });
+      return rt.each({ cases, ...options, location });
     }) as TestEachFn;
 
     testFn.for = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.for({ cases, ...options, location });
+      return rt.for({ cases, ...options, location });
     }) as TestForFn;
 
     return testFn;
@@ -596,20 +750,63 @@ export const createRuntimeAPI = ({
 
   const it = createTestAPI() as TestAPIs;
 
-  it.extend = ((fixtures: Fixtures): TestAPIs => {
+  it.extend = ((...initialArgs: unknown[]): TestAPIs => {
     const extend = (
-      fixtures: Fixtures,
-      extendFixtures?: NormalizedFixtures,
+      args: unknown[],
+      extendFixtures: NormalizedFixtures = {},
     ) => {
-      const normalizedFixtures = normalizeFixtures(fixtures, extendFixtures);
+      let normalizedFixtures: NormalizedFixtures;
+      if (typeof args[0] === 'string') {
+        if (args.length === 2) {
+          normalizedFixtures = normalizeNamedFixture(
+            args[0],
+            args[1],
+            extendFixtures,
+            'test',
+          );
+        } else if (args.length === 3) {
+          if (
+            !isPlainObject(args[1]) ||
+            !['file', 'worker'].includes(args[1].scope as string) ||
+            Object.keys(args[1]).some((key) => key !== 'scope')
+          ) {
+            throw new Error(
+              "test.extend(name, options, fixture) expects { scope: 'file' | 'worker' } as options.",
+            );
+          }
+          if (!currentRuntime().isTopLevelCollection()) {
+            throw new Error(
+              `${args[1].scope === 'worker' ? 'worker' : 'File'}-scoped fixtures must be defined at the top level of the test file.`,
+            );
+          }
+          normalizedFixtures = normalizeNamedFixture(
+            args[0],
+            args[2],
+            extendFixtures,
+            args[1].scope as 'file' | 'worker',
+          );
+        } else {
+          throw new Error(
+            'test.extend(name, fixture) or test.extend(name, options, fixture) expects two or three arguments.',
+          );
+        }
+      } else {
+        if (args.length !== 1) {
+          throw new Error('test.extend(fixtures) expects one argument.');
+        }
+        normalizedFixtures = normalizeFixtures(
+          args[0] as Fixtures,
+          extendFixtures,
+        );
+      }
       const api = createTestAPI({ fixtures: normalizedFixtures }) as TestAPIs;
-      api.extend = ((subFixtures: Fixtures) => {
-        return extend(subFixtures, normalizedFixtures);
+      api.extend = ((...subArgs: unknown[]) => {
+        return extend(subArgs, normalizedFixtures);
       }) as TestAPIs['extend'];
       return api;
     };
 
-    return extend(fixtures);
+    return extend(initialArgs);
   }) as TestAPIs['extend'];
 
   const createDescribeAPI = (
@@ -620,21 +817,23 @@ export const createRuntimeAPI = ({
       location?: Location;
     } = {},
   ): DescribeAPI => {
-    const describeFn = ((name, fn) =>
-      runtimeInstance.describe({
+    const describeFn = ((name, arg2, arg3) => {
+      const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats, meta } = suiteOptions;
+      const rt = currentRuntime();
+      rt.describe({
         name,
         fn,
+        timeout,
+        retry,
+        repeats,
+        meta,
         ...options,
-        location: options.location ?? getLocation(),
-      })) as DescribeAPI;
+        location: options.location ?? rt.getLocation(),
+      });
+    }) as DescribeAPI;
 
-    for (const { name, overrides } of [
-      { name: 'only', overrides: { runMode: 'only' as const } },
-      { name: 'todo', overrides: { runMode: 'todo' as const } },
-      { name: 'skip', overrides: { runMode: 'skip' as const } },
-      { name: 'concurrent', overrides: { concurrent: true } },
-      { name: 'sequential', overrides: { sequential: true } },
-    ]) {
+    for (const { name, overrides } of SHARED_RUN_MODIFIERS) {
       Object.defineProperty(describeFn, name, {
         get: () => {
           return createDescribeAPI({ ...options, ...overrides });
@@ -646,30 +845,32 @@ export const createRuntimeAPI = ({
     describeFn.skipIf = (condition: boolean) =>
       createDescribeAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? 'skip' : options.runMode,
       });
     describeFn.runIf = (condition: boolean) =>
       createDescribeAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? options.runMode : 'skip',
       });
 
     describeFn.each = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.describeEach({ cases, ...options, location });
+      return rt.describeEach({ cases, ...options, location });
     }) as DescribeEachFn;
 
     describeFn.for = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.describeFor({ cases, ...options, location });
+      return rt.describeFor({ cases, ...options, location });
     }) as DescribeForFn;
 
     return describeFn;
@@ -678,15 +879,15 @@ export const createRuntimeAPI = ({
   const describe = createDescribeAPI();
 
   return {
-    api: {
-      describe,
-      it,
-      test: it,
-      afterAll: runtimeInstance.afterAll.bind(runtimeInstance),
-      beforeAll: runtimeInstance.beforeAll.bind(runtimeInstance),
-      afterEach: runtimeInstance.afterEach.bind(runtimeInstance),
-      beforeEach: runtimeInstance.beforeEach.bind(runtimeInstance),
-    },
-    instance: runtimeInstance,
+    describe,
+    it,
+    test: it,
+    afterAll: (...args) => currentRuntime().afterAll(...args),
+    beforeAll: (...args) => currentRuntime().beforeAll(...args),
+    afterEach: (...args) => currentRuntime().afterEach(...args),
+    beforeEach: (...args) => currentRuntime().beforeEach(...args),
   };
 };
+
+/** The stable collection-phase surface. Built once; see `buildRuntimeAPI`. */
+export const runtimeAPI: CollectionAPI = buildRuntimeAPI();

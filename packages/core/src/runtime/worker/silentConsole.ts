@@ -1,4 +1,5 @@
 import type { RuntimeConfig, UserConsoleLog } from '../../types';
+import { getFileTaskId } from '../../utils/helper';
 
 type ConsoleWriter = (payload: {
   content: string;
@@ -10,11 +11,7 @@ const getBufferedLogTaskId = (log: UserConsoleLog): string => {
     return log.taskId;
   }
 
-  return `file:${log.testPath}`;
-};
-
-const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
+  return getFileTaskId(log.testPath);
 };
 
 const getSuiteChainKey = (names: string[]): string => {

@@ -14,7 +14,7 @@
  * - Artifacts intentionally excluded for now: screenshot/toMatchScreenshot/
  *   trace/video
  */
-export const supportedLocatorActions = new Set<string>([
+export const supportedLocatorActions: Set<string> = new Set([
   'click',
   'dblclick',
   'fill',
@@ -32,7 +32,7 @@ export const supportedLocatorActions = new Set<string>([
   'setInputFiles',
 ]);
 
-export const supportedExpectElementMatchers = new Set<string>([
+export const supportedExpectElementMatchers: Set<string> = new Set([
   'toBeVisible',
   'toBeHidden',
   'toBeEnabled',

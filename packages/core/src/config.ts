@@ -4,9 +4,11 @@ import {
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
+import deepmerge from 'deepmerge';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
+  BuiltInReporterNames,
   ExtendConfig,
   NormalizedConfig,
   ProjectConfig,
@@ -17,9 +19,12 @@ import {
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  DEFAULT_EXPECT_POLL_TIMEOUT,
+  DEFAULT_TEST_TIMEOUT,
   formatRootStr,
   getOutputDistPathRoot,
   getTempRstestOutputDirGlob,
+  isPlainObject,
   logger,
   normalizeBuildCache,
   TEMP_RSTEST_OUTPUT_DIR,
@@ -62,6 +67,11 @@ const resolveConfigPath = (root: string, customConfig?: string) => {
   return null;
 };
 
+export interface LoadedRstestConfig {
+  content: RstestConfig;
+  filePath: string | null;
+}
+
 export async function loadConfig({
   cwd = process.cwd(),
   path,
@@ -72,10 +82,7 @@ export async function loadConfig({
   path?: string;
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
-}): Promise<{
-  content: RstestConfig;
-  filePath: string | null;
-}> {
+} = {}): Promise<LoadedRstestConfig> {
   const configFilePath = resolveConfigPath(cwd, path);
 
   if (!configFilePath) {
@@ -129,6 +136,7 @@ export const resolveExtends = async (
   );
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
+  merged.extends = undefined;
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(
@@ -148,6 +156,37 @@ export const resolveExtends = async (
   return merged;
 };
 
+/**
+ * Deep-merge plain data: recurse into plain objects, replace everything else
+ * (arrays, functions, class instances) with the later value.
+ *
+ * For `browser.providerOptions` — an opaque provider payload that must NOT use
+ * `mergeRsbuildConfig`, whose function-chaining / array-concat would corrupt
+ * callable options (`launch.logger.log`) or append `launch.args`.
+ */
+export const plainDeepMerge = <T>(base: T, override: T): T =>
+  deepmerge(base ?? {}, override ?? {}, {
+    // Recurse only into plain records; arrays, functions and class instances are
+    // leaves that get replaced (or kept) by reference, never cloned or merged —
+    // otherwise deepmerge would clone a class-instance option (e.g. a Playwright
+    // `launch.logger`) into a prototype-less plain object.
+    isMergeableObject: isPlainObject,
+  }) as T;
+
+export const clonePlainConfig = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePlainConfig(item)) as T;
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
+    ) as T;
+  }
+
+  return value;
+};
+
 export const mergeProjectConfig = (
   ...configs: ProjectConfig[]
 ): ProjectConfig => {
@@ -158,6 +197,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
     const merged = mergeRsbuildConfig(result, {
       ...config,
+      // Plain-merged below instead of via mergeRsbuildConfig; see plainDeepMerge.
+      browser: undefined,
       exclude: Array.isArray(config.exclude)
         ? {
             patterns: config.exclude,
@@ -173,10 +214,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     }
 
     if (config.browser) {
-      merged.browser = {
-        ...(merged.browser || {}),
-        ...config.browser,
-      };
+      // An absent base resolves to `override`, so undefined result.browser is fine.
+      merged.browser = plainDeepMerge(result.browser, config.browser);
     }
 
     // The following configurations need overrides
@@ -192,6 +231,26 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     return merged;
   }, {});
 };
+
+/**
+ * Whether the process is running inside GitHub Actions. Single source for the
+ * `GITHUB_ACTIONS` runtime signal so every consumer interprets it identically.
+ * Reads `process.env` directly so the build-time `process.env.GITHUB_ACTIONS`
+ * define keeps controlling it (e.g. forced off in this package's own tests).
+ */
+export const isGithubActions = (): boolean =>
+  process.env.GITHUB_ACTIONS === 'true';
+
+/**
+ * Reporters enabled by default. Under GitHub Actions the `github-actions`
+ * reporter is added so failures surface as CI annotations. Takes the flag as a
+ * parameter (pure) so the selection is unit-testable without mutating env or
+ * fighting the build-time `GITHUB_ACTIONS` define.
+ */
+export const getDefaultReporters = (
+  githubActions: boolean = isGithubActions(),
+): BuiltInReporterNames[] =>
+  githubActions ? ['default', 'github-actions'] : ['default'];
 
 const createDefaultConfig = (): NormalizedConfig => ({
   root: process.cwd(),
@@ -215,8 +274,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   isolate: true,
   globals: false,
   passWithNoTests: false,
+  onlyFailures: false,
   update: false,
-  testTimeout: 5_000,
+  testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
   testEnvironment: {
     name: 'node',
@@ -227,10 +287,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     },
   },
   retry: 0,
-  reporters:
-    process.env.GITHUB_ACTIONS === 'true'
-      ? ['default', 'github-actions']
-      : ['default'],
+  reporters: getDefaultReporters(),
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
@@ -241,7 +298,15 @@ const createDefaultConfig = (): NormalizedConfig => ({
   printConsoleTrace: false,
   disableConsoleIntercept: false,
   silent: false,
-  snapshotFormat: {},
+  snapshotFormat: {
+    printShadowRoot: false,
+  },
+  expect: {
+    poll: {
+      interval: 50,
+      timeout: DEFAULT_EXPECT_POLL_TIMEOUT,
+    },
+  },
   env: {},
   hideSkippedTests: false,
   hideSkippedTestFiles: false,
@@ -249,6 +314,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,
+  federation: false,
   browser: {
     enabled: false,
     provider: 'playwright',
@@ -260,7 +326,6 @@ const createDefaultConfig = (): NormalizedConfig => ({
   coverage: {
     exclude: [
       '**/node_modules/**',
-      '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
       '**/*.d.ts',

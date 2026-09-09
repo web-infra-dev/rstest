@@ -1,4 +1,30 @@
-import type { FormattedError, Test } from '../types';
+import type { FormattedError, Test, TestOptions } from '../types';
+
+/**
+ * Resolve the overloaded trailing arguments of `test` / `it` / `test.each` /
+ * `test.for`, which accept two shapes:
+ * - `(name, fn, timeout?)` — `arg2` is the test fn, `arg3` an optional numeric timeout.
+ * - `(name, options, fn?)` — `arg2` is a `TestOptions` object, `arg3` the test fn.
+ *
+ * In the function-first shape `arg3` is only accepted as a numeric timeout.
+ */
+export const resolveTestArgs = <Fn extends (...args: any[]) => any>(
+  arg2?: Fn | TestOptions,
+  arg3?: Fn | number,
+): { fn?: Fn; options: TestOptions } => {
+  if (typeof arg2 === 'function') {
+    if (arg3 !== undefined && typeof arg3 !== 'number') {
+      throw new Error(
+        'The third argument must be a number when the second argument is a function. Use (name, fn, timeout) or (name, options, fn).',
+      );
+    }
+    return {
+      fn: arg2,
+      options: typeof arg3 === 'number' ? { timeout: arg3 } : {},
+    };
+  }
+  return { fn: arg3 as Fn | undefined, options: arg2 ?? {} };
+};
 
 const loadDiffModules = async () => {
   const [{ diff }, { format, plugins }] = await Promise.all([
@@ -11,6 +37,46 @@ const loadDiffModules = async () => {
     format,
     formatPlugins: Object.values(plugins),
   };
+};
+
+const ISTANBUL_COVERAGE_HELPER_REFERENCE_ERROR_REGEXP =
+  /(?:cov_[A-Za-z0-9_$]+.*\bis not defined\b|\bis not defined\b.*cov_[A-Za-z0-9_$]+)/;
+
+const ISTANBUL_COVERAGE_HELPER_HINT = [
+  '',
+  'This looks like an Istanbul coverage counter from instrumented code executed outside its original scope or realm.',
+  'It can happen when a function is serialized with fn.toString() or executed via page.evaluate, Worker, node:vm, eval, or new Function.',
+].join('\n');
+
+const ISTANBUL_COVERAGE_HELPER_WORKAROUND_HINT =
+  "Exclude that source file with coverage.exclude, add an Istanbul ignore hint for small isolated snippets, switch to coverage.provider: 'v8' for non-browser tests, or avoid serializing Istanbul-instrumented functions.";
+
+const ISTANBUL_COVERAGE_HELPER_BROWSER_WORKAROUND_HINT =
+  'Exclude that source file with coverage.exclude, add an Istanbul ignore hint for small isolated snippets, or avoid serializing Istanbul-instrumented functions.';
+
+const isBrowserModeRuntime = (): boolean => {
+  const windowObject = (globalThis as { window?: unknown }).window;
+
+  return (
+    typeof windowObject === 'object' &&
+    windowObject !== null &&
+    '__RSTEST_BROWSER_OPTIONS__' in windowObject
+  );
+};
+
+const appendIstanbulCoverageHelperHint = (message: string): string => {
+  if (
+    message.includes('Istanbul coverage counter') ||
+    !ISTANBUL_COVERAGE_HELPER_REFERENCE_ERROR_REGEXP.test(message)
+  ) {
+    return message;
+  }
+
+  const workaroundHint = isBrowserModeRuntime()
+    ? ISTANBUL_COVERAGE_HELPER_BROWSER_WORKAROUND_HINT
+    : ISTANBUL_COVERAGE_HELPER_WORKAROUND_HINT;
+
+  return `${message}${ISTANBUL_COVERAGE_HELPER_HINT}\n${workaroundHint}`;
 };
 
 const REAL_TIMERS: {
@@ -60,6 +126,10 @@ export const formatTestError = async (
 
       if (error instanceof TestRegisterError && test?.type === 'case') {
         errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
+      }
+
+      if (typeof errObj.message === 'string') {
+        errObj.message = appendIstanbulCoverageHelperHint(errObj.message);
       }
 
       if (
@@ -126,6 +196,18 @@ const formatTemplate = (template: string, values: any[]): string => {
         return String(value ?? '');
     }
   });
+};
+
+/**
+ * The callback arguments for each row of an `each` table. Whether rows are
+ * spread is decided by the whole table, as Jest and Vitest do: only when every
+ * row is an array, so an array row of a mixed table reaches the callback as the
+ * array itself. `Array.from` densifies a sparse table, so a hole becomes one
+ * `undefined` argument instead of a failed spread.
+ */
+export const resolveEachArgs = (cases: readonly unknown[]): unknown[][] => {
+  const rows = Array.from(cases);
+  return rows.every(Array.isArray) ? rows : rows.map((row) => [row]);
 };
 
 export const formatName = (
@@ -214,6 +296,8 @@ export function parseTemplateTable(
 }
 
 export class TestRegisterError extends Error {}
+
+export class TestSkipError extends Error {}
 
 class RstestError extends Error {
   public fullStack?: boolean;

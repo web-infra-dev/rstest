@@ -1,9 +1,9 @@
 import { describe, expect, it } from '@rstest/core';
-import type { BrowserElementExpect } from '../src/augmentExpect';
 import {
   supportedExpectElementMatchers,
   supportedLocatorActions,
 } from '../src/browserRpcRegistry';
+import type { BrowserElementExpect } from '../src/client/augmentExpect';
 import { Locator } from '../src/client/locator';
 import type { BrowserRpcRequest } from '../src/protocol';
 import { dispatchPlaywrightBrowserRpc } from '../src/providers/playwright/dispatchBrowserRpc';
@@ -74,7 +74,6 @@ const createRequest = (
   return {
     id: 'rpc-1',
     testPath: '/tests/example.test.ts',
-    runId: 'run-1',
     kind: 'locator',
     locator: { steps: [{ type: 'locator', selector: '#root' }] },
     method: 'click',

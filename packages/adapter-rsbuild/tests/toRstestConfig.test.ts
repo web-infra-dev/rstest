@@ -1,4 +1,4 @@
-import { normalize } from 'node:path';
+import { normalize, resolve } from 'node:path';
 import { defineConfig, type RsbuildConfig } from '@rsbuild/core';
 import { describe, expect, it } from '@rstest/core';
 import { toRstestConfig } from '../src';
@@ -139,7 +139,9 @@ describe('toRstestConfig', () => {
       cacheDirectory: '.cache/from-rsbuild',
       cacheDigest: ['rsbuild-digest'],
       buildDependencies: [
-        normalize('/repo/configs/rsbuild-extra.ts'),
+        // relative dep is resolved (drive-aware on Windows); the config file
+        // itself is appended via normalize() — mirror both exactly.
+        normalize(resolve('/repo/configs/rsbuild-extra.ts')),
         normalize('/repo/configs/rsbuild.config.ts'),
       ],
     });
@@ -159,7 +161,7 @@ describe('toRstestConfig', () => {
     expect(config.performance?.buildCache).toEqual({
       cacheDirectory: '.cache/from-rsbuild',
       cacheDigest: ['rsbuild-digest'],
-      buildDependencies: [normalize('/repo/project/rsbuild-extra.ts')],
+      buildDependencies: [normalize(resolve('/repo/project/rsbuild-extra.ts'))],
     });
   });
 });

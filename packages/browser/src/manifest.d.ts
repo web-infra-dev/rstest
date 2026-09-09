@@ -1,4 +1,4 @@
-declare module '@rstest/browser-manifest' {
+declare module '__rstest_virtual_browser_manifest__' {
   /** Project configuration from manifest */
   export type ManifestProjectConfig = {
     name: string;

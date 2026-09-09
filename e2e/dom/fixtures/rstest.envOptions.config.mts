@@ -7,6 +7,7 @@ export default defineConfig({
   testEnvironment: {
     name: 'jsdom',
     options: {
+      console: true,
       url: 'http://localhost:8081/test-options',
     },
   },

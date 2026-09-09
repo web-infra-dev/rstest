@@ -3,6 +3,8 @@ title: Hooks
 description: Hooks allow you to run setup and teardown logic before or after your tests or test suites.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Hooks
 
 Hooks allow you to run setup and teardown logic before or after your tests or test suites.
@@ -13,12 +15,15 @@ Hooks allow you to run setup and teardown logic before or after your tests or te
 
 Runs once before all tests in the current suite.
 
+Rstest does not run this hook when the current suite has no tests to run. For example, this happens when all tests are skipped, excluded by test name filtering, or not selected by `test.only`.
+
 ```ts
 import { beforeAll } from '@rstest/core';
 
 beforeAll(async (ctx) => {
   // Setup logic before all tests
   // ctx.filepath gives the current test file path
+  ctx.meta.startedAt = Date.now();
 });
 ```
 
@@ -43,17 +48,26 @@ beforeAll(async () => {
 
 Runs once after all tests in the current suite.
 
+Rstest does not run this hook when the current suite has no tests to run. For example, this happens when all tests are skipped, excluded by test name filtering, or not selected by `test.only`.
+
 ```ts
 import { afterAll } from '@rstest/core';
 
 afterAll(async (ctx) => {
   // Cleanup logic after all tests
+  ctx.meta.finished = true;
 });
 ```
 
+<ApiMeta addedVersion="0.11.1" />
+
+`ctx.meta` is the mutable metadata object for the current suite. If the suite was declared with `describe(name, { meta }, fn)`, `ctx.meta` starts with that metadata after suite inheritance has been applied. File-level hooks write metadata to `TestFileResult.meta`; hooks inside a `describe` block write metadata to that suite result passed to custom reporters.
+
 ## beforeEach
 
-- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | ((ctx: TestContext & ExtraContext) => void | Promise<void>) | Promise<void | ((ctx: TestContext & ExtraContext) => void | Promise<void>)>, timeout?: number) => void`
+
+See [`TestContext`](/api/runtime-api/test-api/test#testcontext) for the `ctx` fields (the same applies to the per-test hooks below).
 
 Runs before each test in the current suite.
 
@@ -80,9 +94,15 @@ beforeEach(async () => {
 });
 ```
 
+<ApiMeta addedVersion="0.11.4" />
+
+The `beforeEach` and `afterEach` callbacks, as well as a cleanup returned by `beforeEach`, can use fixtures created with `test.extend`. Pass the fixture type as `ExtraContext`; Rstest initializes each fixture before the callback that first requests it. See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks).
+
+List fixture dependencies through direct object destructuring in the hook parameter. Rstest does not infer dependencies from the hook body. Object rest properties and default values are not supported in fixture-aware callbacks.
+
 ## afterEach
 
-- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | Promise<void>, timeout?: number) => void`
 
 Runs after each test in the current suite.
 
@@ -96,7 +116,7 @@ afterEach(async () => {
 
 ## onTestFinished
 
-- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 Called after the test has finished running **whatever the test result is**. This can be used to perform cleanup actions. This hook will be called after `afterEach`.
 
@@ -129,7 +149,7 @@ describe.concurrent('concurrent suite', () => {
 
 ## onTestFailed
 
-- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 Called after the test has failed.
 

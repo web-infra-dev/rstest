@@ -11,6 +11,8 @@ overviewHeaders: []
 
 如果测试执行失败，则重试特定次数。这对于一些会产生不稳定结果的测试用例很有帮助。
 
+单个测试可以通过 [`TestOptions.retry`](/api/runtime-api/test-api/test#testoptions) 覆盖该配置；传入 `{ retry: 0 }` 即可在保留全局 retry 的同时为某个测试关闭重试。
+
 ## 示例
 
 你可以通过设置 `retry: 2` 来指定测试失败后重试两次：
@@ -36,7 +38,7 @@ export default defineConfig({
 
 当测试重试时，Rstest 会打印如下日志：
 
-- 当测试成功时:
+- 当测试成功时：
 
 ```bash
  ✓ retry.test.ts (1)

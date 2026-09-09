@@ -1,7 +1,34 @@
-import { isAbsolute, join, normalize, parse, sep } from 'pathe';
+import { normalize as nativeNormalize } from 'node:path';
+import {
+  isAbsolute,
+  join,
+  normalize,
+  parse,
+  relative,
+  resolve,
+  sep,
+} from 'pathe';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
+import { wrapRegex } from './regexpWireFormat';
+
+export const isQuotedFilter = (filter: string): boolean =>
+  filter.length >= 2 &&
+  (filter[0] === '"' || filter[0] === "'") &&
+  filter.at(-1) === filter[0];
+
+export const quoteFilter = (path: string): string => `"${path}"`;
+
+export const unquoteFilter = (filter: string): string =>
+  isQuotedFilter(filter) ? filter.slice(1, -1) : filter;
+
+export const normalizeExactPathMatch = (filePath: string): string => {
+  const normalizedPath = normalize(filePath);
+  return process.platform === 'win32'
+    ? normalizedPath.toLocaleLowerCase()
+    : normalizedPath;
+};
 
 /**
  * Generate a stable hash for a file path.
@@ -41,6 +68,29 @@ export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
 }
 
+/**
+ * Render a path relative to `rootPath` when it lives inside the root, otherwise
+ * fall back to the original path. Used for trace labels and summary tables so
+ * in-repo files show as short relative paths while external/sentinel paths
+ * (e.g. `<host>`) pass through unchanged.
+ */
+export const displayPath = (filePath: string, rootPath: string): string => {
+  const rel = relative(rootPath, resolve(rootPath, filePath));
+  return rel && !rel.startsWith('..') ? rel : filePath;
+};
+
+/**
+ * Convert a path to the OS-native separator form (`\` on Windows, no-op on
+ * POSIX). Internally `testPath` stays POSIX so the pathe-based consumers
+ * (snapshot, reporter relative paths, related-graph lookup) keep working, but
+ * the user-facing surfaces (`expect.getState().testPath`, hook `ctx.filepath`)
+ * must match `import.meta.filename`/`__filename`, which the rspack plugin
+ * injects in native form. Apply this only at those user-facing boundaries.
+ * See https://github.com/web-infra-dev/rstest/issues/1465.
+ */
+export const toNativePath = (filePath: string): string =>
+  nativeNormalize(filePath);
+
 export const parsePosix = (filePath: string): { dir: string; base: string } => {
   const { dir, base } = parse(filePath);
 
@@ -60,11 +110,16 @@ export const castArray = <T>(arr?: T | T[]): T[] => {
   return Array.isArray(arr) ? arr : [arr];
 };
 
-const isPlainObject = (obj: unknown): obj is Record<string, any> => {
+export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
+  if (obj === null || typeof obj !== 'object') {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(obj);
   return (
-    obj !== null &&
-    typeof obj === 'object' &&
-    Object.getPrototypeOf(obj) === Object.prototype
+    prototype !== null &&
+    Object.getPrototypeOf(prototype) === null &&
+    prototype.constructor?.name === 'Object'
   );
 };
 
@@ -102,8 +157,9 @@ export const prettyTime = (milliseconds: number): string => {
     return `${seconds.toFixed(digits)}s`;
   };
 
-  const minutes = Math.floor(seconds / 60);
-  const secondsRemainder = seconds % 60;
+  const roundedSeconds = Math.round(seconds);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const secondsRemainder = minutes > 0 ? roundedSeconds % 60 : seconds;
   let time = '';
 
   if (minutes > 0) {
@@ -128,18 +184,26 @@ export const getTaskNameWithPrefix = (
   delimiter: string = TEST_DELIMITER,
 ): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
-const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
-
-const wrapRegex = (value: RegExp): string =>
-  `${REGEXP_FLAG_PREFIX}${value.toString()}`;
+/**
+ * Single source of truth for the `file:` task-id grammar. The value is an
+ * opaque pass-through label (never equality-checked across processes), so the
+ * grammar only needs to stay self-consistent — owning it here keeps the worker,
+ * pool, and runner copies from drifting.
+ *
+ * The browser package keeps its own copy on purpose (it must not import core
+ * runtime internals across the provider-agnostic barrier).
+ */
+export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
 
 /**
  * Makes some special types that are not supported for passing into the pool serializable.
  * eg. RegExp
  */
-export const serializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
+export const serializableConfig = <
+  T extends Pick<RuntimeConfig, 'testNamePattern'>,
+>(
+  normalizedConfig: T,
+): T => {
   const { testNamePattern } = normalizedConfig;
   return {
     ...normalizedConfig,

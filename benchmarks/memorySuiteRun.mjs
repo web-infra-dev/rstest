@@ -9,7 +9,8 @@ import { withCodSpeed } from '@codspeed/tinybench-plugin';
 import { Bench } from 'tinybench';
 import { createFrontendMemoryFixture } from './createFrontendMemoryFixture.mjs';
 
-const { initCli, createRstest } = await import('@rstest/core');
+const { loadConfig, mergeRstestConfig } = await import('@rstest/core');
+const { createRstest } = await import('@rstest/core/api');
 
 const bench = withCodSpeed(
   new Bench({
@@ -20,28 +21,57 @@ const bench = withCodSpeed(
   }),
 );
 
-const fixture = await createFrontendMemoryFixture();
+const pool = process.env.RSTEST_BENCH_MEMORY_POOL ?? 'forks';
+if (pool !== 'forks' && pool !== 'vmThreads') {
+  throw new Error(
+    `RSTEST_BENCH_MEMORY_POOL must be "forks" or "vmThreads", received "${pool}".`,
+  );
+}
+const maxWorkersValue = (process.env.RSTEST_BENCH_MEMORY_WORKERS ?? '4').trim();
+const maxWorkers = Number(maxWorkersValue);
+if (!/^[1-9]\d*$/.test(maxWorkersValue) || !Number.isSafeInteger(maxWorkers)) {
+  throw new Error('RSTEST_BENCH_MEMORY_WORKERS must be a positive integer.');
+}
+const prebundle =
+  process.env.RSTEST_BENCH_MEMORY_PREBUNDLE === 'auto' ? 'auto' : false;
+const memoryLimit = process.env.RSTEST_BENCH_MEMORY_LIMIT ?? '256MB';
+const fixture = await createFrontendMemoryFixture({
+  maxWorkers,
+  memoryLimit,
+  pool,
+  prebundle,
+});
 
 async function runSyntheticFrontendProject() {
-  const { config, configFilePath, projects } = await initCli({
-    reporter: [],
-    root: fixture.root,
+  const { content } = await loadConfig({ cwd: fixture.root });
+  const rstest = await createRstest({
+    cwd: fixture.root,
+    config: mergeRstestConfig(content, { reporters: [] }),
   });
+  const result = await rstest.run();
 
-  const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
-  await rstest.runTests();
-
-  if (process.exitCode && process.exitCode !== 0) {
+  if (result.status !== 'pass') {
+    const details = result.unhandledErrors
+      .map((error) => error.message)
+      .join('; ');
     throw new Error(
-      `Synthetic frontend memory benchmark failed with exit code ${process.exitCode}`,
+      `Synthetic frontend memory benchmark failed${details ? `: ${details}` : ''}`,
     );
   }
-
-  process.exitCode = undefined;
 }
 
 bench.add('frontend-memory-full-run', async () => {
-  await runSyntheticFrontendProject();
+  const previousCacheDirectory = process.env.RSTEST_BENCH_MEMORY_CACHE;
+  process.env.RSTEST_BENCH_MEMORY_CACHE = `${fixture.root}/.cache/run`;
+  try {
+    await runSyntheticFrontendProject();
+  } finally {
+    if (previousCacheDirectory === undefined) {
+      delete process.env.RSTEST_BENCH_MEMORY_CACHE;
+    } else {
+      process.env.RSTEST_BENCH_MEMORY_CACHE = previousCacheDirectory;
+    }
+  }
 });
 
 try {
@@ -60,8 +90,10 @@ if (!process.env.CODSPEED_ENV) {
   console.table(
     bench.tasks.map((task) => ({
       name: task.name,
-      'avg (ms)': Number((task.result?.mean ?? 0).toFixed(2)),
-      iterations: task.result?.samples?.length ?? 0,
+      pool,
+      prebundle,
+      'avg (ms)': Number((task.result?.latency?.mean ?? 0).toFixed(2)),
+      iterations: task.result?.latency?.samplesCount ?? 0,
     })),
   );
 

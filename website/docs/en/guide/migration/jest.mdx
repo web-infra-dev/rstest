@@ -37,18 +37,18 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 
 Some Jest CLI flags map directly to Rstest, while others move into config. Use this table for the common option differences you are likely to hit during migration:
 
-| Jest CLI option                          | Rstest equivalent                                 | Notes                                                                   |
-| ---------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
-| `jest`                                   | `rstest`                                          |                                                                         |
-| `jest --watch`                           | `rstest --watch` or `rstest watch`                |                                                                         |
-| `jest --watchAll`                        | `rstest --watch` or `rstest watch`                | Rstest does not distinguish between `--watch` and `--watchAll`.         |
-| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                      |                                                                         |
-| `jest --maxWorkers=50%` or `jest -w 50%` | `rstest --pool.maxWorkers 50%`                    | Rstest's `-w` means `--watch`, not `--maxWorkers`.                      |
-| `jest --selectProjects app`              | `rstest --project app`                            |                                                                         |
-| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                  |                                                                         |
-| `jest --coverage`                        | `rstest --coverage`                               | Also install `@rstest/coverage-istanbul`.                               |
-| `jest --coverageDirectory=coverage`      | `coverage.reportsDirectory` in `rstest.config.ts` |                                                                         |
-| `jest --coverageProvider=v8`             | Remove                                            | Only `'istanbul'` is supported — see the `coverageProvider` config row. |
+| Jest CLI option                          | Rstest equivalent                                 | Notes                                                                                                             |
+| ---------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `jest`                                   | `rstest`                                          |                                                                                                                   |
+| `jest --watch`                           | `rstest --watch` or `rstest watch`                |                                                                                                                   |
+| `jest --watchAll`                        | `rstest --watch` or `rstest watch`                | Rstest does not distinguish between `--watch` and `--watchAll`.                                                   |
+| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                      |                                                                                                                   |
+| `jest --maxWorkers=50%` or `jest -w 50%` | `rstest --pool.maxWorkers 50%`                    | Rstest's `-w` means `--watch`, not `--maxWorkers`.                                                                |
+| `jest --selectProjects app`              | `rstest --project app`                            |                                                                                                                   |
+| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                  |                                                                                                                   |
+| `jest --coverage`                        | `rstest --coverage`                               | Also install the provider package that matches your config: `@rstest/coverage-istanbul` or `@rstest/coverage-v8`. |
+| `jest --coverageDirectory=coverage`      | `coverage.reportsDirectory` in `rstest.config.ts` |                                                                                                                   |
+| `jest --coverageProvider=v8`             | `coverage.provider: 'v8'`                         | Install `@rstest/coverage-v8` and configure the provider in `rstest.config.ts`.                                   |
 
 ## Configuration migration
 
@@ -86,10 +86,10 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | `injectGlobals`              | [`globals`](/config/test/globals)                                                                                      | Jest defaults to `true`; Rstest's `globals` defaults to `false`. If your tests rely on bare `describe` / `test` / `expect` without imports, set `globals: true` and add `@rstest/core/globals` to `compilerOptions.types` in `tsconfig.json`.                                                                                                                                                                                           |
 | `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                                                  | `resolve.alias` is string-prefix only. Rewrite prefix mappings: `'^@/(.*)$': '<rootDir>/src/$1'` → `resolve: { alias: { '@': './src' } }`. For TypeScript projects, prefer `compilerOptions.paths` in `tsconfig.json` — Rstest reads it automatically. Regex/asset stubs (e.g. `'\\.(css\|svg)$': 'identity-obj-proxy'`) have no direct equivalent; most are unnecessary because Rstest handles CSS/assets natively.                    |
 | `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                                             | For per-test overrides, replace `jest.setTimeout(n)` with `rstest.setConfig({ testTimeout: n })`.                                                                                                                                                                                                                                                                                                                                       |
+| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                                             | For per-test overrides, replace `jest.setTimeout(n)` with `rs.setConfig({ testTimeout: n })`.                                                                                                                                                                                                                                                                                                                                           |
 | `slowTestThreshold`          | [`slowTestThreshold`](/config/test/slow-test-threshold)                                                                | Jest measures in seconds (default 5); Rstest measures in milliseconds (default 300). Multiply Jest values by 1000.                                                                                                                                                                                                                                                                                                                      |
 | `detectOpenHandles`          | No exact equivalent; consider [`detectAsyncLeaks`](/config/test/detect-async-leaks) for test-file async leak debugging | Not a 1:1 mapping. Jest's `detectOpenHandles` helps diagnose handles that keep the Jest process from exiting, while Rstest's `detectAsyncLeaks` fails a test file when Node.js async resources remain active after the file finishes.                                                                                                                                                                                                   |
-| `fakeTimers`                 | [`rstest.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rstestusefaketimers)                                      | No config field. Call `rstest.useFakeTimers(opts)` inside a `setupFiles` module or per-test; pair with `rstest.useRealTimers()` to restore.                                                                                                                                                                                                                                                                                             |
+| `fakeTimers`                 | [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers)                                              | No config field. Call `rs.useFakeTimers(opts)` inside a `setupFiles` module or per-test; pair with `rs.useRealTimers()` to restore.                                                                                                                                                                                                                                                                                                     |
 | `bail`                       | [`bail`](/config/test/bail)                                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `clearMocks`                 | [`clearMocks`](/config/test/clear-mocks)                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `resetMocks`                 | [`resetMocks`](/config/test/reset-mocks)                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -101,7 +101,7 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `collectCoverageFrom`        | [`coverage.include`](/config/test/coverage#include)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory)                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `coverageProvider`           | Remove                                                                                                                 | Rstest only supports `'istanbul'` (the default), so there is nothing to configure — drop the field. `'v8'` / `'babel'` providers are not supported.                                                                                                                                                                                                                                                                                     |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                                                                  | Rstest supports `'istanbul'` (default) and `'v8'`. Use `coverage.provider: 'v8'` for tests that need V8 coverage. `'babel'` should be replaced with `'istanbul'`.                                                                                                                                                                                                                                                                       |
 | `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `projects`                   | [`projects`](/config/test/projects)                                                                                    | Jest's inline project shape differs — review before porting.                                                                                                                                                                                                                                                                                                                                                                            |
@@ -132,9 +132,26 @@ To enable TypeScript to properly recognize the global APIs, add the `@rstest/cor
 }
 ```
 
+### File-level environment comments
+
+If your Jest tests use file-level environment comments, Rstest recognizes Jest environment comments during migration:
+
+```ts
+/**
+ * @jest-environment jsdom
+ * @jest-environment-options { "url": "https://example.com/" }
+ */
+```
+
+You can keep these comments as-is or rename them to `@rstest-environment` / `@rstest-environment-options`. The options value must be a single-line JSON object. Supported environments are `node`, `jsdom`, and `happy-dom`.
+
 ### Code transformation
 
 Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
+
+Jest itself gets module resolution and transformation from `moduleNameMapper` and `transform`, rather than from `tsconfig.json`. If you use `ts-jest`, do not assume that its TypeScript transform settings carry over: Rstest automatically applies `compilerOptions.paths` for resolution, while transformation settings, such as decorator syntax or output-target requirements, should be reviewed and configured through Rstest when needed. An adapter can inherit or infer additional settings, so refer to the documentation for the [adapter you use](/guide/advanced/adapters). See [source.tsconfigPath](/config/build/source#sourcetsconfigpath).
+
+Rstest transforms files that are part of its bundle graph. If your project previously relied on `ts-jest` runtime transforms, see [Code outside the bundle graph uses native Node.js behavior](/guide/debug/troubleshooting#code-outside-the-bundle-graph-uses-native-nodejs-behavior).
 
 ```diff
 export default {
@@ -184,17 +201,30 @@ Your existing Jest test files should work with minimal changes since Rstest prov
 
 ```diff
 - import { describe, expect, it, test } from '@jest/globals';
-+ import { describe, expect, it, test } from '@rstest/core';
++ import { describe, expect, it, test, rs } from '@rstest/core';
 ```
 
-Rstest provides a `rstest` API that you can use to access Rstest's utilities, such as `rstest.fn()` and `rstest.mock()`. Just like Jest's `jest.fn()` and `jest.mock()`. More utilities can be found in the [Rstest APIs](/api/runtime-api/).
+Rstest provides an `rs` API that you can use to access Rstest's utilities, such as `rs.fn()` and `rs.mock()`. The longer `rstest` helper remains available as an alias. More utilities can be found in the [Rstest APIs](/api/runtime-api/).
 
 ```diff
 - const fn = jest.fn();
-+ const fn = rstest.fn();
++ const fn = rs.fn();
 
 fn.mockResolvedValue('foo');
 ```
+
+### Virtual module mocks
+
+When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:
+
+```diff
+- jest.mock('native-runtime', () => ({ platform: 'test' }), {
+-   virtual: true,
+- });
++ rs.mock('native-runtime', () => ({ platform: 'test' }));
+```
+
+The `rs.mock` factory or a matching manual mock provides the module's runtime exports.
 
 ### Done callback
 
@@ -232,11 +262,11 @@ The return functions of the `beforeEach` and `beforeAll` hooks in Rstest are use
 
 ### Timeout
 
-If you used `jest.setTimeout()` to set the timeout for a test, you can use `rstest.setConfig()` instead.
+If you used `jest.setTimeout()` to set the timeout for a test, you can use `rs.setConfig()` instead.
 
 ```diff
 - jest.setTimeout(5_000)
-+ rstest.setConfig({ testTimeout: 5_000 })
++ rs.setConfig({ testTimeout: 5_000 })
 ```
 
 ## Snapshot format
@@ -284,13 +314,13 @@ If your project is using CommonJS, Rstest still works, but it is recommended to 
 
 ### ESM vs CJS mocking
 
-In Rstest, `rstest.mock()` targets ESM entries used by `import`, while `rstest.mockRequire()` targets CJS entries used by `require()`.
+In Rstest, `rs.mock()` targets ESM entries used by `import`, while `rs.mockRequire()` targets CJS entries used by `require()`.
 
-For code that uses `require()`, `rstest.mockRequire()` targets the CJS entry:
+For code that uses `require()`, `rs.mockRequire()` targets the CJS entry:
 
 ```ts
 // Mocking a CJS module
-rstest.mockRequire('./math.cjs', () => ({
+rs.mockRequire('./math.cjs', () => ({
   sum: (a, b) => a + b + 100,
 }));
 ```

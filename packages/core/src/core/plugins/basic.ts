@@ -1,17 +1,38 @@
 import path from 'node:path';
-import type { RsbuildPlugin } from '@rsbuild/core';
-import pathe from 'pathe';
-import type { RstestContext } from '../../types';
+import { fileURLToPath } from 'node:url';
+import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import {
+  importMetaHook,
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from '../../runtime/worker/runtimeHooks';
+import { createVmTimersShim } from '../../runtime/worker/vm/timers';
+import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
+import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
+import {
+  applyMockExportsPresence,
+  forceWebpackRuntimeMode,
+  getMockRstestPluginOptions,
+} from './mockBuild';
 
-export const RUNTIME_CHUNK_NAME = 'runtime';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
-const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
+const __rstest_native_require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
+${createVmTimersShim()}
+const require = (id) =>
+  id === 'timers' || id === 'node:timers'
+    ? __rstest_load_timers(id)
+    : __rstest_native_require(id);
+require.resolve = __rstest_native_require.resolve;
+require.main = __rstest_native_require.main;
+require.cache = __rstest_native_require.cache;
+require.extensions = __rstest_native_require.extensions;
 `;
 
-export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
+export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
   context,
 ) => ({
   name: 'rstest:basic',
@@ -30,7 +51,12 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
     });
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
       const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
-      const project = context.projects.find((p) => p.environmentName === name)!;
+      const project = context.projects.find((p) => p.environmentName === name);
+
+      if (!project) {
+        return config;
+      }
+
       const {
         normalizedConfig: {
           resolve,
@@ -39,6 +65,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           tools,
           dev,
           testEnvironment,
+          federation,
         },
         outputModule,
         rootPath,
@@ -72,7 +99,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         {
           source: {
             define: {
-              'import.meta.rstest': "global['@rstest/core']",
               'import.meta.env': 'process.env',
             },
           },
@@ -108,6 +134,33 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.mode = isProd ? 'production' : 'development';
               config.output ??= {};
               config.output.iife = false;
+              if (federation) {
+                // Module Federation's Node preset makes chunk loading fs-based
+                // (`readFileVm`), but the bundle's assets only exist in the
+                // in-memory `assetFiles` map, never on disk. `require`-based
+                // loading routes chunks through the vm-injected `require`,
+                // which resolves them from that map.
+                config.output.chunkLoading = 'require';
+                // The config-level value above states the intent, but
+                // `@module-federation/rstest` >= 2.9.0 explicitly writes
+                // `output.chunkLoading = 'async-node'` from its own config
+                // hook (earlier versions only set `target`), and hook order
+                // puts it after this one. Enforce at compiler level instead:
+                // plugin `apply` runs after every config-level hook and
+                // before rspack derives target defaults, so this write wins
+                // regardless of what federation plugins do to the config
+                // object. A federation plugin that writes the field in its
+                // own `apply` (e.g. a hand-wired `StreamingTargetPlugin`)
+                // still wins — documented limitation. `chunkFormat` stays on
+                // the target-derived `'commonjs'`.
+                config.plugins ??= [];
+                config.plugins.push({
+                  name: 'RstestFederationRequireChunkLoading',
+                  apply(compiler: Rspack.Compiler) {
+                    compiler.options.output.chunkLoading = 'require';
+                  },
+                });
+              }
               // polyfill interop
               // TODO: if we ever expose `output.importFunctionName` as a user
               // option, rspack#13849's rewrite still reads it directly to pick
@@ -116,8 +169,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               // the dynamic-import-origin rewrite onto a dedicated rspack
               // option so the two concerns stop sharing one identifier.
               config.output.importFunctionName = outputModule
-                ? 'import.meta.__rstest_dynamic_import__'
-                : '__rstest_dynamic_import__';
+                ? importMetaHook(RSTEST_DYNAMIC_IMPORT_HOOK)
+                : RSTEST_DYNAMIC_IMPORT_HOOK;
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
@@ -128,17 +181,24 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.devtool = 'nosources-source-map';
               }
 
+              const rstestPluginOptions = {
+                ...getMockRstestPluginOptions({ rootPath }),
+                // The runtime hook below resolves relative dynamic-import
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #1207.
+                injectDynamicImportOrigin: true,
+                // The runtime hook below resolves relative require.resolve
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #848.
+                injectRequireResolveOrigin: {
+                  functionName: outputModule
+                    ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
+                    : RSTEST_REQUIRE_RESOLVE_HOOK,
+                },
+              };
+
               config.plugins.push(
-                new rspack.experiments.RstestPlugin({
-                  injectModulePathName: true,
-                  importMetaPathName: true,
-                  hoistMockModule: true,
-                  manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
-                  // The runtime hook below resolves relative dynamic-import
-                  // specifiers against the source module that produced the
-                  // call, instead of the test entry, fixing #1207.
-                  injectDynamicImportOrigin: true,
-                }),
+                new rspack.experiments.RstestPlugin(rstestPluginOptions),
               );
 
               config.module.rules ??= [];
@@ -146,6 +206,19 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 test: /\.mts$/,
                 // Treated mts as strict ES modules.
                 type: 'javascript/esm',
+              });
+
+              const experiments = forceWebpackRuntimeMode(config);
+              // Disable rspack's built-in `webassembly/async` handling and turn
+              // every `.wasm` into a self-contained JS module via wasmLoader.mjs
+              // that reads its on-disk SOURCE bytes and instantiates them, so
+              // there is no `async_wasm_loading` runtime and no `readFile(`
+              // string-replace. All wasm reads resolve source-relative (#1455).
+              experiments.asyncWebAssembly = false;
+              config.module.rules.push({
+                test: /\.wasm$/,
+                type: 'javascript/auto',
+                use: [path.resolve(__dirname, './wasmLoader.mjs')],
               });
 
               if (outputModule) {
@@ -171,10 +244,17 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 requireAsExpression: false,
                 // Keep require.resolve expressions.
                 requireResolve: false,
+                // Keep `new URL(<literal>, import.meta.url)` expressions instead
+                // of rewriting them into hashed bundled asset paths. Tests run
+                // against on-disk source, so this must resolve at runtime
+                // relative to the source module (Node/Vitest behavior), see #1455.
+                // Load-bearing for ALL URL-based source-relative reads (assets
+                // and the `new URL(...).href` wasm path), not just #1455's
+                // sibling case; re-enabling `url` re-breaks every one of them.
+                url: false,
                 ...(config.module.parser.javascript || {}),
-                // suppress ESModulesLinkingError for exports that might be implemented in mock
-                exportsPresence: 'warn',
               };
+              applyMockExportsPresence(config);
 
               config.resolve ??= {};
               config.resolve.extensions ??= [];
@@ -206,7 +286,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
-                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
+                  name: runtimeChunkNameForEnvironment(name),
                 },
               };
             },

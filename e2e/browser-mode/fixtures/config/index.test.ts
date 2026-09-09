@@ -1,5 +1,6 @@
 // @ts-expect-error - @test-alias is defined via resolve.alias in rstest.config.mts
 import { ALIASED_VALUE } from '@test-alias';
+import { expect as rstestExpect } from '@rstest/core';
 
 // This test uses globals: true config
 describe('globals config', () => {
@@ -25,5 +26,16 @@ describe('rsbuild config options', () => {
 
   it('should support resolve.alias', () => {
     expect(ALIASED_VALUE).toBe('aliased-module-works');
+  });
+});
+
+describe('expect config', () => {
+  it('should apply expect.poll defaults', async () => {
+    await rstestExpect(
+      rstestExpect.poll(() => false).toBe(true),
+    ).rejects.toThrow('Matcher did not succeed in 200ms');
+
+    let attempts = 0;
+    await rstestExpect.poll(() => ++attempts).toBe(3);
   });
 });

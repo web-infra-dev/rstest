@@ -6,9 +6,26 @@ import type {
   OnTestFinishedHandler,
   TestContext,
 } from './api';
-import type { MaybePromise, TestPath } from './utils';
+import type { ConsoleStreamType, MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
+
+type ActiveTimeoutContext = {
+  /** @internal Active hook or fixture deadline. */
+  activeTimeout?: number;
+  /** @internal Start time for the active hook or fixture deadline. */
+  activeTimeoutStartTime?: number;
+};
+
+export type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+
+export type TaskMeta = Record<string, TaskMetaValue>;
 
 export type TaskState = 'pass' | 'fail';
 
@@ -42,6 +59,7 @@ export type TestCaseInfo = {
   startTime?: number;
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  meta?: TaskMeta;
   type: 'case';
   runMode: TestRunMode;
 };
@@ -53,10 +71,22 @@ export type TestCase = TestCaseInfo & {
   each?: boolean;
   fixtures?: NormalizedFixtures;
   concurrent?: boolean;
+  /** @internal True when the case is nested in a concurrently running suite. */
+  inConcurrentScope?: boolean;
   sequential?: boolean;
   inTestEach?: boolean;
   context: TestContext;
   only?: boolean;
+  /**
+   * Per-test override for the number of retries on failure. When undefined,
+   * the runner falls back to `runtimeConfig.retry`.
+   */
+  retry?: number;
+  /**
+   * Number of additional runs to perform on top of the first run; any failure
+   * short-circuits remaining repeats. Currently per-test only.
+   */
+  repeats?: number;
   onFinished: OnTestFinishedHandler[];
   onFailed: OnTestFailedHandler[];
   /**
@@ -71,11 +101,12 @@ export type TestCase = TestCaseInfo & {
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;
-};
+} & ActiveTimeoutContext;
 
-export type SuiteContext = {
+export interface SuiteContext {
   filepath: TestPath;
-};
+  meta: TaskMeta;
+}
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
 
@@ -83,11 +114,13 @@ export type BeforeAllListener = (
   ctx: SuiteContext,
 ) => MaybePromise<void | AfterAllListener>;
 
-export type AfterEachListener = (ctx: TestContext) => MaybePromise<void>;
+export type AfterEachListener<ExtraContext = object> = (
+  ctx: TestContext & ExtraContext,
+) => MaybePromise<void>;
 
-export type BeforeEachListener = (
-  ctx: TestContext,
-) => MaybePromise<void | AfterEachListener>;
+export type BeforeEachListener<ExtraContext = object> = (
+  ctx: TestContext & ExtraContext,
+) => MaybePromise<void | AfterEachListener<ExtraContext>>;
 
 export type TestSuiteInfo = {
   testId: string;
@@ -98,21 +131,35 @@ export type TestSuiteInfo = {
   type: 'suite';
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  meta?: TaskMeta;
   runMode: TestRunMode;
 };
 
 export type TestSuite = TestSuiteInfo & {
+  /** @internal */
+  hasRunnableTests?: boolean;
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
+  /** @internal True when the suite is nested in a concurrently running suite. */
+  inConcurrentScope?: boolean;
   sequential?: boolean;
+  /**
+   * Suite-level `TestOptions` passed to `describe(name, options, fn)`. Applied
+   * as inheritable defaults to descendant suites and cases: an explicit child
+   * value wins, and a nested `describe` carries inherited values to its own
+   * descendants.
+   */
+  timeout?: number;
+  retry?: number;
+  repeats?: number;
   /** nested cases and suite could in a suite */
   tests: Test[];
   afterAllListeners?: AfterAllListener[];
   beforeAllListeners?: BeforeAllListener[];
   afterEachListeners?: AfterEachListener[];
   beforeEachListeners?: BeforeEachListener[];
-};
+} & ActiveTimeoutContext;
 
 export type TestSuiteListeners = keyof Pick<
   TestSuite,
@@ -127,6 +174,7 @@ export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
 export type TestFileInfo = {
   testId: string;
   testPath: TestPath;
+  project: string;
   tests: TestInfo[];
 };
 
@@ -142,6 +190,8 @@ export type FormattedError = {
   diff?: string;
   expected?: string;
   actual?: string;
+  retryCount?: number;
+  cause?: unknown;
 };
 
 export type TestResult = {
@@ -155,6 +205,7 @@ export type TestResult = {
   retryErrors?: FormattedError[];
   retryCount?: number;
   project: string;
+  meta?: TaskMeta;
   heap?: number;
 };
 
@@ -162,6 +213,13 @@ export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
   coverage?: Record<string, FileCoverageData>;
+  /**
+   * Raw coverage payload used internally between workers and the pool.
+   * Stripped at the pool boundary before results are exposed to reporters.
+   *
+   * @internal
+   */
+  coverageRaw?: unknown;
   /**
    * Perfetto-compatible trace events. Stripped at the pool boundary.
    *
@@ -179,5 +237,12 @@ export interface UserConsoleLog {
   taskType?: 'file' | 'suite' | 'case';
   trace?: string;
   testPath: TestPath;
-  type: 'stdout' | 'stderr';
+  /**
+   * Owning project. A test path alone does not identify the emitter once
+   * several projects run the same file, and consumers that attribute output to
+   * a file (the blob reporter's replay track, the browser host's sink routing)
+   * cannot recover it from the other fields.
+   */
+  project: string;
+  type: ConsoleStreamType;
 }

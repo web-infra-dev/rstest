@@ -8,7 +8,15 @@ import {
 import type { EnvironmentName } from '../types';
 import { color } from '../utils';
 
-const EnvironmentDependencyMap: Partial<Record<EnvironmentName, string>> = {
+export type EnvironmentDependencyName = Extract<
+  EnvironmentName,
+  'jsdom' | 'happy-dom'
+>;
+
+export const environmentDependencyPackages: Record<
+  EnvironmentDependencyName,
+  string
+> = {
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };
@@ -24,6 +32,12 @@ type PackageInstaller = (
 
 type PackageInstalledChecker = (packageName: string, root: string) => boolean;
 
+type EnsureTestEnvironmentDependenciesOptions = {
+  confirm?: InstallPackageOptions['confirm'];
+  installer?: PackageInstaller;
+  isInstalled?: PackageInstalledChecker;
+};
+
 export const createTestEnvironmentLoadError = (
   packageName: string,
   root: string,
@@ -35,6 +49,12 @@ export const createTestEnvironmentLoadError = (
   error.stack = '';
   return error;
 };
+
+export const formatTestEnvironmentPrebundleFallbackWarning = (
+  packageName: string,
+  reason: unknown,
+): string =>
+  `Failed to load the test environment prebundle for "${packageName}"; falling back to its native entry. The failed prebundle attempt adds startup overhead.\n${String(reason)}`;
 
 export const installTestEnvironmentDependency = (
   packageName: string,
@@ -64,29 +84,34 @@ type EnvironmentDependency = {
   roots: Set<string>;
 };
 
-const getPackageResolutionRoots = (projectRoot: string, root: string) => {
-  return Array.from(new Set([projectRoot, root, coreRoot]));
-};
+export const getTestEnvironmentResolutionRoots = (
+  projectRoot: string,
+  root: string,
+): string[] => Array.from(new Set([projectRoot, root, coreRoot]));
 
 export const ensureTestEnvironmentDependencies = async (
   projects: ProjectWithTestEnvironment[],
   root: string,
-  options: InstallPackageOptions = {},
-  installer: PackageInstaller = installTestEnvironmentDependency,
-  isInstalled: PackageInstalledChecker = isPackageInstalled,
+  {
+    confirm,
+    installer = installTestEnvironmentDependency,
+    isInstalled = isPackageInstalled,
+  }: EnsureTestEnvironmentDependenciesOptions = {},
 ): Promise<void> => {
   const packages = new Map<string, EnvironmentDependency>();
 
   for (const project of projects) {
     const environmentName = project.normalizedConfig.testEnvironment.name;
     const packageName =
-      EnvironmentDependencyMap[environmentName as EnvironmentName];
+      environmentDependencyPackages[
+        environmentName as EnvironmentDependencyName
+      ];
 
     if (!packageName) {
       continue;
     }
 
-    const roots = getPackageResolutionRoots(project.rootPath, root);
+    const roots = getTestEnvironmentResolutionRoots(project.rootPath, root);
 
     if (
       roots.some((resolutionRoot) => isInstalled(packageName, resolutionRoot))
@@ -107,8 +132,14 @@ export const ensureTestEnvironmentDependencies = async (
     }
   }
 
+  const installOptions = confirm ? { confirm } : {};
   for (const [packageName, dependency] of packages) {
-    await installer(packageName, root, dependency.environmentName, options);
+    await installer(
+      packageName,
+      root,
+      dependency.environmentName,
+      installOptions,
+    );
 
     if (
       !Array.from(dependency.roots).some((resolutionRoot) =>

@@ -2,7 +2,10 @@ import {
   defineConfig,
   defineInlineProject,
   defineProject,
-  type ProjectConfig,
+  type RstestConfig,
+  type RstestConfigAsyncFn,
+  type RstestConfigExport,
+  type RstestConfigSyncFn,
 } from '@rstest/core';
 
 export const inlineNodeProject = defineInlineProject({
@@ -43,13 +46,17 @@ export const exportedProject = defineProject({
   include: ['tests/node/**/*.test.ts'],
 });
 
-export const exportedProjectFactory = defineProject(
-  (): ProjectConfig => ({
-    root: __dirname,
-    testEnvironment: 'jsdom',
-    include: ['tests/dom/**/*.test.ts'],
-  }),
-);
+export const exportedProjectFactory = defineProject(() => ({
+  root: __dirname,
+  testEnvironment: 'jsdom',
+  include: ['tests/dom/**/*.test.ts'],
+}));
+
+export const exportedAsyncProjectFactory = defineProject(async () => ({
+  root: __dirname,
+  testEnvironment: 'node',
+  include: ['tests/node/**/*.test.ts'],
+}));
 
 export const exportedNestedProjects = defineProject({
   projects: [
@@ -84,6 +91,57 @@ export const exportedNestedProjectsFactory = defineProject(async () => ({
     }),
   ],
 }));
+
+export const exportedConfigFactory = defineConfig(() => ({
+  testEnvironment: 'node',
+}));
+
+export const exportedSyncConfig: RstestConfigSyncFn = defineConfig(() => ({
+  testEnvironment: 'node',
+}));
+
+export const exportedAsyncConfigFactory = defineConfig(async () => ({
+  testEnvironment: 'jsdom',
+}));
+
+export const exportedAsyncConfig: RstestConfigAsyncFn = defineConfig(
+  async () => ({
+    testEnvironment: 'jsdom',
+  }),
+);
+
+export const exportedObjectConfig: RstestConfig = defineConfig({
+  testEnvironment: 'jsdom',
+});
+
+export const exportedExplicitConfig: RstestConfigSyncFn =
+  defineConfig<RstestConfig>(() => ({
+    testEnvironment: 'node',
+  }));
+
+export const exportedAnyConfig: RstestConfigSyncFn = defineConfig(() =>
+  JSON.parse('{}'),
+);
+
+declare const dynamicConfig: RstestConfigExport;
+defineConfig(dynamicConfig);
+
+// @ts-expect-error unknown config property
+defineConfig({ testEnvironment: 'node', testEnvironmnt: 'node' });
+
+// @ts-expect-error invalid test environment
+defineConfig(async () => ({ testEnvironment: 'invalid' }));
+
+// @ts-expect-error invalid project test environment
+defineProject(async () => ({ testEnvironment: 'invalid' }));
+
+defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    // @ts-expect-error invalid test environment prebundle mode
+    prebundle: 'always',
+  },
+});
 
 export default defineConfig({
   projects: [

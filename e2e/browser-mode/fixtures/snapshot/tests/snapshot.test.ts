@@ -22,6 +22,14 @@ describe('browser snapshot', () => {
     expect(div.outerHTML).toMatchSnapshot();
   });
 
+  it('should omit shadow root from snapshots by default', () => {
+    const element = document.createElement('div');
+    element.textContent = 'light content';
+    element.attachShadow({ mode: 'open' }).innerHTML =
+      '<span>shadow content</span>';
+    expect(element).toMatchSnapshot();
+  });
+
   it('should match array snapshot', () => {
     const items = ['apple', 'banana', 'cherry'];
     expect(items).toMatchSnapshot();

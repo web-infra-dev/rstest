@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rstest/core';
 
 /**
@@ -9,8 +10,26 @@ import { defineConfig } from '@rstest/core';
  */
 const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
 
+/**
+ * Test directories to skip in threads mode.
+ *
+ * - browser-mode: browser tests run in Playwright-managed browser contexts/pages,
+ *   not in the Node.js worker pool, so they do not add coverage for the threads
+ *   transport while increasing CI runtime and flake surface.
+ */
+const THREADS_EXCLUDES = ['browser-mode/**'];
+
+const E2E_MODE =
+  process.env.RSTEST_OUTPUT_MODULE === 'false'
+    ? 'commonjs'
+    : process.env.ISOLATE === 'false'
+      ? 'no-isolate'
+      : process.env.RSTEST_POOL_TYPE === 'threads'
+        ? 'threads'
+        : undefined;
+
 export default defineConfig({
-  name: 'rstest:e2e',
+  name: E2E_MODE ? `rstest:e2e:${E2E_MODE}` : 'rstest:e2e',
   setupFiles: ['../scripts/rstest.setup.ts'],
   // Increased timeout for CI to handle slower environments (e.g., Node.js 22 on Windows)
   // and reduce flaky timeouts caused by resource contention under high parallelism.
@@ -33,6 +52,16 @@ export default defineConfig({
       react: 'commonjs react',
     },
   },
+  resolve: {
+    alias: {
+      // Fixture-only: lets wasm-imports/src/aliasmod.wasm reach its glue through
+      // a non-relative specifier, exercising the wasm loader's resolver-based
+      // import wiring (bare/alias, not just `./` paths).
+      '@e2e/wasm-glue': fileURLToPath(
+        new URL('./wasm-imports/src/alias-glue.js', import.meta.url),
+      ),
+    },
+  },
   pool: {
     // Limit to 80% of available workers to reduce "worker exited unexpectedly"
     // errors in resource-constrained environments (e.g., certain CI runners).
@@ -51,5 +80,8 @@ export default defineConfig({
     '**/fixtures/**',
     '**/fixtures-*/**',
     '**/flaky-fixtures/**',
-  ].concat(process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : []),
+  ].concat(
+    process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : [],
+    process.env.RSTEST_POOL_TYPE === 'threads' ? THREADS_EXCLUDES : [],
+  ),
 });

@@ -1,11 +1,17 @@
 import {
   DISPATCH_NAMESPACE_RUNNER,
-  DISPATCH_RESPONSE_TYPE,
   DISPATCH_RPC_REQUEST_TYPE,
   RSTEST_CONFIG_MESSAGE_TYPE,
 } from '@rstest/browser/protocol';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
@@ -15,25 +21,23 @@ import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
 import {
-  canPostMessageSource,
-  createStaleBrowserRpcDispatchResponse,
-  isStaleBrowserRpcRequest,
-  readBrowserRpcRequest,
-} from './core/browserRpc';
-import { buildCollectedCaseMap, upsertRunningCase } from './core/caseMap';
-import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
-import { createRunId, createRunnerUrl } from './core/runtime';
+  buildCollectedCaseMap,
+  projectCaseInfo,
+  upsertRunningCase,
+} from './core/caseMap';
+import { projectKey as toProjectKey, suiteKey } from './core/treeNodeKey';
+import { forwardDispatchRpcRequest, readRunnerEnvelope } from './core/channel';
+import { createFrameLeaseTable } from './core/frames';
+import { createRunnerUrl, resolveRunnerBase } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
   BrowserDispatchRequest,
   BrowserHostConfig,
-  FatalPayload,
-  LogPayload,
   TestCaseStartPayload,
-  TestFileInfo,
   TestFileReadyPayload,
+  VersionedTestFileSet,
 } from './types';
 import type {
   CaseInfo,
@@ -42,7 +46,11 @@ import type {
   TestStatus,
 } from './utils/constants';
 import { logger } from './utils/logger';
-import { selectionFromConfig, type ViewportSelection } from './utils/viewport';
+import {
+  isPositiveFiniteSize,
+  selectionFromConfig,
+  type ViewportSelection,
+} from './utils/viewport';
 import { isDevicePreset } from './utils/viewportPresets';
 import './index.css';
 
@@ -53,35 +61,6 @@ import './index.css';
 const getDisplayName = (testFile: string): string => {
   const parts = testFile.split('/');
   return parts[parts.length - 1] || testFile;
-};
-
-const readRunIdFromFrame = (frame: HTMLIFrameElement): string | undefined => {
-  try {
-    const url = new URL(frame.src, window.location.href);
-    return url.searchParams.get('runId') ?? undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const findRunnerFrameByTestPath = (
-  testPath: string,
-): HTMLIFrameElement | undefined => {
-  return Array.from(
-    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
-  ).find((frame) => frame.dataset.testFile === testPath);
-};
-
-const findRunnerFrameBySource = (
-  source: MessageEventSource | null,
-): HTMLIFrameElement | undefined => {
-  if (!source) {
-    return undefined;
-  }
-
-  return Array.from(
-    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
-  ).find((frame) => frame.contentWindow === source);
 };
 
 // ============================================================================
@@ -97,7 +76,11 @@ const BrowserRunner: React.FC<{
 }> = ({ options, theme, setTheme }) => {
   const { token } = antdTheme.useToken();
 
-  const [testFiles, setTestFiles] = useState<TestFileInfo[]>([]);
+  const [fileSet, setFileSet] = useState<VersionedTestFileSet>({
+    files: [],
+    version: 0,
+  });
+  const testFiles = fileSet.files;
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
   const [caseMap, setCaseMap] = useState<
@@ -105,9 +88,14 @@ const BrowserRunner: React.FC<{
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
-  const [runIdByTestFile, setRunIdByTestFile] = useState<
-    Record<string, string>
-  >({});
+
+  // Leases live in a ref, never in React state: the lease must be current at
+  // the instant a `load` event fires, and a grant is a synchronous write
+  // inside `handleReloadTestFile` — before any render, any navigation, or the
+  // birpc reply. `bumpLeases` only schedules the re-render that lets the grant
+  // reach the DOM.
+  const leasesRef = useRef(createFrameLeaseTable());
+  const [, bumpLeases] = useReducer((epoch: number) => epoch + 1, 0);
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -137,15 +125,9 @@ const BrowserRunner: React.FC<{
         if (mode === 'responsive') {
           const width = Number((parsed as any).width);
           const height = Number((parsed as any).height);
-          if (
-            Number.isFinite(width) &&
-            width > 0 &&
-            Number.isFinite(height) &&
-            height > 0
-          ) {
-            return { mode: 'responsive', width, height };
-          }
-          return null;
+          return isPositiveFiniteSize(width, height)
+            ? { mode: 'responsive', width, height }
+            : null;
         }
         if (mode === 'preset') {
           const preset = (parsed as any).preset;
@@ -208,28 +190,23 @@ const BrowserRunner: React.FC<{
   }, [options.projects, readStoredViewport]);
 
   const handleReloadTestFile = useCallback(
-    async (testFile: string, testNamePattern?: string) => {
+    async (testFile: string, runId: string, testNamePattern?: string) => {
       logger.debug(
-        '[Container] handleReloadTestFile called:',
+        '[Container] Granting run',
+        runId,
+        'to',
         testFile,
-        testNamePattern,
+        testNamePattern ?? '',
       );
       setActive(testFile);
-      const iframe = document.querySelector<HTMLIFrameElement>(
-        `iframe[data-test-file="${testFile}"]`,
-      );
-      logger.debug('[Container] Found iframe:', iframe);
-      if (!iframe) {
-        throw new Error(
-          `Cannot reload test file "${testFile}": iframe not found`,
-        );
-      }
 
-      const nextRunId = createRunId();
-      setRunIdByTestFile((prev) => ({
-        ...prev,
-        [testFile]: nextRunId,
-      }));
+      // The grant is SYNCHRONOUS and precedes the render that navigates: a
+      // `load` firing at any later instant (the granted navigation, an HMR
+      // full reload, a stray in-flight one) reads this lease and confers the
+      // current identity on whatever document booted.
+      leasesRef.current.grant(testFile, runId, testNamePattern);
+      bumpLeases();
+
       setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
       setCaseMap((prev) => {
         const prevFile = prev[testFile] ?? {};
@@ -239,25 +216,12 @@ const BrowserRunner: React.FC<{
         }
         return { ...prev, [testFile]: updatedCases };
       });
-      const newSrc = createRunnerUrl(
-        testFile,
-        options.runnerUrl,
-        testNamePattern,
-        false,
-        nextRunId,
-      );
-      logger.debug('[Container] Setting iframe.src to:', newSrc);
-      iframe.src = newSrc;
-
-      return {
-        runId: nextRunId,
-      };
     },
-    [options.runnerUrl],
+    [],
   );
 
   const { rpc, loading, connected } = useRpc(
-    setTestFiles,
+    setFileSet,
     options?.wsPort,
     handleReloadTestFile,
   );
@@ -283,18 +247,12 @@ const BrowserRunner: React.FC<{
       return next;
     });
 
-    setRunIdByTestFile((prev) => {
-      const next: Record<string, string> = {};
-      for (const file of testFiles) {
-        if (prev[file.testPath]) {
-          next[file.testPath] = prev[file.testPath]!;
-        }
-      }
-      return next;
-    });
-
-    // Clean up openFiles: remove files that no longer exist
+    // Drop leases whose file left the set; the host has already settled those
+    // runs (`retainPaths` runs before the container is told), so this is pure
+    // container-side cleanup.
     const testPaths = testFiles.map((f) => f.testPath);
+    leasesRef.current.retain(testPaths);
+    bumpLeases();
     setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
 
     // Auto-select first file if none selected
@@ -311,19 +269,16 @@ const BrowserRunner: React.FC<{
   }, [testFiles]);
 
   useEffect(() => {
-    if (!rpc || !connected) {
+    if (!rpc || !connected || fileSet.version === 0) {
       return;
     }
 
-    void rpc
-      .onRunnerFramesReady(testFiles.map((file) => file.testPath))
-      .catch((error) => {
-        logger.debug(
-          '[Container RPC] Failed to notify runner frames ready:',
-          error,
-        );
-      });
-  }, [rpc, connected, testFiles]);
+    // Runs after the commit for this version: every iframe for the set is in
+    // the DOM, so the host may start granting runs against it.
+    void rpc.onFrameSetReady(fileSet.version).catch((error) => {
+      logger.debug('[Container RPC] Failed to notify frame set ready:', error);
+    });
+  }, [rpc, connected, fileSet]);
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
@@ -341,24 +296,21 @@ const BrowserRunner: React.FC<{
 
   const upsertCase = useCallback(
     (filePath: string, payload: BrowserClientTestResult) => {
-      const parentNames = (payload.parentNames ?? []).filter(Boolean);
-      const fullName =
-        [...parentNames, payload.name].join('  ') || payload.name;
+      // Project via the shared owner WITHOUT previousCase so the three-tier
+      // filePath / location?? fallback collapses to the two-tier
+      // `testPath || filePath` and bare `location` this path has always used.
+      const next = projectCaseInfo({
+        filePath,
+        test: payload,
+        status: mapCaseStatus(payload.status),
+      });
       setCaseMap((prev) => {
         const prevFile = prev[filePath] ?? {};
         return {
           ...prev,
           [filePath]: {
             ...prevFile,
-            [payload.testId]: {
-              id: payload.testId,
-              name: payload.name,
-              parentNames,
-              fullName,
-              status: mapCaseStatus(payload.status),
-              filePath: payload.testPath || filePath,
-              location: payload.location,
-            },
+            [payload.testId]: next,
           },
         };
       });
@@ -431,90 +383,45 @@ const BrowserRunner: React.FC<{
     }
   }, [testFiles, rpc, connected]);
 
+  // Fire-and-forget relay of a runner message to the host's one dispatch
+  // gate, stamped with the envelope's identity. The container adjudicates
+  // nothing: whether the run is live is the host registry's question.
+  const forwardCounterRef = useRef(0);
+  const forwardRunnerMessage = useCallback(
+    (runId: string | undefined, method: string, args: unknown): void => {
+      if (!rpc) {
+        return;
+      }
+      forwardCounterRef.current += 1;
+      void rpc
+        .dispatch({
+          requestId: `container-runner-${forwardCounterRef.current}`,
+          runId,
+          namespace: DISPATCH_NAMESPACE_RUNNER,
+          method,
+          args,
+        })
+        .catch((error) => {
+          logger.debug(
+            '[Container] Failed to forward runner message:',
+            method,
+            error,
+          );
+        });
+    },
+    [rpc],
+  );
+
   // Handle messages from test runner iframes
   useEffect(() => {
     const listener = (event: MessageEvent) => {
-      const message = readDispatchMessage(event);
-      if (!message) {
+      const envelope = readRunnerEnvelope(event);
+      if (!envelope) {
         return;
       }
+      const message = envelope.message;
 
-      if (message.type === 'file-start') {
-        const payload = message.payload as {
-          testPath?: string;
-          projectName?: string;
-        };
-        const testPath = payload.testPath;
-        if (typeof testPath === 'string') {
-          setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
-          setCaseMap((prev) => {
-            const prevFile = prev[testPath] ?? {};
-            const updatedCases: Record<string, CaseInfo> = {};
-            for (const [key, caseInfo] of Object.entries(prevFile)) {
-              updatedCases[key] = { ...caseInfo, status: 'running' };
-            }
-            return { ...prev, [testPath]: updatedCases };
-          });
-          rpc?.onTestFileStart({
-            testPath,
-            projectName: payload.projectName ?? '',
-          });
-        }
-      } else if (message.type === 'case-result') {
-        const payload = message.payload as BrowserClientTestResult;
-        if (payload?.testPath) {
-          upsertCase(payload.testPath, payload);
-          rpc?.onTestCaseResult(payload);
-        }
-      } else if (message.type === 'file-complete') {
-        const payload = message.payload as BrowserClientFileResult;
-        const testPath = payload.testPath;
-        if (typeof testPath === 'string') {
-          const frame = findRunnerFrameBySource(event.source);
-          const fallbackFrame = frame ?? findRunnerFrameByTestPath(testPath);
-          const runId =
-            (fallbackFrame ? readRunIdFromFrame(fallbackFrame) : undefined) ??
-            runIdByTestFile[testPath];
-          const passed = payload.status === 'pass' || payload.status === 'skip';
-          setStatusMap((prev) => ({
-            ...prev,
-            [testPath]: passed ? 'pass' : 'fail',
-          }));
-          setCaseMap((prev) => {
-            const newCases: Record<string, CaseInfo> = {};
-            for (const result of payload.results ?? []) {
-              if (result?.testId) {
-                const parentNames = (result.parentNames ?? []).filter(Boolean);
-                const fullName =
-                  [...parentNames, result.name].join('  ') || result.name;
-                newCases[result.testId] = {
-                  id: result.testId,
-                  name: result.name,
-                  parentNames,
-                  fullName,
-                  status: mapCaseStatus(result.status),
-                  filePath: result.testPath || testPath,
-                  location: result.location,
-                };
-              }
-            }
-            return { ...prev, [testPath]: newCases };
-          });
-          rpc?.onTestFileComplete({
-            ...payload,
-            runId,
-          });
-        }
-      } else if (message.type === 'fatal') {
-        const payload = message.payload as FatalPayload;
-        if (active) {
-          setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
-        }
-        rpc?.onFatal(payload);
-      } else if (message.type === 'log') {
-        const payload = message.payload as LogPayload;
-        rpc?.onLog(payload);
-      } else if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
+      if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
         // Unified RPC path for snapshot and future runner-side capabilities.
         const dispatchRequest = message.payload as BrowserDispatchRequest;
 
@@ -543,36 +450,71 @@ const BrowserRunner: React.FC<{
           }
         }
 
-        const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
-
-        if (browserRpcRequest) {
-          const currentFrame = findRunnerFrameByTestPath(
-            browserRpcRequest.testPath,
-          );
-          const currentRunId = currentFrame
-            ? readRunIdFromFrame(currentFrame)
-            : undefined;
-
-          if (isStaleBrowserRpcRequest(browserRpcRequest, currentRunId)) {
-            if (canPostMessageSource(event.source)) {
-              event.source.postMessage(
-                {
-                  type: DISPATCH_RESPONSE_TYPE,
-                  payload: createStaleBrowserRpcDispatchResponse(
-                    dispatchRequest.requestId,
-                    browserRpcRequest,
-                    currentRunId,
-                  ),
-                },
-                '*',
-              );
-            }
-            return;
-          }
-        }
-
         void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
+        return;
       }
+
+      // UI projection first, then one uniform forward — the host's registry
+      // decides staleness, so the projection here is display-optimistic.
+      if (message.type === 'file-start') {
+        const payload = message.payload as {
+          testPath?: string;
+          projectName?: string;
+        };
+        const testPath = payload.testPath;
+        if (typeof testPath === 'string') {
+          setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
+          setCaseMap((prev) => {
+            const prevFile = prev[testPath] ?? {};
+            const updatedCases: Record<string, CaseInfo> = {};
+            for (const [key, caseInfo] of Object.entries(prevFile)) {
+              updatedCases[key] = { ...caseInfo, status: 'running' };
+            }
+            return { ...prev, [testPath]: updatedCases };
+          });
+        }
+      } else if (message.type === 'case-result') {
+        const payload = message.payload as BrowserClientTestResult;
+        if (payload?.testPath) {
+          upsertCase(payload.testPath, payload);
+        }
+      } else if (message.type === 'file-complete') {
+        const payload = message.payload as BrowserClientFileResult;
+        const testPath = payload.testPath;
+        if (typeof testPath === 'string') {
+          const passed = payload.status === 'pass' || payload.status === 'skip';
+          setStatusMap((prev) => ({
+            ...prev,
+            [testPath]: passed ? 'pass' : 'fail',
+          }));
+          setCaseMap((prev) => {
+            const newCases: Record<string, CaseInfo> = {};
+            for (const result of payload.results ?? []) {
+              if (result?.testId) {
+                // Same shared projection, without previousCase: the file's
+                // `testPath` is the two-tier filePath fallback, location stays
+                // bare — byte-identical to the previous inline literal.
+                newCases[result.testId] = projectCaseInfo({
+                  filePath: testPath,
+                  test: result,
+                  status: mapCaseStatus(result.status),
+                });
+              }
+            }
+            return { ...prev, [testPath]: newCases };
+          });
+        }
+      } else if (message.type === 'fatal') {
+        if (active) {
+          setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
+        }
+      }
+
+      forwardRunnerMessage(
+        envelope.runId,
+        message.type,
+        'payload' in message ? message.payload : undefined,
+      );
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
@@ -581,7 +523,7 @@ const BrowserRunner: React.FC<{
     upsertCase,
     mapCaseStatus,
     rpc,
-    runIdByTestFile,
+    forwardRunnerMessage,
     syncCollectedCases,
     syncStartedCase,
   ]);
@@ -616,7 +558,7 @@ const BrowserRunner: React.FC<{
     // Add project keys if multiple projects
     if (hasMultipleProjects) {
       for (const projectName of projectNames) {
-        keys.push(`__project__${projectName}`);
+        keys.push(toProjectKey(projectName));
       }
     }
 
@@ -625,31 +567,16 @@ const BrowserRunner: React.FC<{
       const filePath = file.testPath;
       keys.push(filePath);
 
-      // Collect all unique suite paths from cases
+      // Enumerate every ancestor suite key straight from each case's
+      // parentNames array — via the shared grammar, never a join→split
+      // round-trip — so the keys match the producer byte-for-byte even when a
+      // suite name itself contains a literal '::'.
       const cases = Object.values(caseMap[filePath] ?? {});
-      const suitePaths = new Set<string>();
-
       for (const testCase of cases) {
-        const parentNames = testCase.parentNames;
-        // Build all ancestor suite keys
+        const { parentNames } = testCase;
         for (let i = 1; i <= parentNames.length; i++) {
-          const suitePath = parentNames.slice(0, i).join('::');
-          suitePaths.add(suitePath);
+          keys.push(suiteKey(filePath, parentNames.slice(0, i)));
         }
-      }
-
-      // Add suite keys - need to match the key format in TestFilesTree
-      // Key format: ${keyPrefix}::suite::${fullPath.join('::')}
-      // where keyPrefix accumulates from parent suites
-      for (const suitePath of suitePaths) {
-        const parts = suitePath.split('::');
-        // Build the actual key by accumulating prefixes
-        let currentKey = filePath;
-        for (let i = 1; i <= parts.length; i++) {
-          const partialPath = parts.slice(0, i).join('::');
-          currentKey = `${currentKey}::suite::${partialPath}`;
-        }
-        keys.push(currentKey);
       }
     }
 
@@ -822,7 +749,11 @@ const BrowserRunner: React.FC<{
               {testFiles.map((fileInfo) =>
                 (() => {
                   const isActive = fileInfo.testPath === active;
-                  const runId = runIdByTestFile[fileInfo.testPath];
+                  // Reading the ref during render is safe here: every lease
+                  // mutation calls `bumpLeases`, so this render is never behind
+                  // the table.
+                  const lease = leasesRef.current.get(fileInfo.testPath);
+                  const renderedBoot = lease?.boot ?? 0;
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -831,24 +762,38 @@ const BrowserRunner: React.FC<{
                   const onLoad = (
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
-                    if (!runId) {
+                    // Confer the frame's CURRENT lease on whatever document
+                    // just booted — the granted navigation and an HMR full
+                    // reload alike. The lease ref was written synchronously at
+                    // grant, so it can never be behind this event; a document
+                    // in a frame with no lease is told nothing and stays
+                    // silent.
+                    const currentLease = leasesRef.current.get(
+                      fileInfo.testPath,
+                    );
+                    if (!currentLease) {
                       return;
                     }
-                    const frame = event.currentTarget;
-                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
-                    if (frame.contentWindow) {
-                      frame.contentWindow.postMessage(
-                        {
-                          type: RSTEST_CONFIG_MESSAGE_TYPE,
-                          payload: {
-                            ...options,
-                            testFile: fileInfo.testPath,
-                            runId: frameRunId,
-                          },
-                        },
-                        '*',
-                      );
+                    // A grant bumps `boot` and re-keys the iframe, but the ref
+                    // write and the re-key commit are not atomic: a load event
+                    // queued by the SUPERSEDED browsing context can run in
+                    // between. Only the context whose key encodes the current
+                    // boot may adopt the lease — the doomed one stays silent
+                    // and is unmounted at commit.
+                    if (currentLease.boot !== renderedBoot) {
+                      return;
                     }
+                    event.currentTarget.contentWindow?.postMessage(
+                      {
+                        type: RSTEST_CONFIG_MESSAGE_TYPE,
+                        payload: {
+                          ...options,
+                          testFile: fileInfo.testPath,
+                          runId: currentLease.runId,
+                        },
+                      },
+                      '*',
+                    );
                   };
 
                   return (
@@ -879,16 +824,23 @@ const BrowserRunner: React.FC<{
                         data-test-file={fileInfo.testPath}
                       >
                         <iframe
+                          // The boot counter in the key mounts a FRESH
+                          // browsing context per grant: no document from a
+                          // previous run can survive into this one, so "two
+                          // documents, one run" is unrepresentable.
+                          key={`${fileInfo.testPath}#${renderedBoot}`}
                           data-test-file={fileInfo.testPath}
+                          data-test-project={fileInfo.projectName}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
                           src={
-                            runId
+                            lease
                               ? createRunnerUrl(
                                   fileInfo.testPath,
-                                  options.runnerUrl,
-                                  undefined,
-                                  false,
-                                  runId,
+                                  resolveRunnerBase(
+                                    options,
+                                    fileInfo.projectName,
+                                  ),
+                                  lease.testNamePattern,
                                 )
                               : 'about:blank'
                           }

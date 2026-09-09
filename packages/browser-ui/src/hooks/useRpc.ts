@@ -2,11 +2,13 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
 import { createWebSocketUrl, RECONNECT_DELAYS } from '../core/runtime';
 import type {
+  BrowserHostConfig,
   ContainerRPC,
   HostRPC,
-  ReloadTestFileAck,
   TestFileInfo,
+  VersionedTestFileSet,
 } from '../types';
+import type { ContainerWindow } from '../utils/constants';
 import { logger } from '../utils/logger';
 
 type RpcState = {
@@ -20,12 +22,13 @@ type RpcState = {
 // ============================================================================
 
 export const useRpc = (
-  setTestFiles: (files: TestFileInfo[]) => void,
+  setFileSet: (fileSet: VersionedTestFileSet) => void,
   wsPort: number | undefined,
   onReloadTestFile?: (
     testFile: string,
+    runId: string,
     testNamePattern?: string,
-  ) => Promise<ReloadTestFileAck>,
+  ) => Promise<void>,
 ): RpcState => {
   const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
     null,
@@ -34,14 +37,15 @@ export const useRpc = (
   const [connected, setConnected] = useState(false);
 
   // Use refs to avoid triggering reconnect on callback changes
-  const setTestFilesRef = useRef<(files: TestFileInfo[]) => void>(setTestFiles);
+  const setFileSetRef =
+    useRef<(fileSet: VersionedTestFileSet) => void>(setFileSet);
   const onReloadTestFileRef = useRef(onReloadTestFile);
   // Track the current active WebSocket to handle StrictMode double-mount
   const activeWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    setTestFilesRef.current = setTestFiles;
-  }, [setTestFiles]);
+    setFileSetRef.current = setFileSet;
+  }, [setFileSet]);
 
   useEffect(() => {
     onReloadTestFileRef.current = onReloadTestFile;
@@ -69,21 +73,57 @@ export const useRpc = (
         (event: MessageEvent<string>) => void
       >();
 
+      // The file set never moves backward within a connection: the initial
+      // `getTestFiles()` response and the host's update pushes ride the same
+      // socket, and whichever lands later must not overwrite a newer version
+      // the other already applied. Scoped to the connection — not global —
+      // because a relaunched host restarts its version space, and a baseline
+      // carried across the reconnect would deadlock the resync.
+      let lastAppliedVersion = -1;
+      const applyFileSet = (fileSet: VersionedTestFileSet): void => {
+        if (fileSet.version <= lastAppliedVersion) {
+          return;
+        }
+        lastAppliedVersion = fileSet.version;
+        setFileSetRef.current(fileSet);
+      };
+
       const methods: ContainerRPC = {
-        onTestFileUpdate(files: TestFileInfo[]) {
-          logger.debug('[Container RPC] onTestFileUpdate called:', files);
-          setTestFilesRef.current(files);
+        onTestFileUpdate(files: TestFileInfo[], version: number) {
+          logger.debug(
+            '[Container RPC] onTestFileUpdate called:',
+            version,
+            files,
+          );
+          applyFileSet({ files, version });
         },
-        async reloadTestFile(testFile: string, testNamePattern?: string) {
+        async reloadTestFile(
+          testFile: string,
+          runId: string,
+          testNamePattern?: string,
+        ) {
           logger.debug(
             '[Container RPC] reloadTestFile called:',
             testFile,
+            runId,
             testNamePattern,
           );
           if (!onReloadTestFileRef.current) {
             throw new Error('reloadTestFile handler is not available');
           }
-          return onReloadTestFileRef.current(testFile, testNamePattern);
+          return onReloadTestFileRef.current(testFile, runId, testNamePattern);
+        },
+        onHostConfigUpdate(config: BrowserHostConfig) {
+          logger.debug('[Container RPC] onHostConfigUpdate called');
+          // Mutate in place: the App and the iframe config postMessage hold
+          // this object by reference, so runner iframes loaded after this
+          // update spread the fresh values.
+          const containerWindow = window as ContainerWindow;
+          if (containerWindow.__RSTEST_BROWSER_OPTIONS__) {
+            Object.assign(containerWindow.__RSTEST_BROWSER_OPTIONS__, config);
+          } else {
+            containerWindow.__RSTEST_BROWSER_OPTIONS__ = config;
+          }
         },
       };
 
@@ -127,9 +167,9 @@ export const useRpc = (
         // Fetch test files once connected
         birpc
           .getTestFiles()
-          .then((files) => {
+          .then((fileSet) => {
             if (isMounted) {
-              setTestFilesRef.current(files);
+              applyFileSet(fileSet);
               setLoading(false);
             }
           })

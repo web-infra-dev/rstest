@@ -3,6 +3,8 @@ title: Test
 description: test defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Test
 
 `test` defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
@@ -11,7 +13,12 @@ Alias: `it`.
 
 ## test
 
-- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:**
+
+```ts
+(name: string, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
+```
 
 Defines a test case.
 
@@ -23,6 +30,66 @@ test('should add two numbers correctly', () => {
   expect(1 + 2).toBe(3);
 });
 ```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.11.1" />
+
+Pass a `TestOptions` object as the **second argument** (before the test function) to tune the behavior of a single test:
+
+```ts
+test('flaky network call', { retry: 3 }, async () => {
+  /* ... */
+});
+```
+
+As a shorthand, you can still pass a number as the **last argument** to set only the timeout (equivalent to `{ timeout: n }`):
+
+```ts
+test('runs within 3s', async () => {
+  /* ... */
+}, 3000);
+```
+
+`TestOptions` accepts:
+
+- `timeout?: number` — per-test timeout in milliseconds. Overrides [`test.testTimeout`](/config/test/test-timeout).
+- `retry?: number` — re-runs the test up to this many times if it fails, stopping at the first pass. Overrides [`test.retry`](/config/test/retry).
+- `repeats?: number` — re-runs an already-passing test this many extra times; any failure marks the whole case as failed. Each repeat runs the full `beforeEach`/`afterEach` lifecycle and gets an independent `retry` budget.
+- `meta?: TaskMeta` — added in 0.11.1. Initial JSON-serializable metadata for the test result. If the test is inside a `describe` with `meta`, it inherits a copy of the suite metadata and test-level keys override inherited keys.
+
+`TaskMeta` and `TaskMetaValue` are exported from `@rstest/core` and allow JSON-serializable values:
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
+
+```ts
+test('flaky network call', { retry: 3 }, async () => {
+  /* ... */
+});
+
+// 10 total runs; first failure short-circuits the rest
+test('stays green across runs', { repeats: 9 }, async () => {
+  /* ... */
+});
+
+test('records metadata', { meta: { owner: 'team-a' } }, (context) => {
+  context.task.meta.startedBy = 'runtime';
+});
+```
+
+In this example, the test result's metadata starts as `{ owner: 'team-a' }`. During execution, the test mutates the same object through `context.task.meta`, so reporters and the programmatic API receive `{ owner: 'team-a', startedBy: 'runtime' }` on `TestResult.meta`.
+
+`test.each` and `test.for` accept the same options as their second argument and apply it to every generated case.
 
 ## test.only
 
@@ -44,6 +111,17 @@ test.skip('skip this test', () => {
 });
 ```
 
+Use `test.skip` when you know at definition time that a test should be skipped. If the decision can only be made while the test is running, call `context.skip()` from the test context instead. `context.skip()` stops executing the current test immediately, so code after it will not run, and the test is reported as skipped.
+
+```ts
+test('skip at runtime', (context) => {
+  context.skip();
+
+  // This assertion is not executed.
+  expect(1 + 1).toBe(3);
+});
+```
+
 ## test.todo
 
 Marks certain tests as todo.
@@ -54,7 +132,16 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+- **Type:**
+
+```ts
+// Every row is an array: the row is spread into the arguments
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+test.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
 
 Runs the same test logic for each item in the provided array.
 
@@ -93,7 +180,7 @@ test.each<{ a: number; b: number; expected: number }>`
 });
 ```
 
-You can inject parameters with [printf formatting](https://nodejs.org/api/util.html#util_util_format_format_args) in the test name in the order of the test function parameters.
+You can inject parameters with [printf formatting](https://nodejs.org/api/util.html#utilformatformat-args) in the test name in the order of the test function parameters.
 
 - `%s`: String
 - `%d`: Number
@@ -118,7 +205,16 @@ test.each([
 // adds 2 + 2 to equal 4
 ```
 
-You can also access object properties and array elements with `$` prefix:
+Rows are spread into the test function arguments only when every row of the table is an array. Once any row is not an array, every row is passed whole, so an array row of a mixed table arrives as the array itself:
+
+```ts
+test.each([null, 42, ['a']])('rejects %o', (value) => {
+  // The third case receives ['a'], not 'a'.
+  expect(isValid(value)).toBe(false);
+});
+```
+
+You can also access object properties with `$` prefix:
 
 ```ts
 test.each([
@@ -133,24 +229,16 @@ test.each([
 // adds 1 + 1 to equal 2
 // adds 1 + 2 to equal 3
 // adds 2 + 1 to equal 3
-
-test.each([
-  [1, 1, 2],
-  [1, 2, 3],
-  [2, 1, 3],
-])('add $0 + $1 to equal $2', (a, b, sum) => {
-  expect(a + b).toBe(sum);
-});
-
-// this will return
-// add 1 + 1 to equal 2
-// add 1 + 2 to equal 3
-// add 2 + 1 to equal 3
 ```
 
 ## test.for
 
-- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:**
+
+```ts
+test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
+```
 
 Alternative to `test.each` to provide `TestContext`.
 
@@ -255,7 +343,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **Type:** `test.extend(fixtures: Fixtures)`
+- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' | 'worker' }, fixture)`
 
 Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
 
@@ -288,12 +376,14 @@ test('plain test', ({ expect }) => {
 
 The returned API has the same chainable modifiers as `test` (`only`, `skip`, `each`, `concurrent`, etc.) and can call `.extend()` again for further extension.
 
-### Fixture function lifecycle
+### Fixtures object form
 
-A fixture function receives two parameters:
+A fixture function in the fixtures object form receives two parameters:
 
 1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
 2. **use** — call `await use(value)` to pass the fixture value to the test.
+
+Fixture-aware callbacks must list every requested fixture explicitly through direct object destructuring in the callback parameter. Rstest does not infer dependencies from destructuring inside the function body. Object rest properties such as `({ db, ...rest })` and default values such as `({ db = fallback })` or `({ db } = {})` are not supported in test callbacks, fixture functions, or per-test hooks.
 
 Code before `await use(value)` is **setup**; code after it is **teardown** (runs after the test finishes).
 
@@ -310,6 +400,76 @@ const testWithDb = test.extend({
   },
 });
 ```
+
+### Named fixture form
+
+<ApiMeta addedVersion="0.11.7" />
+
+The named fixture form returns a fixture value directly instead of calling `use`. Its second parameter provides `onCleanup`, which registers one callback for the fixture. Both the fixture function and cleanup callback may be asynchronous.
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('baseURL', 'https://api.example.com')
+  .extend('client', async ({ baseURL }, { onCleanup }) => {
+    const client = await createClient(baseURL);
+    onCleanup(() => client.close());
+    return client;
+  });
+```
+
+The two-argument named fixture form is test-scoped: Rstest evaluates fixture functions for each test attempt and runs their cleanup after the test and its per-test hooks finish. Plain values are reused across attempts. Use a fixture function when mutable state must be isolated for each attempt.
+
+The fixture name must be a statically known ASCII JavaScript identifier so TypeScript can expose exactly one new context field. Values typed as `string`, patterned template literals such as `` `slot${string}` ``, names that require quoted destructuring such as `base-url`, and reserved test context fields are not accepted. Names that overlap Function properties, such as `name` and `length`, are supported.
+
+A function or class passed directly is treated as a fixture function because both are JavaScript functions at runtime. To use the function or class itself as the fixture value, return it from a fixture function, for example `.extend('predicate', () => predicate)` or `.extend('Service', () => Service)`. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
+
+### File-scoped named fixtures
+
+<ApiMeta addedVersion="0.11.7" />
+
+Pass `{ scope: 'file' }` to lazily create one fixture instance for the current test file. The instance is shared by every test, retry, repeat, and concurrent test that requests it. Its cleanup runs after all tests and `afterAll` hooks finish. Dependencies are initialized in order and cleaned up in reverse order.
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('server', { scope: 'file' }, async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  })
+  .extend('client', { scope: 'file' }, ({ server }) => {
+    return createClient(server.url);
+  });
+```
+
+File-scoped fixtures must be declared at the top level of the test file. They can depend on worker- or file-scoped fixtures declared earlier in the chain: they do not receive test-scoped fixtures or `TestContext`. A file-scoped fixture cannot be overridden by a later `.extend()` call. Test-scoped fixtures can depend on file-scoped fixtures.
+
+Fixture setup is bounded by the timeout of the test or hook that requests it. File cleanup is guarded by the Node or browser host, so a cleanup that never settles fails the file instead of blocking the run indefinitely.
+
+### Worker-scoped named fixtures
+
+<ApiMeta addedVersion="0.11.9" />
+
+Pass `{ scope: 'worker' }` to lazily create one fixture instance for the current test worker. The instance is shared by files that run on the same worker and reuse the same extended test API/fixture definition, and is cleaned up when that worker is retired. Worker-scoped fixtures can depend only on worker-scoped fixtures declared earlier in the chain; they cannot access `TestContext` or file-scoped fixtures. A file-scoped fixture may depend on a worker-scoped fixture.
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test.extend(
+  'server',
+  { scope: 'worker' },
+  async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  },
+);
+```
+
+Worker-scoped fixtures must be declared at the top level of the test file. They cannot be overridden by a later `.extend()` call. Their setup is bounded by the timeout of the test that first requests them; cleanup is bounded by the worker host. A terminated worker cannot run user cleanup callbacks. In browser mode, `isolate: false` keeps the fixture alive across files assigned to the same headless browser worker; projects with `setupFiles` remain file-isolated so setup modules run for every file; with the default isolation, its lifetime is equivalent to one file.
 
 ### Plain value fixtures
 
@@ -367,9 +527,47 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 });
 ```
 
+### Using fixtures in hooks
+
+<ApiMeta addedVersion="0.11.4" />
+
+`beforeEach`, `afterEach`, and a cleanup function returned by `beforeEach` can request fixtures. Rstest initializes fixtures requested by the test callback before `beforeEach`, preserving the existing test setup order. A fixture requested only by a hook is initialized before that hook runs. The same instance is shared for the rest of the test attempt, then torn down after all per-test hooks finish.
+
+Declare hook fixture dependencies directly in the callback parameter, for example `beforeEach(({ db }) => {})`. A named hook context such as `beforeEach((context) => {})` remains valid for accessing the regular `TestContext`, but destructuring `context` inside the function body does not initialize lazy fixtures.
+
+Core hooks are suite-level APIs, so provide the fixture context type explicitly and register the hook in a suite whose tests use the matching extended test API. If a test in the suite does not provide a requested fixture, Rstest fails that test before invoking the hook and reports the missing fixture:
+
+```ts
+import { beforeEach, describe, test } from '@rstest/core';
+
+interface DbFixtures {
+  db: Database;
+}
+
+describe('database tests', () => {
+  const dbTest = test.extend<DbFixtures>({
+    db: async ({}, use) => {
+      const db = await connectTestDb();
+      await use(db);
+      await db.close();
+    },
+  });
+
+  beforeEach<DbFixtures>(({ db }) => {
+    return async ({ db }) => {
+      await db.rollback();
+    };
+  });
+
+  dbTest('creates a user', async () => {
+    // db is initialized for beforeEach even though the test does not request it.
+  });
+});
+```
+
 ### Automatic fixtures (`auto`)
 
-Fixtures are lazy by default: they only run when destructured by the test function (or required by another fixture). To make a fixture run for every test automatically — even when not destructured — use the tuple syntax with `{ auto: true }`:
+Fixtures are lazy by default: they only run when requested through object destructuring by a test or per-test hook callback (or required by another fixture). To make a fixture run for every test automatically — even when no callback requests it — use the tuple syntax with `{ auto: true }`:
 
 ```ts
 import { test } from '@rstest/core';
@@ -448,16 +646,95 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.1. */
+    filepath?: string;
+    /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
+    projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. Added in 0.11.6. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
+    /** Mutable metadata copied to the current test result. Added in 0.11.1. */
+    meta: TaskMeta;
   };
+  /** Signal aborted with the timeout error when the current attempt times out. Added in 0.11.9. */
+  readonly signal: AbortSignal;
   /** The `expect` API bound to the current test */
   expect: Expect;
+  /** Skip the current test during execution */
+  skip: () => never;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+<ApiMeta addedVersion="0.11.6" />
+
+Use `context.task.retryCount` to read the current retry index from tests, hooks, and fixtures. It is `0` for the initial attempt, `1` for the first retry, and resets to `0` for each run configured through `repeats`.
+
+#### signal
+
+<ApiMeta addedVersion="0.11.9" />
+
+`context.signal` is aborted with the timeout error when the current test attempt times out. This includes timeouts in the test callback, per-test hooks, and fixtures. Every retry and repeat receives a fresh signal, so a timeout in one attempt does not cancel the next attempt.
+
+Pass the signal to APIs that support cancellation so their in-flight work can stop when Rstest stops waiting for the attempt:
+
+```ts
+import { test } from '@rstest/core';
+
+test('loads a user', { timeout: 1_000 }, async ({ signal }) => {
+  await fetch('/api/user', { signal });
+});
+```
+
+Node.js APIs that accept an `AbortSignal` work the same way. For example, pass it to `fs.readFile` when loading a large fixture so the pending file read can be cancelled if the test times out:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { test } from '@rstest/core';
+
+test('loads a large fixture', { timeout: 1_000 }, async ({ signal }) => {
+  const contents = await readFile('./fixtures/large-data.json', {
+    encoding: 'utf8',
+    signal,
+  });
+
+  JSON.parse(contents);
+});
+```
+
+If the file read is still pending after one second, `signal.reason` is the same error that Rstest reports for the failed attempt:
+
+```text
+Error: test timed out in 1000ms (no expect assertions completed)
+```
+
+APIs may surface cancellation differently. For example, `fs.readFile` rejects with an `AbortError`, while its `cause` points to the timeout error supplied through the signal.
+
+Use `context.task.meta` to attach JSON-serializable metadata to the current test result. You can mutate the metadata object or replace it with a new metadata object. Custom reporters and the programmatic API can read this metadata from `TestResult.meta`:
+
+```ts
+import { test } from '@rstest/core';
+
+test('tracks runtime data', (context) => {
+  context.task.meta.coveredBranches = ['a', 'b'];
+});
+```
+
+Use `context.skip()` to skip a test while it is running. Code after
+`context.skip()` will not execute, and the test is reported as skipped:
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('skipped test', (context) => {
+  context.skip();
+
+  expect(1 + 1).toBe(3);
+});
 ```
 
 You can also extend `TestContext` with custom fixtures using `test.extend`.

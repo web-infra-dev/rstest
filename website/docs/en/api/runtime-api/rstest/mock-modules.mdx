@@ -9,7 +9,7 @@ Rstest supports mocking modules, which allows you to replace the implementation 
 
 ## rs.mock
 
-- **Type**: `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
+- **Type:** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
 Mocks and replaces the module specified in the first parameter.
 
@@ -20,6 +20,8 @@ Mocks and replaces the module specified in the first parameter.
 ### With factory function
 
 If a factory function is provided as the second parameter, the module will be replaced with the return value of the factory function.
+
+Factory functions must be synchronous. To keep part of the original implementation, import the actual module with `with { rstest: 'importActual' }` before the mock factory and spread it into the returned object.
 
 #### Basic example
 
@@ -46,6 +48,53 @@ If a factory function is provided as the second parameter, the module will be re
 
   </div>
 </div>
+
+#### Mock virtual modules
+
+Rstest can mock modules that do not exist on disk, such as generated modules, native modules, and dependencies available only in another runtime. Use the same setup in Node and Browser mode:
+
+1. Declare the module so TypeScript knows its exports:
+
+```ts title="src/types/native-runtime.d.ts"
+declare module 'native-runtime' {
+  export const platform: string;
+}
+```
+
+2. Map the specifier to `false` so the build treats it as a resolved, ignored module:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      'native-runtime': false,
+    },
+  },
+});
+```
+
+3. Provide its runtime exports with a factory:
+
+```ts title="src/native-runtime.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { platform } from 'native-runtime';
+
+rs.mock('native-runtime', () => ({
+  platform: 'test',
+}));
+
+test('uses the virtual module', () => {
+  expect(platform).toBe('test');
+});
+```
+
+Rstest does not use Jest's third `{ virtual: true }` argument. Keep the same specifier in the declaration, alias, mock call, and import. The virtual module can also be imported indirectly by the source code under test.
+
+`rs.mock` supports static `import` because the call is hoisted. For a later dynamic `import()`, call `rs.doMock` before importing. For `require()`, use `rs.mockRequire` or `rs.doMockRequire`.
+
+A matching manual mock in `__mocks__` can provide the implementation instead of a factory. Because an alias mapped to `false` has no real implementation, use a factory or manual mock rather than `{ mock: true }`, `{ spy: true }`, or `rs.importActual`.
 
 #### With `rs.fn()` for call tracking
 
@@ -114,7 +163,7 @@ test('formatDate is mocked, parseDate is real', () => {
 
 ### With `__mocks__` directory
 
-If `rs.mock` is called without providing a factory function, it will attempt to resolve a module with the same name in the `__mocks__` directory at the same level as the mocked module.
+If `rs.mock` is called without providing a factory function or options object, it first attempts to resolve a module with the same name in the `__mocks__` directory. If no manual mock is found, Rstest falls back to auto-mocking the target module, equivalent to passing `{ mock: true }`.
 
 **Resolution rules:**
 
@@ -150,7 +199,21 @@ rs.mock('../src/multiple');
 lodash.random(multiple(1, 2), multiple(3, 4));
 ```
 
-### With `{ spy: true }` option
+If the corresponding manual mock file does not exist, Rstest auto-mocks the original module instead:
+
+```ts title="src/math.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { add } from './math';
+
+rs.mock('./math');
+
+test('falls back to auto-mocking', () => {
+  expect(rs.isMockFunction(add)).toBe(true);
+  expect(add(1, 2)).toBeUndefined();
+});
+```
+
+### With `{ spy: true }` option \{#with-spy-true-option}
 
 If `{ spy: true }` is provided as the second parameter, the module will be auto-mocked but the original implementations will be preserved. All exports will be wrapped in spy functions that track calls while still executing the original code.
 
@@ -158,20 +221,26 @@ This is useful when you want to assert that a function was called correctly with
 
 ```ts title="src/calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
-import { calculate, add } from './calculator';
+import { calculate } from './calculator';
 
 rs.mock('./calculator', { spy: true });
 
-test('calculate calls add with correct arguments', () => {
+test('keeps the real implementation while tracking calls', () => {
   // Original implementation still works
   const result = calculate(1, 2);
   expect(result).toBe(3);
 
-  // But we can also assert on the calls
-  expect(add).toHaveBeenCalledWith(1, 2);
-  expect(add).toHaveReturnedWith(3);
+  // We can also assert on the call, since calculate is called directly
+  expect(calculate).toHaveBeenCalledWith(1, 2);
+  expect(calculate).toHaveReturnedWith(3);
 });
 ```
+
+:::note Internal calls are not tracked
+
+The spy wraps the module's **exports**. When one export calls another inside the same module (e.g. `calculate` internally calls `add`), that internal call goes through the module's local binding rather than the wrapped export, so it is **not** tracked. Assert on exports you call directly (or from another module). This is an inherent limitation of ESM module spying.
+
+:::
 
 :::note ESM and CommonJS modules
 
@@ -182,7 +251,7 @@ test('calculate calls add with correct arguments', () => {
 
 ### With `{ mock: true }` option
 
-If `{ mock: true }` is provided as the second parameter, the module will be auto-mocked with all function exports replaced by mock functions. Unlike `{ spy: true }`, the original implementations are **not** preserved - mock functions return `undefined` by default.
+If `{ mock: true }` is provided as the second parameter, the module will be auto-mocked with all function exports replaced by mock functions. Unlike `{ spy: true }`, the original implementations are **not** preserved - mock functions return `undefined` by default. This is also the fallback behavior of `rs.mock('./module')` when no matching manual mock exists.
 
 This is useful when you want to completely replace a module's behavior and configure mock return values or implementations.
 
@@ -227,7 +296,7 @@ rs.mock(import('../src/b'), () => {
 
 ## rs.doMock
 
-- **Type**: `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
+- **Type:** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
 Similar to `rs.mock`, but it is **not hoisted** to the top of the module. It is called when it's executed, which means that if a module has already been imported before calling `rs.doMock`, that module will not be mocked, while modules imported after calling `rs.doMock` will be mocked.
 
@@ -249,7 +318,7 @@ it('test', async () => {
 
 ## rs.mockRequire
 
-- **Type**: `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+- **Type:** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
 
 Mocks modules loaded through CommonJS `require()`. Like `rs.mock`, this API is hoisted to the top of the current module.
 
@@ -278,7 +347,7 @@ test('mock cjs module with require', () => {
 
 ## rs.doMockRequire
 
-- **Type**: `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+- **Type:** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
 
 Similar to `rs.mockRequire`, but it is **not hoisted**. The mock is applied only after `rs.doMockRequire` is executed, and only affects subsequent `require()` calls.
 
@@ -298,7 +367,7 @@ test('doMockRequire only affects later require calls', () => {
 
 ## rs.unmockRequire
 
-- **Type**: `(path: string) => void`
+- **Type:** `(path: string) => void`
 
 Cancels the mock implementation for modules loaded through `require()`. Like `rs.mockRequire`, this call is hoisted to the top of the file.
 
@@ -320,7 +389,7 @@ test('unmockRequire restores the original CommonJS module', () => {
 
 ## rs.doUnmockRequire
 
-- **Type**: `(path: string) => void`
+- **Type:** `(path: string) => void`
 
 Same as `rs.unmockRequire`, but it is not hoisted. Only later `require()` calls will load the original module again.
 
@@ -342,7 +411,7 @@ test('doUnmockRequire only affects later require calls', () => {
 
 ## rs.hoisted
 
-- **Type**: `<T = unknown>(fn: () => T) => T`
+- **Type:** `<T = unknown>(fn: () => T) => T`
 
 `rs.hoisted` is a helper function that allows you to create values that can be accessed in hoisted functions like `rs.mock` factory functions. Like `rs.mock`, `rs.hoisted` is also hoisted to the top of the module, and it provides access to the `rs` utilities within the hoisted scope.
 
@@ -377,9 +446,9 @@ In this example, `rs.hoisted` allows you to create a mock function using `rs.fn(
 
 ## rs.importActual
 
-- **Type**: `<T = Record<string, unknown>>(path: string) => Promise<T>`
+- **Type:** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Loads the original implementation of a module even if it has already been mocked. Use `rs.importActual` when you want a partial mock so you can merge the real exports with your overrides.
+Loads the original implementation of an ESM module asynchronously, even if it has already been mocked. Use `rs.importActual` when asynchronous test code needs to bypass a module mock. For a CommonJS module loaded through `require()`, use [`rs.requireActual`](#rsrequireactual).
 
 ```ts title="src/sum.test.ts"
 rs.mock('./sum');
@@ -390,7 +459,7 @@ it('test', async () => {
 });
 ```
 
-Rstest also exposes a synchronous `importActual` option for static imports. Add the [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` to load the real module as the file evaluates:
+For a partial ESM mock in a synchronous `rs.mock` factory, add the [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` to a static import. This loads the real module as the file evaluates, so the factory can merge the real exports with its overrides:
 
 ```ts title="src/api.test.ts"
 import * as apiActual from './api' with { rstest: 'importActual' };
@@ -402,22 +471,64 @@ rs.mock('./api', () => ({
 }));
 ```
 
+## rs.requireActual
+
+- **Type:** `<T = Record<string, unknown>>(path: string) => T`
+
+Loads the original implementation of a CommonJS module synchronously, even if it has already been mocked. Use `rs.requireActual` when code consumes the module through `require()`, or when a synchronous mock factory needs the real exports. For an ESM module loaded through `import`, use [`rs.importActual`](#rsimportactual).
+
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: () => 100,
+}));
+
+test('loads the original CommonJS module', () => {
+  const actualMath = rs.requireActual('./math.cjs');
+
+  expect(rs.isMockFunction(actualMath.sum)).toBe(false);
+  expect(actualMath.sum(1, 2)).toBe(3);
+});
+```
+
 ## rs.importMock
 
-- **Type**: `<T = Record<string, unknown>>(path: string) => Promise<T>`
+- **Type:** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Imports a module and all its properties as mock implementations.
+Loads an ESM module asynchronously and replaces its function exports, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.importMock` when a test needs an auto-mocked module directly. For a CommonJS module loaded through `require()`, use [`rs.requireMock`](#rsrequiremock).
 
-```ts title="src/sum.test.ts"
-it('test', async () => {
-  const mockedModule = await rs.importMock('./sum');
-  expect(mockedModule.sum2(1, 2)).toBe(103);
+```ts title="src/api.test.ts"
+test('loads an ESM module as mocks', async () => {
+  const api = await rs.importMock<typeof import('./api')>('./api');
+  const mockedApi = rs.mocked(api, true);
+
+  mockedApi.fetchUser.mockResolvedValue({ id: '1', name: 'Alice' });
+  await mockedApi.fetchUser('1');
+  expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
+});
+```
+
+## rs.requireMock
+
+- **Type:** `<T = Record<string, unknown>>(path: string) => T`
+
+Loads a CommonJS module synchronously and replaces its exported functions, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.requireMock` when the target is consumed through `require()` and the test needs the mocked module immediately. For an ESM module loaded through `import`, use [`rs.importMock`](#rsimportmock).
+
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
+test('loads a CommonJS module as mocks', () => {
+  const mockedMath = rs.requireMock('./math.cjs');
+
+  mockedMath.sum.mockReturnValue(100);
+  expect(mockedMath.sum(1, 2)).toBe(100);
 });
 ```
 
 ## rs.unmock
 
-- **Type**: `(path: string) => void`
+- **Type:** `(path: string) => void`
 
 Cancels the mock implementation of the specified module. After this, all calls to `import` will return the original module, even if it was previously mocked. Like `rs.mock`, this call is hoisted to the top of the file, so it will only cancel module mocks executed in `setupFiles`.
 
@@ -450,13 +561,13 @@ Cancels the mock implementation of the specified module. After this, all calls t
 
 ## rs.doUnmock
 
-- **Type**: `(path: string) => void`
+- **Type:** `(path: string) => void`
 
 Same as `rs.unmock`, but it is not hoisted to the top of the file. The next import of the module will import the original module instead of the mock. This will not cancel modules that were imported before the mock.
 
 ## rs.resetModules
 
-- **Type**: `resetModules: () => RstestUtilities`
+- **Type:** `() => RstestUtilities`
 
 Clears the cache of all modules. This allows modules to be re-executed when re-imported. This is useful for isolating the state of modules shared between different tests.
 

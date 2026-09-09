@@ -1,0 +1,25 @@
+# @rstest/playwright
+
+Playwright fixture integration for Rstest. Provides Node-side Playwright browser automation fixtures and Playwright-style assertions for tests running in Rstest workers.
+
+## Do
+
+- Keep this package independent from Rsbuild-specific dev/build helpers
+- Treat Playwright as a peer dependency
+- Reuse `@rstest/core` runtime APIs instead of duplicating test runner behavior
+- Keep browser/context/page/request lifecycle cleanup deterministic
+- Keep generated setup module options JSON-serializable; use certificate path options instead of direct `Buffer` values, and use `test.extend` for functions, class instances, and test-specific values
+
+## Don't
+
+- Don't depend on `@rsbuild/core`
+- Don't couple this package to Rstest browser mode internals
+- Don't try to match the full Playwright Test API in one step
+
+## Commands
+
+```bash
+pnpm --filter @rstest/playwright build
+pnpm --filter @rstest/playwright test
+pnpm --filter @rstest/playwright lint
+```

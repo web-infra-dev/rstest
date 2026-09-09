@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "names": [],
+  "sources": ["./maps/sources/query-mapped-error.ts"],
+  "sourcesContent": [
+    "export const throwQueryMappedError = () => { throw new Error('query-mapped browser failure'); };\n"
+  ],
+  "mappings": ";;AAAA"
+}

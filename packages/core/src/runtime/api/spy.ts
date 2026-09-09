@@ -13,21 +13,193 @@ import type { CreateMockInstanceFn } from './mockObject';
 const isMockFunction = (fn: any): fn is MockInstance =>
   typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;
 
-export const initSpy = (): Pick<
-  RstestUtilities,
-  'isMockFunction' | 'spyOn' | 'fn'
-> & {
-  mocks: Set<MockInstance>;
+export const initSpy = (
+  // The running file's project key (`workerState.project`). The `rstest`
+  // singleton is shared by a reused worker, which under `isolate: false` can
+  // serve several projects; scoping the registry by project keeps one project's
+  // `*AllMocks` from resetting another project's kept mocks. Defaults to a single
+  // bucket for callers (and unit tests) that don't run multiple projects.
+  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
+  getProjectKey: () => string = () => '',
+  getRuntimeGlobal: () => Record<string, unknown> = () => globalThis,
+): Pick<RstestUtilities, 'isMockFunction' | 'spyOn' | 'fn'> & {
+  /**
+   * Run `callback` against every live registered mock of the running file's
+   * project, pruning entries whose mock has been garbage-collected. See the
+   * registry comment below for why entries are weak and scoped per project.
+   */
+  forEachMock: (callback: (mock: MockInstance) => void) => void;
   createMockInstance: CreateMockInstanceFn;
+  /**
+   * Restart `invocationCallOrder` numbering. The spy state lives for the whole
+   * worker (the `rstest` singleton), so under `isolate: false` the per-file
+   * reset must rewind this counter to mirror the previous per-file rebuild.
+   */
+  resetCallOrder: () => void;
 } => {
   let callOrder = 0;
-  const mocks: Set<MockInstance> = new Set<MockInstance>();
+  // Registry keyed by project, holding weak references. Weak so it never pins a
+  // mock alive: the `rstest` singleton lives for the whole worker, but under
+  // `isolate: false` a mock created in a per-file (later evicted) module must be
+  // collectable once that module is gone, while a mock kept alive by a module
+  // shared across files stays tracked. Keyed by project so a reused worker that
+  // serves several projects never lets one project's `*AllMocks` reach another's
+  // mocks (no module is shared across projects, so every mock belongs to one).
+  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132
+  // and https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
+  const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
+  const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
+
+  const getRealmPromise = (): PromiseConstructor => {
+    const promise = getRuntimeGlobal().Promise;
+    if (typeof promise !== 'function') {
+      throw new TypeError('The runtime global does not provide Promise.');
+    }
+    return promise as PromiseConstructor;
+  };
+
+  const getRealmArray = (): ArrayConstructor => {
+    const array = getRuntimeGlobal().Array;
+    if (typeof array !== 'function') {
+      throw new TypeError('The runtime global does not provide Array.');
+    }
+    return array as ArrayConstructor;
+  };
+
+  const getRealmObject = (): ObjectConstructor => {
+    const object = getRuntimeGlobal().Object;
+    if (typeof object !== 'function') {
+      throw new TypeError('The runtime global does not provide Object.');
+    }
+    return object as ObjectConstructor;
+  };
+
+  const toRealmArray = <T>(values: readonly T[]): T[] => {
+    const array = getRealmArray();
+    return array === Array ? (values as T[]) : array.from(values);
+  };
+
+  const toRealmCall = <T extends readonly unknown[]>(call: T): T =>
+    toRealmArray(call) as unknown as T;
+
+  const toRealmResult = <T>(
+    type: 'return' | 'throw' | 'fulfilled' | 'rejected',
+    value: T,
+  ): { type: typeof type; value: T } => {
+    const object = getRealmObject();
+    if (object === Object) {
+      return { type, value };
+    }
+    return object.assign(new object(), { type, value });
+  };
+
+  const projectMocks = (): Set<WeakRef<MockInstance>> => {
+    const key = getProjectKey();
+    const set = mocksByProject.get(key) ?? new Set<WeakRef<MockInstance>>();
+    mocksByProject.set(key, set);
+    return set;
+  };
+
+  const wrapRealmMock = <T extends FunctionLike>(spyFn: Mock<T>): Mock<T> => {
+    const realmFunction = getRuntimeGlobal().Function;
+    if (typeof realmFunction !== 'function' || realmFunction === Function) {
+      return spyFn;
+    }
+
+    const createFactory = realmFunction as unknown as (
+      ...args: string[]
+    ) => (implementation: FunctionLike) => FunctionLike;
+    const factory = createFactory(
+      'implementation',
+      'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
+    );
+    const realmSpy = factory(spyFn) as Mock<T>;
+
+    for (const key of Reflect.ownKeys(spyFn)) {
+      if (key === 'caller' || key === 'callee' || key === 'arguments') {
+        continue;
+      }
+      if (key === 'length' || key === 'name' || key === 'prototype') {
+        continue;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(spyFn, key);
+      if (!descriptor) {
+        continue;
+      }
+      if (typeof descriptor.value === 'function') {
+        const value = descriptor.value;
+        descriptor.value = (...args: unknown[]) => {
+          const result = Reflect.apply(value, spyFn, args);
+          if (result === spyFn) {
+            return realmSpy;
+          }
+          if (
+            key === 'withImplementation' &&
+            result !== null &&
+            (typeof result === 'object' || typeof result === 'function') &&
+            typeof Reflect.get(result, 'then') === 'function'
+          ) {
+            return getRealmPromise()
+              .resolve(result)
+              .then((resolved) => (resolved === spyFn ? realmSpy : resolved));
+          }
+          return result;
+        };
+      }
+      Object.defineProperty(realmSpy, key, descriptor);
+    }
+
+    Object.defineProperty(realmSpy, 'name', {
+      configurable: true,
+      value: spyFn.name,
+    });
+    Object.defineProperty(realmSpy, 'length', {
+      configurable: true,
+      value: spyFn.length,
+    });
+    // A bare tinyspy mock gets a host-realm default prototype. Keep the
+    // wrapper's VM-realm prototype unless the original spy carries a custom
+    // prototype that must be preserved for constructor mocks.
+    if (
+      spyFn.prototype &&
+      Object.getPrototypeOf(spyFn.prototype) !== Object.prototype
+    ) {
+      realmSpy.prototype = spyFn.prototype;
+    }
+    return realmSpy;
+  };
 
   const wrapSpy = <T extends FunctionLike>(
     obj: Record<string, any>,
-    methodName: string,
+    methodName: string | { getter: string } | { setter: string },
     mockFn?: NormalizedProcedure<T>,
   ): Mock<T> => {
+    const propertyName =
+      typeof methodName === 'string'
+        ? methodName
+        : Object.values(methodName)[0]!;
+    let descriptor: PropertyDescriptor | undefined;
+    let current: object | null = obj;
+    while (current) {
+      descriptor = Object.getOwnPropertyDescriptor(current, propertyName);
+      if (descriptor) {
+        break;
+      }
+      current = Object.getPrototypeOf(current);
+    }
+    const existing =
+      typeof methodName === 'string'
+        ? descriptor?.value
+        : 'getter' in methodName
+          ? descriptor?.get
+          : descriptor?.set;
+    if (typeof existing === 'function') {
+      const realmSpy = realmSpies.get(existing);
+      if (realmSpy) {
+        return realmSpy as Mock<T>;
+      }
+    }
+
     const spyImpl = internalSpyOn(obj, methodName, mockFn) as SpyInternalImpl<
       Parameters<T>,
       ReturnType<T>
@@ -49,7 +221,7 @@ export const initSpy = (): Pick<
 
     const spyState = getInternalState(spyImpl);
 
-    spyFn.getMockName = () => mockName || methodName;
+    spyFn.getMockName = () => mockName || propertyName;
 
     spyFn.mockName = (name: string) => {
       mockName = name;
@@ -63,12 +235,18 @@ export const initSpy = (): Pick<
         : implementation;
     };
 
-    function withImplementation(fn: T, cb: () => void): void;
-    function withImplementation(fn: T, cb: () => Promise<void>): Promise<void>;
     function withImplementation(
-      fn: T,
-      cb: () => void | Promise<void>,
-    ): void | Promise<void> {
+      fn: NormalizedProcedure<T>,
+      cb: () => Promise<unknown>,
+    ): Promise<Mock<T>>;
+    function withImplementation(
+      fn: NormalizedProcedure<T>,
+      cb: () => unknown,
+    ): Mock<T>;
+    function withImplementation(
+      fn: NormalizedProcedure<T>,
+      cb: () => unknown,
+    ): Mock<T> | Promise<Mock<T>> {
       const originalImplementation = implementation;
       const originalMockImplementationOnce = mockImplementationOnce;
 
@@ -81,15 +259,33 @@ export const initSpy = (): Pick<
         mockImplementationOnce = originalMockImplementationOnce;
       };
 
-      const result = cb();
+      try {
+        const result = cb();
 
-      if (result instanceof Promise) {
-        return result.then(() => {
-          reset();
-        });
+        if (
+          typeof result === 'object' &&
+          result !== null &&
+          'then' in result &&
+          typeof result.then === 'function'
+        ) {
+          return result.then(
+            () => {
+              reset();
+              return spyFn;
+            },
+            (error: unknown) => {
+              reset();
+              throw error;
+            },
+          );
+        }
+
+        reset();
+        return spyFn;
+      } catch (error) {
+        reset();
+        throw error;
       }
-
-      reset();
     }
 
     spyFn.withImplementation = withImplementation;
@@ -112,20 +308,36 @@ export const initSpy = (): Pick<
       return spyFn.mockImplementationOnce((() => value) as T);
     };
 
+    spyFn.mockThrow = (value) => {
+      return spyFn.mockImplementation(() => {
+        throw value;
+      });
+    };
+
+    spyFn.mockThrowOnce = (value) => {
+      return spyFn.mockImplementationOnce(() => {
+        throw value;
+      });
+    };
+
     spyFn.mockResolvedValue = (value) => {
-      return spyFn.mockImplementation((() => Promise.resolve(value)) as T);
+      return spyFn.mockImplementation((() =>
+        getRealmPromise().resolve(value)) as T);
     };
 
     spyFn.mockResolvedValueOnce = (value) => {
-      return spyFn.mockImplementationOnce((() => Promise.resolve(value)) as T);
+      return spyFn.mockImplementationOnce((() =>
+        getRealmPromise().resolve(value)) as T);
     };
 
     spyFn.mockRejectedValue = (value) => {
-      return spyFn.mockImplementation((() => Promise.reject(value)) as T);
+      return spyFn.mockImplementation((() =>
+        getRealmPromise().reject(value)) as T);
     };
 
     spyFn.mockRejectedValueOnce = (value) => {
-      return spyFn.mockImplementationOnce((() => Promise.reject(value)) as T);
+      return spyFn.mockImplementationOnce((() =>
+        getRealmPromise().reject(value)) as T);
     };
 
     spyFn.mockReturnThis = () => {
@@ -142,7 +354,26 @@ export const initSpy = (): Pick<
       if (mockImplementationOnce.length) {
         impl = mockImplementationOnce.shift()!;
       }
-      return impl?.apply(this, args);
+      const result = impl?.apply(this, args);
+      if (
+        result !== null &&
+        typeof result === 'object' &&
+        Object.prototype.toString.call(result) === '[object Promise]' &&
+        'then' in result &&
+        typeof result.then === 'function' &&
+        !(result instanceof Promise)
+      ) {
+        const resultIndex = spyState.results.length;
+        void result.then(
+          (value: unknown) => {
+            spyState.resolves[resultIndex] = ['ok', value];
+          },
+          (error: unknown) => {
+            spyState.resolves[resultIndex] = ['error', error];
+          },
+        );
+      }
+      return result;
     }
 
     spyState.willCall(willCall);
@@ -150,35 +381,46 @@ export const initSpy = (): Pick<
     Object.defineProperty(spyFn, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
-          return spyState.calls;
+          return toRealmArray(
+            spyState.calls.map((call) => toRealmCall(call)),
+          ) as MockContext<T>['calls'];
         },
         get lastCall() {
-          return spyState.calls[spyState.callCount - 1];
+          const lastCall = spyState.calls[spyState.callCount - 1];
+          return lastCall
+            ? (toRealmCall(lastCall) as MockContext<T>['lastCall'])
+            : undefined;
         },
         get instances() {
-          return mockState.instances;
+          return toRealmArray(mockState.instances);
         },
         get contexts() {
-          return mockState.contexts;
+          return toRealmArray(mockState.contexts);
         },
         get invocationCallOrder() {
-          return mockState.invocationCallOrder;
+          return toRealmArray(mockState.invocationCallOrder);
         },
         get results() {
-          return spyState.results.map(([resultType, value]) => {
-            const type =
-              resultType === 'error' ? ('throw' as const) : ('return' as const);
-            return { type: type, value };
-          });
+          return toRealmArray(
+            spyState.results.map(([resultType, value]) => {
+              const type =
+                resultType === 'error'
+                  ? ('throw' as const)
+                  : ('return' as const);
+              return toRealmResult(type, value);
+            }),
+          ) as MockContext<T>['results'];
         },
         get settledResults() {
-          return spyState.resolves.map(([resultType, value]) => {
-            const type =
-              resultType === 'error'
-                ? ('rejected' as const)
-                : ('fulfilled' as const);
-            return { type, value };
-          });
+          return toRealmArray(
+            spyState.resolves.map(([resultType, value]) => {
+              const type =
+                resultType === 'error'
+                  ? ('rejected' as const)
+                  : ('fulfilled' as const);
+              return toRealmResult(type, value);
+            }),
+          ) as MockContext<T>['settledResults'];
         },
       }),
     });
@@ -204,9 +446,51 @@ export const initSpy = (): Pick<
       mockName = mockFn?.name;
     };
 
-    mocks.add(spyFn);
+    if (Symbol.dispose) {
+      Object.defineProperty(spyFn, Symbol.dispose, {
+        value: () => {
+          spyFn.mockRestore();
+        },
+        configurable: true,
+      });
+    }
 
-    return spyFn;
+    const realmSpy = wrapRealmMock(spyFn);
+    realmSpies.set(spyFn, realmSpy);
+    realmSpies.set(realmSpy, realmSpy);
+    projectMocks().add(new WeakRef(realmSpy));
+    if (realmSpy !== spyFn) {
+      descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+      if (descriptor) {
+        if (typeof methodName === 'string') {
+          descriptor.value = realmSpy;
+        } else if ('getter' in methodName) {
+          descriptor.get = realmSpy;
+        } else {
+          descriptor.set = realmSpy as unknown as NonNullable<
+            PropertyDescriptor['set']
+          >;
+        }
+        Object.defineProperty(obj, propertyName, descriptor);
+      }
+    }
+
+    return realmSpy;
+  };
+
+  const forEachMock = (callback: (mock: MockInstance) => void): void => {
+    const mocks = mocksByProject.get(getProjectKey());
+    if (!mocks) {
+      return;
+    }
+    for (const ref of mocks) {
+      const mock = ref.deref();
+      if (mock) {
+        callback(mock);
+      } else {
+        mocks.delete(ref);
+      }
+    }
   };
 
   const fn: MockFn = <T extends FunctionLike>(mockFn?: T) => {
@@ -242,6 +526,26 @@ export const initSpy = (): Pick<
       }
     }
 
+    // A native ES module namespace is an exotic object whose exports can't be
+    // redefined — even when the descriptor reports `writable: true` — so
+    // installing a spy fails with a bare "Cannot redefine property". Detect that
+    // exact object (a `[object Module]`) and throw an actionable error instead.
+    // The check matches ONLY a real module namespace, deliberately NOT an
+    // `__esModule` interop object from a transpiled CommonJS module: those are
+    // ordinary objects whose writable exports tinyspy can still spy, so they
+    // must fall through untouched. Bundled deps expose *configurable* getters,
+    // so this never fires for them either. See
+    // https://github.com/web-infra-dev/rstest/issues/1492
+    const targetDescriptor = Object.getOwnPropertyDescriptor(obj, methodName);
+    if (
+      targetDescriptor?.configurable === false &&
+      (obj as Record<PropertyKey, unknown>)[Symbol.toStringTag] === 'Module'
+    ) {
+      throw new Error(
+        `[Rstest] Cannot spy on "${String(methodName)}": it is a read-only export of a third-party or native ES module. Mock the module instead with \`rs.mock('<module>', { spy: true })\`. See https://rstest.rs/api/runtime-api/rstest/mock-functions#rsspyon`,
+      );
+    }
+
     const accessTypeMap = {
       get: 'getter',
       set: 'setter',
@@ -251,7 +555,10 @@ export const initSpy = (): Pick<
       ? { [accessTypeMap[accessType]]: methodName }
       : methodName;
 
-    return wrapSpy(obj, method as string);
+    return wrapSpy(
+      obj,
+      method as string | { getter: string } | { setter: string },
+    );
   };
 
   /**
@@ -330,7 +637,13 @@ export const initSpy = (): Pick<
       );
 
       // Make sure the mock can be used with 'new'
-      Object.setPrototypeOf(mock, Function.prototype);
+      const realmFunction = getRuntimeGlobal().Function;
+      Object.setPrototypeOf(
+        mock,
+        typeof realmFunction === 'function'
+          ? realmFunction.prototype
+          : Function.prototype,
+      );
       mock.prototype = originalImplementation.prototype;
 
       return mock;
@@ -358,7 +671,10 @@ export const initSpy = (): Pick<
     isMockFunction,
     spyOn,
     fn,
-    mocks,
+    forEachMock,
     createMockInstance,
+    resetCallOrder: () => {
+      callOrder = 0;
+    },
   };
 };

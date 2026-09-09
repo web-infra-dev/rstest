@@ -1,5 +1,5 @@
 ---
-description: 了解 Rstest 面向构建一体化测试提供的能力，包括 Rstack 配置复用、浏览器模式、测试分片和覆盖率。
+description: 了解 Rstest 面向构建一体化测试提供的能力，包括 Rstack 配置复用、浏览器模式、Playwright 驱动的 E2E 测试、测试分片和覆盖率。
 ---
 
 # 功能导航
@@ -22,6 +22,12 @@ Rstest 基于 Rspack 的 bundling pipeline 运行测试，因此可以利用 Tre
 
 了解更多关于 [配置 SWC](/guide/basic/configure-rstest#配置-swc)。
 
+## 测试 Module Federation 应用
+
+Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的 [Module Federation](https://module-federation.io/) remote。配合 [@module-federation/rstest](https://github.com/module-federation/core)，测试会实际覆盖 remote 加载和共享依赖，而不是使用 mock 替换 federation 边界。
+
+了解更多关于 [Module Federation 测试](/integration/module-federation)。
+
 ## 多项目测试
 
 Rstest 可以在同一个进程中运行多个测试项目，每个项目都可以保留自己的配置和环境。这适合 monorepo、多应用工作区，以及需要分别覆盖 Node、DOM 或 Browser Mode 的项目。
@@ -32,7 +38,7 @@ Rstest 可以在同一个进程中运行多个测试项目，每个项目都可�
 
 Rstest 可以将测试文件拆分为多个分片并行执行。你可以在 CI 中把同一套测试分发到多台机器以缩短总耗时，并在所有分片完成后通过 `blob` 报告器与 `rstest merge-reports` 合并测试结果和代码覆盖率。
 
-了解更多关于 [测试分片](/config/test/shard)。
+了解更多关于 [测试分片](/guide/basic/cli#sharding-tests)。
 
 ## 源码内联测试
 
@@ -58,9 +64,17 @@ Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromi
 
 了解更多关于 [浏览器模式](/guide/browser-testing)。
 
+## Playwright 驱动的 E2E 测试
+
+Rstest 可以通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 对完整页面或应用运行 E2E 测试。测试会在 Node.js worker 中运行，并使用 Playwright 驱动本地 dev server、preview server 或线上 URL，同时与其他测试共享 Rstest runner、配置和报告工作流。
+
+了解更多关于 [Playwright](/integration/playwright)。
+
 ## 代码覆盖率
 
-Rstest 可以使用 [istanbul](https://istanbul.js.org/) 收集代码覆盖率。你可以在 Rstest 配置文件中将 `coverage.enabled` 设置为 `true` 来启用覆盖率。
+Rstest 同时支持 [istanbul](https://istanbul.js.org/) 和 `v8` 两种覆盖率 provider。你可以在 Rstest 配置文件中将 `coverage.enabled` 设置为 `true` 来启用覆盖率，再根据项目需求选择对应的 provider。
+
+如果你需要基于 SWC 插桩且语义稳定的 Istanbul coverage，可以使用 `istanbul`；如果 coverage 的主要瓶颈是内存占用，可以使用 `v8`。在 headless、非 watch 的 Chromium Browser Mode 运行中，`v8` 从浏览器原生收集 coverage，无需对应用代码插桩。headed 和 watch coverage 仍为实验性能力；Firefox 和 WebKit 使用 `istanbul`。
 
 了解更多关于 [代码覆盖率](/config/test/coverage)。
 

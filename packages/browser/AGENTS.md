@@ -1,64 +1,43 @@
 # @rstest/browser
 
-Browser mode support for Rstest. Provides browser test execution using Playwright and a React-based test UI.
+Browser mode support for Rstest. Provides browser test execution using Playwright and a React-based test UI. Host-side scheduling lives in `src/`; the in-browser runner runtime lives in `src/client/` (top-level page in headless runs, iframe in headed runs).
 
-## Architecture deep dive
+## Boundary map
 
-- Host scheduling internals: `src/AGENTS.md`
-- Runner runtime and transport internals: `src/client/AGENTS.md`
-
-## Architecture overview and cross-package contract
-
-```mermaid
-flowchart LR
-  subgraph Host["package: @rstest/browser"]
-    H1[hostController.ts]
-    H2[dispatchRouter.ts]
-    H3[namespace handlers]
-  end
-
-  subgraph UI["package: @rstest/browser-ui"]
-    U1[useRpc birpc]
-    U2[channel.ts]
-    U3[main.tsx message listener]
-  end
-
-  subgraph RunnerRuntime["module: @rstest/browser src/client"]
-    R1[send lifecycle]
-    R2[dispatch rpc request]
-    R3[snapshot.ts]
-  end
-
-  H1 -->|inject host config| U1
-  H1 -->|birpc callbacks| U1
-  U1 -->|birpc calls| H1
-
-  R1 -->|postMessage __rstest_dispatch__| U3
-  U3 -->|onTest* callbacks| U1
-
-  R2 -->|postMessage dispatch rpc request| U2
-  U2 -->|rpc.dispatch(request)| U1
-  U1 -->|dispatch(request)| H1
-  H1 -->|routing inbound request| H2
-  H2 -->|resolve namespace handler| H3
-  H3 -->|return handler result| H2
-  H2 -->|routing done response payload| H1
-  H1 -->|dispatch response| U1
-  U1 -->|return BrowserDispatchResponse| U2
-  U2 -->|postMessage dispatch response| R3
-
-  H1 -->|headless bridge __rstest_dispatch__| R1
-  H1 -->|headless bridge __rstest_dispatch_rpc__| R2
+```
+Headed:   runner iframe --postMessage--> browser-ui container --birpc--> host --> dispatchRouter --> namespace handler
+Headless: runner top-level page --exposeFunction(__rstest_dispatch__ / __rstest_dispatch_rpc__)--> host (browser-ui not involved)
 ```
 
-This diagram is the package-level quick overview and the contract boundary map.
-`dispatchRouter` handles inbound request routing only; outbound delivery is transport reply.
+Responses always travel back as transport replies — `dispatchRouter` handles inbound request routing only and never initiates outbound delivery. `dispatchTransport` (client side) owns request ids, timeouts, and pending-response resolution for both transports.
 
-Contract ownership:
+## Contract ownership
 
 - `@rstest/browser` owns host scheduling, dispatch routing, and protocol semantics.
 - `@rstest/browser-ui` owns transport bridging and UI state projection only.
-- Runner runtime (`src/client`) owns test execution and emits protocol messages, but does not own filesystem access.
+- The runner runtime (`src/client`) owns test execution and emits protocol messages, but never owns filesystem access — snapshot file operations go through the `snapshot` dispatch namespace.
+- Runner lifecycle events feed `@rstest/core`'s per-project `RunnerEventSink` — the same event pump the node pool uses. The host never fans out to reporters or `stateManager` directly, and it routes every event by the project name carried on the payload — never derived from a test path, which is ambiguous when concurrent projects run the same file.
+- Core's `finalizeRunCycle` owns reporters `onTestRunEnd`, coverage merge, and the exit code for every cycle on both commands. The host never finalizes, and a failing file, a fatal error, and a boot failure all reach core as part of the cycle outcome.
+- A watch launch with no test files opens a session anyway, paying a full provider launch. Added-file pickup depends on two things staying true: the watch manifest emits an include-glob `import.meta.webpackContext` per project whether or not the project has files, and `planWatchRerun`'s file-set diff treats empty → non-empty as a rerun. Either half regressing silently prevents added files from running.
+- Watch differs from one-shot only in what the host owns, not in who finalizes: a persistent runtime reused across controller re-entry, the rerun triggers, and HMR. The initial cycle returns a live watch session instead of a deferred `close`, and `executor.close()` is what tears the runtime down.
+- Rerun-cycle executor rejections finalize an error cycle; first-cycle executor rejections reject startup in node, browser, and mixed watch alike. Mixed watch awaits browser startup rather than booting it in the background. Embedded hosts get no CLI shortcut hints, even on a TTY.
+- Every rerun trigger the host owns (dev rebuild, HMR, the in-page rerun button, an explicit request from a CLI shortcut) resolves its own scope and then signals core's `onInvalidate` subscriber, which calls back into the session to execute exactly that scope. Resolving the scope at the trigger is load-bearing twice over: the file-set diff can only be consumed once, and a trigger that resolves to no work must not signal at all.
+- Signalling hands the cycle to core and returns; only an explicit request (a CLI shortcut, the in-page rerun button) waits for the cycle it started, because it has state to restore afterwards. A rebuild trigger must not wait, and the reason is not politeness: it is signalled from inside the bundler's dev-compile hook, and the bundler holds no watcher while that hook is pending — anything created or deleted in that window is never seen again, so a cycle-long hook silently drops test files added or removed mid-run.
+- Core queues cycles, so a trigger that arrives while one is still running would otherwise wait out a run the user has already superseded. The headless loop therefore cancels its in-flight run as it signals the replacement scope: the stale cycle finalizes with what it had and the queued one starts immediately. That cancel belongs at the signal, not at the trigger: only the signal knows a replacement cycle is actually coming, and a trigger that resolves to no affected files must leave the running cycle alone.
+- Headed run identity has one mint and one comparison. The host mints a `runId` in `HeadedRunRegistry`, synchronously, before the reload RPC leaves the process; the container holds it as a per-frame lease and confers it on whatever document boots into that frame over the config handshake; the runner adopts it once and stamps it beside every message it sends (`RunnerEnvelope` — beside, never inside, so no transport identity ever reaches core reporting or `BlobReporter` output); and the host accepts a message iff its stamped `runId` names a live run, at the single `dispatch` gate. Nothing may re-derive identity from a frame URL, DOM state, React state, or a test path — a path can be deleted and re-added while a run is in flight (same path, different run), and a frame's URL still names the run it was originally navigated for after an HMR full reload (same document slot, different run). Both directions of that ambiguity produced real deadlocks; identity-only matching is what removed the tombstone table and the fallback chains, so reintroducing a secondary identity source reintroduces the ambiguity.
+- A headed cycle ends only once every run it minted has settled, and every settlement obligation lives inside `HeadedRunRegistry` — exactly-once, because every settler funnels through one guarded delete. Any host action that makes a completion impossible settles the run in the same step: a file-set commit calls `retainPaths` before the container is told (the unmounted frame's completion may already be in transport — its identity is gone from the registry, so the arrival drops by rule), transport death or silent socket replacement settles through `rejectAll` / the transport epoch, a run whose document never speaks is settled by a boot deadline armed at mint and disarmed by the first admitted message, and a run that announced fixture cleanup but never finished it is settled by a cleanup deadline (armed by the runner's `file-cleanup` start signal, disarmed by its end signal). That expiry claims the run like a terminal message before doing anything else, because its handler must replace the container page — every headed frame is same-site with the container, so one busy-looping cleanup freezes the shared renderer and no sibling frame can boot — and an unclaimed run would be swept by the very disconnect that recovery causes. The synthesized timeout result is the one result the host authors itself, and the run settles only after the fresh container is ready, since settlement is what releases the serial loop. An unsettled run wedges its cycle and every cycle core has queued behind it, with no error and no disconnect to show for it, so a new way to make a runner unreachable is a new settlement obligation, not just a new log line. For the same reason the cycle waits on settlement alone, never serially on the reload RPC: the host birpc has no timeout, so a delivery that hangs without a close event would outlast every deadline the registry enforces — the RPC's failure feeds the settle, it is not the thing awaited.
+- `retainPaths`, the boot deadline, and the cleanup deadline are not a fallback chain for one fact: they observe different facts (file-set membership, whether a document ever spoke, whether an announced cleanup ever ended) and funnel into the same idempotent settle. Removing any of them reopens the failure mode it covers. Both are host-side because every message the container relays reaches the dispatch gate, so a liveness rule implemented in the container would be a second adjudicator. Conferral is different: load events and element identity exist only in the container, which is why the boot-match check at the config handshake lives there — it decides which browsing context receives the lease, never whether a message is stale.
+- Headed watch HMR degenerates to a full reload of every runner iframe (no hot accept anywhere in the runner). A rerun document must execute under the identity the host is awaiting NOW, which is exactly why identity is conferred at document boot from the lease — written synchronously at grant, before any render or navigation — and never read from the document's own URL. The runner URL therefore carries no identity at all; keep it that way.
+- The watch control plane is core-owned: core is the single stdin/CLI-shortcuts owner — the host never subscribes to stdin.
+- Browser config compatibility (which `RuntimeConfig` fields are supported / ignored / stripped) is declared in core's `executorCapabilities` table; `configValidation.ts` derives its generic warnings and errors from that table instead of hand-maintaining a list. The one exception is `coverage`, which has a hand-written V8 capability guard: native V8 coverage requires Chromium (see the coverage pipeline doc in core).
+- Cross-file `bail` is enforced host-side at file boundaries in the headless scheduler (each worker checks the cycle-wide failed count before picking up the next file and drains the remaining queue as skipped). The headed debugging UI does not apply bail; the runner's per-test gate uses the client-local per-file failed count only.
+
+## Runner runtime invariants (`src/client`)
+
+- `runner.ts` is the only bootstrap entry and decides `collect` vs `run` mode.
+- The native Rspack rewrite uses an optional resolver call, so runtime realms without a resolver observe `undefined`; the runner realm installs the current-file resolver. Collection may reuse one page, so it must evict only the entry about to be collected before loading it.
+- Console interception is per test file and must restore the original console methods in `finally`.
+- An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. The runner deliberately yields macrotasks before finalizing each file result so late-dispatched rejections are still observed — the timing rationale is commented in `runner.ts`.
 
 ## Provider-agnostic design
 
@@ -69,28 +48,8 @@ Browser mode must stay provider-neutral at the framework boundary.
 - Do not export provider-owned config types from `@rstest/browser` public entrypoints.
 - Do not reference optional peer provider modules from public declarations, including `import type` and `import('pkg')` in type positions.
 - Keep provider-specific behavior, config decoding, and runtime quirks inside provider implementations whenever possible.
-- Prefer direct passthrough to provider APIs over provider-specific post-init translation layers. If a capability cannot be expressed as passthrough, only promote it when the behavior is meaningful across multiple providers.
-- Do not introduce new shared abstractions for a single provider convenience; promote behavior into shared contracts only when it is meaningful across multiple providers.
+- Prefer direct passthrough to provider APIs over provider-specific post-init translation layers; promote behavior into shared contracts only when it is meaningful across multiple providers.
 - When richer DX is needed later, prefer provider-owned helpers or separate optional type entrypoints over coupling the main package surface to a specific provider.
-
-## Module structure
-
-- `src/index.ts` — Package entry, exports runBrowserTests and listBrowserTests
-- `src/hostController.ts` — Main browser mode controller (runtime bootstrap + headless/headed scheduling)
-- `src/protocol.ts` — Type definitions for browser-host communication protocol
-- `src/dispatchRouter.ts` — Host-side dispatch namespace router
-- `src/dispatchCapabilities.ts` — Shared built-in dispatch capability registration (`runner`, `snapshot`, extension namespaces)
-- `src/runSession.ts` — Run token lifecycle and cancellation semantics
-- `src/sessionRegistry.ts` — Session index keyed by `sessionId`/`testFile`/`runToken`
-- `src/concurrency.ts` — Shared headless worker concurrency policy
-- `src/headlessTransport.ts` — Top-level headless page bridge wiring (`__rstest_dispatch__` / `__rstest_dispatch_rpc__`)
-- `src/watchRerunPlanner.ts` — Shared watch rerun planning logic across headless/headed paths
-- `src/client/` — Browser-side runtime code (runs in iframe)
-  - `entry.ts` — Browser client entry point
-  - `snapshot.ts` — Browser snapshot environment (proxies file ops to host)
-  - `sourceMapSupport.ts` — Source map handling for browser
-  - `public.ts` — Re-exports runtime API for browser
-  - `fakeTimersStub.ts` — Stub for @sinonjs/fake-timers in browser
 
 ## Commands
 
@@ -99,35 +58,27 @@ Browser mode must stay provider-neutral at the framework boundary.
 pnpm --filter @rstest/browser build
 pnpm --filter @rstest/browser dev     # Watch mode
 
-# Typecheck
-pnpm --filter @rstest/browser typecheck
+# Lint
+pnpm --filter @rstest/browser lint
 ```
 
 ## Dependencies
 
-This package requires `@rstest/core` as a peer dependency. The browser client code uses internal APIs from `@rstest/core/browser`:
+This package requires `@rstest/core` and `playwright` as peer dependencies, and consumes two internal `@rstest/core` entrypoints:
 
-- `createRstestRuntime` - Creates test runtime
-- `setRealTimers` - Preserves real timer references
-- `globalApis` - List of global API names
-- Various types (WorkerState, RuntimeConfig, etc.)
+- `@rstest/core/internal/browser-runtime` (client side): `createRstestRuntime`, `setRealTimers`, `getRealTimers`, `globalApis`, and types (WorkerState, RuntimeConfig, etc.)
+- `@rstest/core/internal/browser` (host side): logger/color/TTY utilities, `createRunnerEventSink`, and the run-cycle contract types
 
 ## Do
 
-- Keep browser-specific code in this package
-- Use shared runtime from @rstest/core
 - Test browser mode via e2e tests in `e2e/browser-mode/`
 
 ## Don't
 
 - Don't duplicate runtime code from @rstest/core
 - Don't add node-only features here
-- Don't modify public API without updating @rstest/core version check
-
-## Key files
-
-- `src/index.ts` — Package entry
-- `src/hostController.ts` — Main scheduling flow
-- `src/dispatchCapabilities.ts` — Built-in dispatch namespace registration
-- `src/watchRerunPlanner.ts` — Shared watch rerun planner
-- `src/client/entry.ts` — Browser-side test runner entry
+- Don't rely on cross-version compatibility of the internal contract with @rstest/core — core's browser loader (`packages/core/src/core/browser/loader.ts`) enforces an exact version match, so cross-package contract changes must land in the same release
+- Don't bypass the `RunnerEventSink` for runner lifecycle events (no direct reporter/`stateManager` fanout from the host)
+- Don't self-finalize in the host, on either command — core's `finalizeRunCycle` owns reporters, coverage, and every cycle's exit code
+- Don't hand-maintain browser config compatibility lists; add or change rows in core's `executorCapabilities` table instead
+- Don't access the filesystem from the runner runtime; proxy through dispatch namespaces

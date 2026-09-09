@@ -6,14 +6,16 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const escapeChar = '\u001b';
+const controlSequenceIntro = String.fromCodePoint(0x9b);
 const shouldExpectColor =
   process.env.NO_COLOR === undefined &&
   (process.env.FORCE_COLOR !== undefined ||
     process.platform === 'win32' ||
     (process.stdout.isTTY && process.env.TERM !== 'dumb') ||
     process.env.CI !== undefined);
-const vtControlSequenceRegex =
-  /(?:\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~])/;
+const vtControlSequenceRegex = new RegExp(
+  `(?:${escapeChar}\\[[0-?]*[ -/]*[@-~]|${controlSequenceIntro}[0-?]*[ -/]*[@-~])`,
+);
 
 it('should show snapshot diff details', async () => {
   const { cli } = await runRstestCli({

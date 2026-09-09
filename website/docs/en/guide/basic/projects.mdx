@@ -16,7 +16,7 @@ Rstest supports running multiple test projects simultaneously within a single Rs
 
 Define each sub-project in a monorepo as a project through the [projects](/config/test/projects) field, where each sub-project has its own test configuration.
 
-Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-files) file (if present) in the subdirectory.
+Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-file) file (if present) in the subdirectory.
 
 ```ts name='rstest.config.ts'
 import { defineConfig, defineInlineProject } from '@rstest/core';
@@ -180,8 +180,6 @@ In the same run, browser launch options must stay consistent across browser proj
 - `provider`
 - `browser`
 - `headless`
-- `port`
-- `strictPort`
 
 So mixing multiple providers, or multiple browser types, in one run is not supported yet.
 
@@ -225,7 +223,7 @@ You can still mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdo
 
 ### Inspect configuration
 
-If you want to view the final effective configuration of Rstest, you can enable [debug mode](/guide/advanced/debugging#debug-mode) through the `DEBUG=rstest` environment variable. Rstest will write the final effective Rstest configuration and build configuration to the output directory.
+If you want to view the final effective configuration of Rstest, you can enable [debug mode](/guide/debug/debugging#debug-mode) through the `DEBUG=rstest` environment variable. Rstest will write the final effective Rstest configuration and build configuration to the output directory.
 
 ## Filtering projects
 

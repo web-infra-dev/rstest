@@ -35,4 +35,11 @@ describe('browser env injection', () => {
   it('should expose NODE_ENV via import.meta.env in browser mode', () => {
     expect(import.meta.env.NODE_ENV).toBe('test');
   });
+
+  it('should expose the RSTEST flag in browser mode', () => {
+    // Matches Node mode, where `prepare.ts` sets `process.env.RSTEST = 'true'`.
+    // See https://github.com/web-infra-dev/rstest/issues/1351
+    expect(process.env.RSTEST).toBe('true');
+    expect(import.meta.env.RSTEST).toBe('true');
+  });
 });

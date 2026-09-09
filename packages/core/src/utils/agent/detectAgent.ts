@@ -1,4 +1,5 @@
 import { type AgentName, detectAgent as detectAgentFromStdEnv } from 'std-env';
+import { ENV } from '../env';
 
 type KnownAgentNames = AgentName;
 
@@ -17,7 +18,7 @@ type AgentResult =
     };
 
 export function determineAgent(): AgentResult {
-  if (process.env.RSTEST_NO_AGENT === '1') {
+  if (process.env[ENV.NO_AGENT] === '1') {
     return { isAgent: false, agent: undefined };
   }
 

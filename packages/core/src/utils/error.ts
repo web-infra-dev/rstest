@@ -14,7 +14,7 @@ const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 const hintNotDefinedError = (message: string): string => {
   const [, varName] = /(\w+) is not defined/.exec(message) || [];
   if (varName) {
-    if ((globalApis as string[]).includes(varName)) {
+    if ((globalApis as readonly string[]).includes(varName)) {
       return message.replace(
         `${varName} is not defined`,
         `${varName} is not defined. Did you forget to enable "globals" configuration?`,
@@ -69,7 +69,7 @@ export async function printError(
   }
 
   if (error.stack) {
-    const stackFrames = await parseErrorStacktrace({
+    let stackFrames = await parseErrorStacktrace({
       stack: error.stack,
       fullStack: error.fullStack,
       getSourcemap,
@@ -79,11 +79,25 @@ export async function printError(
       !(error.fullStack || isDebug()) &&
       !error.stack.endsWith(error.message)
     ) {
-      logger.stderr(
-        color.gray(
-          "No error stack found, set 'DEBUG=rstest' to show fullStack.",
-        ),
+      const fullStackFrames = await parseErrorStacktrace({
+        stack: error.stack,
+        fullStack: true,
+        getSourcemap,
+      });
+
+      const printableFullStackFrames = fullStackFrames.filter(
+        (frame) => frame.file,
       );
+
+      if (printableFullStackFrames[0]) {
+        stackFrames = printableFullStackFrames;
+      } else {
+        logger.stderr(
+          color.gray(
+            "No error stack found, set 'DEBUG=rstest' to show fullStack.",
+          ),
+        );
+      }
     }
 
     if (stackFrames[0]) {
@@ -178,12 +192,15 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = await getSourcemap?.(frame.file!);
+        const file = frame.file;
+        if (!file) return frame;
+
+        const sourcemap = await getSourcemap?.(file);
         if (sourcemap) {
-          let traceMap = traceMapCache.get(frame.file!);
+          let traceMap = traceMapCache.get(file);
           if (!traceMap) {
             traceMap = new TraceMap(sourcemap);
-            traceMapCache.set(frame.file!, traceMap);
+            traceMapCache.set(file, traceMap);
           }
           const { line, column, source, name } = originalPositionFor(traceMap, {
             line: frame.lineNumber!,
@@ -197,7 +214,7 @@ export async function parseErrorStacktrace({
           return {
             ...frame,
             file: isRelativePath(source)
-              ? resolve(frame.file!, '../', source)
+              ? resolve(file, '../', source)
               : (() => {
                   // `source` can be a filesystem path (e.g. `C:\...`) or a URL-like
                   // string (e.g. `webpack://...`). `new URL()` throws for plain paths,

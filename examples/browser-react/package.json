@@ -7,17 +7,17 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@rsbuild/plugin-react": "^2.0.0",
+    "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "playwright": "^1.60.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "playwright": "^1.63.0",
     "typescript": "^6.0.3"
   }
 }

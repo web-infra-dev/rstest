@@ -1,7 +1,5 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { installPackage as installPackageWithPackageManager } from '@antfu/install-pkg';
-import { isTTY } from './helper';
 import { color, logger } from './logger';
 
 type PackageInstaller = (
@@ -13,8 +11,13 @@ type PackageInstaller = (
   },
 ) => Promise<unknown>;
 
+export type PackageInstallerConfirm = (options: {
+  message: string;
+  initialValue: boolean;
+}) => Promise<boolean>;
+
 export type InstallPackageOptions = {
-  confirm?: typeof import('@clack/prompts').confirm;
+  confirm?: PackageInstallerConfirm;
   installPackage?: PackageInstaller;
   message?: string;
 };
@@ -43,23 +46,29 @@ export const installPackage = async (
   root: string,
   options: InstallPackageOptions = {},
 ): Promise<boolean> => {
-  if (!isTTY('stdin')) {
+  if (!options.confirm) {
     return false;
   }
 
-  const confirm = options.confirm ?? (await import('@clack/prompts')).confirm;
-  const shouldInstall = await confirm({
+  const shouldInstall = await options.confirm({
     message: options.message ?? `${packageName} is required. Install it now?`,
     initialValue: true,
   });
 
-  if (shouldInstall !== true) {
+  if (!shouldInstall) {
     return false;
   }
 
   logger.log(color.cyan(`Installing ${packageName}...`));
 
-  const installer = options.installPackage ?? installPackageWithPackageManager;
+  const installer =
+    options.installPackage ??
+    (
+      await import(
+        /* rspackChunkName: 'install-pkg' */
+        '@antfu/install-pkg'
+      )
+    ).installPackage;
   await installer(packageName, {
     cwd: root,
     dev: true,

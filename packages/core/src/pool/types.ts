@@ -1,7 +1,9 @@
 import type { RuntimeRPC, RunWorkerOptions } from '../types';
+import type { RstestPoolType } from '../types/config';
 import type { MemoryGate } from './memoryGate';
+import type { TestEnvironmentModuleFallback } from './protocol';
 
-export type PoolWorkerKind = 'forks' | 'threads';
+export type PoolWorkerKind = RstestPoolType;
 
 export type PoolTask = {
   worker: PoolWorkerKind;
@@ -15,12 +17,8 @@ export type PoolOptions = {
   maxWorkers: number;
   minWorkers: number;
   isolate: boolean;
-  /**
-   * Recycle a reused runner once its last-reported RSS exceeds this
-   * many bytes. Disabled when omitted or `0`. See
-   * `RstestPoolOptions.memoryLimit` for the user-facing knob.
-   */
-  memoryLimitBytes?: number;
+  /** Recycle a VM worker after it reports this much heap usage, when set. */
+  memoryLimit?: number;
   env?: Record<string, string>;
   execArgv?: string[];
   /**
@@ -36,4 +34,6 @@ export type PoolOptions = {
    * a fresh `MemoryGate` by default.
    */
   memoryGate?: MemoryGate;
+  /** Receives each distinct environment prebundle fallback once. */
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };

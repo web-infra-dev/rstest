@@ -1,11 +1,14 @@
-import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import type { SnapshotClient, SnapshotState } from '@vitest/snapshot';
+import { getState } from '@vitest/expect';
+import type {
+  SnapshotClient,
+  SnapshotResult,
+  SnapshotState,
+} from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
   CoverageProvider,
   FormattedError,
-  MatcherState,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   Rstest,
@@ -18,29 +21,171 @@ import type {
   TestFileResult,
   TestResult,
   TestResultStatus,
+  TestSuite,
   WorkerState,
 } from '../../types';
-import { getTaskNameWithPrefix } from '../../utils/helper';
-import { createExpect } from '../api/expect';
-import { formatTestError } from '../util';
+import {
+  ROOT_SUITE_NAME,
+  SYNTHETIC_STACK_ERROR_MESSAGE,
+} from '../../utils/constants';
+import {
+  getFileTaskId,
+  getTaskNameWithPrefix,
+  toNativePath,
+} from '../../utils/helper';
+import { createExpect, getGlobalExpect, resetExpectState } from '../api/expect';
+import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { handleFixtures } from './fixtures';
-import { getFileTaskId } from './index';
+import {
+  createFixtureResolver,
+  FileFixtureManager,
+  workerFixtureManager,
+} from './fixtures';
+import type { FixtureResolver } from './fixtures';
+import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  getWrappedTimeout,
+  inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
+  runWithTimeout,
+  sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
 
 const RealDate = Date;
+const RealAbortController = AbortController;
+
+// Cancellation can start cleanup before setup unwinds. Linked frames let the
+// later phase skip an expired predecessor instead of restoring its deadline.
+type ActiveTimeoutFrame = {
+  active: boolean;
+  previousTestFrame?: ActiveTimeoutFrame;
+  previousTaskFrame?: ActiveTimeoutFrame;
+  startTime: number;
+  task: TestCase | TestSuite;
+  timeout: number;
+};
+
+/**
+ * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
+ * runner is safe when bundled into the web-target browser runtime, where
+ * `process.memoryUsage` does not exist and an unguarded call would crash
+ * (see #1389).
+ */
+export const sampleHeapUsed = (
+  logHeapUsage: boolean | undefined,
+): number | undefined =>
+  logHeapUsage &&
+  typeof process !== 'undefined' &&
+  typeof process.memoryUsage === 'function'
+    ? process.memoryUsage().heapUsed
+    : undefined;
 
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+  private readonly fileFixtureManager = new FileFixtureManager();
+  private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
+  private readonly activeTimeoutFrames = new WeakMap<
+    TestCase | TestSuite,
+    ActiveTimeoutFrame
+  >();
+  private readonly activeTimeoutContexts = new Map<
+    string,
+    ActiveTimeoutFrame
+  >();
+  private readonly abortControllers = new WeakMap<
+    TestContext,
+    AbortController
+  >();
 
   constructor(private readonly taskContext: TaskContext) {}
+
+  private async runWithActiveTimeout<T>(
+    test: TestCase | TestSuite,
+    fn: (...args: any[]) => any,
+    callback: () => T | Promise<T>,
+  ): Promise<T> {
+    const timeout = getWrappedTimeout(fn);
+    if (timeout === undefined) {
+      return callback();
+    }
+
+    const taskId = this.taskContext.getCurrent()?.taskId;
+    const frame: ActiveTimeoutFrame = {
+      active: true,
+      previousTestFrame: this.activeTimeoutFrames.get(test),
+      previousTaskFrame: taskId
+        ? this.activeTimeoutContexts.get(taskId)
+        : undefined,
+      startTime: RealDate.now(),
+      task: test,
+      timeout,
+    };
+    this.activeTimeoutFrames.set(test, frame);
+    test.activeTimeout = timeout;
+    test.activeTimeoutStartTime = frame.startTime;
+    if (taskId) {
+      this.activeTimeoutContexts.set(taskId, frame);
+    }
+    try {
+      return await callback();
+    } finally {
+      frame.active = false;
+      if (this.activeTimeoutFrames.get(test) === frame) {
+        let previousFrame = frame.previousTestFrame;
+        while (previousFrame && !previousFrame.active) {
+          previousFrame = previousFrame.previousTestFrame;
+        }
+        if (previousFrame) {
+          this.activeTimeoutFrames.set(test, previousFrame);
+          test.activeTimeout = previousFrame.timeout;
+          test.activeTimeoutStartTime = previousFrame.startTime;
+        } else {
+          this.activeTimeoutFrames.delete(test);
+          test.activeTimeout = undefined;
+          test.activeTimeoutStartTime = undefined;
+        }
+      }
+      if (taskId && this.activeTimeoutContexts.get(taskId) === frame) {
+        let previousFrame = frame.previousTaskFrame;
+        while (previousFrame && !previousFrame.active) {
+          previousFrame = previousFrame.previousTaskFrame;
+        }
+        if (previousFrame) {
+          this.activeTimeoutContexts.set(taskId, previousFrame);
+        } else {
+          this.activeTimeoutContexts.delete(taskId);
+        }
+      }
+    }
+  }
+
+  async cleanupFileFixtures(
+    result?: TestFileResult,
+  ): Promise<TestFileResult | undefined> {
+    const cleanupStart = RealDate.now();
+    try {
+      await this.fileFixtureManager.cleanup();
+    } catch (error) {
+      if (!result) {
+        throw error;
+      }
+      result.status = 'fail';
+      result.errors = [
+        ...(result.errors ?? []),
+        ...(await formatTestError(error)),
+      ];
+    } finally {
+      if (result?.duration !== undefined) {
+        result.duration += RealDate.now() - cleanupStart;
+      }
+    }
+    return result;
+  }
 
   async runTests({
     tests,
@@ -73,6 +218,7 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
+      retryCount: number,
     ): Promise<TestResult> => {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
@@ -83,6 +229,7 @@ export class TestRunner {
           name: test.name,
           testPath,
           project,
+          meta: test.meta,
         };
         return result;
       }
@@ -94,43 +241,202 @@ export class TestRunner {
           name: test.name,
           testPath,
           project,
+          meta: test.meta,
         };
         return result;
       }
 
       let result: TestResult | undefined;
 
+      test.startTime = undefined;
+
+      // `onTestFinished` / `onTestFailed` are registered from inside the test
+      // body, so each retry / repeat would otherwise stack new handlers on
+      // top of leftovers from prior attempts and rerun them. Snapshot the
+      // current lengths and truncate back after the attempt completes.
+      const onFinishedSnapshot = test.onFinished.length;
+      const onFailedSnapshot = test.onFailed.length;
+
       this.beforeEach(test, state, api);
 
       const cleanups: AfterEachListener[] = [];
+      const fixtureCleanups: (() => Promise<void>)[] = [];
 
-      const fixtureCleanups = await this.beforeRunTest(
+      let skipped = false;
+
+      const skipResult = (): TestResult => ({
+        testId: test.testId,
+        status: 'skip' as const,
+        parentNames: test.parentNames,
+        name: test.name,
+        testPath,
+        project,
+        meta: test.meta,
+      });
+
+      const fixtureResolver = this.beforeRunTest(
         test,
         snapshotClient.getSnapshotState(testPath),
+        fixtureCleanups,
+        retryCount,
       );
-      cleanups.push(...fixtureCleanups);
 
       try {
-        for (const fn of parentHooks.beforeEachListeners) {
-          const cleanupFn = await fn(test.context);
-          if (cleanupFn) cleanups.push(cleanupFn);
-        }
+        await fixtureResolver.resolveTestFixtures(test.originalFn);
       } catch (error) {
-        result = {
-          testId: test.testId,
-          status: 'fail' as const,
-          parentNames: test.parentNames,
-          name: test.name,
-          errors: await formatTestError(error, test),
-          testPath,
-          project,
-        };
+        if (error instanceof TestSkipError) {
+          skipped = true;
+          result = skipResult();
+        } else {
+          result = {
+            testId: test.testId,
+            status: 'fail' as const,
+            parentNames: test.parentNames,
+            name: test.name,
+            errors: await formatTestError(error, test),
+            testPath,
+            project,
+            meta: test.meta,
+          };
+        }
       }
 
-      if (result?.status !== 'fail') {
+      const runPerTestHook = async (
+        fn: BeforeEachListener | AfterEachListener,
+      ): Promise<
+        | { status: 'completed'; cleanup?: AfterEachListener }
+        | { status: 'skipped' }
+        | {
+            status: 'failed';
+            phase: 'fixture' | 'callback';
+            error: unknown;
+          }
+      > => {
+        let callbackStarted = false;
+        const runHook = async (callback: (...args: any[]) => any) => {
+          const resolution =
+            await fixtureResolver.resolveHookFixtures(callback);
+          if (resolution.status === 'skipped') {
+            return { status: 'skipped' as const };
+          }
+          callbackStarted = true;
+          const cleanup = await callback(test.context);
+          return { status: 'completed' as const, cleanup };
+        };
+        let hookExecution: ReturnType<typeof runHook> | undefined;
+        try {
+          return await this.runWithActiveTimeout(test, fn, () =>
+            runWithTimeout(
+              fn,
+              (callback) => {
+                hookExecution = runHook(callback);
+                return hookExecution;
+              },
+              (error) => this.abortContextSignal(test.context, error),
+            ),
+          );
+        } catch (error) {
+          const cancellation =
+            !callbackStarted && fixtureResolver.cancelPendingFixtures();
+          if (cancellation && hookExecution) {
+            const hookCompletion = hookExecution.then(
+              () => ({ status: 'completed' as const }),
+              (fixtureError: unknown) => ({
+                status: 'failed' as const,
+                error: fixtureError,
+              }),
+            );
+            const cancellationProgress = Promise.race([
+              hookCompletion.then((completion) => ({
+                status: 'completed' as const,
+                completion,
+              })),
+              cancellation.teardownStarted.then(() => ({
+                status: 'teardown-started' as const,
+              })),
+            ]);
+            const waitForCancellationProgress = inheritTimeout(
+              fn,
+              () => cancellationProgress,
+            );
+            fixtureCleanups.unshift(async () => {
+              let progress: Awaited<typeof cancellationProgress>;
+              try {
+                progress = await waitForCancellationProgress();
+              } catch {
+                // The original hook timeout is already reported. This timeout
+                // only bounds how long unfinished setup may delay the test.
+                return;
+              }
+              // Once `use` is reached, match normal fixture cleanup semantics:
+              // teardown must finish before the runner continues.
+              const completion =
+                progress.status === 'teardown-started'
+                  ? await hookCompletion
+                  : progress.completion;
+              if (completion.status === 'failed') {
+                throw completion.error;
+              }
+            });
+          }
+          return {
+            status: 'failed',
+            phase: callbackStarted ? 'callback' : 'fixture',
+            error,
+          };
+        }
+      };
+
+      if (!result) {
+        for (const fn of parentHooks.beforeEachListeners) {
+          const hookResult = await runPerTestHook(fn);
+          if (hookResult.status === 'completed') {
+            if (hookResult.cleanup) {
+              cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+            }
+            continue;
+          }
+          if (hookResult.status === 'skipped') {
+            continue;
+          }
+          if (hookResult.error instanceof TestSkipError) {
+            skipped = true;
+            result = skipResult();
+          } else {
+            result = {
+              testId: test.testId,
+              status: 'fail' as const,
+              parentNames: test.parentNames,
+              name: test.name,
+              errors: await formatTestError(hookResult.error, test),
+              testPath,
+              project,
+              meta: test.meta,
+            };
+          }
+          break;
+        }
+      }
+
+      if (!result) {
+        test.startTime = RealDate.now();
+        const runTest = test.fn
+          ? wrapTimeout({
+              name: 'test',
+              fn: test.fn,
+              timeout: test.timeout,
+              stackTraceError: test.stackTraceError,
+              onTimeout: (error) =>
+                this.abortContextSignal(test.context, error),
+              getAssertionCalls: () => {
+                return this.getAssertionState(test).assertionCalls;
+              },
+            })
+          : undefined;
+
         if (test.fails) {
           try {
-            await test.fn?.(test.context);
+            await runTest?.(test.context);
             this.afterRunTest(test);
 
             result = {
@@ -140,41 +446,32 @@ export class TestRunner {
               name: test.name,
               testPath,
               project,
+              meta: test.meta,
               errors: [
                 {
                   message: 'Expect test to fail',
                 },
               ],
             };
-          } catch {
-            result = {
-              testId: test.testId,
-              project,
-              status: 'pass' as const,
-              parentNames: test.parentNames,
-              name: test.name,
-              testPath,
-            };
+          } catch (error) {
+            if (error instanceof TestSkipError) {
+              skipped = true;
+              result = skipResult();
+            } else {
+              result = {
+                testId: test.testId,
+                project,
+                status: 'pass' as const,
+                parentNames: test.parentNames,
+                name: test.name,
+                testPath,
+                meta: test.meta,
+              };
+            }
           }
         } else {
           try {
-            if (test.fn) {
-              const fn = wrapTimeout({
-                name: 'test',
-                fn: test.fn,
-                timeout: test.timeout,
-                stackTraceError: test.stackTraceError,
-                getAssertionCalls: () => {
-                  const expect = (test.context as any)._useLocalExpect
-                    ? test.context.expect
-                    : (globalThis as any)[GLOBAL_EXPECT];
-                  const { assertionCalls } = getState(expect);
-
-                  return assertionCalls;
-                },
-              });
-              await fn(test.context);
-            }
+            await runTest?.(test.context);
             this.afterRunTest(test);
             result = {
               testId: test.testId,
@@ -183,41 +480,82 @@ export class TestRunner {
               name: test.name,
               status: 'pass' as const,
               testPath,
+              meta: test.meta,
             };
           } catch (error) {
-            result = {
-              testId: test.testId,
-              project,
-              status: 'fail' as const,
-              parentNames: test.parentNames,
-              name: test.name,
-              errors: await formatTestError(error, test),
-              testPath,
-            };
+            if (error instanceof TestSkipError) {
+              skipped = true;
+              result = skipResult();
+            } else {
+              result = {
+                testId: test.testId,
+                project,
+                status: 'fail' as const,
+                parentNames: test.parentNames,
+                name: test.name,
+                errors: await formatTestError(error, test),
+                testPath,
+                meta: test.meta,
+              };
+            }
           }
         }
       }
 
+      test.startTime = undefined;
+
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups)
-        .concat(test.onFinished);
+        .concat(cleanups);
 
       test.context.task.result = result;
-      try {
-        for (const fn of afterEachFns) {
-          await fn(test.context);
+      for (const fn of afterEachFns) {
+        const hookResult = await runPerTestHook(fn);
+        if (
+          hookResult.status === 'completed' ||
+          hookResult.status === 'skipped'
+        ) {
+          continue;
         }
-      } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
-        result.errors.push(...(await formatTestError(error)));
+        result.errors.push(...(await formatTestError(hookResult.error)));
+        test.context.task.result = result;
+        if (hookResult.phase === 'callback') {
+          break;
+        }
+      }
+
+      for (const fn of fixtureCleanups) {
+        try {
+          await fn();
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
+      }
+
+      for (const fn of [...test.onFinished]) {
+        try {
+          await this.runWithActiveTimeout(test, fn, () => fn(test.context));
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
+      }
+
+      if (skipped) {
+        snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
 
       if (result.status === 'fail') {
         for (const fn of [...test.onFailed].reverse()) {
           try {
-            await fn(test.context);
+            await this.runWithActiveTimeout(test, fn, () => fn(test.context));
           } catch (error) {
             result.errors ??= [];
             result.errors.push(...(await formatTestError(error)));
@@ -226,6 +564,11 @@ export class TestRunner {
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
+
+      result.meta = test.meta;
+
+      test.onFinished.length = onFinishedSnapshot;
+      test.onFailed.length = onFailedSnapshot;
 
       this.resetCurrentTest();
 
@@ -243,14 +586,15 @@ export class TestRunner {
     ): Promise<TestResult[]> => {
       const tests = [...allTest];
       const results: TestResult[] = [];
+      let testIndex = 0;
 
-      while (tests.length) {
-        const suite = tests.shift()!;
+      while (testIndex < tests.length) {
+        const suite = tests[testIndex++]!;
 
         if (suite.concurrent) {
           const cases = [suite];
-          while (tests[0]?.concurrent) {
-            cases.push(tests.shift()!);
+          while (tests[testIndex]?.concurrent) {
+            cases.push(tests[testIndex++]!);
           }
 
           const result = await Promise.all(
@@ -288,6 +632,7 @@ export class TestRunner {
         project,
         duration: 0,
         errors: [],
+        meta: test.meta,
       };
 
       if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
@@ -296,15 +641,15 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
-        result = await this.taskContext.run(
-          {
-            taskId: test.testId,
-            taskName: test.name,
-            taskParentNames: test.parentNames,
-            taskType: 'suite',
-            testPath,
-          },
-          async () => {
+        const suiteTask = {
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'suite' as const,
+          testPath,
+        };
+        const runSuite = () =>
+          this.taskContext.run(suiteTask, async () => {
             const start = RealDate.now();
 
             hooks.onTestSuiteStart?.({
@@ -316,40 +661,55 @@ export class TestRunner {
               type: 'suite',
               location: test.location,
               runMode: test.runMode,
+              meta: test.meta,
             });
 
             if (test.tests.length === 0) {
               if (['todo', 'skip'].includes(test.runMode)) {
                 defaultStatus = 'skip';
-                hooks.onTestSuiteResult?.(result);
-                return result;
-              }
-              if (passWithNoTests) {
+              } else if (passWithNoTests) {
                 result.status = 'pass';
-                hooks.onTestSuiteResult?.(result);
-                return result;
+              } else {
+                result.status = 'fail';
+                result.errors?.push({
+                  message: `No test found in suite: ${test.name}`,
+                  name: 'No tests',
+                });
               }
-              const noTestError = {
-                message: `No test found in suite: ${test.name}`,
-                name: 'No tests',
-              };
 
-              result.errors?.push(noTestError);
+              hooks.onTestSuiteResult?.(result);
+              return result;
             }
 
+            const shouldRunSuiteHooks =
+              test.hasRunnableTests === true &&
+              ['run', 'only'].includes(test.runMode);
             const cleanups: ((ctx: SuiteContext) => void)[] = [];
             let hasBeforeAllError = false;
+            const suiteContext: SuiteContext = {
+              // `ctx.filepath` is user-facing; expose the OS-native path
+              // so it matches `__filename`/`import.meta.filename` (#1465).
+              filepath: toNativePath(testPath),
+              get meta() {
+                return (test.meta ??= {});
+              },
+              set meta(value) {
+                test.meta = cloneTaskMeta(value);
+                result.meta = test.meta;
+              },
+            };
 
-            if (
-              ['run', 'only'].includes(test.runMode) &&
-              test.beforeAllListeners
-            ) {
+            if (shouldRunSuiteHooks && test.beforeAllListeners) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await fn({
-                    filepath: testPath,
-                  });
-                  if (cleanupFn) cleanups.push(cleanupFn);
+                  const cleanupFn = await this.runWithActiveTimeout(
+                    test,
+                    fn,
+                    () => fn(suiteContext),
+                  );
+                  if (cleanupFn) {
+                    cleanups.push(inheritTimeout(fn, cleanupFn));
+                  }
                 }
               } catch (error) {
                 hasBeforeAllError = true;
@@ -374,12 +734,12 @@ export class TestRunner {
               .reverse()
               .concat(cleanups);
 
-            if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
+            if (shouldRunSuiteHooks && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await fn({
-                    filepath: testPath,
-                  });
+                  await this.runWithActiveTimeout(test, fn, () =>
+                    fn(suiteContext),
+                  );
                 }
               } catch (error) {
                 result.errors?.push(...(await formatTestError(error)));
@@ -393,8 +753,8 @@ export class TestRunner {
             hooks.onTestSuiteResult?.(result);
 
             return result;
-          },
-        );
+          });
+        result = await runSuite();
 
         errors.push(...(result.errors || []));
       } else {
@@ -408,7 +768,17 @@ export class TestRunner {
           },
           async () => {
             const start = RealDate.now();
-            let retryCount = 0;
+            // Per-test override wins over config.retry. `retry` (the runtime
+            // config) is the suite-wide default.
+            const retryBudget = sanitizeAttemptCount(test.retry ?? retry);
+            // Treat negative / NaN / fractional repeats as 0 so the outer
+            // loop always runs at least once. Without this, an invalid
+            // `repeats` value would silently report the case as skipped.
+            const repeats = sanitizeAttemptCount(test.repeats ?? 0);
+            let totalRetryCount = 0;
+            // `retryErrors` aggregates every failed attempt across all
+            // repeats so a final pass can surface the full flakiness picture
+            // via `result.retryErrors`.
             const retryErrors: FormattedError[] = [];
 
             hooks.onTestCaseStart?.({
@@ -422,34 +792,58 @@ export class TestRunner {
               type: 'case',
               location: test.location,
               runMode: test.runMode,
+              meta: test.meta,
             });
 
-            do {
-              const currentResult = await runTestsCase(test, parentHooks);
+            for (let repeat = 0; repeat <= repeats; repeat++) {
+              let retryCount = 0;
+              // Scoped per repeat so a terminal failure does not get
+              // attributed errors from earlier repeats that already passed.
+              const repeatRetryErrors: FormattedError[] = [];
+              do {
+                const currentResult = await runTestsCase(
+                  test,
+                  parentHooks,
+                  retryCount,
+                );
 
-              if (currentResult.status === 'fail') {
-                retryErrors.push(...(currentResult.errors || []));
+                if (currentResult.status === 'fail') {
+                  repeatRetryErrors.push(
+                    ...(currentResult.errors || []).map((error) => ({
+                      ...error,
+                      retryCount:
+                        retryBudget > 0 ? retryCount : error.retryCount,
+                    })),
+                  );
+                }
+
+                result = {
+                  ...currentResult,
+                  errors:
+                    currentResult.status === 'fail'
+                      ? [...repeatRetryErrors]
+                      : currentResult.errors,
+                };
+
+                retryCount++;
+              } while (retryCount <= retryBudget && result.status === 'fail');
+
+              totalRetryCount += retryCount - 1;
+              retryErrors.push(...repeatRetryErrors);
+
+              // `repeats` semantics: any failure short-circuits remaining
+              // repeats. Pass/skip/todo continue to the next repeat.
+              if (result.status === 'fail') {
+                break;
               }
-
-              result = {
-                ...currentResult,
-                errors:
-                  currentResult.status === 'fail'
-                    ? [...retryErrors]
-                    : currentResult.errors,
-              };
-
-              retryCount++;
-            } while (retryCount <= retry && result.status === 'fail');
+            }
 
             result.duration = RealDate.now() - start;
-            result.retryCount = retryCount - 1;
+            result.retryCount = totalRetryCount;
             if (result.status === 'pass' && retryErrors.length > 0) {
               result.retryErrors = retryErrors;
             }
-            result.heap = state.runtimeConfig.logHeapUsage
-              ? process.memoryUsage().heapUsed
-              : undefined;
+            result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
             hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
@@ -480,9 +874,7 @@ export class TestRunner {
         name: '',
         status: 'fail',
         results,
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -497,8 +889,18 @@ export class TestRunner {
       afterEachListeners: [],
     });
 
+    const fileMeta = tests.find(
+      (test) => test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    )?.meta;
+
     // saves files and returns SnapshotResult
-    const snapshotResult = await snapshotClient.finish(testPath);
+    await hooks.onSnapshotFinishStart?.();
+    let snapshotResult: SnapshotResult;
+    try {
+      snapshotResult = await snapshotClient.finish(testPath);
+    } finally {
+      await hooks.onSnapshotFinishEnd?.();
+    }
 
     this.taskContext.setFallback({
       taskId: getFileTaskId(testPath),
@@ -512,14 +914,13 @@ export class TestRunner {
         project,
         testPath,
         name: '',
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
         results,
         snapshotResult,
         errors,
         duration: RealDate.now() - start,
+        meta: fileMeta,
       };
     } finally {
       this.taskContext.setFallback(undefined);
@@ -536,6 +937,11 @@ export class TestRunner {
 
   getCurrentTest(): TestCase | undefined {
     return this._test;
+  }
+
+  getCurrentTimeoutContext(): TestCase | TestSuite | undefined {
+    const taskId = this.taskContext.getCurrent()?.taskId;
+    return taskId ? this.activeTimeoutContexts.get(taskId)?.task : undefined;
   }
 
   private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {
@@ -568,33 +974,56 @@ export class TestRunner {
     }
   }
 
-  private createTestContext(test: TestCase): TestContext {
+  private createTestContext(test: TestCase, retryCount: number): TestContext {
     const context = (() => {
       throw new Error('done() callback is deprecated, use promise instead');
     }) as unknown as TestContext;
 
-    let _expect: RstestExpect | undefined;
-
     const current = this._test;
+    const abortController = new RealAbortController();
+    this.abortControllers.set(context, abortController);
 
-    context.task = { id: test.testId, name: test.name };
+    Object.defineProperty(context, 'signal', {
+      configurable: true,
+      value: abortController.signal,
+    });
+
+    context.task = {
+      id: test.testId,
+      name: test.name,
+      filepath: toNativePath(test.testPath),
+      projectRoot: toNativePath(this.workerState!.projectRoot),
+      retryCount,
+      get meta() {
+        return (test.meta ??= {});
+      },
+      set meta(value) {
+        test.meta = cloneTaskMeta(value);
+      },
+    };
 
     Object.defineProperty(context, 'expect', {
       get: () => {
-        if (!_expect) {
-          _expect = createExpect({
-            workerState: this.workerState!,
+        let expect = this.localExpects.get(context);
+        if (!expect) {
+          expect = createExpect({
+            getWorkerState: () => this.workerState!,
             getCurrentTest: () => current,
           });
+          this.localExpects.set(context, expect);
         }
-        return _expect;
+        return expect;
+      },
+    });
+
+    Object.defineProperty(context, 'skip', {
+      value: () => {
+        throw new TestSkipError('Test skipped');
       },
     });
 
     Object.defineProperty(context, '_useLocalExpect', {
-      get() {
-        return _expect != null;
-      },
+      get: () => this.localExpects.has(context),
     });
 
     Object.defineProperty(context, 'onTestFinished', {
@@ -628,8 +1057,9 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFinished hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
+        onTimeout: (error) => this.abortContextSignal(test.context, error),
+        stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }
@@ -646,33 +1076,32 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFailed hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
+        onTimeout: (error) => this.abortContextSignal(test.context, error),
+        stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }
 
-  private async beforeRunTest(
+  private beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
-  ): Promise<(() => Promise<void>)[]> {
-    setState<MatcherState>(
-      {
-        assertionCalls: 0,
-        isExpectingAssertions: false,
-        isExpectingAssertionsError: null,
-        expectedAssertionsNumber: null,
-        expectedAssertionsNumberErrorGen: null,
-        testPath: test.testPath,
-        snapshotState,
-        currentTestName: getTaskNameWithPrefix(test),
-      },
-      (globalThis as any)[GLOBAL_EXPECT],
-    );
+    fixtureCleanups: (() => Promise<void>)[],
+    retryCount: number,
+  ): FixtureResolver {
+    // @vitest/expect records soft failures on the test object; each attempt must
+    // start clean because retry history is preserved separately in retryErrors.
+    test.result = undefined;
+    resetExpectState(getGlobalExpect(), {
+      // `expect.getState().testPath` is user-facing; expose the OS-native
+      // path (equal to `import.meta.filename`). Internal consumers
+      // (snapshot, reporter, related) keep the POSIX `test.testPath` (#1465).
+      testPath: toNativePath(test.testPath),
+      snapshotState,
+      currentTestName: getTaskNameWithPrefix(test),
+    });
 
-    const context = this.createTestContext(test);
-
-    const { cleanups } = await handleFixtures(test, context);
+    const context = this.createTestContext(test, retryCount);
 
     // create test context
     Object.defineProperty(test, 'context', {
@@ -680,25 +1109,98 @@ export class TestRunner {
       enumerable: false,
     });
 
-    return cleanups;
+    return createFixtureResolver(test, context, fixtureCleanups, {
+      fileFixtureManager: this.fileFixtureManager,
+      workerFixtureManager,
+      runNamedFixtureSetup: (setup, onTimeout) => {
+        const wrappedSetup = wrapTimeout({
+          name: 'fixture setup',
+          fn: setup,
+          timeout: test.timeout,
+          onTimeout: (error) => {
+            this.abortContextSignal(context, error);
+            onTimeout();
+          },
+          stackTraceError: test.stackTraceError,
+        });
+        return this.runWithActiveTimeout(test, wrappedSetup, () =>
+          wrappedSetup(),
+        );
+      },
+      wrapNamedFixtureCleanup: (cleanup) => {
+        const timeoutWrappedCleanup = wrapTimeout({
+          name: 'fixture cleanup',
+          fn: cleanup,
+          timeout: test.timeout,
+          onTimeout: (error) => this.abortContextSignal(context, error),
+          stackTraceError: test.stackTraceError,
+        });
+        return () =>
+          this.runWithActiveTimeout(
+            test,
+            timeoutWrappedCleanup,
+            timeoutWrappedCleanup,
+          );
+      },
+    });
+  }
+
+  private abortContextSignal(context: TestContext, error: Error): void {
+    this.abortControllers.get(context)?.abort(error);
+  }
+
+  private getAssertionState(test: TestCase) {
+    const globalExpect = getGlobalExpect();
+    const globalState = getState(globalExpect);
+    const localExpect = this.localExpects.get(test.context);
+    if (!localExpect) {
+      return globalState;
+    }
+
+    const localState = getState(localExpect);
+    if (test.concurrent) {
+      return localState;
+    }
+
+    const assertionCalls =
+      globalState.assertionCalls + localState.assertionCalls;
+    const hasLocalAssertionCount = localState.expectedAssertionsNumber !== null;
+    const hasLocalAssertionRequirement = localState.isExpectingAssertions;
+
+    return {
+      ...localState,
+      assertionCalls,
+      expectedAssertionsNumber: hasLocalAssertionCount
+        ? localState.expectedAssertionsNumber
+        : globalState.expectedAssertionsNumber,
+      expectedAssertionsNumberErrorGen: hasLocalAssertionCount
+        ? localState.expectedAssertionsNumberErrorGen
+        : globalState.expectedAssertionsNumberErrorGen,
+      isExpectingAssertions:
+        globalState.isExpectingAssertions || localState.isExpectingAssertions,
+      isExpectingAssertionsError: hasLocalAssertionRequirement
+        ? localState.isExpectingAssertionsError
+        : globalState.isExpectingAssertionsError,
+    };
   }
 
   private afterRunTest(test: TestCase): void {
-    // @ts-expect-error
-    const expect = test.context._useLocalExpect
-      ? test.context.expect
-      : (globalThis as any)[GLOBAL_EXPECT];
-
     const {
       assertionCalls,
       expectedAssertionsNumber,
       expectedAssertionsNumberErrorGen,
       isExpectingAssertions,
       isExpectingAssertionsError,
-    } = getState(expect);
+    } = this.getAssertionState(test);
 
     if (test.result?.state === 'fail') {
       throw test.result.errors;
+    }
+
+    const localExpect = this.localExpects.get(test.context);
+    if (localExpect && !test.concurrent) {
+      getGlobalExpect().setState({ assertionCalls });
+      localExpect.setState({ assertionCalls });
     }
 
     if (

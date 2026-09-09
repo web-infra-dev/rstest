@@ -1,132 +1,93 @@
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { basename, dirname, join, resolve } from 'pathe';
-import { getFileTaskId } from '../runtime/runner';
+import { dirname, join, resolve } from 'pathe';
 import type {
   CoverageMapData,
   EntryInfo,
   FormattedError,
-  ProjectContext,
-  RstestContext,
+  InternalContext,
+  InternalProjectContext,
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
-  TestFileInfo,
   TestFileResult,
   TestInfo,
   TestResult,
-  TestSuiteInfo,
-  UserConsoleLog,
+  TestEnvironmentModuleReference,
 } from '../types';
 import {
   color,
-  getForceColorEnv,
+  getFileTaskId,
   isDeno,
+  logger,
   needFlagExperimentalDetectModule,
+  pickColorEnv,
   toError,
 } from '../utils';
-import type { TraceEvent } from '../utils/trace';
+import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { createDefaultMemoryGate } from './memoryGate';
-import { parseMemoryLimit } from './parseMemoryLimit';
+import {
+  getNumCpus,
+  isVmPoolType,
+  parseMemoryLimit,
+  parseWorkers,
+} from '../utils/workers';
+import { selectMemoryGate } from './memoryGate';
+import { assertWorkerEnvironmentOptions } from './workerOptions';
+import { getEnvironmentKey } from '../core/environmentGroups';
+import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
+import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import { composeWorkerEnv } from '../core/workerEnv';
+import { prepareAssetFilesForIPC } from '../utils/assetFiles';
+import {
+  type BundleCoverageResult,
+  isBundleCoverageDebugEnabled,
+} from '../core/bundleCoverage';
+import {
+  createRunnerEventSink,
+  type RunnerEventSink,
+  sinkToRuntimeRpc,
+} from '../core/runnerEventSink';
 import { Pool } from './pool';
-import type { PoolWorkerKind } from './types';
+import type { PoolTask, PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const getNumCpus = (): number => {
-  return os.availableParallelism?.() ?? os.cpus().length;
-};
+const getWorkerConfig = (
+  context: InternalContext,
+  project: InternalProjectContext,
+) => ({
+  runtimeConfig: projectRuntimeConfig(project, {
+    envMode: 'inherit',
+    env: composeWorkerEnv(context.workerEnv),
+  }),
+  deletedEnvKeys: Object.keys(context.workerEnv).filter(
+    (key) => context.workerEnv[key] === undefined,
+  ),
+});
 
-const parseWorkers = (maxWorkers: string | number): number => {
-  const parsed = Number.parseInt(maxWorkers.toString(), 10);
+const VM_WORKER_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
-  if (typeof maxWorkers === 'string' && maxWorkers.trim().endsWith('%')) {
-    const numCpus = getNumCpus();
-    const workers = Math.floor((parsed / 100) * numCpus);
-    return Math.max(workers, 1);
-  }
+const getVmWorkerCacheLimit = (
+  memoryLimit: number | undefined,
+): number | undefined =>
+  memoryLimit === undefined
+    ? undefined
+    : Math.min(VM_WORKER_CACHE_MAX_BYTES, Math.floor(memoryLimit / 4));
 
-  return parsed > 0 ? parsed : 1;
-};
-
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
-  const {
-    testNamePattern,
-    testTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    hookTimeout,
-    isolate,
-    coverage,
-    snapshotFormat,
-    env,
-    logHeapUsage,
-    detectAsyncLeaks,
-    bail,
-    chaiConfig,
-    includeTaskLocation,
-    silent,
-  } = context.normalizedConfig;
-
-  return {
-    env: {
-      // get process.env correctly when globalSetup modified it
-      ...process.env,
-      ...env,
-    },
-    testNamePattern,
-    testTimeout,
-    hookTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    isolate,
-    coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
-    snapshotFormat,
-    logHeapUsage,
-    detectAsyncLeaks,
-    bail,
-    chaiConfig,
-    includeTaskLocation,
-    silent,
-  };
-};
-
-const filterAssetsByEntry = async (
+const getAssetNames = (
   entryInfo: EntryInfo,
-  getAssetFiles: (names: string[]) => Promise<Record<string, string>>,
-  getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
-) => {
-  const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
-  const [neededFiles, neededSourceMaps] = await Promise.all([
-    getAssetFiles(assetNames),
-    getSourceMaps(assetNames),
-  ]);
+  allAssetNames: string[] | undefined,
+  federation: boolean,
+): string[] => {
+  const entryAssetNames =
+    federation && allAssetNames
+      ? allAssetNames.filter((name) => !name.endsWith('.map'))
+      : entryInfo.files!;
 
-  return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
+  return Array.from(new Set([...entryAssetNames, ...setupAssets]));
 };
 
 const getNodeExecArgv = () => {
@@ -146,11 +107,14 @@ const getNodeExecArgv = () => {
 /** Shared parameter type for `runTests` and `collectTests`. */
 type PoolDispatchParams = {
   entries: EntryInfo[];
-  getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+  assetNames: string[];
+  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
-  project: ProjectContext;
+  project: InternalProjectContext;
+  /** Per-compile id threaded to the worker for rebuild-boundary cache flushing (#1373). Defaults to `0`. */
+  buildId?: number;
 };
 
 /**
@@ -165,55 +129,147 @@ const buildTask = async ({
   context,
   project,
   runtimeConfig,
+  deletedEnvKeys,
   setupEntries,
   setupAssets,
+  assetNames,
   updateSnapshot,
   getAssetFiles,
   getSourceMaps,
   rpcMethods,
+  traceSpan,
+  testEnvironmentModule,
+  buildId = 0,
+  workerCacheLimit,
+  captureBundleCoverage = false,
 }: {
   type: 'run' | 'collect';
   workerKind: PoolWorkerKind;
   entryInfo: EntryInfo;
   index: number;
-  context: RstestContext;
-  project: ProjectContext;
+  context: InternalContext;
+  project: InternalProjectContext;
   runtimeConfig: RuntimeConfig;
+  deletedEnvKeys: string[];
   setupEntries: EntryInfo[];
   setupAssets: string[];
+  assetNames: string[];
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
-}) => {
-  const getAssets = () =>
-    filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
+  traceSpan: TraceSpan;
+  testEnvironmentModule?: TestEnvironmentModuleReference;
+  buildId?: number;
+  workerCacheLimit?: number;
+  captureBundleCoverage?: boolean;
+}): Promise<{
+  task: PoolTask;
+  bundleCoverageAssets?: Record<string, number>;
+}> => {
+  const bundleCoverageAssets: Record<string, number> | undefined =
+    captureBundleCoverage ? {} : undefined;
+  const taskAssetNames = getAssetNames(
+    entryInfo,
+    setupAssets,
+    assetNames,
+    project.normalizedConfig.federation,
+  );
+  const getAssets = async (
+    requestedAssetNames = taskAssetNames,
+    requestedSourceMapNames = requestedAssetNames,
+  ) => {
+    const [neededFiles, neededSourceMaps] = await Promise.all([
+      getAssetFiles(requestedAssetNames),
+      getSourceMaps(requestedSourceMapNames),
+    ]);
+    const assets = {
+      assetFiles: neededFiles,
+      sourceMaps: neededSourceMaps,
+    };
+    if (bundleCoverageAssets) {
+      for (const [name, content] of Object.entries(assets.assetFiles)) {
+        bundleCoverageAssets[name] = content.byteLength;
+      }
+    }
+    return {
+      ...assets,
+      assetFiles: prepareAssetFilesForIPC(assets.assetFiles, workerKind),
+    };
+  };
+  const traceArgs = {
+    project: project.name,
+    testPath: entryInfo.testPath,
+    type,
+  };
 
   return {
-    worker: workerKind,
-    type,
-    options: {
-      entryInfo,
-      context: {
-        outputModule: project.outputModule,
-        taskId: index + 1,
-        project: project.name,
-        rootPath: context.rootPath,
-        projectRoot: project.rootPath,
-        runtimeConfig,
-        trace: context.trace,
-      },
+    task: {
+      worker: workerKind,
       type,
-      setupEntries,
-      updateSnapshot,
-      /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
-      assets: isMemorySufficient() ? await getAssets() : undefined,
+      options: {
+        entryInfo,
+        assetNames: taskAssetNames,
+        // Known limit: the config portion is `stableJson`, so environment option
+        // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
+        // function, a `virtualConsole` instance) collapse to identical bytes —
+        // two projects differing only in such values may share a worker's
+        // environment under `isolate: false`. Accepted as too narrow to guard;
+        // if it ever matters, fall back to a project-scoped key when the config
+        // is not JSON-representable instead of trying to serialize those values.
+        environmentKey: [
+          getEnvironmentKey(
+            runtimeConfig.testEnvironment,
+            testEnvironmentModule,
+          ),
+          JSON.stringify(pickColorEnv(runtimeConfig.env)),
+        ].join('\0'),
+        context: {
+          outputModule: project.outputModule,
+          taskId: index + 1,
+          buildId,
+          project: project.name,
+          pool: workerKind,
+          rootPath: context.rootPath,
+          projectRoot: project.rootPath,
+          runtimeConfig,
+          testEnvironmentModule,
+          workerCacheLimit: captureBundleCoverage
+            ? undefined
+            : workerCacheLimit,
+          trace: context.trace,
+        },
+        deletedEnvKeys,
+        type,
+        setupEntries,
+        updateSnapshot,
+        // Bundle coverage needs the complete per-task asset map, so its debug
+        // mode deliberately bypasses the VM pool cache. In normal runs, VM
+        // pools use the lazy path below and cache shared assets by name.
+        assets:
+          (!isVmPoolType(workerKind) || captureBundleCoverage) &&
+          isMemorySufficient() &&
+          !project.normalizedConfig.federation
+            ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+                ...traceArgs,
+                mode: 'eager',
+              })
+            : undefined,
+      },
+      rpcMethods: {
+        ...rpcMethods,
+        // VM pools use this path for their per-worker asset cache; other pools
+        // use it when eager host-side asset delivery is not safe.
+        getAssetsByEntry: (requestedAssetNames, requestedSourceMapNames) =>
+          traceSpan(
+            'host:get-assets-by-entry',
+            'host',
+            () => getAssets(requestedAssetNames, requestedSourceMapNames),
+            { ...traceArgs, mode: 'rpc' },
+          ),
+      },
     },
-    rpcMethods: {
-      ...rpcMethods,
-      // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-      getAssetsByEntry: getAssets,
-    },
+    bundleCoverageAssets,
   };
 };
 
@@ -221,13 +277,18 @@ const buildTask = async ({
  * Convert a worker crash or pool error into a fail-status `TestFileResult`.
  * Enriches the error with context about which test cases were running at the
  * time of the crash (if any).
+ *
+ * Returns the file result plus the synthetic `crashedResults` (the cases that
+ * were running at crash time). The caller replays those through the live
+ * `onTestCaseResult` reporter hook so incremental reporters stay consistent
+ * with the final totals — they are already included in `fileResult.results`.
  */
 const workerErrorToResult = (
   err: unknown,
   testPath: string,
   projectName: string,
-  context: RstestContext,
-): TestFileResult => {
+  context: InternalContext,
+): { fileResult: TestFileResult; crashedResults: TestResult[] } => {
   const error = toError(err);
 
   (error as any).fullStack = true;
@@ -237,7 +298,17 @@ const workerErrorToResult = (
 
   const runningModule = context.stateManager.runningModules.get(testPath);
   const runningTests = runningModule?.runningTests;
+  const completedResults = runningModule?.results || [];
 
+  let results = completedResults;
+  let crashedResults: TestResult[] = [];
+  // The crash error stays at the file level unless we can attribute it to a
+  // running case below, in which case it moves onto that case.
+  let errors = [error];
+
+  // When the worker dies mid-test, attribute the crash to the test case(s) that
+  // were running so they surface as failed test cases in the `Tests` totals,
+  // instead of the case silently vanishing from the counts (#1535).
   if (runningTests?.length) {
     const getCaseName = (test: TestCaseInfo) =>
       `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
@@ -248,40 +319,65 @@ const workerErrorToResult = (
         : `The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningTests.map((t) => getCaseName(t)).join('\n  - ')}`;
 
     error.message += `\n\n${color.white(hint)}`;
+
+    crashedResults = runningTests.map((test) => ({
+      testId: test.testId,
+      status: 'fail',
+      name: test.name,
+      testPath: test.testPath,
+      parentNames: test.parentNames,
+      project: test.project,
+      errors: [error],
+    }));
+
+    results = [...completedResults, ...crashedResults];
+    // The error is attributed to the crashed case(s) above; keep it off the
+    // file-level result so the failing-tests summary doesn't print it twice.
+    errors = [];
   }
 
   return {
-    testId: getFileTaskId(testPath),
-    project: projectName,
-    testPath,
-    status: 'fail',
-    name: '',
-    results: runningModule?.results || [],
-    errors: [error],
+    fileResult: {
+      testId: getFileTaskId(testPath),
+      project: projectName,
+      testPath,
+      status: 'fail',
+      name: '',
+      results,
+      errors,
+    },
+    crashedResults,
   };
 };
 
 export const createPool = async ({
   context,
-  recommendWorkerCount = Number.POSITIVE_INFINITY,
+  testEnvironmentModules,
 }: {
-  context: RstestContext;
-  recommendWorkerCount?: number;
+  context: InternalContext;
+  testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
 }): Promise<{
   runTests: (params: {
     entries: EntryInfo[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+    assetNames: string[];
+    getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
-    project: ProjectContext;
+    project: InternalProjectContext;
+    /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
+    buildId?: number;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
+    onRawCoverageResult?: (coverage: unknown) => void;
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
+    /** Records host-side pool slices in the caller-owned Perfetto trace. */
+    traceSpan: TraceSpan;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
+    bundleCoverage: BundleCoverageResult[];
   }>;
   collectTests: (params: PoolDispatchParams) => Promise<
     {
@@ -291,34 +387,15 @@ export const createPool = async ({
       project: string;
     }[]
   >;
+  /**
+   * Tear down worker-scoped fixtures before a one-shot run is finalized.
+   * Watch mode keeps workers alive across cycles and owns this at shutdown.
+   */
+  cleanupWorkerFixtures: () => Promise<Error[]>;
+  /** Drain errors from reusable workers retired during a watch cycle. */
+  drainWorkerStopErrors: () => Promise<Error[]>;
   close: () => Promise<void>;
 }> => {
-  const shouldEmitUserConsoleLog = ({
-    log,
-    projectConfig,
-  }: {
-    log: UserConsoleLog;
-    projectConfig: ProjectContext['normalizedConfig'];
-  }): boolean => {
-    return projectConfig.onConsoleLog?.(log.content) !== false;
-  };
-
-  const emitUserConsoleLog = async ({
-    log,
-    projectConfig,
-  }: {
-    log: UserConsoleLog;
-    projectConfig: ProjectContext['normalizedConfig'];
-  }): Promise<void> => {
-    if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
-      return;
-    }
-
-    await Promise.all(
-      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-    );
-  };
-
   // Propagate parent execArgv to workers, except flags known to cause issues
   // in child processes (--prof writes per-worker profiling logs, --title is
   // meaningless for workers). Safe for child_process.fork; the referenced
@@ -340,217 +417,246 @@ export const createPool = async ({
 
   const {
     normalizedConfig: { pool: poolOptions, isolate },
-    reporters,
   } = context;
 
   const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
-  const threadsCount =
+  const recommendCount =
     context.command === 'watch'
       ? Math.max(Math.floor(numCpus / 2), 1)
       : Math.max(numCpus - 1, 1);
 
-  // Avoid creating unused workers when the number of tests is less than the default thread count.
-  const recommendCount =
-    context.command === 'watch'
-      ? threadsCount
-      : Math.min(recommendWorkerCount, threadsCount);
-
   const maxWorkers = poolOptions.maxWorkers
-    ? parseWorkers(poolOptions.maxWorkers)
+    ? parseWorkers(poolOptions.maxWorkers, numCpus)
     : recommendCount;
 
-  const minWorkers = poolOptions.minWorkers
-    ? parseWorkers(poolOptions.minWorkers)
-    : maxWorkers < recommendCount
-      ? maxWorkers
-      : recommendCount;
-
-  if (maxWorkers < minWorkers) {
-    throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
-  }
-
-  // `memoryLimit` only matters when runners are reused (`isolate: false`);
-  // otherwise workers are single-use, so the recycle check would be dead
-  // code. Parse to bytes here so the pool stores a single int.
-  const memoryLimitBytes =
-    isolate === false ? parseMemoryLimit(poolOptions.memoryLimit) : undefined;
+  // Internal idle-runner floor for `isolate: false`. It is not user-tunable
+  // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
+  const minWorkers = Math.min(maxWorkers, recommendCount);
+  const memoryLimit = isVmPoolType(workerKind)
+    ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
+    : undefined;
+  const workerCacheLimit = isVmPoolType(workerKind)
+    ? getVmWorkerCacheLimit(memoryLimit)
+    : undefined;
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
-    isolate,
+    // VM pools amortize worker startup while recreating the VM realm for every
+    // file, so host worker reuse is independent of the user's isolate setting.
+    // VM runtime lifecycle branches remain file-scoped by pool type.
+    isolate: isVmPoolType(workerKind) ? false : isolate,
+    // VM contexts can retain module and realm allocations until their worker
+    // exits. Recycle from the worker's own V8 heap report, like Jest and
+    // Vitest, while keeping the worker alive below the limit. The default
+    // gives each VM worker an equal share of the machine memory.
+    memoryLimit,
     maxWorkers,
     minWorkers,
-    memoryLimitBytes,
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    env: {
-      NODE_ENV: 'test',
-      ...getForceColorEnv(),
-      ...process.env,
-    } as Record<string, string>,
-    memoryGate: createDefaultMemoryGate(),
+    memoryGate: selectMemoryGate(workerKind),
+    onTestEnvironmentFallback: ({ packageName, reason }) => {
+      logger.warn(
+        formatTestEnvironmentPrebundleFallbackWarning(packageName, reason),
+      );
+    },
   });
 
-  const createRpcMethods = ({
-    runtimeConfig,
-    projectConfig,
-  }: {
-    runtimeConfig: RuntimeConfig;
-    projectConfig: ProjectContext['normalizedConfig'];
-  }): Omit<RuntimeRPC, 'getAssetsByEntry'> => ({
-    onTestCaseStart: async (test: TestCaseInfo) => {
-      context.stateManager.onTestCaseStart(test);
-      Promise.all(
-        reporters.map((reporter) => reporter.onTestCaseStart?.(test)),
-      );
-    },
-    onTestCaseResult: async (result: TestResult) => {
-      context.stateManager.onTestCaseResult(result);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
-      );
-    },
-    getCountOfFailedTests: async (): Promise<number> => {
-      return context.stateManager.getCountOfFailedTests();
-    },
-    onConsoleLog: async (log: UserConsoleLog) => {
-      if (runtimeConfig.disableConsoleIntercept) {
-        return;
-      }
-
-      await emitUserConsoleLog({ log, projectConfig });
-    },
-    onTestFileStart: async (test: TestFileInfo) => {
-      context.stateManager.onTestFileStart(test.testPath);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileStart?.(test)),
-      );
-    },
-    onTestFileReady: async (test: TestFileInfo) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
-      );
-    },
-    onTestSuiteStart: async (test: TestSuiteInfo) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestSuiteStart?.(test)),
-      );
-    },
-    onTestSuiteResult: async (result: TestResult) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestSuiteResult?.(result)),
-      );
-    },
-    resolveSnapshotPath: (testPath: string): string => {
-      const snapExtension = '.snap';
-      const resolver =
-        projectConfig.resolveSnapshotPath ||
-        // test/index.ts -> test/__snapshots__/index.ts.snap
-        (() =>
-          join(
-            dirname(testPath),
-            '__snapshots__',
-            `${basename(testPath)}${snapExtension}`,
-          ));
-
-      const snapshotPath = resolver(testPath, snapExtension);
-      return snapshotPath;
-    },
-  });
+  const createProjectSink = (
+    project: InternalProjectContext,
+  ): RunnerEventSink =>
+    createRunnerEventSink(context, project.normalizedConfig);
+  const captureBundleCoverage = isBundleCoverageDebugEnabled();
 
   return {
     runTests: async ({
       entries,
+      assetNames,
       getAssetFiles,
       getSourceMaps,
       setupEntries,
       project,
       updateSnapshot,
+      buildId,
       onCoverageResult,
+      onRawCoverageResult,
       onTraceEvents,
+      traceSpan,
     }) => {
       const projectName = project.name;
-      const runtimeConfig = getRuntimeConfig(project);
-      const rpcMethods = createRpcMethods({
-        runtimeConfig,
-        projectConfig: project.normalizedConfig,
-      });
+      const { runtimeConfig, deletedEnvKeys } = getWorkerConfig(
+        context,
+        project,
+      );
+      assertWorkerEnvironmentOptions(
+        runtimeConfig.testEnvironment.options,
+        workerKind,
+      );
+      const sink = createProjectSink(project);
+      const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+
+      // Sequential dispatch gate: `entries` is already perf-sorted, but the
+      // per-entry `buildTask` (eager asset reads) finishes out of order, so
+      // enqueueing right after it would scramble the pool's slot order. Each
+      // entry waits for the previous one to claim its pool slot before calling
+      // `pool.runTest`, then releases the next — the asset reads stay fully
+      // pipelined, only the enqueue is serialized.
+      let dispatchGate: Promise<void> = Promise.resolve();
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
-          const task = await buildTask({
-            type: 'run',
-            workerKind,
-            entryInfo,
-            index,
-            context,
-            project,
-            runtimeConfig,
-            setupEntries,
-            setupAssets,
-            updateSnapshot,
-            getAssetFiles,
-            getSourceMaps,
-            rpcMethods,
+          const gate = dispatchGate;
+          let releaseGate!: () => void;
+          dispatchGate = new Promise<void>((r) => {
+            releaseGate = r;
           });
 
-          const result = await pool.runTest(task).catch((err: unknown) => {
-            return workerErrorToResult(
-              err,
-              entryInfo.testPath,
-              projectName,
-              context,
+          try {
+            const traceArgs = {
+              project: projectName,
+              testPath: entryInfo.testPath,
+            };
+            const { task, bundleCoverageAssets } = await traceSpan(
+              'host:build-task',
+              'host',
+              () =>
+                buildTask({
+                  type: 'run',
+                  workerKind,
+                  entryInfo,
+                  index,
+                  context,
+                  project,
+                  runtimeConfig,
+                  deletedEnvKeys,
+                  setupEntries,
+                  setupAssets,
+                  assetNames,
+                  updateSnapshot,
+                  getAssetFiles,
+                  getSourceMaps,
+                  rpcMethods,
+                  traceSpan,
+                  testEnvironmentModule: testEnvironmentModules?.get(
+                    project.environmentName,
+                  ),
+                  buildId,
+                  workerCacheLimit,
+                  captureBundleCoverage,
+                }),
+              traceArgs,
             );
-          });
 
-          if (result.coverage) {
-            onCoverageResult?.(result.coverage);
-            delete result.coverage;
+            await gate;
+            // `pool.runTest` claims a slot (or parks in `slotWaiters`)
+            // synchronously before its first await, and `traceSpan` invokes
+            // its callback synchronously, so releasing after this returns
+            // preserves the exact enqueue order.
+            const resultPromise = traceSpan(
+              'host:pool-run-test',
+              'host',
+              () => pool.runTest(task),
+              { ...traceArgs, worker: task.worker },
+            );
+            releaseGate();
+
+            const result = await resultPromise.catch(async (err: unknown) => {
+              const { fileResult, crashedResults } = workerErrorToResult(
+                err,
+                entryInfo.testPath,
+                projectName,
+                context,
+              );
+              // Each crashed case already fired `onTestCaseStart`; complete the
+              // pair with a live `onTestCaseResult` so incremental reporters
+              // (dot, custom accounting) render it, matching the final totals.
+              // Counting stays sourced from `fileResult.results`, so the state
+              // manager is intentionally not touched here to avoid
+              // double-counting.
+              for (const caseResult of crashedResults) {
+                await Promise.all(
+                  context.reporters.map((reporter) =>
+                    reporter.onTestCaseResult?.(caseResult),
+                  ),
+                );
+              }
+              return fileResult;
+            });
+
+            if (result.coverage) {
+              onCoverageResult?.(result.coverage);
+              delete result.coverage;
+            }
+            const bundleCoverage: BundleCoverageResult | undefined =
+              bundleCoverageAssets
+                ? {
+                    project: projectName,
+                    testPath: entryInfo.testPath,
+                    assets: bundleCoverageAssets,
+                    rawV8: result.coverageRaw ?? null,
+                  }
+                : undefined;
+            if (result.coverageRaw != null) {
+              onRawCoverageResult?.(result.coverageRaw);
+              delete result.coverageRaw;
+            }
+            if (result.traceEvents) {
+              onTraceEvents?.(result.traceEvents);
+              delete result.traceEvents;
+            }
+            await sink.onTestFileResult(result);
+            return { result, bundleCoverage };
+          } finally {
+            // Unblock the next entry even if `buildTask` threw before the
+            // dispatch above ran — otherwise the whole chain would deadlock.
+            // A second call after the in-`try` release is a harmless no-op
+            // (a Promise's resolve settles once).
+            releaseGate();
           }
-          if (result.traceEvents) {
-            onTraceEvents?.(result.traceEvents);
-            delete result.traceEvents;
-          }
-          context.stateManager.onTestFileResult(result);
-          reporters.map((reporter) => reporter.onTestFileResult?.(result));
-          return result;
         }),
       );
 
-      for (const result of results) {
-        if (result.snapshotResult) {
-          context.snapshotManager.add(result.snapshotResult);
-        }
-      }
+      const fileResults = results.map(({ result }) => result);
+      const testResults = fileResults.flatMap((r) => r.results);
 
-      const testResults = results.flatMap((r) => r.results);
-
-      return { results, testResults, project };
+      return {
+        results: fileResults,
+        testResults,
+        project,
+        bundleCoverage: results.flatMap(({ bundleCoverage }) =>
+          bundleCoverage ? [bundleCoverage] : [],
+        ),
+      };
     },
     collectTests: async ({
       entries,
+      assetNames,
       getAssetFiles,
       getSourceMaps,
       setupEntries,
       project,
       updateSnapshot,
     }) => {
-      const runtimeConfig = getRuntimeConfig(project);
+      const { runtimeConfig, deletedEnvKeys } = getWorkerConfig(
+        context,
+        project,
+      );
+      assertWorkerEnvironmentOptions(
+        runtimeConfig.testEnvironment.options,
+        workerKind,
+      );
       const projectName = project.normalizedConfig.name;
-      const rpcMethods = createRpcMethods({
-        runtimeConfig,
-        projectConfig: project.normalizedConfig,
-      });
+      const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(
         entries.map(async (entryInfo, index) => {
-          const task = await buildTask({
+          const { task } = await buildTask({
             type: 'collect',
             workerKind,
             entryInfo,
@@ -558,12 +664,20 @@ export const createPool = async ({
             context,
             project,
             runtimeConfig,
+            deletedEnvKeys,
             setupEntries,
             setupAssets,
+            assetNames,
             updateSnapshot,
             getAssetFiles,
             getSourceMaps,
             rpcMethods,
+            // `collect` does not participate in tracing.
+            traceSpan: noopTraceSpan,
+            testEnvironmentModule: testEnvironmentModules?.get(
+              project.environmentName,
+            ),
+            workerCacheLimit,
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {
@@ -578,6 +692,8 @@ export const createPool = async ({
         }),
       );
     },
+    cleanupWorkerFixtures: () => pool.cleanupWorkerFixtures(),
+    drainWorkerStopErrors: () => pool.drainWorkerStopErrors(),
     close: () => pool.close(),
   };
 };

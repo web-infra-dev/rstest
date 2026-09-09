@@ -1,0 +1,50 @@
+---
+description: This guide covers how to integrate Rstest with Rspack for seamless testing in your Rspack projects.
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# Rspack
+
+[Rspack](https://rspack.rs) is a high-performance JavaScript bundler written in Rust. It provides a webpack-compatible API and supports reusing webpack loaders and plugins.
+
+If your project uses Rspack, you can use Rstest to test it and reuse compatible compiler options from your Rspack configuration through an adapter. This reduces duplicate configuration and helps keep test compilation consistent with your project build.
+
+## Quick start
+
+To add Rstest to an existing Rspack project, follow the [Quick Start](/guide/start/quick-start) to install and set up test scripts.
+
+## Reuse Rspack config
+
+[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) loads your Rspack config and maps compatible options into the Rstest test compiler.
+
+### Install adapter
+
+<PackageManagerTabs command="add @rstest/adapter-rspack -D" />
+
+### Extend your config
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { withRspackConfig } from '@rstest/adapter-rspack';
+
+export default defineConfig({
+  extends: withRspackConfig(),
+});
+```
+
+The adapter loads `rspack.config.ts`, merges compatible compiler options with the generated test build, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes.
+
+:::warning
+Rstest uses Rsbuild internally, so the adapter keeps Rstest-owned test structure and always removes the built-in CSS plugins `rsbuild:css`, `rsbuild:less`, and `rsbuild:sass`. As a result, some Rsbuild-specific CSS options, such as `output.cssModules`, are unavailable.
+:::
+
+Use `cwd`, `configPath`, `configName`, or the environment options when the default Rspack config does not match your project. See the [configuration reference](./reference) for option details, mapping behavior, and debug instructions.
+
+## Example project
+
+See the [Rspack adapter example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/rspack-adapter) for a complete React project.
+
+## Related documentation
+
+- [Rspack configuration overview](https://rspack.rs/config)

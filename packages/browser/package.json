@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.10.1",
+  "version": "0.11.12",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -14,15 +14,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/browser"
   },
   "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/browser.d.ts",
-      "default": "./dist/browser.js"
+      "types": "./dist/client/client/index.d.ts",
+      "default": "./dist/client/index.js"
     },
     "./internal": {
       "types": "./dist/index.d.ts",
@@ -32,17 +32,17 @@
       "default": "./package.json"
     }
   },
-  "main": "./dist/browser.js",
+  "main": "./dist/client/index.js",
+  "types": "./dist/client/client/index.d.ts",
   "files": [
     "dist",
-    "src",
     "NOTICE",
     "LICENSE-APACHE-2.0"
   ],
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser/tsconfig.json"
+    "lint": "rslint ."
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
@@ -50,24 +50,23 @@
     "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
     "sirv": "^3.0.2",
-    "ws": "^8.20.1"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.5",
+    "@rslib/core": "~1.0.0",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260516.1",
-    "@vitest/snapshot": "^3.2.4",
-    "birpc": "^4.0.0",
-    "picomatch": "^4.0.4",
-    "playwright": "^1.60.0"
+    "@vitest/snapshot": "^4.1.11",
+    "birpc": "^4.2.0",
+    "picomatch": "^4.0.7",
+    "playwright": "^1.63.0"
   },
   "peerDependencies": {
-    "@rstest/core": "workspace:^",
+    "@rstest/core": "workspace:*",
     "playwright": "^1.49.1"
   },
   "peerDependenciesMeta": {

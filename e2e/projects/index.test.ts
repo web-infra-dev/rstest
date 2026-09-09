@@ -7,7 +7,71 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test projects', () => {
+  it('validates duplicate names only among selected projects', async () => {
+    const options = {
+      nodeOptions: { cwd: join(__dirname, 'fixtures-duplicate-names') },
+    };
+    const selected = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--project', 'alpha'],
+      options,
+    });
+    await selected.expectExecSuccess();
+    expect(selected.cli.stdout).toContain('Tests 1 passed');
+
+    const all = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options,
+    });
+    await all.expectExecFailed();
+    all.expectStderrLog('Project name "beta" is already used');
+  });
+
   describe('merge configs', () => {
+    it('replays exclusions onto every file-based project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--globals',
+          '--exclude',
+          '**/*.test.*',
+          '--passWithNoTests',
+        ],
+        options: { nodeOptions: { cwd: join(__dirname, 'fixtures') } },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout).toContain('No test files found');
+      expect(cli.stdout).toContain('Test Files no tests');
+    });
+
+    it('replays timeout overrides onto every file-based project in watch', async () => {
+      const { cli, expectLog } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'watch',
+          '--project',
+          'node',
+          '--project',
+          'client-jsdom',
+          '--globals',
+          '--include',
+          'test/slow.test.ts',
+          '--testTimeout',
+          '1',
+        ],
+        options: { nodeOptions: { cwd: join(__dirname, 'fixtures') } },
+      });
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.stdout).toContain('Tests 2 failed');
+      const logs = cli.stdout.split('\n').filter(Boolean);
+      expectLog('[node]', logs);
+      expectLog('[client-jsdom]', logs);
+      expect(cli.stderr.match(/test timed out in 1ms/g)).toHaveLength(2);
+      await cli.killProcessTree();
+    });
+
     it('should run projects correctly with cli options', async () => {
       const { cli, expectExecSuccess, expectLog } = await runRstestCli({
         command: 'rstest',
@@ -73,6 +137,22 @@ describe('test projects', () => {
     expect(
       logs.find((log) => log.includes('packages/client/test/node.test.ts')),
     ).toBeTruthy();
+  });
+
+  it('uses config root to resolve project paths', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'packages/node/test/index.test.ts', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures-root-anchor'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('packages/node/test/index.test.ts');
+    expect(cli.stdout).toContain('Tests 3 passed');
   });
 
   it('should run projects fail when project not found', async () => {
@@ -171,6 +251,28 @@ describe('test projects', () => {
     });
   });
 
+  it('omits project metadata when list selects one configured project', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--json',
+        '--summary',
+        '--project',
+        'client-node',
+        '--globals',
+      ],
+      options: { nodeOptions: { cwd: join(__dirname, 'fixtures') } },
+    });
+    await expectExecSuccess();
+    const json = JSON.parse(cli.stdout);
+    expect(json.summary.files).toBeGreaterThan(0);
+    expect(json.summary).not.toHaveProperty('projects');
+    for (const item of json.items) {
+      expect(item).not.toHaveProperty('project');
+    }
+  });
+
   it('should run projects with extends correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -197,7 +299,7 @@ describe('test projects', () => {
           'run',
           '-c',
           'rstest.projectConfig.config.mts',
-          '--reporter',
+          '--reporters',
           'verbose',
         ],
         options: {
@@ -230,7 +332,7 @@ describe('test projects', () => {
           'run',
           '-c',
           'rstest.slowTest.config.mts',
-          '--reporter',
+          '--reporters',
           'verbose',
         ],
         options: {

@@ -1,0 +1,192 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from '@rstest/core';
+import { prepareFixtures } from '../scripts';
+import { BROWSER_PORTS } from './fixtures/ports';
+import {
+  deleteFixtureTarget,
+  killCliProcessTree,
+  runBrowserWatchCliWithCwd,
+  runBrowserWatchCrud,
+  shouldRunHeadedBrowserTests,
+} from './utils';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+describe('browser mode - headed watch', () => {
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'runs added files after an empty headed watch start',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-empty-watch-headed`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/index.test.ts'));
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['no-tests-watch-headed']}`,
+        ],
+      });
+      try {
+        await cli.waitForStdout('No test files found');
+        await cli.waitForStdout('Waiting for file changes...');
+        fs.create(
+          path.join(fixturesTargetPath, 'tests/added.test.ts'),
+          `import { expect, it } from '@rstest/core';
+it('runs the added file', () => expect(document.createElement('main').tagName).toBe('MAIN'));`,
+        );
+        await cli.waitForStdout('Test file set changed');
+        await cli.waitForStdout('Test Files 1 passed');
+        expect(cli.stdout).toContain('added.test.ts');
+        expect(cli.stdout.match(/No test files found/g)).toHaveLength(1);
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  // Headed watch is the only mode that builds the HMR runtime (see
+  // `shouldEnableBrowserHmr`); every other fixture in the matrix runs
+  // headless or one-shot, so this smoke is the sole coverage between an
+  // HMR-runtime-only regression and users' default local `--watch`.
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should run tests and track file-set changes in headed watch mode',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed`;
+
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+        ],
+      });
+
+      try {
+        await cli.waitForStdout('Duration');
+        expect(cli.stdout).toMatch('Test Files 2 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+
+        await runBrowserWatchCrud({
+          cli,
+          fixtureFs: fs,
+          fixtureRoot: fixturesTargetPath,
+        });
+      } finally {
+        // A leaked headed browser is costlier than the headless leaks other
+        // watch tests tolerate — always tear down, even on assertion failure.
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should keep the watch session live when a pending reload file is deleted mid-flight',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-pending-delete`;
+      const anotherTestPath = path.join(
+        fixturesTargetPath,
+        'tests/another.test.ts',
+      );
+
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      // Hold every runner short of completing, so a run is still open when
+      // the delete below lands — the state `HeadedRunRegistry.retainPaths`
+      // exists to settle. The barrier has to yield: a runner iframe shares its
+      // renderer thread with the container, so spinning here would also stop
+      // the container from processing the file-set update that unmounts the
+      // iframe, and the race would never happen.
+      fs.update(path.join(fixturesTargetPath, 'setup.ts'), (content) => {
+        return `import { beforeAll } from '@rstest/core';\nbeforeAll(() => new Promise((resolve) => setTimeout(resolve, 1_500)));\n${content}`;
+      });
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+        ],
+      });
+
+      try {
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+
+        cli.resetStd();
+        fs.update(anotherTestPath, (content) => `${content}\n// touch\n`);
+        // Wait for the grant itself rather than sleeping: if the delete beat
+        // the reload, the race would never happen and the test would pass
+        // without exercising anything.
+        await cli.waitForStdout('[Container] Granting run');
+        fs.delete(anotherTestPath);
+
+        await cli.waitForStdout('Test file set changed, re-running 1 file(s)');
+        await cli.waitForStdout('✓ tests/index.test.ts');
+        await cli.waitForStdout('Test Files 1 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should keep the watch session live after an initial fatal error',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-initial-fatal`;
+      const setupPath = path.join(fixturesTargetPath, 'setup.ts');
+      const initialFatal = "throw new Error('initial headed setup failed');\n";
+
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      fs.update(setupPath, (content) => initialFatal + content);
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+        ],
+      });
+      const waitForOutput = (marker: string) =>
+        Promise.race([cli.waitForStdout(marker), cli.waitForStderr(marker)]);
+
+      try {
+        await waitForOutput('initial headed setup failed');
+        await waitForOutput('Waiting for file changes...');
+
+        fs.update(setupPath, (content) => content.replace(initialFatal, ''));
+        await cli.waitForStdout(
+          '[Watch] Setup file changed, re-running all test files of the project',
+        );
+        await cli.waitForStdout('Re-running 1 affected test file(s)');
+        await cli.waitForStdout('Test Files 1 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+});

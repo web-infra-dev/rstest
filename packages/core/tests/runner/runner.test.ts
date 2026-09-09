@@ -29,6 +29,7 @@ describe('traverseUpdateTest', () => {
       traverseUpdateTestRunMode(testA as TestSuite, 'run', false);
 
       expect(testA.runMode).toBe('run');
+      expect((testA as TestSuite).hasRunnableTests).toBe(true);
     });
 
     it('should set the suite to skip when all tests are skip', () => {
@@ -48,6 +49,7 @@ describe('traverseUpdateTest', () => {
       traverseUpdateTestRunMode(testA as TestSuite, 'run', false);
 
       expect(testA.runMode).toBe('skip');
+      expect((testA as TestSuite).hasRunnableTests).toBe(false);
     });
 
     it('should update nested test suite run mode correctly', () => {
@@ -85,6 +87,34 @@ describe('traverseUpdateTest', () => {
 
       expect(testA.runMode).toBe('run');
       expect(testA.tests[2]?.runMode).toBe('skip');
+    });
+
+    it('should track runnable tests without changing empty suite run modes', () => {
+      const emptySuite: TestSuite = {
+        testId: 'empty',
+        testPath: '/test',
+        project: 'test',
+        name: 'empty',
+        runMode: 'run',
+        type: 'suite',
+        tests: [],
+      };
+      const testA: TestSuite = {
+        testId: 'testA',
+        testPath: '/test',
+        project: 'test',
+        name: 'testA',
+        runMode: 'run',
+        type: 'suite',
+        tests: [emptySuite],
+      };
+
+      traverseUpdateTestRunMode(testA, 'run', false);
+
+      expect(testA.runMode).toBe('run');
+      expect(emptySuite.runMode).toBe('run');
+      expect(testA.hasRunnableTests).toBe(false);
+      expect(emptySuite.hasRunnableTests).toBe(false);
     });
   });
 
@@ -279,6 +309,7 @@ describe('traverseUpdateTest', () => {
     expect(tests).toMatchInlineSnapshot(`
       [
         {
+          "hasRunnableTests": true,
           "name": "testA",
           "parentNames": [],
           "runMode": "run",
@@ -300,6 +331,7 @@ describe('traverseUpdateTest', () => {
               "type": "case",
             },
             {
+              "hasRunnableTests": true,
               "name": "test-2",
               "parentNames": [
                 "testA",

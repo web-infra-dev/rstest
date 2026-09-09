@@ -37,18 +37,18 @@ import { PackageManagerTabs } from '@theme';
 
 Jest 的一部分 CLI 参数可以直接映射到 Rstest，另一部分则需要迁移到配置文件中。迁移时，最常遇到的差异可以参考下表：
 
-| Jest CLI 参数                            | Rstest 对应写法                                          | 说明                                                      |
-| ---------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------- |
-| `jest`                                   | `rstest`                                                 |                                                           |
-| `jest --watch`                           | `rstest --watch` 或 `rstest watch`                       |                                                           |
-| `jest --watchAll`                        | `rstest --watch` 或 `rstest watch`                       | Rstest 不区分 `--watch` 和 `--watchAll`。                 |
-| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                             |                                                           |
-| `jest --maxWorkers=50%` 或 `jest -w 50%` | `rstest --pool.maxWorkers 50%`                           | Rstest 的 `-w` 表示 `--watch`，不是 `--maxWorkers`。      |
-| `jest --selectProjects app`              | `rstest --project app`                                   |                                                           |
-| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                         |                                                           |
-| `jest --coverage`                        | `rstest --coverage`                                      | 还需安装 `@rstest/coverage-istanbul`。                    |
-| `jest --coverageDirectory=coverage`      | 在 `rstest.config.ts` 中配置 `coverage.reportsDirectory` |                                                           |
-| `jest --coverageProvider=v8`             | 移除                                                     | 仅支持 `'istanbul'`，详见配置表的 `coverageProvider` 行。 |
+| Jest CLI 参数                            | Rstest 对应写法                                          | 说明                                                                                       |
+| ---------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `jest`                                   | `rstest`                                                 |                                                                                            |
+| `jest --watch`                           | `rstest --watch` 或 `rstest watch`                       |                                                                                            |
+| `jest --watchAll`                        | `rstest --watch` 或 `rstest watch`                       | Rstest 不区分 `--watch` 和 `--watchAll`。                                                  |
+| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                             |                                                                                            |
+| `jest --maxWorkers=50%` 或 `jest -w 50%` | `rstest --pool.maxWorkers 50%`                           | Rstest 的 `-w` 表示 `--watch`，不是 `--maxWorkers`。                                       |
+| `jest --selectProjects app`              | `rstest --project app`                                   |                                                                                            |
+| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                         |                                                                                            |
+| `jest --coverage`                        | `rstest --coverage`                                      | 还需安装与你配置对应的 provider 包：`@rstest/coverage-istanbul` 或 `@rstest/coverage-v8`。 |
+| `jest --coverageDirectory=coverage`      | 在 `rstest.config.ts` 中配置 `coverage.reportsDirectory` |                                                                                            |
+| `jest --coverageProvider=v8`             | `coverage.provider: 'v8'`                                | 安装 `@rstest/coverage-v8`，并在 `rstest.config.ts` 中配置 provider。                      |
 
 ## 配置迁移
 
@@ -86,10 +86,10 @@ export default defineConfig({
 | `injectGlobals`              | [`globals`](/config/test/globals)                                                                 | Jest 默认是 `true`；Rstest 的 `globals` 默认是 `false`。如果你的测试依赖裸 `describe` / `test` / `expect`（不做 import），需显式设置 `globals: true`，并在 `tsconfig.json` 的 `compilerOptions.types` 中加上 `@rstest/core/globals`。                                                                                                                                    |
 | `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                             | `resolve.alias` 只支持字符串前缀。前缀型映射改写为：`'^@/(.*)$': '<rootDir>/src/$1'` → `resolve: { alias: { '@': './src' } }`。TypeScript 项目推荐直接用 `tsconfig.json` 的 `compilerOptions.paths`，Rstest 会自动读取。正则或 asset 占位（如 `'\\.(css\|svg)$': 'identity-obj-proxy'`）没有对等字段；Rstest 原生处理 CSS/资源，大多数占位可以删除。                     |
 | `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                            |                                                                                                                                                                                                                                                                                                                                                                          |
-| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                        | 需要在单个测试内改 timeout 时，把 `jest.setTimeout(n)` 替换为 `rstest.setConfig({ testTimeout: n })`。                                                                                                                                                                                                                                                                   |
+| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                        | 需要在单个测试内改 timeout 时，把 `jest.setTimeout(n)` 替换为 `rs.setConfig({ testTimeout: n })`。                                                                                                                                                                                                                                                                       |
 | `slowTestThreshold`          | [`slowTestThreshold`](/config/test/slow-test-threshold)                                           | Jest 按秒计（默认 5）；Rstest 按毫秒计（默认 300）。Jest 的值需要乘以 1000。                                                                                                                                                                                                                                                                                             |
 | `detectOpenHandles`          | 无完全等价项；可考虑用 [`detectAsyncLeaks`](/config/test/detect-async-leaks) 排查测试文件异步泄漏 | 不是 1:1 映射。Jest 的 `detectOpenHandles` 主要用于诊断导致 Jest 进程无法退出的 handles；Rstest 的 `detectAsyncLeaks` 会在测试文件结束后检查仍然存活的 Node.js 异步资源，并让该测试文件失败。                                                                                                                                                                            |
-| `fakeTimers`                 | [`rstest.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rstestusefaketimers)                 | 没有配置字段。在 `setupFiles` 或单个测试中调用 `rstest.useFakeTimers(opts)`；用 `rstest.useRealTimers()` 还原。                                                                                                                                                                                                                                                          |
+| `fakeTimers`                 | [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers)                         | 没有配置字段。在 `setupFiles` 或单个测试中调用 `rs.useFakeTimers(opts)`；用 `rs.useRealTimers()` 还原。                                                                                                                                                                                                                                                                  |
 | `bail`                       | [`bail`](/config/test/bail)                                                                       |                                                                                                                                                                                                                                                                                                                                                                          |
 | `clearMocks`                 | [`clearMocks`](/config/test/clear-mocks)                                                          |                                                                                                                                                                                                                                                                                                                                                                          |
 | `resetMocks`                 | [`resetMocks`](/config/test/reset-mocks)                                                          |                                                                                                                                                                                                                                                                                                                                                                          |
@@ -101,7 +101,7 @@ export default defineConfig({
 | `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                                               |                                                                                                                                                                                                                                                                                                                                                                          |
 | `collectCoverageFrom`        | [`coverage.include`](/config/test/coverage#include)                                               |                                                                                                                                                                                                                                                                                                                                                                          |
 | `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory)                             |                                                                                                                                                                                                                                                                                                                                                                          |
-| `coverageProvider`           | 移除                                                                                              | Rstest 仅支持 `'istanbul'`（默认值），没有可配置项 —— 直接去掉。`'v8'` / `'babel'` 不支持。                                                                                                                                                                                                                                                                              |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                                             | Rstest 支持 `'istanbul'`（默认值）和 `'v8'`。如需使用 V8 coverage，可配置 `coverage.provider: 'v8'`。应当使用 `'istanbul'` 替换 `'babel'`。                                                                                                                                                                                                                              |
 | `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                                               |                                                                                                                                                                                                                                                                                                                                                                          |
 | `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)                                         |                                                                                                                                                                                                                                                                                                                                                                          |
 | `projects`                   | [`projects`](/config/test/projects)                                                               | Jest 的 inline project 结构不同，迁移前请核对。                                                                                                                                                                                                                                                                                                                          |
@@ -132,9 +132,26 @@ export default defineConfig({
 }
 ```
 
+### 文件级环境注释
+
+如果你的 Jest 测试使用了文件级环境注释，Rstest 在迁移时会识别 Jest 环境注释：
+
+```ts
+/**
+ * @jest-environment jsdom
+ * @jest-environment-options { "url": "https://example.com/" }
+ */
+```
+
+你可以保留这些注释，也可以改名为 `@rstest-environment` / `@rstest-environment-options`。选项值必须是单行 JSON 对象。支持的环境包括 `node`、`jsdom` 和 `happy-dom`。
+
 ### 代码转换
 
 Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。
+
+Jest 本身通过 `moduleNameMapper` 和 `transform` 配置模块解析和转换，而不是读取 `tsconfig.json`。如果你使用了 `ts-jest`，不要假设其中的 TypeScript 转换设置会自动迁移：Rstest 会自动应用 `compilerOptions.paths` 进行解析，而装饰器语法、输出 target 等转换设置需要在迁移时按需检查并通过 Rstest 配置。adapter 可能会继承或推断额外设置，请参考所用 [adapter 的文档](/guide/advanced/adapters)。详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)。
+
+Rstest 会转换进入 bundle graph 的文件。如果你的项目之前依赖 `ts-jest` 的运行时转换，请参考 [bundle graph 之外的代码使用 Node.js 原生行为](/guide/debug/troubleshooting#bundle-graph-之外的代码使用-nodejs-原生行为)。
 
 ```diff
 export default {
@@ -184,17 +201,30 @@ Rstest 提供了与 Jest 兼容的 API。因此，你只需将导入从 Jest 更
 
 ```diff
 - import { describe, expect, it, test } from '@jest/globals';
-+ import { describe, expect, it, test } from '@rstest/core';
++ import { describe, expect, it, test, rs } from '@rstest/core';
 ```
 
-Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Jest 的 `jest.fn()` 和 `jest.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/runtime-api/) 中找到。
+Rstest 提供了 `rs` API，你可以使用它来访问 Rstest 的工具函数，如 `rs.fn()` 和 `rs.mock()`。更长的 `rstest` 工具方法仍然可以作为别名使用。更多工具函数可以在 [Rstest APIs](/api/runtime-api/) 中找到。
 
 ```diff
 - const fn = jest.fn();
-+ const fn = rstest.fn();
++ const fn = rs.fn();
 
 fn.mockResolvedValue('foo');
 ```
+
+### 虚拟模块 mock
+
+迁移 Jest 虚拟模块 mock 时，请先[声明模块并配置 `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)。这套配置同时适用于 Node 和浏览器模式。然后删除 Jest 的第三个参数：
+
+```diff
+- jest.mock('native-runtime', () => ({ platform: 'test' }), {
+-   virtual: true,
+- });
++ rs.mock('native-runtime', () => ({ platform: 'test' }));
+```
+
+`rs.mock` factory 或匹配的手写 mock 会提供模块的运行时导出。
 
 ### Done 回调
 
@@ -232,11 +262,11 @@ Rstest 中 `beforeEach` 和 `beforeAll` 钩子的返回函数用于执行测试�
 
 ### 超时设置
 
-如果你使用 `jest.setTimeout()` 来设置测试的超时时间，你可以改用 `rstest.setConfig()`。
+如果你使用 `jest.setTimeout()` 来设置测试的超时时间，你可以改用 `rs.setConfig()`。
 
 ```diff
 - jest.setTimeout(5_000)
-+ rstest.setConfig({ testTimeout: 5_000 })
++ rs.setConfig({ testTimeout: 5_000 })
 ```
 
 ## Snapshot 格式
@@ -284,13 +314,13 @@ Rstest 默认支持 ESM。如果你的项目使用 ESM，你不需要进行任�
 
 ### ESM vs CJS mocking
 
-在 Rstest 中，`rstest.mock()` 针对 `import` 使用的 ESM 入口，而 `rstest.mockRequire()` 针对 `require()` 使用的 CJS 入口。
+在 Rstest 中，`rs.mock()` 针对 `import` 使用的 ESM 入口，而 `rs.mockRequire()` 针对 `require()` 使用的 CJS 入口。
 
-代码中使用 `require()` 时，`rstest.mockRequire()` 对应 CJS 入口的 mock：
+代码中使用 `require()` 时，`rs.mockRequire()` 对应 CJS 入口的 mock：
 
 ```ts
 // Mock 一个 CJS 模块
-rstest.mockRequire('./math.cjs', () => ({
+rs.mockRequire('./math.cjs', () => ({
   sum: (a, b) => a + b + 100,
 }));
 ```

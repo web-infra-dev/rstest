@@ -1,4 +1,5 @@
 import { type Group, OverviewGroup } from '@rspress/core/theme';
+import testConfigPages from '@en/config/test/_meta.json';
 import { useI18nUrl } from './utils';
 
 export interface GroupItem {
@@ -23,7 +24,9 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'globalSetup',
       'projects',
       'passWithNoTests',
+      'onlyFailures',
       'includeSource',
+      'forceRerunTriggers',
       'testNamePattern',
       'extends',
     ],
@@ -38,6 +41,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'testTimeout',
       'hookTimeout',
       'maxConcurrency',
+      'expect',
     ],
   },
   {
@@ -52,7 +56,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   },
   {
     name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment'],
+    items: ['pool', 'isolate', 'testEnvironment', 'federation'],
   },
   {
     name: 'browser',
@@ -74,13 +78,19 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'coverage',
       'reporters',
-      'silent',
       'includeTaskLocation',
       'logHeapUsage',
+      'detectAsyncLeaks',
       'hideSkippedTests',
       'hideSkippedTestFiles',
       'slowTestThreshold',
       'chaiConfig',
+    ],
+  },
+  {
+    name: 'console',
+    items: [
+      'silent',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
@@ -90,6 +100,21 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
 
 function camelToKebab(str: string) {
   return str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+}
+
+const overviewTestConfigPages = new Set(
+  OVERVIEW_GROUPS.flatMap((group) =>
+    (group.items ?? []).map((item) => camelToKebab(item.split('.')[0] ?? item)),
+  ),
+);
+const missingTestConfigPages = testConfigPages.filter(
+  (page) => !overviewTestConfigPages.has(page),
+);
+
+if (missingTestConfigPages.length > 0) {
+  throw new Error(
+    `Test config pages are missing from the overview: ${missingTestConfigPages.join(', ')}`,
+  );
 }
 
 export default function Overview() {
@@ -103,7 +128,7 @@ export default function Overview() {
       items: item.items?.map((item) => {
         const [page, anchor] = item.split('.');
         const target = page ?? item;
-        const hash = anchor ? `#${camelToKebab(anchor)}` : '';
+        const hash = anchor ? `#${anchor.toLowerCase()}` : '';
 
         return {
           link: tUrl(`/config/test/${camelToKebab(target)}${hash}`),

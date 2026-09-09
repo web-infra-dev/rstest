@@ -5,32 +5,67 @@
  * LICENSE file in the root directory of https://github.com/facebook/jest.
  */
 
+import { createRequire } from 'node:module';
 import type {
   Config as FakeTimerInstallOpts,
   FakeTimers as FakeTimerWithContext,
   Clock as InstalledClock,
+  Timer as FakeTimerRecord,
 } from '@sinonjs/fake-timers';
+import { mockDate, resetDate } from './mockDate';
 
 export type { FakeTimerInstallOpts };
 
-const RealDate = Date;
+type FakeTimerTickTime = Parameters<InstalledClock['tick']>[0];
+type FakeTimerSystemTime = Parameters<InstalledClock['setSystemTime']>[0];
+type FakeTimerTickMode = Parameters<InstalledClock['setTickMode']>[0];
+
 type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
 
+export type FakeTimersSnapshot = {
+  now: number;
+  timers: [number, FakeTimerRecord][];
+  jobs: FakeTimerRecord[];
+  tickMode: FakeTimerTickMode | undefined;
+};
+
+const cloneFakeTimerRecord = (record: FakeTimerRecord): FakeTimerRecord => ({
+  ...record,
+  args: record.args ? [...record.args] : undefined,
+});
+
+// Detect `Date` structurally rather than with `instanceof`, so a `Date` from
+// another realm (iframe / vm context) or created via a mocked global is matched.
+const isDate = (value: unknown): value is Date =>
+  Object.prototype.toString.call(value) === '[object Date]';
+
 const loadFakeTimersModule = () => {
-  // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
-  // preserving that pattern without breaking bundling/runtime resolution.
-  // Preserve the public sync timer API while avoiding module init work
-  // on worker startup when fake timers are never used.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  const loaded = require('@sinonjs/fake-timers');
+  // Rspack bundles this `createRequire` call (parser enabled for this file in
+  // rslib.config.ts), so the dependency stays inside the chunk for both the
+  // Node and browser targets. Preserve the public sync timer API while
+  // avoiding module init work on worker startup when fake timers are never used.
+  const require = createRequire(import.meta.url);
+  const loaded: Pick<
+    typeof import('@sinonjs/fake-timers'),
+    'withGlobal'
+  > = require('@sinonjs/fake-timers');
   return { withGlobal: loaded.withGlobal };
 };
 
 export class FakeTimers {
   private _clock!: InstalledClock;
   private readonly _config: FakeTimerInstallOpts;
+  // | _fakingTime | _fakingDate |
+  // +-------------+-------------+
+  // | false       | falsy       | initial
+  // | false       | truthy      | setSystemTime called first (mock only Date without fake timers)
+  // | true        | falsy       | useFakeTimers called first
+  // | true        | truthy      | unreachable
   private _fakingTime: boolean;
+  private _fakingDate: Date | null;
   private readonly _fakeTimers: FakeTimerWithContext;
+  private readonly _global: typeof globalThis;
+  private readonly _realDate: DateConstructor;
 
   constructor({
     global,
@@ -39,8 +74,11 @@ export class FakeTimers {
     global: typeof globalThis;
     config?: FakeTimerInstallOpts;
   }) {
+    this._global = global;
+    this._realDate = global.Date;
     this._config = config;
     this._fakingTime = false;
+    this._fakingDate = null;
     this._fakeTimers = loadFakeTimersModule().withGlobal(global);
   }
 
@@ -106,15 +144,27 @@ export class FakeTimers {
     }
   }
 
-  advanceTimersByTime(msToRun: number): void {
+  advanceTimersByTime(msToRun: FakeTimerTickTime): void {
     if (this._checkFakeTimers()) {
       this._clock.tick(msToRun);
     }
   }
 
-  async advanceTimersByTimeAsync(msToRun: number): Promise<void> {
+  async advanceTimersByTimeAsync(msToRun: FakeTimerTickTime): Promise<void> {
     if (this._checkFakeTimers()) {
       await this._clock.tickAsync(msToRun);
+    }
+  }
+
+  jumpTimersByTime(msToRun: FakeTimerTickTime): void {
+    if (this._checkFakeTimers()) {
+      this._clock.jump(msToRun);
+    }
+  }
+
+  setTickMode(mode: FakeTimerTickMode): void {
+    if (this._checkFakeTimers()) {
+      this._clock.setTickMode(mode);
     }
   }
 
@@ -130,7 +180,16 @@ export class FakeTimers {
     }
   }
 
+  private _resetFakingDate(): void {
+    if (this._fakingDate) {
+      resetDate(this._global);
+      this._fakingDate = null;
+    }
+  }
+
   useRealTimers(): void {
+    this._resetFakingDate();
+
     if (this._fakingTime) {
       this._clock.uninstall();
       this._fakingTime = false;
@@ -141,6 +200,11 @@ export class FakeTimers {
     toNotFake = [],
     ...restFakeTimersConfig
   }: FakeTimerInstallOpts = {}): void {
+    // Carry over the time pinned by a prior Date-only setSystemTime() so that
+    // promoting to full fake timers keeps the same "now".
+    const fakeDate = this._fakingDate ?? this._realDate.now();
+    this._resetFakingDate();
+
     if (this._fakingTime) {
       this._clock.uninstall();
     }
@@ -162,7 +226,7 @@ export class FakeTimers {
     this._clock = this._fakeTimers.install({
       loopLimit: 10_000,
       shouldClearNativeTimers: true,
-      now: Date.now(),
+      now: fakeDate,
       toFake: [...toFake],
       ignoreMissingTimers: true,
       ...restFakeTimersConfig,
@@ -181,21 +245,99 @@ export class FakeTimers {
     }
   }
 
-  setSystemTime(now?: number | Date): void {
-    if (this._checkFakeTimers()) {
+  setSystemTime(now?: FakeTimerSystemTime): void {
+    if (this._fakingTime) {
+      // `@sinonjs/fake-timers` accepts `number | Date | { epochMilliseconds }`
+      // directly, so forward it untouched.
       this._clock.setSystemTime(now);
+      return;
+    }
+    // Mock only the global `Date` without installing full fake timers, so
+    // setSystemTime() works on its own (matching Vitest). Assign `_fakingDate`
+    // only after `mockDate` validates the input, so an invalid value throws
+    // without corrupting a previously pinned date.
+    const date = this._toFakeDate(now);
+    mockDate(date, this._global);
+    this._fakingDate = date;
+  }
+
+  private _toFakeDate(now?: FakeTimerSystemTime): Date {
+    if (now === undefined) {
+      return new Date(this.getRealSystemTime());
+    }
+    if (typeof now === 'number') {
+      return new Date(now);
+    }
+    // Clone the Date so a later mutation of the caller's object can't leak into
+    // the pin (which a promotion or scoped restore would otherwise pick up).
+    if (isDate(now)) {
+      return new this._realDate(now.valueOf());
+    }
+    // Temporal-like value, e.g. `{ epochMilliseconds }`.
+    return new Date(now.epochMilliseconds);
+  }
+
+  snapshot(): FakeTimersSnapshot | undefined {
+    if (!this._fakingTime) {
+      return undefined;
+    }
+
+    return {
+      now: this._clock.now,
+      timers: [...(this._clock.timers ?? new Map())].map(([id, timer]) => [
+        id,
+        cloneFakeTimerRecord(timer),
+      ]),
+      jobs: (this._clock.jobs ?? []).map(cloneFakeTimerRecord),
+      tickMode: this._clock.tickMode
+        ? {
+            mode: this._clock.tickMode.mode,
+            delta: this._clock.tickMode.delta,
+          }
+        : undefined,
+    };
+  }
+
+  restore(snapshot: FakeTimersSnapshot): void {
+    if (this._checkFakeTimers()) {
+      this._clock.setSystemTime(snapshot.now);
+      const timerEntries = snapshot.timers.map(([id, timer]) => [
+        id,
+        cloneFakeTimerRecord(timer),
+      ]) as [number, FakeTimerRecord][];
+      const timers = timerEntries.map(([, timer]) => timer);
+      this._clock.timers = new Map(timerEntries);
+      if (this._clock.timerHeap) {
+        this._clock.timerHeap.timers = [];
+        for (const timer of timers) {
+          this._clock.timerHeap.push(timer);
+        }
+      }
+      this._clock.jobs = snapshot.jobs.map(cloneFakeTimerRecord);
+      if (snapshot.tickMode) {
+        this._clock.setTickMode(snapshot.tickMode);
+      }
     }
   }
 
   getRealSystemTime(): number {
-    return RealDate.now();
+    return this._realDate.now();
+  }
+
+  /**
+   * The time pinned by a Date-only `setSystemTime()` (i.e. without full fake
+   * timers), or `null`. Used to restore that pin after a scoped
+   * `useFakeTimers()` disposes.
+   */
+  getMockedSystemTime(): Date | null {
+    return this._fakingDate;
   }
 
   now(): number {
     if (this._fakingTime) {
       return this._clock.now;
     }
-    return Date.now();
+    return this._global.Date.now();
   }
 
   getTimerCount(): number {

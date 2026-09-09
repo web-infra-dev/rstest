@@ -8,4 +8,20 @@ describe('browser mode - setup files', () => {
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Tests.*passed/);
   });
+
+  it('should isolate setup files in later non-isolated files', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('setup-files', {
+      args: [
+        '--isolate=false',
+        '--pool.maxWorkers=1',
+        'tests/index.test.ts',
+        'tests/second.test.ts',
+      ],
+    });
+
+    await expectExecSuccess();
+    expect((cli.stdout.match(/RSTEST_SETUP_BEFORE_EACH_1/g) ?? []).length).toBe(
+      2,
+    );
+  });
 });

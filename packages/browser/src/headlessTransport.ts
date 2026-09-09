@@ -1,13 +1,15 @@
 import type {
-  BrowserClientMessage,
   BrowserDispatchRequest,
   BrowserDispatchResponse,
+  RunnerEnvelope,
 } from './protocol';
 import { DISPATCH_MESSAGE_TYPE, DISPATCH_RPC_BRIDGE_NAME } from './protocol';
 import type { BrowserProviderPage } from './providers';
 
 type HeadlessRunnerTransportHandlers = {
-  onDispatchMessage: (message: BrowserClientMessage) => Promise<void>;
+  // The envelope's `runId` is ignored here: headless identity is the
+  // host-injected `runToken` bound at this transport attachment.
+  onDispatchMessage: (envelope: RunnerEnvelope) => Promise<void>;
   onDispatchRpc: (
     request: BrowserDispatchRequest,
   ) => Promise<BrowserDispatchResponse>;

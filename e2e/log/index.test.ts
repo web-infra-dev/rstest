@@ -24,6 +24,28 @@ describe('console log', () => {
     expect(logs.filter((log) => log.startsWith('I'))).toEqual([]);
   });
 
+  it('should pass the stream type as the second onConsoleLog argument', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'log.test', '-c', 'consoleLogStderr.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // stdout logs (console.log / console.info) are kept.
+    expect(logs.some((log) => log.includes("I'm log"))).toBeTruthy();
+    expect(logs.some((log) => log.includes("I'm info"))).toBeTruthy();
+    // stderr logs (console.warn / console.error) are silenced via `type`.
+    expect(logs.some((log) => log.includes("I'm warn"))).toBeFalsy();
+    expect(logs.some((log) => log.includes("I'm error"))).toBeFalsy();
+  });
+
   it('should onConsoleLog will not take effect when disableConsoleIntercept', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
@@ -46,5 +68,31 @@ describe('console log', () => {
 
     expect(logs.some((log) => log.startsWith('I'))).toBeTruthy();
     expect(logs.some((log) => log.includes('log.test.ts:4:11'))).toBeFalsy();
+  });
+
+  it('should forward the native console in vmThreads when interception is disabled', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'log.test',
+        '--pool',
+        'vmThreads',
+        '--pool.memoryLimit',
+        '256MB',
+        '--disableConsoleIntercept',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.some((log) => log.includes("I'm log"))).toBeTruthy();
+    expect(logs.some((log) => log.includes("I'm info"))).toBeTruthy();
   });
 });

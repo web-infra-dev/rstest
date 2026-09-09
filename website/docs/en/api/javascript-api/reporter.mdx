@@ -3,6 +3,8 @@ title: Reporter
 description: The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporter API
 
 The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
@@ -68,9 +70,17 @@ interface Reporter {
   onTestCaseResult?(result: TestResult): void;
   onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
   onUserConsoleLog?(log: UserConsoleLog): void;
-  onExit?(): void;
+  onExit?(): MaybePromise<void>;
 }
 ```
+
+<ApiMeta addedVersion="0.12.0" />
+
+Starting in v0.12.0, Rstest also calls `onExit` when the reporter's owning context is released after normal run, list, or merge completion, watch close, or startup failure. It continues to run on abnormal CLI exits. List contexts currently do not attach reporters, so they have no reporter hooks to call. Use `onExit` to release resources such as streams or renderers. Errors from the hook do not replace the operation's result or error.
+
+<ApiMeta addedVersion="0.11.1" />
+
+Metadata result fields are available on reporter results. JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
 
 ## Examples
 
@@ -116,6 +126,26 @@ const jsonReporter: Reporter = {
     };
 
     writeFileSync('test-report.json', JSON.stringify(report, null, 2));
+  },
+};
+```
+
+### Reading runtime metadata
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const metadataReporter: Reporter = {
+  onTestCaseResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestSuiteResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestFileResult(result) {
+    console.log(result.testPath, result.meta);
   },
 };
 ```

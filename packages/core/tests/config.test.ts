@@ -1,5 +1,7 @@
 import { resolve } from 'pathe';
 import {
+  getDefaultReporters,
+  isGithubActions,
   mergeRstestConfig,
   resolveExtends,
   withDefaultConfig,
@@ -33,6 +35,47 @@ describe('mergeRstestConfig', () => {
     });
 
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
+  });
+
+  it('should merge expect.poll with its defaults', () => {
+    expect(
+      withDefaultConfig({
+        expect: {
+          poll: {
+            timeout: 200,
+          },
+        },
+      }).expect,
+    ).toEqual({
+      poll: {
+        interval: 50,
+        timeout: 200,
+      },
+    });
+  });
+
+  it('should preserve test environment prebundle configuration', () => {
+    expect(
+      withDefaultConfig({
+        testEnvironment: {
+          name: 'jsdom',
+          options: { value: true },
+          prebundle: true,
+        },
+      }).testEnvironment,
+    ).toEqual({
+      name: 'jsdom',
+      options: { value: true },
+      prebundle: true,
+    });
+
+    expect(
+      withDefaultConfig({
+        testEnvironment: 'jsdom',
+      }).testEnvironment,
+    ).toEqual({
+      name: 'jsdom',
+    });
   });
 
   it('should override forceRerunTriggers', () => {
@@ -272,9 +315,10 @@ describe('mergeRstestConfig', () => {
     );
 
     expect(
-      rstest.projects[0]?.normalizedConfig.performance?.buildCache
-        ?.buildDependencies,
-    ).toEqual(['/repo/configs/cache-flags.ts']);
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toMatchObject({
+      buildDependencies: ['/repo/configs/cache-flags.ts'],
+    });
   });
 
   it('should preserve explicit default buildCache directory for projects', () => {
@@ -301,9 +345,10 @@ describe('mergeRstestConfig', () => {
     );
 
     expect(
-      rstest.projects[0]?.normalizedConfig.performance?.buildCache
-        ?.cacheDirectory,
-    ).toBe('/repo/projects/node/node_modules/.cache/rstest');
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest',
+    });
     expect(
       resolveProjectBuildCache({
         context: rstest,
@@ -447,6 +492,105 @@ describe('mergeRstestConfig', () => {
       },
     });
   });
+
+  it('should deep-merge browser.providerOptions across config layers', () => {
+    expect(
+      mergeRstestConfig(
+        {
+          browser: {
+            enabled: true,
+            provider: 'playwright',
+            providerOptions: {
+              launch: { channel: 'chromium', timeout: 30_000 },
+            },
+          },
+        },
+        {
+          browser: {
+            provider: 'playwright',
+            providerOptions: {
+              launch: { channel: 'chrome' },
+              context: { locale: 'en-US' },
+            },
+          },
+        },
+      ).browser,
+    ).toEqual({
+      enabled: true,
+      provider: 'playwright',
+      providerOptions: {
+        // `channel` overridden, sibling `timeout` and unrelated `context` kept.
+        launch: { channel: 'chrome', timeout: 30_000 },
+        context: { locale: 'en-US' },
+      },
+    });
+  });
+
+  it('should replace (not chain/concat) non-plain providerOptions values', () => {
+    const baseLog = () => {};
+    const overrideLog = () => {};
+    const merged = mergeRstestConfig(
+      {
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          providerOptions: {
+            launch: {
+              args: ['--no-sandbox'],
+              logger: { log: baseLog },
+            },
+          },
+        },
+      },
+      {
+        browser: {
+          provider: 'playwright',
+          providerOptions: {
+            launch: {
+              args: ['--headless=new'],
+              logger: { log: overrideLog },
+            },
+          },
+        },
+      },
+    );
+    const launch = (merged.browser!.providerOptions as any).launch;
+    // Opaque provider payload: arrays replace (not concat), functions stay
+    // callable and are replaced (not chained into `[baseLog, overrideLog]`).
+    expect(launch.args).toEqual(['--headless=new']);
+    expect(launch.logger.log).toBe(overrideLog);
+    expect(typeof launch.logger.log).toBe('function');
+  });
+
+  it('should keep a class-instance providerOptions value intact when a sibling leaf is overridden', () => {
+    class Logger {
+      log() {
+        return 'logged';
+      }
+    }
+    const logger = new Logger();
+    const merged = mergeRstestConfig(
+      {
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          providerOptions: { launch: { logger } },
+        },
+      },
+      {
+        browser: {
+          provider: 'playwright',
+          providerOptions: { launch: { channel: 'chrome' } },
+        },
+      },
+    );
+    const launch = (merged.browser!.providerOptions as any).launch;
+    // A class instance is a leaf: it must keep its prototype (deepmerge would
+    // otherwise clone it into a prototype-less plain object).
+    expect(launch.channel).toBe('chrome');
+    expect(launch.logger).toBeInstanceOf(Logger);
+    expect(launch.logger.log()).toBe('logged');
+  });
 });
 
 describe('withDefaultConfig browser normalization', () => {
@@ -520,5 +664,26 @@ describe('withDefaultConfig browser normalization', () => {
     const config: RstestConfig = {};
 
     expect(() => withDefaultConfig(config)).not.toThrow();
+  });
+});
+
+describe('default reporter selection', () => {
+  // `getDefaultReporters` takes the GitHub Actions flag as a parameter so both
+  // branches can be asserted directly — the build-time `GITHUB_ACTIONS` define
+  // (forced to 'false' for this package's own tests) makes the inline runtime
+  // check otherwise impossible to exercise for the `true` branch here.
+  it('adds the github-actions reporter under GitHub Actions', () => {
+    expect(getDefaultReporters(true)).toEqual(['default', 'github-actions']);
+  });
+
+  it('uses only the default reporter outside GitHub Actions', () => {
+    expect(getDefaultReporters(false)).toEqual(['default']);
+  });
+
+  it('defaults to the GITHUB_ACTIONS env signal', () => {
+    // In this package's test build the define pins GITHUB_ACTIONS off, so the
+    // env-driven default must match the non-CI branch and `isGithubActions()`.
+    expect(isGithubActions()).toBe(false);
+    expect(getDefaultReporters()).toEqual(['default']);
   });
 });

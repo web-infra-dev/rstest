@@ -2,6 +2,14 @@ import { defineConfig } from '@rstest/core';
 import { join } from 'pathe';
 
 export default defineConfig({
+  source: {
+    transformImport: [
+      {
+        libraryName: 'demo-lib',
+        libraryDirectory: '.',
+      },
+    ],
+  },
   coverage: {
     enabled: true,
     provider: 'istanbul',
@@ -13,7 +21,7 @@ export default defineConfig({
       './src/c.ts',
     ],
     clean: false,
-    reporters: ['text'],
+    reporters: ['text', 'json-summary'],
   },
   setupFiles: ['./rstest.setup.ts'],
 });

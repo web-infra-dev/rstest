@@ -1,10 +1,16 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { parseMarkerPayload, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const parseReporterMetadata = (stdout: string) =>
+  parseMarkerPayload<Record<string, any>>(
+    stdout,
+    '__RSTEST_REPORTER_METADATA__',
+  );
 
 describe.concurrent('reporters', () => {
   it('default - single file', async ({ onTestFinished }) => {
@@ -45,7 +51,7 @@ describe.concurrent('reporters', () => {
   it('verbose', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/index.test.ts', '--reporter=verbose'],
+      args: ['run', 'fixtures/index.test.ts', '--reporters=verbose'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -62,7 +68,7 @@ describe.concurrent('reporters', () => {
   it('dot', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/index.test.ts', '--reporter=dot'],
+      args: ['run', 'fixtures/index.test.ts', '--reporters=dot'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -104,13 +110,34 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('passing case log');
   });
 
+  it('default - each project uses its own silent config', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'fixtures/silentProjects.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('[silent-a]');
+    expect(cli.stdout).toContain('[loud-b]');
+    expect(cli.stdout).not.toContain('console from silent-a');
+    expect(cli.stdout).toContain('console from loud-b');
+  });
+
   it('dot - silent passed-only', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: [
         'run',
         'fixtures/silent.test.ts',
-        '--reporter=dot',
+        '--reporters=dot',
         '--silent=passed-only',
       ],
       onTestFinished,
@@ -237,7 +264,7 @@ describe.concurrent('reporters', () => {
       args: [
         'run',
         'fixtures/index.test.ts',
-        '--reporter=verbose',
+        '--reporters=verbose',
         '--hideSkippedTests',
       ],
       onTestFinished,
@@ -311,8 +338,78 @@ describe.concurrent('reporters', () => {
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
     ).toBe(3);
 
-    expect(cli.stdout).toContain('[custom reporter] onTestRunStart');
-    expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
+    expect(
+      cli.stdout.match(/\[custom reporter\] onTestRunStart/g)?.length,
+    ).toBe(1);
+    expect(cli.stdout.match(/\[custom reporter\] onTestRunEnd/g)?.length).toBe(
+      1,
+    );
+  });
+
+  it('exposes metadata to custom reporter hooks', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', './rstest.metadataReporterConfig.ts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    const result = parseReporterMetadata(cli.stdout);
+
+    expect(result.caseStartMeta).toEqual([
+      {
+        name: 'inherits metadata',
+        meta: { fromSuite: true, shared: 'suite' },
+      },
+      {
+        name: 'skipped metadata',
+        meta: { fromSuite: true, shared: 'skip', skippedCase: true },
+      },
+      {
+        name: 'todo metadata',
+        meta: { fromSuite: true, shared: 'todo', todoCase: true },
+      },
+      {
+        name: 'overrides metadata',
+        meta: { fromSuite: true, shared: 'case', caseOnly: true },
+      },
+    ]);
+    expect(result.caseResultMeta).toEqual([
+      {
+        name: 'inherits metadata',
+        meta: { fromSuite: true, shared: 'suite', runtime: 'first' },
+      },
+      {
+        name: 'skipped metadata',
+        meta: { fromSuite: true, shared: 'skip', skippedCase: true },
+      },
+      {
+        name: 'todo metadata',
+        meta: { fromSuite: true, shared: 'todo', todoCase: true },
+      },
+      {
+        name: 'overrides metadata',
+        meta: {
+          fromSuite: true,
+          shared: 'case',
+          caseOnly: true,
+          runtime: 'second',
+          replaced: true,
+          afterEach: true,
+        },
+      },
+    ]);
+    expect(result.suiteResultMeta).toEqual([
+      { fromSuite: true, shared: 'suite', suiteHook: 'afterAll' },
+    ]);
+    expect(result.fileResultMeta).toEqual({ fileHook: 'afterAll' });
   });
 
   it('empty', async ({ onTestFinished }) => {

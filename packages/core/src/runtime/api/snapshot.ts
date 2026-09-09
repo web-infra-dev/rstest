@@ -25,6 +25,7 @@ import {
 } from '@vitest/snapshot';
 import type { Assertion, TestCase, WorkerState } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils/helper';
+import { fileContext } from '../fileContext';
 
 function recordAsyncExpect(
   _test: any,
@@ -129,21 +130,40 @@ function getTestMeta(test: TestCase) {
     testId: test.testId,
   };
 }
-export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
-  workerState,
-) => {
-  if (!workerState.snapshotClient) {
-    workerState.snapshotClient = new SnapshotClient({
-      isEqual: (received, expected) => {
-        return equals(received, expected, [iterableEquality, subsetEquality]);
-      },
-    });
-  }
 
-  const client = workerState.snapshotClient;
+/** Snapshot metadata for inline assertions reached outside a test context. */
+function getFileMeta(name: string) {
+  const { testPath, taskId } = fileContext().workerState;
+  return {
+    filepath: testPath,
+    name,
+    testId: String(taskId),
+  };
+}
+/**
+ * Attach this file's `SnapshotClient` to its worker state. Called once per
+ * file by `createRstestRuntime` — the runner consumes it for `setup`/`finish`,
+ * and the (build-once) snapshot chai plugin below resolves it at assert time.
+ */
+export const ensureSnapshotClient = (
+  workerState: WorkerState,
+): SnapshotClient => {
+  workerState.snapshotClient ??= new SnapshotClient({
+    isEqual: (received, expected) => {
+      return equals(received, expected, [iterableEquality, subsetEquality]);
+    },
+  });
+  return workerState.snapshotClient;
+};
 
+/**
+ * Build the snapshot chai plugin. Installed once on the file-level `expect`
+ * singleton; every assertion resolves the running file's worker state through
+ * `fileContext()` at call time (the live-binding contract, see `../api`).
+ */
+export const SnapshotPlugin: () => ChaiPlugin = () => {
   function getSnapshotClient(): SnapshotClient {
-    return client;
+    return ensureSnapshotClient(fileContext().workerState);
   }
 
   return (chai, utils) => {
@@ -268,13 +288,7 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
           inlineSnapshot,
           error,
           errorMessage,
-          ...(test
-            ? getTestMeta(test)
-            : {
-                filepath: workerState.testPath,
-                name: 'toMatchInlineSnapshot',
-                testId: String(workerState.taskId),
-              }),
+          ...(test ? getTestMeta(test) : getFileMeta('toMatchInlineSnapshot')),
         });
       },
     );
@@ -335,11 +349,7 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
           errorMessage,
           ...(test
             ? getTestMeta(test)
-            : {
-                name: 'toThrowErrorMatchingInlineSnapshot',
-                filepath: workerState.testPath,
-                testId: String(workerState.taskId),
-              }),
+            : getFileMeta('toThrowErrorMatchingInlineSnapshot')),
         });
       },
     );

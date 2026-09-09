@@ -2,13 +2,15 @@ import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
 import { pluginAlgolia } from '@rspress/plugin-algolia';
+import { pluginClientRedirects } from '@rspress/plugin-client-redirects';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
 import pluginSitemap from 'rspress-plugin-sitemap';
 
 const siteUrl = 'https://rstest.rs';
-const description = 'The Rspack-based testing framework';
+const description =
+  'Rstest is a JavaScript testing framework powered by Rspack';
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -16,10 +18,10 @@ export default defineConfig({
   icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logoText: 'Rstest',
-  description:
-    'Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.',
+  description,
   markdown: {
     link: {
+      checkAnchors: true,
       checkDeadLinks: true,
     },
   },
@@ -34,6 +36,9 @@ export default defineConfig({
     exclude: ['**/zh/shared/**', '**/en/shared/**', './theme'],
   },
   themeConfig: {
+    llmsUI: {
+      placement: 'outline',
+    },
     socialLinks: [
       {
         icon: 'github',
@@ -64,13 +69,153 @@ export default defineConfig({
       {
         lang: 'zh',
         label: '简体中文',
-        description: '由 Rspack 驱动的测试框架',
+        description: 'Rstest 是由 Rspack 驱动的 JavaScript 测试框架',
       },
     ],
   },
   plugins: [
     pluginAlgolia({
       verificationContent: '71ECBF977243215D',
+    }),
+    pluginClientRedirects({
+      redirects: [
+        {
+          from: '/guide/advanced/debugging',
+          to: '/guide/debug/debugging',
+        },
+        {
+          from: '/guide/advanced/profiling',
+          to: '/guide/debug/profiling',
+        },
+        {
+          from: '/guide/advanced/troubleshooting',
+          to: '/guide/debug/troubleshooting',
+        },
+        {
+          from: '/guide/basic/metadata',
+          to: '/guide/advanced/metadata',
+        },
+        {
+          from: '/guide/basic/scoped-cleanup',
+          to: '/guide/advanced/scoped-cleanup',
+        },
+        {
+          from: '/guide/integration/adapters',
+          to: '/guide/advanced/adapters',
+        },
+        {
+          from: '^/guide/integration$',
+          to: '/integration/module-federation',
+        },
+        {
+          from: '/guide/integration/module-federation',
+          to: '/integration/module-federation',
+        },
+        {
+          from: '/guide/integration/playwright',
+          to: '/integration/playwright',
+        },
+        {
+          from: '/guide/integration/rslint',
+          to: '/integration/rslint',
+        },
+        {
+          from: '/guide/integration/rslib',
+          to: '/integration/rslib',
+        },
+        {
+          from: '/guide/integration/rslib/reference',
+          to: '/integration/rslib/reference',
+        },
+        {
+          from: '/guide/integration/rsbuild',
+          to: '/integration/rsbuild',
+        },
+        {
+          from: '/guide/integration/rsbuild/reference',
+          to: '/integration/rsbuild/reference',
+        },
+        {
+          from: '/guide/integration/rspack',
+          to: '/integration/rspack',
+        },
+        {
+          from: '/guide/integration/rspack/reference',
+          to: '/integration/rspack/reference',
+        },
+        {
+          from: '/guide/advanced/playwright',
+          to: '/integration/playwright',
+        },
+        {
+          from: '/zh/guide/advanced/debugging',
+          to: '/zh/guide/debug/debugging',
+        },
+        {
+          from: '/zh/guide/advanced/profiling',
+          to: '/zh/guide/debug/profiling',
+        },
+        {
+          from: '/zh/guide/advanced/troubleshooting',
+          to: '/zh/guide/debug/troubleshooting',
+        },
+        {
+          from: '/zh/guide/basic/metadata',
+          to: '/zh/guide/advanced/metadata',
+        },
+        {
+          from: '/zh/guide/basic/scoped-cleanup',
+          to: '/zh/guide/advanced/scoped-cleanup',
+        },
+        {
+          from: '/zh/guide/integration/adapters',
+          to: '/zh/guide/advanced/adapters',
+        },
+        {
+          from: '^/zh/guide/integration$',
+          to: '/zh/integration/module-federation',
+        },
+        {
+          from: '/zh/guide/integration/module-federation',
+          to: '/zh/integration/module-federation',
+        },
+        {
+          from: '/zh/guide/integration/playwright',
+          to: '/zh/integration/playwright',
+        },
+        {
+          from: '/zh/guide/integration/rslint',
+          to: '/zh/integration/rslint',
+        },
+        {
+          from: '/zh/guide/integration/rslib',
+          to: '/zh/integration/rslib',
+        },
+        {
+          from: '/zh/guide/integration/rslib/reference',
+          to: '/zh/integration/rslib/reference',
+        },
+        {
+          from: '/zh/guide/integration/rsbuild',
+          to: '/zh/integration/rsbuild',
+        },
+        {
+          from: '/zh/guide/integration/rsbuild/reference',
+          to: '/zh/integration/rsbuild/reference',
+        },
+        {
+          from: '/zh/guide/integration/rspack',
+          to: '/zh/integration/rspack',
+        },
+        {
+          from: '/zh/guide/integration/rspack/reference',
+          to: '/zh/integration/rspack/reference',
+        },
+        {
+          from: '/zh/guide/advanced/playwright',
+          to: '/zh/integration/playwright',
+        },
+      ],
     }),
     pluginFontOpenSans(),
     pluginSitemap({

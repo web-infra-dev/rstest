@@ -128,6 +128,59 @@ export default defineConfig({
     });
   });
 
+  it('should remove build-only plugins in the test environment', async () => {
+    const keepPlugin = {
+      name: 'custom-plugin',
+      setup: () => {},
+    };
+
+    const config = await withRslibConfig({
+      config: {
+        plugins: [
+          { name: 'rsbuild:dts', setup: () => {} },
+          { name: 'rsbuild:type-check', setup: () => {} },
+          { name: 'rsbuild:less', setup: () => {} },
+          keepPlugin,
+        ],
+      },
+    })({});
+
+    expect(config.plugins).toHaveLength(5);
+    expect(config.plugins?.[0]).toMatchObject({ name: 'rsbuild:dts' });
+    expect(config.plugins?.[2]).toMatchObject({ name: 'rsbuild:less' });
+    expect(config.plugins?.[3]).toBe(keepPlugin);
+    expect(config.plugins?.[4]).toMatchObject({
+      name: 'rslib-adapter:remove-useless-plugins',
+      remove: ['rsbuild:dts', 'rsbuild:type-check'],
+    });
+  });
+
+  it('should use inline rslib config before configPath', async () => {
+    const inlineConfigPath = join(__dirname, 'missing-inline-rslib.config.ts');
+    const config = await withRslibConfig({
+      configPath: inlineConfigPath,
+      config: {
+        lib: [{ format: 'esm' }],
+        performance: {
+          buildCache: true,
+        },
+        source: {
+          define: {
+            INLINE_CONFIG: '"inline"',
+          },
+        },
+      },
+    })({});
+
+    expect(config.source?.define).toEqual({
+      INLINE_CONFIG: '"inline"',
+    });
+    expect(config.forceRerunTriggers).toEqual([inlineConfigPath]);
+    expect((config as any).performance?.buildCache).toEqual({
+      buildDependencies: [inlineConfigPath],
+    });
+  });
+
   it('should throw error when config file not found', async () => {
     await expect(() =>
       withRslibConfig({

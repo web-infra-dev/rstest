@@ -1,1033 +1,287 @@
-import { constants as osConstants } from 'node:os';
-import { cleanCoverageReports, createCoverageProvider } from '../coverage';
-import { ensureRunDependencies } from './dependencies';
-import { createPool } from '../pool';
-import type {
-  Duration,
-  EntryInfo,
-  ProjectEntries,
-  SourceMapInput,
-} from '../types';
-import type { CoverageMap } from '../types/coverage';
 import {
-  clearScreen,
+  cleanCoverageReports,
+  createCoverageProviderWithLog,
+  ensureCoverageProviderInstalled,
+} from '../coverage';
+import type { TestExecutor } from '../types';
+import {
   color,
   createTraceController,
-  getTestEntries,
   getForceRerunTriggerMessage,
-  getNoTestFilesMessage,
-  isDebug,
   logger,
-  resolveShardedEntries,
   type TraceEvent,
 } from '../utils';
 import {
-  type BrowserTestRunOptions,
-  type BrowserTestRunResult,
-  loadBrowserModule,
-} from './browserLoader';
+  finalizeRunCycle,
+  notifyReportersOnTestRunStart,
+  runLifecycleStep,
+} from './finalizeRun';
+import {
+  type BrowserTestExecutor,
+  loadBrowserExecutor,
+  validateBrowserRunConfig,
+} from './browser/loader';
+import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
-import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
-import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import {
+  type BrowserGlobalSetupStageResult,
+  globalSetupFailureOutcome,
+  runBrowserGlobalSetupStage,
+} from './browser/globalSetupStage';
+import { createNodeExecutor } from './executors/nodeExecutor';
+import { runGlobalTeardown } from './globalSetup';
+import { isBrowserProject, isNodeProject } from './isBrowserProject';
+import { createTestPlanner } from './planner';
 import type { Rstest } from './rstest';
-
-/**
- * Run browser mode tests.
- * Returns the result for unified reporter output.
- */
-async function runBrowserModeTests(
-  context: Rstest,
-  browserProjects: typeof context.projects,
-  options: BrowserTestRunOptions,
-): Promise<BrowserTestRunResult | void> {
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
-    projectRoots,
-  });
-  validateBrowserConfig(context);
-  return runBrowserTests(context, options);
-}
-
-const getSignalExitCode = (signal: NodeJS.Signals): number => {
-  const signalNumber = osConstants.signals[signal];
-  return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
-};
-
-const reportNoTestFiles = ({
-  context,
-  mode = 'all',
-}: {
-  context: Rstest;
-  mode?: 'all' | 'on-demand';
-}) => {
-  if (context.command === 'watch') {
-    if (mode === 'on-demand') {
-      logger.log(color.yellow('No test files need re-run.'));
-    } else {
-      logger.log(color.yellow('No test files found.'));
-    }
-  } else {
-    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    const message = getNoTestFilesMessage({
-      context,
-      code,
-      defaultMessage: `No test files found, exiting with code ${code}.`,
-    });
-
-    if (code === 0) {
-      logger.log(color.yellow(message));
-    } else {
-      logger.error(color.red(message));
-    }
-
-    process.exitCode = code;
-  }
-
-  if (mode === 'all') {
-    if (context.relatedFilters?.length) {
-      logger.log(
-        color.gray('related: '),
-        context.relatedFilters.join(color.gray(', ')),
-      );
-    } else if (context.fileFilters?.length) {
-      logger.log(
-        color.gray('filter: '),
-        context.fileFilters.join(color.gray(', ')),
-      );
-    }
-
-    context.projects.forEach((p) => {
-      if (context.projects.length > 1) {
-        logger.log('');
-        logger.log(color.gray('project:'), p.name);
-      }
-      logger.log(color.gray('root:'), p.rootPath);
-
-      logger.log(
-        color.gray('include:'),
-        p.normalizedConfig.include.join(color.gray(', ')),
-      );
-      logger.log(
-        color.gray('exclude:'),
-        p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
-      );
-    });
-  }
-};
-
-const notifyReportersOnTestRunEnd = async ({
-  context,
-  coverage,
-  duration,
-  getSourcemap,
-  unhandledErrors,
-  filterRerunTestPaths,
-}: {
-  context: Rstest;
-  coverage?: CoverageMap;
-  duration: Duration;
-  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
-  unhandledErrors?: Error[];
-  filterRerunTestPaths?: string[];
-}) => {
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunEnd?.({
-      results: context.reporterResults.results,
-      coverage: coverage?.toJSON(),
-      testResults: context.reporterResults.testResults,
-      unhandledErrors,
-      snapshotSummary: context.snapshotManager.summary,
-      duration,
-      getSourcemap,
-      filterRerunTestPaths,
-    });
-  }
-};
-
-const isLifecycleDebugEnabled = isDebug();
-
-const runLifecycleStep = async <T>(
-  label: string,
-  fn: () => Promise<T>,
-): Promise<T> => {
-  if (!isLifecycleDebugEnabled) {
-    return fn();
-  }
-
-  const startTime = Date.now();
-  logger.debug(`lifecycle: start ${label}`);
-
-  try {
-    const result = await fn();
-    logger.debug(`lifecycle: finish ${label} (${Date.now() - startTime}ms)`);
-    return result;
-  } catch (error) {
-    logger.debug(`lifecycle: fail ${label} (${Date.now() - startTime}ms)`);
-    throw error;
-  }
-};
+import {
+  createWatchCycleDriver,
+  createWatchShortcutHandlers,
+  createWatchTeardown,
+  registerWatchSignalExit,
+  type WatchSessionTargets,
+} from './watchSession';
 
 export async function runTests(context: Rstest): Promise<void> {
+  // High-level flow (post-executor-seam):
+  // 1. Split browser/node projects (the single `isBrowserProject` predicate).
+  // 2. Resolve the plan first (each side's `modifyRstestConfig` hooks fire and
+  //    the plan is read inside the planner — the init barrier), then construct
+  //    whichever executors it says this run needs. 0 and N node projects take
+  //    the same route: a zero-node run gets no node build from the planner and
+  //    therefore no node executor (the cold-start gate, see below).
+  // 3. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
+  //    `finalizeRunCycle` → one `executors.close()` exit path.
+  // 4. Watch: both executors signal through `onInvalidate` and every signal is
+  //    one queued cycle + finalize, so node rebuilds, browser rebuilds, and CLI
+  //    shortcuts all run through the same loop.
   cleanCoverageReports(context.normalizedConfig.coverage);
 
   if (context.relatedRerunReason === 'forceRerunTrigger') {
     logger.log(`${color.yellow(getForceRerunTriggerMessage(context))}\n`);
   }
 
-  // Separate browser mode and node mode projects
-  const browserProjects = context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
-  );
-  const nodeProjects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
-
-  const hasBrowserProjects = browserProjects.length > 0;
-  const hasNodeProjects = nodeProjects.length > 0;
+  const browserProjects = context.projects.filter(isBrowserProject);
+  const nodeProjects = context.projects.filter(isNodeProject);
 
   const isWatchMode = context.command === 'watch';
 
-  // For non-watch mode with both browser and node tests, we need to unify reporter output
-  const shouldUnifyReporter =
-    !isWatchMode && hasBrowserProjects && hasNodeProjects;
-  const getEmptyRunDuration = () => ({
-    totalTime: 0,
-    buildTime: 0,
-    testTime: 0,
-  });
+  // Reset the per-run test state once, before any executor streams events into
+  // `stateManager`. Watch cycles own their own reset via
+  // `prepareWatchCycleState`.
+  if (!isWatchMode) {
+    context.stateManager.reset();
+  }
 
-  // Constructed before the browser-only fast path so `--trace` is honored
-  // for pure-browser runs (browser host forwards events via `onTraceEvents`).
+  // `onlyFailures` applies only to a plain, full run; every other scoping
+  // mechanism wins over failure history. Warn once and ignore (rather than
+  // erroring) so a shared config carrying `onlyFailures` stays usable everywhere.
+  if (context.normalizedConfig.onlyFailures) {
+    if (isWatchMode) {
+      logger.warn(
+        'onlyFailures is ignored in watch mode; use the watch run-failed shortcut instead.',
+      );
+    } else if (context.relatedMode) {
+      logger.warn(
+        `onlyFailures is ignored when combined with --${context.relatedMode}.`,
+      );
+    } else if (context.fileFilters !== undefined) {
+      logger.warn(
+        'onlyFailures is ignored when explicit file filters are provided.',
+      );
+    } else if (context.normalizedConfig.testNamePattern) {
+      logger.warn(
+        'onlyFailures is ignored when a test name pattern is provided.',
+      );
+    }
+  }
+
+  const { coverage } = context.normalizedConfig;
+  const { rootPath, snapshotManager } = context;
+
   const traceController = createTraceController({
     enabled: context.trace,
     rootPath: context.rootPath,
   });
-
-  // If only browser tests, run them and generate coverage
-  if (hasBrowserProjects && !hasNodeProjects) {
-    if (context.relatedResolutionEmpty) {
-      if (isWatchMode) {
-        await runBrowserModeTests(context, browserProjects, {
-          skipOnTestRunEnd: false,
-          allowEmptyWatchRun: true,
-        });
-      } else {
-        reportNoTestFiles({ context });
-        await notifyReportersOnTestRunEnd({
-          context,
-          duration: getEmptyRunDuration(),
-          getSourcemap: async () => null,
-        });
-      }
-
-      await runLifecycleStep('trace controller cleanup', () =>
-        traceController.close(),
-      );
-      return;
-    }
-
-    const { coverage } = context.normalizedConfig;
-
-    await ensureRunDependencies({
-      projects: [],
-      rootPath: context.rootPath,
-      coverage,
-    });
-
-    if (coverage.enabled) {
-      logger.log(
-        ` ${color.gray('Coverage enabled with')} %s\n`,
-        color.yellow(coverage.provider),
-      );
-    }
-
-    const traceRun = traceController.beginRun();
-
-    const browserResult = await runBrowserModeTests(context, browserProjects, {
-      skipOnTestRunEnd: false,
-      onTraceEvents: traceRun.onEvents,
-    });
-
-    // Generate coverage reports for browser-only tests when execution produced test results.
-    // Skip coverage on early startup failures surfaced via unhandledErrors.
-    if (
-      coverage.enabled &&
-      browserResult?.results.length &&
-      !browserResult.unhandledErrors?.length
-    ) {
-      const coverageProvider = await createCoverageProvider(
-        coverage,
-        context.rootPath,
-      );
-      if (coverageProvider) {
-        const browserCoverageMap = coverageProvider.createCoverageMap();
-        for (const result of browserResult.results) {
-          if (result.coverage) {
-            browserCoverageMap.merge(result.coverage);
-          }
-        }
-        const { generateCoverage } = await import('../coverage/generate');
-        await generateCoverage(context, browserCoverageMap, coverageProvider);
-      }
-    }
-
-    await runLifecycleStep('trace shutdown', () =>
-      traceController.shutdown(traceRun),
-    );
-    return;
-  }
-
-  // If only node tests, run them (handled below)
-  // If both, run them in parallel
-
-  let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
-  // Late-binding handoff for mixed-mode browser+node runs: the browser host
-  // is launched once at the top of `runTests`, but each call to `run()`
-  // starts a fresh per-rerun trace buffer. Pre-allocate the first buffer
-  // here so events emitted before `run()` adopts it — or in scenarios where
-  // `run()` is never called (mixed mode with all node tests filtered out) —
-  // are not silently dropped. `beginRun` itself returns a no-op handle when
-  // tracing is disabled, so we can keep `activeTraceRun` non-optional.
+  // Pre-allocated so browser events emitted before a cycle adopts a fresh buffer
+  // (or in filtered runs where no cycle runs) are not silently dropped.
   let activeTraceRun = traceController.beginRun();
   const forwardBrowserTraceEvents = context.trace
     ? (events: TraceEvent[]) => activeTraceRun.onEvents?.(events)
     : undefined;
 
-  const allProjects = context.projects;
-
-  const { rootPath, reporters, snapshotManager, command, normalizedConfig } =
-    context;
-  const { coverage, shard } = normalizedConfig;
-
-  const entriesCache: Map<string, ProjectEntries> =
-    (await resolveShardedEntries(context)) || new Map();
-
-  // Define globTestSourceEntries after entriesCache is potentially populated
-  const globTestSourceEntries = async (
-    name: string,
-  ): Promise<Record<string, string>> => {
-    if (context.relatedResolutionEmpty) {
-      return {};
-    }
-    if (!isWatchMode && shard && entriesCache.has(name)) {
-      return entriesCache.get(name)!.entries;
-    }
-    const { include, exclude, includeSource, root } = allProjects.find(
-      (p) => p.environmentName === name,
-    )!.normalizedConfig;
-    const entries = await getTestEntries({
-      include,
-      exclude: exclude.patterns,
-      includeSource,
-      rootPath,
-      projectRoot: root,
-      fileFilters: context.fileFilters || [],
-      fileFilterMode: context.fileFilterMode,
-    });
-
-    entriesCache.set(name, {
-      entries,
-      fileFilters: context.fileFilters,
-    });
-
-    return entries;
-  };
-
-  let browserProjectsToRun = browserProjects;
-  let nodeProjectsToRun = nodeProjects;
-
-  // In non-watch mode, proactively skip projects with no test files to avoid unnecessary builds
-  if (!isWatchMode) {
-    // Populate entries cache for all projects
-    await Promise.all(
-      allProjects.map((p) => globTestSourceEntries(p.environmentName)),
-    );
-
-    const hasEntries = (env: string) =>
-      Object.keys(entriesCache.get(env)?.entries || {}).length > 0;
-
-    browserProjectsToRun = browserProjects.filter((p) =>
-      hasEntries(p.environmentName),
-    );
-    nodeProjectsToRun = nodeProjects.filter((p) =>
-      hasEntries(p.environmentName),
-    );
-  } else if (shard) {
-    // In watch mode with sharding, only run projects that have sharded entries
-    browserProjectsToRun = browserProjects.filter((p) => {
-      return (
-        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
-        0
-      );
-    });
-    nodeProjectsToRun = nodeProjects.filter((p) => {
-      return (
-        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
-        0
-      );
-    });
-  }
-
-  if (isWatchMode && context.relatedResolutionEmpty) {
-    browserProjectsToRun = browserProjects;
-    nodeProjectsToRun = [];
-  }
-
-  const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
-  const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
-
-  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
-    await ensureRunDependencies({
-      projects: nodeProjectsToRun,
-      rootPath,
-      coverage,
-    });
-  }
-
-  // If there are browser tests to run, start them.
-  if (hasBrowserTestsToRun) {
-    const browserEntries = new Map();
-    if (shard) {
-      for (const p of browserProjectsToRun) {
-        browserEntries.set(
-          p.environmentName,
-          entriesCache.get(p.environmentName),
-        );
-      }
-    }
-    browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
-      skipOnTestRunEnd: shouldUnifyReporter,
-      shardedEntries: shard ? browserEntries : undefined,
-      allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
-      onTraceEvents: forwardBrowserTraceEvents,
-    });
-
-    // Prevent an unhandled rejection window in mixed node+browser runs.
-    // We still await the original promise later to surface the error.
-    browserResultPromise.catch(() => undefined);
-  }
-
-  // If there are no node tests to run, we can potentially exit early.
-  if (!hasNodeTestsToRun) {
-    if (browserResultPromise) {
-      await browserResultPromise;
-    }
-    // If only browser tests were to run and they ran, we should return.
-    if (hasBrowserTestsToRun) {
-      // `run()` was never invoked on this path, so no node-side finalize
-      // fires for the pre-allocated buffer. Flush any browser events the
-      // host emitted into it before exiting so `--trace` still produces a
-      // file for filtered mixed-mode runs.
-      await runLifecycleStep('trace shutdown', () =>
-        traceController.shutdown(activeTraceRun),
-      );
-      return;
-    }
-    // If no node projects at all, and no browser tests to run,
-    // then nothing to do here. This handles the original early exit for no node projects.
-    if (!hasNodeProjects) {
-      return;
-    }
-  }
-
-  // The `projects` variable now refers to node projects that have tests to run.
-  const projects = nodeProjectsToRun;
-
-  const { getSetupFiles } = await import('../utils/getSetupFiles');
-
-  const setupFiles = Object.fromEntries(
-    projects.map((project) => {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { setupFiles },
-      } = project;
-
-      return [environmentName, getSetupFiles(setupFiles, rootPath)];
-    }),
-  );
-
-  const globalSetupFiles = Object.fromEntries(
-    // Global setup still applies to all original projects in context
-    context.projects.map((project) => {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { globalSetup },
-      } = project;
-
-      return [environmentName, getSetupFiles(globalSetup, rootPath)];
-    }),
-  );
-
-  const rsbuildInstance = await prepareRsbuild(
-    context,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    projects,
-  );
-
-  const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    inspectedConfig: {
-      ...context.normalizedConfig,
-      // Pass only the relevant node projects for Rsbuild processing
-      projects: projects.map((p) => p.normalizedConfig),
-    },
+  // ===================================================================
+  // Init barrier: the planner resolves first — the node `modifyRstestConfig`
+  // hooks fire, the browser's do too where the plan may depend on them (inside a
+  // files-only discovery boot, hence the trace sink), and the plan is read while
+  // it is being built — and only then is any executor constructed from it. One
+  // planner answers for both sides, so there is no half-resolved pair to keep in
+  // step, and every run shape — node-only, browser-only, mixed — comes through
+  // here.
+  // ===================================================================
+  const planner = await createTestPlanner(context, {
+    browserProjects,
+    nodeProjects,
     isWatchMode,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    rsbuildInstance,
-    rootPath,
+    onTraceEvents: forwardBrowserTraceEvents,
   });
 
-  const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
-    (acc, entry) => acc.concat(Object.values(entry.entries) || []),
-    [],
-  );
+  const hasNodeTestsToRun = planner.hasNodeTestsToRun();
+  const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
 
-  const getRecommendWorkerCount = (): number => {
-    // TODO: the best way is to create workers on demand
-    const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
-      const project = projects.find((p) => p.environmentName === key);
-      return project?.normalizedConfig.browser.enabled !== true;
+  // Gated on there being something to run: auto-installing a missing coverage
+  // package for a run with no work is the wrong default.
+  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
+    await ensureCoverageProviderInstalled(coverage, rootPath, {
+      confirm: context.packageInstallerConfirm,
     });
-
-    return nodeEntries.flatMap(
-      ([_key, entry]) => Object.values(entry.entries) || [],
-    ).length;
-  };
-
-  const recommendWorkerCount =
-    command === 'watch' ? Number.POSITIVE_INFINITY : getRecommendWorkerCount();
-
-  const pool = await createPool({
-    context,
-    recommendWorkerCount,
-  });
-
-  // Initialize coverage collector
-  const coverageProvider = coverage.enabled
-    ? await createCoverageProvider(coverage, context.rootPath)
-    : null;
-
-  if (coverageProvider) {
-    logger.log(
-      ` ${color.gray('Coverage enabled with')} %s\n`,
-      color.yellow(coverage.provider),
-    );
+    const coveragePluginLoadError = planner.coveragePluginLoadError();
+    if (coveragePluginLoadError) {
+      throw coveragePluginLoadError;
+    }
   }
 
-  type Mode = 'all' | 'on-demand';
+  // The single run-scoped provider, built before the executors so both sides can
+  // take it through their constructor. A coverage-plugin load error is only
+  // thrown when something actually runs (above); on the empty path it just means
+  // no provider can be built.
+  // Built for every shape, the empty ones included: an empty `--related`
+  // resolution writes an empty coverage report rather than none at all.
+  // "Coverage was requested and this run covered nothing" is a report, and
+  // suppressing it for one run shape would re-split the single assembly.
+  const coverageProvider = planner.coveragePluginLoadError()
+    ? null
+    : await createCoverageProviderWithLog(
+        context.normalizedConfig.coverage,
+        rootPath,
+      );
 
-  const run = async ({
-    fileFilters,
-    mode = 'all',
-    buildStart = Date.now(),
-  }: {
-    fileFilters?: string[];
-    mode?: Mode;
-    buildStart?: number;
-  } = {}) => {
-    for (const reporter of reporters) {
-      await reporter.onTestRunStart?.();
+  // The cold-start gate, followed rather than re-decided here: the planner
+  // brings up no node build for a run with zero node projects, so that run
+  // constructs no node executor and pays for no node Rsbuild instance.
+  // Constructing a `NodeExecutor` is not the cost being avoided — it allocates
+  // closures and nothing else — so re-adding a branch above `createTestPlanner`
+  // to "save" it is the regression the gate exists to prevent.
+  const { nodeBuild } = planner;
+  const nodeExecutor = nodeBuild
+    ? createNodeExecutor(context, {
+        ...nodeBuild,
+        getPlan: planner.getPlan,
+        coverageProvider,
+        isWatchMode,
+        getTraceRun: () => activeTraceRun,
+      })
+    : undefined;
+  await nodeExecutor?.init();
+
+  // Nothing to run on either side: route the empty run through the shared
+  // finalize like every other non-watch path. This is also where an empty
+  // `--related` resolution lands — the plan globs nothing for it, so no executor
+  // is ever launched and the no-test-files verdict comes from the one finalize.
+  if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
+    // Constructing a browser executor normally validates its config, and this
+    // branch may reach the end without one — so ask for the check directly
+    // unless the discovery boot already validated after config hooks ran.
+    //
+    // This reaches empty *mixed* runs, not only browser-only ones: an empty
+    // mixed run whose `@rstest/browser` is missing or version-mismatched
+    // reports that and exits instead of finalizing with "no test files found"
+    // and hiding it. Deliberate — a broken install is the more useful verdict,
+    // and the loader's exit no longer drags the unexpected-exit banner with it.
+    //
+    // Equally deliberate is what this branch does NOT cover: a run with node
+    // tests skips the check even when its filters left the browser side empty
+    // (`--related` on node-only sources must not touch an invalid browser
+    // config — pinned in `e2e/filter/related.test.ts`), while `list` validates
+    // that shape. The policy is per-command, so it lives here, not on the
+    // planner.
+    if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
+      await validateBrowserRunConfig(context, browserProjects);
     }
-
-    let testStart: number | undefined;
-    const currentEntries: EntryInfo[] = [];
-    const currentDeletedEntries: string[] = [];
-
-    context.stateManager.reset();
-
-    // TODO: this is not the best practice for collecting test files
-    context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
-
-    const mergedCoverageMap: CoverageMap | undefined = coverageProvider
-      ? coverageProvider.createCoverageMap()
-      : undefined;
-
-    // Adopt the pre-allocated buffer (set above `runTests` or at the end of
-    // the previous rerun's `finalize`) so browser events emitted before
-    // `run()` are captured.
-    const traceRun = activeTraceRun;
-
-    const returns = await Promise.all(
-      projects.map(async (p) => {
-        const {
-          assetNames,
-          entries,
-          setupEntries,
-          globalSetupEntries,
-          getAssetFiles,
-          getSourceMaps,
-          affectedEntries,
-          deletedEntries,
-        } = await getRsbuildStats({
-          environmentName: p.environmentName,
-          fileFilters,
-        });
-
-        testStart ??= Date.now();
-
-        // Global setup only run once per project
-        // Global setup runs only if there is at least one running test
-        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
-          p._globalSetups = true;
-          const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFilesPromise = getAssetFiles(files);
-          const sourceMapsPromise = getSourceMaps(files);
-          const [assetFiles, sourceMaps] = await Promise.all([
-            assetFilesPromise,
-            sourceMapsPromise,
-          ]);
-
-          const { success, errors } = await runGlobalSetup({
-            globalSetupEntries,
-            assetFiles,
-            sourceMaps,
-            interopDefault: true,
-            outputModule: p.outputModule,
-          });
-          if (!success) {
-            return {
-              results: [],
-              testResults: [],
-              errors,
-              assetNames,
-              // sourcemap is useless since we install source-map-support in worker
-              getSourceMaps: () => null,
-            };
-          }
-        }
-
-        currentDeletedEntries.push(...deletedEntries);
-
-        let finalEntries: EntryInfo[] = entries;
-        if (mode === 'on-demand') {
-          if (affectedEntries.length === 0) {
-            logger.debug(
-              color.yellow(
-                `No test files need re-run in project(${p.environmentName}).`,
-              ),
-            );
-          } else {
-            logger.debug(
-              color.yellow(
-                `Test files to re-run in project(${p.environmentName}):\n`,
-              ) +
-                affectedEntries.map((e) => e.testPath).join('\n') +
-                '\n',
-            );
-          }
-          finalEntries = affectedEntries;
-        } else {
-          logger.debug(
-            color.yellow(
-              fileFilters?.length
-                ? `Run filtered tests in project(${p.environmentName}).\n`
-                : `Run all tests in project(${p.environmentName}).\n`,
-            ),
-          );
-        }
-
-        currentEntries.push(...finalEntries);
-        const { results, testResults } = await pool.runTests({
-          entries: finalEntries,
-          getSourceMaps,
-          setupEntries,
-          getAssetFiles,
-          project: p,
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
-          onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
-          onTraceEvents: traceRun.onEvents,
-        });
-
-        return {
-          results,
-          testResults,
-          assetNames,
-          getSourceMaps,
-        };
-      }),
+    // An empty run is still a run as far as reporters are concerned. Every
+    // other shape pairs a start with its end — the non-watch run below, every
+    // watch cycle — and this branch was the one that finalized without ever
+    // starting, which a reporter that opens state on `onTestRunStart` cannot
+    // tell apart from a run that never happened.
+    await notifyReportersOnTestRunStart(context);
+    await finalizeRunCycle(context, {
+      outcomes: [],
+      mode: 'all',
+      isWatchMode,
+      coverageProvider,
+      reportOnFailure: coverage.reportOnFailure,
+      traceRun: activeTraceRun,
+    });
+    if (nodeExecutor) {
+      await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
+    }
+    await runLifecycleStep('trace shutdown', () =>
+      traceController.shutdown(activeTraceRun),
     );
+    context.exitCode.finishCycle();
+    return;
+  }
 
-    testStart ??= buildStart;
-    const buildTime = testStart - buildStart;
+  // `hasNodeTestsToRun` implies the planner brought up a node build, so this is
+  // the single handle every node-side gate below reads — carrying the narrowing
+  // with it instead of re-deriving it from the boolean.
+  const nodeExecutorToRun = hasNodeTestsToRun ? nodeExecutor : undefined;
 
-    const testTime = Date.now() - testStart;
-
-    // Wait for browser tests to complete if running in parallel
-    const browserResult = browserResultPromise
-      ? await browserResultPromise
-      : undefined;
-    const browserResolveSourcemap = browserResult?.resolveSourcemap;
-    const browserClose = browserResult?.close;
-
-    try {
-      const nodeResourceByAssetName = new Map<
-        string,
-        (typeof returns)[number]['getSourceMaps']
-      >();
-
-      for (const item of returns) {
-        for (const assetName of item.assetNames) {
-          nodeResourceByAssetName.set(assetName, item.getSourceMaps);
-        }
-      }
-
-      const getSourcemap = async (
-        sourcePath: string,
-      ): Promise<SourceMapInput | null> => {
-        if (browserResolveSourcemap) {
-          const resolved = await browserResolveSourcemap(sourcePath);
-          if (resolved.handled) {
-            return resolved.sourcemap;
-          }
-        }
-
-        const getSourceMaps = nodeResourceByAssetName.get(sourcePath);
-        const sourceMap = (await getSourceMaps?.([sourcePath]))?.[sourcePath];
-        return sourceMap ? JSON.parse(sourceMap) : null;
-      };
-
-      // When unifying reporter output, combine browser and node durations
-      const duration: Duration =
-        shouldUnifyReporter && browserResult
-          ? {
-              totalTime:
-                testTime + buildTime + browserResult.duration.totalTime,
-              buildTime: buildTime + browserResult.duration.buildTime,
-              testTime: testTime + browserResult.duration.testTime,
-            }
-          : {
-              totalTime: testTime + buildTime,
-              buildTime,
-              testTime,
-            };
-
-      const results = returns.flatMap((r) => r.results);
-      const testResults = returns.flatMap((r) => r.testResults);
-      const errors = returns.flatMap((r) => r.errors || []);
-
-      // Merge browser test results for coverage collection (only when unifying reporter output)
-      // In watch mode, browser and node tests run independently with their own reporters,
-      // so we should not merge stale browser results into node results
-      if (shouldUnifyReporter && browserResult?.results) {
-        results.push(...browserResult.results);
-        // Strip coverage from browser results to avoid memory bloat in reporter/state caches,
-        // same as the node-side pool layer does via `delete result.coverage`
-        for (const r of browserResult.results) {
-          if (r.coverage) {
-            mergedCoverageMap?.merge(r.coverage);
-            delete r.coverage;
-          }
-        }
-      }
-      if (shouldUnifyReporter && browserResult?.testResults) {
-        testResults.push(...browserResult.testResults);
-      }
-      if (shouldUnifyReporter && browserResult?.unhandledErrors) {
-        errors.push(...browserResult.unhandledErrors);
-      }
-
-      context.updateReporterResultState(
-        results,
-        testResults,
-        currentDeletedEntries,
-      );
-
-      // Check for failures including browser results when unified
-      const nodeHasFailure =
-        results.some((r) => r.status === 'fail') || errors.length;
-      const browserHasFailure =
-        shouldUnifyReporter && browserResult?.hasFailure;
-
-      const noTestsDiscovered = results.length === 0 && !errors.length;
-
-      if (noTestsDiscovered) {
-        reportNoTestFiles({ context, mode });
-      }
-
-      const isFailure = nodeHasFailure || browserHasFailure;
-
-      if (isFailure) {
-        process.exitCode = 1;
-      }
-
-      await runLifecycleStep('reporter onTestRunEnd', () =>
-        notifyReportersOnTestRunEnd({
-          context,
-          coverage: mergedCoverageMap,
-          duration,
-          getSourcemap,
-          unhandledErrors: errors,
-          filterRerunTestPaths: currentEntries.length
-            ? currentEntries.map((e) => e.testPath)
-            : undefined,
-        }),
-      );
-
-      // Generate coverage reports after all tests complete
-      if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
-        const { generateCoverage } = await import('../coverage/generate');
-
-        await runLifecycleStep('coverage report generation', () =>
-          generateCoverage(context, mergedCoverageMap!, coverageProvider),
-        );
-      }
-
-      await runLifecycleStep('trace run finalize', () => traceRun.finalize());
-      // Pre-allocate the next watch-rerun buffer so browser events emitted
-      // between reruns (or before the next `run()` adopts a fresh buffer)
-      // are not lost.
-      activeTraceRun = traceController.beginRun();
-
-      if (isFailure) {
-        const bail = context.normalizedConfig.bail;
-
-        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-          logger.log(
-            color.yellow(
-              `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
-            ),
-          );
-        }
-      }
-    } finally {
-      if (browserClose) {
-        await runLifecycleStep('browser result cleanup', () => browserClose());
-      }
+  // ===================================================================
+  // Non-watch: one executor loop, one finalize, one close exit path.
+  // ===================================================================
+  if (!isWatchMode) {
+    // Start the node resources (dev server, env-dependency validation, pool)
+    // BEFORE constructing the browser executor, so an early node dependency
+    // failure (e.g. missing `jsdom`) never leaves a browser host mid-launch —
+    // the same deliberate ordering the pre-seam code had. The build/stats phase
+    // inside `runCycle` still overlaps with the browser run below.
+    if (nodeExecutorToRun) {
+      await nodeExecutorToRun.ensureRunResources();
     }
-  };
 
-  if (command === 'watch') {
-    const enableCliShortcuts = isCliShortcutsEnabled();
+    const executors: TestExecutor[] = nodeExecutorToRun
+      ? [nodeExecutorToRun]
+      : [];
 
-    let isCleaningUp = false;
-
-    const cleanup = async () => {
-      if (isCleaningUp) {
+    // Single-exit-path rule: every executor closes through here exactly once
+    // (idempotent), so no early return or throw can reintroduce a #1363-class
+    // deferred-teardown hang. `executors` is read at close time, so the browser
+    // executor pushed inside the try below is covered — including when its own
+    // load/init fails with the node resources above already up.
+    //
+    // The run owns the shared globalSetup queue: every executor must close
+    // before user teardown starts, including on the signal path. The exit
+    // handler is registered for non-embedded runs so a mid-run unexpected exit
+    // prints and sets a failing code rather than ending quietly.
+    let didCloseExecutors = false;
+    const closeExecutors = async () => {
+      if (didCloseExecutors) {
         return;
       }
-      isCleaningUp = true;
-
+      didCloseExecutors = true;
       try {
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
-        await runLifecycleStep('worker pool cleanup', () => pool.close());
-        await runLifecycleStep('rsbuild server cleanup', () => closeServer());
-        // Flush any browser events the host pushed into the pre-allocated
-        // buffer since the last `run()` finalized — otherwise they get
-        // dropped when the controller closes. Inline (not `shutdown`)
-        // because cleanup may run from a SIGINT handler and `waitForExit`
-        // would block waiting for another signal.
-        await runLifecycleStep('trace run finalize', () =>
-          activeTraceRun.finalize(),
+        const closePromises = executors.map((executor) =>
+          runLifecycleStep('executor cleanup', () => executor.close()),
         );
-        await runLifecycleStep('trace controller cleanup', () =>
-          traceController.close(),
+        await Promise.allSettled(closePromises);
+        await Promise.all(closePromises);
+      } finally {
+        // User teardown must still run when an executor close throws.
+        await runLifecycleStep('global teardown', () =>
+          runGlobalTeardown(context),
         );
-      } catch (error) {
-        logger.log(color.red(`Error during cleanup: ${error}`));
       }
     };
 
-    const handleSignal = async (signal: NodeJS.Signals) => {
-      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-      await cleanup();
-      // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(getSignalExitCode(signal));
-    };
-
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
-
-    const afterTestsWatchRun = () => {
-      logger.log(color.green('  Waiting for file changes...'));
-
-      if (enableCliShortcuts) {
-        if (snapshotManager.summary.unmatched) {
-          // highlight `u` when there are unmatched snapshots
-          logger.log(
-            `  ${color.dim('press')} ${color.yellow(color.bold('u'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h')} ${color.dim('to show help')}\n`,
-          );
-        } else {
-          logger.log(
-            `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
-          );
-        }
-      }
-    };
-
-    const { onBeforeRestart } = await import('./restart');
-
-    onBeforeRestart(async () => {
-      await runLifecycleStep('global teardown', () => runGlobalTeardown());
-      await runLifecycleStep('worker pool cleanup', () => pool.close());
-      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
-      await runLifecycleStep('trace run finalize', () =>
-        activeTraceRun.finalize(),
-      );
-      await runLifecycleStep('trace controller cleanup', () =>
-        traceController.close(),
-      );
-    });
-
-    let buildStart: number | undefined;
-
-    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
-      buildStart = Date.now();
-      if (!isFirstCompile) {
-        clearScreen();
-      }
-    });
-
-    rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
-      snapshotManager.clear();
-      await run({ buildStart, mode: isFirstCompile ? 'all' : 'on-demand' });
-      buildStart = undefined;
-
-      if (isFirstCompile && enableCliShortcuts) {
-        const closeCliShortcuts = await setupCliShortcuts({
-          closeServer: async () => {
-            await runLifecycleStep('worker pool cleanup', () => pool.close());
-            await runLifecycleStep('rsbuild server cleanup', () =>
-              closeServer(),
-            );
-            await runLifecycleStep('trace run finalize', () =>
-              activeTraceRun.finalize(),
-            );
-            await runLifecycleStep('trace controller cleanup', () =>
-              traceController.close(),
-            );
-          },
-          runAll: async () => {
-            clearScreen();
-            snapshotManager.clear();
-            context.normalizedConfig.testNamePattern = undefined;
-            context.fileFilters = undefined;
-
-            // TODO: should rerun compile with new entries
-            await run({ mode: 'all' });
-            afterTestsWatchRun();
-          },
-          runWithTestNamePattern: async (pattern?: string) => {
-            clearScreen();
-            // Update testNamePattern for current run
-            context.normalizedConfig.testNamePattern = pattern;
-
-            if (pattern) {
-              logger.log(
-                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
-              );
-            } else {
-              logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
-            }
-            snapshotManager.clear();
-            await run();
-            afterTestsWatchRun();
-          },
-          runWithFileFilters: async (filters?: string[]) => {
-            clearScreen();
-            if (filters && filters.length > 0) {
-              logger.log(
-                `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
-              );
-            } else {
-              logger.log(`\n${color.dim('Cleared file filters')}\n`);
-            }
-            snapshotManager.clear();
-            context.fileFilters = filters;
-            const entries = await Promise.all(
-              projects.map(async (p) => {
-                return globTestSourceEntries(p.environmentName);
-              }),
-            ).then((entries) =>
-              entries.reduce<string[]>(
-                (acc, entry) => acc.concat(...Object.values(entry)),
-                [],
-              ),
-            );
-
-            if (!entries.length) {
-              logger.log(
-                filters
-                  ? color.yellow(
-                      `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
-                    )
-                  : color.yellow('\nNo matching test files to run.\n'),
-              );
-              return;
-            }
-            await run({ fileFilters: entries });
-            afterTestsWatchRun();
-          },
-          runFailedTests: async () => {
-            const failedTests = context.reporterResults.results
-              .filter((result) => result.status === 'fail')
-              .map((r) => r.testPath);
-
-            if (!failedTests.length) {
-              logger.log(
-                color.yellow(
-                  '\nNo failed tests were found that needed to be rerun.',
-                ),
-              );
-              return;
-            }
-
-            clearScreen();
-
-            snapshotManager.clear();
-
-            await run({ fileFilters: failedTests, mode: 'all' });
-            afterTestsWatchRun();
-          },
-          updateSnapshot: async () => {
-            if (!snapshotManager.summary.unmatched) {
-              logger.log(
-                color.yellow(
-                  '\nNo snapshots were found that needed to be updated.',
-                ),
-              );
-              return;
-            }
-            const failedTests = context.reporterResults.results
-              .filter((result) => result.snapshotResult?.unmatched)
-              .map((r) => r.testPath);
-
-            clearScreen();
-
-            const originalUpdateSnapshot =
-              snapshotManager.options.updateSnapshot;
-            snapshotManager.clear();
-            snapshotManager.options.updateSnapshot = 'all';
-            await run({ fileFilters: failedTests });
-            afterTestsWatchRun();
-            snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
-          },
-        });
-
-        onBeforeRestart(closeCliShortcuts);
-      }
-
-      afterTestsWatchRun();
-    });
-  } else {
     let isTeardown = false;
     let isCleaningUp = false;
-
     const cleanup = async () => {
       if (isCleaningUp) {
         return;
       }
       isCleaningUp = true;
-
       try {
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
-        await runLifecycleStep('worker pool cleanup', () => pool.close());
-        await runLifecycleStep('rsbuild server cleanup', () => closeServer());
+        await closeExecutors();
         await runLifecycleStep('trace run finalize', () =>
           activeTraceRun.finalize(),
         );
@@ -1052,45 +306,322 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
-
-        // Run global teardown before exit
-        runGlobalTeardown().catch((error) => {
+        runGlobalTeardown(context).catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
-
-        process.exitCode = 1;
+        context.exitCode.raise(1);
       }
     };
 
     const handleSignal = async (signal: NodeJS.Signals) => {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
-      // Exit with appropriate code (128 + signal number is Unix convention)
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('exit', unExpectedExit);
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    if (!context.embedded) {
+      process.on('exit', unExpectedExit);
+      for (const signal of FATAL_SIGNALS) {
+        process.on(signal, handleSignal);
+      }
+    }
 
     try {
-      await run();
-      isTeardown = true;
-      await runLifecycleStep('worker pool cleanup', () => pool.close());
-      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
+      let browserStage: BrowserGlobalSetupStageResult = { errors: [] };
+      let browserExecutor: TestExecutor | undefined;
+      if (hasBrowserTestsToRun) {
+        const browserProjectsToRun = planner.getBrowserProjectsToRun();
+        browserExecutor = await loadBrowserExecutor(
+          context,
+          browserProjectsToRun,
+          coverageProvider,
+          planner.getExecutorRunOptions(browserProjectsToRun),
+        );
+        executors.push(browserExecutor);
+        await browserExecutor.init();
+        // Core-owned pre-cycle globalSetup stage over the resolved browser
+        // subset. Its context-local env changes are visible to both the browser
+        // cycle and node workers dispatched below.
+        browserStage = await runBrowserGlobalSetupStage(
+          context,
+          browserProjectsToRun,
+          { entriesCache: planner.getPlan().entriesCache },
+        );
+      }
 
-      // Run global teardown after all tests are done
-      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      // After the browser globalSetup stage, not before it: a setup that fails
+      // takes the run down before any reporter was told one started, which is
+      // the pairing every other shape already has.
+      await notifyReportersOnTestRunStart(context);
+      // Settle every cycle before propagating a failure: a fail-fast
+      // `Promise.all` would reach the `finally` teardown while a sibling
+      // executor is still mid-cycle, truncating its tests and firing global
+      // teardown early. The re-await unwraps the already-settled promises,
+      // rejecting with the first failure in executor order.
+      const cyclePromises = executors.map((executor) =>
+        executor === browserExecutor && browserStage.errors.length
+          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+          : executor.runCycle({
+              buildId: 1,
+              mode: 'all',
+              updateSnapshot: snapshotManager.options.updateSnapshot,
+              env: browserStage.env,
+              onTraceEvents: forwardBrowserTraceEvents,
+            }),
+      );
+      await Promise.allSettled(cyclePromises);
+      const outcomes = await Promise.all(cyclePromises);
+
+      await finalizeRunCycle(context, {
+        outcomes,
+        mode: 'all',
+        isWatchMode: false,
+        coverageProvider,
+        reportOnFailure: coverage.reportOnFailure,
+        traceRun: activeTraceRun,
+      });
+      isTeardown = true;
     } finally {
-      process.off('exit', unExpectedExit);
-      process.off('SIGINT', handleSignal);
-      process.off('SIGTERM', handleSignal);
-      process.off('SIGTSTP', handleSignal);
+      try {
+        await closeExecutors();
+      } finally {
+        if (!context.embedded) {
+          process.off('exit', unExpectedExit);
+          for (const signal of FATAL_SIGNALS) {
+            process.off(signal, handleSignal);
+          }
+        }
+      }
     }
 
     await runLifecycleStep('trace wait for exit', () =>
       traceController.waitForExit(),
     );
+    context.exitCode.finishCycle();
+    return;
+  }
+
+  // ===================================================================
+  // Watch mode: one core-owned loop. Both executors signal invalidations, and
+  // every signal is one queued cycle + finalize — a node rebuild landing during
+  // a browser rerun waits instead of interleaving on the shared `stateManager`.
+  // ===================================================================
+  const enableCliShortcuts = isCliShortcutsEnabled(context);
+  // Constructed (not launched) below so its invalidation subscriber, the shared
+  // teardown, and the stdin owner — all three closing over it — are in place
+  // before either side's first cycle. Loading it can fail on a version mismatch,
+  // which is why that runs ahead of the node env-dependency validation
+  // `ensureRunResources()` does further down; the ordering that matters is the
+  // launch, and the launch is the first browser cycle, deferred until those node
+  // resources are up.
+  let browserExecutor: BrowserTestExecutor | undefined;
+  // Assigned once the teardown below exists; until then nothing can be closing.
+  let isSessionClosing = () => false;
+  const watchDriver = createWatchCycleDriver({
+    context,
+    coverageProvider,
+    traceController,
+    getTraceRun: () => activeTraceRun,
+    setTraceRun: (traceRun) => {
+      activeTraceRun = traceRun;
+    },
+    enableCliShortcuts,
+    // Empty launches keep watching; a browser boot failure returned as an
+    // outcome can still leave no live session.
+    isSessionLive: () =>
+      Boolean(nodeExecutorToRun) ||
+      (browserExecutor?.hasWatchSession() ?? false),
+    isSessionClosing: () => isSessionClosing(),
+  });
+
+  if (hasBrowserTestsToRun) {
+    const browserProjectsToRun = planner.getBrowserProjectsToRun();
+    browserExecutor = await loadBrowserExecutor(
+      context,
+      browserProjectsToRun,
+      coverageProvider,
+      planner.getExecutorRunOptions(browserProjectsToRun),
+    );
+    await browserExecutor.init();
+    const executor = browserExecutor;
+    // The host resolves the rerun scope before signalling (its file-set diff is
+    // consumed once), so the hint's filters are the scope this trigger asked
+    // for — the cycle's own is that, plus whatever any signal folded into it.
+    executor.onInvalidate(({ fileFilters }) =>
+      watchDriver.runCycle(executor, {
+        mode: 'on-demand',
+        fileFilters,
+        trigger: 'invalidation',
+      }),
+    );
+  }
+
+  let nodeFileFilterPatterns = context.fileFilters;
+  let nodeFileFilters =
+    nodeFileFilterPatterns !== undefined
+      ? await planner.globTestEntries(nodeFileFilterPatterns)
+      : undefined;
+  const browserTarget = browserExecutor;
+  const watchTargets: WatchSessionTargets = {
+    node: nodeExecutorToRun
+      ? {
+          runCycle: (options) =>
+            watchDriver.runCycle(nodeExecutorToRun, {
+              ...options,
+              fileFilters: options?.fileFilters ?? nodeFileFilters,
+            }),
+          globTestEntries: (filters) => planner.globTestEntries(filters),
+          setFileFilters: (fileFilters) => {
+            nodeFileFilterPatterns = undefined;
+            nodeFileFilters = fileFilters;
+          },
+        }
+      : undefined,
+    browser: browserTarget && {
+      rerun: (testPaths) => browserTarget.requestRerun(testPaths),
+    },
+  };
+
+  // One teardown for the `q` shortcut, the fatal-signal handler, and the
+  // config-change restart hook. The browser side closes first: its runtime owns
+  // the servers the node executor's shutdown does not know about.
+  const watchTeardown = createWatchTeardown({
+    context,
+    executors: [
+      ...(browserExecutor ? [browserExecutor] : []),
+      ...(nodeExecutor ? [nodeExecutor] : []),
+    ],
+    traceController,
+    getTraceRun: () => activeTraceRun,
+  });
+  const closeWatchSession = () => watchTeardown.close();
+  context.closeWatchSession = closeWatchSession;
+  watchTeardown.addCleanup(() => {
+    context.closeWatchSession = undefined;
+  });
+  const closeActiveWatchSession = () =>
+    context.closeWatchSession?.() ?? closeWatchSession();
+  isSessionClosing = () => watchTeardown.isClosing();
+  watchTeardown.addCleanup(
+    registerWatchSignalExit(context, closeActiveWatchSession),
+  );
+
+  // Installed before the first cycle so the ready banner can never appear
+  // before stdin has an owner (a keystroke answering it would be swallowed).
+  if (enableCliShortcuts) {
+    // Every executor this run has, not just the ones a given key queues a cycle
+    // for. A key is answerable only once every one of them is past its first
+    // cycle, and in a mixed run the node side gets there first while the browser
+    // host still has no watch session.
+    const shortcutExecutors = [
+      ...(nodeExecutorToRun ? [nodeExecutorToRun] : []),
+      ...(browserExecutor ? [browserExecutor] : []),
+    ];
+    const closeCliShortcuts = await setupCliShortcuts(
+      createWatchShortcutHandlers(
+        context,
+        watchTargets,
+        closeActiveWatchSession,
+        () => watchDriver.hasSettledCycle(shortcutExecutors),
+      ),
+    );
+    // Released by the teardown rather than the restart hook alone: it is the
+    // process-level owner that keeps the loop alive, so a session that ends
+    // without a restart (a setup failure) would otherwise never exit.
+    watchTeardown.addCleanup(closeCliShortcuts);
+  }
+
+  // Carried only by the initial browser cycle: that cycle is the host launch,
+  // and the host stores the change-set for the session, so a rerun's options
+  // never need it (the executor drops them).
+  let browserWatchEnv: Record<string, string | undefined> | undefined;
+  try {
+    if (browserExecutor) {
+      // Ahead of the node dev server, for the reason the non-watch assembly runs
+      // the stage before dispatching node work: the pool composes its env from
+      // the context-local overlay at dispatch, so a node cycle started first
+      // would miss the browser setups' env changes. The node
+      // dependency check comes first in turn, so a node project that cannot run
+      // rejects the session before a user setup has run — which is
+      // why `validateRunDependencies` is a seam member of its own rather than
+      // something `ensureRunResources` alone owns.
+      if (nodeExecutorToRun) {
+        await watchTeardown.track(nodeExecutorToRun.validateRunDependencies());
+      }
+      if (watchTeardown.isClosing()) {
+        return;
+      }
+      const stage = await watchTeardown.track(
+        runBrowserGlobalSetupStage(context, planner.getBrowserProjectsToRun(), {
+          entriesCache: planner.getPlan().entriesCache,
+          watch: true,
+        }),
+      );
+      if (stage.errors.length) {
+        // Reported through the same finalize every cycle uses, so a watch
+        // session that dies in setup still leaves the reporters a run — and
+        // then rethrown, because a watch session that never opened has to end
+        // the process rather than sit on a stdin owner nothing can answer.
+        await notifyReportersOnTestRunStart(context);
+        await finalizeRunCycle(context, {
+          outcomes: [globalSetupFailureOutcome(stage.errors)],
+          mode: 'all',
+          isWatchMode: true,
+          coverageProvider,
+          reportOnFailure: coverage.reportOnFailure,
+          traceRun: activeTraceRun,
+        });
+        throw new AggregateError(stage.errors, 'Browser globalSetup failed');
+      }
+      if (watchTeardown.isClosing()) {
+        await closeWatchSession();
+        return;
+      }
+      browserWatchEnv = stage.env;
+    }
+
+    if (nodeExecutorToRun) {
+      // The node executor's rebuilds are the watch trigger; its initial compile
+      // signals too, which is what drives the first node cycle.
+      nodeExecutorToRun.onInvalidate(async ({ isFirstBuild }) => {
+        if (nodeFileFilterPatterns !== undefined) {
+          nodeFileFilters = await planner.globTestEntries(
+            nodeFileFilterPatterns,
+          );
+        }
+        return watchDriver.runCycle(nodeExecutorToRun, {
+          mode: isFirstBuild ? 'all' : 'on-demand',
+          fileFilters: nodeFileFilters,
+          trigger: 'invalidation',
+        });
+      });
+      // Start the node dev server now that the subscriber is in place. `runCycle`
+      // (invoked from that callback) reuses these resources via the in-flight
+      // guard rather than starting a second server.
+      await nodeExecutorToRun.ensureRunResources();
+      if (watchTeardown.isClosing()) {
+        await closeWatchSession();
+        return;
+      }
+    }
+
+    if (browserExecutor) {
+      // Deferred to here so node env-dependency validation failures never leave a
+      // browser host running — the same ordering the pre-seam code had.
+      const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
+        mode: 'all',
+        env: browserWatchEnv,
+      });
+      await initialBrowserCycle;
+    }
+  } catch (error) {
+    // A close already under way owns the exit; re-throwing its victim's
+    // rejection would replace a clean shutdown with a crash.
+    const wasClosing = watchTeardown.isClosing();
+    await closeWatchSession();
+    if (wasClosing) {
+      return;
+    }
+    throw error;
   }
 }

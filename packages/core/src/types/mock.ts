@@ -1,6 +1,20 @@
-import type { Config as FakeTimerInstallOpts } from '@sinonjs/fake-timers';
-import type { FunctionLike, MaybePromise } from './utils';
+import type {
+  Clock as FakeTimerClock,
+  Config as FakeTimerInstallOpts,
+} from '@sinonjs/fake-timers';
+import type { FunctionLike, MaybePromise, Truthy } from './utils';
 import type { RuntimeConfig } from './worker';
+
+type FakeTimerTickTime = Parameters<FakeTimerClock['tick']>[0];
+type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
+type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
+type MockFactory<T = unknown> = () => Partial<T>;
+
+export type RealTimers = {
+  setTimeout: typeof globalThis.setTimeout;
+  clearTimeout: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
+};
 
 interface MockResultReturn<T> {
   type: 'return';
@@ -22,9 +36,7 @@ interface MockResultThrow {
 }
 
 type MockResult<T> =
-  | MockResultReturn<T>
-  | MockResultThrow
-  | MockResultIncomplete;
+  MockResultReturn<T> | MockResultThrow | MockResultIncomplete;
 
 interface MockSettledResultFulfilled<T> {
   type: 'fulfilled';
@@ -36,8 +48,7 @@ interface MockSettledResultRejected {
 }
 
 type MockSettledResult<T> =
-  | MockSettledResultFulfilled<T>
-  | MockSettledResultRejected;
+  MockSettledResultFulfilled<T> | MockSettledResultRejected;
 
 type RuntimeOptions = Partial<
   Pick<
@@ -117,6 +128,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    */
   mockRestore(): void;
   /**
+   * Restores the mock when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+  /**
    * Returns current mock implementation if there is one.
    */
   getMockImplementation(): NormalizedProcedure<T> | undefined;
@@ -134,7 +149,7 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   withImplementation<T2>(
     fn: NormalizedProcedure<T>,
     callback: () => T2,
-  ): T2 extends Promise<unknown> ? Promise<void> : void;
+  ): T2 extends Promise<unknown> ? Promise<this> : this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */
@@ -147,6 +162,14 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    * Accepts a value that will be returned for one call to the mock function.
    */
   mockReturnValueOnce(value: ReturnType<T>): this;
+  /**
+   * Accepts a value that will be thrown whenever the mock function is called.
+   */
+  mockThrow(value: unknown): this;
+  /**
+   * Accepts a value that will be thrown during the next function call.
+   */
+  mockThrowOnce(value: unknown): this;
   /**
    * Accepts a value that will be resolved when the async function is called.
    */
@@ -173,7 +196,6 @@ export interface Mock<
 }
 
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
-type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
 
 export type WaitForCallback<T> = () => MaybePromise<T>;
 
@@ -225,12 +247,18 @@ type MockProcedure = (...args: any[]) => any;
 type Constructor<T = any> = new (...args: any[]) => T;
 
 // Mocked class constructor type - preserves both the constructor signature and mock capabilities
-export type MockedClass<T extends Constructor> = Mock<
+type MockedClassBase<T extends Constructor> = Mock<
   (...args: ConstructorParameters<T>) => InstanceType<T>
 > & {
   new (...args: ConstructorParameters<T>): InstanceType<T>;
   prototype: InstanceType<T>;
 };
+
+export type MockedClass<T extends Constructor> = MockedClassBase<T> &
+  MockedObject<T>;
+
+type MockedClassDeep<T extends Constructor> = MockedClassBase<T> &
+  MockedObjectDeep<T>;
 
 type Methods<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? K : never;
@@ -240,11 +268,30 @@ type Properties<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? never : K;
 }[keyof T];
 
-export type MockedFunction<T extends MockProcedure> = Mock<T> & {
+// A mock-wrapped callable. Stripping `this` keeps `mocked(args)` callable
+// without a receiver for methods typed with an explicit `this`, which a bare
+// `T` would break — but when a `this` parameter is present,
+// `OmitThisParameter<T>` rebuilds a bare call signature and drops `T`'s
+// construct signature, so `ConstructSignature<T>` re-extracts it (the tuple
+// wrapping avoids distributing over union members). `T`'s real signatures come
+// before `Mock<T>` so a construct+call member keeps its real construct
+// signature at `new mocked.fn()` sites (`Mock<T>`'s synthetic `new` returns
+// `ReturnType<T>` and would otherwise shadow it).
+type ConstructSignature<T> = [T] extends [new (...args: infer A) => infer R]
+  ? new (...args: A) => R
+  : unknown;
+
+type MockedCallable<T extends MockProcedure> = OmitThisParameter<T> &
+  ConstructSignature<T> &
+  Mock<T>;
+
+// The extra `{ [K in keyof T]: T[K] }` restores named/static properties that
+// `OmitThisParameter` drops when it rebuilds a this-less call signature.
+export type MockedFunction<T extends MockProcedure> = MockedCallable<T> & {
   [K in keyof T]: T[K];
 };
 
-export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
+export type MockedFunctionDeep<T extends MockProcedure> = MockedCallable<T> &
   MockedObjectDeep<T>;
 
 export type MockedObject<T> = {
@@ -266,7 +313,7 @@ export type Mocked<T> = T extends Constructor
       : T;
 
 export type MaybeMockedDeep<T> = T extends Constructor
-  ? MockedClass<T>
+  ? MockedClassDeep<T>
   : T extends MockProcedure
     ? MockedFunctionDeep<T>
     : T extends object
@@ -282,12 +329,19 @@ export type MaybePartiallyMocked<T> = T extends Constructor
       : T;
 
 export type MaybePartiallyMockedDeep<T> = T extends Constructor
-  ? MockedClass<T>
+  ? MockedClassDeep<T>
   : T extends MockProcedure
     ? MockedFunctionDeep<T>
     : T extends object
       ? MockedObjectDeep<T>
       : T;
+
+export type DisposableRstestUtilities = RstestUtilities & {
+  /**
+   * Restores the resource created by the current utility call when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+};
 
 export interface RstestUtilities {
   /**
@@ -495,7 +549,10 @@ export interface RstestUtilities {
    * Changes the value of an environment variable in the current runtime env store.
    * Uses `process.env` in Node.js and runtime env store in browser mode.
    */
-  stubEnv: (name: string, value: string | undefined) => RstestUtilities;
+  stubEnv: (
+    name: string,
+    value: string | undefined,
+  ) => DisposableRstestUtilities;
 
   /**
    * Restores all env values that were changed with `rstest.stubEnv`.
@@ -508,7 +565,7 @@ export interface RstestUtilities {
   stubGlobal: (
     name: string | number | symbol,
     value: unknown,
-  ) => RstestUtilities;
+  ) => DisposableRstestUtilities;
 
   /**
    * Restores all global variables that were changed with `rstest.stubGlobal`.
@@ -533,14 +590,15 @@ export interface RstestUtilities {
   /**
    * Mocks timers using `@sinonjs/fake-timers`.
    */
-  useFakeTimers: (config?: FakeTimerInstallOpts) => RstestUtilities;
+  useFakeTimers: (config?: FakeTimerInstallOpts) => DisposableRstestUtilities;
   useRealTimers: () => RstestUtilities;
   isFakeTimers: () => boolean;
   /**
    * Set the current system time used by fake timers.
    */
-  setSystemTime: (now?: number | Date) => RstestUtilities;
+  setSystemTime: (now?: FakeTimerSystemTime) => RstestUtilities;
   getRealSystemTime: () => number;
+  getRealTimers: () => RealTimers;
 
   runAllTicks: () => RstestUtilities;
   runAllTimers: () => RstestUtilities;
@@ -548,11 +606,13 @@ export interface RstestUtilities {
   runOnlyPendingTimers: () => RstestUtilities;
   runOnlyPendingTimersAsync: () => Promise<RstestUtilities>;
 
-  advanceTimersByTime: (ms: number) => RstestUtilities;
-  advanceTimersByTimeAsync: (ms: number) => Promise<RstestUtilities>;
+  advanceTimersByTime: (ms: FakeTimerTickTime) => RstestUtilities;
+  advanceTimersByTimeAsync: (ms: FakeTimerTickTime) => Promise<RstestUtilities>;
   advanceTimersToNextTimer: (steps?: number) => RstestUtilities;
   advanceTimersToNextTimerAsync: (steps?: number) => Promise<RstestUtilities>;
   advanceTimersToNextFrame: () => RstestUtilities;
+  jumpTimersByTime: (ms: FakeTimerTickTime) => RstestUtilities;
+  setTickMode: (mode: FakeTimerTickMode) => RstestUtilities;
 
   /**
    * Returns the number of fake timers still left to run.
@@ -580,5 +640,5 @@ export interface RstestUtilities {
   waitUntil: <T>(
     callback: () => MaybePromise<T>,
     options?: number | WaitUntilOptions,
-  ) => Promise<T>;
+  ) => Promise<Truthy<Awaited<T>>>;
 }

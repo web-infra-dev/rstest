@@ -7,23 +7,30 @@ description: Rstest provides some utility functions to help you mock functions p
 
 Rstest provides some utility functions to help you mock functions powered by [tinyspy](https://github.com/tinylibs/tinyspy).
 
-## rstest.fn
+## rs.fn
 
-- **Alias:** `rs.fn`
+- **Alias:** `rstest.fn`
 - **Type:**
 
 ```ts
-export interface Mock<T extends Function> extends MockInstance<T> {
+type FunctionLike = (...args: any) => any;
+
+export interface Mock<
+  T extends FunctionLike = FunctionLike,
+> extends MockInstance<T> {
+  new (...args: Parameters<T>): ReturnType<T>;
   (...args: Parameters<T>): ReturnType<T>;
 }
 
-export type MockFn = <T extends Function>(fn?: T) => Mock<T>;
+export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 ```
 
 Creates a spy on a function.
 
+See the [`Mock`](/api/javascript-api/types#mock) type for annotating callable mock functions.
+
 ```ts
-const sayHi = rstest.fn((name: string) => `hi ${name}`);
+const sayHi = rs.fn((name: string) => `hi ${name}`);
 
 const res = sayHi('bob');
 
@@ -32,20 +39,22 @@ expect(res).toBe('hi bob');
 expect(sayHi).toHaveBeenCalledTimes(1);
 ```
 
-## rstest.spyOn
+## rs.spyOn
 
-- **Alias:** `rs.spyOn`
+- **Alias:** `rstest.spyOn`
 - **Type:**
 
 ```ts
-export type SpyFn = (
-  obj: Record<string, any>,
-  methodName: string,
+export type SpyFn = <T extends Record<string, any>, K extends keyof T>(
+  obj: T,
+  methodName: K,
   accessType?: 'get' | 'set',
-) => MockInstance;
+) => MockInstance<T[K]>;
 ```
 
 Creates a spy on a method of an object.
+
+See the [`MockInstance`](/api/javascript-api/types#mockinstance) type for the control API returned by a spy.
 
 ```ts
 const sayHi = () => 'hi';
@@ -53,36 +62,48 @@ const hi = {
   sayHi,
 };
 
-const spy = rstest.spyOn(hi, 'sayHi');
+const spy = rs.spyOn(hi, 'sayHi');
 
 expect(hi.sayHi()).toBe('hi');
 
 expect(spy).toHaveBeenCalled();
 ```
 
-If you call `rstest.spyOn` multiple times for the same method, Rstest reuses the existing spy instead of redefining it.
+If you call `rs.spyOn` multiple times for the same method, Rstest reuses the existing spy instead of redefining it.
 
 ```ts
 const hi = {
   sayHi: () => 'hi',
 };
-rstest.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
+rs.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
 
 expect(hi.sayHi()).toBe('hello');
 // should get the same spy instance
-expect(rstest.spyOn(hi, 'sayHi')).toBeCalled();
+expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
 ```
 
-## rstest.isMockFunction
+:::note Spying on re-exported or third-party exports
 
-- **Alias:** `rs.isMockFunction`
+`rs.spyOn` works on an export defined in the module you import from, but not on one **re-exported** from another module (`export * from '...'`) or provided by a third-party dependency — there the spy may not take effect.
+
+For those, mock the module with [`{ spy: true }`](/api/runtime-api/rstest/mock-modules#with-spy-true-option) instead. It spies every export while keeping its real implementation:
+
+```ts
+rs.mock('pkg', { spy: true });
+```
+
+:::
+
+## rs.isMockFunction
+
+- **Alias:** `rstest.isMockFunction`
 - **Type:** `(fn: any) => fn is MockInstance`
 
 Determines if the given function is a mocked function.
 
-## rstest.mockObject
+## rs.mockObject
 
-- **Alias:** `rs.mockObject`
+- **Alias:** `rstest.mockObject`
 - **Type:**
 
 ```ts
@@ -109,7 +130,7 @@ const original = {
   prop: 'foo',
 };
 
-const mocked = rstest.mockObject(original);
+const mocked = rs.mockObject(original);
 
 // Methods return undefined by default
 expect(mocked.method()).toBe(undefined);
@@ -119,7 +140,7 @@ expect(mocked.nested.getValue()).toBe(undefined);
 expect(mocked.prop).toBe('foo');
 
 // Methods are mock functions
-expect(rstest.isMockFunction(mocked.method)).toBe(true);
+expect(rs.isMockFunction(mocked.method)).toBe(true);
 ```
 
 ### Mocking return values
@@ -127,7 +148,7 @@ expect(rstest.isMockFunction(mocked.method)).toBe(true);
 You can configure mocked methods to return specific values:
 
 ```ts
-const mocked = rstest.mockObject({
+const mocked = rs.mockObject({
   fetchData: () => 'real data',
 });
 
@@ -145,7 +166,7 @@ const original = {
   add: (a: number, b: number) => a + b,
 };
 
-const spied = rstest.mockObject(original, { spy: true });
+const spied = rs.mockObject(original, { spy: true });
 
 // Original implementation is preserved
 expect(spied.add(1, 2)).toBe(3);
@@ -160,10 +181,10 @@ expect(spied.add.mock.results[0]).toEqual({ type: 'return', value: 3 });
 By default, arrays are replaced with empty arrays. With `{ spy: true }`, arrays keep their original values:
 
 ```ts
-const mocked = rstest.mockObject({ array: [1, 2, 3] });
+const mocked = rs.mockObject({ array: [1, 2, 3] });
 expect(mocked.array).toEqual([]);
 
-const spied = rstest.mockObject({ array: [1, 2, 3] }, { spy: true });
+const spied = rs.mockObject({ array: [1, 2, 3] }, { spy: true });
 expect(spied.array).toEqual([1, 2, 3]);
 ```
 
@@ -179,7 +200,7 @@ class UserService {
 }
 
 // Use { spy: true } to keep original implementation
-const MockedService = rstest.mockObject(UserService, { spy: true });
+const MockedService = rs.mockObject(UserService, { spy: true });
 const instance = new MockedService();
 
 // Original method works
@@ -190,19 +211,27 @@ rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
 expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```
 
-## rstest.mocked
+## rs.mocked
 
-- **Alias:** `rs.mocked`
+- **Alias:** `rstest.mocked`
 - **Type:**
 
 ```ts
 type MockedFn = <T>(
   item: T,
-  deep?: boolean | { partial?: boolean; deep?: boolean },
-) => Mocked<T>;
+  deepOrOptions?: boolean | { partial?: boolean; deep?: boolean },
+) =>
+  | Mocked<T>
+  | MaybeMockedDeep<T>
+  | MaybePartiallyMocked<T>
+  | MaybePartiallyMockedDeep<T>;
 ```
 
 A type helper for TypeScript that wraps an object with mock types without changing its runtime behavior. This is useful when you have mocked a module and want proper type hints for the mock methods.
+
+The inferred return type follows the options: `{ deep: true }` applies mock types recursively, while `{ partial: true }` uses the partial mock variants.
+
+See the [`Mocked`](/api/javascript-api/types#mocked) type for annotating mocked objects and modules.
 
 ```ts
 import { myModule } from './myModule';
@@ -210,31 +239,31 @@ import { myModule } from './myModule';
 rs.mock('./myModule', { spy: true });
 
 // TypeScript now knows myModule.method is a MockInstance
-const mockedModule = rstest.mocked(myModule);
+const mockedModule = rs.mocked(myModule);
 
 mockedModule.method.mockReturnValue('mocked');
 ```
 
 The function simply returns the same object at runtime - it only affects TypeScript types.
 
-## rstest.clearAllMocks
+## rs.clearAllMocks
 
-- **Alias:** `rs.clearAllMocks`
-- **Type:** `() => Rstest`
+- **Alias:** `rstest.clearAllMocks`
+- **Type:** `() => RstestUtilities`
 
 Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
 
-## rstest.resetAllMocks
+## rs.resetAllMocks
 
-- **Alias:** `rs.resetAllMocks`
-- **Type:** `() => Rstest`
+- **Alias:** `rstest.resetAllMocks`
+- **Type:** `() => RstestUtilities`
 
 Clears all mocks properties and reset each mock's implementation to its original.
 
-## rstest.restoreAllMocks
+## rs.restoreAllMocks
 
-- **Alias:** `rs.restoreAllMocks`
-- **Type:** `() => Rstest`
+- **Alias:** `rstest.restoreAllMocks`
+- **Type:** `() => RstestUtilities`
 
 Reset all mocks and restore original descriptors of spied-on objects.
 

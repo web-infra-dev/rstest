@@ -1,10 +1,10 @@
 ---
-description: Rstest 是一个基于 Rspack 的测试框架，它为 Rspack 生态提供了全面、一流的支持，能够轻松集成到现有的 Rspack 项目中。
+description: Rstest 是一个基于 Rspack 的 JavaScript 测试框架，它为 Rspack 生态提供了全面、一流的支持，能够轻松集成到现有的 Rspack 项目中。
 ---
 
 # 介绍
 
-Rstest 是一个基于 Rspack 的测试框架，它为 Rspack 生态提供了全面、一流的支持，能够轻松集成到现有的 Rspack 项目中。
+Rstest 是一个基于 Rspack 的 JavaScript 测试框架，它为 Rspack 生态提供了全面、一流的支持，能够轻松集成到现有的 Rspack 项目中。
 
 Rstest 提供兼容 Jest 的 API，同时提供对 TypeScript、ESM、CJS 等的原生、开箱即用支持，确保现代高效的测试体验。
 
@@ -28,7 +28,7 @@ Rstest 现已支持 Node.js 测试、DOM 测试、Mock、多项目测试、覆�
 
 ## 🦀 Rstack
 
-Rstack 是一个以 Rspack 为核心的 JavaScript 统一工具链，具有优秀的性能和一致的架构。
+Rstest 是 Rstack 的一员。Rstack 是为开发者与 Agent 打造的高性能、一体化 JavaScript 工具链。
 
 <img
   src="https://assets.rspack.rs/rstack/rstack-overview.png"
@@ -48,6 +48,23 @@ Rstack 包含以下工具：
 | [Rstest](https://github.com/web-infra-dev/rstest)     | 测试框架       | <a href="https://npmjs.com/package/@rstest/core"><img src="https://img.shields.io/npm/v/@rstest/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
 | [Rslint](https://github.com/web-infra-dev/rslint)     | 代码检查工具   | <a href="https://npmjs.com/package/@rslint/core"><img src="https://img.shields.io/npm/v/@rslint/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
 
+## 📦 核心包
+
+Rstest 的基础能力由 [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 提供，其他核心包则用于补充 Browser Mode、覆盖率和 Rstack 配置复用等场景。你可以根据项目需要按需安装。
+
+Rstest 包含以下核心包：
+
+| 名称                                                                                                      | 描述                     | 版本                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core)                           | 测试框架核心包           | <a href="https://npmjs.com/package/@rstest/core"><img src="https://img.shields.io/npm/v/@rstest/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>                           |
+| [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)                     | Browser Mode 支持        | <a href="https://npmjs.com/package/@rstest/browser"><img src="https://img.shields.io/npm/v/@rstest/browser?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>                     |
+| [@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react)         | React 组件测试工具       | <a href="https://npmjs.com/package/@rstest/browser-react"><img src="https://img.shields.io/npm/v/@rstest/browser-react?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>         |
+| [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)             | V8 覆盖率 Provider       | <a href="https://npmjs.com/package/@rstest/coverage-v8"><img src="https://img.shields.io/npm/v/@rstest/coverage-v8?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>             |
+| [@rstest/coverage-istanbul](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-istanbul) | Istanbul 覆盖率 Provider | <a href="https://npmjs.com/package/@rstest/coverage-istanbul"><img src="https://img.shields.io/npm/v/@rstest/coverage-istanbul?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a> |
+| [@rstest/adapter-rsbuild](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rsbuild)     | 复用 Rsbuild 配置        | <a href="https://npmjs.com/package/@rstest/adapter-rsbuild"><img src="https://img.shields.io/npm/v/@rstest/adapter-rsbuild?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
+| [@rstest/adapter-rslib](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rslib)         | 复用 Rslib 配置          | <a href="https://npmjs.com/package/@rstest/adapter-rslib"><img src="https://img.shields.io/npm/v/@rstest/adapter-rslib?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>         |
+| [@rstest/adapter-rspack](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rspack)       | 复用 Rspack 配置         | <a href="https://npmjs.com/package/@rstest/adapter-rspack"><img src="https://img.shields.io/npm/v/@rstest/adapter-rspack?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>       |
+
 ## 🔗 链接
 
 - [awesome-rstack](https://github.com/rstackjs/awesome-rstack)：与 Rstack 相关的精彩内容列表。
@@ -55,6 +72,7 @@ Rstack 包含以下工具：
 - [storybook-rsbuild](https://github.com/rstackjs/storybook-rsbuild): 基于 Rsbuild 构建的 Storybook。
 - [rsbuild-plugin-template](https://github.com/rstackjs/rsbuild-plugin-template)：使用此模板创建你的 Rsbuild 插件。
 - [rstack-design-resources](https://github.com/rstackjs/rstack-design-resources)：Rstack 的设计资源。
+- [Rslint](/integration/rslint)：配置 Rslint 内置的 Rstest rules。
 
 ## 🧑‍💻 社区
 

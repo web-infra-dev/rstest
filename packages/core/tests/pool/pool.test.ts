@@ -1,6 +1,8 @@
 import { resolve } from 'pathe';
 import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
+import { composeSpawnEnv } from '../../src/pool/workers';
+import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 
 const WORKER_ENTRY = resolve(__dirname, './fixtures/testWorker.mjs');
@@ -38,13 +40,68 @@ const stubRpcMethods = () =>
 const createTask = (
   type: PoolTask['type'] = 'run',
   optionOverrides?: Record<string, unknown>,
+  // A worker is only reused for tasks carrying the same key.
+  environmentKey = 'node',
+  worker: PoolTask['worker'] = 'forks',
 ): PoolTask => ({
-  worker: 'forks',
+  worker,
   type,
   options: {
+    context: { runtimeConfig: { env: {} } },
+    environmentKey,
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
+});
+
+describe('composeSpawnEnv', () => {
+  it('combines the host env with only the task color env', () => {
+    const envKeys = [
+      'NODE_ENV',
+      'FORCE_COLOR',
+      'NO_COLOR',
+      'RSTEST_HOST_ONLY_ENV',
+      'RSTEST_PROJECT_ONLY_ENV',
+    ] as const;
+    const previousEnv = Object.fromEntries(
+      envKeys.map((key) => [key, process.env[key]]),
+    );
+
+    try {
+      process.env.NODE_ENV = 'host';
+      process.env.FORCE_COLOR = '0';
+      process.env.NO_COLOR = '1';
+      process.env.RSTEST_HOST_ONLY_ENV = 'host-value';
+
+      const task = createTask('run', {
+        context: {
+          runtimeConfig: {
+            env: {
+              NODE_ENV: 'project',
+              FORCE_COLOR: '1',
+              NO_COLOR: undefined,
+              RSTEST_PROJECT_ONLY_ENV: 'project-value',
+            },
+          },
+        },
+      });
+      const spawnEnv = composeSpawnEnv(task);
+
+      expect(spawnEnv.NODE_ENV).toBe('host');
+      expect(spawnEnv.RSTEST_HOST_ONLY_ENV).toBe('host-value');
+      expect(spawnEnv.RSTEST_PROJECT_ONLY_ENV).toBeUndefined();
+      expect(spawnEnv.FORCE_COLOR).toBe('1');
+      expect(spawnEnv.NO_COLOR).toBeUndefined();
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
 });
 
 // ── basic run ───────────────────────────────────────────────────────────────
@@ -66,6 +123,111 @@ describe('Pool - basic', () => {
       const result = await pool.collectTests(createTask('collect'));
       expect(result.tests).toEqual([]);
       expect(result.testPath).toBeTypeOf('string');
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('preserves Buffer assets over advanced IPC', async () => {
+    const pool = new Pool(createPoolOptions());
+    try {
+      const result = await pool.runTest(
+        createTask('run', {
+          __testMode: 'asset-transport',
+          assets: {
+            assetFiles: { '/asset.bin': Buffer.from([0, 0xff, 0x80, 0x41]) },
+            sourceMaps: {},
+          },
+        }),
+      );
+      expect((result as any)._assetConstructor).toBe('Buffer');
+      expect((result as any)._assetBytes).toEqual([0, 0xff, 0x80, 0x41]);
+    } finally {
+      await pool.close();
+    }
+  });
+});
+
+describe('Pool - environment prebundle fallback', () => {
+  it('reports the same fallback only once across isolated workers', async () => {
+    const onTestEnvironmentFallback = rs.fn();
+    const pool = new Pool(
+      createPoolOptions({ onTestEnvironmentFallback, maxWorkers: 1 }),
+    );
+    try {
+      await pool.runTest(
+        createTask('run', { __testMode: 'environment-fallback' }),
+      );
+      await pool.runTest(
+        createTask('run', { __testMode: 'environment-fallback' }),
+      );
+
+      expect(onTestEnvironmentFallback).toHaveBeenCalledTimes(1);
+      expect(onTestEnvironmentFallback).toHaveBeenCalledWith({
+        packageName: 'happy-dom',
+        bundlePath: '/tmp/happy-dom-bundle.mjs',
+        resolvedPath: '/project/node_modules/happy-dom/cjs/index.cjs',
+        reason: 'Error: Expected exports: GlobalWindow or Window.',
+      });
+    } finally {
+      await pool.close();
+    }
+  });
+});
+
+describe('Pool - VM worker memory limit', () => {
+  it('recycles a reusable worker after it reports heap over the limit', async () => {
+    const pool = new Pool(
+      createPoolOptions({
+        isolate: false,
+        maxWorkers: 1,
+        minWorkers: 1,
+        memoryLimit: 100,
+      }),
+    );
+    try {
+      const first = await pool.runTest(
+        createTask('run', { __testMode: 'memory-over-limit' }),
+      );
+      const second = await pool.runTest(createTask());
+
+      expect((first as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).not.toBe(
+        (first as any)._workerIdentity,
+      );
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('recycles a reusable vmForks worker after it reports heap over the limit', async () => {
+    const pool = new Pool(
+      createPoolOptions({
+        isolate: false,
+        maxWorkers: 1,
+        minWorkers: 1,
+        memoryLimit: 100,
+      }),
+    );
+    try {
+      const first = await pool.runTest(
+        createTask(
+          'run',
+          { __testMode: 'memory-over-limit' },
+          'node',
+          'vmForks',
+        ),
+      );
+      const second = await pool.runTest(
+        createTask('run', undefined, 'node', 'vmForks'),
+      );
+
+      expect((first as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).toBeTypeOf('number');
+      expect((second as any)._workerIdentity).not.toBe(
+        (first as any)._workerIdentity,
+      );
     } finally {
       await pool.close();
     }
@@ -100,9 +262,9 @@ describe('Pool - fatal error', () => {
   it('should enrich error with captured stderr when worker crashes', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-crash' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-crash' })),
+      );
       expect(err.message).toContain('segfault at 0x0');
     } finally {
       await pool.close();
@@ -116,9 +278,9 @@ describe('Pool - stderr handling', () => {
   it('should truncate large stderr in error messages', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-large' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-large' })),
+      );
       expect(err.message).toContain('[truncated');
       expect(err.message).toContain('bytes of stderr]');
       // Tail is preserved
@@ -133,9 +295,9 @@ describe('Pool - stderr handling', () => {
   it('should capture stderr written immediately before exit', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-late' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-late' })),
+      );
       expect(err.message).toContain('late-stderr-marker');
     } finally {
       await pool.close();
@@ -177,6 +339,29 @@ describe('Pool - isolate', () => {
     }
   });
 
+  it('should not reuse a worker for a different test environment', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    try {
+      // A worker keeps its environment alive across files under
+      // `isolate: false`, so reuse must be environment-matched — otherwise a
+      // persisted module's evaluation-time DOM captures would dangle on the
+      // previous environment (rstest#767).
+      const jsdom = await pool.runTest(createTask('run', undefined, 'jsdom'));
+      const node = await pool.runTest(createTask());
+      expect((jsdom as any)._workerIdentity).not.toBe(
+        (node as any)._workerIdentity,
+      );
+
+      // Same environment still reuses — affinity must not disable sharing.
+      const nodeAgain = await pool.runTest(createTask());
+      expect((nodeAgain as any)._workerIdentity).toBe(
+        (node as any)._workerIdentity,
+      );
+    } finally {
+      await pool.close();
+    }
+  });
+
   it('should replace a crashed reusable worker instead of reusing or deadlocking', async () => {
     const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
     try {
@@ -191,6 +376,20 @@ describe('Pool - isolate', () => {
       // runner, this would hang or throw an IPC error.
       const result = await pool.runTest(createTask());
       expect(result.status).toBe('pass');
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should drain cleanup errors from retired reusable workers', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 0 }));
+    try {
+      await pool.runTest(createTask('run', { __testMode: 'cleanup-error' }));
+      await expect(pool.drainWorkerStopErrors()).resolves.toEqual([
+        expect.objectContaining({
+          message: 'intentional worker cleanup failure',
+        }),
+      ]);
     } finally {
       await pool.close();
     }
@@ -371,10 +570,12 @@ describe('Pool - capacity', () => {
       expect(iv.end).toBeTypeOf('number');
     }
 
-    // Upper bound: at no point were more than maxWorkers tasks running.
+    // Concurrency can only increase when a task starts, so sampling every
+    // start proves the upper bound without combining overlaps from
+    // different moments in the sampled task's lifetime.
     for (const point of intervals) {
       const concurrent = intervals.filter(
-        (iv) => iv.start < point.end && iv.end > point.start,
+        (iv) => iv.start <= point.start && iv.end > point.start,
       ).length;
       expect(concurrent).toBeLessThanOrEqual(maxWorkers);
     }
@@ -387,7 +588,7 @@ describe('Pool - capacity', () => {
       ...sorted.slice(0, maxWorkers).map((iv) => iv.end),
     );
     for (let i = maxWorkers; i < sorted.length; i++) {
-      expect(sorted[i].start).toBeGreaterThanOrEqual(firstBatchEarliestEnd);
+      expect(sorted[i]!.start).toBeGreaterThanOrEqual(firstBatchEarliestEnd);
     }
 
     await pool.close();

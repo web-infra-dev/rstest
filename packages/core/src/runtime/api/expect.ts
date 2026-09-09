@@ -20,6 +20,7 @@
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
+  ChaiStyleAssertions,
   type ChaiPlugin,
   customMatchers,
   GLOBAL_EXPECT,
@@ -42,32 +43,155 @@ import type {
   MatcherState,
   RstestExpect,
   TestCase,
+  TestSuite,
   WorkerState,
 } from '../../types';
+import { DEFAULT_EXPECT_POLL_TIMEOUT } from '../../utils/constants';
+import { toNativePath } from '../../utils/helper';
+import { fileContext } from '../fileContext';
 import { createExpectPoll } from './poll';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
-export { GLOBAL_EXPECT };
 
-export function setupChaiConfig(config: ChaiConfig): void {
-  Object.assign(chaiConfig, config);
+const defaultChaiConfig: ChaiConfig = {
+  showDiff: chaiConfig.showDiff,
+  truncateThreshold: chaiConfig.truncateThreshold,
+};
+
+export function setupChaiConfig(config: ChaiConfig = {}): void {
+  Object.assign(chaiConfig, defaultChaiConfig, config);
 }
+
+const EXPECT_BOOKKEEPING_STATE = {
+  assertionCalls: 0,
+  isExpectingAssertions: false,
+  isExpectingAssertionsError: null,
+  expectedAssertionsNumber: null,
+  expectedAssertionsNumberErrorGen: null,
+} satisfies Partial<MatcherState>;
+
+export const resetExpectState = (
+  expect: RstestExpect,
+  state: Partial<MatcherState>,
+): void => {
+  setState<MatcherState>(EXPECT_BOOKKEEPING_STATE, expect);
+  // Keep this separate from the bookkeeping reset: setState preserves getters
+  // such as the file-level testPath binding, while object spread would not.
+  setState<MatcherState>(state, expect);
+};
+
+/**
+ * The runner pins `testPath` to a plain value per test, so each file must
+ * restore this live getter.
+ */
+const fileExpectState = (
+  getWorkerState: () => WorkerState,
+): Partial<MatcherState> => ({
+  // `testPath` is user-facing; expose the OS-native path (equal to
+  // `import.meta.filename`) for every expect instance — global and the
+  // public per-test `context.expect` alike. Internally it stays POSIX (#1465).
+  get testPath() {
+    return toNativePath(getWorkerState().testPath);
+  },
+});
+
+type GlobalWithExpect = typeof globalThis & {
+  [GLOBAL_EXPECT]: RstestExpect;
+};
+
+export const getGlobalExpect = (): RstestExpect =>
+  (globalThis as GlobalWithExpect)[GLOBAL_EXPECT];
+
+type ElementExpectHandler = (
+  locator: unknown,
+  options: { getTimeout: () => number },
+) => unknown;
+
+let elementExpectHandler: ElementExpectHandler | undefined;
+
+export const registerElementExpect = (handler: ElementExpectHandler): void => {
+  elementExpectHandler = handler;
+};
+
+// Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
+const ReturnedAlias: ChaiPlugin = (chai, utils) => {
+  utils.overwriteMethod(chai.Assertion.prototype, 'returned', () => {
+    return function (this: Assertion, expected?: unknown) {
+      return arguments.length === 0
+        ? this.toHaveReturned()
+        : this.toHaveReturnedWith(expected);
+    };
+  });
+};
+
+type ChaiThrowAssertion = Assertion & {
+  throws: (expected?: RegExp | string) => unknown;
+};
+
+const CrossRealmToThrow: ChaiPlugin = (chai, utils) => {
+  const overwrite = (_super: (expected?: unknown) => unknown) => {
+    return function (this: ChaiThrowAssertion, expected?: unknown) {
+      const isPromiseAssertion = Boolean(utils.flag(this, 'promise'));
+      const isRegExp =
+        expected !== null &&
+        typeof expected === 'object' &&
+        Object.prototype.toString.call(expected) === '[object RegExp]';
+
+      // `@vitest/expect` uses `instanceof RegExp` before delegating to Chai.
+      // A regexp literal created in a vm.Context is not an instance of the
+      // host realm's RegExp, so preserve Vitest's toThrow semantics across
+      // realms by using Chai's cross-realm-safe `throws` implementation for
+      // synchronous function assertions. Promise assertions must stay on
+      // Vitest's promise-aware path because their target is the rejection
+      // value, not a callable function.
+      if (isRegExp && !isPromiseAssertion) {
+        return this.throws(expected as RegExp);
+      }
+
+      // Keep a cross-realm regexp usable by Vitest's promise-aware matcher.
+      // Vitest recognizes host RegExp instances before it handles `.rejects`.
+      if (isRegExp && !(expected instanceof RegExp)) {
+        const regexp = expected as RegExp;
+        return _super.call(this, new RegExp(regexp.source, regexp.flags));
+      }
+
+      return _super.call(this, expected);
+    };
+  };
+
+  utils.overwriteMethod(chai.Assertion.prototype, 'toThrow', overwrite);
+  utils.overwriteMethod(chai.Assertion.prototype, 'toThrowError', overwrite);
+};
+
+// These plugins mutate Chai's process-level prototype, not an expect instance.
+use(JestExtend);
+use(JestChaiExpect);
+use(ChaiStyleAssertions);
+use(ReturnedAlias);
+use(CrossRealmToThrow);
+use(JestAsymmetricMatchers);
 
 export function createExpect({
   getCurrentTest,
-  workerState,
+  getElementTest,
+  getWorkerState,
   snapshotPlugin,
 }: {
-  workerState: WorkerState;
+  /**
+   * Resolved at call time, never captured: the file-level singleton passes a
+   * context-resolving accessor so a reference shared across files under
+   * `isolate: false` always reads the running file's state; a per-test local
+   * expect passes its own pinned state.
+   */
+  getWorkerState: () => WorkerState;
   getCurrentTest: () => TestCase | undefined;
+  getElementTest?: () => TestCase | TestSuite | undefined;
   snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
-  use(JestExtend);
-  use(JestChaiExpect);
   if (snapshotPlugin) {
     use(snapshotPlugin);
   }
-  use(JestAsymmetricMatchers);
 
   const expect = ((value: any, message?: string): Assertion => {
     const { assertionCalls } = getState(expect);
@@ -88,20 +212,8 @@ export function createExpect({
 
   const globalState = getState((globalThis as any)[GLOBAL_EXPECT]) || {};
 
-  setState<MatcherState>(
-    {
-      ...globalState,
-      assertionCalls: 0,
-      isExpectingAssertions: false,
-      isExpectingAssertionsError: null,
-      expectedAssertionsNumber: null,
-      expectedAssertionsNumberErrorGen: null,
-      get testPath() {
-        return workerState.testPath;
-      },
-    },
-    expect,
-  );
+  setState<MatcherState>({ ...globalState }, expect);
+  resetExpectState(expect, fileExpectState(getWorkerState));
 
   // @ts-expect-error chai.expect.extend untyped
   expect.extend = (matchers) => chaiExpect.extend(expect, matchers);
@@ -113,14 +225,44 @@ export function createExpect({
     return expect(...args).withContext({ soft: true }) as Assertion;
   };
 
-  expect.poll = createExpectPoll(expect);
+  expect.poll = createExpectPoll(
+    expect,
+    () => getWorkerState().runtimeConfig.expect.poll,
+    () => {
+      if (getElementTest) {
+        const timeoutContext = getElementTest();
+        return timeoutContext?.type === 'case' ? timeoutContext : undefined;
+      }
+      return getCurrentTest();
+    },
+  );
 
-  (expect as any).element = () => {
-    throw new Error(
-      'expect.element() is only available in browser mode. ' +
-        'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',
-    );
+  const element = (locator: unknown): unknown => {
+    if (!elementExpectHandler) {
+      throw new Error(
+        'expect.element() is only available in browser mode. ' +
+          'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',
+      );
+    }
+
+    const getTimeout = (): number => {
+      const currentTest = getElementTest ? getElementTest() : getCurrentTest();
+      const pollTimeout =
+        getWorkerState().runtimeConfig.expect?.poll?.timeout ??
+        DEFAULT_EXPECT_POLL_TIMEOUT;
+      const remainingTestTimeout = currentTest
+        ? getRemainingTestTimeout(currentTest, TEST_TIMEOUT_BUFFER)
+        : undefined;
+      return remainingTestTimeout === undefined
+        ? pollTimeout
+        : Math.min(pollTimeout, remainingTestTimeout);
+    };
+    const assertion = elementExpectHandler(locator, { getTimeout });
+    const { assertionCalls } = getState(expect);
+    setState({ assertionCalls: assertionCalls + 1 }, expect);
+    return assertion;
   };
+  Object.assign(expect, { element });
 
   expect.unreachable = (message?: string) => {
     assert.fail(`expected ${message ? `"${message}" ` : ''}not to be reached`);
@@ -162,3 +304,53 @@ export function createExpect({
 
   return expect;
 }
+
+let fileExpect: RstestExpect | undefined;
+
+const getContextWorkerState = (): WorkerState => fileContext().workerState;
+
+/**
+ * The file-level `expect` is a build-once singleton with a STABLE identity
+ * across files (the live-binding contract, see `../api`): it resolves the
+ * running file's worker state and current test through `fileContext()` at call
+ * time, so any value-copied reference (`expect.poll`, `.soft`, `{ ...api }`)
+ * captured in a module shared under `isolate: false` stays live — no
+ * delegation needed, there is only one instance. Per-file state is RESET, not
+ * rebuilt. The per-test local expect (`context.expect`, created by the runner)
+ * stays pinned to its test so concurrent tests and callbacks that outlive a
+ * timeout cannot write into another test's matcher state.
+ */
+export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
+  if (!fileExpect) {
+    fileExpect = createExpect({
+      getWorkerState: getContextWorkerState,
+      getCurrentTest: () => fileContext().testRunner.getCurrentTest(),
+      getElementTest: () => {
+        const { testRunner } = fileContext();
+        const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
+        const currentTest = testRunner.getCurrentTest();
+        const timeoutContext = activeTimeoutContext ?? currentTest;
+        // The file-level expect is shared, so the runner's current-test pointer
+        // and browser task context are not reliable while concurrent flows are
+        // interleaved. Tests use context.expect when they need their deadline;
+        // concurrent suite hooks fall back to the configured poll timeout.
+        return timeoutContext?.concurrent || timeoutContext?.inConcurrentScope
+          ? undefined
+          : timeoutContext;
+      },
+      snapshotPlugin,
+    });
+    // The slot the runner and `@vitest/expect` internals read; assigned once —
+    // the singleton never changes identity.
+    Object.defineProperty(globalThis, GLOBAL_EXPECT, {
+      value: fileExpect,
+      writable: true,
+      configurable: true,
+    });
+    return fileExpect;
+  }
+  // Later files reuse the singleton on a clean slate, mirroring the previous
+  // per-file rebuild (which also carried non-bookkeeping state forward).
+  resetExpectState(fileExpect, fileExpectState(getContextWorkerState));
+  return fileExpect;
+};

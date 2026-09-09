@@ -1,8 +1,9 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { dirname, relative, resolve } from 'pathe';
-import { isTTY } from './helper';
+import { dirname, resolve } from 'pathe';
+import { displayPath, isTTY } from './helper';
 import { color, logger } from './logger';
+import { formatTraceSummary, summarizeTrace } from './traceSummary';
 
 // ---------------------------------------------------------------------------
 // Public event type
@@ -28,17 +29,35 @@ export type TraceEvent = {
   args?: Record<string, string | number | boolean | undefined>;
 };
 
+export type TraceSpan = <T>(
+  name: string,
+  cat: string,
+  fn: () => T | Promise<T>,
+  args?: TraceEvent['args'],
+) => Promise<T>;
+
+/**
+ * Transparent pass-through span used when tracing is disabled, so call sites
+ * can always invoke `span(...)` without branching on whether `--trace` is on.
+ */
+export const noopTraceSpan: TraceSpan = async (_name, _cat, fn) => fn();
+
 // ---------------------------------------------------------------------------
 // File output
 // ---------------------------------------------------------------------------
 
 /**
- * Build the absolute path for a Perfetto trace dump. The filename embeds an
- * ISO-like timestamp so repeated runs do not overwrite each other.
+ * Build the absolute paths for a run's artifacts: the Perfetto trace dump and
+ * its markdown summary sidecar. Both share one timestamped stem so the pair is
+ * named from a single source (no fragile extension rewriting), and the stamp
+ * keeps repeated runs from overwriting each other.
  */
-const getTraceOutputPath = (rootPath: string): string => {
+const getTraceOutputPaths = (
+  rootPath: string,
+): { tracePath: string; summaryPath: string } => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('Z', '');
-  return resolve(rootPath, '.rstest', `trace-${stamp}.json`);
+  const stem = resolve(rootPath, '.rstest', `trace-${stamp}`);
+  return { tracePath: `${stem}.json`, summaryPath: `${stem}.summary.md` };
 };
 
 /**
@@ -87,11 +106,6 @@ const buildTraceFile = (
     threadIds.add(ev.tid);
   }
 
-  const displayPath = (testPath: string): string => {
-    const rel = relative(rootPath, testPath);
-    return rel && !rel.startsWith('..') ? rel : testPath;
-  };
-
   const seenPid = new Set<number>();
   const seenThread = new Set<string>();
   const metadata: TraceEvent[] = [];
@@ -106,7 +120,9 @@ const buildTraceFile = (
       const sharedWorker = (threadIdsByPid.get(ev.pid)?.size ?? 0) > 1;
       metadata.push(
         meta('process_name', ev.pid, ev.tid, {
-          name: sharedWorker ? `worker ${ev.pid}` : displayPath(testPath),
+          name: sharedWorker
+            ? `worker ${ev.pid}`
+            : displayPath(testPath, rootPath),
         }),
         meta('process_sort_index', ev.pid, ev.tid, {
           sort_index: sortIndex++,
@@ -118,7 +134,9 @@ const buildTraceFile = (
     if (!seenThread.has(threadKey)) {
       seenThread.add(threadKey);
       metadata.push(
-        meta('thread_name', ev.pid, ev.tid, { name: displayPath(testPath) }),
+        meta('thread_name', ev.pid, ev.tid, {
+          name: displayPath(testPath, rootPath),
+        }),
       );
     }
   }
@@ -150,7 +168,7 @@ type TraceServerHandle = {
   close: () => Promise<void>;
   /**
    * Block until SIGINT/SIGTERM/SIGTSTP arrives, then close the server and
-   * exit with the current `process.exitCode`. Use this after tests have
+   * exit with the process's current status. Use this after tests have
    * finished so Ctrl+C is treated as a clean shutdown — without it, the
    * default 128+SIGINT exit code makes pnpm/npm surface ELIFECYCLE.
    */
@@ -242,6 +260,8 @@ export interface TraceRun {
    * disabled, so the pool layer skips collecting events entirely.
    */
   onEvents: ((events: TraceEvent[]) => void) | undefined;
+  /** Record a host-side Perfetto slice in the current run. */
+  span: TraceSpan;
   /**
    * Write the buffered events for this run to disk and (lazily) start or
    * refresh the Perfetto helper server. No-op when nothing was collected.
@@ -256,7 +276,7 @@ export interface TraceController {
   close: () => Promise<void>;
   /**
    * If a trace was produced this session, print a Ctrl+C hint and block
-   * until the user signals; then exit with the current `process.exitCode`.
+   * until the user signals; then preserve the process's current status.
    */
   waitForExit: () => Promise<void>;
   /**
@@ -285,12 +305,41 @@ export const createTraceController = (options: {
   // In watch mode we replace it on each rerun so .rstest/ does not accumulate
   // multi-MB JSONs; files from earlier sessions are left alone.
   let lastTracePath: string | undefined;
+  // Sidecar `.summary.md` produced alongside the trace; replaced on rerun in
+  // watch mode for the same reason as `lastTracePath`.
+  let lastSummaryPath: string | undefined;
 
   const beginRun = (): TraceRun => {
     if (!enabled) {
-      return { onEvents: undefined, finalize: async () => {} };
+      return {
+        onEvents: undefined,
+        span: noopTraceSpan,
+        finalize: async () => {},
+      };
     }
     const events: TraceEvent[] = [];
+    const pushHostSlice: TraceSpan = async (name, cat, fn, args) => {
+      const start = Date.now();
+      try {
+        return await fn();
+      } finally {
+        const end = Date.now();
+        events.push({
+          name,
+          cat,
+          ph: 'X',
+          ts: start * 1000,
+          dur: (end - start) * 1000,
+          pid: process.pid,
+          tid: 0,
+          args: {
+            testPath: '<host>',
+            project: 'host',
+            ...args,
+          },
+        });
+      }
+    };
     return {
       // Iterate instead of spreading: a single file with thousands of cases
       // can hand `chunk` a very large array, and `push(...chunk)` would then
@@ -299,9 +348,10 @@ export const createTraceController = (options: {
       onEvents: (chunk) => {
         for (const ev of chunk) events.push(ev);
       },
+      span: pushHostSlice,
       finalize: async () => {
         if (!events.length) return;
-        const tracePath = getTraceOutputPath(rootPath);
+        const { tracePath, summaryPath } = getTraceOutputPaths(rootPath);
         await mkdir(dirname(tracePath), { recursive: true });
         await writeFile(
           tracePath,
@@ -312,9 +362,28 @@ export const createTraceController = (options: {
           unlink(lastTracePath).catch(() => {});
         }
         lastTracePath = tracePath;
+
+        // Agent/CI-friendly text summary: the Perfetto JSON is a raw event
+        // dump meant for the visual UI, so always emit a ranked markdown
+        // digest (printed to stdout and written next to the trace) that
+        // answers "where did time go" without opening a flame graph.
+        const summaryMarkdown = formatTraceSummary(
+          summarizeTrace(events, rootPath),
+        );
+        await writeFile(summaryPath, `${summaryMarkdown}\n`);
+        if (lastSummaryPath && lastSummaryPath !== summaryPath) {
+          unlink(lastSummaryPath).catch(() => {});
+        }
+        lastSummaryPath = summaryPath;
+
+        logger.log(`\n${summaryMarkdown}\n`);
         logger.log(
           color.gray('  Perfetto trace file: '),
           color.cyan(tracePath),
+        );
+        logger.log(
+          color.gray('  Trace summary file: '),
+          color.cyan(summaryPath),
         );
         // The helper server keeps the event loop alive until SIGINT, which
         // would hang `rstest run` in CI. Only start it in an interactive TTY,

@@ -1,15 +1,18 @@
-import type { DevicePreset } from '@rstest/core/browser';
+import type { BrowserViewport } from '@rstest/core/internal/browser';
 import type {
-  RuntimeConfig,
+  BrowserRuntimeConfig,
   TestFileResult,
   TestInfo,
   TestResult,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 
 export type {
   BrowserLocatorIR,
   BrowserRpcRequest,
+  SnapshotRpcCall,
+  SnapshotRpcMethod,
+  SnapshotRpcMethodArgs,
   SnapshotRpcRequest,
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';
@@ -19,25 +22,27 @@ export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
 export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+export const NO_RPC_TIMEOUT = -1;
 
 export const DISPATCH_NAMESPACE_RUNNER = 'runner';
 export const DISPATCH_NAMESPACE_BROWSER = 'browser';
+export const DISPATCH_NAMESPACE_FILE_CLEANUP = 'file-cleanup';
 export const DISPATCH_NAMESPACE_SNAPSHOT = 'snapshot';
 export const DISPATCH_METHOD_RPC = 'rpc';
 
-export type SerializedRuntimeConfig = RuntimeConfig;
+export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
-export type BrowserViewport =
-  | {
-      width: number;
-      height: number;
-    }
-  | DevicePreset;
+// `BrowserViewport` is a core config type (`@rstest/core` owns the canonical
+// definition used by `NormalizedBrowserModeConfig`). Re-export it so the host
+// assigns the SAME type across the seam instead of a hand-copied duplicate.
+export type { BrowserViewport };
 
 export type BrowserProjectRuntime = {
   name: string;
   environmentName: string;
   projectRoot: string;
+  /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
+  hasSetupFiles: boolean;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
 };
@@ -51,12 +56,57 @@ export type TestFileInfo = {
   projectName: string;
 };
 
+export type FileCleanupDispatchMethod =
+  'start' | 'end' | 'worker-start' | 'worker-end';
+
+export type FileCleanupDispatchPayload = {
+  projectName: string;
+  result?: TestFileResult;
+  runId?: string;
+  testPath: string;
+};
+
+/**
+ * The committed test-file set plus its monotonic version. The version is what
+ * the container acks once every iframe for that set exists in the DOM, so both
+ * halves must travel together — a set without its version cannot be acked.
+ */
+export type VersionedTestFileSet = {
+  files: TestFileInfo[];
+  version: number;
+};
+
 /**
  * Execution mode for browser tests.
  * - 'run': Execute tests and report results (default)
  * - 'collect': Only collect test metadata without running
  */
 export type BrowserExecutionMode = 'run' | 'collect';
+
+/**
+ * Wire shape of a `log` client message payload. The host receives this and maps
+ * it onto core's {@link UserConsoleLog} (notably `level` → `name`); that mapper
+ * (`hostController.ts` `handleLog`) annotates its result as `UserConsoleLog`, so
+ * the map→core direction is compiler-checked. Owning the wire shape here as one
+ * named type keeps the host's input type from drifting away from the producer.
+ */
+export type BrowserLogPayload = {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  content: string;
+  /**
+   * Owning project, resolved by the client from its manifest. The host must
+   * not re-derive it from `testPath` — concurrent projects can run the same
+   * file, so a path-keyed lookup can attribute the log to the wrong project.
+   */
+  projectName: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
+  testPath: string;
+  type: 'stdout' | 'stderr';
+  trace?: string;
+};
 
 export type BrowserHostConfig = {
   rootPath: string;
@@ -65,15 +115,28 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
+  /** Test files assigned to one browser worker session. */
+  testFiles?: string[];
   /**
-   * Per-run identifier assigned by the container.
-   * Used by browser RPC calls to prevent stale requests from previous reruns.
+   * The run identity this document executes under — the runner's SOLE identity
+   * source, adopted once at boot and stamped on every outbound message. Headed:
+   * the container confers its frame's current lease over the config handshake
+   * (so even an HMR full reload boots with the run the host is awaiting NOW).
+   * Headless: injected host-side as `${run.token}:${session.id}`. Never
+   * derivable from the URL.
    */
   runId?: string;
   /**
-   * Base URL for runner (iframe) pages.
+   * Base URL for runner (iframe) pages. Container origin; used as a fallback
+   * when a project has no entry in `projectRunnerUrls`.
    */
   runnerUrl?: string;
+  /**
+   * Per-project runner origin base URLs, keyed by project name. Each browser
+   * project runs on its own dev server, so the container must load each test
+   * file's iframe from that project's own origin.
+   */
+  projectRunnerUrls?: Record<string, string>;
   /**
    * WebSocket port for container RPC.
    */
@@ -86,11 +149,26 @@ export type BrowserHostConfig = {
    * Debug mode. When true, enables verbose logging in browser.
    */
   debug?: boolean;
-  /**
-   * Timeout for RPC operations in milliseconds (e.g., snapshot file operations).
-   * Derived from testTimeout config.
-   */
+  /** Timeout for RPC operations in milliseconds; negative values disable it. */
   rpcTimeout?: number;
+};
+
+export const RSTEST_BROWSER_CACHE_CLEANERS_KEY =
+  '@rstest/browser/cache-cleaners';
+
+/**
+ * The wrapper every runner document posts over `postMessage` / the headless
+ * bridge. Identity rides BESIDE the payload, never inside it: `message`
+ * payloads reach core reporting (`RunnerEventSink`, `BlobReporter`) as-is, so a
+ * transport identity spread into them would leak a nondeterministic UUID into
+ * reporter output. `runId` is the identity the document was granted at boot
+ * (headed: the container's config handshake; headless: the injected inline
+ * options) — never re-derived from the URL or the frame. Absent only for a
+ * document that was never granted one; the headed host drops such messages.
+ */
+export type RunnerEnvelope = {
+  runId?: string;
+  message: BrowserClientMessage;
 };
 
 export type BrowserClientMessage =
@@ -101,20 +179,7 @@ export type BrowserClientMessage =
     }
   | { type: 'case-result'; payload: TestResult }
   | { type: 'file-complete'; payload: TestFileResult }
-  | {
-      type: 'log';
-      payload: {
-        level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-        content: string;
-        taskId?: string;
-        taskName?: string;
-        taskParentNames?: string[];
-        taskType?: 'file' | 'suite' | 'case';
-        testPath: string;
-        type: 'stdout' | 'stderr';
-        trace?: string;
-      };
-    }
+  | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
       payload: { message: string; stack?: string };
@@ -135,6 +200,36 @@ export type BrowserClientMessage =
     };
 
 /**
+ * Lifecycle methods the runner emits via `dispatchRunnerLifecycle()` as
+ * dispatch-rpc-requests on the `runner` namespace (as opposed to the
+ * {@link BrowserClientMessage} types it `send()`s). The runner client imports
+ * this instead of redeclaring the list, so the emit site cannot drift from the
+ * host router.
+ */
+export type RunnerLifecycleMethod =
+  'file-ready' | 'suite-start' | 'suite-result' | 'case-start';
+
+/**
+ * {@link BrowserClientMessage} types that are forwarded to the `runner`
+ * namespace (by message `type`) rather than handled at the transport layer.
+ * `Extract` keeps this a checked subset of the message union. `ready` and
+ * `complete` are deliberately absent: they still arrive, but their only job
+ * is done at the dispatch gate and the router ignores them silently.
+ */
+type RunnerMessageMethod = Extract<
+  BrowserClientMessage['type'],
+  'file-start' | 'case-result' | 'file-complete' | 'log' | 'fatal'
+>;
+
+/**
+ * Single source of truth for every method handled by the `runner` dispatch
+ * namespace. The host handler table is keyed by this union (a missing key is a
+ * compile error), so adding a runner method here forces a matching handler and
+ * cannot silently no-op at runtime.
+ */
+export type RunnerDispatchMethod = RunnerLifecycleMethod | RunnerMessageMethod;
+
+/**
  * Transport-agnostic envelope used by host routing.
  * `namespace + method + args + target` describes an operation independent of
  * the underlying message channel, and `runToken` provides run-level isolation.
@@ -144,9 +239,22 @@ export type BrowserDispatchRequest = {
   // Optional so headed/container paths can adopt the same envelope even when
   // run-token isolation is only enforced in headless scheduling today.
   runToken?: number;
+  /**
+   * Headed run identity, stamped by the runner's dispatch transport from the
+   * identity its document adopted at boot. The headed host accepts a request
+   * iff this names a live run; headless keeps using the host-injected
+   * `runToken` instead (`runToken` is the CYCLE generation, `runId` is the
+   * RUN identity — they are not interchangeable).
+   */
+  runId?: string;
   namespace: string;
   method: string;
   args?: unknown;
+  // Routing reads `namespace`, `method`, `runToken`, and `target.sessionId`
+  // (see dispatchRouter.ts / dispatchBrowserRpcRequest). `target.testFile` and
+  // `target.projectName` are carried for diagnostics / forward-compatibility and
+  // are NOT consulted for routing today — adding a routing-relevant field here
+  // means wiring a reader on the host side, which structural typing won't force.
   target?: {
     testFile?: string;
     sessionId?: string;

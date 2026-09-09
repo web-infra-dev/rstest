@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,10 +31,38 @@ describe('globalSetup', async () => {
         "[global-setup-named] executed",
         "[rstest] Running basic tests",
         "[rstest] Running basic tests",
+        "[rstest-dev-server] closed",
         "[global-teardown-named] executed",
         "[global-teardown-default] executed",
       ]
     `);
+  });
+
+  it('should close list resources before global teardown', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list'],
+      options: {
+        nodeOptions: {
+          env: { ISOLATE: undefined },
+          cwd: join(__dirname, 'fixtures/basic'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const cleanupLogs = cli.stdout
+      .split('\n')
+      .filter(
+        (log) =>
+          log.includes('[rstest-dev-server]') ||
+          log.includes('[global-teardown-default]'),
+      );
+    expect(cleanupLogs).toEqual([
+      '[rstest-dev-server] closed',
+      '[global-teardown-default] executed',
+    ]);
   });
 
   it('should fail when global setup throws an error', async () => {
@@ -80,4 +108,136 @@ describe('globalSetup', async () => {
     expectStderrLog(/Global teardown failed intentionally/);
     expectStderrLog(/globalSetup\.ts:3/);
   });
+
+  it('retries failed globalSetup on the next watch cycle and keeps a successful claim', async () => {
+    const fixturesTargetPath = join(
+      __dirname,
+      'fixtures-test-watch-setup-retry',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures/error'),
+      fixturesTargetPath,
+    });
+    fs.update(
+      join(fixturesTargetPath, 'globalSetup.ts'),
+      `import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export default async function globalSetup() {
+  if (!existsSync(join(dirname(fileURLToPath(import.meta.url)), 'ok.flag'))) {
+    throw new Error('Global setup failed intentionally');
+  }
+  console.log('[global-setup-retry] executed');
+  return () => console.log('[global-teardown-retry] executed');
+}`,
+    );
+    fs.create(
+      join(fixturesTargetPath, 'second.test.ts'),
+      `import { describe, it } from '@rstest/core';
+describe('second file', () => {
+  it('passes after setup succeeds', () => {});
+});`,
+    );
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--disableConsoleIntercept'],
+      options: {
+        nodeOptions: {
+          env: { ISOLATE: undefined },
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    try {
+      await cli.waitForStderr('Global setup failed intentionally');
+      await cli.waitForStdout('Waiting for file changes...');
+      fs.create(join(fixturesTargetPath, 'ok.flag'), '');
+      fs.update(
+        join(fixturesTargetPath, 'index.test.ts'),
+        (content) => `${content}\n// trigger setup retry`,
+      );
+      await cli.waitForStdout('Test Files 2 passed');
+      expect(cli.stdout.match(/\[global-setup-retry\] executed/g)).toHaveLength(
+        1,
+      );
+
+      cli.resetStd();
+      fs.update(
+        join(fixturesTargetPath, 'index.test.ts'),
+        (content) => `${content}\n// trigger another cycle`,
+      );
+      // The summary retains results from files not rerun in this cycle.
+      await cli.waitForStdout('Test Files 2 passed');
+      expect(cli.stdout).toContain('index.test.ts (1)');
+      expect(cli.stdout).not.toContain('[global-setup-retry] executed');
+      expect(cli.stdout).not.toContain('second.test.ts');
+    } finally {
+      await cli.killProcessTree();
+      fs.delete(fixturesTargetPath);
+    }
+  }, 60_000);
+
+  it.skipIf(process.platform === 'win32')(
+    'tears down the current watch session on SIGINT after a config restart',
+    async () => {
+      const fixturesTargetPath = join(
+        __dirname,
+        'fixtures-test-watch-restart-signal',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: join(__dirname, 'fixtures/basic'),
+        fixturesTargetPath,
+      });
+      const configPath = join(fixturesTargetPath, 'rstest.config.ts');
+      const result = await runRstestCli({
+        command: 'rstest',
+        args: ['watch', '--disableConsoleIntercept'],
+        options: {
+          nodeOptions: {
+            env: { ISOLATE: undefined },
+            cwd: fixturesTargetPath,
+          },
+        },
+      });
+      const { cli } = result;
+
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        fs.update(configPath, (content) => `${content}\n// trigger restart`);
+
+        await cli.waitForStdout('restarting Rstest');
+        await cli.waitForStdout('[global-setup-default] executed');
+        await cli.waitForStdout('Waiting for file changes...');
+
+        cli.exec.process!.kill('SIGINT');
+        await result.expectExecFailed();
+
+        expect(cli.exec.process!.exitCode).toBe(130);
+        expect(
+          cli.stdout.match(/\[global-teardown-default\] executed/g),
+        ).toHaveLength(2);
+        expect(
+          cli.stdout
+            .split('\n')
+            .filter(
+              (log) =>
+                log.includes('[rstest-dev-server]') ||
+                log.includes('[global-teardown-default]'),
+            ),
+        ).toEqual([
+          '[rstest-dev-server] closed',
+          '[global-teardown-default] executed',
+          '[rstest-dev-server] closed',
+          '[global-teardown-default] executed',
+        ]);
+      } finally {
+        await cli.killProcessTree();
+        fs.delete(fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
 });

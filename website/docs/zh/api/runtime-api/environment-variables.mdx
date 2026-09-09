@@ -20,15 +20,17 @@ if (import.meta.env.NODE_ENV === 'test') {
 
 ## `RSTEST`
 
-Rstest 在执行测试时会把 `process.env.RSTEST` 设为 `'true'`，可以用来在源码中标记仅在测试中执行的代码分支。
+`process.env.RSTEST` 和 `import.meta.env.RSTEST` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下都可用。Rstest 在执行测试时会把它们设为 `'true'`，可以用来在源码中标记仅在测试中执行的代码分支。
+
+在 browser mode 下，Rstest 会在构建时替换这些表达式，但不会添加全局 `process` 对象。在兼容浏览器的 ESM 源码中，推荐使用 `import.meta.env.RSTEST`。不要先通过 `typeof process !== 'undefined'` 判断是否可用，因为该条件在浏览器中仍为 `false`。
 
 ```ts
-if (process.env.RSTEST) {
+if (import.meta.env.RSTEST === 'true') {
   // 运行在 Rstest 中
 }
 ```
 
-在生产构建中把 `process.env.RSTEST` 替换为 `false`，这样打包工具就能消除对应的死代码 — 详见 [检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
+在生产构建中，把源码使用的表达式替换为 `false`，这样打包工具就能消除对应的死代码 — 详见 [检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
 
 如果想把测试代码直接写在源文件里，更推荐使用 [`import.meta.rstest`](/config/test/include-source) — 它直接暴露 Rstest 的测试 API，并且在生产构建中为 `undefined`。
 

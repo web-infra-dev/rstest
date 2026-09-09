@@ -15,7 +15,7 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
 
   const { cli } = await runRstestCli({
     command: 'rstest',
-    args: ['run', 'githubActions', '--reporter', 'github-actions'],
+    args: ['run', 'githubActions', '--reporters', 'github-actions'],
     options: {
       nodeOptions: {
         cwd: __dirname,
@@ -32,16 +32,18 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
   expect(cli.exec.process?.exitCode).toBe(1);
 
   const logs = cli.stdout
+    .replaceAll(process.cwd(), '<ROOT>')
     .split('\n')
     .filter(Boolean)
     .filter((log) => log.startsWith('::error'));
 
-  expect(logs).toMatchInlineSnapshot(`
-    [
-      "::error file=<ROOT>/e2e/reporter/fixtures/githubActions.test.ts,line=4,col=17,title=fixtures/githubActions.test.ts > should add two numbers correctly::expected 2 to be 4 // Object.is equality%0A- Expected%0A+ Received%0A%0A- 4%0A+ 2",
-      "::error file=<ROOT>/e2e/reporter/fixtures/githubActions.test.ts,line=8,col=19,title=fixtures/githubActions.test.ts > test snapshot::Snapshot \`test snapshot 1\` mismatched%0A- Expected%0A+ Received%0A%0A- "hello world"%0A+ "hello"",
-    ]
-  `);
+  expect(logs).toHaveLength(2);
+  expect(logs[0]).toMatch(
+    /^::error file=<ROOT>[\\/]reporter[\\/]fixtures[\\/]githubActions\.test\.ts,line=4,col=17,title=fixtures\/githubActions\.test\.ts > should add two numbers correctly::expected 2 to be 4 \/\/ Object\.is equality%0A- Expected%0A\+ Received%0A%0A- 4%0A\+ 2$/,
+  );
+  expect(logs[1]).toContain(
+    'title=fixtures/githubActions.test.ts > test snapshot::Snapshot `test snapshot 1` mismatched%0A- Expected%0A+ Received%0A%0A- "hello world"%0A+ "hello"',
+  );
 
   expect(fs.existsSync(stepSummaryPath)).toBe(true);
   const stepSummary = fs
@@ -93,7 +95,7 @@ it.skipIf(!process.env.CI)(
   async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'githubActions', '--reporter', 'github-actions'],
+      args: ['run', 'githubActions', '--reporters', 'github-actions'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -133,7 +135,7 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
       'run',
       '-c',
       './rstest.agentMd.pass.config.mts',
-      '--reporter',
+      '--reporters',
       'github-actions',
     ],
     options: {
@@ -198,7 +200,7 @@ it.skipIf(!process.env.CI)(
         'run',
         '-c',
         './rstest.githubActions.flaky.config.mts',
-        '--reporter',
+        '--reporters',
         'github-actions',
       ],
       options: {
@@ -255,7 +257,7 @@ it.skipIf(!process.env.CI)(
         'run',
         '-c',
         './rstest.githubActions.namedProject.config.mts',
-        '--reporter',
+        '--reporters',
         'github-actions',
       ],
       options: {
@@ -295,15 +297,55 @@ it.skipIf(!process.env.CI)(
       '.tmp',
       'github-step-summary-npm.md',
     );
-    const packageLockPath = join(__dirname, 'package-lock.json');
+    const npmFixturePath = join(__dirname, 'fixtures-npm');
 
     fs.rmSync(stepSummaryPath, { force: true });
-    fs.writeFileSync(packageLockPath, '{}');
 
     try {
       const { cli } = await runRstestCli({
         command: 'rstest',
-        args: ['run', 'githubActions', '--reporter', 'github-actions'],
+        args: ['run', '--reporters', 'github-actions'],
+        options: {
+          nodeOptions: {
+            cwd: npmFixturePath,
+            env: {
+              GITHUB_WORKSPACE: githubWorkspace,
+              GITHUB_STEP_SUMMARY: stepSummaryPath,
+            },
+          },
+        },
+      });
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.exec.process?.exitCode).toBe(1);
+
+      const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
+
+      expect(stepSummary).toContain(
+        "npx rstest '../fixtures/githubActions.test.ts' --testNamePattern 'should add two numbers correctly'",
+      );
+    } finally {
+      fs.rmSync(stepSummaryPath, { force: true });
+      fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+    }
+  },
+);
+
+it.skipIf(!process.env.CI)(
+  'github-actions summary supports a custom field length',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-long-diff.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    try {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '-c', './rstest.githubActions.longSummary.config.mts'],
         options: {
           nodeOptions: {
             cwd: __dirname,
@@ -321,11 +363,9 @@ it.skipIf(!process.env.CI)(
 
       const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
 
-      expect(stepSummary).toContain(
-        "npx rstest 'fixtures/githubActions.test.ts' --testNamePattern 'should add two numbers correctly'",
-      );
+      expect(stepSummary).toContain('-   "expected first line",');
+      expect(stepSummary).toContain('+   "received last line",');
     } finally {
-      fs.rmSync(packageLockPath, { force: true });
       fs.rmSync(stepSummaryPath, { force: true });
       fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
     }
@@ -348,7 +388,7 @@ it.skipIf(!process.env.CI)(
         'run',
         '-c',
         './rstest.agentMd.pass.config.mts',
-        '--reporter',
+        '--reporters',
         'github-actions',
       ],
       options: {
@@ -368,7 +408,7 @@ it.skipIf(!process.env.CI)(
 
     const failingRun = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'githubActions', '--reporter', 'github-actions'],
+      args: ['run', 'githubActions', '--reporters', 'github-actions'],
       options: {
         nodeOptions: {
           cwd: __dirname,

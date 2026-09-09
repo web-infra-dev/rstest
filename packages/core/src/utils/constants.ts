@@ -1,10 +1,10 @@
 import { dirname, isAbsolute, join, normalize, resolve } from 'pathe';
 import type {
-  ProjectContext,
+  InternalContext,
+  InternalProjectContext,
   Rstest,
   RstestBuildCacheConfig,
   RstestConfig,
-  RstestContext,
 } from '../types';
 
 export const DEFAULT_CONFIG_NAME = 'rstest.config';
@@ -15,8 +15,69 @@ export const POINTER = '➜';
 
 export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
+/**
+ * Description key of the well-known `Symbol.for(...)` under which Rstest stores
+ * the runtime env store on `globalThis`. Single owner of the string, shared by
+ * three contexts that must resolve the SAME registry symbol: the core worker
+ * runtime and the browser client both call `Symbol.for(RSTEST_ENV_SYMBOL_KEY)`,
+ * while the host bakes it into the rspack `define` text via
+ * `JSON.stringify(RSTEST_ENV_SYMBOL_KEY)`. Kept a plain string (not a Symbol) so
+ * it serves both the runtime and the build-define codegen path. Re-exported from
+ * both `./internal/browser-runtime` and `./internal/browser` barrels.
+ */
+export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
+
+/**
+ * Key under which the per-file runtime API object is published on the
+ * executor's global; `import.meta.rstest` defines compile to a read of it, and
+ * the mock hoister keeps `@rstest/core` external against the same key.
+ * node: `rstestContext.global[KEY]` (runInPool); web: `globalThis[KEY]`
+ * (browser client entry). Other `'@rstest/core'` string literals in the
+ * codebase (the module-cache id in `core/plugins/moduleCacheControl.ts`, the
+ * reporter package label in `reporter/md.ts`) have unrelated semantics and
+ * must NOT be replaced with this constant.
+ */
+export const RSTEST_API_GLOBAL_KEY = '@rstest/core';
+
+/**
+ * Key under which each executor publishes the per-file resolver used by the
+ * native `import.meta.rstest` rewrite. It is separate from
+ * {@link RSTEST_API_GLOBAL_KEY}: real `@rstest/core` imports stay available
+ * throughout execution, while in-source APIs are exposed only to the module
+ * currently loaded as the test entry.
+ */
+export const RSTEST_IMPORT_META_GLOBAL_KEY = '@rstest/core/import-meta';
+
+/**
+ * Single source of truth for the built-in browser provider identifiers.
+ *
+ * Core owns this list because the peer-dependency direction is one-way
+ * (`@rstest/browser` depends on `@rstest/core`, never the reverse), so the CLI
+ * `init` templates here cannot import the registry from `@rstest/browser`.
+ * `@rstest/browser` re-exports {@link BrowserProvider} and keys its provider
+ * registry by it (`Record<BrowserProvider, …>`), so adding a provider here
+ * forces a matching implementation there — a missing key is a compile error.
+ */
+export const BROWSER_PROVIDERS = ['playwright'] as const;
+export type BrowserProvider = (typeof BROWSER_PROVIDERS)[number];
+
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
+
+/**
+ * Directory for the per-file test-results cache (see `core/resultsCache.ts`),
+ * consumed by the perf-first sequencer and `onlyFailures`.
+ * The leading dot is load-bearing: it must NOT reuse `rstest` or `rstest-*`.
+ * The Rspack build cache occupies `node_modules/.cache/rstest` (no environment)
+ * and `node_modules/.cache/rstest-<environmentName>` (see
+ * `getDefaultBuildCacheDir`), so a plain `rstest-results` would collide with a
+ * build cache for an environment literally named `results`. A dotted prefix is
+ * the only construction guaranteed collision-free against every build cache dir,
+ * and it matches the `dist/.rstest-temp` style. Kept here, next to the build
+ * cache prefix, so renaming the build cache naming can't silently break this
+ * construction-based no-collision invariant.
+ */
+export const RESULTS_CACHE_DIR = 'node_modules/.cache/.rstest-results';
 const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(
   'defaultBuildCacheDirectory',
 );
@@ -67,7 +128,7 @@ type BuildCacheInput = {
   assumeNormalized?: boolean;
 };
 
-const getDefaultBuildCacheDir = (environmentName?: string): string =>
+export const getDefaultBuildCacheDir = (environmentName?: string): string =>
   environmentName
     ? `${DEFAULT_BUILD_CACHE_PREFIX}-${environmentName}`
     : DEFAULT_BUILD_CACHE_PREFIX;
@@ -154,6 +215,18 @@ export const normalizeBuildCache = ({
   return normalized;
 };
 
+export const isDefaultBuildCache = (
+  buildCache: boolean | RstestBuildCacheConfig | undefined,
+): boolean =>
+  buildCache === true ||
+  Boolean(
+    buildCache &&
+    typeof buildCache === 'object' &&
+    (buildCache as InternalBuildCacheConfig)[
+      DEFAULT_BUILD_CACHE_DIRECTORY_MARKER
+    ],
+  );
+
 export const resolveBuildCacheDependencyPaths = <
   T extends {
     performance?: {
@@ -196,11 +269,11 @@ export const resolveProjectBuildCache = ({
   project,
 }: {
   context: Pick<
-    RstestContext,
+    InternalContext,
     'rootPath' | 'configFilePath' | 'command' | 'normalizedConfig' | 'projects'
   >;
   project: Pick<
-    ProjectContext,
+    InternalProjectContext,
     'environmentName' | 'configFilePath' | 'normalizedConfig'
   >;
 }): false | RstestBuildCacheConfig =>
@@ -229,7 +302,10 @@ export const DEFAULT_CONFIG_EXTENSIONS = [
   '.cts',
 ] as const;
 
-export const globalApis: (keyof Rstest)[] = [
+// Literal tuple kept private so `(typeof globalApiList)[number]` is the exact
+// key union (the exported alias below is widened for consumers); `satisfies`
+// rejects a *wrong* key here.
+const globalApiList = [
   'test',
   'describe',
   'it',
@@ -243,6 +319,38 @@ export const globalApis: (keyof Rstest)[] = [
   'assert',
   'onTestFinished',
   'onTestFailed',
-];
+] as const satisfies readonly (keyof Rstest)[];
+
+type GlobalApi = keyof Rstest;
+export const globalApis: readonly GlobalApi[] = globalApiList;
+
+/**
+ * Exhaustiveness guard for {@link globalApis}. `satisfies` above rejects a
+ * *wrong* key, but a short array still compiles — a new {@link Rstest} API
+ * silently missing here is never registered onto `globalThis` under
+ * `globals: true`. This alias resolves to a descriptive tuple (not `true`) when
+ * any global `Rstest` API key is absent, failing the assignment below at compile time.
+ */
+type MissingGlobalApis = Exclude<GlobalApi, (typeof globalApiList)[number]>;
+type GlobalApisAreExhaustive = [MissingGlobalApis] extends [never]
+  ? true
+  : ['globalApis is missing keys of Rstest:', MissingGlobalApis];
+const _globalApisAreExhaustive: GlobalApisAreExhaustive = true;
+void _globalApisAreExhaustive;
+
+/** Shared marker message for synthetic errors used only to capture a stack
+ * trace. The value is a placeholder: the runner reads it back via
+ * `error.message`, so every synthetic-stack site must use this same constant. */
+export const SYNTHETIC_STACK_ERROR_MESSAGE = 'STACK_TRACE_ERROR';
+
+/** Default per-test timeout (ms). Single source for the config default and any
+ * downstream fallback. */
+export const DEFAULT_TEST_TIMEOUT = 5_000;
+
+export const DEFAULT_BROWSER_TEST_TIMEOUT = 15_000;
+export const DEFAULT_EXPECT_POLL_TIMEOUT = 1_000;
+export const DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT = 5_000;
+export const FIXTURE_CLEANUP_TIMEOUT_MS = 10_000;
+export const WORKER_CLEANUP_TIMEOUT_MS = 35_000;
 
 export const TS_CONFIG_FILE = 'tsconfig.json';

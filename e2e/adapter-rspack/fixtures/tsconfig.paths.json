@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "adapter-tsconfig-reference": ["./fallback.ts"]
+    }
+  }
+}

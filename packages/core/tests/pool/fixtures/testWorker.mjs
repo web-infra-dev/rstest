@@ -9,10 +9,15 @@
  *   - 'stderr-crash'       → write to stderr then exit(1)
  *   - 'stderr-large'       → write >64KB of stderr then exit(1)
  *   - 'stderr-late'        → write to stderr and exit(1) immediately
+ *   - 'environment-fallback' → report an environment prebundle fallback,
+ *                                then succeed.
+ *   - 'asset-transport'     → echo the received asset byte shape.
+ *   - 'memory-over-limit'   → report heap usage above the configured limit.
  *   - 'spawn-orphan'       → spawn a long-lived grandchild that inherits
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
  *                             pool lifecycle.
+ *   - 'cleanup-error'      → fail worker-scoped cleanup after the run.
  *
  * Auto-detects whether it's running under `child_process.fork` (forks pool)
  * or `worker_threads.Worker` (threads pool) and routes messages over the
@@ -61,7 +66,12 @@ const workerIdentity = isThreadWorker ? threadId : process.pid;
 let assignedWorkerId = null;
 
 let runCount = 0;
+let cleanupShouldFail = false;
 
+// This worker entry runs as a real .mjs and cannot import core .ts source, so
+// it keeps a literal copy. MUST match getFileTaskId in
+// packages/core/src/utils/helper.ts (the grammar is pinned by
+// tests/utils/helper.test.ts).
 const getFileTaskId = (testPath) => `file:${testPath}`;
 
 const makeRunResult = (request, extra) => ({
@@ -81,12 +91,14 @@ const makeRunResult = (request, extra) => ({
 
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
+  cleanupShouldFail = mode === 'cleanup-error';
 
-  const finish = (extra) => {
+  const finish = (extra, memory) => {
     send({
       type: 'runFinished',
       taskId: request.taskId,
       result: makeRunResult(request, extra),
+      ...(memory ? { memory } : {}),
     });
   };
 
@@ -149,6 +161,34 @@ const handleRun = (request) => {
     return;
   }
 
+  if (mode === 'environment-fallback') {
+    send({
+      type: 'testEnvironmentFallback',
+      fallback: {
+        packageName: 'happy-dom',
+        bundlePath: '/tmp/happy-dom-bundle.mjs',
+        resolvedPath: '/project/node_modules/happy-dom/cjs/index.cjs',
+        reason: 'Error: Expected exports: GlobalWindow or Window.',
+      },
+    });
+    finish();
+    return;
+  }
+
+  if (mode === 'asset-transport') {
+    const content = request.options.assets.assetFiles['/asset.bin'];
+    finish({
+      _assetBytes: Array.from(content),
+      _assetConstructor: content.constructor.name,
+    });
+    return;
+  }
+
+  if (mode === 'memory-over-limit') {
+    finish({}, { heapUsed: 101 });
+    return;
+  }
+
   if (mode === 'slow') {
     const delay = request.options?.__delayMs ?? 500;
     const startedAt = Date.now();
@@ -183,6 +223,16 @@ onHostMessage((message) => {
     case 'start':
       assignedWorkerId = request.workerId;
       send({ type: 'started', pid: workerIdentity });
+      break;
+    case 'cleanup':
+      send(
+        cleanupShouldFail
+          ? {
+              type: 'cleanupFinished',
+              error: { message: 'intentional worker cleanup failure' },
+            }
+          : { type: 'cleanupFinished' },
+      );
       break;
     case 'run':
       handleRun(request);

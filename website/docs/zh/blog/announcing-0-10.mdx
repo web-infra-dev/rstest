@@ -11,7 +11,7 @@ authors:
     github: 'fi3ework'
 ---
 
-import { BlogAuthors } from '@rstack-dev/doc-ui/blog-authors';
+import { BlogAuthors } from '@rstackjs/doc-ui/blog-authors';
 
 # Rstest 0.10 发布
 
@@ -90,7 +90,7 @@ npx rstest list --changed --filesOnly
 npx rstest list --related src/button.ts --filesOnly
 ```
 
-请参考 [Run related tests](/guide/basic/cli#run-related-tests) 与 [Run changed tests](/guide/basic/cli#run-changed-tests) 了解更多。
+请参考 [Run related tests](/guide/basic/cli#运行相关测试) 与 [Run changed tests](/guide/basic/cli#运行变更相关测试) 了解更多。
 
 ## 支持持久化构建缓存 \{#build-cache}
 
@@ -187,7 +187,7 @@ npx rstest run --trace
 
 在 TTY 下，Rstest 会启动一个本地 helper，使打印出的链接直接在 Perfetto UI 中打开 trace。在 CI 下，trace 会写入 `<rootPath>/.rstest/trace-<ts>.json`，方便作为 artifact 上传。
 
-对于其他 profiling 需求，例如使用 samply 分析 CPU 时间分布、使用 `--heap-prof` 分析内存、使用 `--inspect` 进行单步调试，请参考 [Profiler](/guide/advanced/profiling#profiler) 一节。
+对于其他 profiling 需求，例如使用 samply 分析 CPU 时间分布、使用 `--heap-prof` 分析内存、使用 `--inspect` 进行单步调试，请参考 [Profiler](/guide/debug/profiling#profiler) 一节。
 
 ## 更清晰的 worker 输出归属 \{#worker-pool}
 

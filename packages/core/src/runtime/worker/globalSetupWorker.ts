@@ -1,8 +1,12 @@
-import './setup';
 import { install } from 'source-map-support';
-import type { FormattedError } from '../../types';
+import type { AssetFiles, FormattedError } from '../../types';
+import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
+import { setFederationDynamicImportOrigin } from './runtimeHooks';
+import { installGracefulExit } from './setup';
+
+installGracefulExit();
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
@@ -40,10 +44,11 @@ const runGlobalSetup = async (data: {
     runtimeDistPath?: string;
     testPath: string;
   }[];
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<{
   success: boolean;
   hasTeardown: boolean;
@@ -73,15 +78,20 @@ const runGlobalSetup = async (data: {
     // Start tracking environment changes
     trackEnvChanges();
 
+    // `mockRuntimeCode.js` gates its Module Federation shims on this
+    // worker-wide flag, so it must be set before any setup code is evaluated.
+    (globalThis as Record<string, unknown>).__rstest_federation__ =
+      data.federation === true;
+
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
-      const setupCodeContent = data.assetFiles[distPath]!;
+      setFederationDynamicImportOrigin(data.federation, testPath);
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');
 
       const module = await loadModule({
-        codeContent: setupCodeContent,
+        codeContent: getAssetText(data.assetFiles, distPath),
         distPath,
         runtimeDistPath,
         testPath,
@@ -184,26 +194,22 @@ process.on('message', async (message: unknown) => {
 
 export const runGlobalTeardown = async (): Promise<{
   success: boolean;
-  error?: string;
 }> => {
-  try {
-    const callbacks = [...teardownCallbacks];
-    teardownCallbacks = [];
+  const callbacks = [...teardownCallbacks];
+  teardownCallbacks = [];
+  let success = true;
 
-    // Run teardown in reverse order (LIFO - Last In, First Out)
-    for (const teardown of callbacks.reverse()) {
+  // Run teardown in reverse order (LIFO - Last In, First Out)
+  for (const teardown of callbacks.reverse()) {
+    try {
       await teardown();
+    } catch (error) {
+      const message =
+        error instanceof Error && error.stack ? error.stack : String(error);
+      console.error(color.red(`Error during global teardown: ${message}`));
+      success = false;
     }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    const message =
-      error instanceof Error && error.stack ? error.stack : String(error);
-    console.error(color.red(`Error during global teardown: ${message}`));
-    return {
-      success: false,
-    };
   }
+
+  return { success };
 };

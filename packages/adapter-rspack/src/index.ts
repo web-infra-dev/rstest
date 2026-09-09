@@ -1,12 +1,17 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { RspackCLI } from '@rspack/cli';
+import { rspackVersion } from '@rspack/core';
 import type {
   Configuration,
   MultiRspackOptions,
   RspackOptions,
 } from '@rspack/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
+import {
+  resolveCacheDependency,
+  resolveTestEnvironmentFromTarget,
+} from '@rstest/core/internal/adapter';
 
 type RspackConfig = RspackOptions | MultiRspackOptions;
 
@@ -24,9 +29,20 @@ type BuildCacheOutput =
       buildDependencies?: string[];
     }
   | undefined;
+type CacheOutput = {
+  buildCache: BuildCacheOutput;
+  cacheLocation?: string;
+};
 
 const DEFAULT_CONFIG_BASENAME = 'rspack.config';
 const DEFAULT_EXTENSIONS = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
+const [rspackMajor = 0, rspackMinor = 0, rspackPatch = 0] = rspackVersion
+  .split('.')
+  .map((part) => Number.parseInt(part, 10));
+const SUPPORTS_DERIVED_CACHE_LOCATION =
+  rspackMajor > 2 ||
+  (rspackMajor === 2 &&
+    (rspackMinor > 1 || (rspackMinor === 1 && rspackPatch >= 8)));
 
 export interface WithRspackConfigOptions {
   /**
@@ -68,24 +84,6 @@ const findDefaultConfig = (cwd: string): string | null => {
   return null;
 };
 
-const normalizeTargets = (target: RspackOptions['target']): string[] => {
-  if (!target) {
-    return [];
-  }
-  if (Array.isArray(target)) {
-    return target.filter(Boolean) as string[];
-  }
-  if (typeof target === 'string') {
-    return [target];
-  }
-  return [];
-};
-
-const isNodeTarget = (targets: string[]): boolean =>
-  targets.some(
-    (target) => target === 'async-node' || target.startsWith('node'),
-  );
-
 const isHtmlRspackPlugin = (plugin: unknown): boolean =>
   plugin && (plugin as { constructor?: { name?: string } }).constructor
     ? (plugin as { constructor: { name?: string } }).constructor.name ===
@@ -96,20 +94,6 @@ const isPersistentCacheConfig = (
   cache: RspackOptions['cache'],
 ): cache is PersistentRspackCacheConfig =>
   typeof cache === 'object' && cache?.type === 'persistent';
-
-const getCachePath = ({
-  cachePath,
-  root,
-}: {
-  cachePath: string;
-  root?: string;
-}): string => {
-  if (path.isAbsolute(cachePath)) {
-    return path.normalize(cachePath);
-  }
-
-  return root ? path.normalize(path.resolve(root, cachePath)) : cachePath;
-};
 
 const getCacheRoot = (
   rspackConfig: RspackOptions,
@@ -130,29 +114,36 @@ const updateCacheConfig = ({
   cache,
   configPath,
   root,
+  rspackMode,
+  rspackName,
 }: {
   cache?: RspackOptions['cache'];
   configPath?: string;
   root?: string;
-}): BuildCacheOutput => {
+  rspackMode?: RspackOptions['mode'];
+  rspackName?: RspackOptions['name'];
+}): CacheOutput => {
   if (cache === undefined) {
-    return undefined;
+    return { buildCache: undefined };
   }
 
   if (
     cache === false ||
     (typeof cache === 'object' && cache?.type === 'memory')
   ) {
-    return false;
+    return { buildCache: false };
   }
 
   if (!isPersistentCacheConfig(cache)) {
-    return undefined;
+    return { buildCache: undefined };
   }
 
+  // Rspack resolves cache paths relative to the build `context` (root), so only
+  // `root` is passed — never `configPath` — to keep the shared resolver's
+  // context-based behavior.
   const buildDependencies = cache.buildDependencies?.map((dependency) =>
-    getCachePath({
-      cachePath: dependency,
+    resolveCacheDependency({
+      dependency,
       root,
     }),
   );
@@ -161,74 +152,139 @@ const updateCacheConfig = ({
         new Set([...(buildDependencies || []), path.normalize(configPath)]),
       )
     : buildDependencies;
-
-  return {
-    cacheDirectory: cache.storage?.directory
-      ? getCachePath({
-          cachePath: cache.storage.directory,
+  const configuredStorageDirectory = cache.storage?.directory;
+  const storageDirectory =
+    configuredStorageDirectory !== undefined
+      ? resolveCacheDependency({
+          dependency: configuredStorageDirectory,
           root,
         })
-      : undefined,
-    cacheDigest: cache.version ? [cache.version] : undefined,
-    buildDependencies: nextBuildDependencies,
+      : path.resolve(root ?? process.cwd(), 'node_modules/.cache/rspack');
+  const cacheName =
+    cache.name ??
+    `${rspackName ? `${rspackName}-` : ''}${rspackMode ?? 'production'}`;
+  const cacheLocation = SUPPORTS_DERIVED_CACHE_LOCATION
+    ? cache.storage?.location !== undefined
+      ? resolveCacheDependency({
+          dependency: cache.storage.location,
+          root,
+        })
+      : path.resolve(storageDirectory, cacheName)
+    : configuredStorageDirectory !== undefined
+      ? storageDirectory
+      : path.resolve(storageDirectory, cacheName);
+
+  return {
+    buildCache: {
+      cacheDirectory: storageDirectory,
+      cacheDigest: cache.version ? [cache.version] : undefined,
+      buildDependencies: nextBuildDependencies,
+    },
+    cacheLocation,
   };
 };
 
-/**
- * Build rspack tool config function that applies user's rspack config
- * onto the base config generated by rstest/rsbuild.
- *
- * Properties already extracted to rstest-native config (resolve, output, etc.)
- * are excluded to avoid double-merging.
- */
+type RspackConfigMerger = (
+  firstConfiguration: Configuration | Configuration[],
+  ...configurations: Configuration[]
+) => Configuration;
+
 const buildRspackToolConfig = (
   rspackConfig: RspackOptions,
-): ((config: Configuration) => Configuration) => {
-  // lazyCompilation is only supported in browser mode, strip it
-  const { lazyCompilation: _lazy, ...restConfig } = rspackConfig;
+  cacheLocation?: string,
+): ((
+  config: Configuration,
+  utils: { mergeConfig: RspackConfigMerger },
+) => Configuration) => {
+  const {
+    amd,
+    cache,
+    devtool,
+    experiments,
+    externals,
+    externalsPresets,
+    externalsType,
+    ignoreWarnings,
+    incremental,
+    infrastructureLogging,
+    loader,
+    module,
+    optimization,
+    output,
+    plugins,
+    resolve,
+    resolveLoader,
+    watchOptions,
+  } = rspackConfig;
 
-  return (config: Configuration): Configuration => {
-    const nextConfig: Configuration = { ...config };
+  const {
+    alias,
+    conditionNames: _conditionNames,
+    extensions: _extensions,
+    mainFields: _mainFields,
+    tsConfig,
+    ...rspackOnlyResolve
+  } = resolve ?? {};
+  const compilerResolve = {
+    ...rspackOnlyResolve,
+    ...(alias === false ? { alias } : {}),
+  };
+  const hasCompilerResolve = Object.keys(compilerResolve).length > 0;
+
+  return (config, { mergeConfig }): Configuration => {
+    const nextConfig = mergeConfig(config, {
+      ...(amd !== undefined ? { amd } : {}),
+      ...(externals !== undefined ? { externals } : {}),
+      ...(externalsType !== undefined ? { externalsType } : {}),
+      ...(ignoreWarnings !== undefined ? { ignoreWarnings } : {}),
+      ...(incremental !== undefined ? { incremental } : {}),
+      ...(infrastructureLogging !== undefined ? { infrastructureLogging } : {}),
+      ...(loader !== undefined ? { loader } : {}),
+      ...(hasCompilerResolve ? { resolve: compilerResolve } : {}),
+      ...(resolveLoader !== undefined ? { resolveLoader } : {}),
+    });
 
     // Module rules: concatenate user's rules with base rules
-    if (restConfig.module) {
+    if (module) {
       const baseModule = config.module || {};
-      const merged = { ...baseModule, ...restConfig.module };
-      if (baseModule.rules || restConfig.module.rules) {
-        merged.rules = [
-          ...(baseModule.rules || []),
-          ...(restConfig.module.rules || []),
-        ];
+      const merged = { ...baseModule, ...module };
+      if (baseModule.rules || module.rules) {
+        merged.rules = [...(baseModule.rules || []), ...(module.rules || [])];
       }
       nextConfig.module = merged;
     }
 
+    if (tsConfig !== undefined) {
+      nextConfig.resolve ??= {};
+      nextConfig.resolve.tsConfig = tsConfig;
+    }
+
     // Plugins: filter out HtmlRspackPlugin (rsbuild manages HTML)
-    if (restConfig.plugins?.length) {
-      const plugins = restConfig.plugins.filter(
+    if (plugins?.length) {
+      const filteredPlugins = plugins.filter(
         (plugin) => plugin && !isHtmlRspackPlugin(plugin),
       );
-      nextConfig.plugins = [...(config.plugins || []), ...plugins];
+      nextConfig.plugins = [...(config.plugins || []), ...filteredPlugins];
     }
 
     // Merge remaining rspack-only properties
-    if (restConfig.experiments) {
+    if (experiments) {
       nextConfig.experiments = {
         ...(config.experiments || {}),
-        ...restConfig.experiments,
+        ...experiments,
       };
     }
 
-    if (restConfig.optimization) {
+    if (optimization) {
       nextConfig.optimization = {
         ...(config.optimization || {}),
-        ...restConfig.optimization,
+        ...optimization,
       };
     }
 
-    if (restConfig.output) {
+    if (output) {
       const baseOutput = config.output || {};
-      const mergedOutput = { ...baseOutput, ...restConfig.output };
+      const mergedOutput = { ...baseOutput, ...output };
       // Preserve rstest's output path
       if (baseOutput.path) {
         mergedOutput.path = baseOutput.path;
@@ -236,33 +292,38 @@ const buildRspackToolConfig = (
       nextConfig.output = mergedOutput;
     }
 
-    if (restConfig.devtool !== undefined) {
-      nextConfig.devtool = restConfig.devtool;
+    if (devtool !== undefined) {
+      nextConfig.devtool = devtool;
     }
 
-    if (restConfig.watchOptions) {
+    if (watchOptions) {
       nextConfig.watchOptions = {
         ...(config.watchOptions || {}),
-        ...restConfig.watchOptions,
+        ...watchOptions,
       };
     }
 
-    if (restConfig.snapshot !== undefined) {
-      nextConfig.snapshot = restConfig.snapshot;
-    }
-
-    if (restConfig.externalsPresets) {
+    if (externalsPresets) {
       nextConfig.externalsPresets = {
         ...(config.externalsPresets || {}),
-        ...restConfig.externalsPresets,
+        ...externalsPresets,
       };
     }
 
     if (
-      restConfig.cache !== undefined &&
-      !isPersistentCacheConfig(restConfig.cache)
+      isPersistentCacheConfig(cache) &&
+      cacheLocation !== undefined &&
+      isPersistentCacheConfig(nextConfig.cache)
     ) {
-      nextConfig.cache = restConfig.cache;
+      nextConfig.cache = {
+        ...nextConfig.cache,
+        storage: {
+          ...(nextConfig.cache.storage ?? { type: 'filesystem' }),
+          location: cacheLocation,
+        },
+      };
+    } else if (cache !== undefined && !isPersistentCacheConfig(cache)) {
+      nextConfig.cache = cache;
     }
 
     return nextConfig;
@@ -341,37 +402,43 @@ export function toRstestConfig({
     ? modifyRspackConfig(rspackConfig)
     : rspackConfig;
 
-  const targets = normalizeTargets(finalConfig.target);
-  const testEnvironment = isNodeTarget(targets) ? 'node' : 'happy-dom';
+  const testEnvironment = resolveTestEnvironmentFromTarget(finalConfig.target);
 
-  // Extract resolve config — rspack's ResolveOptions is mostly compatible
-  // with rsbuild's resolve type, cast to align minor differences (e.g. alias: false)
-  const resolve = finalConfig.resolve as ExtendConfig['resolve'];
+  const resolve: NonNullable<ExtendConfig['resolve']> = {};
+  if (finalConfig.resolve?.alias !== false) {
+    resolve.alias = finalConfig.resolve?.alias;
+  }
+  resolve.conditionNames = finalConfig.resolve?.conditionNames;
+  resolve.extensions = finalConfig.resolve?.extensions;
+  resolve.mainFields = finalConfig.resolve?.mainFields;
+  const hasRstestResolve = Object.values(resolve).some(
+    (value) => value !== undefined,
+  );
 
   // Extract output.module — the only rspack output property supported by rstest
   const outputModule = finalConfig.output?.module;
   const output =
     outputModule !== undefined ? { module: outputModule } : undefined;
 
-  const buildCache = updateCacheConfig({
+  const { buildCache, cacheLocation } = updateCacheConfig({
     cache: finalConfig.cache,
     configPath,
     root: getCacheRoot(finalConfig, cwd),
+    rspackMode: finalConfig.mode,
+    rspackName: finalConfig.name,
   });
 
   // Extract tsconfigPath from rspack's resolve.tsConfig
   const tsConfig = finalConfig.resolve?.tsConfig;
   const tsconfigPath =
-    typeof tsConfig === 'string'
-      ? tsConfig
-      : (tsConfig as { configFile?: string } | undefined)?.configFile;
+    typeof tsConfig === 'string' ? tsConfig : tsConfig?.configFile;
   const source = tsconfigPath ? { tsconfigPath } : undefined;
 
   return {
     name: configName ?? finalConfig.name,
     ...(output ? { output } : {}),
     ...(source ? { source } : {}),
-    ...(resolve ? { resolve } : {}),
+    ...(hasRstestResolve ? { resolve } : {}),
     forceRerunTriggers: configPath ? [path.normalize(configPath)] : undefined,
     performance: {
       buildCache,
@@ -384,7 +451,7 @@ export function toRstestConfig({
       },
     ],
     tools: {
-      rspack: buildRspackToolConfig(finalConfig),
+      rspack: buildRspackToolConfig(finalConfig, cacheLocation),
     } as ExtendConfig['tools'],
     testEnvironment,
   };

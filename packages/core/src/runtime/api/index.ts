@@ -1,3 +1,4 @@
+import { normalize } from 'pathe';
 import type {
   Rstest,
   RstestExpect,
@@ -7,15 +8,55 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
-import { createRunner } from '../runner';
+import { createRunner, runnerAPI } from '../runner';
+import { registerWorkerCleanup } from '../runner/workerCleanup';
+import { registerFileCleanup } from '../runner/fileCleanup';
 import type { TaskContext } from '../worker/taskContext';
-import { assert, createExpect, GLOBAL_EXPECT, setupChaiConfig } from './expect';
+import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
+import type { RootSuiteListeners } from '../runner/runtime';
+
+type RuntimeRstest = Rstest & {
+  registerFileCleanup: typeof registerFileCleanup;
+  registerWorkerCleanup: typeof registerWorkerCleanup;
+};
+
+/**
+ * Live per-file API binding under `isolate: false` (the canonical contract).
+ *
+ * One worker runs many files: `@rstest/core`'s runtime is re-prepared per file
+ * (#1373) but user modules persist, so any context-bound API value-copied into
+ * a shared helper (`export const test = base.extend({})`, `{ ...rstest }`, a
+ * snapshotted `expect.poll`) must not freeze to the first file's torn-down
+ * context. ONE mechanism covers the whole surface: every injected member is
+ * built once per worker with a stable identity and resolves the running file's
+ * `FileContext` (`../fileContext`) at call time — never closing over a
+ * per-file instance. `createRunner` republishes the context per file, and
+ * per-file state is reset, not rebuilt:
+ *
+ *   - test / it / describe / hooks   → `runtimeAPI`            (runner/runtime.ts)
+ *   - onTestFinished / onTestFailed  → `runnerAPI`             (runner/index.ts)
+ *   - expect (incl. `.poll`/`.soft`) → `createFileExpect`      (./expect)
+ *   - rstest / rs                    → `createRstestUtilities` (./utilities)
+ *
+ * The per-test local expect (`context.expect`) stays pinned to its test. The
+ * runner reconciles its assertion bookkeeping with the file singleton for
+ * sequential tests, while concurrent tests keep local-only state.
+ *
+ * See https://github.com/web-infra-dev/rstest/issues/1376.
+ */
 
 export const createRstestRuntime = async (
   workerState: WorkerState,
-  { taskContext }: { taskContext: TaskContext },
+  {
+    taskContext,
+    runtimeGlobal,
+  }: {
+    taskContext: TaskContext;
+    runtimeGlobal?: Record<string, unknown>;
+  },
 ): Promise<{
+  resolveImportMetaRstest: (filename: string) => Rstest | undefined;
   runner: {
     runTests: (
       testPath: string,
@@ -24,32 +65,33 @@ export const createRstestRuntime = async (
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
+    getRootSuiteListeners: () => RootSuiteListeners;
+    setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
-  api: Rstest;
+  api: RuntimeRstest;
 }> => {
-  const [{ runner, api: runnerAPI }, { SnapshotPlugin }] = await Promise.all([
-    Promise.resolve(createRunner({ workerState, taskContext })),
-    import(/* webpackChunkName: "snapshot" */ './snapshot'),
-  ]);
+  const [{ runner }, { SnapshotPlugin, ensureSnapshotClient }] =
+    await Promise.all([
+      Promise.resolve(
+        createRunner({ workerState, taskContext, runtimeGlobal }),
+      ),
+      import(/* webpackChunkName: "snapshot" */ './snapshot'),
+    ]);
 
-  if (workerState.runtimeConfig.chaiConfig) {
-    setupChaiConfig(workerState.runtimeConfig.chaiConfig);
-  }
+  setupChaiConfig(workerState.runtimeConfig.chaiConfig);
 
-  const expect: RstestExpect = createExpect({
-    workerState,
-    getCurrentTest: () => runner.getCurrentTest(),
-    snapshotPlugin: SnapshotPlugin(workerState),
-  });
+  // The runner consumes this file's snapshot client for `setup`/`finish`; the
+  // build-once snapshot plugin resolves it through the context at assert time.
+  ensureSnapshotClient(workerState);
 
-  Object.defineProperty(globalThis, GLOBAL_EXPECT, {
-    value: expect,
-    writable: true,
-    configurable: true,
-  });
+  const expect: RstestExpect = createFileExpect(SnapshotPlugin());
 
-  const rstest = await createRstestUtilities(workerState);
+  const rstest = await createRstestUtilities();
 
+  // Injected surface: build-once members only (see the contract above).
+  // Async helpers retain worker-realm promises and internally created errors.
+  // VM consumers can await them; publishing this surface does not promise
+  // VM constructor identity or convert user callback values/errors.
   const runtime = {
     runner,
     api: {
@@ -58,10 +100,24 @@ export const createRstestRuntime = async (
       assert,
       rstest,
       rs: rstest,
+      registerFileCleanup,
+      registerWorkerCleanup,
     },
   };
 
+  // Published live for real-module importers (`public.ts` reads `RSTEST_API`).
+  // VM bundles see the VM global, while an external `@rstest/core` module
+  // imported by setup files runs in the worker host realm. Publish both
+  // worker-local surfaces so that wrapper APIs resolve the current file in
+  // either realm without sharing state across worker threads.
   globalThis.RSTEST_API = runtime.api;
+  (runtimeGlobal ?? globalThis).RSTEST_API = runtime.api;
 
-  return runtime;
+  const testPath = normalize(workerState.testPath);
+
+  return {
+    ...runtime,
+    resolveImportMetaRstest: (filename) =>
+      normalize(filename) === testPath ? runtime.api : undefined,
+  };
 };

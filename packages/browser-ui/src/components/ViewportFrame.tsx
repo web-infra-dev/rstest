@@ -67,40 +67,41 @@ export const ViewportFrame: React.FC<ViewportFrameProps> = ({
     return () => ro.disconnect();
   }, [active, selection, onResponsiveResize]);
 
-  if (!size) {
-    return (
-      <div
-        className="h-full w-full"
-        style={{ background: token.colorBgContainer }}
-        {...dataAttrs}
-      >
-        {children}
-      </div>
-    );
-  }
-
+  // One element tree for every viewport mode, `size` only choosing styles: a
+  // structural difference between modes would remount the runner iframe on a
+  // viewport switch, silently destroying a possibly-running document.
   return (
-    <div className="flex h-full w-full items-start justify-center p-4 overflow-auto">
+    <div
+      className={
+        size
+          ? 'flex h-full w-full items-start justify-center p-4 overflow-auto'
+          : 'h-full w-full'
+      }
+    >
       <div
         ref={ref}
-        className="shrink-0 relative group"
-        style={{
-          width: size.width,
-          height: size.height,
-          // Tailwind sets `box-sizing: border-box` globally.
-          // Ensure the configured viewport matches the iframe content box.
-          boxSizing: 'content-box',
-          border: `1px solid ${token.colorBorder}`,
-          borderRadius: 0,
-          background: token.colorBgContainer,
-          // CSS resize only works when overflow is not `visible`.
-          overflow: 'hidden',
-          resize: selection.mode === 'responsive' ? 'both' : 'none',
-          minWidth: selection.mode === 'responsive' ? 1 : undefined,
-          minHeight: selection.mode === 'responsive' ? 1 : undefined,
-          maxWidth: selection.mode === 'responsive' ? 10000 : undefined,
-          maxHeight: selection.mode === 'responsive' ? 10000 : undefined,
-        }}
+        className={size ? 'shrink-0 relative group' : 'h-full w-full'}
+        style={
+          size
+            ? {
+                width: size.width,
+                height: size.height,
+                // Tailwind sets `box-sizing: border-box` globally.
+                // Ensure the configured viewport matches the iframe content box.
+                boxSizing: 'content-box',
+                border: `1px solid ${token.colorBorder}`,
+                borderRadius: 0,
+                background: token.colorBgContainer,
+                // CSS resize only works when overflow is not `visible`.
+                overflow: 'hidden',
+                resize: selection.mode === 'responsive' ? 'both' : 'none',
+                minWidth: selection.mode === 'responsive' ? 1 : undefined,
+                minHeight: selection.mode === 'responsive' ? 1 : undefined,
+                maxWidth: selection.mode === 'responsive' ? 10000 : undefined,
+                maxHeight: selection.mode === 'responsive' ? 10000 : undefined,
+              }
+            : { background: token.colorBgContainer }
+        }
         {...dataAttrs}
       >
         {children}

@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "names": [],
+  "sources": ["http://localhost:5280/src/cross-origin.ts"],
+  "sourcesContent": [
+    "Object.defineProperty(globalThis, '__RSTEST_CROSS_ORIGIN_COVERAGE__', { value: 42, configurable: true });\n"
+  ],
+  "mappings": "AAAA"
+}

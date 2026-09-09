@@ -1,10 +1,11 @@
+import { DISPATCH_MESSAGE_TYPE, DISPATCH_RPC_BRIDGE_NAME } from './protocol';
 import type {
-  BrowserClientMessage,
   BrowserDispatchRequest,
   BrowserHostConfig,
+  RunnerEnvelope,
 } from './protocol';
 
-declare module '@rstest/browser-manifest' {
+declare module '__rstest_virtual_browser_manifest__' {
   export type ManifestProjectConfig = {
     name: string;
     environmentName: string;
@@ -38,8 +39,11 @@ declare global {
 
   interface Window {
     __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
-    __rstest_dispatch__?: (message: BrowserClientMessage) => void;
-    __rstest_dispatch_rpc__?: (
+    // Keyed by the sentinel constants so the declared global name and the
+    // constant are the same source — renaming a constant moves this key with it,
+    // and every `window[CONST]` access site stays in lockstep automatically.
+    [DISPATCH_MESSAGE_TYPE]?: (envelope: RunnerEnvelope) => void;
+    [DISPATCH_RPC_BRIDGE_NAME]?: (
       request: BrowserDispatchRequest,
     ) => Promise<unknown>;
     __rstest_container_dispatch__?: (data: unknown) => void;

@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import v8 from 'node:v8';
+import type { RstestPoolType } from '../types/config';
+import { ENV } from '../utils/env';
 import { isDebug, logger } from '../utils/logger';
 import { isWorkerResponseEnvelope } from './protocol';
 
@@ -152,7 +154,7 @@ export class MemoryGate {
       if (!isWorkerResponseEnvelope(msg)) return;
       const r = msg.response;
       if (r.type !== 'runFinished' && r.type !== 'collectFinished') return;
-      if (r.memory) this.recordWorkerRss(r.memory.rss);
+      if (r.memory?.rss) this.recordWorkerRss(r.memory.rss);
     });
   }
 
@@ -238,6 +240,28 @@ export class MemoryGate {
 
 /** Honors `RSTEST_MEMORY_AWARE=0` (emergency kill switch). */
 export const createDefaultMemoryGate = (): MemoryGate | undefined => {
-  if (process.env.RSTEST_MEMORY_AWARE === '0') return undefined;
+  if (process.env[ENV.MEMORY_AWARE] === '0') return undefined;
   return new MemoryGate();
+};
+
+/**
+ * Decide whether the memory-aware spawn gate applies to a given pool transport.
+ *
+ * Only `forks` and `vmForks` are supported. The gate's per-worker RSS sampling assumes each
+ * worker reports its own resident memory — which holds for `child_process.fork`
+ * but not for `worker_threads`, where `process.memoryUsage().rss` returns the
+ * *entire host process* RSS shared across all threads. Feeding those inflated
+ * samples into the gate collapses thread-pool parallelism to 1–2 workers.
+ * See rstest#1301.
+ *
+ * The `makeGate` indirection exists for unit testing only; production callers
+ * use the default `createDefaultMemoryGate`.
+ */
+export const selectMemoryGate = (
+  workerKind: RstestPoolType,
+  makeGate: () => MemoryGate | undefined = createDefaultMemoryGate,
+): MemoryGate | undefined => {
+  return workerKind === 'forks' || workerKind === 'vmForks'
+    ? makeGate()
+    : undefined;
 };

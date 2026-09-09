@@ -10,6 +10,19 @@ import type {
 import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
+import { setFixtureCallbackSource } from './fixtures';
+
+/**
+ * Coerce a user-supplied retry/repeats count into a non-negative integer.
+ * Negative, NaN, Infinity, and fractional values collapse to 0 so loop
+ * bounds stay well-defined.
+ */
+export const sanitizeAttemptCount = (value: number | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.floor(value);
+};
 
 export const getTestStatus = (
   results: TestResult[],
@@ -103,6 +116,7 @@ const traverseUpdateTestRunModeWithContext = (
   context: TestModeContext,
 ): void => {
   if (testSuite.tests.length === 0) {
+    testSuite.hasRunnableTests = false;
     return;
   }
 
@@ -118,6 +132,7 @@ const traverseUpdateTestRunModeWithContext = (
   const runSubOnly =
     runOnly && testSuite.runMode !== 'only' ? runOnly : childrenHaveOnly;
   let hasRunTest = false;
+  let hasRunnableTests = false;
   let allTodoTest = true;
 
   for (const test of testSuite.tests) {
@@ -141,10 +156,20 @@ const traverseUpdateTestRunModeWithContext = (
       hasRunTest = true;
     }
 
+    if (
+      (test.type === 'case' &&
+        (test.runMode === 'run' || test.runMode === 'only')) ||
+      (test.type === 'suite' && test.hasRunnableTests)
+    ) {
+      hasRunnableTests = true;
+    }
+
     if (test.runMode !== 'todo') {
       allTodoTest = false;
     }
   }
+
+  testSuite.hasRunnableTests = hasRunnableTests;
 
   if (testSuite.runMode !== 'run') {
     return;
@@ -210,6 +235,13 @@ export const updateTestModes = (
 const updateTestParents = (tests: Test[], parentNames: string[] = []): void => {
   for (const test of tests) {
     test.parentNames = parentNames;
+    if (test.type === 'case') {
+      // Vitest 4 derives custom matcher `currentTestName` from this field.
+      Object.defineProperty(test, 'fullTestName', {
+        configurable: true,
+        value: getTaskNameWithPrefix(test),
+      });
+    }
     if (test.type === 'suite') {
       const names =
         test.name === ROOT_SUITE_NAME
@@ -260,24 +292,37 @@ function makeError(message: string, stackTraceError?: Error): Error {
   return error;
 }
 
+type TimeoutOptions<T extends (...args: any[]) => any> = {
+  name: string;
+  fn: T;
+  timeout?: number;
+  onTimeout?: (error: Error) => void;
+  getAssertionCalls?: () => number;
+  stackTraceError: Error;
+};
+
+const timeoutOptions = new WeakMap<
+  (...args: any[]) => any,
+  TimeoutOptions<(...args: any[]) => any>
+>();
+
+export const getWrappedTimeout = (
+  fn: (...args: any[]) => any,
+): number | undefined => timeoutOptions.get(fn)?.timeout;
+
 export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,
   timeout,
+  onTimeout,
   getAssertionCalls,
   stackTraceError,
-}: {
-  name: string;
-  fn: T;
-  timeout?: number;
-  getAssertionCalls?: () => number;
-  stackTraceError: Error;
-}): T {
+}: TimeoutOptions<T>): T {
   if (!timeout) {
     return fn;
   }
 
-  return (async (...args: Parameters<T>) => {
+  const wrapped = async (...args: Parameters<T>) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = getRealTimers().setTimeout!(() => {
@@ -289,19 +334,68 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
         const message = `${name} timed out in ${timeout}ms${getAssertionCalls ? assertionInfo : ''}`;
 
         // Create timeout error with the provided stack trace from test registration
-        reject(makeError(message, stackTraceError));
+        const error = makeError(message, stackTraceError);
+        reject(error);
+        onTimeout?.(error);
       }, timeout);
     });
 
     try {
       const result = await Promise.race([fn(...args), timeoutPromise]);
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) getRealTimers().clearTimeout!(timeoutId);
       return result;
     } catch (error) {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) getRealTimers().clearTimeout!(timeoutId);
       throw error;
     }
-  }) as T;
+  };
+
+  timeoutOptions.set(wrapped, {
+    name,
+    fn,
+    timeout,
+    onTimeout,
+    getAssertionCalls,
+    stackTraceError,
+  });
+  setFixtureCallbackSource(wrapped, fn);
+
+  return wrapped as T;
+}
+
+export async function runWithTimeout<T>(
+  fn: (...args: any[]) => any,
+  run: (callback: (...args: any[]) => any) => T | PromiseLike<T>,
+  onTimeout?: (error: Error) => void,
+): Promise<T> {
+  const options = timeoutOptions.get(fn);
+  if (!options) {
+    return run(fn);
+  }
+
+  const wrapped = wrapTimeout({
+    ...options,
+    fn: () => run(options.fn),
+    onTimeout: (error) => {
+      options.onTimeout?.(error);
+      onTimeout?.(error);
+    },
+  });
+  return wrapped();
+}
+
+export function inheritTimeout<T extends (...args: any[]) => any>(
+  source: (...args: any[]) => any,
+  fn: T,
+): T {
+  const options = timeoutOptions.get(source);
+  if (!options) {
+    return fn;
+  }
+  return wrapTimeout({
+    ...options,
+    fn,
+  });
 }
 
 export function limitConcurrency(
@@ -311,13 +405,24 @@ export function limitConcurrency(
   ...args: Args
 ) => Promise<T> {
   let running = 0;
-  const queue: (() => void)[] = [];
+  const queue: Array<(() => void) | undefined> = [];
+  let queueIndex = 0;
 
   const runNext = () => {
-    if (queue.length > 0 && running < concurrency) {
+    if (queueIndex < queue.length && running < concurrency) {
       running++;
-      const next = queue.shift()!;
+      const next = queue[queueIndex]!;
+      queue[queueIndex] = undefined;
+      queueIndex++;
       next();
+
+      if (queueIndex === queue.length) {
+        queue.length = 0;
+        queueIndex = 0;
+      } else if (queueIndex > 1024 && queueIndex * 2 > queue.length) {
+        queue.splice(0, queueIndex);
+        queueIndex = 0;
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 ---
-description: Explore Rstest features for build-integrated testing, including Rstack config reuse, browser mode, sharding, and coverage.
+description: Explore Rstest features for build-integrated testing, including Rstack config reuse, browser mode, Playwright-driven E2E tests, sharding, and coverage.
 ---
 
 # Features
@@ -22,6 +22,12 @@ By default, Rstest uses Rspack's built-in SWC loader to transform JavaScript and
 
 Learn more about [Configuring SWC](/guide/basic/configure-rstest#configure-swc).
 
+## Test Module Federation applications
+
+Rstest can load real [Module Federation](https://module-federation.io/) remotes in Node, JSDOM, and Browser Mode tests. With [@module-federation/rstest](https://github.com/module-federation/core), tests exercise remote loading and shared dependencies instead of replacing the federation boundary with mocks.
+
+Learn more about [Module Federation testing](/integration/module-federation).
+
 ## Multi-project testing
 
 Rstest can run multiple test projects in one process, with each project keeping its own configuration and environment. This is useful for monorepos, multi-app workspaces, and projects that need separate Node, DOM, or Browser Mode test targets.
@@ -32,7 +38,7 @@ Learn more about [Test projects](/guide/basic/projects).
 
 Rstest can split test files into shards for parallel execution. In CI, you can distribute the same test suite across multiple machines to reduce total runtime, then use the `blob` reporter and `rstest merge-reports` to merge test results and coverage data after all shards complete.
 
-Learn more about [Test sharding](/config/test/shard).
+Learn more about [Test sharding](/guide/basic/cli#sharding-tests).
 
 ## In-source tests
 
@@ -58,9 +64,17 @@ Browser Mode is powered by [Playwright](https://playwright.dev/) and can run tes
 
 Learn more about [Browser mode](/guide/browser-testing).
 
+## Playwright-driven E2E tests
+
+Rstest can run E2E tests against a complete page or app with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright). Tests run in Node.js workers and use Playwright to drive a local dev server, preview server, or deployed URL while sharing the same Rstest runner, configuration, and reporting workflow as other tests.
+
+Learn more about [Playwright](/integration/playwright).
+
 ## Code coverage
 
-Rstest can collect code coverage with [istanbul](https://istanbul.js.org/). Enable it by setting `coverage.enabled` to `true` in your Rstest configuration file.
+Rstest supports both [istanbul](https://istanbul.js.org/) and `v8` coverage providers. Enable coverage by setting `coverage.enabled` to `true`, then choose the provider that matches your workflow.
+
+Use `istanbul` when you want SWC-based instrumentation with stable Istanbul semantics, or `v8` when coverage memory usage is the main bottleneck. In headless, non-watch Chromium Browser Mode runs, `v8` collects native coverage without instrumenting application code. Headed and watch coverage is experimental; Firefox and WebKit use `istanbul`.
 
 Learn more about [Code coverage](/config/test/coverage).
 

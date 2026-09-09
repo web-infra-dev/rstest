@@ -1,5 +1,6 @@
 import { resolve } from 'pathe';
 import { Pool } from '../../src/pool/pool';
+import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 
 const WORKER_ENTRY = resolve(__dirname, './fixtures/testWorker.mjs');
@@ -38,6 +39,9 @@ const createTask = (
   worker: 'threads',
   type,
   options: {
+    context: { runtimeConfig: { env: {} } },
+    // A worker is only reused for tasks carrying the same key.
+    environmentKey: 'node',
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
@@ -62,6 +66,25 @@ describe('ThreadsPool - basic', () => {
       const result = await pool.collectTests(createTask('collect'));
       expect(result.tests).toEqual([]);
       expect(result.testPath).toBeTypeOf('string');
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('preserves Buffer assets as Uint8Array over structured clone', async () => {
+    const pool = new Pool(createPoolOptions());
+    try {
+      const result = await pool.runTest(
+        createTask('run', {
+          __testMode: 'asset-transport',
+          assets: {
+            assetFiles: { '/asset.bin': Buffer.from([0, 0xff, 0x80, 0x41]) },
+            sourceMaps: {},
+          },
+        }),
+      );
+      expect((result as any)._assetConstructor).toBe('Uint8Array');
+      expect((result as any)._assetBytes).toEqual([0, 0xff, 0x80, 0x41]);
     } finally {
       await pool.close();
     }
@@ -96,9 +119,9 @@ describe('ThreadsPool - fatal error', () => {
   it('should enrich error with captured stderr when worker crashes', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-crash' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-crash' })),
+      );
       expect(err.message).toContain('segfault at 0x0');
     } finally {
       await pool.close();
@@ -112,9 +135,9 @@ describe('ThreadsPool - stderr handling', () => {
   it('should truncate large stderr in error messages', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-large' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-large' })),
+      );
       expect(err.message).toContain('[truncated');
       expect(err.message).toContain('bytes of stderr]');
       expect(err.message).toContain('STDERR_TAIL_MARKER');
@@ -242,10 +265,12 @@ describe('ThreadsPool - capacity', () => {
         end: (r as any)._finishedAt as number,
       }));
 
-      // Upper bound: at no point were more than maxWorkers tasks running.
+      // Concurrency can only increase when a task starts, so sampling every
+      // start proves the upper bound without combining overlaps from
+      // different moments in the sampled task's lifetime.
       for (const point of intervals) {
         const concurrent = intervals.filter(
-          (iv) => iv.start < point.end && iv.end > point.start,
+          (iv) => iv.start <= point.start && iv.end > point.start,
         ).length;
         expect(concurrent).toBeLessThanOrEqual(maxWorkers);
       }

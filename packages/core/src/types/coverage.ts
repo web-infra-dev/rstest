@@ -18,10 +18,7 @@ type CustomReporter = string | [string, Record<string, unknown>];
 
 /** Union type for all supported reporter types */
 type SupportedReporter =
-  | keyof ReportOptions
-  | ReportWithOptions
-  | ReportBase
-  | CustomReporter;
+  keyof ReportOptions | ReportWithOptions | ReportBase | CustomReporter;
 
 export type CoverageThreshold = {
   /** Threshold for statements */
@@ -39,8 +36,7 @@ export type CoverageSummaryTotals = Totals;
 export type { CoverageMap, CoverageMapData, CoverageSummary };
 
 export type CoverageThresholds =
-  | CoverageThreshold
-  | (CoverageThreshold & ThresholdGlobRecord);
+  CoverageThreshold | (CoverageThreshold & ThresholdGlobRecord);
 
 /** check thresholds for matched files */
 type ThresholdGlobRecord = Record<
@@ -83,7 +79,6 @@ export type CoverageOptions = {
    * This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
    *
    * @default ['**\/node_modules/**',
-   *           '**\/test/**',
    *           '**\/__tests__/**',
    *           '**\/__mocks__/**',
    *           '**\/*.d.ts',
@@ -99,7 +94,7 @@ export type CoverageOptions = {
    * The provider to use for coverage collection.
    * @default 'istanbul'
    */
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
 
   /**
    * The reporters to use for coverage collection.
@@ -158,17 +153,92 @@ export type NormalizedCoverageOptions = Required<
   changed?: boolean | string;
 };
 
+export type CoverageCollectOptions = {
+  assetFiles?: Record<string, string>;
+  sourceMaps?: Record<string, string>;
+  outputModule?: boolean;
+};
+
+/**
+ * Runtime state exposed to a worker-side coverage provider.
+ *
+ * @internal
+ */
+export type CoverageInitOptions = {
+  global: typeof globalThis;
+};
+
+/**
+ * Core-to-provider contract for resolving raw coverage payloads.
+ *
+ * @internal
+ */
+export type RawCoverageResolveOptions = {
+  /** Load compiled sources from the main-process asset store. */
+  loadAssetFiles?: (
+    filenames: string[],
+  ) => Promise<NonNullable<CoverageCollectOptions['assetFiles']>>;
+  /** Load source maps from the main-process asset store. */
+  loadSourceMaps?: (
+    filenames: string[],
+  ) => Promise<NonNullable<CoverageCollectOptions['sourceMaps']>>;
+};
+
 export declare class CoverageProvider {
-  constructor(options: CoverageOptions);
+  constructor(options: NormalizedCoverageOptions, root?: string);
+  /** Whether this provider can resolve raw coverage URLs emitted by Chromium. */
+  supportsBrowserCoverage?: boolean;
+
+  /**
+   * Whether blob runs may leave report generation and untested-file backfill
+   * to `merge-reports`. Providers that do not declare this capability are
+   * finalized before the blob is written for backward compatibility.
+   *
+   * @internal
+   */
+  readonly supportsDeferredCoverageFinalization?: boolean;
   /**
    * Initialize coverage collection
    */
-  init(): void;
+  init(options?: CoverageInitOptions): void | Promise<void>;
 
   /**
-   * Collect coverage data from global coverage object
+   * Collect coverage data into an Istanbul coverage map.
    */
-  collect(): CoverageMap | null;
+  collect(
+    options?: CoverageCollectOptions,
+  ): CoverageMap | null | Promise<CoverageMap | null>;
+
+  /**
+   * Collect lightweight, serializable raw coverage payloads in workers.
+   *
+   * Providers may implement this with `resolveRawCoverage` to defer expensive
+   * conversion work to the main process. Return `null` to indicate that no raw
+   * coverage was collected and the runner should not call `resolveRawCoverage`
+   * for that worker result.
+   *
+   * @internal
+   */
+  collectRaw?(
+    options?: CoverageCollectOptions,
+  ): unknown | null | Promise<unknown | null>;
+
+  /**
+   * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.
+   *
+   * The runner passes only non-null payloads returned by the same provider.
+   * Payloads are internal transfer objects and may be consumed during
+   * resolution.
+   * Implementations should ignore malformed payloads only when they can still
+   * produce a valid partial report; otherwise they may reject to fail coverage
+   * finalization.
+   *
+   * @internal
+   */
+  resolveRawCoverage?(
+    payloads: unknown[],
+    options?: RawCoverageResolveOptions,
+  ): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map
@@ -184,12 +254,14 @@ export declare class CoverageProvider {
   }): Promise<FileCoverageData[]>;
 
   /**
-   * Generate coverage reports
+   * Generate coverage reports.
+   *
+   * Reporters and output directory come from the normalized options the
+   * provider received at construction — there is no per-call override, so a
+   * provider cannot silently ignore a second argument that drifts away from the
+   * constructor config.
    */
-  generateReports(
-    coverageMap: CoverageMap,
-    options: CoverageOptions,
-  ): Promise<void>;
+  generateReports(coverageMap: CoverageMap): Promise<void>;
 
   /**
    * Clean up coverage data

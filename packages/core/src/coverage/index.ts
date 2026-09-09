@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
+import { isAbsolute, join, relative } from 'pathe';
+import { color, logger } from '../utils';
 import type {
   CoverageOptions,
   CoverageProvider,
@@ -13,6 +15,19 @@ import {
   getCoverageProviderModuleName,
 } from './install';
 export { ensureCoverageProviderInstalled } from './install';
+export { resolveAndMergeRawCoverage } from './resolveRawCoverage';
+
+export const excludeVirtualSetupFromCoverage = (
+  coverage: NormalizedCoverageOptions | undefined,
+  virtualModules: Record<string, string>,
+): void => {
+  const setupPaths = Object.keys(virtualModules);
+  if (!coverage?.enabled || !setupPaths.length) {
+    return;
+  }
+
+  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupPaths]));
+};
 
 export const loadCoverageProvider = async (
   options: CoverageOptions,
@@ -51,17 +66,66 @@ export const loadCoverageProvider = async (
  * rsbuild instance, and `--passWithNoTests` with no matching files races the
  * hook against generateCoverage. See https://github.com/web-infra-dev/rstest/issues/1212.
  */
-export function cleanCoverageReports(options: NormalizedCoverageOptions): void {
+export function cleanCoverageReports(
+  options: NormalizedCoverageOptions,
+  preservedPaths?: string[],
+): void {
   if (!options.enabled || !options.clean) {
     return;
   }
-  if (fs.existsSync(options.reportsDirectory)) {
-    fs.rmSync(options.reportsDirectory, { recursive: true });
+  const { reportsDirectory } = options;
+  if (!fs.existsSync(reportsDirectory)) {
+    return;
   }
+
+  const pathsToPreserve = preservedPaths?.filter((path) => {
+    const preservedRelativePath = relative(reportsDirectory, path);
+    return (
+      preservedRelativePath !== '..' &&
+      !preservedRelativePath.startsWith('../') &&
+      !isAbsolute(preservedRelativePath)
+    );
+  });
+
+  if (pathsToPreserve?.length) {
+    if (fs.lstatSync(reportsDirectory).isSymbolicLink()) {
+      return;
+    }
+
+    for (const entry of fs.readdirSync(reportsDirectory)) {
+      const entryPath = join(reportsDirectory, entry);
+      const preservedPathsInEntry = pathsToPreserve.filter((path) => {
+        const preservedRelativePath = relative(entryPath, path);
+        return (
+          preservedRelativePath !== '..' &&
+          !preservedRelativePath.startsWith('../') &&
+          !isAbsolute(preservedRelativePath)
+        );
+      });
+
+      if (preservedPathsInEntry.length) {
+        if (preservedPathsInEntry.some((path) => path === entryPath)) {
+          continue;
+        }
+        cleanCoverageReports(
+          {
+            ...options,
+            reportsDirectory: entryPath,
+          },
+          preservedPathsInEntry,
+        );
+      } else {
+        fs.rmSync(entryPath, { recursive: true, force: true });
+      }
+    }
+    return;
+  }
+
+  fs.rmSync(reportsDirectory, { recursive: true });
 }
 
 export async function createCoverageProvider(
-  options: CoverageOptions,
+  options: NormalizedCoverageOptions,
   root: string,
 ): Promise<CoverageProvider | null> {
   if (!options.enabled) {
@@ -70,8 +134,31 @@ export async function createCoverageProvider(
 
   if (!options.provider || CoverageProviderMap[options.provider]) {
     const { CoverageProvider } = await loadCoverageProvider(options, root);
-    return new CoverageProvider(options);
+    return new CoverageProvider(options, root);
   }
 
   throw new Error(`Unknown coverage provider: ${options.provider}`);
+}
+
+/** The `Coverage enabled with <provider>` banner. Printed once per run. */
+function logCoverageEnabled(options: NormalizedCoverageOptions): void {
+  logger.log(
+    ` ${color.gray('Coverage enabled with')} %s\n`,
+    color.yellow(options.provider),
+  );
+}
+
+/**
+ * Create the coverage provider when coverage is enabled and print the
+ * {@link logCoverageEnabled} banner. Returns null when disabled.
+ */
+export async function createCoverageProviderWithLog(
+  options: NormalizedCoverageOptions,
+  root: string,
+): Promise<CoverageProvider | null> {
+  const coverageProvider = await createCoverageProvider(options, root);
+  if (coverageProvider) {
+    logCoverageEnabled(options);
+  }
+  return coverageProvider;
 }

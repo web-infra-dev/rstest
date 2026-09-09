@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runRstestCli } from '../scripts';
+import { type prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,6 +15,20 @@ const __dirname = dirname(__filename);
 const defaultEnvOverrides: Record<string, string> = {
   CI: '',
   GITHUB_ACTIONS: '',
+};
+
+const useGithubActionsChrome = (fixtureName?: string): boolean =>
+  Boolean(process.env.CI) && fixtureName !== 'webkit';
+
+const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {
+  if (
+    !useGithubActionsChrome(fixtureName) ||
+    args.some((arg) => arg.startsWith('--browser.providerOptions.launch.'))
+  ) {
+    return;
+  }
+
+  args.push('--browser.providerOptions.launch.channel=chrome');
 };
 
 const canRunHeadedBrowser =
@@ -61,21 +75,75 @@ export const expectNoFrameworkWarnings = (cli: {
   );
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const WINDOWS_PROCESS_CLEANUP_RETRY_COUNT = 40;
+const POSIX_PROCESS_CLEANUP_RETRY_COUNT = 20;
+
+type BrowserCli = Awaited<ReturnType<typeof runRstestCli>>['cli'];
+type BrowserFixtureFs = Awaited<ReturnType<typeof prepareFixtures>>['fs'];
+
+/**
+ * Kill a spawned rstest process tree before the fixture directory is removed.
+ * The `onTestFinished` hook fires too late for that ordering, so watch tests
+ * still call this explicitly; Windows file-handle contention is absorbed by
+ * `deleteFixtureTarget`'s retries.
+ */
+export const killCliProcessTree = (cli: BrowserCli): Promise<void> =>
+  cli.killProcessTree();
+
+export const deleteFixtureTarget = async (
+  fixtureFs: { delete: (targetPath: string) => void } | undefined,
+  targetPath: string,
+): Promise<void> => {
+  if (!fixtureFs) {
+    return;
+  }
+
+  try {
+    fixtureFs.delete(targetPath);
+    return;
+  } catch (err) {
+    if (process.platform !== 'win32') {
+      throw err;
+    }
+  }
+
+  const retryCount =
+    process.platform === 'win32'
+      ? WINDOWS_PROCESS_CLEANUP_RETRY_COUNT
+      : POSIX_PROCESS_CLEANUP_RETRY_COUNT;
+
+  for (let attempt = 0; attempt < retryCount; attempt++) {
+    await sleep(50);
+    try {
+      fixtureFs.delete(targetPath);
+      return;
+    } catch {
+      // Retry briefly on Windows where killed browser processes can release file
+      // handles a little after the kill callback fires.
+    }
+  }
+};
+
 /**
  * Run browser mode CLI with specified fixture
  */
 export const runBrowserCli = async (
   fixtureName: string,
   extra?: {
+    command?: 'run' | 'list';
     args?: string[];
     env?: Record<string, string>;
   },
 ) => {
   const args = extra?.args || [];
 
+  applyGithubActionsChrome(args, fixtureName);
+
   const result = await runRstestCli({
     command: 'rstest',
-    args: ['run', ...args],
+    args: [extra?.command ?? 'run', ...args],
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
@@ -102,9 +170,13 @@ export const runBrowserWatchCli = async (
     env?: Record<string, string>;
   },
 ) => {
+  const args = extra?.args || [];
+
+  applyGithubActionsChrome(args, fixtureName);
+
   const result = await runRstestCli({
     command: 'rstest',
-    args: ['watch', '--disableConsoleIntercept', ...(extra?.args || [])],
+    args: ['watch', '--disableConsoleIntercept', ...args],
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
@@ -121,19 +193,122 @@ export const runBrowserWatchCli = async (
   };
 };
 
-/**
- * Run browser mode CLI with custom cwd
- */
-export const runBrowserCliWithCwd = async (
+export const runBrowserWatchCliWithCwd = async (
   cwd: string,
   extra?: {
     args?: string[];
     env?: Record<string, string>;
   },
 ) => {
+  const args = extra?.args || [];
+
+  applyGithubActionsChrome(args);
+
   const result = await runRstestCli({
     command: 'rstest',
-    args: ['run', ...(extra?.args || [])],
+    args: ['watch', '--disableConsoleIntercept', ...args],
+    options: {
+      nodeOptions: {
+        cwd,
+        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
+      },
+    },
+  });
+  return {
+    ...result,
+    expectExecSuccess: async () => {
+      await result.expectExecSuccess();
+      expectNoFrameworkWarnings(result.cli);
+    },
+  };
+};
+
+export const runBrowserWatchCrud = async ({
+  cli,
+  fixtureFs,
+  fixtureRoot,
+}: {
+  cli: BrowserCli;
+  fixtureFs: BrowserFixtureFs;
+  fixtureRoot: string;
+}): Promise<void> => {
+  const addedTestPath = join(fixtureRoot, 'tests/added.test.ts');
+  const renamedTestPath = join(fixtureRoot, 'tests/renamed.test.ts');
+  const waitForWatchReady = async (): Promise<void> => {
+    if (!cli.stdout.includes('Waiting for file changes...')) {
+      await cli.waitForStdout('Waiting for file changes...');
+    }
+  };
+
+  cli.resetStd();
+  fixtureFs.create(
+    addedTestPath,
+    `import { expect, test } from '@rstest/core';
+
+test('added watch test', () => {
+  expect('watch').toBe('watch');
+});`,
+  );
+  await cli.waitForStdout('Test file set changed, re-running 3 file(s)');
+  await cli.waitForStdout('✓ tests/added.test.ts');
+  await cli.waitForStdout('Test Files 3 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.update(addedTestPath, (content) =>
+    content.replace("toBe('watch')", "toBe('changed')"),
+  );
+  await cli.waitForStdout("expected 'watch' to be 'changed'");
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.update(addedTestPath, (content) =>
+    content.replace("toBe('changed')", "toBe('watch')"),
+  );
+  await cli.waitForStdout('✓ tests/added.test.ts');
+  await cli.waitForStdout('Test Files 3 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.rename(addedTestPath, renamedTestPath);
+  await cli.waitForStdout('Test file set changed, re-running 3 file(s)');
+  await cli.waitForStdout('✓ tests/renamed.test.ts');
+  await cli.waitForStdout('Test Files 3 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.delete(renamedTestPath);
+  await cli.waitForStdout('Test file set changed, re-running 2 file(s)');
+  await cli.waitForStdout('✓ tests/index.test.ts');
+  await cli.waitForStdout('✓ tests/another.test.ts');
+  await cli.waitForStdout('Test Files 2 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.delete(join(fixtureRoot, 'tests/index.test.ts'));
+  fixtureFs.delete(join(fixtureRoot, 'tests/another.test.ts'));
+  await cli.waitForStdout('No browser test files remain after update.');
+  await cli.waitForStdout('No test files need re-run.');
+};
+
+/**
+ * Run browser mode CLI with custom cwd
+ */
+export const runBrowserCliWithCwd = async (
+  cwd: string,
+  extra?: {
+    command?: 'run' | 'list';
+    args?: string[];
+    env?: Record<string, string>;
+  },
+) => {
+  const args = extra?.args || [];
+
+  applyGithubActionsChrome(args);
+
+  const result = await runRstestCli({
+    command: 'rstest',
+    args: [extra?.command ?? 'run', ...args],
     options: {
       nodeOptions: {
         cwd,

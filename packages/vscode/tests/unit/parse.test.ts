@@ -243,6 +243,47 @@ describe('parseTestFile', () => {
     expect(byName.child.range.startLine).toBe(1);
   });
 
+  it('should compute ranges correctly after leading comments', () => {
+    const code = `/* eslint-disable max-lines */
+/* eslint-disable max-lines-per-function */
+describe('outer', () => {
+  it('inner', () => {});
+  it('inner-1', () => {});
+});`;
+
+    const results: { name: string; range: Range }[] = [];
+    parseTestFile(code, {
+      onTest: (range: Range, name: string) => {
+        results.push({ name, range });
+      },
+    });
+
+    expect(
+      Object.fromEntries(
+        results.map(({ name, range }) => [
+          name,
+          {
+            start: { line: range.startLine, character: range.startChar },
+            end: { line: range.endLine, character: range.endChar },
+          },
+        ]),
+      ),
+    ).toEqual({
+      outer: {
+        start: { line: 2, character: 0 },
+        end: { line: 5, character: 2 },
+      },
+      inner: {
+        start: { line: 3, character: 2 },
+        end: { line: 3, character: 23 },
+      },
+      'inner-1': {
+        start: { line: 4, character: 2 },
+        end: { line: 4, character: 25 },
+      },
+    });
+  });
+
   it('should compute range correctly with chinese characters', () => {
     const code = fs.readFileSync(join(__dirname, './test.txt'), 'utf-8');
 
@@ -257,6 +298,21 @@ describe('parseTestFile', () => {
     expect(byName.outer.range.startLine).toBe(5);
     expect(byName.outer.range.endLine).toBe(8);
     expect(byName.inner.range.startLine).toBe(6);
+  });
+
+  it('should compute UTF-16 columns after astral characters', () => {
+    const code = `const emoji = '😀'; test('unicode', () => {});`;
+
+    const results: { name: string; range: Range }[] = [];
+    parseTestFile(code, {
+      onTest: (range: Range, name: string) => {
+        results.push({ name, range });
+      },
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('unicode');
+    expect(results[0].range.startChar).toBe(code.indexOf('test'));
   });
 
   it('should handle quotes and escaped characters', () => {
@@ -345,5 +401,13 @@ describe('parseTestFile', () => {
     });
 
     expect(tests).toEqual([{ name: 'skipped suite', type: 'suite' }]);
+  });
+
+  it('should reject invalid syntax', () => {
+    expect(() =>
+      parseTestFile('test(', {
+        onTest: () => undefined,
+      }),
+    ).toThrow(SyntaxError);
   });
 });

@@ -5,15 +5,24 @@ import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const fixturesPath = join(__dirname, 'fixtures');
+const shardFiles = [
+  'packages/client/test/App.test.tsx',
+  'packages/client/test/index.test.ts',
+  'packages/client/test/node.test.ts',
+  'packages/client-vue/test/index.test.ts',
+  'packages/node/test/index.test.ts',
+  'packages/node/test/mockFs.test.ts',
+];
 
 describe('test projects sharding', () => {
   it('should run the first shard of 2', async () => {
     const { cli, expectExecSuccess, expectLog } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--shard', '1/2', '--globals'],
+      args: ['run', '--shard', '1/2', '--globals', ...shardFiles],
       options: {
         nodeOptions: {
-          cwd: join(__dirname, 'fixtures-shard'),
+          cwd: fixturesPath,
         },
       },
     });
@@ -44,10 +53,10 @@ describe('test projects sharding', () => {
   it('should run the second shard of 2', async () => {
     const { cli, expectExecSuccess, expectLog } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--shard', '2/2', '--globals'],
+      args: ['run', '--shard', '2/2', '--globals', ...shardFiles],
       options: {
         nodeOptions: {
-          cwd: join(__dirname, 'fixtures-shard'),
+          cwd: fixturesPath,
         },
       },
     });
@@ -81,10 +90,10 @@ describe('test projects sharding', () => {
     const { expectExecFailed, expectLog, expectStderrLog } = await runRstestCli(
       {
         command: 'rstest',
-        args: ['run', '--shard', '7/7', '--globals'], // Total 6 test files, so 7th shard is empty
+        args: ['run', '--shard', '7/7', '--globals', ...shardFiles], // Total 6 test files, so 7th shard is empty
         options: {
           nodeOptions: {
-            cwd: join(__dirname, 'fixtures-shard'),
+            cwd: fixturesPath,
           },
         },
       },

@@ -11,6 +11,7 @@ describe('globalSetup tests', () => {
 
   it('should access process.env', () => {
     expect(process.env.GLOBAL_SETUP_EXECUTED).toBe('true');
+    expect(process.env.GLOBAL_SETUP_SOURCE).toBe('loaded');
   });
 
   it('should not be able to access global variable', () => {

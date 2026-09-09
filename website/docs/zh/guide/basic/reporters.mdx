@@ -17,7 +17,7 @@ Rstest 中的报告器控制测试结果的显示和处理方式。
 
 你可以通过以下方式配置报告器：
 
-1. **CLI**: `--reporter=<name>` (可多次使用)
+1. **CLI**: `--reporters=<name>` (可多次使用；同时兼容 `--reporter` 作为别名)
 2. **配置文件**: 在 `rstest.config.ts` 中添加 [reporters](/config/test/reporters)
 
 ```ts
@@ -68,8 +68,8 @@ Rstest 提供了多种内置报告器：
 
 **配置选项：**
 
-- `summary`: 是否显示汇总信息 (默认: `true`)
-- `logger`: 用于输出的自定义日志函数 (默认: `process.stdout/process.stderr`)
+- `summary`：是否显示汇总信息（默认：`true`）
+- `logger`：用于输出的自定义日志函数（默认：`process.stdout/process.stderr`）
 
 #### 进度报告
 
@@ -109,7 +109,7 @@ Rstest 提供了多种内置报告器：
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=verbose
+npx rstest --reporters=verbose
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -149,7 +149,7 @@ Dot 报告器会为每个测试用例输出一个紧凑字符：
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=dot
+npx rstest --reporters=dot
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -172,7 +172,7 @@ GitHub Actions 报告器将在测试失败时以 [GitHub Actions 工作流命令
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=github-actions
+npx rstest --reporters=github-actions
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -216,7 +216,7 @@ export default defineConfig({
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=github-actions
+npx rstest --reporters=github-actions
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -232,16 +232,30 @@ export default defineConfig({
 
 #### 选项
 
-| 选项          | 类型      | 默认值 | 说明                                              |
-| :------------ | :-------- | :----- | :------------------------------------------------ |
-| `annotations` | `boolean` | `true` | 是否为失败的测试输出 `::error` 注解。             |
-| `summary`     | `boolean` | `true` | 是否向 `GITHUB_STEP_SUMMARY` 追加 Markdown 摘要。 |
+| 选项          | 类型                                       | 默认值 | 说明                                  |
+| :------------ | :----------------------------------------- | :----- | :------------------------------------ |
+| `annotations` | `boolean`                                  | `true` | 是否为失败的测试输出 `::error` 注解。 |
+| `summary`     | `boolean \| { maxCharsPerField?: number }` | `true` | 控制 Markdown 摘要输出和单字段长度。  |
+
+<ApiMeta addedVersion="0.11.6" />
+
+使用 `summary` 的对象形式，可以自定义每个失败消息和 diff，以及每个未处理错误消息和 stack 包含的最大字符数。`maxCharsPerField` 默认为 `400`。GitHub 将一个 step 生成的完整 Summary 限制为 [1 MiB](https://docs.github.com/zh/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#步骤隔离和限制)，因此应为该配置设置合理的上限。将 `summary` 设置为 `false` 可以禁用 Markdown 摘要。
 
 ```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: [['github-actions', { annotations: true, summary: false }]],
+  reporters: [
+    [
+      'github-actions',
+      {
+        annotations: true,
+        summary: {
+          maxCharsPerField: 2_000,
+        },
+      },
+    ],
+  ],
 });
 ```
 
@@ -252,7 +266,7 @@ export default defineConfig({
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=junit
+npx rstest --reporters=junit
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -268,7 +282,7 @@ export default defineConfig({
 
 **配置选项：**
 
-- `outputPath`: 输出文件路径 (默认为控制台输出)
+- `outputPath`：输出文件路径 (默认为控制台输出)
 
 JUnit 报告器生成如下 XML 格式：
 
@@ -290,10 +304,10 @@ JUnit 报告器生成如下 XML 格式：
 
 JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
 
-- `pass`: 测试通过
-- `fail`: 测试失败，生成 `<failure>` 标签
-- `skip`: 测试跳过，生成 `<skipped>` 标签
-- `todo`: 测试待办，生成 `<skipped>` 标签
+- `pass`：测试通过
+- `fail`：测试失败，生成 `<failure>` 标签
+- `skip`：测试跳过，生成 `<skipped>` 标签
+- `todo`：测试待办，生成 `<skipped>` 标签
 
 ### JSON 报告器
 
@@ -304,7 +318,7 @@ JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=json
+npx rstest --reporters=json
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -320,18 +334,18 @@ export default defineConfig({
 
 **配置选项：**
 
-- `outputPath`: 输出文件路径（默认输出到 stdout）
+- `outputPath`：输出文件路径（默认输出到 stdout）
 
 **输出结构：**
 
-- `status`: 本次运行的整体状态（`pass` 或 `fail`）
-- `summary`: 文件和测试的聚合计数
-- `durationMs`: 总耗时、构建耗时和测试耗时（毫秒）
-- `snapshot`: 本次运行的 snapshot 汇总
-- `files`: 按测试文件聚合的结果，包含嵌套测试项
-- `tests`: 扁平化测试结果，每项都带 `fullName`
-- `consoleLogs`: 捕获到的用户 console 输出（如果有）
-- `unhandledErrors`: 顶层 unhandled errors（如果有）
+- `status`：本次运行的整体状态（`pass` 或 `fail`）
+- `summary`：文件和测试的聚合计数
+- `durationMs`：总耗时、构建耗时和测试耗时（毫秒）
+- `snapshot`：本次运行的 snapshot 汇总
+- `files`：按测试文件聚合的结果，包含嵌套测试项
+- `tests`：扁平化测试结果，每项都带 `fullName`
+- `consoleLogs`：捕获到的用户 console 输出（如果有）
+- `unhandledErrors`：顶层 unhandled errors（如果有）
 
 JSON 报告器会将 `testPath` 写成相对路径，这样在不同机器和 CI workspace 中输出更稳定。
 
@@ -361,7 +375,7 @@ Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=md
+npx rstest --reporters=md
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -472,12 +486,12 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.3" />
 
-Blob 报告器将测试结果序列化为 JSON 文件，以便后续合并。它专门用于 CI 环境中的[测试分片](/config/test/shard)场景，在多台机器上拆分运行测试后需要合并结果。
+Blob 报告器将测试结果序列化为 JSON 文件，以便后续合并。它专门用于 CI 环境中的[测试分片](/guide/basic/cli#sharding-tests)场景，在多台机器上拆分运行测试后需要合并结果。与分片一样，它不支持 watch 模式。
 
 <Tabs defaultValue='CLI'>
   <Tab label="CLI">
 ```bash
-npx rstest run --shard 1/3 --reporter=blob
+npx rstest run --shard 1/3 --reporters=blob
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -493,7 +507,7 @@ export default defineConfig({
 
 **配置选项：**
 
-- `outputDir`: blob 报告文件的存储目录（默认：`.rstest-reports`）
+- `outputDir`：blob 报告文件的存储目录（默认：`.rstest-reports`）
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
@@ -503,9 +517,9 @@ export default defineConfig({
 });
 ```
 
-Blob 文件默认保存到 `.rstest-reports/` 目录。所有分片完成后，使用 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 将它们合并为统一的报告。
+Blob 文件默认保存到 `.rstest-reports/` 目录。启用覆盖率时，每个 blob 只保存该次运行实际采集的覆盖率。支持延迟最终处理的 coverage provider 会让使用 blob 报告器的运行不生成覆盖率报告、不根据 `coverage.include` 补齐未测试文件，也不检查覆盖率阈值。未使用 blob 报告器的运行会正常完成覆盖率最终处理，包括分片运行。旧版 provider 保持原有的单次运行最终处理行为。所有生成 blob 的运行完成后，使用启用了覆盖率的 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 基于统一结果集中执行这些步骤。只传给生成 blob 的运行的覆盖率参数不会写入 blob；请把最终处理参数放在配置文件中，或在执行 `merge-reports` 时再次传入。
 
-完整的 CI 工作流示例请参考[分片配置](/config/test/shard)。
+完整的 CI 工作流示例请参考[使用分片拆分测试](/guide/advanced/ci#split-tests-with-shards)。
 
 ## 自定义报告器
 

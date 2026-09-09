@@ -1,0 +1,7 @@
+{
+  "name": "@rstest/e2e-environment-affinity-jsdom-26",
+  "private": true,
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

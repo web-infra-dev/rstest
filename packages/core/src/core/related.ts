@@ -1,9 +1,13 @@
 import { existsSync } from 'node:fs';
-import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
-import type { ProjectContext, RstestContext } from '../types';
-import { getTestEntries } from '../utils';
-import { getSetupFiles } from '../utils/getSetupFiles';
+import type {
+  InternalContext,
+  InternalProjectContext,
+  NormalizedProjectConfig,
+} from '../types';
+import { getTestEntries, normalizeExactPathMatch } from '../utils';
+import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -11,6 +15,54 @@ type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
 type ModuleGraph = {
   allSources: Set<string>;
   dependentsBySource: Map<string, Set<string>>;
+};
+
+type ProjectConfigSnapshot = {
+  project: InternalProjectContext;
+  normalizedConfig: NormalizedProjectConfig;
+  rootPath: string;
+  outputModule: boolean;
+};
+
+const clonePlainConfig = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePlainConfig(item)) as T;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
+    ) as T;
+  }
+
+  return value;
+};
+
+const snapshotProjectConfigs = (
+  projects: InternalProjectContext[],
+): ProjectConfigSnapshot[] =>
+  projects.map((project) => ({
+    project,
+    normalizedConfig: clonePlainConfig(project.normalizedConfig),
+    rootPath: project.rootPath,
+    outputModule: project.outputModule,
+  }));
+
+const restoreProjectConfigs = (snapshots: ProjectConfigSnapshot[]): void => {
+  for (const {
+    project,
+    normalizedConfig,
+    rootPath,
+    outputModule,
+  } of snapshots) {
+    project.normalizedConfig = normalizedConfig;
+    project.rootPath = rootPath;
+    project.outputModule = outputModule;
+  }
 };
 
 const stripSourceProtocol = (source: string): string => {
@@ -69,24 +121,31 @@ export const resolveStatsPathCandidate = ({
 const normalizeStatsPathCandidate = ({
   candidate,
   projectRoot,
+  virtualModulePaths,
 }: {
   candidate: string;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): string | null => {
   const absolutePath = resolveStatsPathCandidate({
     candidate,
     projectRoot,
   });
 
-  return absolutePath && existsSync(absolutePath) ? absolutePath : null;
+  return absolutePath &&
+    (virtualModulePaths?.has(absolutePath) || existsSync(absolutePath))
+    ? absolutePath
+    : null;
 };
 
 const normalizeStatsModulePath = ({
   module,
   projectRoot,
+  virtualModulePaths,
 }: {
   module: Rspack.StatsModule;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): string | null => {
   const candidate =
     typeof module.nameForCondition === 'string' && module.nameForCondition
@@ -96,15 +155,18 @@ const normalizeStatsModulePath = ({
   return normalizeStatsPathCandidate({
     candidate,
     projectRoot,
+    virtualModulePaths,
   });
 };
 
 const normalizeStatsReasonPath = ({
   reason,
   projectRoot,
+  virtualModulePaths,
 }: {
   reason: StatsModuleReason;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): string | null => {
   const candidate =
     reason.moduleIdentifier || reason.moduleName || reason.module || '';
@@ -112,15 +174,18 @@ const normalizeStatsReasonPath = ({
   return normalizeStatsPathCandidate({
     candidate,
     projectRoot,
+    virtualModulePaths,
   });
 };
 
 const collectModuleGraph = ({
   modules,
   projectRoot,
+  virtualModulePaths,
 }: {
   modules: Rspack.StatsModule[] | undefined;
   projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
 }): ModuleGraph => {
   const allSources = new Set<string>();
   const dependentsBySource = new Map<string, Set<string>>();
@@ -130,6 +195,7 @@ const collectModuleGraph = ({
       const sourcePath = normalizeStatsModulePath({
         module,
         projectRoot,
+        virtualModulePaths,
       });
 
       if (sourcePath) {
@@ -139,6 +205,7 @@ const collectModuleGraph = ({
           const dependentPath = normalizeStatsReasonPath({
             reason,
             projectRoot,
+            virtualModulePaths,
           });
 
           if (!dependentPath) {
@@ -176,13 +243,14 @@ const collectReachableDependents = ({
 }): Set<string> => {
   const visited = new Set<string>();
   const queue = Array.from(initialSources);
+  let queueIndex = 0;
 
   for (const source of queue) {
     visited.add(source);
   }
 
-  while (queue.length > 0) {
-    const currentSource = queue.shift()!;
+  while (queueIndex < queue.length) {
+    const currentSource = queue[queueIndex++]!;
 
     for (const dependent of dependentsBySource.get(currentSource) || []) {
       if (visited.has(dependent)) {
@@ -198,7 +266,7 @@ const collectReachableDependents = ({
 };
 
 const collectProjectEntries = async (
-  context: RstestContext,
+  context: InternalContext,
 ): Promise<Map<string, Record<string, string>>> => {
   const entries = new Map<string, Record<string, string>>();
 
@@ -215,25 +283,13 @@ const collectProjectEntries = async (
           includeSource,
           rootPath: context.rootPath,
           projectRoot: root,
-          fileFilters: [],
+          fileFilters: undefined,
         }),
       );
     }),
   );
 
   return entries;
-};
-
-const buildSetupFiles = (
-  projects: ProjectContext[],
-  key: 'setupFiles' | 'globalSetup',
-): Record<string, Record<string, string>> => {
-  return Object.fromEntries(
-    projects.map((project) => [
-      project.environmentName,
-      getSetupFiles(project.normalizedConfig[key], project.rootPath),
-    ]),
-  );
 };
 
 const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
@@ -259,14 +315,6 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
     });
   },
 });
-
-const normalizeExactPathMatch = (filePath: string): string => {
-  const normalizedPath = normalize(filePath);
-
-  return process.platform === 'win32'
-    ? normalizedPath.toLocaleLowerCase()
-    : normalizedPath;
-};
 
 const collectDirectlyMatchedFiles = ({
   files,
@@ -300,7 +348,7 @@ const collectDirectlyMatchedFiles = ({
 };
 
 export async function resolveRelatedTestFiles(
-  context: RstestContext,
+  context: InternalContext,
   options: {
     sourceFilters: string[];
     filterLabel?: string;
@@ -323,38 +371,58 @@ export async function resolveRelatedTestFiles(
     );
   }
 
-  const projectEntries = await collectProjectEntries(context);
-  const matchedTestFiles = new Set(
-    collectDirectlyMatchedFiles({
+  let projectEntries = new Map<string, Record<string, string>>();
+  const globTestSourceEntries = async (environmentName: string) =>
+    projectEntries.get(environmentName) ?? {};
+
+  const setupFileState = createSetupFileState();
+  projectEntries = await collectProjectEntries(context);
+
+  const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
+  let devServer:
+    Awaited<ReturnType<RsbuildInstance['createDevServer']>> | undefined;
+
+  try {
+    const rsbuildInstance = await prepareRsbuild({
+      context,
+      globTestSourceEntries,
+      setupFileState,
+      targetProjects: context.projects,
+      exposeRstestAPIProjects: context.projects,
+      extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      getSetupFileProjects: () => ({
+        setupProjects: context.projects,
+        globalSetupProjects: context.projects,
+      }),
+      onModifyRstestConfigApplied: async () => {
+        projectEntries = await collectProjectEntries(context);
+      },
+    });
+
+    devServer = await rsbuildInstance.createDevServer({
+      getPortSilently: true,
+    });
+
+    const matchedTestFiles = new Set<string>();
+    projectEntries = projectEntries.size
+      ? projectEntries
+      : await collectProjectEntries(context);
+
+    for (const file of collectDirectlyMatchedFiles({
       files: Array.from(projectEntries.values()).flatMap((entries) =>
         Object.values(entries),
       ),
       sourceFilters,
       rootPath: context.rootPath,
-    }),
-  );
+    })) {
+      matchedTestFiles.add(file);
+    }
 
-  const globTestSourceEntries = async (environmentName: string) =>
-    projectEntries.get(environmentName) ?? {};
-
-  const setupFiles = buildSetupFiles(context.projects, 'setupFiles');
-  const globalSetupFiles = buildSetupFiles(context.projects, 'globalSetup');
-
-  const rsbuildInstance = await prepareRsbuild(
-    context,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    context.projects,
-    [createRelatedBuildSafeguardsPlugin()],
-  );
-
-  const devServer = await rsbuildInstance.createDevServer({
-    getPortSilently: true,
-  });
-
-  try {
     for (const project of context.projects) {
+      if (!projectEntries.has(project.environmentName)) {
+        continue;
+      }
+
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
       const { modules } = stats.toJson({
@@ -367,15 +435,20 @@ export async function resolveRelatedTestFiles(
       const moduleGraph = collectModuleGraph({
         modules,
         projectRoot: project.rootPath,
+        virtualModulePaths: new Set(
+          Object.keys(
+            setupFileState.virtualModules[project.environmentName] || {},
+          ),
+        ),
       });
       const testPaths = Object.values(
         projectEntries.get(project.environmentName) || {},
       );
       const setupPaths = Object.values(
-        setupFiles[project.environmentName] || {},
+        setupFileState.setupFiles[project.environmentName] || {},
       );
       const globalSetupPaths = Object.values(
-        globalSetupFiles[project.environmentName] || {},
+        setupFileState.globalSetupFiles[project.environmentName] || {},
       );
       const matchedSources = collectDirectlyMatchedFiles({
         files: Array.from(moduleGraph.allSources),
@@ -411,9 +484,10 @@ export async function resolveRelatedTestFiles(
         }
       }
     }
-  } finally {
-    await devServer.close();
-  }
 
-  return Array.from(matchedTestFiles).sort();
+    return Array.from(matchedTestFiles).sort();
+  } finally {
+    await devServer?.close();
+    restoreProjectConfigs(projectConfigSnapshots);
+  }
 }

@@ -3,6 +3,8 @@ title: Test
 description: test 用于定义一个测试用例，支持链式调用和 fixture 扩展。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Test
 
 `test` 用于定义一个测试用例，支持链式调用和 fixture 扩展。
@@ -11,7 +13,12 @@ description: test 用于定义一个测试用例，支持链式调用和 fixture
 
 ## test
 
-- **类型：** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：**
+
+```ts
+(name: string, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
+```
 
 定义一个测试用例。
 
@@ -23,6 +30,66 @@ test('should add two numbers correctly', () => {
   expect(1 + 2).toBe(3);
 });
 ```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.11.1" />
+
+将 `TestOptions` 对象作为**第二个参数**（位于测试函数之前）传入，用于细化单个测试的运行行为：
+
+```ts
+test('flaky network call', { retry: 3 }, async () => {
+  /* ... */
+});
+```
+
+作为简写，你仍可以将数字作为**最后一个参数**传入，仅用于设置超时（等价于 `{ timeout: n }`）：
+
+```ts
+test('runs within 3s', async () => {
+  /* ... */
+}, 3000);
+```
+
+`TestOptions` 支持以下字段：
+
+- `timeout?: number` — 单测超时（毫秒），覆盖 [`test.testTimeout`](/config/test/test-timeout)。
+- `retry?: number` — 测试失败时的重跑次数，首次通过即停。覆盖 [`test.retry`](/config/test/retry)。
+- `repeats?: number` — 在通过的前提下额外重跑指定次数，任一次失败则整体判定为失败。每次重跑会完整执行 `beforeEach` / `afterEach`，并各自享有独立的 `retry` 配额。
+- `meta?: TaskMeta` — 0.11.1 新增。测试结果的初始可 JSON 序列化元数据。如果测试位于带有 `meta` 的 `describe` 中，会继承一份套件元数据副本，测试级别的同名字段会覆盖继承值。
+
+`TaskMeta` 和 `TaskMetaValue` 都从 `@rstest/core` 导出，允许使用可 JSON 序列化的值：
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
+
+```ts
+test('flaky network call', { retry: 3 }, async () => {
+  /* ... */
+});
+
+// 共执行 10 次；任一次失败即短路后续重跑
+test('stays green across runs', { repeats: 9 }, async () => {
+  /* ... */
+});
+
+test('records metadata', { meta: { owner: 'team-a' } }, (context) => {
+  context.task.meta.startedBy = 'runtime';
+});
+```
+
+在这个例子中，测试结果的 metadata 初始值是 `{ owner: 'team-a' }`。测试运行时又通过 `context.task.meta` 修改同一个对象，因此 Reporter 和 programmatic API 会在 `TestResult.meta` 上收到 `{ owner: 'team-a', startedBy: 'runtime' }`。
+
+`test.each` 与 `test.for` 的第二个参数语义相同，会作用于生成的每个 case。
 
 ## test.only
 
@@ -44,6 +111,17 @@ test.skip('skip this test', () => {
 });
 ```
 
+当你在定义测试时就确定要跳过它，可以使用 `test.skip`。如果只能在测试运行过程中决定是否跳过，请从测试上下文中调用 `context.skip()`。`context.skip()` 会立即停止执行当前测试，因此它后面的代码不会继续执行，并且该测试会被报告为 skipped。
+
+```ts
+test('skip at runtime', (context) => {
+  context.skip();
+
+  // 这个断言不会被执行。
+  expect(1 + 1).toBe(3);
+});
+```
+
 ## test.todo
 
 将某些测试标记为待办。
@@ -54,7 +132,16 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+- **类型：**
+
+```ts
+// Every row is an array: the row is spread into the arguments
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+// Otherwise: the row is passed as a single argument
+test.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
 
 对提供的数组中的每一项运行相同的测试逻辑。
 
@@ -93,7 +180,7 @@ test.each<{ a: number; b: number; expected: number }>`
 });
 ```
 
-你可以使用 [printf formatting](https://nodejs.org/api/util.html#util_util_format_format_args) 来格式化测试名称中的参数。
+你可以使用 [printf formatting](https://nodejs.org/api/util.html#utilformatformat-args) 来格式化测试名称中的参数。
 
 - `%s`: String
 - `%d`: Number
@@ -118,7 +205,16 @@ test.each([
 // adds 2 + 2 to equal 4
 ```
 
-你也可以使用 `$` 前缀访问对象属性和数组元素：
+只有当表格的每一行都是数组时，行才会展开成测试函数的多个参数。只要有一行不是数组，每一行都会整体作为单个参数传入，混合表中的数组行会原样传给测试函数：
+
+```ts
+test.each([null, 42, ['a']])('rejects %o', (value) => {
+  // The third case receives ['a'], not 'a'.
+  expect(isValid(value)).toBe(false);
+});
+```
+
+你也可以使用 `$` 前缀访问对象属性：
 
 ```ts
 test.each([
@@ -133,24 +229,16 @@ test.each([
 // adds 1 + 1 to equal 2
 // adds 1 + 2 to equal 3
 // adds 2 + 1 to equal 3
-
-test.each([
-  [1, 1, 2],
-  [1, 2, 3],
-  [2, 1, 3],
-])('add $0 + $1 to equal $2', (a, b, sum) => {
-  expect(a + b).toBe(sum);
-});
-
-// 此时将返回：
-// add 1 + 1 to equal 2
-// add 1 + 2 to equal 3
-// add 2 + 1 to equal 3
 ```
 
 ## test.for
 
-- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：**
+
+```ts
+test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
+```
 
 `test.each` 的替代方案，提供 `TestContext`。
 
@@ -255,7 +343,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **类型：** `test.extend(fixtures: Fixtures)`
+- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' | 'worker' }, fixture)`
 
 通过自定义 fixture 扩展测试上下文，返回一个**新的** test API。原始 `test` 不会被修改，你可以同时拥有多个各自独立的扩展版本。
 
@@ -288,12 +376,14 @@ test('plain test', ({ expect }) => {
 
 返回的 API 拥有与 `test` 相同的链式修饰符（`only`、`skip`、`each`、`concurrent` 等），并且可以继续调用 `.extend()` 进行二次扩展。
 
-### Fixture 函数的生命周期
+### fixtures 对象写法
 
-Fixture 函数接收两个参数：
+fixtures 对象写法中的 fixture 函数接收两个参数：
 
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
+
+使用 fixture 的 callback 必须在 callback 参数中通过直接对象解构显式列出所有请求的 fixture。Rstest 不会从函数体内的解构推断依赖。测试 callback、fixture 函数和 per-test hook 不支持 `({ db, ...rest })` 这类对象 rest property，也不支持 `({ db = fallback })` 或 `({ db } = {})` 这类默认值。
 
 `await use(value)` 之前的代码是 **setup**，之后的代码是 **teardown**（测试结束后执行）。
 
@@ -310,6 +400,76 @@ const testWithDb = test.extend({
   },
 });
 ```
+
+### 具名 fixture 写法
+
+<ApiMeta addedVersion="0.11.7" />
+
+具名 fixture 写法会直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于为 fixture 注册一个 cleanup callback。fixture 函数和 cleanup callback 都可以是异步函数。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('baseURL', 'https://api.example.com')
+  .extend('client', async ({ baseURL }, { onCleanup }) => {
+    const client = await createClient(baseURL);
+    onCleanup(() => client.close());
+    return client;
+  });
+```
+
+双参数的具名 fixture 写法属于 test scope：Rstest 会为每次 test attempt 执行 fixture 函数，并在测试及其 per-test hooks 结束后执行 cleanup。普通值会在不同 attempt 之间复用；如果可变状态需要在每次 attempt 之间隔离，请使用 fixture 函数。
+
+Fixture 名称必须是静态可知的 ASCII JavaScript identifier，TypeScript 才能准确暴露一个新的 context 字段。此 overload 不接受类型为 `string` 的值、`` `slot${string}` `` 这类 template literal pattern、`base-url` 这类需要带引号解构的名称，以及 test context 的保留字段。它支持与 Function 属性重名的名称，例如 `name` 和 `length`。
+
+直接传入的函数或 class 都会被视为 fixture 函数，因为它们在 JavaScript 运行时都是函数。若要把函数或 class 本身作为 fixture 值，请通过 fixture 函数返回它，例如 `.extend('predicate', () => predicate)` 或 `.extend('Service', () => Service)`。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
+
+### File scope 具名 fixtures
+
+<ApiMeta addedVersion="0.11.7" />
+
+传入 `{ scope: 'file' }` 可以为当前测试文件惰性创建一个 fixture 实例。所有请求它的测试、retry、repeat 和并发测试都会共享该实例。它的 cleanup 会在所有测试和 `afterAll` hooks 结束后执行。依赖项按依赖顺序初始化，并按反序 cleanup。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('server', { scope: 'file' }, async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  })
+  .extend('client', { scope: 'file' }, ({ server }) => {
+    return createClient(server.url);
+  });
+```
+
+File scope fixture 必须在测试文件顶层声明。它可以依赖链中更早声明的 worker scope 或 file scope fixture，无法访问 test scope fixture 或 `TestContext`。后续 `.extend()` 不能覆盖 file scope fixture。Test scope fixture 可以依赖 file scope fixture。
+
+Fixture setup 受首次请求它的测试或 hook timeout 限制。File cleanup 由 Node 或 browser host 提供保护，因此永不结束的 cleanup 会让文件失败，而不会无限阻塞整个测试运行。
+
+### Worker scope 具名 fixtures
+
+<ApiMeta addedVersion="0.11.9" />
+
+传入 `{ scope: 'worker' }` 可以为当前测试 worker 惰性创建一个 fixture 实例。只有复用同一个 extended test API/fixture definition 时，同一个 worker 执行的多个文件才会共享该实例；worker 被回收时执行 cleanup。Worker scope fixture 只能依赖链中更早声明的 worker scope fixture，不能访问 `TestContext` 或 file scope fixture；file scope fixture 可以依赖 worker scope fixture。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test.extend(
+  'server',
+  { scope: 'worker' },
+  async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  },
+);
+```
+
+Worker scope fixture 必须在测试文件顶层声明，后续 `.extend()` 不能覆盖它。它的 setup 受首次请求它的测试 timeout 限制，cleanup 由 worker host 提供超时保护；如果 worker 被终止，则无法执行用户 cleanup。在 browser mode 中，`isolate: false` 会让分配到同一个 headless browser worker 的多个文件复用该 fixture；包含 `setupFiles` 的 project 会保持按文件隔离，以确保 setup module 在每个文件执行；默认隔离模式下，它的生命周期等同于单个文件。
 
 ### 普通值 fixture
 
@@ -367,9 +527,47 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 });
 ```
 
+### 在 hook 中使用 fixture
+
+<ApiMeta addedVersion="0.11.4" />
+
+`beforeEach`、`afterEach` 以及 `beforeEach` 返回的 cleanup 函数都可以请求 fixture。Rstest 会在 `beforeEach` 之前初始化测试 callback 请求的 fixture，以保持现有的测试 setup 顺序；仅由 hook 请求的 fixture 则会在该 hook 运行前初始化。同一个实例会在本次 test attempt 的后续阶段共享，并在所有 per-test hooks 结束后执行 teardown。
+
+Hook 必须直接在 callback 参数中声明 fixture 依赖，例如 `beforeEach(({ db }) => {})`。`beforeEach((context) => {})` 这类 named hook context 仍可用于访问常规 `TestContext`，但在函数体内解构 `context` 不会初始化惰性 fixture。
+
+Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook。如果 suite 中的某个测试没有提供 hook 请求的 fixture，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture：
+
+```ts
+import { beforeEach, describe, test } from '@rstest/core';
+
+interface DbFixtures {
+  db: Database;
+}
+
+describe('database tests', () => {
+  const dbTest = test.extend<DbFixtures>({
+    db: async ({}, use) => {
+      const db = await connectTestDb();
+      await use(db);
+      await db.close();
+    },
+  });
+
+  beforeEach<DbFixtures>(({ db }) => {
+    return async ({ db }) => {
+      await db.rollback();
+    };
+  });
+
+  dbTest('creates a user', async () => {
+    // 即使测试函数没有请求 db，也会为 beforeEach 初始化它。
+  });
+});
+```
+
 ### 自动 fixture（`auto`）
 
-Fixture 默认是按需执行的：只有测试函数中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使测试没有解构它——可以使用元组语法并设置 `{ auto: true }`：
+Fixture 默认是按需执行的：只有测试或 per-test hook callback 中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使没有 callback 解构它——可以使用元组语法并设置 `{ auto: true }`：
 
 ```ts
 import { test } from '@rstest/core';
@@ -437,16 +635,94 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.1. */
+    filepath?: string;
+    /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
+    projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. Added in 0.11.6. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
+    /** Mutable metadata copied to the current test result. Added in 0.11.1. */
+    meta: TaskMeta;
   };
+  /** 当前 attempt 超时时，以 timeout error 中止的 Signal。0.11.9 新增。 */
+  readonly signal: AbortSignal;
   /** The `expect` API bound to the current test */
   expect: Expect;
+  /** Skip the current test during execution */
+  skip: () => never;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+<ApiMeta addedVersion="0.11.6" />
+
+你可以通过 `context.task.retryCount` 在测试、Hook 和 fixture 中读取当前的 retry index。初次尝试时该值为 `0`，第一次 retry 时为 `1`；配置 `repeats` 后，每次 repeat 都会从 `0` 重新计数。
+
+#### signal
+
+<ApiMeta addedVersion="0.11.9" />
+
+当前测试 attempt 超时时，`context.signal` 会以对应的 timeout error 中止，包括测试回调、per-test Hook 和 fixture 中发生的超时。每次 retry 和 repeat 都会获得一个新的 signal，因此一次 attempt 超时不会取消下一次 attempt。
+
+将 signal 传给支持取消操作的 API，可以在 Rstest 停止等待当前 attempt 时终止尚未完成的工作：
+
+```ts
+import { test } from '@rstest/core';
+
+test('loads a user', { timeout: 1_000 }, async ({ signal }) => {
+  await fetch('/api/user', { signal });
+});
+```
+
+接受 `AbortSignal` 的 Node.js API 也遵循相同约定。例如，读取大型 fixture 时将 signal 传给 `fs.readFile`，测试超时后就能取消尚未完成的文件读取：
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { test } from '@rstest/core';
+
+test('loads a large fixture', { timeout: 1_000 }, async ({ signal }) => {
+  const contents = await readFile('./fixtures/large-data.json', {
+    encoding: 'utf8',
+    signal,
+  });
+
+  JSON.parse(contents);
+});
+```
+
+如果文件在一秒后仍未读取完成，`signal.reason` 就是 Rstest 为这次失败的 attempt 报告的同一个 error：
+
+```text
+Error: test timed out in 1000ms (no expect assertions completed)
+```
+
+不同 API 暴露取消操作的方式可能不同。例如，`fs.readFile` 会抛出 `AbortError`，其 `cause` 指向通过 signal 传入的 timeout error。
+
+你可以使用 `context.task.meta` 给当前测试结果附加可 JSON 序列化的元数据。既可以修改该对象，也可以整体替换为一个新的 metadata 对象。自定义 Reporter 和 programmatic API 可以从 `TestResult.meta` 读取这些数据：
+
+```ts
+import { test } from '@rstest/core';
+
+test('tracks runtime data', (context) => {
+  context.task.meta.coveredBranches = ['a', 'b'];
+});
+```
+
+你可以使用 `context.skip()` 在测试运行过程中跳过当前测试。`context.skip()` 之后的代码不会继续执行，测试结果会被标记为 skipped：
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('skipped test', (context) => {
+  context.skip();
+
+  expect(1 + 1).toBe(3);
+});
 ```
 
 你也可以通过 `test.extend` 方法通过自定义 fixture 的方式来扩展测试上下文。

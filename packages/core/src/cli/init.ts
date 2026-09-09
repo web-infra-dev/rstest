@@ -2,8 +2,9 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
-import { loadConfig, resolveExtends } from '../config';
-import type { BrowserName, Project, RstestConfig } from '../types';
+import type { RunOptions } from '../api/types';
+import { loadConfig, plainDeepMerge, resolveExtends } from '../config';
+import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
 import {
   castArray,
   color,
@@ -11,85 +12,42 @@ import {
   filterProjects,
   formatRootStr,
   getAbsolutePath,
+  logger,
 } from '../utils';
 
-export type CommonOptions = {
+export type CommonOptions = Omit<RunOptions, 'filters'> & {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
-  related?: boolean;
-  findRelatedTests?: boolean;
-  changed?: boolean | string;
-  globals?: boolean;
-  /**
-   * Pool options.
-   * - `string`: shorthand for `{ type: string }` (from `--pool` flag)
-   * - `object`: detailed pool config (from `--pool.*` options)
-   */
-  pool?:
-    | string
-    | {
-        type?: string;
-        maxWorkers?: string | number;
-        minWorkers?: string | number;
-        execArgv?: string[] | string;
-      };
-  /**
-   * Browser mode options.
-   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--browser` flag)
-   * - `object`: detailed browser config (from `--browser.*` options)
-   */
-  browser?:
-    | boolean
-    | {
-        enabled?: boolean;
-        name?: BrowserName;
-        headless?: boolean;
-        port?: number;
-        strictPort?: boolean;
-      };
-  isolate?: boolean;
-  include?: string[];
-  exclude?: string[];
-  reporter?: string[];
-  project?: string[];
-  /**
-   * Coverage options.
-   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--coverage` flag)
-   * - `object`: detailed coverage config (from `--coverage.*` options)
-   */
-  coverage?:
-    | boolean
-    | {
-        enabled?: boolean | string;
-        allowExternal?: boolean;
-        changed?: boolean | string;
-      };
-  passWithNoTests?: boolean;
-  silent?: boolean | 'passed-only';
-  printConsoleTrace?: boolean;
-  logHeapUsage?: boolean;
-  detectAsyncLeaks?: boolean;
   trace?: boolean;
-  disableConsoleIntercept?: boolean;
-  update?: boolean;
-  testNamePattern?: RegExp | string;
-  testTimeout?: number;
-  hookTimeout?: number;
-  testEnvironment?: string;
-  clearMocks?: boolean;
-  resetMocks?: boolean;
-  restoreMocks?: boolean;
-  unstubGlobals?: boolean;
-  unstubEnvs?: boolean;
-  retry?: number;
-  maxConcurrency?: number;
-  slowTestThreshold?: number;
-  hideSkippedTests?: boolean;
-  hideSkippedTestFiles?: boolean;
-  bail?: number | boolean;
-  shard?: string;
 };
+
+export const loadCliConfig = (
+  options: CommonOptions,
+  cwd: string,
+): ReturnType<typeof loadConfig> =>
+  loadConfig({
+    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
+    path: options.config,
+    configLoader: options.configLoader,
+  });
+
+function coerceCliBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+  }
+
+  return undefined;
+}
 
 const normalizeBooleanLikeCliValue = (
   value: boolean | string,
@@ -105,15 +63,16 @@ const normalizeBooleanLikeCliValue = (
   return value;
 };
 
-function mergeWithCLIOptions(
-  config: RstestConfig,
+export function mergeWithCLIOptions(
+  config: ResolvedRstestConfig,
   options: CommonOptions,
-): RstestConfig {
+): ResolvedRstestConfig {
   const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
     'root',
     'globals',
     'isolate',
     'passWithNoTests',
+    'onlyFailures',
     'silent',
     'update',
     'testNamePattern',
@@ -134,6 +93,8 @@ function mergeWithCLIOptions(
     'hideSkippedTestFiles',
     'logHeapUsage',
     'detectAsyncLeaks',
+    'includeTaskLocation',
+    'federation',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -141,12 +102,26 @@ function mergeWithCLIOptions(
     }
   }
 
-  if (options.changed !== undefined && options.passWithNoTests === undefined) {
+  if (
+    options.changed !== undefined &&
+    options.changed !== false &&
+    options.passWithNoTests === undefined
+  ) {
     config.passWithNoTests ??= true;
   }
 
-  if (options.reporter) {
-    config.reporters = castArray(options.reporter) as typeof config.reporters;
+  if (options.reporters) {
+    config.reporters = castArray(options.reporters) as typeof config.reporters;
+  }
+
+  // `shard` is CLI-only (`--shard`). Discard any value carried by the loaded
+  // config so sharding can never take effect without the flag, then populate
+  // it solely from the CLI option below.
+  if (config.shard) {
+    logger.warn(
+      'The `shard` config field is no longer supported and is ignored. Use the `--shard <index>/<count>` CLI flag instead.',
+    );
+    config.shard = undefined;
   }
 
   if (options.shard) {
@@ -154,13 +129,13 @@ function mergeWithCLIOptions(
     if (
       !index ||
       !count ||
-      Number.isNaN(index) ||
-      Number.isNaN(count) ||
+      !Number.isInteger(index) ||
+      !Number.isInteger(count) ||
       index < 1 ||
       index > count
     ) {
       throw new Error(
-        `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
+        `Invalid shard option: ${options.shard}. It must use positive integers in the format <index>/<count> and be 1-based.`,
       );
     }
     config.shard = {
@@ -181,21 +156,69 @@ function mergeWithCLIOptions(
     if (typeof options.coverage === 'boolean') {
       config.coverage.enabled = options.coverage;
     } else {
-      if (options.coverage.enabled !== undefined) {
-        config.coverage.enabled = Boolean(
-          normalizeBooleanLikeCliValue(options.coverage.enabled),
-        );
+      let changed: boolean | string | undefined;
+      let shouldEnableCoverage = false;
+      const coverageEnabled = coerceCliBoolean(options.coverage.enabled);
+      if (coverageEnabled !== undefined) {
+        config.coverage.enabled = coverageEnabled;
       }
       if (options.coverage.allowExternal !== undefined) {
         config.coverage.allowExternal = options.coverage.allowExternal;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.provider !== undefined) {
+        config.coverage.provider = options.coverage.provider;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.include !== undefined) {
+        config.coverage.include = castArray(options.coverage.include);
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.exclude !== undefined) {
+        config.coverage.exclude = [
+          ...(config.coverage.exclude || []),
+          ...castArray(options.coverage.exclude),
+        ];
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reporters !== undefined) {
+        config.coverage.reporters = castArray(
+          options.coverage.reporters,
+        ) as typeof config.coverage.reporters;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reportsDirectory !== undefined) {
+        config.coverage.reportsDirectory = options.coverage.reportsDirectory;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reportOnFailure !== undefined) {
+        const reportOnFailure = coerceCliBoolean(
+          options.coverage.reportOnFailure,
+        );
+        if (reportOnFailure !== undefined) {
+          config.coverage.reportOnFailure = reportOnFailure;
+          shouldEnableCoverage = true;
+        }
+      }
+      if (options.coverage.clean !== undefined) {
+        const clean = coerceCliBoolean(options.coverage.clean);
+        if (clean !== undefined) {
+          config.coverage.clean = clean;
+          shouldEnableCoverage = true;
+        }
       }
       if (options.coverage.changed !== undefined) {
-        const changed = normalizeBooleanLikeCliValue(options.coverage.changed);
+        changed = normalizeBooleanLikeCliValue(options.coverage.changed);
         config.coverage.changed = changed;
+        shouldEnableCoverage ||= changed !== false;
+      }
 
-        if (options.coverage.enabled === undefined && changed !== false) {
-          config.coverage.enabled = true;
-        }
+      if (
+        coverageEnabled === undefined &&
+        options.coverage.enabled === undefined &&
+        shouldEnableCoverage
+      ) {
+        config.coverage.enabled = true;
       }
     }
   }
@@ -208,14 +231,38 @@ function mergeWithCLIOptions(
     config.include = castArray(options.include);
   }
 
+  if (options.source?.tsconfigPath !== undefined) {
+    config.source ??= {};
+    config.source.tsconfigPath = options.source.tsconfigPath;
+  }
+
+  if (options.dev?.writeToDisk !== undefined) {
+    config.dev ??= {};
+    config.dev.writeToDisk = options.dev.writeToDisk;
+  }
+
+  if (options.output !== undefined) {
+    config.output ??= {};
+    if (options.output.emitAssets !== undefined) {
+      config.output.emitAssets = options.output.emitAssets;
+    }
+    if (options.output.cleanDistPath !== undefined) {
+      config.output.cleanDistPath = options.output.cleanDistPath;
+    }
+    if (options.output.module !== undefined) {
+      config.output.module = options.output.module;
+    }
+  }
+
   if (options.browser !== undefined) {
     config.browser ??= { provider: 'playwright' };
     // Handle --browser as shorthand for --browser.enabled
     if (typeof options.browser === 'boolean') {
       config.browser.enabled = options.browser;
     } else {
-      if (options.browser.enabled !== undefined) {
-        config.browser.enabled = options.browser.enabled;
+      const browserEnabled = coerceCliBoolean(options.browser.enabled);
+      if (browserEnabled !== undefined) {
+        config.browser.enabled = browserEnabled;
       }
       if (options.browser.name !== undefined) {
         config.browser.browser = options.browser.name;
@@ -228,6 +275,14 @@ function mergeWithCLIOptions(
       }
       if (options.browser.strictPort !== undefined) {
         config.browser.strictPort = options.browser.strictPort;
+      }
+      if (options.browser.providerOptions !== undefined) {
+        // Deep-merge so a CLI leaf override keeps unrelated config keys (e.g.
+        // config `providerOptions.context`); see plainDeepMerge.
+        config.browser.providerOptions = plainDeepMerge(
+          config.browser.providerOptions ?? {},
+          options.browser.providerOptions,
+        );
       }
     }
   }
@@ -267,8 +322,8 @@ function mergeWithCLIOptions(
         pool.maxWorkers = poolFromCli.maxWorkers as any;
       }
 
-      if (poolFromCli.minWorkers !== undefined) {
-        pool.minWorkers = poolFromCli.minWorkers as any;
+      if (poolFromCli.memoryLimit !== undefined) {
+        pool.memoryLimit = poolFromCli.memoryLimit;
       }
 
       if (poolFromCli.execArgv !== undefined) {
@@ -303,6 +358,20 @@ async function resolveConfig(
     configFilePath: configFilePath ?? undefined,
   };
 }
+
+export const formatNoProjectsFoundError = (
+  config: Pick<RstestConfig, 'projects'>,
+  projectFilter?: CommonOptions['project'],
+): string => {
+  let message = `No projects found, please make sure you have at least one valid project.
+${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
+
+  if (projectFilter) {
+    message += `\n${color.gray('projectName filter:')} ${JSON.stringify(projectFilter, null, 2)}`;
+  }
+
+  return message;
+};
 
 export async function resolveProjects({
   config,
@@ -455,63 +524,21 @@ export async function resolveProjects({
   );
 
   if (!projects.length) {
-    let errorMsg = `No projects found, please make sure you have at least one valid project.
-${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
-
-    if (options.project) {
-      errorMsg += `\n${color.gray('projectName filter:')} ${JSON.stringify(options.project, null, 2)}`;
-    }
-
-    throw errorMsg;
+    throw formatNoProjectsFoundError(config, options.project);
   }
-
-  const names = new Set<string>();
-
-  projects.forEach((project) => {
-    if (names.has(project.config.name!)) {
-      const conflictProjects = projects.filter(
-        (p) => p.config.name === project.config.name,
-      );
-      throw `Project name "${project.config.name}" is already used. Please ensure all projects have unique names.
-Conflicting projects:
-${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n')}
-        `;
-    }
-
-    names.add(project.config.name!);
-  });
 
   return projects;
 }
 
-export async function initCli(options: CommonOptions): Promise<{
-  config: RstestConfig;
-  configFilePath?: string;
-  projects: Project[];
-}> {
-  const cwd = process.cwd();
-  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
-
-  const { config, configFilePath } = await resolveConfig({
-    ...options,
-    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
-  });
-
-  // In agent environments, default to markdown output when the user didn't
-  // explicitly set reporters (no `reporters` in config and no `--reporter`).
+export function applyAgentReporterDefault(
+  config: RstestConfig,
+  options: CommonOptions,
+): void {
   if (
     determineAgent().isAgent &&
-    !options.reporter &&
+    !options.reporters &&
     config.reporters == null
   ) {
     config.reporters = ['md'];
   }
-
-  const projects = await resolveProjects({ config, root, options });
-
-  return {
-    config,
-    configFilePath,
-    projects,
-  };
 }

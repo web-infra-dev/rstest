@@ -18,8 +18,10 @@
  */
 import type { Assertion } from '@vitest/expect';
 import { Assertion as ChaiAssertion, util } from 'chai';
-import type { RstestExpect, TestCase } from '../../types';
+import type { RstestExpect, RuntimeConfig, TestCase } from '../../types';
+import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getRealTimers } from '../util';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 // these matchers are not supported because they don't make sense with poll
 const unsupported = [
@@ -43,9 +45,13 @@ const unsupported = [
   // resolves
 ];
 
-export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
+export function createExpectPoll(
+  expect: RstestExpect,
+  getPollConfig: () => RuntimeConfig['expect']['poll'],
+  getTestForTimeout: () => TestCase | undefined,
+): RstestExpect['poll'] {
   return function poll(fn, options = {}) {
-    const { interval = 50, timeout = 1000, message } = options;
+    const { message } = options;
     // @ts-expect-error private poll access
     const assertion = expect(null, message).withContext({
       poll: true,
@@ -56,6 +62,19 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
     if (!test) {
       throw new Error('expect.poll() must be called inside a test');
     }
+    const getTimeout = (): number => {
+      if (options.timeout !== undefined) {
+        return options.timeout;
+      }
+      const defaults = getPollConfig();
+      const timeoutTest = getTestForTimeout();
+      return Math.min(
+        defaults.timeout,
+        (timeoutTest &&
+          getRemainingTestTimeout(timeoutTest, TEST_TIMEOUT_BUFFER)) ??
+          defaults.timeout,
+      );
+    };
     const proxy: any = new Proxy(assertion, {
       get(target, key, receiver) {
         const assertionFunction = Reflect.get(target, key, receiver);
@@ -77,9 +96,11 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
         }
 
         return function (this: any, ...args: any[]) {
-          const STACK_TRACE_ERROR = new Error('STACK_TRACE_ERROR');
+          const STACK_TRACE_ERROR = new Error(SYNTHETIC_STACK_ERROR_MESSAGE);
           const promise = () =>
             new Promise<void>((resolve, reject) => {
+              const timeout = getTimeout();
+              const interval = options.interval ?? getPollConfig().interval;
               let intervalId: any;
               let lastError: any;
               // TODO: use timeout manager
@@ -89,8 +110,8 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                   const obj = await fn();
                   util.flag(assertion, 'object', obj);
                   resolve(await assertionFunction.call(assertion, ...args));
-                  clearTimeout(intervalId);
-                  clearTimeout(timeoutId);
+                  getRealTimers().clearTimeout!(intervalId);
+                  getRealTimers().clearTimeout!(timeoutId);
                 } catch (err) {
                   lastError = err;
                   if (!util.flag(assertion, '_isLastPollAttempt')) {
@@ -99,7 +120,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                 }
               };
               const timeoutId = getRealTimers().setTimeout!(() => {
-                clearTimeout(intervalId);
+                getRealTimers().clearTimeout!(intervalId);
                 util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {
                   reject(
@@ -122,10 +143,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           test.onFinished.push(() => {
             if (!awaited) {
               const negated = util.flag(assertion, 'negate') ? 'not.' : '';
-              const name = util.flag(assertion, '_poll.element')
-                ? 'element(locator)'
-                : 'poll(assertion)';
-              const assertionString = `expect.${name}.${negated}${String(key)}()`;
+              const assertionString = `expect.poll(assertion).${negated}${String(key)}()`;
               const error = new Error(
                 `${assertionString} was not awaited. This assertion is asynchronous and must be awaited; otherwise, it is not executed to avoid unhandled rejections:\n\nawait ${assertionString}\n`,
               );

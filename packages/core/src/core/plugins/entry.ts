@@ -1,6 +1,8 @@
-import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import type { RstestContext } from '../../types';
+import { rspack, type RsbuildPlugin, type Rspack } from '@rsbuild/core';
+import path from 'pathe';
+import type { InternalContext } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
+import type { TestEntryPathState } from './moduleCacheControl';
 
 class TestFileWatchPlugin {
   private readonly contextToWatch: string | null = null;
@@ -27,10 +29,12 @@ class TestFileWatchPlugin {
 }
 
 export const pluginEntryWatch: (params: {
-  context: RstestContext;
+  context: InternalContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  virtualModules: Record<string, Record<string, string>>;
+  testEntryPathState?: TestEntryPathState;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
@@ -38,16 +42,41 @@ export const pluginEntryWatch: (params: {
   globTestSourceEntries,
   setupFiles,
   globalSetupFiles,
+  virtualModules,
   context,
+  testEntryPathState,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
+    const getSourceEntries = async (environmentName: string) => {
+      const sourceEntries = await globTestSourceEntries(environmentName);
+      if (testEntryPathState) {
+        testEntryPathState.set(
+          environmentName,
+          new Set(Object.values(sourceEntries).map(path.normalize)),
+        );
+      }
+      return sourceEntries;
+    };
+
     api.modifyRspackConfig(async (config, { environment }) => {
+      const environmentVirtualModules = virtualModules[environment.name];
+      if (
+        environmentVirtualModules &&
+        Object.keys(environmentVirtualModules).length
+      ) {
+        config.plugins.push(
+          new rspack.experiments.VirtualModulesPlugin(
+            environmentVirtualModules,
+          ),
+        );
+      }
+
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
-          const sourceEntries = await globTestSourceEntries(environment.name);
+          const sourceEntries = await getSourceEntries(environment.name);
           return {
             ...sourceEntries,
             ...setupFiles[environment.name],
@@ -56,8 +85,7 @@ export const pluginEntryWatch: (params: {
         };
 
         config.watchOptions ??= {};
-        // FIXME: Temporarily default to 5 to debounce rerun in watch mode.
-        config.watchOptions.aggregateTimeout = 5;
+        config.watchOptions.aggregateTimeout = 100;
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
@@ -74,11 +102,11 @@ export const pluginEntryWatch: (params: {
         config.watchOptions.ignored.push(
           getTempRstestOutputDirGlob(outputDistPathRoot),
           context.normalizedConfig.coverage.reportsDirectory,
-          // ignore global setup files since they are only run once
-          ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
         );
 
+        config.experiments ??= {};
+        config.experiments.nativeWatcher ??= true;
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;
@@ -92,7 +120,7 @@ export const pluginEntryWatch: (params: {
         config.watchOptions ??= {};
         config.watchOptions.ignored = '**/**';
 
-        const sourceEntries = await globTestSourceEntries(environment.name);
+        const sourceEntries = await getSourceEntries(environment.name);
         config.entry = {
           ...setupFiles[environment.name],
           ...(globalSetupFiles?.[environment.name] || {}),

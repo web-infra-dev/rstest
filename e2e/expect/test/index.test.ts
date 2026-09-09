@@ -1,4 +1,10 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
+
+declare module '@rstest/core' {
+  interface Assertion {
+    toHaveCurrentTestName(expected: string): void;
+  }
+}
 
 describe('Expect API', () => {
   it('test expect API', () => {
@@ -84,6 +90,70 @@ describe('Expect API', () => {
     expect(1 + 3).toBe(4);
   });
 
+  it('shares assertion counts between imported and context expect', ({
+    expect: contextExpect,
+  }) => {
+    expect.assertions(2);
+    expect(1 + 1).toBe(2);
+    contextExpect(1 + 2).toBe(3);
+  });
+
+  it('shares context assertion counts with imported expect', ({
+    expect: contextExpect,
+  }) => {
+    contextExpect.assertions(2);
+    expect(1 + 1).toBe(2);
+    contextExpect(1 + 2).toBe(3);
+  });
+
+  it('satisfies imported hasAssertions with context expect', ({
+    expect: contextExpect,
+  }) => {
+    expect.hasAssertions();
+    contextExpect(1 + 1).toBe(2);
+  });
+
+  it('satisfies context hasAssertions with imported expect', ({
+    expect: contextExpect,
+  }) => {
+    contextExpect.hasAssertions();
+    expect(1 + 1).toBe(2);
+  });
+
+  it.fails(
+    'enforces imported assertion counts for context expect',
+    ({ expect: contextExpect }) => {
+      expect.assertions(2);
+      contextExpect(1 + 1).toBe(2);
+    },
+  );
+
+  it.fails(
+    'enforces imported hasAssertions for context expect',
+    ({ expect: contextExpect }) => {
+      expect.hasAssertions();
+      void contextExpect;
+    },
+  );
+
+  it('passes the full test name to custom matchers', ({ expect }) => {
+    expect.extend({
+      toHaveCurrentTestName(_, expected) {
+        const actual = this.currentTestName;
+        return {
+          actual,
+          expected,
+          pass: actual === expected,
+          message: () => `expected current test name to be ${expected}`,
+        };
+      },
+    });
+
+    expect(null).toHaveCurrentTestName(
+      'Expect API > passes the full test name to custom matchers',
+    );
+  });
+
   it('test expect API not', () => {
     expect(1 + 1).not.toBe(3);
     expect('blue red').not.toBeUndefined();
@@ -97,6 +167,48 @@ describe('Expect API', () => {
     expect('blue red').not.toMatch('redd');
   });
 
+  // Regression guard for #1514: a mock from `rs.fn()` / `rs.spyOn()` must be
+  // accepted by the call-order matchers without a cast under strict
+  // type-checking, including through inherited chains like `.not`. The value is
+  // the no-cast usage being type-checked (`e2e` is in the `pnpm typecheck`
+  // scope); reverting the fix makes these lines fail to compile.
+  it('toHaveBeenCalledBefore / toHaveBeenCalledAfter accept a mock without a cast', () => {
+    const a = rs.fn();
+    const b = rs.fn();
+
+    a();
+    b();
+
+    expect(a).toHaveBeenCalledBefore(b);
+    expect(b).toHaveBeenCalledAfter(a);
+    expect(b).not.toHaveBeenCalledBefore(a);
+    expect(a).not.toHaveBeenCalledAfter(b);
+  });
+
+  it('supports the spy matcher aliases preserved from Vitest 3', () => {
+    const mock = rs.fn((value: string) => value.toUpperCase());
+
+    mock('first');
+    mock('second');
+
+    expect(mock).nthCalledWith(1, 'first');
+    expect(mock).lastCalledWith('second');
+    expect(mock).nthReturnedWith(1, 'FIRST');
+    expect(mock).lastReturnedWith('SECOND');
+  });
+
+  it('checks the value passed to the returned alias', () => {
+    const mock = rs.fn(() => 'actual');
+    mock();
+
+    // @ts-expect-error Vitest 4.1 also supports this alias without a value at runtime.
+    expect(mock).returned();
+    expect(mock).returned('actual');
+    expect(mock).not.returned('expected');
+    expect(() => expect(mock).returned('expected')).toThrow();
+    expect(() => expect(mock).returned(undefined)).toThrow();
+  });
+
   it.fails('test not failed', () => {
     expect(1 + 1).not.toBe(2);
   });
@@ -106,5 +218,20 @@ describe('Expect API', () => {
     expect.assertions(2);
     expect(1 + 2).toBe(3);
     expect(1 + 3).toBe(4);
+  });
+
+  // testPath must be the OS-native absolute path so it equals
+  // `import.meta.filename`/`__filename` on every platform (incl. Windows).
+  // https://github.com/web-infra-dev/rstest/issues/1465
+  it('expect.getState().testPath should be the native file path', () => {
+    expect(expect.getState().testPath).toBe(import.meta.filename);
+  });
+
+  // The public per-test `context.expect` reads testPath through a separate
+  // state getter, so it must agree with the global `expect` (#1465).
+  it('context.expect.getState().testPath should also be native', ({
+    expect,
+  }) => {
+    expect(expect.getState().testPath).toBe(import.meta.filename);
   });
 });

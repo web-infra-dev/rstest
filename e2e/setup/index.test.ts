@@ -98,11 +98,13 @@ describe('test setup file', async () => {
     const logs = cli.stdout.split('\n');
     await expectExecSuccess();
 
+    // `ctx.filepath` is OS-native (#1465), so build the expected suffix with
+    // `join` to match backslashes on Windows and forward slashes on POSIX.
     expect(
-      logs.filter((log) => log.endsWith('no-isolate/foo.test.ts')),
+      logs.filter((log) => log.endsWith(join('no-isolate', 'foo.test.ts'))),
     ).toHaveLength(1);
     expect(
-      logs.filter((log) => log.endsWith('no-isolate/bar.test.ts')),
+      logs.filter((log) => log.endsWith(join('no-isolate', 'bar.test.ts'))),
     ).toHaveLength(1);
     expect(logs.filter((log) => log.endsWith('[beforeAll] root'))).toHaveLength(
       2,

@@ -1,9 +1,183 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
-import { resolveProjects } from '../../src/cli/init';
-import type { RstestConfig } from '../../src/types';
+import { mergeWithCLIOptions, resolveProjects } from '../../src/cli/init';
+import type { InlineProjectConfig, RstestConfig } from '../../src/types';
 
 const rootPath = join(__dirname, '../..');
+
+describe('mergeWithCLIOptions', () => {
+  it('creates simple nested build config objects from CLI', () => {
+    const config = mergeWithCLIOptions(
+      {},
+      {
+        source: {
+          tsconfigPath: 'tsconfig.cli.json',
+        },
+        dev: {
+          writeToDisk: true,
+        },
+        output: {
+          emitAssets: false,
+          cleanDistPath: true,
+          module: false,
+        },
+      },
+    );
+
+    expect(config).toEqual({
+      source: {
+        tsconfigPath: 'tsconfig.cli.json',
+      },
+      dev: {
+        writeToDisk: true,
+      },
+      output: {
+        emitAssets: false,
+        cleanDistPath: true,
+        module: false,
+      },
+    });
+  });
+
+  it('preserves nested build config fields that are not supported by CLI', () => {
+    const config = mergeWithCLIOptions(
+      {
+        source: {
+          define: {
+            BASE_URL: JSON.stringify('https://example.com'),
+          },
+        },
+        output: {
+          cssModules: {
+            localIdentName: '[local]-[hash:base64:6]',
+          },
+          externals: ['react'],
+        },
+      },
+      {
+        source: {
+          tsconfigPath: 'tsconfig.cli.json',
+        },
+        output: {
+          emitAssets: false,
+        },
+      },
+    );
+
+    expect(config).toMatchObject({
+      source: {
+        define: {
+          BASE_URL: JSON.stringify('https://example.com'),
+        },
+        tsconfigPath: 'tsconfig.cli.json',
+      },
+      output: {
+        cssModules: {
+          localIdentName: '[local]-[hash:base64:6]',
+        },
+        externals: ['react'],
+        emitAssets: false,
+      },
+    });
+  });
+
+  it('merges simple nested build options from CLI', () => {
+    const config = mergeWithCLIOptions(
+      {
+        includeTaskLocation: false,
+        source: {
+          tsconfigPath: 'base.tsconfig.json',
+        },
+        dev: {
+          writeToDisk: false,
+        },
+        output: {
+          emitAssets: true,
+          cleanDistPath: true,
+          module: true,
+        },
+      },
+      {
+        includeTaskLocation: true,
+        source: {
+          tsconfigPath: 'cli.tsconfig.json',
+        },
+        dev: {
+          writeToDisk: true,
+        },
+        output: {
+          emitAssets: false,
+          cleanDistPath: false,
+          module: false,
+        },
+      },
+    );
+
+    expect(config).toMatchObject({
+      includeTaskLocation: true,
+      source: {
+        tsconfigPath: 'cli.tsconfig.json',
+      },
+      dev: {
+        writeToDisk: true,
+      },
+      output: {
+        emitAssets: false,
+        cleanDistPath: false,
+        module: false,
+      },
+    });
+  });
+
+  it('ignores a `shard` field carried by the config file', () => {
+    const config = mergeWithCLIOptions({ shard: { count: 2, index: 1 } }, {});
+
+    expect(config.shard).toBeUndefined();
+  });
+
+  it('populates `shard` only from the --shard CLI flag', () => {
+    const config = mergeWithCLIOptions(
+      { shard: { count: 2, index: 1 } },
+      { shard: '1/3' },
+    );
+
+    expect(config.shard).toEqual({ index: 1, count: 3 });
+  });
+
+  it('merges pool.memoryLimit without replacing existing pool fields', () => {
+    const config = mergeWithCLIOptions(
+      { pool: { type: 'vmThreads', maxWorkers: 2 } },
+      { pool: { memoryLimit: '256MB' } },
+    );
+
+    expect(config.pool).toEqual({
+      type: 'vmThreads',
+      maxWorkers: 2,
+      memoryLimit: '256MB',
+    });
+  });
+  it.each(['1.5/2', '1/2.5'])(
+    'rejects a non-integer --shard value: %s',
+    (shard) => {
+      expect(() => mergeWithCLIOptions({}, { shard })).toThrow(
+        `Invalid shard option: ${shard}`,
+      );
+    },
+  );
+
+  it.each([
+    { changed: false, passWithNoTests: undefined },
+    { changed: true, passWithNoTests: true },
+    { changed: 'main', passWithNoTests: true },
+  ])(
+    'sets passWithNoTests to $passWithNoTests for changed: $changed',
+    ({ changed, passWithNoTests }) => {
+      const config = mergeWithCLIOptions({}, { changed });
+
+      expect(config.passWithNoTests).toBe(passWithNoTests);
+    },
+  );
+});
 
 describe('resolveProjects', () => {
   describe('inline project extends', () => {
@@ -425,19 +599,112 @@ describe('resolveProjects', () => {
         port: 6000, // overridden by CLI
       });
     });
+
+    it('should override browser provider options with CLI options', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              providerOptions: {
+                launch: {
+                  channel: 'chromium',
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: {
+            providerOptions: {
+              launch: {
+                channel: 'chrome',
+              },
+            },
+          },
+        },
+      });
+
+      expect(projects[0]!.config.browser!.providerOptions).toEqual({
+        launch: {
+          channel: 'chrome',
+        },
+      });
+    });
+
+    it('should deep-merge browser provider options instead of replacing the config object', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              providerOptions: {
+                launch: {
+                  channel: 'chromium',
+                  args: ['--no-sandbox'],
+                },
+                context: {
+                  locale: 'en-US',
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: {
+            providerOptions: {
+              launch: {
+                channel: 'chrome',
+              },
+            },
+          },
+        },
+      });
+
+      // CLI overrides only `launch.channel`; sibling leaves (`launch.args`) and
+      // the unrelated `context` object from config are preserved.
+      expect(projects[0]!.config.browser!.providerOptions).toEqual({
+        launch: {
+          channel: 'chrome',
+          args: ['--no-sandbox'],
+        },
+        context: {
+          locale: 'en-US',
+        },
+      });
+    });
   });
+
+  // `resolveProjects` spreads an inline project into a full config, so the CLI
+  // coverage merge still reaches project-level `coverage` even though the public
+  // project config type omits the key.
+  const projectWithCoverage = (
+    coverage: RstestConfig['coverage'],
+  ): InlineProjectConfig =>
+    ({ name: 'test-project', coverage }) as InlineProjectConfig;
 
   describe('coverage CLI options', () => {
     it('should apply coverage.changed from CLI', async () => {
       const projects = await resolveProjects({
         config: {
           projects: [
-            {
-              name: 'test-project',
-              coverage: {
-                enabled: true,
-              },
-            },
+            projectWithCoverage({
+              enabled: true,
+            }),
           ],
         },
         root: rootPath,
@@ -500,6 +767,161 @@ describe('resolveProjects', () => {
         changed: true,
       });
     });
+
+    it('should not enable coverage when coverage.changed is disabled from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            changed: 'false',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        changed: false,
+      });
+      expect(projects[0]!.config.coverage!.enabled).toBeUndefined();
+    });
+
+    it('should enable coverage when coverage provider is set from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            provider: 'v8',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        provider: 'v8',
+      });
+    });
+
+    it('should apply a single coverage.reporters from CLI as an array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: 'html',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['html'],
+      });
+    });
+
+    it('should apply repeated coverage.reporters from CLI as an array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: ['text', 'html'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['text', 'html'],
+      });
+    });
+
+    it('should let CLI coverage.reporters override config reporters', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            projectWithCoverage({
+              enabled: true,
+              reporters: ['text', ['json', { file: 'coverage.json' }]],
+            }),
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: ['lcov'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['lcov'],
+      });
+    });
+
+    it('should override coverage options from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            projectWithCoverage({
+              include: ['old-include/**'],
+              exclude: ['old-exclude/**'],
+              reporters: ['html'],
+              reportsDirectory: 'old-coverage',
+              clean: true,
+            }),
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            include: ['src/**', 'test/**'],
+            exclude: ['src/generated/**'],
+            reporters: ['text', 'json'],
+            reportsDirectory: 'custom-coverage',
+            reportOnFailure: 'true',
+            clean: 'false',
+            allowExternal: true,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        include: ['src/**', 'test/**'],
+        exclude: ['old-exclude/**', 'src/generated/**'],
+        reporters: ['text', 'json'],
+        reportsDirectory: 'custom-coverage',
+        reportOnFailure: true,
+        clean: false,
+        allowExternal: true,
+      });
+    });
   });
 
   describe('pool CLI options', () => {
@@ -540,13 +962,31 @@ describe('resolveProjects', () => {
         root: rootPath,
         options: {
           pool: {
-            minWorkers: 1,
+            maxWorkers: 1,
           },
         },
       });
 
       expect(projects[0]!.config.pool).toEqual({
-        minWorkers: 1,
+        maxWorkers: 1,
+      });
+    });
+
+    it('should apply --pool.memoryLimit', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+        },
+        root: rootPath,
+        options: {
+          pool: {
+            memoryLimit: '256MB',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({
+        memoryLimit: '256MB',
       });
     });
 

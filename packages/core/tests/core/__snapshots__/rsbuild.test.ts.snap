@@ -5,6 +5,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "asyncWebAssembly": false,
+    "runtimeMode": "webpack",
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -31,6 +36,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "requireDynamic": false,
         "requireResolve": false,
         "typeReexportsPresence": "tolerant",
+        "url": false,
       },
     },
     "rules": [
@@ -45,6 +51,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -124,11 +136,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -138,19 +160,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -169,6 +178,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -273,6 +297,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -288,7 +318,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -302,6 +332,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -335,6 +371,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -350,7 +392,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -364,6 +406,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -385,6 +433,49 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       },
       {
         "oneOf": [
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -413,8 +504,38 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
+      },
+      {
+        "test": /\\\\\\.wasm\\$/,
+        "type": "javascript/auto",
+        "use": [
+          "<ROOT>/packages/core/src/core/plugins/wasmLoader.mjs",
+        ],
       },
     ],
   },
@@ -466,7 +587,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -494,9 +614,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {
-      "outputModule": true,
-    },
+    MockRuntimeRspackPlugin {},
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -504,7 +622,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "import.meta.__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -516,7 +638,37 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         {
           "banner": "// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
-const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
+const __rstest_native_require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
+const __rstest_timer_exports = new Set(["setTimeout","clearTimeout","setInterval","clearInterval","setImmediate","clearImmediate"]);
+let __rstest_timers_proxy;
+const __rstest_load_timers = (id) => {
+  const timers = __rstest_native_require(id);
+  // This source is emitted as an Rspack banner, where bracket placeholders
+  // such as "[name]" are expanded using the chunk name.
+  const usesGlobalTimers = [...__rstest_timer_exports].some(
+    (name) => Reflect.get(timers, name) !== Reflect.get(globalThis, name),
+  );
+  if (!usesGlobalTimers) return timers;
+  if (!__rstest_timers_proxy) {
+    __rstest_timers_proxy = new Proxy(timers, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && __rstest_timer_exports.has(property)) {
+          return globalThis[property];
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  }
+  return __rstest_timers_proxy;
+};
+const require = (id) =>
+  id === 'timers' || id === 'node:timers'
+    ? __rstest_load_timers(id)
+    : __rstest_native_require(id);
+require.resolve = __rstest_native_require.resolve;
+require.main = __rstest_native_require.main;
+require.cache = __rstest_native_require.cache;
+require.extensions = __rstest_native_require.extensions;
 ",
           "include": /\\\\\\.\\(js\\|mjs\\)\\$/,
           "raw": true,
@@ -581,6 +733,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "asyncWebAssembly": false,
+    "runtimeMode": "webpack",
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -606,6 +763,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "requireDynamic": false,
         "requireResolve": false,
         "typeReexportsPresence": "tolerant",
+        "url": false,
       },
     },
     "rules": [
@@ -620,6 +778,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -699,11 +863,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -713,19 +887,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -744,6 +905,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -848,6 +1024,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -863,7 +1045,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -877,6 +1059,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -910,6 +1098,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -925,7 +1119,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -939,6 +1133,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -960,6 +1160,49 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       },
       {
         "oneOf": [
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -988,8 +1231,38 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
+      },
+      {
+        "test": /\\\\\\.wasm\\$/,
+        "type": "javascript/auto",
+        "use": [
+          "<ROOT>/packages/core/src/core/plugins/wasmLoader.mjs",
+        ],
       },
     ],
   },
@@ -1041,7 +1314,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -1069,9 +1341,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {
-      "outputModule": true,
-    },
+    MockRuntimeRspackPlugin {},
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -1079,7 +1349,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -1142,6 +1416,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "asyncWebAssembly": false,
+    "runtimeMode": "webpack",
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -1168,6 +1447,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "requireDynamic": false,
         "requireResolve": false,
         "typeReexportsPresence": "tolerant",
+        "url": false,
       },
     },
     "rules": [
@@ -1182,6 +1462,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -1261,11 +1547,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -1275,19 +1571,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -1306,6 +1589,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -1410,6 +1708,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1425,7 +1729,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1439,6 +1743,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -1472,6 +1782,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1487,7 +1803,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1501,6 +1817,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -1522,6 +1844,49 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       },
       {
         "oneOf": [
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -1550,8 +1915,26 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
+      },
+      {
+        "test": /\\\\\\.wasm\\$/,
+        "type": "javascript/auto",
+        "use": [
+          "<ROOT>/packages/core/src/core/plugins/wasmLoader.mjs",
+        ],
       },
     ],
   },
@@ -1603,7 +1986,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -1631,16 +2013,18 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {
-      "outputModule": true,
-    },
+    MockRuntimeRspackPlugin {},
     RstestPlugin {
       "_args": [
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -1702,6 +2086,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": [Function],
+  "experiments": {
+    "asyncWebAssembly": false,
+    "nativeWatcher": true,
+    "runtimeMode": "webpack",
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -1728,6 +2118,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "requireDynamic": false,
         "requireResolve": false,
         "typeReexportsPresence": "tolerant",
+        "url": false,
       },
     },
     "rules": [
@@ -1742,6 +2133,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -1821,11 +2218,21 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -1835,19 +2242,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -1866,6 +2260,21 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -1970,6 +2379,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1985,7 +2400,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1999,6 +2414,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -2032,6 +2453,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2047,7 +2474,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -2061,6 +2488,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -2082,6 +2515,49 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       },
       {
         "oneOf": [
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -2110,8 +2586,26 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
+      },
+      {
+        "test": /\\\\\\.wasm\\$/,
+        "type": "javascript/auto",
+        "use": [
+          "<ROOT>/packages/core/src/core/plugins/wasmLoader.mjs",
+        ],
       },
     ],
   },
@@ -2163,7 +2657,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -2191,9 +2684,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {
-      "outputModule": true,
-    },
+    MockRuntimeRspackPlugin {},
     TestFileWatchPlugin {
       "contextToWatch": "<ROOT>/packages/core",
     },
@@ -2203,7 +2694,11 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -2253,7 +2748,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   },
   "target": "node",
   "watchOptions": {
-    "aggregateTimeout": 5,
+    "aggregateTimeout": 100,
     "ignored": [
       "**/.git",
       "**/node_modules",
@@ -2358,6 +2853,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         ],
       },
       {
+        "type": "asset/source",
+        "with": {
+          "type": "text",
+        },
+      },
+      {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "type": "asset/source",
       },
@@ -2366,11 +2867,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         "use": [
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
           },
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
-              "importLoaders": 2,
+              "importLoaders": 1,
               "modules": {
                 "auto": true,
                 "exportGlobals": false,
@@ -2392,19 +2903,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
                 ],
               },
               "sourceMap": false,
-            },
-          },
-          {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
             },
           },
         ],
@@ -2529,6 +3027,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         ],
       },
       {
+        "type": "asset/source",
+        "with": {
+          "type": "text",
+        },
+      },
+      {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "type": "asset/source",
       },
@@ -2537,11 +3041,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         "use": [
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
           },
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
-              "importLoaders": 3,
+              "importLoaders": 2,
               "modules": {
                 "auto": true,
                 "exportGlobals": false,
@@ -2574,19 +3088,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
               "sourceMap": true,
             },
           },
-          {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-            },
-          },
         ],
       },
     ],
@@ -2603,6 +3104,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "asyncWebAssembly": false,
+    "runtimeMode": "webpack",
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -2628,6 +3134,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "requireDynamic": false,
         "requireResolve": false,
         "typeReexportsPresence": "tolerant",
+        "url": false,
       },
     },
     "rules": [
@@ -2642,6 +3149,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -2721,11 +3234,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -2735,19 +3258,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -2766,6 +3276,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -2870,6 +3395,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2885,7 +3416,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -2899,6 +3430,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -2932,6 +3469,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2947,7 +3490,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -2961,6 +3504,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -2982,6 +3531,49 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
       {
         "oneOf": [
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -3010,8 +3602,38 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
+      },
+      {
+        "test": /\\\\\\.wasm\\$/,
+        "type": "javascript/auto",
+        "use": [
+          "<ROOT>/packages/core/src/core/plugins/wasmLoader.mjs",
+        ],
       },
     ],
   },
@@ -3063,7 +3685,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -3091,9 +3712,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {
-      "outputModule": true,
-    },
+    MockRuntimeRspackPlugin {},
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -3101,7 +3720,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -3164,6 +3787,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "asyncWebAssembly": false,
+    "runtimeMode": "webpack",
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -3190,6 +3818,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "requireDynamic": false,
         "requireResolve": false,
         "typeReexportsPresence": "tolerant",
+        "url": false,
       },
     },
     "rules": [
@@ -3204,6 +3833,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -3283,11 +3918,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -3297,19 +3942,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -3328,6 +3960,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -3432,6 +4079,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3447,7 +4100,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -3461,6 +4114,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -3494,6 +4153,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3509,7 +4174,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -3523,6 +4188,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -3544,6 +4215,49 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
       {
         "oneOf": [
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -3572,8 +4286,38 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
+      },
+      {
+        "test": /\\\\\\.wasm\\$/,
+        "type": "javascript/auto",
+        "use": [
+          "<ROOT>/packages/core/src/core/plugins/wasmLoader.mjs",
+        ],
       },
     ],
   },
@@ -3625,7 +4369,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -3653,9 +4396,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {
-      "outputModule": true,
-    },
+    MockRuntimeRspackPlugin {},
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -3663,7 +4404,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -3741,6 +4486,21 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
     ],
     "oneOf": [
       {
+        "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+          },
+        ],
+      },
+      {
+        "type": "asset/source",
+        "with": {
+          "type": "text",
+        },
+      },
+      {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "type": "asset/source",
       },
@@ -3784,6 +4544,17 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       },
     ],
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+  },
+  {
+    "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+    "use": [
+      {
+        "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+      },
+    ],
+    "with": {
+      "rstest": "importActual",
+    },
   },
 ]
 `;

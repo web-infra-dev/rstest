@@ -1,4 +1,4 @@
-import './setup';
+import { isMainThread } from 'node:worker_threads';
 import {
   isWorkerRequestEnvelope,
   serializeError,
@@ -6,14 +6,20 @@ import {
   type WorkerResponse,
   wrapWorkerResponse,
 } from '../../pool/protocol';
+import { ENV } from '../../utils/env';
+import { isVmPoolType } from '../../utils/workers';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
+import { installGracefulExit } from './setup';
+
+installGracefulExit();
 
 const send = (response: WorkerResponse): void => {
   channel.send(wrapWorkerResponse(response));
 };
 
-let currentTaskId: number | undefined;
+let taskHandlesErrors = false;
 /**
  * Set when a task handler has reported `fatal_error` and is on its way to
  * exit. Suppresses the bottom-of-the-stack `fatalExit` from racing in with a
@@ -29,30 +35,56 @@ const sendFatalError = (err: unknown): void => {
 };
 
 /**
+ * Hand control back to Node's default uncaught-exception path. Best-effort
+ * IPC delivery happens first, then **all** uncaughtException / unhandledRejection
+ * listeners are cleared and the error is re-thrown on the next tick so Node's
+ * built-in handler is what actually terminates the process — printing the
+ * stack to stderr (forks pool: piped to the host's stderr; threads pool:
+ * surfaced via `worker.on('error')`).
+ *
+ * Why clear *all* listeners, not just `fatalExit`: `runInPool` installs its
+ * own per-task uncaughtException handler that absorbs errors into
+ * `unhandledErrors`. Non-VM pools retain that handler until the next
+ * `preparePool`, while VM pools remove it during teardown. If left attached, the
+ * re-thrown error gets absorbed and Node's default never runs — the worker
+ * neither prints a stack nor exits, and `PoolRunner.stopTimer` eventually
+ * SIGTERMs it 60s later with no diagnostic info.
+ *
+ * Why not just `process.exit(1)`: `process.send` is async and a synchronous
+ * exit drops any envelope still queued in the IPC pipe (verified to lose
+ * 100% of envelopes ≥ ~100KB on macOS). Without a fallback the host sees
+ * only `Worker exited unexpectedly (code=1, signal=null)` with no stack.
+ */
+const handOffToNodeDefault = (err: unknown): void => {
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+  process.nextTick(() => {
+    throw err;
+  });
+};
+
+/**
  * Last-resort handlers. The runtime's `runInPool` registers its own
  * uncaught/unhandled handlers that capture errors thrown WHILE a test is
  * running and feed them into the test result. These bottom-of-the-stack
- * handlers fire only when no task is active (e.g., during worker bootstrap,
- * teardown after the result has been flushed, or async leak after the
- * test completes), and surface a structured `fatal_error` to the host
- * before exiting. This is the structured replacement for
- * `patches/tinypool@2.1.0.patch`.
+ * handlers take over whenever the runtime cannot include further errors in
+ * its result, including bootstrap, teardown and idle worker time.
  */
 const fatalExit = (err: unknown): void => {
   if (dyingFromFatal) return;
-  if (currentTaskId !== undefined) {
-    // A task is in progress — let runInPool's own handlers absorb the error
-    // into the test result.
+  if (taskHandlesErrors) {
+    // Delegate only while the runtime can still include errors in its result.
     return;
   }
+  dyingFromFatal = true;
   sendFatalError(err);
-  setImmediate(() => process.exit(1));
+  handOffToNodeDefault(err);
 };
 process.on('uncaughtException', fatalExit);
 process.on('unhandledRejection', fatalExit);
 
 const handleStart = (request: Extract<WorkerRequest, { type: 'start' }>) => {
-  process.env.RSTEST_WORKER_ID = String(request.workerId);
+  process.env[ENV.WORKER_ID] = String(request.workerId);
   send({ type: 'started', pid: process.pid });
 };
 
@@ -63,25 +95,54 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
   collect: 'collectFinished',
 };
 
-// Read once at worker bootstrap — toggling `RSTEST_MEMORY_AWARE` mid-run is
-// not supported (host samples it at pool construction too).
-const MEMORY_REPORTING_ENABLED = process.env.RSTEST_MEMORY_AWARE !== '0';
+// Skip RSS reporting for thread workers — `process.memoryUsage().rss` is
+// host-wide and would mislead the gate. See rstest#1301. Read once at
+// bootstrap; toggling `RSTEST_MEMORY_AWARE` mid-run is not supported (host
+// samples it at pool construction too).
+const MEMORY_REPORTING_ENABLED =
+  isMainThread && process.env[ENV.MEMORY_AWARE] !== '0';
 
 const runTask = async (
   kind: TaskKind,
   request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
 ): Promise<void> => {
-  currentTaskId = request.taskId;
-
   try {
-    const result = await runInPool(request.options);
+    const result = await runInPool(request.options, {
+      onTaskErrorHandlingChange: (active) => {
+        taskHandlesErrors = active;
+      },
+      onFileCleanupStart: (result) => {
+        send({ type: 'fileCleanupStarted', taskId: request.taskId, result });
+      },
+      onFileCleanupEnd: () => {
+        send({ type: 'fileCleanupFinished', taskId: request.taskId });
+      },
+      onWorkerCleanupStart: () => {
+        send({ type: 'workerCleanupStarted', taskId: request.taskId });
+      },
+      onWorkerCleanupEnd: (error) => {
+        send({
+          type: 'workerCleanupFinished',
+          taskId: request.taskId,
+          error: error ? serializeError(error) : undefined,
+        });
+      },
+      onTestEnvironmentFallback: (fallback) => {
+        send({ type: 'testEnvironmentFallback', fallback });
+      },
+    });
     send({
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
-      memory: MEMORY_REPORTING_ENABLED
-        ? { rss: process.memoryUsage().rss }
-        : undefined,
+      memory: isVmPoolType(request.options.context.pool)
+        ? {
+            heapUsed: process.memoryUsage().heapUsed,
+            ...(isMainThread ? { rss: process.memoryUsage().rss } : {}),
+          }
+        : MEMORY_REPORTING_ENABLED
+          ? { rss: process.memoryUsage().rss }
+          : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into
@@ -91,12 +152,21 @@ const runTask = async (
     // reuse this poisoned process for the next file.
     dyingFromFatal = true;
     sendFatalError(err);
-    currentTaskId = undefined;
-    setImmediate(() => process.exit(1));
+    taskHandlesErrors = false;
+    handOffToNodeDefault(err);
     return;
   }
 
-  currentTaskId = undefined;
+  taskHandlesErrors = false;
+};
+
+const cleanupWorker = async (): Promise<void> => {
+  try {
+    await cleanupWorkerFixtures();
+    send({ type: 'cleanupFinished' });
+  } catch (error) {
+    send({ type: 'cleanupFinished', error: serializeError(error) });
+  }
 };
 
 // No SIGTERM handler — the host owns termination and SIGTERM (default action:
@@ -114,6 +184,9 @@ channel.on((message: unknown) => {
   switch (request.type) {
     case 'start':
       handleStart(request);
+      break;
+    case 'cleanup':
+      void cleanupWorker();
       break;
     case 'run':
       void runTask('run', request);

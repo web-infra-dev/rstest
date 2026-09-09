@@ -134,6 +134,34 @@ export default defineConfig({
     });
   });
 
+  it('should use inline rsbuild config before configPath', async () => {
+    const inlineConfigPath = join(
+      __dirname,
+      'missing-inline-rsbuild.config.ts',
+    );
+    const config = await withRsbuildConfig({
+      configPath: inlineConfigPath,
+      config: {
+        performance: {
+          buildCache: true,
+        },
+        source: {
+          define: {
+            INLINE_CONFIG: '"inline"',
+          },
+        },
+      },
+    })({});
+
+    expect(config.source?.define).toEqual({
+      INLINE_CONFIG: '"inline"',
+    });
+    expect(config.forceRerunTriggers).toEqual([inlineConfigPath]);
+    expect(config.performance?.buildCache).toEqual({
+      buildDependencies: [inlineConfigPath],
+    });
+  });
+
   it('should throw error when config file not found', async () => {
     await expect(() =>
       withRsbuildConfig({
