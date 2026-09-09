@@ -1,5 +1,5 @@
 ---
-description: Options of pool used to run tests in.
+description: Configure the worker pool used to run tests.
 overviewHeaders: []
 ---
 
@@ -13,7 +13,7 @@ import { ApiMeta } from '@components/ApiMeta';
 export type RstestPoolType = 'forks' | 'threads' | 'vmForks' | 'vmThreads';
 
 export type RstestPoolOptions = {
-  /** Pool used to run tests in. */
+  /** Worker pool used to run tests. */
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
@@ -26,12 +26,12 @@ export type RstestPoolOptions = {
    * @default undefined (`system memory / maxWorkers` for VM pools)
    */
   memoryLimit?: number | string;
-  /** Pass additional arguments to node process in the child processes. */
+  /** Pass additional Node.js arguments to workers. */
   execArgv?: string[];
 };
 
 export type RstestConfig = {
-  /** Pool used to run tests in. */
+  /** Worker pool used to run tests. */
   pool?: RstestPoolType | RstestPoolOptions;
 };
 ```
@@ -47,109 +47,67 @@ const defaultPool = {
 
 - **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.memoryLimit <limit>`, `--pool.execArgv <arg>`
 
-Options of pool used to run tests in.
+Configure the worker pool Rstest uses to run tests, including isolation, concurrency, and memory recycling thresholds.
+
+## Choose a pool type
+
+Start with the default `forks` pool. It introduces the fewest execution restrictions of the four pools and offers broader compatibility with Node.js APIs and native addons. The default [`isolate: true`](/config/test/isolate) also gives each test file a separate process, preventing process-level state from persisting between files and containing native crashes within the child process.
+
+If performance does not meet your expectations, first identify where the time is spent. The `rstest-debugging` skill can help; see [Profiling](/guide/debug/profiling) for installation and analysis guidance. If worker startup or module loading is the bottleneck, consider these options:
+
+| Scenario                                                                                    | Pool to try | Check before switching                                                               |
+| ------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
+| Short test files spend a large share of their time starting workers                         | `threads`   | Tests and dependencies support worker-thread API and native-addon restrictions       |
+| Many files repeatedly start workers and load and compile dependencies                       | `vmThreads` | Tests support worker-thread and cross-realm restrictions                             |
+| Worker reuse is desirable, but you also need process APIs or easier memory-pressure control | `vmForks`   | Tests tolerate process state persisting within a worker and cross-realm restrictions |
+
+VM pools reuse workers and compilation resources, which can benefit suites with many files or large setup dependencies. Setup files, test environment creation, and module evaluation still run for every file, however. Switching to a VM pool will not eliminate database initialization or network requests performed in setup. Use your project's runtime and memory measurements to make the final choice.
 
 ## Pool types
 
-Rstest supports the following pool types. All share the same scheduler, RPC, and result-aggregation logic — they differ in how workers are spawned and isolated.
+`forks` and `threads` run tests in child processes and worker threads, respectively. `vmForks` and `vmThreads` reuse those workers while creating a fresh `vm.Context` for each file.
+
+All pools serialize environment options before sending them to workers, so functions are not supported in those options. See [`testEnvironment.options`](/config/test/test-environment#environment-options) for the requirements.
 
 ### forks
 
-Each test file runs in a separate Node.js child process spawned via `child_process.fork`. Every worker has its own V8 heap, so process-wide state (`process.chdir`, signal handlers, environment mutations, native module bindings) cannot leak between files.
+Creates Node.js child processes with `child_process.fork`. Each worker has separate process memory and process-level state. By default, every file gets a new process; with [`isolate: false`](/config/test/isolate), multiple files can reuse the same child process.
+
+With the default isolation setting, each file incurs process startup and initialization costs.
 
 ### threads
 
 <ApiMeta addedVersion="0.10.0" />
 
-Each test file runs in a Node.js worker thread spawned via `node:worker_threads`. Every worker has its own V8 isolate and heap, while all workers share one operating-system process and its aggregate RSS. Rstest pipes each worker's stdout and stderr back to the host.
+Runs tests through `node:worker_threads`. Each worker has its own V8 isolate and heap, but all threads share one operating-system process. RSS therefore measures memory usage across the entire process.
+
+Threads generally start faster than child processes, but have some Node.js API restrictions. The following differences apply to both `threads` and `vmThreads`:
+
+- `process.chdir()`, `process.abort()`, and methods that change user or group IDs are unavailable; `process.title` cannot be changed.
+- OS signals are not delivered through `process.on()`, and `process.exit()` terminates only the worker thread.
+- Native addons must support use in worker threads. A native crash can affect the entire process.
+
+See the [Node.js Worker documentation](https://nodejs.org/api/worker_threads.html#class-worker) for the full list of differences.
 
 ### vmForks
 
 <ApiMeta addedVersion="0.12.0" />
 
-`vmForks` uses `child_process.fork` to create isolated worker processes and a fresh `vm.Context` for every test file. The child process is reused across files assigned to it, so process-level state is not reset per file; use `forks` when that is required. It has the same VM module loading and cross-realm behavior as `vmThreads`, while keeping process APIs such as `process.chdir()` available inside the worker. Worker recycling is handled by letting the child process exit.
+Reuses child processes and creates a fresh `vm.Context` for each test file, reducing repeated process startup. Process APIs such as `process.chdir()` remain available, but files in the same child process can share process-level state.
 
 ### vmThreads
 
 <ApiMeta addedVersion="0.12.0" />
 
-`vmThreads` reuses Node.js worker threads while creating a fresh `vm.Context` for every test file. This keeps file-level JavaScript globals, DOM objects, and the bundled module graph isolated without paying for a new worker thread for every file. It is intended for DOM-heavy suites where environment setup is expensive but worker startup is also measurable. `vmForks` provides the same VM isolation with separate child processes.
+Reuses worker threads and creates a fresh `vm.Context` for each test file, reducing repeated thread startup. It provides the same VM isolation as `vmForks`, with the worker-thread restrictions described above.
 
-Its core guarantee is file-level VM isolation with reusable compilation resources, not complete equivalence with a separate Node.js process or a replacement for Node's module loader. Support is limited to the loading paths and cross-realm behavior described below.
-
-#### Isolation and cross-realm limits
-
-The [`isolate`](/config/test/isolate) option has no effect on `vmForks` or `vmThreads`. Passing `isolate: false` is accepted for configuration compatibility, but every file still receives a fresh VM context, module graph, test environment, and worker-scoped fixture lifecycle.
-
-Async runtime helpers such as `rs.waitFor()`, `rs.waitUntil()`, and `rs.runAllTimersAsync()` execute in the worker realm. Their returned Promises and internally created errors are not guaranteed to pass `instanceof Promise` or `instanceof Error` against VM constructors. Use `await` and assertions on values or error messages. User callback values and errors are passed through without realm conversion; the stable API references still resolve the current file's state at call time.
-
-Always await `rs.waitFor()` and `rs.waitUntil()`. If either is still pending at VM file teardown, Rstest clears its internal timers and leaves its Promise pending rather than resolving or rejecting it, so disposal does not trigger its user continuations. This does not cancel work already started inside a user callback.
-
-At file teardown, Rstest clears pending timers created through its file-scoped timer wrappers, including `util.promisify(setTimeout)` and `util.promisify(setImmediate)`. Pending operations from these promisified timers are cancelled with `AbortError`, as are the wrapped `node:timers/promises` timeout and immediate operations. Tests must still await or explicitly cancel their asynchronous work: VM teardown does not cancel arbitrary Promise chains, native I/O, or background tasks. Cancellation can itself run user `catch` or `finally` handlers; it does not guarantee that no user code runs after teardown.
-
-The VM context does not isolate worker-level state. Changes to `process.env`, signal handlers, native addons, and other state outside the VM context may persist when the same worker runs another file. Compatibility globals copied from the worker realm, such as `Buffer`, are shared constructors, so mutating those constructors may persist between files. Context-native globals such as `ArrayBuffer` and `Uint8Array` are recreated for each file. Node.js does not support `process.chdir()` inside any worker thread, so neither `threads` nor `vmThreads` can run tests or setup files that call it. VM contexts also have cross-realm identity, so values created in one file may not pass `instanceof` checks against constructors from another file. In the `happy-dom` environment, DOM implementation objects are created by `happy-dom`'s provider realm; use the environment's DOM constructors instead of assuming every DOM value passes `instanceof Object` or `instanceof Array` against VM intrinsics.
-
-Node worker pools send `testEnvironment.options` through an IPC structured-clone boundary. The options therefore must be structured-cloneable; function-valued options such as `beforeParse`, custom callback hooks, or instances that contain functions are rejected before dispatch. Use cloneable options or move equivalent callback setup into a setup file. This applies to `forks`, `threads`, `vmForks`, and `vmThreads`.
-
-On Bun, `forks` and `vmForks` use JSON IPC, so their environment options must also be JSON-compatible. Values such as `Map`, `Set`, `Date`, class instances, and `BigInt` are rejected because JSON IPC would change their shape or fail to serialize them.
-
-Each VM worker also keeps a bounded cache of immutable bundle bytes, source maps, external source text, resolution results, and V8 compilation data between files. After the first file, unchanged assets are referenced from that worker instead of being transferred again, and unchanged modules can skip part of the resolution, parse, and compile work. These entries share one cache budget: at most 64 MiB or one quarter of the worker's `memoryLimit`, whichever is smaller. Rstest disables V8's unbounded isolate-wide compilation cache for these workers; the bounded cache supplies the reusable compilation resources instead. The cache is cleared on rebuild or worker recycle. Evaluated module instances, context-bound scripts, and setup execution state are not cached across VM contexts.
-
-Under memory pressure or high concurrency, `vmForks` is usually easier to bound than `vmThreads`. Each fork worker reports its own RSS, so Rstest can use the fork-based `MemoryGate` to defer new workers when free memory is low. `vmThreads` workers share the host process RSS, so applying the same per-worker RSS gate would incorrectly treat the aggregate process memory as each worker's usage and collapse parallelism. This does not mean `vmForks` always uses less memory: child processes have additional startup overhead, and `memoryLimit` remains a worker heap recycling threshold for both VM pools.
-
-Across the Node builtin boundary, Rstest adapts plain objects, arrays, Promise fulfillment values, and Error rejection reasons from the direct and Promise result paths to the current VM. Callback arguments and errors thrown synchronously by native builtins are not converted. This is not a general conversion of every value between realms: Node-native objects such as Buffers, streams, typed arrays, and native handles retain their native backing and prototypes. DOM objects created by jsdom and happy-dom likewise retain the prototype of their provider realm. Do not rely on constructor identity when passing values across realms.
-
-In the Node environment, `fetch()` returns a VM Promise but preserves the native `Response`. Its body methods, such as `json()` and `text()`, keep native Promises, results, and errors; conversion does not extend to methods on returned native objects. Error conversion applies to ordinary errors, not native `DOMException` objects: aborting `fetch()` with the default signal reason preserves that same `DOMException` (`name: 'AbortError'`, `code: 20`). A failing `structuredClone()` also preserves Node's native `DOMException` (`name: 'DataCloneError'`, `code: 25`). Use `await` and assertions on content or error `name`/`code`, rather than `instanceof Promise`, `Object`, or `Error` against VM constructors for these values.
-
-#### Supported module loading
-
-| Loading path                         | Supported behavior                                                                                                                      | Boundary                                                                                                                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Built test and setup bundles         | Execute in the file VM; setup executes for each file.                                                                                   | Only immutable compilation resources are reused, not setup or dependency execution state.                                                                                 |
-| External JavaScript ESM and CommonJS | Execute in the file VM, including static and dynamic JavaScript imports.                                                                | This is not support for arbitrary Node loader hooks or runtime source transforms.                                                                                         |
-| CommonJS named exports               | Statically detected own exports are read from the original `module.exports` receiver, including non-enumerable properties and getters.  | Named exports are snapshots, not live bindings. The existing `interopDefault` option still applies; do not assume every CJS namespace is identical to native ESM interop. |
-| External JSON and WebAssembly        | JSON and asynchronously loaded WebAssembly execute in the file VM. JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. | JSON ESM imports require `type: 'json'`; synchronous `require()` of WebAssembly is not supported.                                                                         |
-| Synchronous `require(esm)`           | Supported on Node.js 24.9+ when the VM graph API is available and the graph has no top-level await.                                     | Async graphs throw `ERR_REQUIRE_ASYNC_MODULE`; older VM implementations reject ESM require with `ERR_REQUIRE_ESM`. Use dynamic `import()` instead.                        |
-| Native addons                        | Direct CommonJS `require()` delegates loading to Node.                                                                                  | Addon state is outside VM isolation; importing `.node` files through the VM ESM graph is not supported.                                                                   |
-
-CommonJS path and export-condition selection are delegated to Node's native `require.resolve()`, including its handling of startup flags. VM execution support is checked **after** resolution: Rstest does not select a different package entry to work around an unsupported VM operation.
-
-For example, on Node.js 22 a package's `module-sync` condition may select an ESM entry that the VM cannot require synchronously. This throws `ERR_REQUIRE_ESM` rather than selecting the package's CommonJS fallback. Use dynamic `import()` or bundle the dependency instead.
-
-`Module._cache` exposes the file's `require.cache` for CommonJS and JSON entry inspection and deletion; replacing or deleting the `_cache` property itself is unsupported. Synchronous `require(esm)` uses the VM's ESM cache and does not currently publish CommonJS cache records or `module.children` links. Do not rely on those APIs to traverse or invalidate an ESM graph.
-
-Custom Node loaders and external TypeScript execution are outside this scope; compile or bundle those files first. The supported loading paths do not imply complete Node loader-internal metadata compatibility, universal cross-realm value conversion, or cancellation of arbitrary asynchronous work. Failures within the supported execution paths remain compatibility bugs.
-
-## Choose a pool type
-
-`forks` is the default — most existing test code relies on per-file process isolation. If you're not sure, keep using `forks`.
-
-Consider switching to `threads` when:
-
-- Your suite is dominated by small, fast test files and worker startup eats a noticeable share of total runtime — `worker_threads` spawns roughly 10× faster than `child_process.fork`, making watch-mode reruns feel instant.
-- Worker startup is the bottleneck and your suite can use a shared operating-system process. Worker heaps are still separate, and their memory contributes to the same process RSS.
-- Your tests don't call `process.chdir()`, mutate worker-level state, or rely on that state being reset between files.
-
-Consider switching to `vmThreads` or `vmForks` when:
-
-- Each file needs a fresh global or DOM environment, but creating a worker thread per file dominates runtime.
-- Your tests are compatible with cross-realm values and do not depend on process-level isolation.
-- A shared configuration sets `isolate: false`, but this suite must retain file-level JavaScript isolation.
-
-Consider `vmForks` when the suite needs VM isolation, relies on process APIs, and can tolerate process-level state being shared by files assigned to the same child. Consider `vmThreads` when avoiding child-process startup is more important and the suite is compatible with worker-thread limitations.
-
-Stick with `forks` when:
-
-- Your tests call `process.chdir()`, mutate worker-level state, or rely on per-file process isolation.
-- Your project uses native addons (e.g. `better-sqlite3`, `sharp`, `canvas`) — one not built for worker threads can abort the whole run under `threads` (`SIGSEGV` / `SIGABRT`, not a catchable error).
-- You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
-- You need strict process-level isolation for every test file. Use `forks` with `isolate: true`; `forks` also reuses child processes when `isolate: false`, while `vmForks` always reuses child processes and only creates a fresh VM context for each file.
+For the isolation scope and compatibility requirements of both VM pools, see [VM pool behavior](#vm-pool-behavior) at the end of this page.
 
 ## Configure worker concurrency and memory
 
 ### `pool.maxWorkers`
 
-Controls how many test files can run at the same time. Use it when tests compete for the same database, port, fixture directory, or other external resource.
+`pool.maxWorkers` controls how many test files run at the same time. Lower it to reduce resource conflicts when tests share a database, port, or fixture directory.
 
 The default is computed from the CPU count and the command mode. You can provide a positive integer or a percentage of the available CPU count.
 
@@ -173,7 +131,7 @@ Common values:
 
 - `1`: run test files one at a time. This is the Rstest equivalent of Vitest's `fileParallelism: false` and Jest's `--runInBand`.
 - `50%`: keep parallelism proportional to the available CPU count, which is useful on CI machines with shared capacity.
-- A fixed number such as `4`: cap resource usage to a known safe level regardless of machine size.
+- A fixed number such as `4`: run at most 4 workers, regardless of the machine's CPU count.
 
 `maxWorkers` is about file-level parallelism. It does not limit `test.concurrent` cases inside a single test file — use [`maxConcurrency`](/config/test/max-concurrency) for that.
 
@@ -181,9 +139,14 @@ Common values:
 
 <ApiMeta addedVersion="0.12.0" />
 
-Sets the V8 heap threshold for recycling a `vmForks` or `vmThreads` worker. After a test file finishes, Rstest reads the worker's `heapUsed`; if it reaches the threshold, the worker is recycled before another file is assigned to it. This is a worker-recycling threshold, not a hard process RSS or OOM limit.
+As a VM worker runs successive files, its memory usage can grow. `pool.memoryLimit` controls when to recycle it: after each file, Rstest checks the worker's V8 `heapUsed`. If it reaches the threshold, Rstest recycles the worker and runs subsequent files in a new one.
 
-This option currently applies only to `vmForks` and `vmThreads`. It is ignored by `forks` and `threads`. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `KB`, `KiB`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker uses an equal share of system memory (`system memory / maxWorkers`).
+This option applies only to `vmForks` and `vmThreads`; `forks` and `threads` ignore it. The default threshold is `system memory / maxWorkers`. To override it, use one of these formats:
+
+- A number: values in `(0, 1]` are fractions of system memory; values greater than `1` are bytes.
+- A string: supports `%`, `KB`, `KiB`, `MB`, `MiB`, `GB`, and `GiB`, such as `'25%'` or `'256MB'`.
+
+For example, this configuration runs up to 4 VM workers. After each file, a worker whose heap usage reaches `256MB` is recycled:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -203,9 +166,15 @@ You can also set it from the CLI:
 npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
+`memoryLimit` triggers recycling only between files. It is not a hard process RSS limit and cannot guarantee that a run avoids OOM.
+
+It also bounds each VM worker's shared cache of immutable assets, external source, resolution results, and compilation data to the smaller of 64 MiB and one quarter of `memoryLimit`. Lowering the threshold can shrink this cache and increase loading and compilation work.
+
+Separately, `vmForks` can use each child process's RSS to defer worker creation under memory pressure. This makes memory pressure easier to control than with the shared process RSS of `vmThreads`. This scheduling mechanism operates independently of `memoryLimit`; child processes still have additional overhead, so actual memory usage is not necessarily lower.
+
 ## Pass Node.js flags to workers
 
-Use `pool.execArgv` when the code running inside workers needs specific Node.js flags, such as custom conditions, warnings, or debugging flags.
+Use `pool.execArgv` to pass Node.js startup flags to workers. For example, this configuration enables the `development` condition:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -217,7 +186,7 @@ export default defineConfig({
 });
 ```
 
-For debugging a single worker, combine `execArgv` with `maxWorkers: 1` so only one test file attaches to the debugger at a time:
+When debugging, combine it with `maxWorkers: 1` to run files one at a time and make execution easier to follow:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -229,3 +198,42 @@ export default defineConfig({
   },
 });
 ```
+
+## VM pool behavior
+
+These restrictions apply to both `vmForks` and `vmThreads`.
+
+### Isolation and cleanup
+
+Each file gets a fresh VM context, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file, regardless of [`isolate`](/config/test/isolate). Workers are reused, however, so state outside the VM, such as `process.env` and native-addon state, may persist across files.
+
+Tests must still await or cancel asynchronous work before the file finishes. Teardown clears timers managed by Rstest, but does not cancel arbitrary Promise chains, native I/O, or background tasks.
+
+Pending wrapped `node:timers/promises` and promisified timeout/immediate operations are cancelled with `AbortError`. Cancellation may run user `catch` or `finally` handlers, so teardown does not guarantee that no user code runs afterward.
+
+### Cross-realm assertions
+
+Values from Node.js, workers, or DOM environments may use different constructors and fail `instanceof` checks in the current VM. Use `await` and content assertions, and check an error's `name`, `code`, or `message`.
+
+### Module loading
+
+Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
+
+Synchronous `require(esm)` requires Node.js 24.9+, VM graph support, and a dependency graph without top-level await. Otherwise, use dynamic `import()`. Native addons can only be loaded through direct CommonJS `require()`, and their state is outside VM isolation.
+
+<details>
+<summary>Module loading compatibility</summary>
+
+VM loading differs from the native Node.js loader in the following ways:
+
+| Loading path                               | Support and limits                                                                                                                                                                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test/setup bundles and external JavaScript | Execute in the file VM, including static and dynamic imports. Setup and evaluated module state are recreated per file.                                                                                                                                  |
+| CommonJS named exports                     | Statically detected own exports, including non-enumerable properties and getters, are read from the original `module.exports` receiver. They are snapshots, not live bindings; `interopDefault` still applies.                                          |
+| JSON, WebAssembly, and `data:` URLs        | JSON ESM imports require `type: 'json'`. Asynchronous WebAssembly and JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. Synchronous Wasm `require()` is unsupported.                                                                 |
+| Synchronous `require(esm)`                 | Requires Node.js 24.9+ and VM graph support. Async graphs throw `ERR_REQUIRE_ASYNC_MODULE`; older VM implementations reject ESM require with `ERR_REQUIRE_ESM`.                                                                                         |
+| Native addons                              | Direct CommonJS `require()` delegates to Node.js. VM ESM imports of `.node` files are unsupported, and addon state is not VM-isolated.                                                                                                                  |
+| CommonJS resolution                        | Node.js `require.resolve()` selects paths and export conditions. Rstest does not choose a fallback entry if the selected entry cannot run in the VM.                                                                                                    |
+| `Module._cache`                            | Exposes the file's `require.cache` for inspecting and deleting CommonJS/JSON entries. Replacing or deleting `_cache` itself is unsupported. Synchronous `require(esm)` uses the VM ESM cache without CommonJS cache records or `module.children` links. |
+
+</details>
