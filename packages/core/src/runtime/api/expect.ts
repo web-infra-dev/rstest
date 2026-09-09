@@ -59,6 +59,16 @@ const defaultChaiConfig: ChaiConfig = {
   truncateThreshold: chaiConfig.truncateThreshold,
 };
 
+const ANY_PRIMITIVE_CONSTRUCTOR_NAMES = [
+  'String',
+  'Number',
+  'Function',
+  'Boolean',
+  'BigInt',
+  'Symbol',
+  'Object',
+] as const;
+
 export function setupChaiConfig(config: ChaiConfig = {}): void {
   Object.assign(chaiConfig, defaultChaiConfig, config);
 }
@@ -206,6 +216,26 @@ export function createExpect({
   }) as RstestExpect;
   Object.assign(expect, chaiExpect);
   Object.assign(expect, (globalThis as any)[ASYMMETRIC_MATCHERS_OBJECT]);
+
+  const any = expect.any;
+  expect.any = (constructor) => {
+    const runtimeGlobal = fileContext().runtimeGlobal;
+    for (const name of ANY_PRIMITIVE_CONSTRUCTOR_NAMES) {
+      if (constructor === runtimeGlobal?.[name]) {
+        const matcher = Reflect.apply(any, expect, [globalThis[name]]);
+        const asymmetricMatch = matcher.asymmetricMatch.bind(matcher);
+        matcher.asymmetricMatch = (value: unknown) =>
+          asymmetricMatch(value) ||
+          Reflect.apply(
+            Function.prototype[Symbol.hasInstance],
+            constructor,
+            [value],
+          );
+        return matcher;
+      }
+    }
+    return Reflect.apply(any, expect, [constructor]);
+  };
 
   expect.getState = () => getState<MatcherState>(expect);
   expect.setState = (state) => setState(state, expect);
