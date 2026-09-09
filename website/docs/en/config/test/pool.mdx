@@ -168,6 +168,8 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 
 `memoryLimit` triggers recycling only between files. It is not a hard process RSS limit and cannot guarantee that a run avoids OOM.
 
+It also bounds each VM worker's shared cache of immutable assets, external source, resolution results, and compilation data to the smaller of 64 MiB and one quarter of `memoryLimit`. Lowering the threshold can shrink this cache and increase loading and compilation work.
+
 Separately, `vmForks` can use each child process's RSS to defer worker creation under memory pressure. This makes memory pressure easier to control than with the shared process RSS of `vmThreads`. This scheduling mechanism operates independently of `memoryLimit`; child processes still have additional overhead, so actual memory usage is not necessarily lower.
 
 ## Pass Node.js flags to workers
@@ -207,6 +209,8 @@ Each file gets a fresh VM context, module graph, and test environment. Worker-sc
 
 Tests must still await or cancel asynchronous work before the file finishes. Teardown clears timers managed by Rstest, but does not cancel arbitrary Promise chains, native I/O, or background tasks.
 
+Pending wrapped `node:timers/promises` and promisified timeout/immediate operations are cancelled with `AbortError`. Cancellation may run user `catch` or `finally` handlers, so teardown does not guarantee that no user code runs afterward.
+
 ### Cross-realm assertions
 
 Values from Node.js, workers, or DOM environments may use different constructors and fail `instanceof` checks in the current VM. Use `await` and content assertions, and check an error's `name`, `code`, or `message`.
@@ -216,3 +220,20 @@ Values from Node.js, workers, or DOM environments may use different constructors
 Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
 
 Synchronous `require(esm)` requires Node.js 24.9+, VM graph support, and a dependency graph without top-level await. Otherwise, use dynamic `import()`. Native addons can only be loaded through direct CommonJS `require()`, and their state is outside VM isolation.
+
+<details>
+<summary>Module loading compatibility</summary>
+
+VM loading differs from the native Node.js loader in the following ways:
+
+| Loading path                               | Support and limits                                                                                                                                                                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test/setup bundles and external JavaScript | Execute in the file VM, including static and dynamic imports. Setup and evaluated module state are recreated per file.                                                                                                                                  |
+| CommonJS named exports                     | Statically detected own exports, including non-enumerable properties and getters, are read from the original `module.exports` receiver. They are snapshots, not live bindings; `interopDefault` still applies.                                          |
+| JSON, WebAssembly, and `data:` URLs        | JSON ESM imports require `type: 'json'`. Asynchronous WebAssembly and JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. Synchronous Wasm `require()` is unsupported.                                                                 |
+| Synchronous `require(esm)`                 | Requires Node.js 24.9+ and VM graph support. Async graphs throw `ERR_REQUIRE_ASYNC_MODULE`; older VM implementations reject ESM require with `ERR_REQUIRE_ESM`.                                                                                         |
+| Native addons                              | Direct CommonJS `require()` delegates to Node.js. VM ESM imports of `.node` files are unsupported, and addon state is not VM-isolated.                                                                                                                  |
+| CommonJS resolution                        | Node.js `require.resolve()` selects paths and export conditions. Rstest does not choose a fallback entry if the selected entry cannot run in the VM.                                                                                                    |
+| `Module._cache`                            | Exposes the file's `require.cache` for inspecting and deleting CommonJS/JSON entries. Replacing or deleting `_cache` itself is unsupported. Synchronous `require(esm)` uses the VM ESM cache without CommonJS cache records or `module.children` links. |
+
+</details>

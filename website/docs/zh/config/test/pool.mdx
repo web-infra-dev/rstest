@@ -167,6 +167,8 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 
 `memoryLimit` 只在文件之间触发回收，不是进程 RSS 的硬上限，也不能保证避免 OOM。
 
+它还会影响每个 VM worker 的缓存大小：不可变资源、external source、解析结果和编译数据共用一份缓存，上限取 64 MiB 与 `memoryLimit` 四分之一中的较小值。调低阈值可能缩小缓存，增加重复加载和编译的开销。
+
 此外，`vmForks` 能根据各子进程的 RSS，在内存紧张时延后创建 worker，因此比共享进程 RSS 的 `vmThreads` 更容易控制内存压力。这项调度机制与 `memoryLimit` 分开工作；子进程本身仍有额外开销，实际内存占用不一定更低。
 
 ## 向 worker 传递 Node.js flags
@@ -206,6 +208,8 @@ export default defineConfig({
 
 测试仍需在文件结束前 `await` 或取消异步任务。teardown 会清理受 Rstest 管理的定时器，但不会取消任意 Promise 链、原生 I/O 或后台任务。
 
+尚未完成的已包装 `node:timers/promises` 和 promisify timeout/immediate 操作会以 `AbortError` 取消。这可能触发用户的 `catch` 或 `finally`，因此不能保证 teardown 后不再执行用户代码。
+
 ### 跨 realm 断言
 
 来自 Node.js、worker 或 DOM 环境的值可能使用不同的 constructor，无法通过当前 VM 中的 `instanceof` 检查。请使用 `await` 和内容断言，判断错误时检查 `name`、`code` 或 `message`。
@@ -215,3 +219,20 @@ export default defineConfig({
 测试和 setup bundle、external JavaScript ESM 与 CommonJS 均可在 VM 中执行。自定义 Node.js loader 和 external TypeScript 执行不受支持，请先编译或 bundle。
 
 同步 `require(esm)` 需要 Node.js 24.9+、VM graph API 可用且依赖图不含 top-level await，否则应改用动态 `import()`。native addon 仅支持通过 CommonJS `require()` 直接加载，其状态不受 VM 隔离。
+
+<details>
+<summary>查看模块加载兼容性</summary>
+
+VM 加载方式与 Node.js 原生 loader 存在以下差异：
+
+| 加载方式                                 | 支持范围与限制                                                                                                                                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| test/setup bundle 和 external JavaScript | 在文件 VM 中执行，支持静态和动态 import；setup 和模块执行状态按文件重新创建。                                                                                                                |
+| CommonJS named export                    | 从原始 `module.exports` receiver 读取静态识别出的自有导出，包括不可枚举属性和 getter。导出是快照而非 live binding；`interopDefault` 仍然生效。                                               |
+| JSON、WebAssembly 和 `data:` URL         | JSON ESM import 需要 `type: 'json'`。支持异步 WebAssembly，以及 JavaScript、JSON 和 base64 WebAssembly `data:` URL；不支持同步 `require()` WebAssembly。                                     |
+| 同步 `require(esm)`                      | 需要 Node.js 24.9+ 和 VM graph API。异步依赖图抛出 `ERR_REQUIRE_ASYNC_MODULE`；较早的 VM 实现会以 `ERR_REQUIRE_ESM` 拒绝 ESM require。                                                       |
+| Native addon                             | CommonJS `require()` 直接交给 Node.js 加载；不支持通过 VM ESM import `.node` 文件，addon 状态不受 VM 隔离。                                                                                  |
+| CommonJS 解析                            | 路径和 export condition 由 Node.js `require.resolve()` 选择；选中的入口无法在 VM 中执行时，不会自动改选其他入口。                                                                            |
+| `Module._cache`                          | 指向当前文件的 `require.cache`，支持查看和删除 CommonJS/JSON 条目；不支持替换或删除 `_cache` 本身。同步 `require(esm)` 使用 VM ESM 缓存，不生成 CommonJS 缓存记录或 `module.children` 关联。 |
+
+</details>
