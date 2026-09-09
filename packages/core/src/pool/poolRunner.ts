@@ -2,7 +2,10 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
 import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
 import { toError } from '../utils';
-import { FIXTURE_CLEANUP_TIMEOUT_MS } from '../utils/constants';
+import {
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  WORKER_CLEANUP_TIMEOUT_MS,
+} from '../utils/constants';
 import type { PoolWorker } from './poolWorker';
 import {
   type CollectTaskResult,
@@ -278,10 +281,10 @@ export class PoolRunner {
     this.cleanupTimer = setTimeout(() => {
       this.rejectCleanup(
         new Error(
-          `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+          `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
         ),
       );
-    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+    }, WORKER_CLEANUP_TIMEOUT_MS);
     this.cleanupTimer.unref();
     try {
       this.worker.send({ type: 'cleanup' });
@@ -601,13 +604,17 @@ export class PoolRunner {
       return;
     }
     this.clearFixtureCleanupTimer();
+    const timeoutMs =
+      scope === 'Worker'
+        ? WORKER_CLEANUP_TIMEOUT_MS
+        : FIXTURE_CLEANUP_TIMEOUT_MS;
     this.fixtureCleanupTimer = setTimeout(() => {
       if (this.currentTask?.taskId !== taskId) {
         return;
       }
       this.crashed = true;
       const error = new Error(
-        `${scope} fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+        `${scope} fixture cleanup did not finish within ${timeoutMs}ms`,
       );
       const task = this.currentTask;
       if (task.kind === 'run' && task.provisionalResult) {
@@ -625,7 +632,7 @@ export class PoolRunner {
         return;
       }
       this.rejectCurrentTaskWithStderr(error);
-    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+    }, timeoutMs);
     this.fixtureCleanupTimer.unref();
   }
 
