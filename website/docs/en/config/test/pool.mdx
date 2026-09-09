@@ -67,7 +67,7 @@ VM pools reuse workers and compilation resources, which can benefit suites with 
 
 `forks` and `threads` run tests in child processes and worker threads, respectively. `vmForks` and `vmThreads` reuse those workers while creating a fresh `vm.Context` for each file.
 
-All pools serialize environment options before sending them to workers, so functions are not supported in those options. See [`testEnvironment.options`](/config/test/test-environment#environment-options) for the requirements, including Bun's JSON IPC restrictions.
+All pools serialize environment options before sending them to workers, so functions are not supported in those options. See [`testEnvironment.options`](/config/test/test-environment#environment-options) for the requirements.
 
 ### forks
 
@@ -199,36 +199,20 @@ export default defineConfig({
 
 ## VM pool behavior
 
-The following applies to both `vmForks` and `vmThreads`. Before switching, check your tests' requirements for isolation, cross-realm values, and module loading.
+These restrictions apply to both `vmForks` and `vmThreads`.
 
 ### Isolation and cleanup
 
-Each test file gets a fresh VM context, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file. These behaviors apply regardless of the [`isolate`](/config/test/isolate) setting.
+Each file gets a fresh VM context, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file, regardless of [`isolate`](/config/test/isolate). Workers are reused, however, so state outside the VM, such as `process.env` and native-addon state, may persist across files.
 
-The worker itself is reused, so state outside the VM context may persist across files. This includes changes to `process.env`, signal handlers, native addons, and shared constructors such as `Buffer`.
+Tests must still await or cancel asynchronous work before the file finishes. Teardown clears timers managed by Rstest, but does not cancel arbitrary Promise chains, native I/O, or background tasks.
 
-Tests must also manage their own asynchronous work. Await or cancel it before the file finishes. Teardown clears timers managed by Rstest, but cannot cancel arbitrary Promise chains, native I/O, or background tasks.
+### Cross-realm assertions
 
-### Cross-realm values
+Values from Node.js, workers, or DOM environments may use different constructors and fail `instanceof` checks in the current VM. Use `await` and content assertions, and check an error's `name`, `code`, or `message`.
 
-Each realm has its own constructors, so values from the worker, Node.js, or a DOM provider may fail `instanceof` checks in the current VM. Use `await` and content assertions when handling these Promises, errors, or objects. For errors, check fields such as `name`, `code`, or `message`.
+### Module loading
 
-Rstest adapts plain objects and arrays returned by Node.js builtins, either directly or through Promises, along with ordinary Error rejection reasons, to the current VM. This conversion does not cover callback arguments, synchronous native errors, or methods on returned native objects. Buffers, streams, typed arrays, native handles, `DOMException`, and DOM objects retain their original prototypes.
+Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
 
-### Supported module loading
-
-VM pools support the loading paths below, with some differences from Node.js loaders. Custom Node.js loaders and direct execution of external TypeScript are unsupported; compile or bundle those files first.
-
-| Loading path                         | Support and limits                                                                                                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Built test and setup bundles         | Run in the file VM. Setup and evaluated module state are recreated for every file.                                                                                             |
-| External JavaScript ESM and CommonJS | Static and dynamic imports are supported. CommonJS named exports are snapshots, and `interopDefault` still applies.                                                            |
-| External JSON and WebAssembly        | JSON ESM imports require `type: 'json'`. Asynchronous WebAssembly and JavaScript, JSON, or base64 WebAssembly `data:` URLs are supported; synchronous Wasm `require()` is not. |
-| Synchronous `require(esm)`           | Requires Node.js 24.9+, VM graph support, and no top-level await. Otherwise use dynamic `import()`.                                                                            |
-| Native addons                        | Direct CommonJS `require()` is supported, but addon state is outside VM isolation. VM ESM imports of `.node` files are unsupported.                                            |
-
-CommonJS paths and export conditions are resolved by Node.js `require.resolve()`. If the selected entry cannot run in the VM, Rstest does not automatically select another entry.
-
-`Module._cache` exposes the current file's CommonJS and JSON cache. Synchronous `require(esm)` uses a separate VM ESM cache and does not create CommonJS cache records or `module.children` links.
-
-To reduce repeated loading and compilation, each VM worker caches immutable bundle bytes, source maps, external source, resolution results, and V8 compilation data. The cache is limited to the smaller of 64 MiB and one quarter of `memoryLimit`, and is cleared on rebuild or worker recycle. Evaluated module instances and setup state are not reused across VM contexts.
+Synchronous `require(esm)` requires Node.js 24.9+, VM graph support, and a dependency graph without top-level await. Otherwise, use dynamic `import()`. Native addons can only be loaded through direct CommonJS `require()`, and their state is outside VM isolation.
