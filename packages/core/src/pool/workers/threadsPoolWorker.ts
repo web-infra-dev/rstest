@@ -48,6 +48,10 @@ export class ThreadsPoolWorker extends BasePoolWorker {
         worker = new Worker(this.filename, {
           env: this.env,
           execArgv: this.execArgv,
+          // Node processes default to a 984 KiB V8 stack, while Workers default
+          // to 4 MiB. Keep pool behavior aligned so recursion fails consistently
+          // instead of doing substantially more work under thread pools.
+          resourceLimits: { stackSizeMb: 1 },
           // Pipe stdout/stderr so we own the streams; forwardStdio is honored
           // inside attachStdout / attachStderr.
           stdout: true,
