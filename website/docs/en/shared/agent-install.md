@@ -43,8 +43,8 @@ Determine from the target's **actual source/test file extensions** first. Only f
 
 ### 2.2 Build tool (→ pick adapter)
 
-- **Rsbuild project** (`rsbuild.config.*` or `@rsbuild/core` dep) → follow https://rstest.rs/guide/integration/rsbuild.md
-- **Rslib project** (`rslib.config.*` or `@rslib/core` dep) → follow https://rstest.rs/guide/integration/rslib.md
+- **Rsbuild project** (`rsbuild.config.*` or `@rsbuild/core` dep) → follow https://rstest.rs/integration/rsbuild/index.md
+- **Rslib project** (`rslib.config.*` or `@rslib/core` dep) → follow https://rstest.rs/integration/rslib/index.md
 - **Neither** → configure Rstest standalone.
 
 An adapter auto-inherits plugins, aliases, and build config. Even with an adapter you still need to decide `testEnvironment` or browser mode from 2.3 — adapters do not decide those. If 2.3 picks Browser Mode, that takes precedence over adapters.
