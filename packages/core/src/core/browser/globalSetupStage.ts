@@ -7,7 +7,7 @@ import type {
   ProjectEntries,
 } from '../../types';
 import { isDebug, resolveShardedEntries } from '../../utils';
-import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
+import { shouldRunGlobalSetup, runGlobalSetup } from '../globalSetup';
 import {
   getRsbuildEnvironmentConfig,
   initModifyRstestConfigHooks,
@@ -237,7 +237,7 @@ export async function runBrowserGlobalSetupStage(
 
   for (const item of prepared) {
     if (
-      !claimGlobalSetupOnce(
+      !shouldRunGlobalSetup(
         item.project,
         watch ? Math.max(1, item.entryCount) : item.entryCount,
         item.globalSetupEntries.length,
@@ -249,7 +249,7 @@ export async function runBrowserGlobalSetupStage(
       success,
       errors: setupErrors,
       envChanges,
-    } = await runGlobalSetup(context, {
+    } = await runGlobalSetup(context, item.project, {
       globalSetupEntries: item.globalSetupEntries,
       assetFiles: item.assetFiles,
       sourceMaps: item.sourceMaps,

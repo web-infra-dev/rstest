@@ -18,23 +18,11 @@ import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import { composeWorkerEnv } from './workerEnv';
 
 /**
- * Single owner of the once-per-project global-setup gate.
- *
- * Global setup runs at most once per project and only when the project has at
- * least one running test. This collapses the read-check-and-set that was
- * hand-copied across {@link runTests} and {@link listTests} into one named,
- * test-covered operation, preserving the exact short-circuit order and the
- * set-before-await semantics (a failed setup is not retried within the run).
- *
- * The `_globalSetups` marker lives on the per-project {@link InternalProjectContext} and
- * is intentionally never reset between watch reruns — only re-seeded `false`
- * when a fresh context is constructed — so this helper mutates the passed object
- * by reference and never touches module-level state.
- *
- * @returns `true` when the caller should run global setup now (and the marker
- * has been claimed); `false` otherwise.
+ * Runs setup once per project, only when the project has running tests.
+ * The marker is set by runGlobalSetup on success, never by callers.
+ * A failed setup therefore retries on the next watch cycle.
  */
-export function claimGlobalSetupOnce(
+export function shouldRunGlobalSetup(
   project: Pick<InternalProjectContext, '_globalSetups'>,
   entriesLength: number,
   globalSetupEntriesLength: number,
@@ -42,7 +30,6 @@ export function claimGlobalSetupOnce(
   if (!(entriesLength && globalSetupEntriesLength) || project._globalSetups) {
     return false;
   }
-  project._globalSetups = true;
   return true;
 }
 
@@ -188,6 +175,7 @@ export class GlobalSetupWorker {
 
 export async function runGlobalSetup(
   context: InternalContext,
+  project: Pick<InternalProjectContext, '_globalSetups'>,
   {
     globalSetupEntries,
     assetFiles,
@@ -233,6 +221,7 @@ export async function runGlobalSetup(
   });
 
   if (result.success) {
+    project._globalSetups = true;
     if (result.envChanges) {
       Object.assign(context.workerEnv, result.envChanges);
     }
