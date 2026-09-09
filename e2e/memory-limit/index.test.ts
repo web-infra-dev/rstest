@@ -25,7 +25,25 @@ describe('pool.memoryLimit', () => {
       args: ['list', '--pool.memoryLimit', '2'],
       workers: 4,
     },
+    {
+      name: 'recycles forks with the spawn gate disabled',
+      args: ['run', '--pool.memoryLimit', '2'],
+      memoryAware: '0',
+      workers: 4,
+    },
+    {
+      name: 'recycles collected forks with the spawn gate disabled',
+      args: ['list', '--pool.memoryLimit', '2'],
+      memoryAware: '0',
+      workers: 4,
+    },
     { name: 'reuses forks without a limit', args: ['run'], workers: 1 },
+    {
+      name: 'reuses forks without a limit with the spawn gate disabled',
+      args: ['run'],
+      memoryAware: '0',
+      workers: 1,
+    },
     {
       name: 'reuses forks below the limit',
       args: ['run', '--pool.memoryLimit', '100000GB'],
@@ -41,7 +59,7 @@ describe('pool.memoryLimit', () => {
       args: ['run', '--isolate', 'true', '--pool.memoryLimit', '100000GB'],
       workers: 4,
     },
-  ])('$name', async ({ args, workers }, { onTestFinished }) => {
+  ])('$name', async ({ args, workers, memoryAware }, { onTestFinished }) => {
     const directory = mkdtempSync(join(tmpdir(), 'rstest-memory-limit-'));
     const logPath = join(directory, 'workers.log');
     onTestFinished(() => rmSync(directory, { recursive: true, force: true }));
@@ -52,7 +70,10 @@ describe('pool.memoryLimit', () => {
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
-          env: { RSTEST_MEMLIMIT_LOG: logPath },
+          env: {
+            RSTEST_MEMLIMIT_LOG: logPath,
+            RSTEST_MEMORY_AWARE: memoryAware,
+          },
         },
       },
     });
@@ -86,7 +107,10 @@ it('recycles forks after a watch rebuild', async ({ onTestFinished }) => {
     args: ['watch', '--pool.memoryLimit', '2'],
     onTestFinished,
     options: {
-      nodeOptions: { cwd: directory, env: { RSTEST_MEMLIMIT_LOG: logPath } },
+      nodeOptions: {
+        cwd: directory,
+        env: { RSTEST_MEMLIMIT_LOG: logPath, RSTEST_MEMORY_AWARE: '0' },
+      },
     },
   });
   onTestFinished(async () => {

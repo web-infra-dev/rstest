@@ -95,13 +95,6 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
   collect: 'collectFinished',
 };
 
-// Skip RSS reporting for thread workers — `process.memoryUsage().rss` is
-// host-wide and would mislead the gate. See rstest#1301. Read once at
-// bootstrap; toggling `RSTEST_MEMORY_AWARE` mid-run is not supported (host
-// samples it at pool construction too).
-const MEMORY_REPORTING_ENABLED =
-  isMainThread && process.env[ENV.MEMORY_AWARE] !== '0';
-
 const runTask = async (
   kind: TaskKind,
   request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
@@ -131,6 +124,8 @@ const runTask = async (
         send({ type: 'testEnvironmentFallback', fallback });
       },
     });
+    // Fork RSS also drives explicit recycling limits, independently of the
+    // host spawn gate. Thread RSS is process-wide and cannot identify a worker.
     send({
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
@@ -140,7 +135,7 @@ const runTask = async (
             heapUsed: process.memoryUsage().heapUsed,
             ...(isMainThread ? { rss: process.memoryUsage().rss } : {}),
           }
-        : MEMORY_REPORTING_ENABLED
+        : isMainThread
           ? { rss: process.memoryUsage().rss }
           : undefined,
     });
