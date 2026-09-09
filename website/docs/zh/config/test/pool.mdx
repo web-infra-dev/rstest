@@ -48,6 +48,8 @@ const defaultPool = {
 
 配置 Rstest 如何创建 worker、隔离测试文件，以及控制并行度和内存。
 
+建议先使用默认的 `forks`，它的 Node.js 兼容性最好，并提供文件级进程隔离。性能不符合预期时，再根据 worker 启动、模块加载和 setup 的实际耗时选择其他 pool。
+
 ## Pool 类型
 
 Rstest 支持四种 pool，主要区别是 worker 的创建方式和文件隔离方式。
@@ -56,11 +58,21 @@ Rstest 支持四种 pool，主要区别是 worker 的创建方式和文件隔离
 
 默认 pool。使用默认的 [`isolate: true`](/config/test/isolate) 时，每个测试文件都会在 `child_process.fork` 创建的新 Node.js 子进程中运行。设置 `isolate: false` 后，子进程会在文件之间复用。
 
+四种 pool 中，`forks` 引入的执行限制最少：没有 worker thread 的 API 限制和 VM 的跨 realm 限制，对 native addon 通常也最兼容。原生崩溃的影响限于子进程，新进程还能在文件之间重置进程级状态。代价是每个文件都需要承担进程启动和初始化成本。
+
 ### threads
 
 <ApiMeta addedVersion="0.10.0" />
 
-通过 `node:worker_threads` 运行测试文件。每个 worker 都有独立的 V8 isolate 和 heap，但共享同一个操作系统进程，内存也会计入同一份 RSS。Node.js 不支持在 worker thread 中调用 `process.chdir()`。
+通过 `node:worker_threads` 运行测试文件。每个 worker 都有独立的 V8 isolate 和 heap，但共享同一个操作系统进程，内存也会计入同一份 RSS。
+
+以下 Node.js 限制同时适用于 `threads` 和 `vmThreads`：
+
+- 不支持 `process.chdir()`、`process.abort()` 和修改用户或用户组 ID 的方法，也不能修改 `process.title`。
+- `process.on()` 不会收到操作系统信号；`process.exit()` 只结束当前 worker thread。
+- native addon 必须支持在 worker thread 中使用，原生崩溃可能影响整个进程。
+
+完整差异请参阅 [Node.js Worker 文档](https://nodejs.org/api/worker_threads.html#class-worker)。
 
 ### vmForks
 
@@ -74,50 +86,18 @@ Rstest 支持四种 pool，主要区别是 worker 的创建方式和文件隔离
 
 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。它省去了子进程启动开销，并保持文件级 JavaScript 状态隔离，但仍受 worker thread 限制，例如不能调用 `process.chdir()`。
 
-## VM pool 的行为边界
-
-`vmForks` 和 `vmThreads` 提供文件级 VM 隔离，但不等同于进程级隔离，也不完全兼容 Node.js 模块加载机制。
-
-### 隔离与清理
-
-两种 VM pool 都会复用 worker，但每个文件都有新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。因此，[`isolate`](/config/test/isolate) 对它们不生效。
-
-VM context 之外的状态可能留在复用的 worker 中，包括对 `process.env`、signal handler、native addon 和 `Buffer` 等共享 constructor 的修改。测试文件结束前，请 await 或主动取消异步任务。teardown 会清理受 Rstest 管理的 timer，但不会取消任意 Promise 链、原生 I/O 或后台任务。
-
-Pool 会先序列化 [`testEnvironment.options`](/config/test/test-environment#环境选项)，再把任务发给 worker。structured clone 和 Bun JSON IPC 的限制请参阅该配置项。
-
-### 跨 realm 的值
-
-值可能保留 worker、Node.js 或 DOM provider realm 的 constructor。对于 Promise、错误、Node.js 原生对象和 DOM 对象，不要依赖它们能通过 VM constructor 的 `instanceof` 检查。请使用 `await`，并断言具体值或错误的 `name`、`code`、`message` 等稳定字段。
-
-Rstest 会适配 Node.js builtin 直接返回或通过 Promise 返回的普通对象、数组和普通 Error。callback 参数、原生同步错误、Buffer、stream、typed array、native handle、`DOMException`，以及原生对象的方法返回值，仍保留原来的 prototype。
-
-### 支持的模块加载方式
-
-| 加载方式                            | 支持范围与限制                                                                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 构建后的 test 和 setup bundle       | 在文件 VM 中运行；每个文件都会重新执行 setup 和 module。                                                                                                     |
-| External JavaScript ESM 和 CommonJS | 支持静态和动态 import。CommonJS named export 是快照，`interopDefault` 仍然生效。                                                                             |
-| External JSON 和 WebAssembly        | JSON ESM import 需要 `type: 'json'`；支持异步加载 WebAssembly，以及 JavaScript、JSON 和 base64 WebAssembly `data:` URL；不支持同步 `require()` WebAssembly。 |
-| 同步 `require(esm)`                 | 需要 Node.js 24.9+、VM graph API 可用且依赖图不含 top-level await，否则请使用动态 `import()`。                                                               |
-| Native addon                        | 支持通过 CommonJS `require()` 直接加载，但 addon 状态不受 VM 隔离；不支持通过 VM ESM graph import `.node` 文件。                                             |
-
-路径和 export condition 由 Node.js 的 `require.resolve()` 决定。若选中的入口使用了 VM 不支持的操作，Rstest 不会自动改选其他入口。`Module._cache` 可以访问当前文件的 CommonJS 和 JSON 缓存，但同步 `require(esm)` 不会生成 CommonJS cache record 或 `module.children` 关联。
-
-不支持自定义 Node.js loader 和直接运行 external TypeScript，请先编译或 bundle。
-
-每个 VM worker 会缓存不可变的 bundle、source map、external source、解析结果和 V8 compilation data。缓存会在 rebuild 或 worker 回收时清空，上限取 64 MiB 与 `memoryLimit` 四分之一中的较小值。执行后的 module 和 setup 状态不会在 VM context 之间共享。
-
 ## 如何选择 pool 类型
 
-如果不确定该选哪种 pool，请使用默认的 `forks`。
+默认使用 `forks`，测量后再决定是否切换。worker 启动耗时较高时，可以尝试 `threads`；反复启动 worker，或加载、编译测试与 setup 依赖的成本较高时，可以尝试 VM pool。
 
-| Pool        | 适用场景                                                              | 主要取舍                                                                          |
-| ----------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `forks`     | 需要进程级隔离、兼容 native addon，或希望限制单个文件崩溃的影响范围。 | worker 启动成本最高。要为每个文件创建新进程，请使用 `isolate: true`。             |
-| `threads`   | worker 启动是主要瓶颈，而且测试套件兼容 worker thread。               | 不能调用 `process.chdir()`；worker 共享进程 RSS，测试不能依赖进程状态按文件重置。 |
-| `vmForks`   | 每个文件需要新 VM，同时依赖进程 API 或需要分别观测各子进程的内存。    | 文件之间可能共享进程状态，受跨 realm 限制，而且子进程有额外启动成本。             |
-| `vmThreads` | 每个文件需要新 VM，同时希望减少 worker 启动成本。                     | 受跨 realm 和 worker thread 限制；内存统一计入宿主进程 RSS。                      |
+VM pool 会复用 worker 和不可变的编译资源，同时为每个文件创建新环境，可能更适合文件多、单文件测试短或 setup 依赖较大的套件。但 setup 文件、环境创建和模块求值仍会逐文件执行，数据库初始化、网络请求等 setup 工作不会因此省掉，收益需要用自己的测试套件验证。
+
+| Pool        | 适用场景                                                              | 主要取舍                                                              |
+| ----------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `forks`     | 默认选择，适合需要 Node.js 兼容性、进程隔离和限制崩溃影响范围的套件。 | `isolate: true` 时，每个文件都有新进程的启动和初始化成本。            |
+| `threads`   | worker 启动是主要瓶颈，而且测试套件兼容 worker thread。               | 受 worker thread API 和 native addon 限制，所有 worker 共享进程。     |
+| `vmForks`   | 每个文件需要新 VM，同时依赖进程 API 或需要分别观测各子进程的内存。    | 文件之间可能共享进程状态，受跨 realm 限制，而且子进程有额外启动成本。 |
+| `vmThreads` | 每个文件需要新 VM，同时希望减少 worker 启动成本。                     | 受跨 realm 和 worker thread 限制；内存统一计入宿主进程 RSS。          |
 
 ## 配置 worker 并行度和内存
 
@@ -205,3 +185,37 @@ export default defineConfig({
   },
 });
 ```
+
+## VM pool 的行为边界
+
+`vmForks` 和 `vmThreads` 提供文件级 VM 隔离，但不等同于进程级隔离，也不完全兼容 Node.js 模块加载机制。
+
+### 隔离与清理
+
+两种 VM pool 都会复用 worker，但每个文件都有新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。因此，[`isolate`](/config/test/isolate) 对它们不生效。
+
+VM context 之外的状态可能留在复用的 worker 中，包括对 `process.env`、signal handler、native addon 和 `Buffer` 等共享 constructor 的修改。测试文件结束前，请 await 或主动取消异步任务。teardown 会清理受 Rstest 管理的 timer，但不会取消任意 Promise 链、原生 I/O 或后台任务。
+
+Pool 会先序列化 [`testEnvironment.options`](/config/test/test-environment#环境选项)，再把任务发给 worker。structured clone 和 Bun JSON IPC 的限制请参阅该配置项。
+
+### 跨 realm 的值
+
+值可能保留 worker、Node.js 或 DOM provider realm 的 constructor。对于 Promise、错误、Node.js 原生对象和 DOM 对象，不要依赖它们能通过 VM constructor 的 `instanceof` 检查。请使用 `await`，并断言具体值或错误的 `name`、`code`、`message` 等稳定字段。
+
+Rstest 会适配 Node.js builtin 直接返回或通过 Promise 返回的普通对象、数组和普通 Error。callback 参数、原生同步错误、Buffer、stream、typed array、native handle、`DOMException`，以及原生对象的方法返回值，仍保留原来的 prototype。
+
+### 支持的模块加载方式
+
+| 加载方式                            | 支持范围与限制                                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 构建后的 test 和 setup bundle       | 在文件 VM 中运行；每个文件都会重新执行 setup 和 module。                                                                                                     |
+| External JavaScript ESM 和 CommonJS | 支持静态和动态 import。CommonJS named export 是快照，`interopDefault` 仍然生效。                                                                             |
+| External JSON 和 WebAssembly        | JSON ESM import 需要 `type: 'json'`；支持异步加载 WebAssembly，以及 JavaScript、JSON 和 base64 WebAssembly `data:` URL；不支持同步 `require()` WebAssembly。 |
+| 同步 `require(esm)`                 | 需要 Node.js 24.9+、VM graph API 可用且依赖图不含 top-level await，否则请使用动态 `import()`。                                                               |
+| Native addon                        | 支持通过 CommonJS `require()` 直接加载，但 addon 状态不受 VM 隔离；不支持通过 VM ESM graph import `.node` 文件。                                             |
+
+路径和 export condition 由 Node.js 的 `require.resolve()` 决定。若选中的入口使用了 VM 不支持的操作，Rstest 不会自动改选其他入口。`Module._cache` 可以访问当前文件的 CommonJS 和 JSON 缓存，但同步 `require(esm)` 不会生成 CommonJS cache record 或 `module.children` 关联。
+
+不支持自定义 Node.js loader 和直接运行 external TypeScript，请先编译或 bundle。
+
+每个 VM worker 会缓存不可变的 bundle、source map、external source、解析结果和 V8 compilation data。缓存会在 rebuild 或 worker 回收时清空，上限取 64 MiB 与 `memoryLimit` 四分之一中的较小值。执行后的 module 和 setup 状态不会在 VM context 之间共享。
