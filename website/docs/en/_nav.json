@@ -15,6 +15,12 @@
     "activeMatch": "/api/runtime-api/"
   },
   {
+    "text": "Integrations",
+    "link": "/integration/module-federation",
+    "activeMatch": "/integration/",
+    "position": "right"
+  },
+  {
     "text": "Blog",
     "link": "/blog/index",
     "activeMatch": "/blog"

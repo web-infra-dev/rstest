@@ -15,6 +15,12 @@
     "activeMatch": "/api/runtime-api/"
   },
   {
+    "text": "集成",
+    "link": "/integration/module-federation",
+    "activeMatch": "/integration/",
+    "position": "right"
+  },
+  {
     "text": "博客",
     "link": "/blog/index",
     "activeMatch": "/blog"

@@ -46,7 +46,7 @@ export default defineConfig({
 
 `federation` 只负责准备测试运行时，不会配置 remotes、exposes 或共享模块。使用 [@module-federation/rstest](https://github.com/module-federation/core) 时，该插件会配置 Module Federation 构建，并为基于 Node 的测试环境自动启用 Rstest 兼容模式，因此不要再设置 `federation: true`。
 
-安装方式和 Rstest 测试流程，请先阅读 [Module Federation 指南](/guide/integration/module-federation)。复用已有 Rsbuild federation 配置以及完整插件选项，请参考 [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)。
+安装方式和 Rstest 测试流程，请先阅读 [Module Federation 指南](/integration/module-federation)。复用已有 Rsbuild federation 配置以及完整插件选项，请参考 [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)。
 
 ```ts title="rstest.config.ts"
 import { federation } from '@module-federation/rstest';
@@ -67,4 +67,4 @@ export default defineConfig({
 });
 ```
 
-该 Node 示例消费面向 Node 的 `remoteEntry.cjs`，Browser Mode 应消费浏览器构建的 `remoteEntry.js`。两者的区别请参考 [Module Federation 指南](/guide/integration/module-federation)；包含 Browser Mode、HTTP remote、本地 CommonJS remote 以及 SSR 测试的完整配置可参考 [federation 示例](https://github.com/web-infra-dev/rstest/tree/main/examples/federation)。
+该 Node 示例消费面向 Node 的 `remoteEntry.cjs`，Browser Mode 应消费浏览器构建的 `remoteEntry.js`。两者的区别请参考 [Module Federation 指南](/integration/module-federation)；包含 Browser Mode、HTTP remote、本地 CommonJS remote 以及 SSR 测试的完整配置可参考 [federation 示例](https://github.com/web-infra-dev/rstest/tree/main/examples/federation)。
