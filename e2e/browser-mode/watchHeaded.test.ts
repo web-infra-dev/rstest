@@ -15,6 +15,43 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('browser mode - headed watch', () => {
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'runs added files after an empty headed watch start',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-empty-watch-headed`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/index.test.ts'));
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['no-tests-watch-headed']}`,
+        ],
+      });
+      try {
+        await cli.waitForStdout('No test files found');
+        await cli.waitForStdout('Waiting for file changes...');
+        fs.create(
+          path.join(fixturesTargetPath, 'tests/added.test.ts'),
+          `import { expect, it } from '@rstest/core';
+it('runs the added file', () => expect(document.createElement('main').tagName).toBe('MAIN'));`,
+        );
+        await cli.waitForStdout('Test file set changed');
+        await cli.waitForStdout('Test Files 1 passed');
+        expect(cli.stdout).toContain('added.test.ts');
+        expect(cli.stdout.match(/No test files found/g)).toHaveLength(1);
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
   // Headed watch is the only mode that builds the HMR runtime (see
   // `shouldEnableBrowserHmr`); every other fixture in the matrix runs
   // headless or one-shot, so this smoke is the sole coverage between an

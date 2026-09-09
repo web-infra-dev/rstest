@@ -176,8 +176,8 @@ export async function createBrowserExecutor(
     async requestRerun(testPaths?: string[]): Promise<void> {
       if (!watchSession) {
         // Core gates rerun keys until every executor is past its first cycle, so
-        // reaching here means no session will ever open: the launch found no test
-        // files or failed outright, and reported that itself. The keys stay
+        // reaching here means no session will ever open: the launch failed
+        // before opening one, and reported that itself. The keys stay
         // installed either way — a mixed run's node side keeps watching, and even
         // a browser-only run outlives a launch that opened nothing — so resolving
         // in silence would let the shortcut claim a rerun that never happened.

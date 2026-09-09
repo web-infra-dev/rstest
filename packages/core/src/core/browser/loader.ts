@@ -54,9 +54,9 @@ export type BrowserTestExecutor = TestExecutor &
   Required<Pick<TestExecutor, 'collect' | 'onInvalidate' | 'requestRerun'>> & {
     /**
      * Watch only, meaningful once the initial cycle has resolved: whether the
-     * host left a live session behind. A launch that found no test files, or
-     * that failed before the runtime came up, opens none — and with no session
-     * no trigger can ever fire, so core prints no ready banner for it.
+     * host left a live session behind. An early `failWithError` return before
+     * scheduling opens none — no trigger can fire, so core prints no ready
+     * banner. A fatal cycle can still return an established session.
      */
     hasWatchSession(): boolean;
   };

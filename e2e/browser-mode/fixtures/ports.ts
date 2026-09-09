@@ -64,6 +64,9 @@ export const BROWSER_PORTS = {
   'watch-setup': 5278,
   'basic-federation': 5274,
   'basic-federation-watch': 5276,
+  'no-tests-watch': 5292,
+  'no-tests-watch-headed': 5294,
+  'browser-global-setup-empty-watch': 5296,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);
