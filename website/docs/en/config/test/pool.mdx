@@ -4,6 +4,7 @@ overviewHeaders: []
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
+import { Tab, Tabs } from '@theme';
 
 # pool
 
@@ -75,6 +76,23 @@ Creates Node.js child processes with `child_process.fork`. Each worker has separ
 
 With the default isolation setting, each file incurs process startup and initialization costs.
 
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --pool forks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'forks',
+});
+```
+  </Tab>
+</Tabs>
+
 ### threads
 
 <ApiMeta addedVersion="0.10.0" />
@@ -89,11 +107,45 @@ Threads generally start faster than child processes, but have some Node.js API r
 
 See the [Node.js Worker documentation](https://nodejs.org/api/worker_threads.html#class-worker) for the full list of differences.
 
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --pool threads
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'threads',
+});
+```
+  </Tab>
+</Tabs>
+
 ### vmForks
 
 <ApiMeta addedVersion="0.12.0" />
 
 Reuses child processes and creates a fresh `vm.Context` for each test file, reducing repeated process startup. Process APIs such as `process.chdir()` remain available, but files in the same child process can share process-level state.
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --pool vmForks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'vmForks',
+});
+```
+  </Tab>
+</Tabs>
 
 ### vmThreads
 
@@ -102,6 +154,26 @@ Reuses child processes and creates a fresh `vm.Context` for each test file, redu
 Reuses worker threads and creates a fresh `vm.Context` for each test file, reducing repeated thread startup. It provides the same VM isolation as `vmForks`, with the worker-thread restrictions described above.
 
 For the isolation scope and compatibility requirements of both VM pools, see [VM pool behavior](#vm-pool-behavior) at the end of this page.
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --pool vmThreads --pool.memoryLimit 256MB
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'vmThreads',
+    memoryLimit: '256MB',
+  },
+});
+```
+  </Tab>
+</Tabs>
 
 ## Configure worker concurrency and memory
 
