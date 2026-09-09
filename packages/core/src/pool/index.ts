@@ -435,7 +435,11 @@ export const createPool = async ({
   const minWorkers = Math.min(maxWorkers, recommendCount);
   const memoryLimit = isVmPoolType(workerKind)
     ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
-    : undefined;
+    : workerKind === 'forks' &&
+        isolate === false &&
+        poolOptions.memoryLimit !== undefined
+      ? parseMemoryLimit(poolOptions.memoryLimit)
+      : undefined;
   const workerCacheLimit = isVmPoolType(workerKind)
     ? getVmWorkerCacheLimit(memoryLimit)
     : undefined;

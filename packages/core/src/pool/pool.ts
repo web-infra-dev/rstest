@@ -187,6 +187,7 @@ export class Pool {
         workerId,
         environmentKey,
         memoryLimit: this.options.memoryLimit,
+        memoryMetric: task.worker === 'forks' ? 'rss' : 'heapUsed',
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
       });
       this.activeRunners.add(runner);

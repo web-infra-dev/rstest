@@ -66,7 +66,7 @@ export const parseWorkers = (
 };
 
 /**
- * Resolve a VM worker memory limit using the same units as Vitest/Jest:
+ * Resolve a worker memory limit using the same units as Vitest/Jest:
  * numbers in (0, 1] are percentages of machine memory, larger numbers are
  * bytes, and strings may use %, KB/KiB, MB/MiB, or GB/GiB suffixes.
  */
