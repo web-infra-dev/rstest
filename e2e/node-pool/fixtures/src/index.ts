@@ -7,3 +7,7 @@ export function increment() {
 export function getCount() {
   return count;
 }
+
+export function getLabel() {
+  return 'real';
+}
