@@ -89,6 +89,8 @@ Reuses Node.js worker threads while creating a fresh `vm.Context` for every test
 
 ## Choose a pool type
 
+If performance does not meet your expectations, use the `rstest-debugging` skill to identify the bottleneck before adjusting the pool. See [Profiling](/guide/debug/profiling) for installation and troubleshooting guidance.
+
 Keep `forks` unless measured performance gives you a reason to switch. Try `threads` when worker startup is expensive. Try a VM pool when repeatedly starting workers or loading and compiling test and setup dependencies accounts for a substantial part of runtime.
 
 VM pools reuse workers and immutable compilation resources while preserving a fresh environment for each file. They can help suites with many small files or large setup dependencies, but setup files, environment creation, and module evaluation still run for each file. Expensive setup work such as database initialization or network requests is not eliminated; compare performance on your own suite.

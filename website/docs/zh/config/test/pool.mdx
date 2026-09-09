@@ -88,6 +88,8 @@ Rstest 支持四种 pool，主要区别是 worker 的创建方式和文件隔离
 
 ## 如何选择 pool 类型
 
+性能不符合预期时，可以使用 `rstest-debugging` skill 辅助定位瓶颈，再决定是否调整 pool。安装方式和排查方法请参阅[性能分析](/guide/debug/profiling)。
+
 默认使用 `forks`，测量后再决定是否切换。worker 启动耗时较高时，可以尝试 `threads`；反复启动 worker，或加载、编译测试与 setup 依赖的成本较高时，可以尝试 VM pool。
 
 VM pool 会复用 worker 和不可变的编译资源，同时为每个文件创建新环境，可能更适合文件多、单文件测试短或 setup 依赖较大的套件。但 setup 文件、环境创建和模块求值仍会逐文件执行，数据库初始化、网络请求等 setup 工作不会因此省掉，收益需要用自己的测试套件验证。
