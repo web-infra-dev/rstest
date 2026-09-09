@@ -23,6 +23,10 @@ hoistPattern: ['@secretlint/*']
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  # cspell and its packages are resolved together by pnpx.
+  - cspell
+  - 'cspell-*'
+  - '@cspell/*'
   - '@module-federation/*'
   - '@rspack/*'
   - '@rsbuild/*'
