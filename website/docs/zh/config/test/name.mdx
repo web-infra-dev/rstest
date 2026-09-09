@@ -1,5 +1,5 @@
 ---
-description: 测试项目的名称。当你通过 projects 定义多个测试项目时，建议为每个项目指定唯一的名称，方便通过 --project 选项来过滤运行特定项目。
+description: 测试项目的名称。通过 projects 定义的所有项目名称必须唯一。
 ---
 
 # name
@@ -17,6 +17,6 @@ export default defineConfig({
 });
 ```
 
-当你通过 [projects](/config/test/projects) 定义多个测试项目时，建议为每个项目指定唯一的名称，方便通过 [--project](/guide/basic/test-filter#根据项目名称过滤) 选项来过滤运行特定项目。
+通过 [projects](/config/test/projects) 定义的所有项目名称必须唯一；两个项目重名时，Rstest 会在启动时报错。可通过 [--project](/guide/basic/test-filter#根据项目名称过滤) 选项按名称过滤项目。
 
 如果 project 未提供名称，Rstest 将会使用当前项目的 `package.json` 中定义的 `name` 属性，如果不存在，则使用文件夹名称。

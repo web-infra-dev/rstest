@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test projects', () => {
-  it('validates duplicate names only among selected projects', async () => {
+  it('rejects duplicate project names even when the selection excludes them', async () => {
     const options = {
       nodeOptions: { cwd: join(__dirname, 'fixtures-duplicate-names') },
     };
@@ -16,16 +16,8 @@ describe('test projects', () => {
       args: ['run', '--project', 'alpha'],
       options,
     });
-    await selected.expectExecSuccess();
-    expect(selected.cli.stdout).toContain('Tests 1 passed');
-
-    const all = await runRstestCli({
-      command: 'rstest',
-      args: ['run'],
-      options,
-    });
-    await all.expectExecFailed();
-    all.expectStderrLog('Project name "beta" is already used');
+    await selected.expectExecFailed();
+    selected.expectStderrLog('Project name "beta" is already used');
   });
 
   describe('merge configs', () => {

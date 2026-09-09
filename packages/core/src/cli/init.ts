@@ -9,7 +9,6 @@ import {
   castArray,
   color,
   determineAgent,
-  filterProjects,
   formatRootStr,
   getAbsolutePath,
   logger,
@@ -519,15 +518,13 @@ export async function resolveProjects({
     return projects.concat(projectConfigs);
   };
 
-  const projects = await getProjects(config, root).then((p) =>
-    filterProjects(p, options),
-  );
+  const declaredProjects = await getProjects(config, root);
 
-  if (!projects.length) {
-    throw formatNoProjectsFoundError(config, options.project);
+  if (!declaredProjects.length) {
+    throw formatNoProjectsFoundError(config);
   }
 
-  return projects;
+  return declaredProjects;
 }
 
 export function applyAgentReporterDefault(
