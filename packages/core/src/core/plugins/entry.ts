@@ -102,8 +102,6 @@ export const pluginEntryWatch: (params: {
         config.watchOptions.ignored.push(
           getTempRstestOutputDirGlob(outputDistPathRoot),
           context.normalizedConfig.coverage.reportsDirectory,
-          // ignore global setup files since they are only run once
-          ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
         );
 

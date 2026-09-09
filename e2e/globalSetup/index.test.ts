@@ -109,6 +109,76 @@ describe('globalSetup', async () => {
     expectStderrLog(/globalSetup\.ts:3/);
   });
 
+  it('retries failed globalSetup on the next watch cycle and keeps a successful claim', async () => {
+    const fixturesTargetPath = join(
+      __dirname,
+      'fixtures-test-watch-setup-retry',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures/error'),
+      fixturesTargetPath,
+    });
+    fs.update(
+      join(fixturesTargetPath, 'globalSetup.ts'),
+      `import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export default async function globalSetup() {
+  if (!existsSync(join(dirname(fileURLToPath(import.meta.url)), 'ok.flag'))) {
+    throw new Error('Global setup failed intentionally');
+  }
+  console.log('[global-setup-retry] executed');
+  return () => console.log('[global-teardown-retry] executed');
+}`,
+    );
+    fs.create(
+      join(fixturesTargetPath, 'second.test.ts'),
+      `import { describe, it } from '@rstest/core';
+describe('second file', () => {
+  it('passes after setup succeeds', () => {});
+});`,
+    );
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--disableConsoleIntercept'],
+      options: {
+        nodeOptions: {
+          env: { ISOLATE: undefined },
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    try {
+      await cli.waitForStderr('Global setup failed intentionally');
+      await cli.waitForStdout('Waiting for file changes...');
+      fs.create(join(fixturesTargetPath, 'ok.flag'), '');
+      fs.update(
+        join(fixturesTargetPath, 'index.test.ts'),
+        (content) => `${content}\n// trigger setup retry`,
+      );
+      await cli.waitForStdout('Test Files 2 passed');
+      expect(cli.stdout.match(/\[global-setup-retry\] executed/g)).toHaveLength(
+        1,
+      );
+
+      cli.resetStd();
+      fs.update(
+        join(fixturesTargetPath, 'index.test.ts'),
+        (content) => `${content}\n// trigger another cycle`,
+      );
+      // The summary retains results from files not rerun in this cycle.
+      await cli.waitForStdout('Test Files 2 passed');
+      expect(cli.stdout).toContain('index.test.ts (1)');
+      expect(cli.stdout).not.toContain('[global-setup-retry] executed');
+      expect(cli.stdout).not.toContain('second.test.ts');
+    } finally {
+      await cli.killProcessTree();
+      fs.delete(fixturesTargetPath);
+    }
+  }, 60_000);
+
   it.skipIf(process.platform === 'win32')(
     'tears down the current watch session on SIGINT after a config restart',
     async () => {

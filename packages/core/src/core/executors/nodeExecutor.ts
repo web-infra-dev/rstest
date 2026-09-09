@@ -16,7 +16,7 @@ import type {
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
-import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
+import { shouldRunGlobalSetup, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { ProjectPlan } from '../projectPlan';
 import { createRsbuildServer } from '../rsbuild';
@@ -374,22 +374,30 @@ export function createNodeExecutor(
 
         let finalEntries: EntryInfo[] = entries;
         if (mode === 'on-demand') {
-          if (affectedEntries.length === 0) {
-            logger.debug(
-              color.yellow(
-                `No test files need re-run in project(${p.environmentName}).`,
-              ),
-            );
+          if (
+            shouldRunGlobalSetup(p, entries.length, globalSetupEntries.length)
+          ) {
+            // No entry of this project has run under a successful setup yet,
+            // so the cycle that runs setup covers the whole project.
+            finalEntries = entries;
           } else {
-            logger.debug(
-              color.yellow(
-                `Test files to re-run in project(${p.environmentName}):\n`,
-              ) +
-                affectedEntries.map((e) => e.testPath).join('\n') +
-                '\n',
-            );
+            if (affectedEntries.length === 0) {
+              logger.debug(
+                color.yellow(
+                  `No test files need re-run in project(${p.environmentName}).`,
+                ),
+              );
+            } else {
+              logger.debug(
+                color.yellow(
+                  `Test files to re-run in project(${p.environmentName}):\n`,
+                ) +
+                  affectedEntries.map((e) => e.testPath).join('\n') +
+                  '\n',
+              );
+            }
+            finalEntries = affectedEntries;
           }
-          finalEntries = affectedEntries;
         } else {
           logger.debug(
             color.yellow(
@@ -402,7 +410,7 @@ export function createNodeExecutor(
 
         const execute = async (selectedEntries: EntryInfo[]) => {
           if (
-            claimGlobalSetupOnce(
+            shouldRunGlobalSetup(
               p,
               selectedEntries.length,
               globalSetupEntries.length,
@@ -424,7 +432,7 @@ export function createNodeExecutor(
               'host:global-setup',
               'host',
               () =>
-                runGlobalSetup(context, {
+                runGlobalSetup(context, p, {
                   globalSetupEntries,
                   assetFiles,
                   sourceMaps,
