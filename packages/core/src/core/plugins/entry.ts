@@ -1,7 +1,7 @@
 import { rspack, type RsbuildPlugin, type Rspack } from '@rsbuild/core';
 import path from 'pathe';
 import type { InternalContext } from '../../types';
-import { castArray, getTempRstestOutputDirGlob } from '../../utils';
+import { applyRstestWatchIgnored } from '../watchInvalidation';
 import type { TestEntryPathState } from './moduleCacheControl';
 
 class TestFileWatchPlugin {
@@ -48,7 +48,6 @@ export const pluginEntryWatch: (params: {
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
-    const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
     const getSourceEntries = async (environmentName: string) => {
       const sourceEntries = await globTestSourceEntries(environmentName);
       if (testEntryPathState) {
@@ -84,36 +83,19 @@ export const pluginEntryWatch: (params: {
           };
         };
 
-        config.watchOptions ??= {};
-        config.watchOptions.aggregateTimeout = 100;
-        // TODO: rspack should support `(string | RegExp)[]` type
-        // https://github.com/web-infra-dev/rspack/issues/10596
-        config.watchOptions.ignored = castArray(
-          config.watchOptions.ignored || [],
-        ) as string[];
-
-        if (config.watchOptions.ignored.length === 0) {
-          config.watchOptions.ignored.push(
-            // apply default ignored patterns
-            ...['**/.git', '**/node_modules'],
-          );
-        }
-
-        config.watchOptions.ignored.push(
-          getTempRstestOutputDirGlob(outputDistPathRoot),
-          context.normalizedConfig.coverage.reportsDirectory,
-          '**/*.snap',
-        );
-
-        config.experiments ??= {};
-        config.experiments.nativeWatcher ??= true;
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;
 
-        if (configFilePath) {
-          config.watchOptions.ignored.push(configFilePath);
-        }
+        config.watchOptions = { ...config.watchOptions, aggregateTimeout: 100 };
+        applyRstestWatchIgnored(
+          config,
+          context.normalizedConfig,
+          configFilePath ? [configFilePath] : [],
+        );
+
+        config.experiments ??= {};
+        config.experiments.nativeWatcher ??= true;
       } else {
         // watch false seems not effect when rspack.watch()
         config.watch = false;

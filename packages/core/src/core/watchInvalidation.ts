@@ -4,12 +4,37 @@
  * (hostController). Callers translate their compiler stats into per-entry
  * chunk-hash snapshots; this module owns the diff and the
  * setup-change => rerun-all rule.
+ * It also owns the default watchOptions.ignored set both pools apply.
  *
  * Baselines are keyed per project/environment by the caller — one mutable
  * state handle per key, never one per executor — so sibling projects with
  * separate compilers cannot clobber each other's baselines or collide on
  * compiler-local chunk keys.
  */
+
+import type { Rspack } from '@rsbuild/core';
+import type { NormalizedConfig } from '../types';
+import { castArray, getTempRstestOutputDirGlob } from '../utils';
+
+export const applyRstestWatchIgnored = (
+  rspackConfig: Rspack.Configuration,
+  config: NormalizedConfig,
+  extraIgnored: string[] = [],
+): void => {
+  // TODO: rspack should support `(string | RegExp)[]` type
+  // https://github.com/web-infra-dev/rspack/issues/10596
+  const existing = castArray(rspackConfig.watchOptions?.ignored) as string[];
+  rspackConfig.watchOptions = {
+    ...rspackConfig.watchOptions,
+    ignored: [
+      ...(existing.length ? existing : ['**/.git', '**/node_modules']),
+      getTempRstestOutputDirGlob(config.output.distPath.root),
+      config.coverage.reportsDirectory,
+      '**/*.snap',
+      ...extraIgnored,
+    ],
+  };
+};
 
 /** Chunk hashes for one entry: stable chunk key -> chunk hash. */
 export type EntryChunkHashes = Record<string, string>;
