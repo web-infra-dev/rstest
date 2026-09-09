@@ -17,6 +17,6 @@ export default defineConfig({
 });
 ```
 
-When you define multiple test projects via [projects](/config/test/projects), it's recommended to give each project a unique name so that you can filter specific projects using the [--project](/guide/basic/test-filter#filter-by-project-name) option.
+Project names must be unique across all projects declared through [projects](/config/test/projects); Rstest reports an error at startup when two projects share a name. Use the [--project](/guide/basic/test-filter#filter-by-project-name) option to filter projects by name.
 
 If a project's name is not provided, Rstest will use the `name` field from the current project's `package.json`. If it does not exist, the folder name will be used instead.
