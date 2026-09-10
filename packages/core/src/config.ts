@@ -1,11 +1,10 @@
-import fs from 'node:fs';
 import {
   type LoadConfigOptions,
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import deepmerge from 'deepmerge';
-import { dirname, isAbsolute, join, resolve } from 'pathe';
+import { isAbsolute, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
   BuiltInReporterNames,
@@ -16,7 +15,6 @@ import type {
 } from './types';
 import {
   castArray,
-  color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
   DEFAULT_EXPECT_POLL_TIMEOUT,
@@ -41,32 +39,6 @@ const DEFAULT_FORCE_RERUN_TRIGGERS = [
   '**/rstest.config.*',
 ];
 
-const findConfig = (basePath: string): string | undefined => {
-  return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
-    fs.existsSync,
-  );
-};
-
-const resolveConfigPath = (root: string, customConfig?: string) => {
-  if (customConfig) {
-    const customConfigPath = isAbsolute(customConfig)
-      ? customConfig
-      : join(root, customConfig);
-    if (fs.existsSync(customConfigPath)) {
-      return customConfigPath;
-    }
-    throw `Cannot find config file: ${color.dim(customConfigPath)}`;
-  }
-
-  const configFilePath = findConfig(join(root, DEFAULT_CONFIG_NAME));
-
-  if (configFilePath) {
-    return configFilePath;
-  }
-
-  return null;
-};
-
 export interface LoadedRstestConfig {
   content: RstestConfig;
   filePath: string | null;
@@ -83,28 +55,25 @@ export async function loadConfig({
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
 } = {}): Promise<LoadedRstestConfig> {
-  const configFilePath = resolveConfigPath(cwd, path);
-
-  if (!configFilePath) {
-    logger.debug('no rstest config file found');
-    return {
-      content: {},
-      filePath: configFilePath,
-    };
-  }
-
-  const { content } = await loadRsbuildConfig({
-    cwd: dirname(configFilePath),
-    path: configFilePath,
+  const { content, filePath } = await loadRsbuildConfig({
+    cwd,
+    path,
+    configFileNames: DEFAULT_CONFIG_EXTENSIONS.map(
+      (ext) => DEFAULT_CONFIG_NAME + ext,
+    ),
     envMode,
     loader: configLoader,
   });
+
+  if (!filePath) {
+    logger.debug('no rstest config file found');
+  }
 
   let config = content as RstestConfig;
 
   config = await resolveExtends(config);
 
-  return { content: config, filePath: configFilePath };
+  return { content: config, filePath };
 }
 
 const resolveExtendEntry = async (
