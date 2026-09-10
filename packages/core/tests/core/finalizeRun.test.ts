@@ -7,9 +7,10 @@ import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
 import { noopTraceSpan } from '../../src/utils';
 
 describe('finalizeRunCycle', () => {
-  it.for([false, true])(
-    'finalizes blob runs with interruption %s',
-    async (interrupted) => {
+  it.for(['none', 'before', 'reporter', 'raw'])(
+    'finalizes blob runs with interruption at %s',
+    async (phase) => {
+      let interrupted = phase === 'before';
       const generatedReports: number[] = [];
       const coverageMap: CoverageMap = {
         data: {},
@@ -28,6 +29,14 @@ describe('finalizeRunCycle', () => {
       const coverageProvider = {
         init() {},
         collect: () => null,
+        async resolveRawCoverage() {
+          if (phase === 'raw') {
+            await Promise.resolve();
+            interrupted = true;
+            context.exitCode.raise(130);
+          }
+          return null;
+        },
         createCoverageMap: () => coverageMap,
         generateCoverageForUntestedFiles: async () => [],
         async generateReports() {
@@ -38,7 +47,13 @@ describe('finalizeRunCycle', () => {
       const blobReporter = Object.create(
         BlobReporter.prototype,
       ) as BlobReporter;
-      blobReporter.onTestRunEnd = rs.fn(async () => {});
+      blobReporter.onTestRunEnd = rs.fn(async () => {
+        if (phase === 'reporter') {
+          await Promise.resolve();
+          interrupted = true;
+          context.exitCode.raise(130);
+        }
+      });
       const finalizeTrace = rs.fn(async () => {});
 
       const context = {
@@ -55,10 +70,19 @@ describe('finalizeRunCycle', () => {
 
       if (interrupted) context.exitCode.raise(130);
       await finalizeRunCycle(context, {
-        outcomes: [],
+        outcomes: [
+          {
+            results: [],
+            testResults: [],
+            errors: [],
+            testPaths: [],
+            duration: { buildTime: 0, testTime: 0 },
+            coverage: { raw: [{}] },
+          },
+        ],
         mode: 'all',
         isWatchMode: false,
-        interrupted,
+        isInterrupted: () => interrupted,
         coverageProvider,
         reportOnFailure: false,
         traceRun: {

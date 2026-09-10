@@ -289,9 +289,11 @@ export async function runTests(context: Rstest): Promise<void> {
           // Closing unblocks the cycle; its finalizer must finish before exit.
           await runFinished;
         }
-        await runLifecycleStep('trace run finalize', () =>
-          activeTraceRun.finalize(),
-        );
+        if (!isTeardown) {
+          await runLifecycleStep('trace run finalize', () =>
+            activeTraceRun.finalize(),
+          );
+        }
         await runLifecycleStep('trace controller cleanup', () =>
           traceController.close(),
         );
@@ -376,17 +378,22 @@ export async function runTests(context: Rstest): Promise<void> {
       // executor is still mid-cycle, truncating its tests and firing global
       // teardown early. The re-await unwraps the already-settled promises,
       // rejecting with the first failure in executor order.
-      const cyclePromises = executors.map((executor) =>
-        executor === browserExecutor && browserStage.errors.length
-          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
-          : executor.runCycle({
-              buildId: 1,
-              mode: 'all',
-              updateSnapshot: snapshotManager.options.updateSnapshot,
-              env: browserStage.env,
-              onTraceEvents: forwardBrowserTraceEvents,
-            }),
-      );
+      const cyclePromises =
+        signalExitCode === undefined
+          ? executors.map((executor) =>
+              executor === browserExecutor && browserStage.errors.length
+                ? Promise.resolve(
+                    globalSetupFailureOutcome(browserStage.errors),
+                  )
+                : executor.runCycle({
+                    buildId: 1,
+                    mode: 'all',
+                    updateSnapshot: snapshotManager.options.updateSnapshot,
+                    env: browserStage.env,
+                    onTraceEvents: forwardBrowserTraceEvents,
+                  }),
+            )
+          : [];
       const settledCycles = await Promise.allSettled(cyclePromises);
       const outcomes =
         signalExitCode === undefined
@@ -399,7 +406,7 @@ export async function runTests(context: Rstest): Promise<void> {
         outcomes,
         mode: 'all',
         isWatchMode: false,
-        interrupted: signalExitCode !== undefined,
+        isInterrupted: () => signalExitCode !== undefined,
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
         traceRun: activeTraceRun,

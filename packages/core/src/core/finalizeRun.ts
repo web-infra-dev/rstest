@@ -182,7 +182,7 @@ export async function finalizeRunCycle(
     outcomes,
     mode,
     isWatchMode,
-    interrupted = false,
+    isInterrupted = () => false,
     coverageProvider,
     reportOnFailure,
     traceRun,
@@ -190,7 +190,7 @@ export async function finalizeRunCycle(
     outcomes: ExecutorCycleOutcome[];
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
-    interrupted?: boolean;
+    isInterrupted?: () => boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
     /**
@@ -222,7 +222,7 @@ export async function finalizeRunCycle(
   // `map` into the run's map, then resolve the concatenated v8 `raw` batches.
   // Each executor owns its own per-file merge (node in the pool, browser at
   // outcome assembly), so nothing is read off individual results here.
-  const mergedCoverageMap = interrupted
+  const mergedCoverageMap = isInterrupted()
     ? undefined
     : coverageProvider?.createCoverageMap();
   for (const outcome of outcomes) {
@@ -247,7 +247,7 @@ export async function finalizeRunCycle(
 
   const rawCoverageResults = outcomes.flatMap((o) => o.coverage?.raw ?? []);
   await resolveAndMergeRawCoverage({
-    coverageProvider: interrupted ? null : coverageProvider,
+    coverageProvider: isInterrupted() ? null : coverageProvider,
     mergedCoverageMap,
     rawCoverageResults,
     resolveOptions: {
@@ -284,7 +284,7 @@ export async function finalizeRunCycle(
     outcomes.flatMap((o) => o.deletedTestPaths ?? []),
   );
 
-  if (!interrupted && noTestsDiscovered) {
+  if (!isInterrupted() && noTestsDiscovered) {
     reportNoTestFiles({ context, mode });
   }
 
@@ -295,7 +295,7 @@ export async function finalizeRunCycle(
   await runLifecycleStep('reporter onTestRunEnd', () =>
     notifyReportersOnTestRunEnd({
       context,
-      coverage: mergedCoverageMap,
+      coverage: isInterrupted() ? undefined : mergedCoverageMap,
       duration,
       getSourcemap,
       unhandledErrors: errors,
@@ -314,25 +314,28 @@ export async function finalizeRunCycle(
   // reports, and thresholds belong to the merge-reports process that sees the
   // complete coverage map rather than to every partial shard.
   if (
-    !interrupted &&
+    !isInterrupted() &&
     coverageProvider &&
     !defersCoverageReport &&
     (!isFailure || reportOnFailure)
   ) {
     const { generateCoverage } = await import('../coverage/generate');
-    await runLifecycleStep('coverage report generation', () =>
-      generateCoverage(
-        context,
-        mergedCoverageMap!,
-        coverageProvider,
-        traceRun.span,
-      ),
+    await runLifecycleStep(
+      'coverage report generation',
+      async () =>
+        !isInterrupted() &&
+        generateCoverage(
+          context,
+          mergedCoverageMap!,
+          coverageProvider,
+          traceRun.span,
+        ),
     );
   }
 
   await runLifecycleStep('trace run finalize', () => traceRun.finalize());
 
-  if (!interrupted && isFailure) {
+  if (!isInterrupted() && isFailure) {
     const bail = context.normalizedConfig.bail;
     if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
       logger.log(

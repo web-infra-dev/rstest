@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -9,15 +10,18 @@ const __dirname = dirname(__filename);
 describe('globalSetup', async () => {
   describe.skipIf(process.platform === 'win32')('SIGINT cancellation', () => {
     it.for(
-      ['forks', 'threads', 'vmForks', 'vmThreads'].flatMap((pool) =>
-        [false, true].map((exitDuringCleanup) => ({ pool, exitDuringCleanup })),
-      ),
+      ['forks', 'threads', 'vmForks', 'vmThreads'].flatMap((pool) => [
+        { pool, phase: 'test', exitDuringCleanup: false },
+        { pool, phase: 'test', exitDuringCleanup: true },
+        { pool, phase: 'run-start', exitDuringCleanup: false },
+        { pool, phase: 'run-end', exitDuringCleanup: false },
+      ]),
     )(
-      'cancels tests under $pool (cleanup calls exit: $exitDuringCleanup)',
-      async ({ pool, exitDuringCleanup }) => {
+      'cancels $phase under $pool (cleanup calls exit: $exitDuringCleanup)',
+      async ({ pool, phase, exitDuringCleanup }) => {
         const fixturesTargetPath = join(
           __dirname,
-          `fixtures-test-sigint-${pool}-${exitDuringCleanup}`,
+          `fixtures-test-sigint-${pool}-${phase}-${exitDuringCleanup}`,
         );
         const { fs } = await prepareFixtures({
           fixturesPath: join(__dirname, 'fixtures/basic'),
@@ -28,8 +32,21 @@ describe('globalSetup', async () => {
             'globalSetup:',
             `reporters: ['default', {
             onTestFileResult() { console.log('[unexpected-file-result]'); },
-            onTestRunStart() { console.log('[run-start]'); },
+            async onTestRunStart() {
+              if ('${phase}' === 'run-start') {
+                await new Promise(resolve => {
+                  process.once('SIGINT', resolve);
+                  console.log('[run-start]');
+                });
+              } else console.log('[run-start]');
+            },
             async onTestRunEnd() {
+              if ('${phase}' === 'run-end') {
+                await new Promise(resolve => {
+                  process.once('SIGINT', resolve);
+                  console.log('[run-end-pending]');
+                });
+              }
               await new Promise(resolve => setTimeout(resolve, 100));
               console.log('[run-end]');
             },
@@ -51,7 +68,9 @@ describe('globalSetup', async () => {
             import { test } from '@rstest/core';
             test('wait for cancellation', async () => {
               console.log('[test-running]');
-              await new Promise(resolve => setTimeout(resolve, 60000));
+              if ('${phase}' !== 'run-end') {
+                await new Promise(resolve => setTimeout(resolve, '${phase}' === 'run-start' ? 100 : 60000));
+              }
             }, 65000);
           `,
           );
@@ -65,6 +84,16 @@ describe('globalSetup', async () => {
             '--pool.maxWorkers',
             '1',
             '--disableConsoleIntercept',
+            '--trace',
+            ...(phase === 'run-end'
+              ? [
+                  '--coverage',
+                  '--coverage.provider',
+                  'v8',
+                  '--coverage.reporter',
+                  'json',
+                ]
+              : []),
           ],
           options: {
             nodeOptions: {
@@ -74,27 +103,52 @@ describe('globalSetup', async () => {
           },
         });
         try {
-          await cli.waitForStdout('[test-running]');
+          await cli.waitForStdout(
+            phase === 'run-start'
+              ? '[run-start]'
+              : phase === 'run-end'
+                ? '[run-end-pending]'
+                : '[test-running]',
+          );
           cli.exec.process!.kill('SIGINT');
           await expectExecFailed();
           expect(cli.exec.process!.exitCode).toBe(130);
-          expect(cli.log).not.toContain('[unexpected-file-result]');
+          if (phase !== 'run-end')
+            expect(cli.log).not.toContain('[unexpected-file-result]');
           expect(cli.stdout.match(/\[run-start\]/g)).toHaveLength(1);
           if (exitDuringCleanup) return;
           expect(cli.stdout.match(/\[run-end\]/g)).toHaveLength(1);
           expect(cli.log).not.toContain('No test files found');
+          if (phase === 'run-start')
+            expect(cli.log).not.toContain('[test-running]');
+          expect(
+            existsSync(
+              join(fixturesTargetPath, 'coverage/coverage-final.json'),
+            ),
+          ).toBe(false);
+          if (phase !== 'run-start') {
+            expect(cli.stdout.match(/Perfetto trace file:/g)).toHaveLength(1);
+            expect(cli.stdout.match(/Trace summary file:/g)).toHaveLength(1);
+          }
           expect(cli.log).not.toContain('pool is closed');
           expect(cli.log).not.toContain('Worker stopped');
           expect(cli.log).not.toContain('exited unexpectedly');
           expect(
-            cli.stdout.match(/\[global-teardown-default\] executed/g),
-          ).toHaveLength(1);
+            cli.stdout.match(/\[global-teardown-default\] executed/g) ?? [],
+          ).toHaveLength(phase === 'run-start' ? 0 : 1);
           expect(
-            cli.stdout.match(/\[global-teardown-named\] executed/g),
+            cli.stdout.match(/\[global-teardown-named\] executed/g) ?? [],
+          ).toHaveLength(phase === 'run-start' ? 0 : 1);
+          expect(
+            cli.stdout.match(/\[rstest-dev-server\] closed/g),
           ).toHaveLength(1);
-          expect(cli.stdout.indexOf('[rstest-dev-server] closed')).toBeLessThan(
-            cli.stdout.indexOf('[global-teardown-default] executed'),
-          );
+          if (phase !== 'run-start') {
+            expect(
+              cli.stdout.indexOf('[rstest-dev-server] closed'),
+            ).toBeLessThan(
+              cli.stdout.indexOf('[global-teardown-default] executed'),
+            );
+          }
         } finally {
           await cli.killProcessTree();
           fs.delete(fixturesTargetPath);
