@@ -155,6 +155,10 @@ export default defineConfig({
                   from: 'src/core/plugins/wasmLoader.mjs',
                   to: 'wasmLoader.mjs',
                 },
+                {
+                  from: 'src/core/plugins/styleFallbackLoader.mjs',
+                  to: 'styleFallbackLoader.mjs',
+                },
               ],
             }),
             // only load & apply licensePlugin in lib build

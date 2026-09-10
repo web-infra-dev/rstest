@@ -10,7 +10,7 @@ Rstest 既可以通过 Rsbuild 工具链处理样式，也可以在测试不关�
 
 | 测试目标                                            | 推荐方案                                  |
 | --------------------------------------------------- | ----------------------------------------- |
-| 只测组件逻辑，不检查样式                            | [替换样式导入](#在逻辑测试中替换样式)     |
+| 只测组件逻辑，不检查样式                            | [使用默认样式处理](#nodejs-测试)          |
 | 使用 CSS Modules class name，或检查预处理器能否编译 | [在 Node.js 测试中处理样式](#nodejs-测试) |
 | 检查 computed styles、布局或视觉效果                | [使用 Browser Mode](#browser-mode)        |
 
@@ -18,11 +18,16 @@ Rstest 既可以通过 Rsbuild 工具链处理样式，也可以在测试不关�
 
 ### Node.js 测试
 
-Rstest 内置支持 CSS 和 CSS Modules。在 Node.js 测试中，Rstest 会编译导入的样式，但默认不输出 CSS 产物：
+Rstest 内置支持 CSS 和 CSS Modules。在 Node.js 测试（包括 jsdom 和 happy-dom）中，Rstest 默认处理 CSS，但不输出 CSS 产物：
 
 - 普通 CSS 文件不会生成样式产物。
 - CSS Modules 会导出 class name 映射，可直接用于组件测试。
-- 启用对应 plugin 后，Less 和 Sass 仍会参与编译，因此语法或编译错误不会被忽略。
+- 没有匹配的 loader 或资源类型时，普通 `.less`、`.scss` 和 `.sass` 导入会导出空字符串（`''`），无需安装预处理器 plugin。
+- 启用 Less 或 Sass plugin 后，样式处理及其配置照常生效，编译错误仍会报出。
+
+兜底同样适用于 `.module.less`、`.module.scss` 和 `.module.sass`：默认导出为 `{}`，因此 `styles.button` 的值为 `undefined`。需要真实 class name 映射时，请启用预处理器 plugin；希望用属性名作为类名时，可以[替换样式导入](#在逻辑测试中替换样式)。
+
+用户配置的 loader、alias 和资源类型会保留原有行为。带 query 的导入（如 `?raw` 或 `?url`）需要对应的 plugin 或规则，不会使用兜底。样式文件仍须存在，兜底不会替换无法解析的导入。
 
 例如，`.css` 和 `.module.css` 无需额外配置即可导入：
 
@@ -48,7 +53,7 @@ CSS Modules 常用 `.module.css`、`.module.less` 或 `.module.scss` 作为文�
 
 ### 添加 CSS 预处理器支持
 
-CSS 预处理器需要对应的 Rsbuild plugin。下面以 Less 和 Sass 为例；如果使用其他预处理器，请先查看 [Rsbuild plugin 列表](https://rsbuild.rs/plugins/list/) 是否有对应的 plugin，再按相同方式注册。只需安装测试实际用到的 plugin。
+需要编译预处理器样式时，请启用对应的 Rsbuild plugin。下面以 Less 和 Sass 为例；如果使用其他预处理器，请先查看 [Rsbuild plugin 列表](https://rsbuild.rs/plugins/list/) 是否有对应的 plugin，再按相同方式注册。只需安装测试实际用到的 plugin。
 
 [@rsbuild/plugin-less](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-less) 用于编译 `.less` 和 `.module.less` 文件：
 
@@ -84,7 +89,7 @@ export default defineConfig({
 
 ### Browser mode
 
-Node.js 测试可以检查样式导入值，但样式不会参与页面渲染。需要检查 computed styles、布局或视觉效果时，请使用 [Browser Mode](/guide/browser-testing/)。Browser Mode 会在真实浏览器中运行组件并加载样式。
+Node.js 测试可以检查样式导入值，但样式不会参与页面渲染。需要检查 computed styles、布局或视觉效果时，请使用 [Browser Mode](/guide/browser-testing/)。Browser Mode 会在真实浏览器中运行组件并加载样式，不使用 Node.js 的空样式兜底；Less 和 Sass 需要对应的 plugin 或 loader。
 
 ## 在逻辑测试中替换样式
 

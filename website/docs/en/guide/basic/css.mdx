@@ -8,21 +8,26 @@ import { PackageManagerTabs } from '@theme';
 
 Rstest can either process styles with the Rsbuild toolchain or replace style imports when a test does not depend on them. Choose the setup based on what the test needs to verify:
 
-| Test goal                                                      | Recommended setup                                       |
-| -------------------------------------------------------------- | ------------------------------------------------------- |
-| Test component logic without checking styles                   | [Replace style imports](#replace-styles-in-logic-tests) |
-| Use CSS Modules class names or verify preprocessor compilation | [Process styles in Node.js tests](#nodejs-tests)        |
-| Check computed styles, layout, or visual behavior              | [Use Browser Mode](#browser-mode)                       |
+| Test goal                                                      | Recommended setup                                |
+| -------------------------------------------------------------- | ------------------------------------------------ |
+| Test component logic without checking styles                   | [Use the default style handling](#nodejs-tests)  |
+| Use CSS Modules class names or verify preprocessor compilation | [Process styles in Node.js tests](#nodejs-tests) |
+| Check computed styles, layout, or visual behavior              | [Use Browser Mode](#browser-mode)                |
 
 ## Process styles in tests
 
 ### Node.js tests
 
-Rstest has built-in support for CSS and CSS Modules. In Node.js tests, it compiles imported styles but does not emit CSS assets by default:
+Rstest has built-in support for CSS and CSS Modules. In Node.js tests, including jsdom and happy-dom, it processes CSS without emitting CSS assets by default:
 
 - Regular CSS files do not produce style assets.
 - CSS Modules export class name mappings that component tests can use.
-- Less and Sass are compiled when their corresponding plugin is enabled, so syntax and compilation errors are still reported.
+- Without a matching loader or resource type, ordinary `.less`, `.scss`, and `.sass` imports export an empty string (`''`). No preprocessor plugin is needed for these imports.
+- When a Less or Sass plugin is enabled, its processing and options remain effective. Compilation errors are still reported.
+
+The fallback also applies to `.module.less`, `.module.scss`, and `.module.sass`: their default export is `{}`, so `styles.button` is `undefined`. Enable a preprocessor plugin when you need real class name mappings, or [replace style imports](#replace-styles-in-logic-tests) when you want a property-name proxy.
+
+User loaders, aliases, and resource types retain their behavior. Imports with a query, such as `?raw` or `?url`, require a matching plugin or rule and do not use the fallback. Style files must still exist; the fallback does not replace unresolved imports.
 
 For example, `.css` and `.module.css` imports work without additional CSS configuration:
 
@@ -48,7 +53,7 @@ CSS Modules commonly use filenames such as `.module.css`, `.module.less`, or `.m
 
 ### Add CSS preprocessor support
 
-CSS preprocessors require a corresponding Rsbuild plugin. The examples below cover Less and Sass. For another preprocessor, check the [Rsbuild plugin list](https://rsbuild.rs/plugins/list/) for a matching plugin and register it in the same way. Install only the plugins required by the styles under test.
+To compile preprocessor styles, enable a corresponding Rsbuild plugin. The examples below cover Less and Sass. For another preprocessor, check the [Rsbuild plugin list](https://rsbuild.rs/plugins/list/) for a matching plugin and register it in the same way. Install only the plugins required by the styles under test.
 
 [@rsbuild/plugin-less](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-less) compiles `.less` and `.module.less` files:
 
@@ -84,7 +89,7 @@ If you use [`@rstest/adapter-rspack`](/guide/integration/rspack), the Rsbuild pl
 
 ### Browser mode
 
-Node.js tests can verify imported values, but styles do not participate in page rendering. Use [Browser Mode](/guide/browser-testing/) when a test needs computed styles, layout, or visual behavior. Browser Mode runs the component and its styles in a real browser.
+Node.js tests can verify imported values, but styles do not participate in page rendering. Use [Browser Mode](/guide/browser-testing/) when a test needs computed styles, layout, or visual behavior. Browser Mode runs the component and its styles in a real browser. It does not use the Node.js empty-style fallback; Less and Sass require their corresponding plugin or loader.
 
 ## Replace styles in logic tests
 

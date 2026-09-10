@@ -15,6 +15,7 @@ describe('test build config', () => {
     { name: 'modifyRstestConfig' },
     { name: 'tools/rspack' },
     { name: 'styleReplacement' },
+    { name: 'styleFallback' },
     { name: 'decorators' },
   ])(
     '$name config should work correctly',
@@ -215,4 +216,20 @@ describe('test build config', () => {
       false,
     );
   });
+});
+
+it('reports configured Less compilation errors instead of ignoring styles', async ({
+  onTestFinished,
+}) => {
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', '--config', 'rstest.errors.config.mts'],
+    onTestFinished,
+    options: {
+      nodeOptions: { cwd: join(__dirname, 'fixtures/styleFallback') },
+    },
+  });
+  await expectExecFailed();
+  expect(cli.stderr).toContain('Variable @color is undefined');
+  expect(cli.stderr).not.toContain('from ./styleFallbackLoader.mjs');
 });

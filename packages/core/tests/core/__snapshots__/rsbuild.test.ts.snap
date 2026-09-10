@@ -504,6 +504,16 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         ],
       },
       {
+        "enforce": "post",
+        "resourceQuery": /\\^\\$/,
+        "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "use": [
           {
@@ -1231,6 +1241,16 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
       {
+        "enforce": "post",
+        "resourceQuery": /\\^\\$/,
+        "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "use": [
           {
@@ -1915,6 +1935,16 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         ],
       },
       {
+        "enforce": "post",
+        "resourceQuery": /\\^\\$/,
+        "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "use": [
           {
@@ -2586,6 +2616,16 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         ],
       },
       {
+        "enforce": "post",
+        "resourceQuery": /\\^\\$/,
+        "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "use": [
           {
@@ -2763,6 +2803,16 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
 exports[`prepareRsbuild > should generate rspack config correctly with less / sass plugin > less rules 1`] = `
 [
   {
+    "enforce": "post",
+    "resourceQuery": /\\^\\$/,
+    "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+    "use": [
+      {
+        "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+      },
+    ],
+  },
+  {
     "dependency": {
       "not": "url",
     },
@@ -2918,6 +2968,16 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
 
 exports[`prepareRsbuild > should generate rspack config correctly with less / sass plugin > sass rules 1`] = `
 [
+  {
+    "enforce": "post",
+    "resourceQuery": /\\^\\$/,
+    "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+    "use": [
+      {
+        "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+      },
+    ],
+  },
   {
     "dependency": {
       "not": "url",
@@ -3602,6 +3662,16 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
       {
+        "enforce": "post",
+        "resourceQuery": /\\^\\$/,
+        "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "use": [
           {
@@ -4282,6 +4352,16 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
             },
+          },
+        ],
+      },
+      {
+        "enforce": "post",
+        "resourceQuery": /\\^\\$/,
+        "test": /\\\\\\.\\(less\\|scss\\|sass\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/styleFallbackLoader.mjs",
           },
         ],
       },
