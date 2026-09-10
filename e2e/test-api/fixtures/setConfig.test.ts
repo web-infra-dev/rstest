@@ -20,4 +20,5 @@ it('it in level C', async () => {
   const config = rs.getConfig();
 
   expect(config.testTimeout).toBe(100);
+  expect(config.expect.poll).toEqual({ interval: 50, timeout: 1000 });
 });

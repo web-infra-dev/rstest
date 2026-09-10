@@ -178,12 +178,12 @@ The `playwright` fixture supports these options:
 
 Using `extends: definePlaywrightConfig({})` also provides these defaults for the current project:
 
-| Setting                                   | Default                                                             |
-| ----------------------------------------- | ------------------------------------------------------------------- |
-| `testTimeout`                             | `30_000ms`                                                          |
-| `hookTimeout`                             | `30_000ms`                                                          |
-| Playwright locator/page assertion timeout | `5000ms`                                                            |
-| Rstest `expect.poll.timeout`              | `definePlaywrightConfig`'s `expect.timeout`, or `5000ms` when unset |
+| Setting                                   | Default                                           |
+| ----------------------------------------- | ------------------------------------------------- |
+| `testTimeout`                             | `30_000ms`                                        |
+| `hookTimeout`                             | `30_000ms`                                        |
+| Playwright locator/page assertion timeout | `expect.poll.timeout` (`5000ms` with this helper) |
+| Rstest `expect.poll.timeout`              | `5000ms`                                          |
 
 Explicit Rstest configuration overrides the inherited defaults. For example:
 
@@ -192,9 +192,7 @@ import { defineConfig } from '@rstest/core';
 import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  extends: definePlaywrightConfig({
-    expect: { timeout: 10_000 },
-  }),
+  extends: definePlaywrightConfig({}),
   testTimeout: 60_000,
   hookTimeout: 45_000,
   expect: {
@@ -203,7 +201,7 @@ export default defineConfig({
 });
 ```
 
-Here, Playwright locator/page assertions use `10_000ms`, while `expect.poll()` uses `2000ms`. Per-call timeout options still take precedence for both APIs.
+Here, Playwright locator/page assertions and `expect.poll()` both use `2000ms`. Per-call timeout options still take precedence for both APIs.
 
 These defaults apply only when using `definePlaywrightConfig`; importing `test` or `expect` from `@rstest/playwright` alone does not change Rstest's runner defaults. In a mixed unit/E2E workspace, apply the helper only to the E2E project.
 
@@ -368,7 +366,7 @@ Page assertions:
 - `toHaveTitle(expected, options?)`
 - `toHaveURL(expected, options?)`
 
-String text assertions normalize whitespace. Playwright assertions retry until they pass or the `timeout` option is reached. The default timeout is `5000` milliseconds.
+String text assertions normalize whitespace. Playwright assertions retry until they pass or the `timeout` option is reached. The default timeout comes from `expect.poll.timeout`.
 
 ```ts
 await expect(page.locator('.message')).toContainText('Saved', {
@@ -387,24 +385,23 @@ await expect.soft(page).toHaveTitle(/Dashboard/);
 
 <ApiMeta addedVersion="0.12.0" />
 
-Set a shared timeout for all Playwright locator and page assertions with `definePlaywrightConfig`:
+Playwright locator and page assertions read Rstest's [`expect.poll.timeout`](/config/test/expect#expectpolltimeout). Configure it once to control both these assertions and `expect.poll()`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  extends: definePlaywrightConfig({
-    expect: { timeout: 10_000 },
-  }),
+  extends: definePlaywrightConfig({}),
+  expect: {
+    poll: { timeout: 10_000 },
+  },
 });
 ```
 
-Timeout precedence is: the matcher's `{ timeout }`, then `definePlaywrightConfig`'s `expect.timeout`, then `5000ms`. This also applies to `.not` and `expect.soft`. The outer test or hook timeout can still end the assertion sooner.
+The matcher’s `{ timeout }` takes precedence over `expect.poll.timeout`, including for `.not` and `expect.soft`. The helper defaults `expect.poll.timeout` to `5000ms`; without the helper or an explicit configuration, Node Mode uses `1000ms`. Explicit configuration works even without the helper, and multiple helper entries do not introduce a separate assertion timeout to merge.
 
-The helper also uses `expect.timeout` as the default for Rstest's `expect.poll()`. You can override polling separately with top-level `expect.poll.timeout`. Changes to that top-level polling setting do not change the Playwright locator/page assertion timeout.
-
-Rstest's [`expect.poll.timeout`](/config/test/expect#expectpolltimeout) controls `expect.poll()` and Browser Mode `expect.element()`; it does not affect these Playwright assertions. `page.setDefaultTimeout()` controls Playwright operations and does not change this assertion timeout. Rstest does not read `playwright.config.ts`.
+The outer test or hook timeout can still end the assertion sooner. Playwright assertions keep their fixed `50ms` retry interval; `expect.poll.interval` only controls `expect.poll()`. `page.setDefaultTimeout()` controls Playwright operations, not these assertion timeouts. Rstest does not read `playwright.config.ts`; migrate Playwright Test's `expect.timeout` to Rstest's `expect.poll.timeout`.
 
 ## Trace debugging
 

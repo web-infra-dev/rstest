@@ -456,6 +456,7 @@ const buildRstestUtilities = async (): Promise<{
         restoreMocks,
         maxConcurrency,
         retry,
+        expect,
       } = fileContext().workerState.runtimeConfig;
       return {
         testTimeout,
@@ -465,6 +466,7 @@ const buildRstestUtilities = async (): Promise<{
         restoreMocks,
         maxConcurrency,
         retry,
+        expect,
       };
     },
 

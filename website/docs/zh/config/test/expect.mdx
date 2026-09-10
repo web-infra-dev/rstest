@@ -35,7 +35,7 @@ export default defineConfig({
 - **类型：** `number`
 - **默认值：** `50`
 
-`expect.poll()` 每次重试之间的间隔时间，单位为毫秒。此配置不控制 Browser Mode `expect.element()` 的重试间隔，后者由浏览器 Provider 控制。
+`expect.poll()` 每次重试之间的间隔时间，单位为毫秒。此配置不控制 Browser Mode `expect.element()` 的重试间隔，后者由浏览器 Provider 控制。`@rstest/playwright` 的 Locator/Page 断言也保留固定的 `50ms` 重试间隔。
 
 ### expect.poll.timeout
 
@@ -46,15 +46,15 @@ export default defineConfig({
 
 此超时时间的作用范围如下：
 
-| API                                                                     | 是否使用 `expect.poll.timeout`                                                                          | 单次调用的覆盖方式                 |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Node 或 Browser Mode 中的 `expect.poll(fn).toBe(...)`                   | 是                                                                                                      | `expect.poll(fn, { timeout })`     |
-| Browser Mode 的 `expect.element(locator).toContainText(...)` 等元素断言 | 是                                                                                                      | `toContainText(text, { timeout })` |
-| `expect(value).toBe(...)` 等普通断言                                    | 否，普通断言不会重试                                                                                    | —                                  |
-| `@rstest/playwright` 的 `expect(locator).toContainText(...)`            | 否，使用 [`definePlaywrightConfig({ expect: { timeout } })`](/integration/playwright#assertion-timeout) | `toContainText(text, { timeout })` |
+| API                                                                     | 是否使用 `expect.poll.timeout` | 单次调用的覆盖方式                 |
+| ----------------------------------------------------------------------- | ------------------------------ | ---------------------------------- |
+| Node 或 Browser Mode 中的 `expect.poll(fn).toBe(...)`                   | 是                             | `expect.poll(fn, { timeout })`     |
+| Browser Mode 的 `expect.element(locator).toContainText(...)` 等元素断言 | 是                             | `toContainText(text, { timeout })` |
+| `expect(value).toBe(...)` 等普通断言                                    | 否，普通断言不会重试           | —                                  |
+| `@rstest/playwright` 的 `expect(locator).toContainText(...)`            | 是，自 0.12.0 起               | `toContainText(text, { timeout })` |
 
-单次调用显式传入的 timeout 优先于此配置。未显式传入时，如果能获取当前 test 或 hook 的剩余时间，Rstest 会取配置值与剩余时间中较小的值。例如，配置为 `5000ms`，但当前阶段只剩 `2000ms`，断言不会再获得完整的五秒。显式传入 timeout 可以跳过这个计算，但不会延长外层的 [`testTimeout`](/config/test/test-timeout) 或 hook timeout。
+单次调用显式传入的 timeout 优先于此配置。对于 `expect.poll()` 和 Browser Mode 的 `expect.element()`，未显式传入时，如果能获取当前 test 或 hook 的剩余时间，Rstest 会取配置值与剩余时间中较小的值。例如，配置为 `5000ms`，但当前阶段只剩 `2000ms`，断言不会再获得完整的五秒。显式传入 timeout 可以跳过这个计算，但不会延长外层的 [`testTimeout`](/config/test/test-timeout) 或 hook timeout。
 
 在 Browser Mode 的并发测试中，使用测试作用域内的 `expect` fixture，才能按该测试的剩余时间计算。文件级共享 `expect` 和 `describe.concurrent` 中的 hook 使用配置的轮询超时。详见[浏览器断言超时](/api/runtime-api/browser-mode/assertion)。
 
-使用 [`definePlaywrightConfig`](/integration/playwright#e2e-defaults) 时，helper 会将其 `expect.timeout` 作为 `expect.poll.timeout` 的默认值，未设置时使用 `5000ms`。显式的顶层 `expect.poll.timeout` 会覆盖这个继承值，但不会改变 Playwright Locator/Page 断言的超时。
+使用 [`definePlaywrightConfig`](/integration/playwright#e2e-defaults) 时，helper 将 `expect.poll.timeout` 的默认值设为 `5000ms`。显式的 `expect.poll.timeout` 会同时覆盖轮询和 Playwright Locator/Page 断言的超时。不使用 helper 时，Node Mode 默认使用 `1000ms`。

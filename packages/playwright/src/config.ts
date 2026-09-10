@@ -5,22 +5,8 @@ import type { PlaywrightOptions } from './fixture';
 
 const PLAYWRIGHT_CONFIG_SYMBOL = Symbol.for('rstest.playwright.config');
 
-/** @internal */
-export const DEFAULT_PLAYWRIGHT_EXPECT_TIMEOUT = 5000;
-
-export type PlaywrightConfig = PlaywrightOptions & {
-  /** Defaults for Playwright locator/page assertions and Rstest polling assertions. */
-  expect?: {
-    /**
-     * Time to retry assertions in milliseconds. Individual matcher options override this value.
-     * @default 5000
-     */
-    timeout?: number;
-  };
-};
-
 type ConfigEntry = {
-  options: PlaywrightConfig;
+  options: PlaywrightOptions;
 };
 
 type ConfigRegistry = {
@@ -105,11 +91,13 @@ const getOrCreateConfigRegistry = (): ConfigRegistry => {
 };
 
 /** @internal */
-export const __registerPlaywrightConfig = (options: PlaywrightConfig): void => {
+export const __registerPlaywrightConfig = (
+  options: PlaywrightOptions,
+): void => {
   const registry = getOrCreateConfigRegistry();
   const previous = registry.entries.at(-1)?.options;
   const entry: ConfigEntry = {
-    options: mergePlaywrightOptions(previous, options) as PlaywrightConfig,
+    options: mergePlaywrightOptions(previous, options) as PlaywrightOptions,
   };
   registry.entries.push(entry);
 
@@ -125,7 +113,7 @@ export const __registerPlaywrightConfig = (options: PlaywrightConfig): void => {
 };
 
 /** @internal */
-export const getPlaywrightConfig = (): PlaywrightConfig | undefined =>
+export const getPlaywrightConfig = (): PlaywrightOptions | undefined =>
   getConfigRegistry()?.entries.at(-1)?.options;
 
 /**
@@ -133,7 +121,7 @@ export const getPlaywrightConfig = (): PlaywrightConfig | undefined =>
  * config file.
  */
 export const definePlaywrightConfig = (
-  options: PlaywrightConfig,
+  options: PlaywrightOptions,
 ): ExtendConfig => {
   assertSerializable(options);
   const serializedOptions = JSON.stringify(options);
@@ -144,7 +132,7 @@ export const definePlaywrightConfig = (
     hookTimeout: 30_000,
     expect: {
       poll: {
-        timeout: options.expect?.timeout ?? DEFAULT_PLAYWRIGHT_EXPECT_TIMEOUT,
+        timeout: 5000,
       },
     },
     setupFiles: [

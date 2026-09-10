@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, rstest } from '@rstest/core';
 
 describe('Fake timers', () => {
+  it('exposes the resolved browser polling config', () => {
+    expect(rstest.getConfig().expect.poll).toEqual({
+      interval: 50,
+      timeout: 5000,
+    });
+  });
+
   afterEach(() => {
     if (rstest.isFakeTimers()) {
       rstest.useRealTimers();

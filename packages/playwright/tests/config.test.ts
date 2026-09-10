@@ -15,21 +15,11 @@ describe('definePlaywrightConfig', () => {
     expect(config.isolate).toBeUndefined();
   });
 
-  it.for([0, 10_000])(
-    'uses expect.timeout as the polling default (%s)',
-    (timeout) => {
-      expect(definePlaywrightConfig({ expect: { timeout } }).expect).toEqual({
-        poll: { timeout },
-      });
-    },
-  );
-
   it('generates a setup file with serialized Playwright options', () => {
     const config = definePlaywrightConfig({
       contextOptions: {
         viewport: { width: 1440, height: 900 },
       },
-      expect: { timeout: 10_000 },
     });
     const setupFile = Array.isArray(config.setupFiles)
       ? config.setupFiles[0]
@@ -47,7 +37,7 @@ describe('definePlaywrightConfig', () => {
       "import { __registerPlaywrightConfig } from '@rstest/playwright/config';",
     );
     expect(source).toContain(
-      '__registerPlaywrightConfig({"contextOptions":{"viewport":{"width":1440,"height":900}},"expect":{"timeout":10000}});',
+      '__registerPlaywrightConfig({"contextOptions":{"viewport":{"width":1440,"height":900}}});',
     );
   });
 

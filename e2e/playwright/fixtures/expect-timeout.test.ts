@@ -8,6 +8,10 @@ const test = base.extend({
   } satisfies PlaywrightOptions,
 });
 
+base('keeps assertion settings out of fixture options', ({ playwright }) => {
+  expect(playwright).not.toHaveProperty('expect');
+});
+
 describe('E2E defaults', () => {
   test('allows tests longer than five seconds', async () => {
     await new Promise((resolve) => setTimeout(resolve, 5100));
@@ -52,7 +56,7 @@ test('uses configurable assertion timeouts and matcher overrides', async ({
   });
 
   const assertion = expect(page.locator('.message')).toContainText('Saved');
-  if (process.env.RSTEST_E2E_EXPECT_TIMEOUT) {
+  if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
     await expect(assertion).rejects.toThrow('to contain text');
   } else {
     await assertion;
@@ -68,7 +72,7 @@ test('uses configurable assertion timeouts and matcher overrides', async ({
     }, 500);
   });
   const titleAssertion = expect(page).toHaveTitle('Saved');
-  if (process.env.RSTEST_E2E_EXPECT_TIMEOUT) {
+  if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
     await expect(titleAssertion).rejects.toThrow('to have title');
   } else {
     await titleAssertion;

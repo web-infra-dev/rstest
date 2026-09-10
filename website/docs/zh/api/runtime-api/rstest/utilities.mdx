@@ -189,7 +189,22 @@ rs.resetConfig(); // 恢复默认配置
 
 - **别名：** `rstest.getConfig`
 
-- **类型：** `() => RuntimeConfig`
+- **类型：**
+
+```ts
+type GetConfig = () => RuntimeConfig & {
+  expect: {
+    poll: {
+      interval: number;
+      timeout: number;
+    };
+  };
+};
+```
+
+<ApiMeta addedVersion="0.12.0" />
+
+返回值还包含合并后的 `expect.poll` 配置。
 
 获取当前测试文件的运行时配置。
 

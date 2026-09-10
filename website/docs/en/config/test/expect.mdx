@@ -35,7 +35,7 @@ Global configuration for polling assertions.
 - **Type:** `number`
 - **Default:** `50`
 
-The interval between `expect.poll()` retry attempts, in milliseconds. This option does not control the retry interval of Browser Mode `expect.element()` assertions; the browser provider controls those retries.
+The interval between `expect.poll()` retry attempts, in milliseconds. This option does not control the retry interval of Browser Mode `expect.element()` assertions; the browser provider controls those retries. `@rstest/playwright` locator/page assertions also retain their fixed `50ms` retry interval.
 
 ### expect.poll.timeout
 
@@ -46,15 +46,15 @@ The maximum total polling time before the assertion fails, in milliseconds. When
 
 This timeout applies to these APIs:
 
-| API                                                                                  | Uses `expect.poll.timeout`?                                                                             | Per-call override                  |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `expect.poll(fn).toBe(...)` in Node or Browser Mode                                  | Yes                                                                                                     | `expect.poll(fn, { timeout })`     |
-| `expect.element(locator).toContainText(...)` and other Browser Mode element matchers | Yes                                                                                                     | `toContainText(text, { timeout })` |
-| Ordinary assertions such as `expect(value).toBe(...)`                                | No; they do not retry                                                                                   | —                                  |
-| `expect(locator).toContainText(...)` from `@rstest/playwright`                       | No; uses [`definePlaywrightConfig({ expect: { timeout } })`](/integration/playwright#assertion-timeout) | `toContainText(text, { timeout })` |
+| API                                                                                  | Uses `expect.poll.timeout`? | Per-call override                  |
+| ------------------------------------------------------------------------------------ | --------------------------- | ---------------------------------- |
+| `expect.poll(fn).toBe(...)` in Node or Browser Mode                                  | Yes                         | `expect.poll(fn, { timeout })`     |
+| `expect.element(locator).toContainText(...)` and other Browser Mode element matchers | Yes                         | `toContainText(text, { timeout })` |
+| Ordinary assertions such as `expect(value).toBe(...)`                                | No; they do not retry       | —                                  |
+| `expect(locator).toContainText(...)` from `@rstest/playwright`                       | Yes, since 0.12.0           | `toContainText(text, { timeout })` |
 
-An explicit per-call timeout takes precedence over this configuration. Without one, Rstest uses the smaller of the configured timeout and the remaining active test or hook time, when that context is available. For example, a configured `5000ms` timeout with only `2000ms` remaining does not grant the assertion another five seconds. An explicit timeout bypasses this calculation, but it does not extend the outer [`testTimeout`](/config/test/test-timeout) or hook timeout.
+An explicit per-call timeout takes precedence over this configuration. For `expect.poll()` and Browser Mode `expect.element()`, without one, Rstest uses the smaller of the configured timeout and the remaining active test or hook time, when that context is available. For example, a configured `5000ms` timeout with only `2000ms` remaining does not grant the assertion another five seconds. An explicit timeout bypasses this calculation, but it does not extend the outer [`testTimeout`](/config/test/test-timeout) or hook timeout.
 
 In Browser Mode concurrent tests, use the test-scoped `expect` fixture to account for that test's remaining time. Shared file-level `expect` and hooks in `describe.concurrent` use the configured polling timeout instead. See [Browser Mode assertion timeouts](/api/runtime-api/browser-mode/assertion).
 
-When using [`definePlaywrightConfig`](/integration/playwright#e2e-defaults), the helper supplies `expect.poll.timeout` from its `expect.timeout` option, defaulting to `5000ms`. An explicit top-level `expect.poll.timeout` overrides that inherited value without changing Playwright locator/page assertion timeouts.
+When using [`definePlaywrightConfig`](/integration/playwright#e2e-defaults), the helper defaults `expect.poll.timeout` to `5000ms`. An explicit `expect.poll.timeout` overrides that value for both polling and Playwright locator/page assertions. Without the helper, Node Mode defaults to `1000ms`.

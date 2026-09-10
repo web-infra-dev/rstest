@@ -178,12 +178,12 @@ test('mobile page', async ({ page }) => {
 
 使用 `extends: definePlaywrightConfig({})` 时，还会为当前 project 提供以下默认值：
 
-| 配置                             | 默认值                                                            |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `testTimeout`                    | `30_000ms`                                                        |
-| `hookTimeout`                    | `30_000ms`                                                        |
-| Playwright Locator/Page 断言超时 | `5000ms`                                                          |
-| Rstest `expect.poll.timeout`     | `definePlaywrightConfig` 的 `expect.timeout`，未设置时为 `5000ms` |
+| 配置                             | 默认值                                               |
+| -------------------------------- | ---------------------------------------------------- |
+| `testTimeout`                    | `30_000ms`                                           |
+| `hookTimeout`                    | `30_000ms`                                           |
+| Playwright Locator/Page 断言超时 | `expect.poll.timeout`（使用此 helper 时为 `5000ms`） |
+| Rstest `expect.poll.timeout`     | `5000ms`                                             |
 
 显式的 Rstest 配置会覆盖继承的默认值。例如：
 
@@ -192,9 +192,7 @@ import { defineConfig } from '@rstest/core';
 import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  extends: definePlaywrightConfig({
-    expect: { timeout: 10_000 },
-  }),
+  extends: definePlaywrightConfig({}),
   testTimeout: 60_000,
   hookTimeout: 45_000,
   expect: {
@@ -203,7 +201,7 @@ export default defineConfig({
 });
 ```
 
-这里的 Playwright Locator/Page 断言使用 `10_000ms`，`expect.poll()` 则使用 `2000ms`。两类 API 都可以通过单次调用的 timeout 进一步覆盖默认值。
+这里的 Playwright Locator/Page 断言和 `expect.poll()` 都使用 `2000ms`。两类 API 都可以通过单次调用的 timeout 进一步覆盖默认值。
 
 这些默认值只在使用 `definePlaywrightConfig` 时生效。仅从 `@rstest/playwright` 导入 `test` 或 `expect` 不会改变 Rstest 的运行默认值。单元测试与 E2E 混用的 workspace 应只在 E2E project 中使用此 helper。
 
@@ -368,7 +366,7 @@ Page 断言：
 - `toHaveTitle(expected, options?)`
 - `toHaveURL(expected, options?)`
 
-字符串文本断言会规范化空白字符。Playwright 风格断言会持续重试，直到断言通过或达到 `timeout` 选项。默认 timeout 是 `5000` 毫秒。
+字符串文本断言会规范化空白字符。Playwright 风格断言会持续重试，直到断言通过或达到 `timeout` 选项。默认 timeout 取自 `expect.poll.timeout`。
 
 ```ts
 await expect(page.locator('.message')).toContainText('Saved', {
@@ -387,24 +385,23 @@ await expect.soft(page).toHaveTitle(/Dashboard/);
 
 <ApiMeta addedVersion="0.12.0" />
 
-通过 `definePlaywrightConfig` 为所有 Playwright Locator 和 Page 断言设置统一的超时时间：
+Playwright Locator 和 Page 断言读取 Rstest 的 [`expect.poll.timeout`](/config/test/expect#expectpolltimeout)。配置一次即可同时控制这些断言和 `expect.poll()`：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
-  extends: definePlaywrightConfig({
-    expect: { timeout: 10_000 },
-  }),
+  extends: definePlaywrightConfig({}),
+  expect: {
+    poll: { timeout: 10_000 },
+  },
 });
 ```
 
-超时时间的优先级依次为：matcher 的 `{ timeout }`、`definePlaywrightConfig` 的 `expect.timeout`、默认值 `5000ms`。`.not` 和 `expect.soft` 同样遵循此规则。外层 test 或 hook 的超时仍可能提前结束断言。
+matcher 的 `{ timeout }` 优先于 `expect.poll.timeout`，`.not` 和 `expect.soft` 也遵循这一规则。helper 将 `expect.poll.timeout` 的默认值设为 `5000ms`；未使用 helper 且未显式配置时，Node Mode 默认使用 `1000ms`。即使不使用 helper，显式配置也能生效；组合多个 helper 时，也不再有另一套断言超时需要合并。
 
-此 helper 还会用 `expect.timeout` 设置 Rstest `expect.poll()` 的默认超时。你可以通过顶层 `expect.poll.timeout` 单独覆盖轮询超时；修改顶层轮询配置不会改变 Playwright Locator/Page 断言的超时。
-
-Rstest 的 [`expect.poll.timeout`](/config/test/expect#expectpolltimeout) 控制 `expect.poll()` 和 Browser Mode 的 `expect.element()`，不影响这里的 Playwright 断言。`page.setDefaultTimeout()` 控制 Playwright 操作的超时，不会改变断言的超时。Rstest 不读取 `playwright.config.ts`。
+外层 test 或 hook 的超时仍可能提前结束断言。Playwright 断言保留固定的 `50ms` 重试间隔，`expect.poll.interval` 只控制 `expect.poll()`。`page.setDefaultTimeout()` 控制 Playwright 操作的超时，不控制这些断言的超时。Rstest 不读取 `playwright.config.ts`；迁移时请将 Playwright Test 的 `expect.timeout` 改为 Rstest 的 `expect.poll.timeout`。
 
 ## Trace 调试
 

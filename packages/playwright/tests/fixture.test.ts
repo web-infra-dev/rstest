@@ -52,10 +52,7 @@ const writeNodeImportablePlaywrightSource = async (root: string) => {
       .replace("from './expect';", "from './expect.ts';")
       .replace("from './config';", "from './config.ts';"),
   );
-  await writeFile(
-    join(root, 'expect.ts'),
-    expectSource.replace("from './config';", "from './config.ts';"),
-  );
+  await writeFile(join(root, 'expect.ts'), expectSource);
   await writeFile(join(root, 'config.ts'), configSource);
 };
 

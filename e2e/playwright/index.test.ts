@@ -88,16 +88,28 @@ describe('@rstest/playwright', () => {
     },
   );
 
-  it.for(['', '100'])(
-    'applies Playwright assertion timeout config (%s)',
-    async (timeout) => {
+  it.for([
+    { timeout: '', withoutHelper: '' },
+    { timeout: '100', withoutHelper: '' },
+    { timeout: '100', withoutHelper: 'true' },
+  ])(
+    'applies Playwright assertion timeout config ($timeout, without helper: $withoutHelper)',
+    async ({ timeout, withoutHelper }) => {
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: ['run', 'expect-timeout.test.ts', '-t', 'uses configurable'],
+        args: [
+          'run',
+          'expect-timeout.test.ts',
+          '-t',
+          'uses configurable|keeps assertion',
+        ],
         options: {
           nodeOptions: {
             cwd: join(__dirname, 'fixtures'),
-            env: { RSTEST_E2E_EXPECT_TIMEOUT: timeout },
+            env: {
+              RSTEST_E2E_POLL_TIMEOUT: timeout,
+              RSTEST_E2E_NO_PLAYWRIGHT_CONFIG: withoutHelper,
+            },
           },
         },
       });
@@ -134,19 +146,10 @@ describe('@rstest/playwright', () => {
       env: {},
     },
     {
-      name: 'expect',
-      pattern: 'allows polling',
-      args: [],
-      env: { RSTEST_E2E_EXPECT_TIMEOUT: '100' },
-    },
-    {
       name: 'poll',
       pattern: 'allows polling',
       args: [],
-      env: {
-        RSTEST_E2E_EXPECT_TIMEOUT: '5000',
-        RSTEST_E2E_POLL_TIMEOUT: '100',
-      },
+      env: { RSTEST_E2E_POLL_TIMEOUT: '100' },
     },
   ])(
     'honors explicit E2E timeout overrides ($name)',
@@ -161,25 +164,6 @@ describe('@rstest/playwright', () => {
       expect(cli.stdout + cli.stderr).toContain('100ms');
     },
   );
-
-  it('allows the polling override to exceed the Playwright assertion timeout', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'expect-timeout.test.ts', '-t', 'allows polling'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-          env: {
-            RSTEST_E2E_EXPECT_TIMEOUT: '100',
-            RSTEST_E2E_POLL_TIMEOUT: '5000',
-          },
-        },
-      },
-    });
-
-    await expectExecSuccess();
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_POLL_DEFAULT_OK');
-  });
 
   it('preserves Playwright assertion errors at the timeout deadline', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
