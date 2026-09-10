@@ -226,6 +226,10 @@ const config = mergeProjectConfig(
 
 加载 Rstest 配置。
 
+<ApiMeta addedVersion="0.11.13" />
+
+`dependencies` 包含配置加载器收集的依赖文件。
+
 - **类型：**
 
 ```ts
@@ -239,6 +243,7 @@ function loadConfig(params?: {
 }): Promise<{
   content: RstestConfig;
   filePath: string | null;
+  dependencies: string[];
 }>;
 ```
 
@@ -256,4 +261,4 @@ console.log('配置加载自：', filePath);
 console.log('配置：', content);
 ```
 
-如果在 cwd 目录中不存在 Rstest 配置文件，loadConfig 方法的返回值为 `{ content: {}, filePath: null }`。
+如果在 cwd 目录中不存在 Rstest 配置文件，loadConfig 方法的返回值为 `{ content: {}, filePath: null, dependencies: [] }`。

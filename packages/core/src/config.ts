@@ -1,5 +1,6 @@
 import {
   type LoadConfigOptions,
+  type LoadConfigResult,
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
@@ -39,9 +40,11 @@ const DEFAULT_FORCE_RERUN_TRIGGERS = [
   '**/rstest.config.*',
 ];
 
-export interface LoadedRstestConfig {
-  content: RstestConfig;
-  filePath: string | null;
+export interface LoadedRstestConfig extends Pick<
+  LoadConfigResult<RstestConfig>,
+  'content' | 'filePath'
+> {
+  dependencies?: string[];
 }
 
 export async function loadConfig({
@@ -54,8 +57,8 @@ export async function loadConfig({
   path?: string;
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
-} = {}): Promise<LoadedRstestConfig> {
-  const { content, filePath } = await loadRsbuildConfig({
+} = {}): Promise<LoadConfigResult<RstestConfig>> {
+  const result = await loadRsbuildConfig<RstestConfig>({
     cwd,
     path,
     configFileNames: DEFAULT_CONFIG_EXTENSIONS.map(
@@ -65,15 +68,12 @@ export async function loadConfig({
     loader: configLoader,
   });
 
-  if (!filePath) {
+  if (!result.filePath) {
     logger.debug('no rstest config file found');
   }
 
-  let config = content as RstestConfig;
-
-  config = await resolveExtends(config);
-
-  return { content: config, filePath };
+  result.content = await resolveExtends(result.content);
+  return result;
 }
 
 const resolveExtendEntry = async (

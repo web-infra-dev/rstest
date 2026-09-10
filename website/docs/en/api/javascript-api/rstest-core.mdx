@@ -226,6 +226,10 @@ const config = mergeProjectConfig(
 
 Load Rstest configuration.
 
+<ApiMeta addedVersion="0.11.13" />
+
+`dependencies` contains the config file dependencies collected by the loader.
+
 - **Type:**
 
 ```ts
@@ -239,6 +243,7 @@ function loadConfig(params?: {
 }): Promise<{
   content: RstestConfig;
   filePath: string | null;
+  dependencies: string[];
 }>;
 ```
 
@@ -256,4 +261,4 @@ console.log('Config loaded from:', filePath);
 console.log('Config:', content);
 ```
 
-If the Rstest config file does not exist in the cwd directory, the return value of the loadConfig method is `{ content: {}, filePath: null }`.
+If the Rstest config file does not exist in the cwd directory, the return value of the loadConfig method is `{ content: {}, filePath: null, dependencies: [] }`.

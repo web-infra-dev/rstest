@@ -62,6 +62,7 @@ const rstest = await createRstest({ config: loaded });
 ```ts
 interface LoadedRstestConfig {
   content: RstestConfig; // 已加载的配置内容。
+  dependencies?: string[];
   filePath: string | null; // `loadConfig` 返回的配置文件来源路径，没有时为 `null`。
 }
 
