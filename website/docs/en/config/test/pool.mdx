@@ -19,11 +19,12 @@ export type RstestPoolOptions = {
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /**
-   * V8 heap threshold used to recycle a `vmForks` or `vmThreads` worker after it finishes a test file.
+   * Memory threshold used to recycle a worker after it finishes a test file.
    * This is a worker-recycling threshold, not a hard process RSS limit.
    * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
    * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
-   * Currently supported only by `vmForks` and `vmThreads`.
+   * Uses RSS for `forks` with `isolate: false`, and V8 heap for VM pools.
+   * Ignored by `threads` and isolated `forks`.
    * @default undefined (`system memory / maxWorkers` for VM pools)
    */
   memoryLimit?: number | string;
@@ -213,7 +214,11 @@ Common values:
 
 As a VM worker runs successive files, its memory usage can grow. `pool.memoryLimit` controls when to recycle it: after each file, Rstest checks the worker's V8 `heapUsed`. If it reaches the threshold, Rstest recycles the worker and runs subsequent files in a new one.
 
-This option applies only to `vmForks` and `vmThreads`; `forks` and `threads` ignore it. The default threshold is `system memory / maxWorkers`. To override it, use one of these formats:
+For `vmForks` and `vmThreads`, the default threshold is `system memory / maxWorkers`.
+
+For `forks` with `isolate: false`, an explicit `memoryLimit` checks the child process's RSS instead. There is no limit by default. With `isolate: true`, fork workers are already discarded after each file, so this option is ignored. Ordinary `threads` also ignore it because RSS measures the entire process, not an individual worker thread.
+
+To set a threshold, use one of these formats:
 
 - A number: values in `(0, 1]` are fractions of system memory; values greater than `1` are bytes.
 - A string: supports `%`, `KB`, `KiB`, `MB`, `MiB`, `GB`, and `GiB`, such as `'25%'` or `'256MB'`.

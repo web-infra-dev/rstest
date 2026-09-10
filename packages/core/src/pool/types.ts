@@ -17,7 +17,7 @@ export type PoolOptions = {
   maxWorkers: number;
   minWorkers: number;
   isolate: boolean;
-  /** Recycle a VM worker after it reports this much heap usage, when set. */
+  /** Recycle after this many bytes of RSS (forks) or V8 heap (VM pools). */
   memoryLimit?: number;
   env?: Record<string, string>;
   execArgv?: string[];

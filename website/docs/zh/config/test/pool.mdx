@@ -22,7 +22,8 @@ export type RstestPoolOptions = {
    * `vmForks` 或 `vmThreads` worker 完成一个测试文件后，如果报告的 V8 `heapUsed` 达到该阈值，
    * 则会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 的硬上限。
    * 支持字节数、百分比和单位字符串。
-   * 当前仅由 `vmForks` 和 `vmThreads` 支持。
+   * forks 在 isolate: false 时使用 RSS；VM pools 使用 V8 堆用量。
+   * threads 和开启隔离的 forks 忽略此选项。
    * @default undefined（VM pool 使用 `系统内存 / maxWorkers`）
    */
   memoryLimit?: number | string;
@@ -212,7 +213,11 @@ npx rstest --pool.maxWorkers 1
 
 VM worker 会连续运行多个文件，内存也可能随之增长。`pool.memoryLimit` 用于控制何时回收 worker：每个文件结束后，Rstest 会检查其 V8 `heapUsed`，达到阈值便回收，在新的 worker 中运行后续文件。
 
-此选项仅适用于 `vmForks` 和 `vmThreads`，在 `forks` 和 `threads` 中会被忽略。默认阈值为 `系统内存 / maxWorkers`，也可以使用以下格式指定：
+`vmForks` 和 `vmThreads` 的默认阈值为 `系统内存 / maxWorkers`。
+
+对于 `forks`，只有在 `isolate: false` 且显式配置 `memoryLimit` 时，才会按子进程的 RSS 检查是否需要回收，默认不设限制。`isolate: true` 时，每个文件结束后都会销毁 fork worker，因此忽略此选项。普通 `threads` 也会忽略此选项，因为 RSS 反映的是整个进程的内存用量，无法用于判断单个线程的内存用量。
+
+可以使用以下格式指定阈值：
 
 - 数字：`(0, 1]` 表示系统内存的比例，大于 `1` 表示字节数。
 - 字符串：支持 `%`、`KB`、`KiB`、`MB`、`MiB`、`GB` 和 `GiB`，例如 `'25%'` 或 `'256MB'`。

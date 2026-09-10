@@ -76,11 +76,12 @@ export type RstestPoolOptions = {
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /**
-   * V8 heap threshold used to recycle a `vmForks` or `vmThreads` worker after it finishes a test file.
+   * Memory threshold used to recycle a worker after it finishes a test file.
    * This is a worker-recycling threshold, not a hard process RSS limit.
    * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
    * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
-   * Currently supported only by `vmForks` and `vmThreads`.
+   * Uses RSS for `forks` with `isolate: false`, and V8 heap for VM pools.
+   * Ignored by `threads` and isolated `forks`.
    * @default undefined (`system memory / maxWorkers` for VM pools)
    */
   memoryLimit?: number | string;

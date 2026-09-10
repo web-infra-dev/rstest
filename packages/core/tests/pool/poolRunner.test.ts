@@ -249,7 +249,7 @@ class MemoryReportingWorker implements PoolWorker {
               testId: 'file:/test.ts',
               testPath: '/test.ts',
             },
-            memory: { heapUsed: 101 },
+            memory: { heapUsed: 101, rss: 201 },
           }),
         );
       });
@@ -432,4 +432,30 @@ describe('PoolRunner VM worker memory limit', () => {
     expect(runner.shouldRecycle()).toBe(true);
     await runner.stop({ force: true });
   });
+});
+
+describe('PoolRunner RSS limit', () => {
+  it.for([
+    { memoryMetric: 'rss', memoryLimit: 200, recycle: true },
+    { memoryMetric: 'rss', memoryLimit: 201, recycle: true },
+    { memoryMetric: 'rss', memoryLimit: 202, recycle: false },
+    { memoryMetric: 'heapUsed', memoryLimit: 200, recycle: false },
+  ] as const)(
+    '$memoryMetric at $memoryLimit bytes',
+    async ({ memoryMetric, memoryLimit, recycle }) => {
+      const runner = new PoolRunner(new MemoryReportingWorker(), {
+        environmentKey: 'node',
+        workerId: 1,
+        memoryMetric,
+        memoryLimit,
+      });
+      try {
+        await runner.start();
+        await runner.runTest(createTask());
+        expect(runner.shouldRecycle()).toBe(recycle);
+      } finally {
+        await runner.stop({ force: true });
+      }
+    },
+  );
 });

@@ -185,7 +185,7 @@ const handleRun = (request) => {
   }
 
   if (mode === 'memory-over-limit') {
-    finish({}, { heapUsed: 101 });
+    finish({}, { heapUsed: 101, rss: 201 });
     return;
   }
 
