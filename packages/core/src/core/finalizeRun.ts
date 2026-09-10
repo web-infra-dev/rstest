@@ -182,6 +182,8 @@ export async function finalizeRunCycle(
     outcomes,
     mode,
     isWatchMode,
+    isInterrupted = () => false,
+    reportersStarted = true,
     coverageProvider,
     reportOnFailure,
     traceRun,
@@ -189,6 +191,9 @@ export async function finalizeRunCycle(
     outcomes: ExecutorCycleOutcome[];
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
+    isInterrupted?: () => boolean;
+    /** Cancellation before run-start still finalizes state, without reporter callbacks. */
+    reportersStarted?: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
     /**
@@ -220,7 +225,9 @@ export async function finalizeRunCycle(
   // `map` into the run's map, then resolve the concatenated v8 `raw` batches.
   // Each executor owns its own per-file merge (node in the pool, browser at
   // outcome assembly), so nothing is read off individual results here.
-  const mergedCoverageMap = coverageProvider?.createCoverageMap();
+  const mergedCoverageMap = isInterrupted()
+    ? undefined
+    : coverageProvider?.createCoverageMap();
   for (const outcome of outcomes) {
     if (outcome.coverage?.map) {
       mergedCoverageMap?.merge(outcome.coverage.map);
@@ -243,7 +250,7 @@ export async function finalizeRunCycle(
 
   const rawCoverageResults = outcomes.flatMap((o) => o.coverage?.raw ?? []);
   await resolveAndMergeRawCoverage({
-    coverageProvider,
+    coverageProvider: isInterrupted() ? null : coverageProvider,
     mergedCoverageMap,
     rawCoverageResults,
     resolveOptions: {
@@ -280,7 +287,7 @@ export async function finalizeRunCycle(
     outcomes.flatMap((o) => o.deletedTestPaths ?? []),
   );
 
-  if (noTestsDiscovered) {
+  if (!isInterrupted() && noTestsDiscovered) {
     reportNoTestFiles({ context, mode });
   }
 
@@ -288,19 +295,21 @@ export async function finalizeRunCycle(
     context.exitCode.raise(1);
   }
 
-  await runLifecycleStep('reporter onTestRunEnd', () =>
-    notifyReportersOnTestRunEnd({
-      context,
-      coverage: mergedCoverageMap,
-      duration,
-      getSourcemap,
-      unhandledErrors: errors,
-      // Only filter the failing-test summary in watch mode; a non-watch run
-      // surfaces every executor's failures (Appendix A bug 2).
-      filterRerunTestPaths:
-        isWatchMode && testPaths.length ? testPaths : undefined,
-    }),
-  );
+  if (reportersStarted) {
+    await runLifecycleStep('reporter onTestRunEnd', () =>
+      notifyReportersOnTestRunEnd({
+        context,
+        coverage: isInterrupted() ? undefined : mergedCoverageMap,
+        duration,
+        getSourcemap,
+        unhandledErrors: errors,
+        // Only filter the failing-test summary in watch mode; a non-watch run
+        // surfaces every executor's failures (Appendix A bug 2).
+        filterRerunTestPaths:
+          isWatchMode && testPaths.length ? testPaths : undefined,
+      }),
+    );
+  }
 
   const defersCoverageReport =
     coverageProvider?.supportsDeferredCoverageFinalization === true &&
@@ -310,24 +319,28 @@ export async function finalizeRunCycle(
   // reports, and thresholds belong to the merge-reports process that sees the
   // complete coverage map rather than to every partial shard.
   if (
+    !isInterrupted() &&
     coverageProvider &&
     !defersCoverageReport &&
     (!isFailure || reportOnFailure)
   ) {
     const { generateCoverage } = await import('../coverage/generate');
-    await runLifecycleStep('coverage report generation', () =>
-      generateCoverage(
-        context,
-        mergedCoverageMap!,
-        coverageProvider,
-        traceRun.span,
-      ),
+    await runLifecycleStep(
+      'coverage report generation',
+      async () =>
+        !isInterrupted() &&
+        generateCoverage(
+          context,
+          mergedCoverageMap!,
+          coverageProvider,
+          traceRun.span,
+        ),
     );
   }
 
   await runLifecycleStep('trace run finalize', () => traceRun.finalize());
 
-  if (isFailure) {
+  if (!isInterrupted() && isFailure) {
     const bail = context.normalizedConfig.bail;
     if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
       logger.log(

@@ -1,6 +1,12 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { withDefaultConfig } from '../../src/config';
+import { emptyDuration, emptySnapshotSummary } from './helpers';
 import { describe, expect, it } from '@rstest/core';
 import {
   BLOB_TRACK_MATCHES_RUNNER_EVENTS,
+  BlobReporter,
   blobFileName,
   isBlobFile,
   parseBlobFile,
@@ -44,4 +50,38 @@ describe('blob wire-format', () => {
     expect(isBlobFile('prefix-blob.json')).toBe(false);
     expect(isBlobFile('blob-a-b.json')).toBe(false);
   });
+});
+
+describe('blob cancellation', () => {
+  it.for([false, true])(
+    'invalidates only its shard (already written: %s)',
+    async (alreadyWritten, { onTestFinished }) => {
+      const rootPath = mkdtempSync(join(tmpdir(), 'rstest-blob-cancel-'));
+      onTestFinished(() => rmSync(rootPath, { recursive: true, force: true }));
+      const reporter = new BlobReporter({
+        rootPath,
+        config: { ...withDefaultConfig({}), shard: { index: 1, count: 2 } },
+      });
+      const sibling = new BlobReporter({
+        rootPath,
+        config: { ...withDefaultConfig({}), shard: { index: 2, count: 2 } },
+      });
+      const result = {
+        results: [],
+        testResults: [],
+        duration: emptyDuration,
+        snapshotSummary: emptySnapshotSummary,
+      };
+      await sibling.onTestRunEnd(result);
+      if (alreadyWritten) await reporter.onTestRunEnd(result);
+      const path = join(rootPath, '.rstest-reports', 'blob-1-2.json');
+      expect(existsSync(path)).toBe(alreadyWritten);
+      reporter.cancel();
+      await reporter.onTestRunEnd(result);
+      expect(existsSync(path)).toBe(false);
+      expect(
+        existsSync(join(rootPath, '.rstest-reports', 'blob-2-2.json')),
+      ).toBe(true);
+    },
+  );
 });

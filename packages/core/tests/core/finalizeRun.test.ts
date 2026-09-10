@@ -7,60 +7,99 @@ import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
 import { noopTraceSpan } from '../../src/utils';
 
 describe('finalizeRunCycle', () => {
-  it('finalizes blob coverage for providers without deferred finalization support', async () => {
-    const generatedReports: number[] = [];
-    const coverageMap: CoverageMap = {
-      data: {},
-      addFileCoverage() {},
-      files: () => [],
-      fileCoverageFor() {
-        throw new Error('No file coverage');
-      },
-      filter() {},
-      getCoverageSummary() {
-        throw new Error('No coverage summary');
-      },
-      merge() {},
-      toJSON: () => ({}),
-    };
-    const coverageProvider = {
-      init() {},
-      collect: () => null,
-      createCoverageMap: () => coverageMap,
-      generateCoverageForUntestedFiles: async () => [],
-      async generateReports() {
-        generatedReports.push(1);
-      },
-      cleanup() {},
-    } satisfies CoverageProvider;
-    const blobReporter = Object.create(BlobReporter.prototype) as BlobReporter;
-    blobReporter.onTestRunEnd = async () => {};
+  it.for(['none', 'pre-start', 'before', 'reporter', 'raw'])(
+    'finalizes blob runs with interruption at %s',
+    async (phase) => {
+      let interrupted = phase === 'before' || phase === 'pre-start';
+      const generatedReports: number[] = [];
+      const coverageMap: CoverageMap = {
+        data: {},
+        addFileCoverage() {},
+        files: () => [],
+        fileCoverageFor() {
+          throw new Error('No file coverage');
+        },
+        filter() {},
+        getCoverageSummary() {
+          throw new Error('No coverage summary');
+        },
+        merge() {},
+        toJSON: () => ({}),
+      };
+      const coverageProvider = {
+        init() {},
+        collect: () => null,
+        async resolveRawCoverage() {
+          if (phase === 'raw') {
+            await Promise.resolve();
+            interrupted = true;
+            context.exitCode.raise(130);
+          }
+          return null;
+        },
+        createCoverageMap: () => coverageMap,
+        generateCoverageForUntestedFiles: async () => [],
+        async generateReports() {
+          generatedReports.push(1);
+        },
+        cleanup() {},
+      } satisfies CoverageProvider;
+      const blobReporter = Object.create(
+        BlobReporter.prototype,
+      ) as BlobReporter;
+      blobReporter.onTestRunEnd = rs.fn(async () => {
+        if (phase === 'reporter') {
+          await Promise.resolve();
+          interrupted = true;
+          context.exitCode.raise(130);
+        }
+      });
+      const finalizeTrace = rs.fn(async () => {});
 
-    const context = {
-      command: 'run',
-      rootPath: process.cwd(),
-      normalizedConfig: withDefaultConfig({ passWithNoTests: true }),
-      projects: [],
-      reporters: [blobReporter],
-      reporterResults: { results: [], testResults: [] },
-      snapshotManager: { summary: {} },
-      exitCode: createExitCode(),
-      updateReporterResultState() {},
-    } as unknown as InternalContext;
+      const context = {
+        command: 'run',
+        rootPath: process.cwd(),
+        normalizedConfig: withDefaultConfig({ passWithNoTests: true }),
+        projects: [],
+        reporters: [blobReporter],
+        reporterResults: { results: [], testResults: [] },
+        snapshotManager: { summary: {} },
+        exitCode: createExitCode(),
+        updateReporterResultState: rs.fn(),
+      } as unknown as InternalContext;
 
-    await finalizeRunCycle(context, {
-      outcomes: [],
-      mode: 'all',
-      isWatchMode: false,
-      coverageProvider,
-      reportOnFailure: false,
-      traceRun: {
-        onEvents: undefined,
-        span: noopTraceSpan,
-        finalize: async () => {},
-      },
-    });
+      if (interrupted) context.exitCode.raise(130);
+      await finalizeRunCycle(context, {
+        outcomes: [
+          {
+            results: [],
+            testResults: [],
+            errors: [],
+            testPaths: [],
+            duration: { buildTime: 0, testTime: 0 },
+            coverage: { raw: [{}] },
+          },
+        ],
+        mode: 'all',
+        isWatchMode: false,
+        isInterrupted: () => interrupted,
+        reportersStarted: phase !== 'pre-start',
+        coverageProvider,
+        reportOnFailure: false,
+        traceRun: {
+          onEvents: undefined,
+          span: noopTraceSpan,
+          finalize: finalizeTrace,
+        },
+      });
 
-    expect(generatedReports).toEqual([1]);
-  });
+      expect(generatedReports).toEqual(interrupted ? [] : [1]);
+      expect(blobReporter.onTestRunEnd).toHaveBeenCalledTimes(
+        phase === 'pre-start' ? 0 : 1,
+      );
+      expect(context.updateReporterResultState).toHaveBeenCalledTimes(1);
+      expect(finalizeTrace).toHaveBeenCalledTimes(1);
+      expect(context.exitCode.current).toBe(interrupted ? 130 : 0);
+    },
+  );
 });

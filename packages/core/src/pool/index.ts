@@ -512,7 +512,7 @@ export const createPool = async ({
       // pipelined, only the enqueue is serialized.
       let dispatchGate: Promise<void> = Promise.resolve();
 
-      const results = await Promise.all(
+      const dispatchedResults = await Promise.all(
         entries.map(async (entryInfo, index) => {
           const gate = dispatchGate;
           let releaseGate!: () => void;
@@ -521,6 +521,7 @@ export const createPool = async ({
           });
 
           try {
+            if (pool.closing) return;
             const traceArgs = {
               project: projectName,
               testPath: entryInfo.testPath,
@@ -557,6 +558,7 @@ export const createPool = async ({
             );
 
             await gate;
+            if (pool.closing) return;
             // `pool.runTest` claims a slot (or parks in `slotWaiters`)
             // synchronously before its first await, and `traceSpan` invokes
             // its callback synchronously, so releasing after this returns
@@ -570,6 +572,9 @@ export const createPool = async ({
             releaseGate();
 
             const result = await resultPromise.catch(async (err: unknown) => {
+              // Closing deliberately rejects queued and running tasks. They
+              // must not become worker-crash results during cancellation.
+              if (pool.closing) return;
               const { fileResult, crashedResults } = workerErrorToResult(
                 err,
                 entryInfo.testPath,
@@ -591,6 +596,8 @@ export const createPool = async ({
               }
               return fileResult;
             });
+
+            if (!result || pool.closing) return;
 
             if (result.coverage) {
               onCoverageResult?.(result.coverage);
@@ -625,6 +632,9 @@ export const createPool = async ({
         }),
       );
 
+      const results = dispatchedResults.filter(
+        (result) => result !== undefined,
+      );
       const fileResults = results.map(({ result }) => result);
       const testResults = fileResults.flatMap((r) => r.results);
 

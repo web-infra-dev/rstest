@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -7,6 +8,193 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('globalSetup', async () => {
+  describe.skipIf(process.platform === 'win32')('SIGINT cancellation', () => {
+    it.for(
+      ['forks', 'threads', 'vmForks', 'vmThreads'].flatMap((pool) => [
+        { pool, phase: 'test', exitDuringCleanup: false },
+        { pool, phase: 'test', exitDuringCleanup: true },
+        { pool, phase: 'run-start', exitDuringCleanup: false },
+        { pool, phase: 'run-end', exitDuringCleanup: false },
+        { pool, phase: 'global-setup', exitDuringCleanup: false },
+        { pool, phase: 'blob-conflict', exitDuringCleanup: false },
+      ]),
+    )(
+      'cancels $phase under $pool (cleanup calls exit: $exitDuringCleanup)',
+      async ({ pool, phase, exitDuringCleanup }) => {
+        const fixturesTargetPath = join(
+          __dirname,
+          `fixtures-test-sigint-${pool}-${phase}-${exitDuringCleanup}`,
+        );
+        const { fs } = await prepareFixtures({
+          fixturesPath: join(__dirname, 'fixtures/basic'),
+          fixturesTargetPath,
+        });
+        fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
+          content.replace(
+            'globalSetup:',
+            `reporters: ['blob', 'default', {
+            onTestFileResult() { console.log('[unexpected-file-result]'); },
+            async onTestRunStart() {
+              if ('${phase}' === 'run-start') {
+                await new Promise(resolve => {
+                  process.once('SIGINT', resolve);
+                  console.log('[run-start]');
+                });
+              } else console.log('[run-start]');
+            },
+            async onTestRunEnd() {
+              if ('${phase}' === 'run-end') {
+                await new Promise(resolve => {
+                  process.once('SIGINT', resolve);
+                  console.log('[run-end-pending]');
+                });
+              }
+              await new Promise(resolve => setTimeout(resolve, 100));
+              console.log('[run-end]');
+            },
+          }], globalSetup:`,
+          ),
+        );
+        if (phase === 'blob-conflict') {
+          mkdirSync(join(fixturesTargetPath, '.rstest-reports/blob.json'), {
+            recursive: true,
+          });
+        }
+        if (phase === 'global-setup') {
+          fs.update(
+            join(fixturesTargetPath, 'setups/defaultExport.ts'),
+            (content) =>
+              content.replace(
+                "  console.log('[global-setup-default] executed');",
+                `  console.log('[setup-pending]');
+                 const { existsSync } = await import('node:fs');
+                 while (!existsSync('release-setup')) {
+                   await new Promise(resolve => setTimeout(resolve, 10));
+                 }
+                 console.log('[setup-finished]');
+                 console.log('[global-setup-default] executed');`,
+              ),
+          );
+        }
+        if (exitDuringCleanup) {
+          fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
+            content.replace(
+              "console.log('[rstest-dev-server] closed');",
+              "console.log('[rstest-dev-server] closed'); process.exit(0);",
+            ),
+          );
+        }
+        for (const name of ['index.test.ts', 'index1.test.ts']) {
+          fs.update(
+            join(fixturesTargetPath, name),
+            () => `
+            import { test } from '@rstest/core';
+            test('wait for cancellation', async () => {
+              console.log('[test-running]');
+              if ('${phase}' !== 'run-end') {
+                await new Promise(resolve => setTimeout(resolve, '${phase}' === 'run-start' ? 100 : 60000));
+              }
+            }, 65000);
+          `,
+          );
+        }
+        const { cli, expectExecFailed } = await runRstestCli({
+          command: 'rstest',
+          args: [
+            'run',
+            '--pool',
+            pool,
+            '--pool.maxWorkers',
+            '1',
+            '--disableConsoleIntercept',
+            '--trace',
+            ...(phase === 'run-end'
+              ? [
+                  '--coverage',
+                  '--coverage.provider',
+                  'v8',
+                  '--coverage.reporter',
+                  'json',
+                ]
+              : []),
+          ],
+          options: {
+            nodeOptions: {
+              cwd: fixturesTargetPath,
+              env: { ISOLATE: undefined },
+            },
+          },
+        });
+        try {
+          await cli.waitForStdout(
+            phase === 'run-start'
+              ? '[run-start]'
+              : phase === 'run-end'
+                ? '[run-end-pending]'
+                : phase === 'global-setup'
+                  ? '[setup-pending]'
+                  : '[test-running]',
+          );
+          cli.exec.process!.kill('SIGINT');
+          if (phase === 'global-setup') {
+            await cli.waitForStdout('Received SIGINT');
+            fs.create(join(fixturesTargetPath, 'release-setup'), '');
+          }
+          await expectExecFailed();
+          expect(cli.exec.process!.exitCode).toBe(130);
+          if (phase !== 'run-end')
+            expect(cli.log).not.toContain('[unexpected-file-result]');
+          expect(cli.stdout.match(/\[run-start\]/g)).toHaveLength(1);
+          expect(
+            existsSync(join(fixturesTargetPath, '.rstest-reports/blob.json')),
+          ).toBe(phase === 'blob-conflict');
+          if (phase === 'blob-conflict') {
+            expect(cli.log).toContain('Failed to remove cancelled blob report');
+            expect(cli.log).not.toContain('Failed to run Rstest');
+          }
+          if (exitDuringCleanup) return;
+          expect(cli.stdout.match(/\[run-end\]/g)).toHaveLength(1);
+          expect(cli.log).not.toContain('No test files found');
+          if (phase === 'run-start' || phase === 'global-setup')
+            expect(cli.log).not.toContain('[test-running]');
+          if (phase === 'global-setup')
+            expect(cli.log).toContain('[setup-finished]');
+          expect(
+            existsSync(
+              join(fixturesTargetPath, 'coverage/coverage-final.json'),
+            ),
+          ).toBe(false);
+          if (phase !== 'run-start') {
+            expect(cli.stdout.match(/Perfetto trace file:/g)).toHaveLength(1);
+            expect(cli.stdout.match(/Trace summary file:/g)).toHaveLength(1);
+          }
+          expect(cli.log).not.toContain('pool is closed');
+          expect(cli.log).not.toContain('Worker stopped');
+          expect(cli.log).not.toContain('exited unexpectedly');
+          expect(
+            cli.stdout.match(/\[global-teardown-default\] executed/g) ?? [],
+          ).toHaveLength(phase === 'run-start' ? 0 : 1);
+          expect(
+            cli.stdout.match(/\[global-teardown-named\] executed/g) ?? [],
+          ).toHaveLength(phase === 'run-start' ? 0 : 1);
+          expect(
+            cli.stdout.match(/\[rstest-dev-server\] closed/g),
+          ).toHaveLength(1);
+          if (phase !== 'run-start') {
+            expect(
+              cli.stdout.indexOf('[rstest-dev-server] closed'),
+            ).toBeLessThan(
+              cli.stdout.indexOf('[global-teardown-default] executed'),
+            );
+          }
+        } finally {
+          await cli.killProcessTree();
+          fs.delete(fixturesTargetPath);
+        }
+      },
+    );
+  });
+
   it('should run global setup file correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -120,7 +308,7 @@ describe('globalSetup', async () => {
     });
     fs.update(
       join(fixturesTargetPath, 'globalSetup.ts'),
-      `import { existsSync } from 'node:fs';
+      `import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

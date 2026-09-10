@@ -1,3 +1,4 @@
+import { BlobReporter } from '../reporter/blob';
 import {
   cleanCoverageReports,
   createCoverageProviderWithLog,
@@ -243,36 +244,29 @@ export async function runTests(context: Rstest): Promise<void> {
       ? [nodeExecutorToRun]
       : [];
 
-    // Single-exit-path rule: every executor closes through here exactly once
-    // (idempotent), so no early return or throw can reintroduce a #1363-class
-    // deferred-teardown hang. `executors` is read at close time, so the browser
-    // executor pushed inside the try below is covered — including when its own
-    // load/init fails with the node resources above already up.
-    //
-    // The run owns the shared globalSetup queue: every executor must close
-    // before user teardown starts, including on the signal path. The exit
-    // handler is registered for non-embedded runs so a mid-run unexpected exit
-    // prints and sets a failing code rather than ending quietly.
-    let didCloseExecutors = false;
+    // A signal can close existing executors while another is still loading.
+    // Memoize per executor so the final drain also closes late arrivals once.
+    const executorClosePromises = new Map<TestExecutor, Promise<void>>();
     const closeExecutors = async () => {
-      if (didCloseExecutors) {
-        return;
-      }
-      didCloseExecutors = true;
-      try {
-        const closePromises = executors.map((executor) =>
-          runLifecycleStep('executor cleanup', () => executor.close()),
-        );
-        await Promise.allSettled(closePromises);
-        await Promise.all(closePromises);
-      } finally {
-        // User teardown must still run when an executor close throws.
-        await runLifecycleStep('global teardown', () =>
-          runGlobalTeardown(context),
-        );
-      }
+      const closePromises = executors.map((executor) => {
+        let promise = executorClosePromises.get(executor);
+        if (!promise) {
+          promise = runLifecycleStep('executor cleanup', () =>
+            executor.close(),
+          );
+          executorClosePromises.set(executor, promise);
+        }
+        return promise;
+      });
+      await Promise.allSettled(closePromises);
+      await Promise.all(closePromises);
     };
 
+    let signalExitCode: number | undefined;
+    let resolveRunFinished!: () => void;
+    const runFinished = new Promise<void>((resolve) => {
+      resolveRunFinished = resolve;
+    });
     let isTeardown = false;
     let isCleaningUp = false;
     const cleanup = async () => {
@@ -281,10 +275,17 @@ export async function runTests(context: Rstest): Promise<void> {
       }
       isCleaningUp = true;
       try {
-        await closeExecutors();
-        await runLifecycleStep('trace run finalize', () =>
-          activeTraceRun.finalize(),
-        );
+        try {
+          await closeExecutors();
+        } finally {
+          // Closing unblocks the cycle; its finalizer must finish before exit.
+          await runFinished;
+        }
+        if (!isTeardown) {
+          await runLifecycleStep('trace run finalize', () =>
+            activeTraceRun.finalize(),
+          );
+        }
         await runLifecycleStep('trace controller cleanup', () =>
           traceController.close(),
         );
@@ -294,6 +295,14 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const unExpectedExit = (code?: number) => {
+      if (signalExitCode !== undefined) {
+        process.exitCode = Math.max(
+          Number(process.exitCode) || 0,
+          signalExitCode,
+          context.exitCode.current,
+        );
+        return;
+      }
       if (isTeardown) {
         logger.log(
           color.yellow(
@@ -314,9 +323,21 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const handleSignal = async (signal: NodeJS.Signals) => {
+      signalExitCode = getSignalExitCode(signal);
+      context.exitCode.raise(signalExitCode);
+      for (const reporter of context.reporters) {
+        if (reporter instanceof BlobReporter) {
+          try {
+            reporter.cancel();
+          } catch (error) {
+            // Invalidation must not prevent executor and global teardown.
+            logger.warn(`Failed to remove cancelled blob report: ${error}`);
+          }
+        }
+      }
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
-      process.exit(getSignalExitCode(signal));
+      process.exit(context.exitCode.current);
     };
 
     if (!context.embedded) {
@@ -338,44 +359,56 @@ export async function runTests(context: Rstest): Promise<void> {
           planner.getExecutorRunOptions(browserProjectsToRun),
         );
         executors.push(browserExecutor);
-        await browserExecutor.init();
+        if (signalExitCode === undefined) await browserExecutor.init();
         // Core-owned pre-cycle globalSetup stage over the resolved browser
         // subset. Its context-local env changes are visible to both the browser
         // cycle and node workers dispatched below.
-        browserStage = await runBrowserGlobalSetupStage(
-          context,
-          browserProjectsToRun,
-          { entriesCache: planner.getPlan().entriesCache },
-        );
+        if (signalExitCode === undefined) {
+          browserStage = await runBrowserGlobalSetupStage(
+            context,
+            browserProjectsToRun,
+            { entriesCache: planner.getPlan().entriesCache },
+          );
+        }
       }
 
-      // After the browser globalSetup stage, not before it: a setup that fails
-      // takes the run down before any reporter was told one started, which is
-      // the pairing every other shape already has.
-      await notifyReportersOnTestRunStart(context);
+      const reportersStarted = signalExitCode === undefined;
+      if (reportersStarted) await notifyReportersOnTestRunStart(context);
       // Settle every cycle before propagating a failure: a fail-fast
       // `Promise.all` would reach the `finally` teardown while a sibling
       // executor is still mid-cycle, truncating its tests and firing global
       // teardown early. The re-await unwraps the already-settled promises,
       // rejecting with the first failure in executor order.
-      const cyclePromises = executors.map((executor) =>
-        executor === browserExecutor && browserStage.errors.length
-          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
-          : executor.runCycle({
-              buildId: 1,
-              mode: 'all',
-              updateSnapshot: snapshotManager.options.updateSnapshot,
-              env: browserStage.env,
-              onTraceEvents: forwardBrowserTraceEvents,
-            }),
-      );
-      await Promise.allSettled(cyclePromises);
-      const outcomes = await Promise.all(cyclePromises);
+      const cyclePromises =
+        signalExitCode === undefined
+          ? executors.map((executor) =>
+              executor === browserExecutor && browserStage.errors.length
+                ? Promise.resolve(
+                    globalSetupFailureOutcome(browserStage.errors),
+                  )
+                : executor.runCycle({
+                    buildId: 1,
+                    mode: 'all',
+                    updateSnapshot: snapshotManager.options.updateSnapshot,
+                    env: browserStage.env,
+                    onTraceEvents: forwardBrowserTraceEvents,
+                  }),
+            )
+          : [];
+      const settledCycles = await Promise.allSettled(cyclePromises);
+      const outcomes =
+        signalExitCode === undefined
+          ? await Promise.all(cyclePromises)
+          : settledCycles.flatMap((cycle) =>
+              cycle.status === 'fulfilled' ? [cycle.value] : [],
+            );
 
       await finalizeRunCycle(context, {
         outcomes,
         mode: 'all',
         isWatchMode: false,
+        isInterrupted: () => signalExitCode !== undefined,
+        reportersStarted,
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
         traceRun: activeTraceRun,
@@ -383,9 +416,19 @@ export async function runTests(context: Rstest): Promise<void> {
       isTeardown = true;
     } finally {
       try {
-        await closeExecutors();
+        try {
+          await closeExecutors();
+        } finally {
+          // Setup can register teardown until the active run settles. The
+          // signal path closes executors early but must not drain this queue.
+          await runLifecycleStep('global teardown', () =>
+            runGlobalTeardown(context),
+          );
+        }
       } finally {
-        if (!context.embedded) {
+        resolveRunFinished();
+        if (signalExitCode !== undefined) context.exitCode.finishCycle();
+        if (!context.embedded && signalExitCode === undefined) {
           process.off('exit', unExpectedExit);
           for (const signal of FATAL_SIGNALS) {
             process.off(signal, handleSignal);
@@ -394,6 +437,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
+    if (signalExitCode !== undefined) return;
     await runLifecycleStep('trace wait for exit', () =>
       traceController.waitForExit(),
     );
