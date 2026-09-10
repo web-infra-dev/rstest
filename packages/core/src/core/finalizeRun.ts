@@ -183,6 +183,7 @@ export async function finalizeRunCycle(
     mode,
     isWatchMode,
     isInterrupted = () => false,
+    reportersStarted = true,
     coverageProvider,
     reportOnFailure,
     traceRun,
@@ -191,6 +192,8 @@ export async function finalizeRunCycle(
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
     isInterrupted?: () => boolean;
+    /** Cancellation before run-start still finalizes state, without reporter callbacks. */
+    reportersStarted?: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
     /**
@@ -292,19 +295,21 @@ export async function finalizeRunCycle(
     context.exitCode.raise(1);
   }
 
-  await runLifecycleStep('reporter onTestRunEnd', () =>
-    notifyReportersOnTestRunEnd({
-      context,
-      coverage: isInterrupted() ? undefined : mergedCoverageMap,
-      duration,
-      getSourcemap,
-      unhandledErrors: errors,
-      // Only filter the failing-test summary in watch mode; a non-watch run
-      // surfaces every executor's failures (Appendix A bug 2).
-      filterRerunTestPaths:
-        isWatchMode && testPaths.length ? testPaths : undefined,
-    }),
-  );
+  if (reportersStarted) {
+    await runLifecycleStep('reporter onTestRunEnd', () =>
+      notifyReportersOnTestRunEnd({
+        context,
+        coverage: isInterrupted() ? undefined : mergedCoverageMap,
+        duration,
+        getSourcemap,
+        unhandledErrors: errors,
+        // Only filter the failing-test summary in watch mode; a non-watch run
+        // surfaces every executor's failures (Appendix A bug 2).
+        filterRerunTestPaths:
+          isWatchMode && testPaths.length ? testPaths : undefined,
+      }),
+    );
+  }
 
   const defersCoverageReport =
     coverageProvider?.supportsDeferredCoverageFinalization === true &&

@@ -7,10 +7,10 @@ import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
 import { noopTraceSpan } from '../../src/utils';
 
 describe('finalizeRunCycle', () => {
-  it.for(['none', 'before', 'reporter', 'raw'])(
+  it.for(['none', 'pre-start', 'before', 'reporter', 'raw'])(
     'finalizes blob runs with interruption at %s',
     async (phase) => {
-      let interrupted = phase === 'before';
+      let interrupted = phase === 'before' || phase === 'pre-start';
       const generatedReports: number[] = [];
       const coverageMap: CoverageMap = {
         data: {},
@@ -65,7 +65,7 @@ describe('finalizeRunCycle', () => {
         reporterResults: { results: [], testResults: [] },
         snapshotManager: { summary: {} },
         exitCode: createExitCode(),
-        updateReporterResultState() {},
+        updateReporterResultState: rs.fn(),
       } as unknown as InternalContext;
 
       if (interrupted) context.exitCode.raise(130);
@@ -83,6 +83,7 @@ describe('finalizeRunCycle', () => {
         mode: 'all',
         isWatchMode: false,
         isInterrupted: () => interrupted,
+        reportersStarted: phase !== 'pre-start',
         coverageProvider,
         reportOnFailure: false,
         traceRun: {
@@ -93,7 +94,10 @@ describe('finalizeRunCycle', () => {
       });
 
       expect(generatedReports).toEqual(interrupted ? [] : [1]);
-      expect(blobReporter.onTestRunEnd).toHaveBeenCalledTimes(1);
+      expect(blobReporter.onTestRunEnd).toHaveBeenCalledTimes(
+        phase === 'pre-start' ? 0 : 1,
+      );
+      expect(context.updateReporterResultState).toHaveBeenCalledTimes(1);
       expect(finalizeTrace).toHaveBeenCalledTimes(1);
       expect(context.exitCode.current).toBe(interrupted ? 130 : 0);
     },

@@ -354,6 +354,16 @@ describe('browser mode - globalSetup', () => {
           }
         }
         export async function createBrowserExecutor(...args) {
+          const context = args[0];
+          const updateResults = context.updateReporterResultState.bind(context);
+          context.updateReporterResultState = (...results) => {
+            updateResults(...results);
+            console.log('[results-finalized]');
+          };
+          context.reporters.push({
+            onTestRunStart() { console.log('[reporter-start]'); },
+            onTestRunEnd() { console.log('[reporter-end]'); },
+          });
           const executor = await create(...args);
           if ('${phase}' === 'load') await pause();
           return {
@@ -383,6 +393,9 @@ describe('browser mode - globalSetup', () => {
         expect(cli.stdout).not.toContain('[browser-global-setup] executed');
         expect(cli.stdout).not.toContain('[browser-global-setup-test] running');
         expect(cli.stdout.match(/\[executor-close\]/g)).toHaveLength(1);
+        expect(cli.stdout.match(/\[results-finalized\]/g)).toHaveLength(1);
+        expect(cli.stdout).not.toContain('[reporter-start]');
+        expect(cli.stdout).not.toContain('[reporter-end]');
         if (phase === 'load')
           expect(cli.stdout).not.toContain('[executor-init]');
       } finally {

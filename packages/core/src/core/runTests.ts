@@ -359,24 +359,21 @@ export async function runTests(context: Rstest): Promise<void> {
           planner.getExecutorRunOptions(browserProjectsToRun),
         );
         executors.push(browserExecutor);
-        if (signalExitCode !== undefined) return;
-        await browserExecutor.init();
-        if (signalExitCode !== undefined) return;
+        if (signalExitCode === undefined) await browserExecutor.init();
         // Core-owned pre-cycle globalSetup stage over the resolved browser
         // subset. Its context-local env changes are visible to both the browser
         // cycle and node workers dispatched below.
-        browserStage = await runBrowserGlobalSetupStage(
-          context,
-          browserProjectsToRun,
-          { entriesCache: planner.getPlan().entriesCache },
-        );
+        if (signalExitCode === undefined) {
+          browserStage = await runBrowserGlobalSetupStage(
+            context,
+            browserProjectsToRun,
+            { entriesCache: planner.getPlan().entriesCache },
+          );
+        }
       }
 
-      // After the browser globalSetup stage, not before it: a setup that fails
-      // takes the run down before any reporter was told one started, which is
-      // the pairing every other shape already has.
-      if (signalExitCode !== undefined) return;
-      await notifyReportersOnTestRunStart(context);
+      const reportersStarted = signalExitCode === undefined;
+      if (reportersStarted) await notifyReportersOnTestRunStart(context);
       // Settle every cycle before propagating a failure: a fail-fast
       // `Promise.all` would reach the `finally` teardown while a sibling
       // executor is still mid-cycle, truncating its tests and firing global
@@ -411,6 +408,7 @@ export async function runTests(context: Rstest): Promise<void> {
         mode: 'all',
         isWatchMode: false,
         isInterrupted: () => signalExitCode !== undefined,
+        reportersStarted,
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
         traceRun: activeTraceRun,
