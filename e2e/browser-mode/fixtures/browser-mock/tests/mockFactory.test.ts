@@ -3,9 +3,9 @@ import { foo, sum } from '../src/sum';
 
 // The mock must be hoisted above the static import, so the imported bindings
 // are already replaced when this module evaluates.
-rs.mock('../src/sum', () => {
+jest.mock('../src/sum', () => {
   return {
-    foo: rs.fn(() => 'mocked-foo'),
+    foo: jest.fn(() => 'mocked-foo'),
     sum: 999,
   };
 });

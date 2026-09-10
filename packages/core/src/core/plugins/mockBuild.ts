@@ -5,6 +5,40 @@ import { RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 
 type RspackInstance = ModifyRspackConfigUtils['rspack'];
 
+const jestMockApiAliases = [
+  'mock',
+  'mockRequire',
+  'doMock',
+  'doMockRequire',
+  'unmock',
+  'doUnmock',
+  'unmockRequire',
+  'doUnmockRequire',
+  'importMock',
+  'requireMock',
+  'importActual',
+  'requireActual',
+  'resetModules',
+  'hoisted',
+] as const;
+
+const jestMockApiGlobals = Object.fromEntries(
+  jestMockApiAliases.map((method) => [`jest.${method}`, `rstest.${method}`]),
+);
+
+export const applyJestMockApiAliases = (
+  config: Rspack.SwcLoaderOptions,
+): void => {
+  config.jsc ??= {};
+  config.jsc.transform ??= {};
+  config.jsc.transform.optimizer ??= {};
+  config.jsc.transform.optimizer.globals ??= {};
+  config.jsc.transform.optimizer.globals.vars = {
+    ...config.jsc.transform.optimizer.globals.vars,
+    ...jestMockApiGlobals,
+  };
+};
+
 export const forceWebpackRuntimeMode = (
   config: Rspack.Configuration,
 ): NonNullable<Rspack.Configuration['experiments']> => {

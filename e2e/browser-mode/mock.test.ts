@@ -5,7 +5,8 @@ import { runBrowserCli } from './utils';
 // node build (RstestPlugin + mock runtime + importActual rule). The fixture
 // covers rs.mock factories, hoisting above imports, rs.hoisted,
 // rs.importActual, rs.unmock/doMock/doUnmock, { spy: true }, { mock: true }
-// automock, manual __mocks__ mocks, virtual modules, and rs.mockRequire.
+// automock, manual __mocks__ mocks, virtual modules, rs.mockRequire, and the
+// setup-file `jest = rstest` migration alias.
 describe('browser mode - module mocking', () => {
   it('runs the rs.mock family inside browser test files', async () => {
     const { cli, expectExecSuccess } = await runBrowserCli('browser-mock');

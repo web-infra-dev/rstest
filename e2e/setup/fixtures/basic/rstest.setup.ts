@@ -1,6 +1,8 @@
 import path from 'node:path';
-import { afterAll, beforeAll, expect } from '@rstest/core';
+import { afterAll, beforeAll, expect, rstest } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
+
+(globalThis as Record<string, unknown>).jest = rstest;
 
 process.env.RETEST_SETUP_FLAG = '1';
 

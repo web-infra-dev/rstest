@@ -11,6 +11,7 @@ import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 import {
+  applyJestMockApiAliases,
   applyMockExportsPresence,
   forceWebpackRuntimeMode,
   getMockRstestPluginOptions,
@@ -136,6 +137,7 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
             },
           },
           tools: {
+            swc: applyJestMockApiAliases,
             rspack: (config, { isProd, rspack }) => {
               // keep windows path as native path
               config.context = path.resolve(rootPath);

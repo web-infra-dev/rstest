@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import type { Rspack } from '@rstest/core';
 import {
+  applyJestMockApiAliases,
   applyWatchInvalidation,
   applyWebMockRspackConfig,
   color,
@@ -1694,6 +1695,7 @@ export const createBrowserRuntime = async ({
                   },
                   tools: {
                     swc: (swcConfig) => {
+                      applyJestMockApiAliases(swcConfig);
                       // Fixture dependency discovery reads callback parameters
                       // through Function#toString(). Playwright's supported
                       // browsers all support parameter destructuring, so keep
