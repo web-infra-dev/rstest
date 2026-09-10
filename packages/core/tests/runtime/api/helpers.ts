@@ -15,6 +15,7 @@ export function createWorkerState(): WorkerState {
       restoreMocks: false,
       maxConcurrency: 5,
       retry: 0,
+      expect: { poll: { interval: 50, timeout: 1000 } },
     },
   } as WorkerState;
 }

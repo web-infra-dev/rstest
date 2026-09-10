@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it, rstest } from '@rstest/core';
 
 describe('Fake timers', () => {
   it('exposes the resolved browser polling config', () => {
+    const config = rstest.getConfig();
+    config.expect.poll.timeout = 0;
+    config.expect.poll.interval = 0;
+    expect(rstest.getConfig().expect.poll).toEqual({
+      interval: 50,
+      timeout: 5000,
+    });
+    config.expect.poll = { interval: 1, timeout: 1 };
     expect(rstest.getConfig().expect.poll).toEqual({
       interval: 50,
       timeout: 5000,

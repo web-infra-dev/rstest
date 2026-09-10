@@ -204,7 +204,7 @@ type GetConfig = () => RuntimeConfig & {
 
 <ApiMeta addedVersion="0.12.0" />
 
-The return value also includes the resolved `expect.poll` configuration.
+The return value also includes a copy of the resolved `expect.poll` configuration. Modifying this copy does not change the runtime configuration.
 
 Retrieves the current runtime configuration for the test file. Useful for inspecting or logging the current settings.
 

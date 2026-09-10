@@ -10,6 +10,22 @@ const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 describe('rstest utilities per-file reset', () => {
+  it('returns polling config detached from current and reset state', async () => {
+    const rs = await createUtilities();
+    rs.setConfig({ testTimeout: 2000 });
+    const config = rs.getConfig();
+    config.expect.poll.timeout = 0;
+    config.expect.poll.interval = 0;
+    expect(rs.getConfig().expect.poll).toEqual({ interval: 50, timeout: 1000 });
+
+    config.expect.poll = { interval: 1, timeout: 1 };
+    rs.resetConfig();
+    expect(rs.getConfig()).toMatchObject({
+      testTimeout: 1000,
+      expect: { poll: { interval: 50, timeout: 1000 } },
+    });
+  });
+
   it('restarts invocationCallOrder numbering for the next file', async () => {
     const rs1 = await createUtilities();
     const first = rs1.fn();

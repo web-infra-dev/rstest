@@ -204,7 +204,7 @@ type GetConfig = () => RuntimeConfig & {
 
 <ApiMeta addedVersion="0.12.0" />
 
-返回值还包含合并后的 `expect.poll` 配置。
+返回值还包含合并后的 `expect.poll` 配置副本。修改该副本不会改变运行时配置。
 
 获取当前测试文件的运行时配置。
 

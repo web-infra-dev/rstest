@@ -466,7 +466,7 @@ const buildRstestUtilities = async (): Promise<{
         restoreMocks,
         maxConcurrency,
         retry,
-        expect,
+        expect: { ...expect, poll: { ...expect.poll } },
       };
     },
 
