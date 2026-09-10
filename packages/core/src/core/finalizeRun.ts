@@ -182,6 +182,7 @@ export async function finalizeRunCycle(
     outcomes,
     mode,
     isWatchMode,
+    interrupted = false,
     coverageProvider,
     reportOnFailure,
     traceRun,
@@ -189,6 +190,7 @@ export async function finalizeRunCycle(
     outcomes: ExecutorCycleOutcome[];
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
+    interrupted?: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
     /**
@@ -220,7 +222,9 @@ export async function finalizeRunCycle(
   // `map` into the run's map, then resolve the concatenated v8 `raw` batches.
   // Each executor owns its own per-file merge (node in the pool, browser at
   // outcome assembly), so nothing is read off individual results here.
-  const mergedCoverageMap = coverageProvider?.createCoverageMap();
+  const mergedCoverageMap = interrupted
+    ? undefined
+    : coverageProvider?.createCoverageMap();
   for (const outcome of outcomes) {
     if (outcome.coverage?.map) {
       mergedCoverageMap?.merge(outcome.coverage.map);
@@ -243,7 +247,7 @@ export async function finalizeRunCycle(
 
   const rawCoverageResults = outcomes.flatMap((o) => o.coverage?.raw ?? []);
   await resolveAndMergeRawCoverage({
-    coverageProvider,
+    coverageProvider: interrupted ? null : coverageProvider,
     mergedCoverageMap,
     rawCoverageResults,
     resolveOptions: {
@@ -280,7 +284,7 @@ export async function finalizeRunCycle(
     outcomes.flatMap((o) => o.deletedTestPaths ?? []),
   );
 
-  if (noTestsDiscovered) {
+  if (!interrupted && noTestsDiscovered) {
     reportNoTestFiles({ context, mode });
   }
 
@@ -310,6 +314,7 @@ export async function finalizeRunCycle(
   // reports, and thresholds belong to the merge-reports process that sees the
   // complete coverage map rather than to every partial shard.
   if (
+    !interrupted &&
     coverageProvider &&
     !defersCoverageReport &&
     (!isFailure || reportOnFailure)
@@ -327,7 +332,7 @@ export async function finalizeRunCycle(
 
   await runLifecycleStep('trace run finalize', () => traceRun.finalize());
 
-  if (isFailure) {
+  if (!interrupted && isFailure) {
     const bail = context.normalizedConfig.bail;
     if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
       logger.log(

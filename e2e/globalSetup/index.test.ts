@@ -8,12 +8,16 @@ const __dirname = dirname(__filename);
 
 describe('globalSetup', async () => {
   describe.skipIf(process.platform === 'win32')('SIGINT cancellation', () => {
-    it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
-      'cancels queued tests and tears down once under %s',
-      async (pool) => {
+    it.for(
+      ['forks', 'threads', 'vmForks', 'vmThreads'].flatMap((pool) =>
+        [false, true].map((exitDuringCleanup) => ({ pool, exitDuringCleanup })),
+      ),
+    )(
+      'cancels tests under $pool (cleanup calls exit: $exitDuringCleanup)',
+      async ({ pool, exitDuringCleanup }) => {
         const fixturesTargetPath = join(
           __dirname,
-          `fixtures-test-sigint-${pool}`,
+          `fixtures-test-sigint-${pool}-${exitDuringCleanup}`,
         );
         const { fs } = await prepareFixtures({
           fixturesPath: join(__dirname, 'fixtures/basic'),
@@ -24,10 +28,22 @@ describe('globalSetup', async () => {
             'globalSetup:',
             `reporters: ['default', {
             onTestFileResult() { console.log('[unexpected-file-result]'); },
-            onTestRunEnd() { console.log('[unexpected-run-end]'); },
+            onTestRunStart() { console.log('[run-start]'); },
+            async onTestRunEnd() {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              console.log('[run-end]');
+            },
           }], globalSetup:`,
           ),
         );
+        if (exitDuringCleanup) {
+          fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
+            content.replace(
+              "console.log('[rstest-dev-server] closed');",
+              "console.log('[rstest-dev-server] closed'); process.exit(0);",
+            ),
+          );
+        }
         for (const name of ['index.test.ts', 'index1.test.ts']) {
           fs.update(
             join(fixturesTargetPath, name),
@@ -63,7 +79,10 @@ describe('globalSetup', async () => {
           await expectExecFailed();
           expect(cli.exec.process!.exitCode).toBe(130);
           expect(cli.log).not.toContain('[unexpected-file-result]');
-          expect(cli.log).not.toContain('[unexpected-run-end]');
+          expect(cli.stdout.match(/\[run-start\]/g)).toHaveLength(1);
+          if (exitDuringCleanup) return;
+          expect(cli.stdout.match(/\[run-end\]/g)).toHaveLength(1);
+          expect(cli.log).not.toContain('No test files found');
           expect(cli.log).not.toContain('pool is closed');
           expect(cli.log).not.toContain('Worker stopped');
           expect(cli.log).not.toContain('exited unexpectedly');

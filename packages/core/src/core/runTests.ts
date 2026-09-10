@@ -270,7 +270,11 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     };
 
-    let isInterrupted = false;
+    let signalExitCode: number | undefined;
+    let resolveRunFinished!: () => void;
+    const runFinished = new Promise<void>((resolve) => {
+      resolveRunFinished = resolve;
+    });
     let isTeardown = false;
     let isCleaningUp = false;
     const cleanup = async () => {
@@ -279,7 +283,12 @@ export async function runTests(context: Rstest): Promise<void> {
       }
       isCleaningUp = true;
       try {
-        await closeExecutors();
+        try {
+          await closeExecutors();
+        } finally {
+          // Closing unblocks the cycle; its finalizer must finish before exit.
+          await runFinished;
+        }
         await runLifecycleStep('trace run finalize', () =>
           activeTraceRun.finalize(),
         );
@@ -292,7 +301,14 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const unExpectedExit = (code?: number) => {
-      if (isInterrupted) return;
+      if (signalExitCode !== undefined) {
+        process.exitCode = Math.max(
+          Number(process.exitCode) || 0,
+          signalExitCode,
+          context.exitCode.current,
+        );
+        return;
+      }
       if (isTeardown) {
         logger.log(
           color.yellow(
@@ -313,10 +329,11 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const handleSignal = async (signal: NodeJS.Signals) => {
-      isInterrupted = true;
+      signalExitCode = getSignalExitCode(signal);
+      context.exitCode.raise(signalExitCode);
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
-      process.exit(getSignalExitCode(signal));
+      process.exit(context.exitCode.current);
     };
 
     if (!context.embedded) {
@@ -352,6 +369,7 @@ export async function runTests(context: Rstest): Promise<void> {
       // After the browser globalSetup stage, not before it: a setup that fails
       // takes the run down before any reporter was told one started, which is
       // the pairing every other shape already has.
+      if (signalExitCode !== undefined) return;
       await notifyReportersOnTestRunStart(context);
       // Settle every cycle before propagating a failure: a fail-fast
       // `Promise.all` would reach the `finally` teardown while a sibling
@@ -369,14 +387,19 @@ export async function runTests(context: Rstest): Promise<void> {
               onTraceEvents: forwardBrowserTraceEvents,
             }),
       );
-      await Promise.allSettled(cyclePromises);
-      if (isInterrupted) return;
-      const outcomes = await Promise.all(cyclePromises);
+      const settledCycles = await Promise.allSettled(cyclePromises);
+      const outcomes =
+        signalExitCode === undefined
+          ? await Promise.all(cyclePromises)
+          : settledCycles.flatMap((cycle) =>
+              cycle.status === 'fulfilled' ? [cycle.value] : [],
+            );
 
       await finalizeRunCycle(context, {
         outcomes,
         mode: 'all',
         isWatchMode: false,
+        interrupted: signalExitCode !== undefined,
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
         traceRun: activeTraceRun,
@@ -386,7 +409,9 @@ export async function runTests(context: Rstest): Promise<void> {
       try {
         await closeExecutors();
       } finally {
-        if (!context.embedded) {
+        resolveRunFinished();
+        if (signalExitCode !== undefined) context.exitCode.finishCycle();
+        if (!context.embedded && signalExitCode === undefined) {
           process.off('exit', unExpectedExit);
           for (const signal of FATAL_SIGNALS) {
             process.off(signal, handleSignal);
@@ -395,6 +420,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
+    if (signalExitCode !== undefined) return;
     await runLifecycleStep('trace wait for exit', () =>
       traceController.waitForExit(),
     );
