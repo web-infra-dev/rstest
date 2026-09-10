@@ -27,9 +27,11 @@ const publishFile = (
   testPath: string,
   currentTestName: string,
   concurrent = false,
+  runtimeGlobal?: Record<string, unknown>,
 ) => {
   setFileContext({
     workerState: { testPath, runtimeConfig: {} } as WorkerState,
+    runtimeGlobal,
     testRunner: {
       getCurrentTest: () => fakeTest(currentTestName, concurrent),
       getCurrentTimeoutContext: () => undefined,
@@ -145,6 +147,66 @@ describe('file-level expect singleton (isolate: false)', () => {
     expect(localExpect.getState().assertionCalls).toBe(3);
     // The file singleton's state is untouched by the local expect.
     expect(fileExpect.getState().assertionCalls).toBe(0);
+  });
+
+  it('matches primitives against constructors from the running VM realm', () => {
+    const context = vm.createContext({});
+    const runtimeGlobal = vm.runInContext('globalThis', context) as Record<
+      string,
+      unknown
+    >;
+    publishFile('/f1', 't1', false, runtimeGlobal);
+    const fileExpect = createFileExpect(() => {});
+
+    const stringMatcher = fileExpect.any(
+      runtimeGlobal.String as StringConstructor,
+    );
+    const numberMatcher = fileExpect.any(
+      runtimeGlobal.Number as NumberConstructor,
+    );
+    const objectMatcher = fileExpect.objectContaining({
+      value: numberMatcher,
+    });
+    const boxedPrimitives = vm.runInContext(
+      `[
+        Object('value'),
+        Object(42),
+        Object(true),
+        Object(42n),
+        Object(Symbol('value')),
+        new (class extends String {})('value'),
+      ]`,
+      context,
+    ) as unknown[];
+
+    expect(stringMatcher.asymmetricMatch('value')).toBe(true);
+    expect(numberMatcher.asymmetricMatch(42)).toBe(true);
+    expect(objectMatcher.asymmetricMatch({ value: 42 })).toBe(true);
+    expect(
+      fileExpect
+        .any(runtimeGlobal.Object as ObjectConstructor)
+        .asymmetricMatch(() => {}),
+    ).toBe(false);
+    expect(
+      fileExpect
+        .any(runtimeGlobal.Function as FunctionConstructor)
+        .asymmetricMatch(
+          vm.runInContext('Object.create(Function.prototype)', context),
+        ),
+    ).toBe(false);
+    for (const [index, constructorName] of [
+      'String',
+      'Number',
+      'Boolean',
+      'BigInt',
+      'Symbol',
+      'String',
+    ].entries()) {
+      const matcher = fileExpect.any(
+        runtimeGlobal[constructorName] as StringConstructor,
+      );
+      expect(matcher.asymmetricMatch(boxedPrimitives[index])).toBe(true);
+    }
   });
 
   it('does not use the shared test deadline for concurrent tests', () => {

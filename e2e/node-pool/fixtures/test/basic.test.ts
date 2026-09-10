@@ -34,6 +34,22 @@ describe('node pool - basic', () => {
     ]);
   });
 
+  it('matches VM-realm constructors in asymmetric matchers', () => {
+    expect('value').toEqual(expect.any(String));
+    expect(42).toEqual(expect.any(Number));
+    expect(Object('value')).toEqual(expect.any(String));
+    expect(Object(42)).toEqual(expect.any(Number));
+    expect(Object(true)).toEqual(expect.any(Boolean));
+    expect(Object(42n)).toEqual(expect.any(BigInt));
+    expect(Object(Symbol('value'))).toEqual(expect.any(Symbol));
+    expect(new (class extends String {})('value')).toEqual(expect.any(String));
+    expect(() => {}).not.toEqual(expect.any(Object));
+    expect(Object.create(Function.prototype)).not.toEqual(expect.any(Function));
+    expect({ value: 42 }).toEqual(
+      expect.objectContaining({ value: expect.any(Number) }),
+    );
+  });
+
   it('can import source modules and observe local mutation', () => {
     source.increment();
     expect(source.getCount()).toBe(1);
