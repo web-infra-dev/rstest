@@ -1,5 +1,5 @@
 import { describe, expect, it, rs } from '@rstest/core';
-import { getCount, increment } from '../src/index';
+import * as source from '../src/index';
 
 const FILE_MARKER = '__rstest_threads_pool_file_marker__';
 
@@ -35,8 +35,16 @@ describe('node pool - basic', () => {
   });
 
   it('can import source modules and observe local mutation', () => {
-    increment();
-    expect(getCount()).toBe(1);
+    source.increment();
+    expect(source.getCount()).toBe(1);
+  });
+
+  it('can spy on a bundled namespace export', () => {
+    const spy = rs.spyOn(source, 'getLabel').mockReturnValue('mocked');
+
+    expect(source.getLabel()).toBe('mocked');
+    spy.mockRestore();
+    expect(source.getLabel()).toBe('real');
   });
 
   it('runs in the expected worker transport', () => {

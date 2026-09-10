@@ -70,7 +70,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.2.3",
+    "@rsbuild/core": "~2.2.4",
     "@types/chai": "^5.2.3",
     "cjs-module-lexer": "^2.2.1"
   },

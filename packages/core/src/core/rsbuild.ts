@@ -603,7 +603,7 @@ export const createRsbuildServer = async ({
             buildData[environmentName],
             outputPath!,
             runtimeChunkNameForEnvironment(environmentName),
-            setupEntries,
+            [...setupEntries, ...globalSetupEntries],
           )
         : { affectedEntries: [], deletedEntries: [] };
 

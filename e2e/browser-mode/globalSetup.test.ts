@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { prepareFixtures, sleep } from '../scripts';
+import { BROWSER_PORTS } from './fixtures/ports';
 import {
   deleteFixtureTarget,
   killCliProcessTree,
@@ -459,6 +460,48 @@ Module._resolveFilename = function (request, ...args) {
       await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
     }
   }, 60_000);
+
+  it('runs globalSetup at empty watch start so added files receive its env', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-empty-watch',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+      fixturesTargetPath,
+    });
+    fixtureFs.delete(
+      path.join(fixturesTargetPath, 'tests/globalSetup.test.ts'),
+    );
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+      args: [
+        `--browser.port=${BROWSER_PORTS['browser-global-setup-empty-watch']}`,
+      ],
+    });
+    try {
+      await cli.waitForStdout('[browser-global-setup] executed');
+      await cli.waitForStdout('No test files found');
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(
+        cli.stdout.indexOf('[browser-global-setup] executed'),
+      ).toBeLessThan(cli.stdout.indexOf('No test files found'));
+      fixtureFs.create(
+        path.join(fixturesTargetPath, 'tests/added.test.ts'),
+        `import { expect, it } from '@rstest/core';
+it('receives globalSetup env in the added file', () => {
+  expect(import.meta.env.RSTEST_E2E_GS).toBe('from-global-setup');
+  expect(process.env.RSTEST_E2E_GS).toBe('from-global-setup');
+});`,
+      );
+      await cli.waitForStdout('Test Files 1 passed');
+      expect(cli.stdout.split('[browser-global-setup] executed')).toHaveLength(
+        2,
+      );
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+    }
+  });
 
   it('runs globalSetup once per watch session and reruns it only on a config restart', async () => {
     const fixturesTargetPath = path.join(

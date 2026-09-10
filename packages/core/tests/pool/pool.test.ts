@@ -175,14 +175,14 @@ describe('Pool - environment prebundle fallback', () => {
   });
 });
 
-describe('Pool - VM worker memory limit', () => {
-  it('recycles a reusable worker after it reports heap over the limit', async () => {
+describe('Pool - worker memory limit', () => {
+  it('recycles a reusable fork after it reports RSS over the limit', async () => {
     const pool = new Pool(
       createPoolOptions({
         isolate: false,
         maxWorkers: 1,
         minWorkers: 1,
-        memoryLimit: 100,
+        memoryLimit: 200,
       }),
     );
     try {

@@ -6,7 +6,7 @@ import type {
   ListCommandResult,
 } from '../types';
 import {
-  claimGlobalSetupOnce,
+  shouldRunGlobalSetup,
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
@@ -110,7 +110,7 @@ const collectNodeTests = async ({
         });
 
         if (
-          claimGlobalSetupOnce(
+          shouldRunGlobalSetup(
             project,
             entries.length,
             globalSetupEntries.length,
@@ -124,7 +124,7 @@ const collectNodeTests = async ({
             sourceMapsPromise,
           ]);
 
-          const { success, errors } = await runGlobalSetup(context, {
+          const { success, errors } = await runGlobalSetup(context, project, {
             globalSetupEntries,
             assetFiles,
             sourceMaps,

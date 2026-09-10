@@ -208,7 +208,7 @@ const poolOptionDefinitions: OptionDefinition[] = [
   ],
   [
     '--pool.memoryLimit <limit>',
-    'Memory limit for VM workers before recycling (e.g. 256MB or 50%); currently only supported by vmForks and vmThreads',
+    'Memory threshold for recycling reused forks or VM workers (e.g. 256MB or 50%)',
   ],
   [
     '--pool.execArgv <arg>',

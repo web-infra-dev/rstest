@@ -90,5 +90,19 @@ export async function resolveRunnerInputs({
     options,
   });
 
+  const names = new Set<string>();
+  for (const project of projects) {
+    if (names.has(project.config.name!)) {
+      const conflictProjects = projects.filter(
+        (p) => p.config.name === project.config.name,
+      );
+      throw `Project name "${project.config.name}" is already used. Please ensure all projects have unique names.
+Conflicting projects:
+${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n')}`;
+    }
+
+    names.add(project.config.name!);
+  }
+
   return { config, configFilePath, projects, cwd };
 }

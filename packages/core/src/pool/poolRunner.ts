@@ -2,7 +2,10 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
 import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
 import { toError } from '../utils';
-import { FIXTURE_CLEANUP_TIMEOUT_MS } from '../utils/constants';
+import {
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  WORKER_CLEANUP_TIMEOUT_MS,
+} from '../utils/constants';
 import type { PoolWorker } from './poolWorker';
 import {
   type CollectTaskResult,
@@ -65,6 +68,7 @@ type PoolRunnerOptions = {
   workerId: number;
   environmentKey: string;
   memoryLimit?: number;
+  memoryMetric?: 'rss' | 'heapUsed';
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
 
@@ -111,11 +115,13 @@ export class PoolRunner {
   ) => void;
   private readonly memoryLimit: number | undefined;
   private memoryLimitReached = false;
+  private readonly memoryMetric: 'rss' | 'heapUsed';
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
     this.environmentKey = options.environmentKey;
     this.memoryLimit = options.memoryLimit;
+    this.memoryMetric = options.memoryMetric ?? 'heapUsed';
     this.onTestEnvironmentFallback = options.onTestEnvironmentFallback;
     this.worker = worker;
 
@@ -278,10 +284,10 @@ export class PoolRunner {
     this.cleanupTimer = setTimeout(() => {
       this.rejectCleanup(
         new Error(
-          `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+          `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
         ),
       );
-    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+    }, WORKER_CLEANUP_TIMEOUT_MS);
     this.cleanupTimer.unref();
     try {
       this.worker.send({ type: 'cleanup' });
@@ -448,11 +454,11 @@ export class PoolRunner {
         }
         return;
       case 'runFinished':
-        this.recordMemoryUsage(response.memory?.heapUsed);
+        this.recordMemoryUsage(response.memory?.[this.memoryMetric]);
         this.resolveTask('run', response.taskId, response.result);
         return;
       case 'collectFinished':
-        this.recordMemoryUsage(response.memory?.heapUsed);
+        this.recordMemoryUsage(response.memory?.[this.memoryMetric]);
         this.resolveTask('collect', response.taskId, response.result);
         return;
       case 'testEnvironmentFallback':
@@ -487,11 +493,11 @@ export class PoolRunner {
     task.resolve(result);
   }
 
-  private recordMemoryUsage(heapUsed: number | undefined): void {
+  private recordMemoryUsage(memoryUsed: number | undefined): void {
     if (
       this.memoryLimit !== undefined &&
-      heapUsed !== undefined &&
-      heapUsed >= this.memoryLimit
+      memoryUsed !== undefined &&
+      memoryUsed >= this.memoryLimit
     ) {
       this.memoryLimitReached = true;
     }
@@ -601,13 +607,17 @@ export class PoolRunner {
       return;
     }
     this.clearFixtureCleanupTimer();
+    const timeoutMs =
+      scope === 'Worker'
+        ? WORKER_CLEANUP_TIMEOUT_MS
+        : FIXTURE_CLEANUP_TIMEOUT_MS;
     this.fixtureCleanupTimer = setTimeout(() => {
       if (this.currentTask?.taskId !== taskId) {
         return;
       }
       this.crashed = true;
       const error = new Error(
-        `${scope} fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+        `${scope} fixture cleanup did not finish within ${timeoutMs}ms`,
       );
       const task = this.currentTask;
       if (task.kind === 'run' && task.provisionalResult) {
@@ -625,7 +635,7 @@ export class PoolRunner {
         return;
       }
       this.rejectCurrentTaskWithStderr(error);
-    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+    }, timeoutMs);
     this.fixtureCleanupTimer.unref();
   }
 

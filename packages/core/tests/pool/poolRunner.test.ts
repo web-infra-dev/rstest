@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { FIXTURE_CLEANUP_TIMEOUT_MS } from '../../src/utils/constants';
+import {
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  WORKER_CLEANUP_TIMEOUT_MS,
+} from '../../src/utils/constants';
 import { PoolRunner } from '../../src/pool/poolRunner';
 import type { Envelope, WorkerRequest } from '../../src/pool/protocol';
 import { wrapWorkerResponse } from '../../src/pool/protocol';
@@ -97,6 +100,8 @@ class WorkerCleanupErrorWorker implements PoolWorker {
   private live = true;
   cleanupRequests = 0;
 
+  constructor(private readonly finishInTaskCleanup = true) {}
+
   async start(): Promise<void> {}
 
   async stop(): Promise<void> {
@@ -141,6 +146,9 @@ class WorkerCleanupErrorWorker implements PoolWorker {
         taskId: request.taskId,
       }),
     );
+    if (!this.finishInTaskCleanup) {
+      return;
+    }
     this.events.emit(
       'message',
       wrapWorkerResponse({
@@ -197,6 +205,13 @@ class WorkerCleanupErrorWorker implements PoolWorker {
   }
 }
 
+class WorkerCleanupTimeoutWorker extends WorkerCleanupErrorWorker {
+  override send(request: WorkerRequest): void {
+    if (request.type === 'cleanup') return;
+    super.send(request);
+  }
+}
+
 class MemoryReportingWorker implements PoolWorker {
   readonly name = 'memory-reporting-worker';
   private readonly events = new EventEmitter();
@@ -234,7 +249,7 @@ class MemoryReportingWorker implements PoolWorker {
               testId: 'file:/test.ts',
               testPath: '/test.ts',
             },
-            memory: { heapUsed: 101 },
+            memory: { heapUsed: 101, rss: 201 },
           }),
         );
       });
@@ -312,6 +327,63 @@ describe('PoolRunner file fixture cleanup watchdog', () => {
 });
 
 describe('PoolRunner worker fixture cleanup', () => {
+  it('uses the longer watchdog for in-task worker cleanup', async () => {
+    rs.useFakeTimers();
+    const runner = new PoolRunner(new WorkerCleanupErrorWorker(false), {
+      environmentKey: 'node',
+      workerId: 1,
+    });
+
+    try {
+      await runner.start();
+      const runPromise = runner.runTest(createTask());
+      let settled = false;
+      void runPromise.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+
+      await rs.advanceTimersByTimeAsync(FIXTURE_CLEANUP_TIMEOUT_MS);
+      expect(settled).toBe(false);
+
+      await rs.advanceTimersByTimeAsync(
+        WORKER_CLEANUP_TIMEOUT_MS - FIXTURE_CLEANUP_TIMEOUT_MS,
+      );
+      await expect(runPromise).rejects.toThrow(
+        `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
+      );
+    } finally {
+      rs.useRealTimers();
+      await runner.stop();
+    }
+  });
+
+  it('uses the longer watchdog for final worker cleanup', async () => {
+    rs.useFakeTimers();
+    const runner = new PoolRunner(new WorkerCleanupTimeoutWorker(), {
+      environmentKey: 'node',
+      workerId: 1,
+    });
+
+    try {
+      await runner.start();
+      const cleanupPromise = runner.cleanupWorkerFixtures();
+      const rejection = expect(cleanupPromise).rejects.toThrow(
+        `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
+      );
+
+      await rs.advanceTimersByTimeAsync(WORKER_CLEANUP_TIMEOUT_MS);
+      await rejection;
+    } finally {
+      rs.useRealTimers();
+      await runner.stop();
+    }
+  });
+
   it('keeps the completed result when worker cleanup reports an error', async () => {
     const runner = new PoolRunner(new WorkerCleanupErrorWorker(), {
       environmentKey: 'node',
@@ -360,4 +432,30 @@ describe('PoolRunner VM worker memory limit', () => {
     expect(runner.shouldRecycle()).toBe(true);
     await runner.stop({ force: true });
   });
+});
+
+describe('PoolRunner RSS limit', () => {
+  it.for([
+    { memoryMetric: 'rss', memoryLimit: 200, recycle: true },
+    { memoryMetric: 'rss', memoryLimit: 201, recycle: true },
+    { memoryMetric: 'rss', memoryLimit: 202, recycle: false },
+    { memoryMetric: 'heapUsed', memoryLimit: 200, recycle: false },
+  ] as const)(
+    '$memoryMetric at $memoryLimit bytes',
+    async ({ memoryMetric, memoryLimit, recycle }) => {
+      const runner = new PoolRunner(new MemoryReportingWorker(), {
+        environmentKey: 'node',
+        workerId: 1,
+        memoryMetric,
+        memoryLimit,
+      });
+      try {
+        await runner.start();
+        await runner.runTest(createTask());
+        expect(runner.shouldRecycle()).toBe(recycle);
+      } finally {
+        await runner.stop({ force: true });
+      }
+    },
+  );
 });

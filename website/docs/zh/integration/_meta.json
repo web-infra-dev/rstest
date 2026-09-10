@@ -1,0 +1,48 @@
+[
+  {
+    "type": "section-header",
+    "label": "集成"
+  },
+  "module-federation",
+  "playwright",
+  "rslint",
+  {
+    "type": "custom-link",
+    "label": "Rslib",
+    "collapsible": true,
+    "collapsed": true,
+    "items": [
+      { "label": "概览", "link": "/integration/rslib/" },
+      {
+        "label": "配置参考",
+        "link": "/integration/rslib/reference"
+      }
+    ]
+  },
+  {
+    "type": "custom-link",
+    "label": "Rsbuild",
+    "collapsible": true,
+    "collapsed": true,
+    "items": [
+      { "label": "概览", "link": "/integration/rsbuild/" },
+      {
+        "label": "配置参考",
+        "link": "/integration/rsbuild/reference"
+      }
+    ]
+  },
+  {
+    "type": "custom-link",
+    "label": "Rspack",
+    "collapsible": true,
+    "collapsed": true,
+    "items": [
+      { "label": "概览", "link": "/integration/rspack/" },
+      {
+        "label": "配置参考",
+        "link": "/integration/rspack/reference"
+      }
+    ]
+  }
+]

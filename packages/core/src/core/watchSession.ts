@@ -185,8 +185,8 @@ export function createWatchCycleDriver({
   enableCliShortcuts: boolean;
   /**
    * Whether the run still has a session that could answer the ready banner. A
-   * browser launch that found no test files (or failed before its runtime came
-   * up) leaves none, and no trigger of any kind can fire afterwards — offering
+   * browser launch that failed before its runtime came up leaves none,
+   * and no trigger of any kind can fire afterwards — offering
    * to wait for file changes there would be a promise nothing can keep.
    */
   isSessionLive: () => boolean;

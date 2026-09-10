@@ -2,7 +2,13 @@ import { resolveObjectURL } from 'node:buffer';
 import { appendFileSync } from 'node:fs';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { promisify } from 'node:util';
-import { afterAll, expect, registerFileCleanup, rs } from '@rstest/core';
+import {
+  afterAll,
+  beforeAll,
+  expect,
+  registerFileCleanup,
+  rs,
+} from '@rstest/core';
 
 expect(typeof globalThis.crypto.subtle.digest).toBe('function');
 expect(globalThis.crypto.randomUUID()).toMatch(/^[0-9a-f-]{36}$/);
@@ -47,6 +53,14 @@ afterAll(async () => {
   }
   const marker = process.env.RSTEST_VM_WAIT_MARKER;
   if (!marker) throw new Error('RSTEST_VM_WAIT_MARKER is required');
+  // Cleanup may take longer than the interval. Only callbacks surviving into
+  // the next file are leaks; callbacks during this file's teardown are valid.
+  const env = process.env;
+  setInterval(() => {
+    if (env.RSTEST_VM_PREVIOUS_OBJECT_URL !== objectURL) {
+      appendFileSync(marker, 'stale VM timer\n');
+    }
+  }, 10);
   const options = { timeout: 60_000, interval: 10_000 };
   const waits = [
     rs.waitUntil(() => false, options),
@@ -76,6 +90,11 @@ if (previousObjectURL) {
 const objectURL = URL.createObjectURL(new Blob(['file-scoped']));
 expect(resolveObjectURL(objectURL)).toBeDefined();
 process.env.RSTEST_VM_PREVIOUS_OBJECT_URL = objectURL;
+if (previousObjectURL) {
+  beforeAll(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  });
+}
 
 if (process.env.RSTEST_VM_FILE_CLEANUP_FAIL === 'true') {
   registerFileCleanup(() => {

@@ -426,8 +426,8 @@ export async function runTests(context: Rstest): Promise<void> {
       activeTraceRun = traceRun;
     },
     enableCliShortcuts,
-    // The node side always keeps the session open; a browser-only mixed watch
-    // has nothing left when the host's launch opened no session.
+    // Empty launches keep watching; a browser boot failure returned as an
+    // outcome can still leave no live session.
     isSessionLive: () =>
       Boolean(nodeExecutorToRun) ||
       (browserExecutor?.hasWatchSession() ?? false),
@@ -554,6 +554,7 @@ export async function runTests(context: Rstest): Promise<void> {
       const stage = await watchTeardown.track(
         runBrowserGlobalSetupStage(context, planner.getBrowserProjectsToRun(), {
           entriesCache: planner.getPlan().entriesCache,
+          watch: true,
         }),
       );
       if (stage.errors.length) {

@@ -12,22 +12,6 @@ const parsePayload = (stdout: string) =>
   parseMarkerPayload<Record<string, any>>(stdout, '__RSTEST_API_RESULT__');
 
 describe('programmatic createRstest', () => {
-  it('validates duplicate names only among selected projects', async ({
-    onTestFinished,
-  }) => {
-    const { cli } = await runRstestCli({
-      command: 'node',
-      args: ['run-duplicate-projects.mjs'],
-      onTestFinished,
-      options: { nodeOptions: { cwd: fixturesDir } },
-    });
-    await cli.exec;
-    const result = parsePayload(cli.stdout);
-    expect(result.status).toBe('pass');
-    expect(result.passed).toBe(1);
-    expect(result.error).toContain('Project name "beta" is already used');
-  });
-
   it.for(['forks', 'vmThreads'] as const)(
     'uses inline config and rejects build failures with %s',
     async (pool, { onTestFinished }) => {
@@ -458,7 +442,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: 'pass',
       tests: 1,
       file: 'browser.test.ts',
@@ -468,6 +452,16 @@ describe('programmatic createRstest', () => {
         { status: 'pass', tests: 1, errors: [] },
         { status: 'pass', tests: 1, errors: [] },
       ],
+    });
+    expect(result.emptyProjectCycles[0]).toEqual({
+      status: 'pass',
+      files: [],
+      errors: [],
+    });
+    expect(result.emptyProjectCycles.at(-1)).toEqual({
+      status: 'pass',
+      files: ['added.test.ts'],
+      errors: [],
     });
     expect(cli.stdout).toContain('Waiting for file changes...');
     expect(cli.stdout).not.toContain('press h');

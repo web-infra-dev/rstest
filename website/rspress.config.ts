@@ -104,8 +104,48 @@ export default defineConfig({
           to: '/guide/advanced/adapters',
         },
         {
+          from: '^/guide/integration$',
+          to: '/integration/module-federation',
+        },
+        {
+          from: '/guide/integration/module-federation',
+          to: '/integration/module-federation',
+        },
+        {
+          from: '/guide/integration/playwright',
+          to: '/integration/playwright',
+        },
+        {
+          from: '/guide/integration/rslint',
+          to: '/integration/rslint',
+        },
+        {
+          from: '/guide/integration/rslib',
+          to: '/integration/rslib',
+        },
+        {
+          from: '/guide/integration/rslib/reference',
+          to: '/integration/rslib/reference',
+        },
+        {
+          from: '/guide/integration/rsbuild',
+          to: '/integration/rsbuild',
+        },
+        {
+          from: '/guide/integration/rsbuild/reference',
+          to: '/integration/rsbuild/reference',
+        },
+        {
+          from: '/guide/integration/rspack',
+          to: '/integration/rspack',
+        },
+        {
+          from: '/guide/integration/rspack/reference',
+          to: '/integration/rspack/reference',
+        },
+        {
           from: '/guide/advanced/playwright',
-          to: '/guide/integration/playwright',
+          to: '/integration/playwright',
         },
         {
           from: '/zh/guide/advanced/debugging',
@@ -132,8 +172,48 @@ export default defineConfig({
           to: '/zh/guide/advanced/adapters',
         },
         {
+          from: '^/zh/guide/integration$',
+          to: '/zh/integration/module-federation',
+        },
+        {
+          from: '/zh/guide/integration/module-federation',
+          to: '/zh/integration/module-federation',
+        },
+        {
+          from: '/zh/guide/integration/playwright',
+          to: '/zh/integration/playwright',
+        },
+        {
+          from: '/zh/guide/integration/rslint',
+          to: '/zh/integration/rslint',
+        },
+        {
+          from: '/zh/guide/integration/rslib',
+          to: '/zh/integration/rslib',
+        },
+        {
+          from: '/zh/guide/integration/rslib/reference',
+          to: '/zh/integration/rslib/reference',
+        },
+        {
+          from: '/zh/guide/integration/rsbuild',
+          to: '/zh/integration/rsbuild',
+        },
+        {
+          from: '/zh/guide/integration/rsbuild/reference',
+          to: '/zh/integration/rsbuild/reference',
+        },
+        {
+          from: '/zh/guide/integration/rspack',
+          to: '/zh/integration/rspack',
+        },
+        {
+          from: '/zh/guide/integration/rspack/reference',
+          to: '/zh/integration/rspack/reference',
+        },
+        {
           from: '/zh/guide/advanced/playwright',
-          to: '/zh/guide/integration/playwright',
+          to: '/zh/integration/playwright',
         },
       ],
     }),

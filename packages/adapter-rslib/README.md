@@ -20,4 +20,4 @@ export default defineConfig({
 });
 ```
 
-More advanced usage examples can be found in the [Rslib integration guide](https://rstest.rs/guide/integration/rslib).
+More advanced usage examples can be found in the [Rslib integration guide](https://rstest.rs/integration/rslib).
