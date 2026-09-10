@@ -233,8 +233,6 @@ describe('programmatic createRstest', () => {
       status: 'pass',
       tests: 1,
       extendsCalls: 1,
-      emptyConfig: { content: {}, filePath: null, dependencies: [] },
-      dependencies: ['shared.mjs'],
     });
   });
 

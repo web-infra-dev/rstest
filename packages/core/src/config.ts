@@ -40,11 +40,9 @@ const DEFAULT_FORCE_RERUN_TRIGGERS = [
   '**/rstest.config.*',
 ];
 
-export interface LoadedRstestConfig extends Pick<
-  LoadConfigResult<RstestConfig>,
-  'content' | 'filePath'
-> {
-  dependencies?: string[];
+export interface LoadedRstestConfig {
+  content: RstestConfig;
+  filePath: string | null;
 }
 
 export async function loadConfig({

@@ -62,7 +62,6 @@ const rstest = await createRstest({ config: loaded });
 ```ts
 interface LoadedRstestConfig {
   content: RstestConfig; // Loaded config content.
-  dependencies?: string[];
   filePath: string | null; // Source config file path returned by `loadConfig`, or `null`.
 }
 

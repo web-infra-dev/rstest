@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRstest } from '@rstest/core/api';
 import { loadConfig } from '@rstest/core';
@@ -9,11 +9,6 @@ const root = join(fixtureDir, `.loaded-config-${process.pid}`);
 const extendsLog = join(root, 'extends.log');
 
 await mkdir(root, { recursive: true });
-const emptyConfig = await loadConfig({ cwd: root });
-await writeFile(
-  join(root, 'shared.mjs'),
-  "export const include = ['loaded.test.ts'];",
-);
 await writeFile(
   join(root, 'loaded.test.ts'),
   `
@@ -28,12 +23,11 @@ await writeFile(
   join(root, 'rstest.config.mjs'),
   `
 import { appendFileSync } from 'node:fs';
-import { include } from './shared.mjs';
 
 export default {
   extends: () => {
     appendFileSync(${JSON.stringify(extendsLog)}, 'resolved\\n');
-    return { include };
+    return { include: ['loaded.test.ts'] };
   },
   reporters: [],
 };
@@ -57,8 +51,6 @@ try {
       status: result.status,
       tests: result.summary.tests.total,
       extendsCalls: extendsEntries.length,
-      emptyConfig,
-      dependencies: loaded.dependencies?.map((file) => relative(root, file)),
     })}__END__`,
   );
 } finally {
