@@ -54,6 +54,7 @@ try {
       provider: 'playwright',
       headless: true,
       port: Number(process.argv[2]),
+      strictPort: true,
       providerOptions: process.env.CI
         ? { launch: { channel: 'chrome' } }
         : undefined,
@@ -92,15 +93,85 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
 
   const emptyRoot = join(root, 'empty');
   await mkdir(emptyRoot, { recursive: true });
+  const failedBuildRstest = await createRstest({
+    cwd: emptyRoot,
+    config: {
+      ...config,
+      include: ['*.test.ts'],
+      tools: {
+        rspack(rspackConfig) {
+          rspackConfig.plugins.push({
+            apply(compiler) {
+              compiler.hooks.afterCompile.tap('failed-empty-watch', () => {
+                throw new Error('Browser compilation failed intentionally');
+              });
+            },
+          });
+        },
+      },
+    },
+  });
+  let buildFailure;
+  watcher = await failedBuildRstest.watch({
+    onResult(result) {
+      buildFailure = {
+        status: result.status,
+        errors: result.unhandledErrors.map((error) => error.message),
+      };
+    },
+  });
+  await watcher.close();
+  watcher = undefined;
+
   const emptyProjectCycles = [];
+  let startupCompiled = false;
+  let startupCompiledAtResult;
   const emptyRstest = await createRstest({
     cwd: emptyRoot,
-    config: { ...config, include: ['*.test.ts'] },
+    config: {
+      ...config,
+      include: ['*.test.ts'],
+      tools: {
+        rspack(rspackConfig) {
+          rspackConfig.plugins.push({
+            apply(compiler) {
+              let additionalPass = true;
+              compiler.hooks.thisCompilation.tap(
+                'slow-empty-watch',
+                (compilation) => {
+                  compilation.hooks.needAdditionalPass.tap(
+                    'slow-empty-watch',
+                    () => {
+                      if (additionalPass) {
+                        additionalPass = false;
+                        return true;
+                      }
+                    },
+                  );
+                },
+              );
+              compiler.hooks.afterCompile.tapPromise(
+                'slow-empty-watch',
+                async () => {
+                  if (!startupCompiled) {
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                  }
+                },
+              );
+              compiler.hooks.afterDone.tap('slow-empty-watch', () => {
+                startupCompiled = true;
+              });
+            },
+          });
+        },
+      },
+    },
   });
   await watcher?.close();
   watcher = undefined;
   watcher = await emptyRstest.watch({
     onResult(result) {
+      startupCompiledAtResult ??= startupCompiled;
       emptyProjectCycles.push({
         status: result.status,
         files: result.files.map((file) => file.testPath.split('/').pop()),
@@ -127,7 +198,9 @@ it('runs after an empty start', () => expect(document.createElement('main').tagN
       errors: result.unhandledErrors.map((error) => error.message),
       cycles,
       setupRejection,
+      buildFailure,
       emptyProjectCycles,
+      startupCompiledAtResult,
     })}__END__`,
   );
 } finally {

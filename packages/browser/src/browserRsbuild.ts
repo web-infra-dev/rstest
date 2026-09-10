@@ -35,6 +35,7 @@ import { WebSocketServer } from 'ws';
 import { validateBrowserConfig } from './configValidation';
 import type { ContainerRpcManager } from './containerRpc';
 import type { HeadedRunRegistry } from './headedRunRegistry';
+import { createDeferredPromise } from './hostPayloads';
 import {
   type BrowserDispatchHandler,
   type BrowserHostConfig,
@@ -1258,6 +1259,7 @@ export const createBrowserRuntime = async ({
   let serializedOptions = 'null';
   // Reserved extension seam for future browser-side capabilities.
   const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
+  const waitForBuilds: (() => Promise<void>)[] = [];
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
@@ -1728,6 +1730,54 @@ export const createBrowserRuntime = async ({
                       );
                       rspackConfig.plugins.push(virtualModulesPlugin);
 
+                      if (isWatchMode && !skipProviderLaunch) {
+                        rspackConfig.plugins.push({
+                          apply(compiler: Rspack.Compiler) {
+                            let build = createDeferredPromise<
+                              Error | undefined
+                            >();
+                            compiler.hooks.watchRun.tap(
+                              'rstest:browser-ready',
+                              () => {
+                                const previous = build;
+                                build = createDeferredPromise<
+                                  Error | undefined
+                                >();
+                                previous.resolve(undefined);
+                              },
+                            );
+                            compiler.hooks.afterDone.tap(
+                              'rstest:browser-ready',
+                              () => {
+                                const completed = build;
+                                // Rspack reattaches its watcher on the next tick after
+                                // done hooks. Publishing readiness inside those hooks
+                                // lets an empty watch add files before they are watched.
+                                process.nextTick(() =>
+                                  completed.resolve(undefined),
+                                );
+                              },
+                            );
+                            compiler.hooks.failed.tap(
+                              'rstest:browser-ready',
+                              (error) => {
+                                build.resolve(error);
+                              },
+                            );
+                            waitForBuilds.push(async () => {
+                              let pending;
+                              do {
+                                pending = build;
+                                const error = await pending.promise;
+                                if (error) {
+                                  throw error;
+                                }
+                              } while (pending !== build);
+                            });
+                          },
+                        });
+                      }
+
                       applyDefaultWatchOptions(rspackConfig, isWatchMode);
                     },
                   },
@@ -1978,6 +2028,7 @@ export const createBrowserRuntime = async ({
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
   const browserName = browserLaunchOptions.browser ?? 'chromium';
+  let browser: BrowserProviderBrowser | undefined;
   try {
     const providerImplementation = getBrowserProviderImplementation(
       browserLaunchOptions.provider,
@@ -1987,10 +2038,12 @@ export const createBrowserRuntime = async ({
       headless: forceHeadless ?? browserLaunchOptions.headless,
       providerOptions: browserLaunchOptions.providerOptions,
     });
+    browser = runtime.browser;
+    await Promise.all(waitForBuilds.map((waitForBuild) => waitForBuild()));
     return {
       projectServers,
       containerServer,
-      browser: runtime.browser,
+      browser,
       browserLaunchOptions,
       wsPort,
       tempDir,
@@ -2002,7 +2055,10 @@ export const createBrowserRuntime = async ({
     };
   } catch (error) {
     wss.close();
-    await closeAllProjectServers(projectServers.values());
+    await Promise.allSettled([
+      browser?.close(),
+      closeAllProjectServers(projectServers.values()),
+    ]);
     throw error;
   }
 };
