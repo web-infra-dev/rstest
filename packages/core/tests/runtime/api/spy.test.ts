@@ -118,6 +118,30 @@ describe('initSpy fn()', () => {
     expect(object.method).toBe(original);
   });
 
+  it('installs a VM-realm spy for an accessor-backed method', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { spyOn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const original = () => 'real';
+    const object = {} as { method: () => string };
+    Object.defineProperty(object, 'method', {
+      configurable: true,
+      enumerable: true,
+      get: () => original,
+    });
+
+    const spy = spyOn(object, 'method').mockReturnValue('mocked');
+
+    expect(object.method()).toBe('mocked');
+    spy.mockRestore();
+    expect(object.method).toBe(original);
+  });
+
   it('tracks calls, results and invocationCallOrder', () => {
     const { fn } = initSpy();
     const spy = fn((x: number) => x * 2);

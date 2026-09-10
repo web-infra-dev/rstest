@@ -463,7 +463,11 @@ export const initSpy = (
       descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
       if (descriptor) {
         if (typeof methodName === 'string') {
-          descriptor.value = realmSpy;
+          if ('value' in descriptor) {
+            descriptor.value = realmSpy;
+          } else {
+            descriptor.get = () => realmSpy;
+          }
         } else if ('getter' in methodName) {
           descriptor.get = realmSpy;
         } else {
