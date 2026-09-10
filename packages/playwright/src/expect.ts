@@ -3,8 +3,11 @@ import { isDeepStrictEqual } from 'node:util';
 import { expect as rstestExpect, rstest } from '@rstest/core';
 import type { Assertion, ExpectStatic, RealTimers } from '@rstest/core';
 import type { Locator, Page } from 'playwright';
+import {
+  DEFAULT_PLAYWRIGHT_EXPECT_TIMEOUT,
+  getPlaywrightConfig,
+} from './config';
 
-const DEFAULT_EXPECT_TIMEOUT = 5000;
 const EXPECT_POLL_INTERVAL = 50;
 
 export type TextMatcher = string | RegExp;
@@ -12,7 +15,7 @@ export type TextExpectation = TextMatcher | TextMatcher[];
 
 export type MatcherOptions = {
   /**
-   * Time to retry the assertion in milliseconds.
+   * Time to retry the assertion in milliseconds. Overrides `definePlaywrightConfig`'s `expect.timeout`.
    * @default 5000
    */
   timeout?: number;
@@ -330,7 +333,10 @@ const waitForExpectation = async (
   check: () => Promise<void>,
   options?: MatcherOptions,
 ) => {
-  const timeout = options?.timeout ?? DEFAULT_EXPECT_TIMEOUT;
+  const timeout =
+    options?.timeout ??
+    getPlaywrightConfig()?.expect?.timeout ??
+    DEFAULT_PLAYWRIGHT_EXPECT_TIMEOUT;
   const deadline = getRealNow() + timeout;
   let lastError: unknown;
   let firstAttempt = true;

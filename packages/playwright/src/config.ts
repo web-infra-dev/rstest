@@ -5,8 +5,22 @@ import type { PlaywrightOptions } from './fixture';
 
 const PLAYWRIGHT_CONFIG_SYMBOL = Symbol.for('rstest.playwright.config');
 
+/** @internal */
+export const DEFAULT_PLAYWRIGHT_EXPECT_TIMEOUT = 5000;
+
+export type PlaywrightConfig = PlaywrightOptions & {
+  /** Defaults for Playwright locator/page assertions and Rstest polling assertions. */
+  expect?: {
+    /**
+     * Time to retry assertions in milliseconds. Individual matcher options override this value.
+     * @default 5000
+     */
+    timeout?: number;
+  };
+};
+
 type ConfigEntry = {
-  options: PlaywrightOptions;
+  options: PlaywrightConfig;
 };
 
 type ConfigRegistry = {
@@ -91,13 +105,11 @@ const getOrCreateConfigRegistry = (): ConfigRegistry => {
 };
 
 /** @internal */
-export const __registerPlaywrightConfig = (
-  options: PlaywrightOptions,
-): void => {
+export const __registerPlaywrightConfig = (options: PlaywrightConfig): void => {
   const registry = getOrCreateConfigRegistry();
   const previous = registry.entries.at(-1)?.options;
   const entry: ConfigEntry = {
-    options: mergePlaywrightOptions(previous, options) as PlaywrightOptions,
+    options: mergePlaywrightOptions(previous, options) as PlaywrightConfig,
   };
   registry.entries.push(entry);
 
@@ -113,21 +125,28 @@ export const __registerPlaywrightConfig = (
 };
 
 /** @internal */
-export const getPlaywrightConfig = (): PlaywrightOptions | undefined =>
+export const getPlaywrightConfig = (): PlaywrightConfig | undefined =>
   getConfigRegistry()?.entries.at(-1)?.options;
 
 /**
- * Configure the default `@rstest/playwright` fixture options from an Rstest
+ * Configure the default `@rstest/playwright` fixture and assertion options from an Rstest
  * config file.
  */
 export const definePlaywrightConfig = (
-  options: PlaywrightOptions,
+  options: PlaywrightConfig,
 ): ExtendConfig => {
   assertSerializable(options);
   const serializedOptions = JSON.stringify(options);
   const setupSource = `import { __registerPlaywrightConfig } from '@rstest/playwright/config';\n__registerPlaywrightConfig(${serializedOptions});`;
 
   return {
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+    expect: {
+      poll: {
+        timeout: options.expect?.timeout ?? DEFAULT_PLAYWRIGHT_EXPECT_TIMEOUT,
+      },
+    },
     setupFiles: [
       `data:text/javascript;base64,${Buffer.from(setupSource).toString('base64')}`,
     ],
