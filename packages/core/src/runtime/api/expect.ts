@@ -223,14 +223,15 @@ export function createExpect({
     for (const name of ANY_PRIMITIVE_CONSTRUCTOR_NAMES) {
       if (constructor === runtimeGlobal?.[name]) {
         const matcher = Reflect.apply(any, expect, [globalThis[name]]);
+        if (name === 'Function' || name === 'Object') {
+          return matcher;
+        }
         const asymmetricMatch = matcher.asymmetricMatch.bind(matcher);
         matcher.asymmetricMatch = (value: unknown) =>
           asymmetricMatch(value) ||
-          Reflect.apply(
-            Function.prototype[Symbol.hasInstance],
-            constructor,
-            [value],
-          );
+          Reflect.apply(Function.prototype[Symbol.hasInstance], constructor, [
+            value,
+          ]);
         return matcher;
       }
     }

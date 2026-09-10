@@ -43,6 +43,8 @@ describe('node pool - basic', () => {
     expect(Object(42n)).toEqual(expect.any(BigInt));
     expect(Object(Symbol('value'))).toEqual(expect.any(Symbol));
     expect(new (class extends String {})('value')).toEqual(expect.any(String));
+    expect(() => {}).not.toEqual(expect.any(Object));
+    expect(Object.create(Function.prototype)).not.toEqual(expect.any(Function));
     expect({ value: 42 }).toEqual(
       expect.objectContaining({ value: expect.any(Number) }),
     );

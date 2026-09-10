@@ -182,6 +182,18 @@ describe('file-level expect singleton (isolate: false)', () => {
     expect(stringMatcher.asymmetricMatch('value')).toBe(true);
     expect(numberMatcher.asymmetricMatch(42)).toBe(true);
     expect(objectMatcher.asymmetricMatch({ value: 42 })).toBe(true);
+    expect(
+      fileExpect
+        .any(runtimeGlobal.Object as ObjectConstructor)
+        .asymmetricMatch(() => {}),
+    ).toBe(false);
+    expect(
+      fileExpect
+        .any(runtimeGlobal.Function as FunctionConstructor)
+        .asymmetricMatch(
+          vm.runInContext('Object.create(Function.prototype)', context),
+        ),
+    ).toBe(false);
     for (const [index, constructorName] of [
       'String',
       'Number',
