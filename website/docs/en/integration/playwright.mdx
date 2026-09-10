@@ -172,6 +172,41 @@ The `playwright` fixture supports these options:
 | `debug`          | Convenience options for local headed debugging.      |
 | `trace`          | Capture Playwright trace artifacts for debugging.    |
 
+### E2E defaults
+
+<ApiMeta addedVersion="0.12.0" />
+
+Using `extends: definePlaywrightConfig({})` also provides these defaults for the current project:
+
+| Setting                                   | Default                                           |
+| ----------------------------------------- | ------------------------------------------------- |
+| `testTimeout`                             | `30_000ms`                                        |
+| `hookTimeout`                             | `30_000ms`                                        |
+| Playwright locator/page assertion timeout | `expect.poll.timeout` (`5000ms` with this helper) |
+| Rstest `expect.poll.timeout`              | `5000ms`                                          |
+
+Explicit Rstest configuration overrides the inherited defaults. For example:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
+
+export default defineConfig({
+  extends: definePlaywrightConfig({}),
+  testTimeout: 60_000,
+  hookTimeout: 45_000,
+  expect: {
+    poll: { timeout: 2000 },
+  },
+});
+```
+
+Here, Playwright locator/page assertions and `expect.poll()` both use `2000ms`. Per-call timeout options still take precedence for both APIs.
+
+These defaults apply only when using `definePlaywrightConfig`; importing `test` or `expect` from `@rstest/playwright` alone does not change Rstest's runner defaults. In a mixed unit/E2E workspace, apply the helper only to the E2E project.
+
+Matching the timeout values does not change Rstest's hook/fixture timeout accounting to Playwright Test's shared test budget. Polling still uses Rstest's fixed interval (`50ms` by default), rather than Playwright Test's backoff intervals. Worker count and `isolate` also retain Rstest's defaults; configure them explicitly at the root when needed.
+
 ## Fixtures
 
 `@rstest/playwright` provides these fixtures:
@@ -331,7 +366,7 @@ Page assertions:
 - `toHaveTitle(expected, options?)`
 - `toHaveURL(expected, options?)`
 
-String text assertions normalize whitespace. Playwright assertions retry until they pass or the `timeout` option is reached. The default timeout is `5000` milliseconds.
+String text assertions normalize whitespace. Playwright assertions retry until they pass or the `timeout` option is reached. The default timeout comes from `expect.poll.timeout`.
 
 ```ts
 await expect(page.locator('.message')).toContainText('Saved', {
@@ -345,6 +380,28 @@ await expect(page.locator('.message')).toContainText('Saved', {
 await expect(page.locator('.error')).not.toBeAttached();
 await expect.soft(page).toHaveTitle(/Dashboard/);
 ```
+
+### Assertion timeout
+
+<ApiMeta addedVersion="0.12.0" />
+
+Playwright locator and page assertions read Rstest's [`expect.poll.timeout`](/config/test/expect#expectpolltimeout). Configure it once to control both these assertions and `expect.poll()`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
+
+export default defineConfig({
+  extends: definePlaywrightConfig({}),
+  expect: {
+    poll: { timeout: 10_000 },
+  },
+});
+```
+
+The matcher’s `{ timeout }` takes precedence over `expect.poll.timeout`, including for `.not` and `expect.soft`. The helper defaults `expect.poll.timeout` to `5000ms`; without the helper or an explicit configuration, Node Mode uses `1000ms`. Explicit configuration works even without the helper, and multiple helper entries do not introduce a separate assertion timeout to merge.
+
+The outer test or hook timeout can still end the assertion sooner. Playwright assertions keep their fixed `50ms` retry interval; `expect.poll.interval` only controls `expect.poll()`. `page.setDefaultTimeout()` controls Playwright operations, not these assertion timeouts. Rstest does not read `playwright.config.ts`; migrate Playwright Test's `expect.timeout` to Rstest's `expect.poll.timeout`.
 
 ## Trace debugging
 

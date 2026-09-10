@@ -117,7 +117,7 @@ export const getPlaywrightConfig = (): PlaywrightOptions | undefined =>
   getConfigRegistry()?.entries.at(-1)?.options;
 
 /**
- * Configure the default `@rstest/playwright` fixture options from an Rstest
+ * Configure the default `@rstest/playwright` fixture and assertion options from an Rstest
  * config file.
  */
 export const definePlaywrightConfig = (
@@ -128,6 +128,13 @@ export const definePlaywrightConfig = (
   const setupSource = `import { __registerPlaywrightConfig } from '@rstest/playwright/config';\n__registerPlaywrightConfig(${serializedOptions});`;
 
   return {
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+    expect: {
+      poll: {
+        timeout: 5000,
+      },
+    },
     setupFiles: [
       `data:text/javascript;base64,${Buffer.from(setupSource).toString('base64')}`,
     ],

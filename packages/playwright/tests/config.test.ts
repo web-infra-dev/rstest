@@ -3,6 +3,18 @@ import { describe, expect, it } from '@rstest/core';
 import { definePlaywrightConfig } from '../src/config';
 
 describe('definePlaywrightConfig', () => {
+  it('provides E2E timeouts without overriding scheduling or polling intervals', () => {
+    const config = definePlaywrightConfig({});
+    expect(config).toMatchObject({
+      testTimeout: 30_000,
+      hookTimeout: 30_000,
+      expect: { poll: { timeout: 5000 } },
+    });
+    expect(config.expect?.poll?.interval).toBeUndefined();
+    expect(config.pool).toBeUndefined();
+    expect(config.isolate).toBeUndefined();
+  });
+
   it('generates a setup file with serialized Playwright options', () => {
     const config = definePlaywrightConfig({
       contextOptions: {

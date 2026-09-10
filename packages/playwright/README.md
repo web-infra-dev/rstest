@@ -223,11 +223,11 @@ export default defineConfig({
 - `toHaveTitle(expected, options?)`
 - `toHaveURL(expected, options?)`
 
-String text assertions normalize whitespace. Each Playwright-style assertion retries until it passes or reaches `options.timeout`.
+String text assertions normalize whitespace. Playwright locator/page assertions, including `.not` and `expect.soft`, use Rstest's `expect.poll.timeout`. A matcher's `options.timeout` takes precedence. `page.setDefaultTimeout()` does not control these assertion timeouts.
 
 ## Configure playwright options
 
-Set Playwright defaults in `rstest.config.ts` with `definePlaywrightConfig`:
+Set Playwright defaults in `rstest.config.ts` with `definePlaywrightConfig`. The helper defaults `testTimeout` and `hookTimeout` to `30_000ms`, and `expect.poll.timeout` to `5000ms`. Explicit Rstest options override these defaults. Without the helper, Node Mode defaults `expect.poll.timeout` to `1000ms`. Worker count and file isolation retain Rstest defaults.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -239,6 +239,7 @@ export default defineConfig({
       viewport: { width: 1440, height: 900 },
     },
   }),
+  expect: { poll: { timeout: 10_000 } },
 });
 ```
 

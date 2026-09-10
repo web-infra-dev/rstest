@@ -580,7 +580,7 @@ export interface RstestUtilities {
   /**
    * get runtime config for the current test.
    */
-  getConfig: () => RuntimeOptions;
+  getConfig: () => RuntimeOptions & Pick<RuntimeConfig, 'expect'>;
 
   /**
    * Reset runtime config that were changed with `rstest.setConfig`.
