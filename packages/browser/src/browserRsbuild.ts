@@ -1260,6 +1260,7 @@ export const createBrowserRuntime = async ({
   // Reserved extension seam for future browser-side capabilities.
   const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
   const waitForBuilds: (() => Promise<void>)[] = [];
+  let buildGeneration = 0;
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
@@ -1739,6 +1740,7 @@ export const createBrowserRuntime = async ({
                             compiler.hooks.watchRun.tap(
                               'rstest:browser-ready',
                               () => {
+                                buildGeneration++;
                                 const previous = build;
                                 build = createDeferredPromise<
                                   Error | undefined
@@ -2039,7 +2041,12 @@ export const createBrowserRuntime = async ({
       providerOptions: browserLaunchOptions.providerOptions,
     });
     browser = runtime.browser;
-    await Promise.all(waitForBuilds.map((waitForBuild) => waitForBuild()));
+    let generation;
+    do {
+      generation = buildGeneration;
+      await Promise.all(waitForBuilds.map((waitForBuild) => waitForBuild()));
+      // A finished project can rebuild while another project is still starting.
+    } while (generation !== buildGeneration);
     return {
       projectServers,
       containerServer,
