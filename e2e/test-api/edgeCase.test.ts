@@ -100,7 +100,7 @@ describe('Test Edge Cases', () => {
     // expectLog("import('aaa')", logs);
   });
 
-  it('should log build error message correctly', async () => {
+  it('should report unhandled style query build errors', async () => {
     const { cli, expectLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/lessError.test.ts'],

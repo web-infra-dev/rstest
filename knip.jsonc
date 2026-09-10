@@ -104,6 +104,7 @@
         "src/core/plugins/mockRuntimeCode.js",
         "src/core/plugins/importActualLoader.mjs",
         "src/core/plugins/wasmLoader.mjs",
+        "src/core/plugins/styleFallbackLoader.mjs",
         "src/pool/rstestSuppressWarnings.cjs",
         // coverage/checkThresholds.ts uses picomatch but is only reachable via
         // nested dynamic imports that knip cannot fully trace

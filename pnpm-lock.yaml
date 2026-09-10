@@ -225,6 +225,18 @@ importers:
 
   e2e/build/fixtures/runtimeRequire: {}
 
+  e2e/build/fixtures/styleFallback:
+    devDependencies:
+      '@rsbuild/plugin-less':
+        specifier: ^2.0.1
+        version: 2.0.1(@rsbuild/core@2.2.4(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.3(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
+      '@rsbuild/plugin-sass':
+        specifier: ^2.0.1
+        version: 2.0.1(@rsbuild/core@2.2.4(@module-federation/runtime-tools@2.9.0))
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
   e2e/build/runtimeImport: {}
 
   e2e/cli:

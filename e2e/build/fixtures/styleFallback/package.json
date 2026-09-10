@@ -1,0 +1,10 @@
+{
+  "name": "@rstest/e2e-style-fallback",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@rsbuild/plugin-less": "^2.0.1",
+    "@rsbuild/plugin-sass": "^2.0.1",
+    "@rstest/core": "workspace:*"
+  }
+}
