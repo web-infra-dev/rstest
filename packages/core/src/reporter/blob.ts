@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
 import type { RunnerLifecycleEvent } from '../core/runnerEventSink';
 import type {
@@ -115,6 +115,7 @@ export class BlobReporter implements Reporter {
 
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
+  private cancelled = false;
   // One track per file, for a single one-shot run: watch mode is rejected at
   // reporter construction (`rstest.ts`), so no track ever spans two cycles.
   private readonly files = new Map<string, BlobFileData>();
@@ -190,6 +191,13 @@ export class BlobReporter implements Reporter {
     return data;
   }
 
+  cancel(): void {
+    this.cancelled = true;
+    rmSync(join(this.outputDir, blobFileName(this.config.shard)), {
+      force: true,
+    });
+  }
+
   async onTestRunEnd({
     results,
     coverage,
@@ -205,6 +213,7 @@ export class BlobReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
   }): Promise<void> {
+    if (this.cancelled) return;
     const shard = this.config.shard;
     const fileName = blobFileName(shard);
 

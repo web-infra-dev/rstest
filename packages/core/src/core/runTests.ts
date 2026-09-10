@@ -1,3 +1,4 @@
+import { BlobReporter } from '../reporter/blob';
 import {
   cleanCoverageReports,
   createCoverageProviderWithLog,
@@ -256,18 +257,11 @@ export async function runTests(context: Rstest): Promise<void> {
     let closeExecutorsPromise: Promise<void> | undefined;
     const closeExecutors = () => (closeExecutorsPromise ??= disposeExecutors());
     const disposeExecutors = async () => {
-      try {
-        const closePromises = executors.map((executor) =>
-          runLifecycleStep('executor cleanup', () => executor.close()),
-        );
-        await Promise.allSettled(closePromises);
-        await Promise.all(closePromises);
-      } finally {
-        // User teardown must still run when an executor close throws.
-        await runLifecycleStep('global teardown', () =>
-          runGlobalTeardown(context),
-        );
-      }
+      const closePromises = executors.map((executor) =>
+        runLifecycleStep('executor cleanup', () => executor.close()),
+      );
+      await Promise.allSettled(closePromises);
+      await Promise.all(closePromises);
     };
 
     let signalExitCode: number | undefined;
@@ -333,6 +327,9 @@ export async function runTests(context: Rstest): Promise<void> {
     const handleSignal = async (signal: NodeJS.Signals) => {
       signalExitCode = getSignalExitCode(signal);
       context.exitCode.raise(signalExitCode);
+      for (const reporter of context.reporters) {
+        if (reporter instanceof BlobReporter) reporter.cancel();
+      }
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       process.exit(context.exitCode.current);
@@ -414,7 +411,15 @@ export async function runTests(context: Rstest): Promise<void> {
       isTeardown = true;
     } finally {
       try {
-        await closeExecutors();
+        try {
+          await closeExecutors();
+        } finally {
+          // Setup can register teardown until the active run settles. The
+          // signal path closes executors early but must not drain this queue.
+          await runLifecycleStep('global teardown', () =>
+            runGlobalTeardown(context),
+          );
+        }
       } finally {
         resolveRunFinished();
         if (signalExitCode !== undefined) context.exitCode.finishCycle();

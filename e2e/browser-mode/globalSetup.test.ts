@@ -8,6 +8,7 @@ import {
   deleteFixtureTarget,
   killCliProcessTree,
   runBrowserCli,
+  runBrowserCliWithCwd,
   runBrowserWatchCli,
   runBrowserWatchCliWithCwd,
 } from './utils';
@@ -70,12 +71,14 @@ const expectSignalExitDuringRestartCleanup = async ({
 };
 
 const expectSignalExitDuringGlobalSetup = async ({
+  mode,
   fixtureName,
   targetName,
   globalSetupPath,
   setupMarker,
   teardownMarker,
 }: {
+  mode: 'run' | 'watch';
   fixtureName: string;
   targetName: string;
   globalSetupPath: string;
@@ -96,7 +99,10 @@ const expectSignalExitDuringGlobalSetup = async ({
       `console.log('${setupMarker}');\n  await new Promise((resolve) => setTimeout(resolve, 1500));`,
     ),
   );
-  const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+  const result =
+    mode === 'run'
+      ? await runBrowserCliWithCwd(fixturesTargetPath)
+      : await runBrowserWatchCliWithCwd(fixturesTargetPath);
   const { cli } = result;
 
   try {
@@ -721,12 +727,13 @@ it('receives globalSetup env in the added file', () => {
   // `runBrowserGlobalSetupStage` call site on both shapes and the SIGINT
   // handler is shape-agnostic; the mixed shape keeps its own signal coverage
   // in the restart-cleanup pair below, where a node teardown is what blocks.
-  it.skipIf(process.platform === 'win32')(
-    'handles SIGINT during browser-only globalSetup',
-    () =>
+  it.skipIf(process.platform === 'win32').for(['run', 'watch'] as const)(
+    'handles SIGINT during browser-only globalSetup in %s',
+    (mode) =>
       expectSignalExitDuringGlobalSetup({
         fixtureName: 'browser-global-setup',
-        targetName: 'browser-global-setup-signal',
+        mode,
+        targetName: `browser-global-setup-signal-${mode}`,
         globalSetupPath: 'globalSetup.ts',
         setupMarker: '[browser-global-setup] executed',
         teardownMarker: '[browser-global-teardown] executed',

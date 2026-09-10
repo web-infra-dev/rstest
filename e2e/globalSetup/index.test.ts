@@ -15,6 +15,7 @@ describe('globalSetup', async () => {
         { pool, phase: 'test', exitDuringCleanup: true },
         { pool, phase: 'run-start', exitDuringCleanup: false },
         { pool, phase: 'run-end', exitDuringCleanup: false },
+        { pool, phase: 'global-setup', exitDuringCleanup: false },
       ]),
     )(
       'cancels $phase under $pool (cleanup calls exit: $exitDuringCleanup)',
@@ -30,7 +31,7 @@ describe('globalSetup', async () => {
         fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
           content.replace(
             'globalSetup:',
-            `reporters: ['default', {
+            `reporters: ['blob', 'default', {
             onTestFileResult() { console.log('[unexpected-file-result]'); },
             async onTestRunStart() {
               if ('${phase}' === 'run-start') {
@@ -53,6 +54,22 @@ describe('globalSetup', async () => {
           }], globalSetup:`,
           ),
         );
+        if (phase === 'global-setup') {
+          fs.update(
+            join(fixturesTargetPath, 'setups/defaultExport.ts'),
+            (content) =>
+              content.replace(
+                "  console.log('[global-setup-default] executed');",
+                `  console.log('[setup-pending]');
+                 const { existsSync } = await import('node:fs');
+                 while (!existsSync('release-setup')) {
+                   await new Promise(resolve => setTimeout(resolve, 10));
+                 }
+                 console.log('[setup-finished]');
+                 console.log('[global-setup-default] executed');`,
+              ),
+          );
+        }
         if (exitDuringCleanup) {
           fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
             content.replace(
@@ -108,19 +125,30 @@ describe('globalSetup', async () => {
               ? '[run-start]'
               : phase === 'run-end'
                 ? '[run-end-pending]'
-                : '[test-running]',
+                : phase === 'global-setup'
+                  ? '[setup-pending]'
+                  : '[test-running]',
           );
           cli.exec.process!.kill('SIGINT');
+          if (phase === 'global-setup') {
+            await cli.waitForStdout('Received SIGINT');
+            fs.create(join(fixturesTargetPath, 'release-setup'), '');
+          }
           await expectExecFailed();
           expect(cli.exec.process!.exitCode).toBe(130);
           if (phase !== 'run-end')
             expect(cli.log).not.toContain('[unexpected-file-result]');
           expect(cli.stdout.match(/\[run-start\]/g)).toHaveLength(1);
+          expect(
+            existsSync(join(fixturesTargetPath, '.rstest-reports/blob.json')),
+          ).toBe(false);
           if (exitDuringCleanup) return;
           expect(cli.stdout.match(/\[run-end\]/g)).toHaveLength(1);
           expect(cli.log).not.toContain('No test files found');
-          if (phase === 'run-start')
+          if (phase === 'run-start' || phase === 'global-setup')
             expect(cli.log).not.toContain('[test-running]');
+          if (phase === 'global-setup')
+            expect(cli.log).toContain('[setup-finished]');
           expect(
             existsSync(
               join(fixturesTargetPath, 'coverage/coverage-final.json'),
