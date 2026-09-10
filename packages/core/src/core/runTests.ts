@@ -244,22 +244,20 @@ export async function runTests(context: Rstest): Promise<void> {
       ? [nodeExecutorToRun]
       : [];
 
-    // Single-exit-path rule: every executor closes through here exactly once
-    // (idempotent), so no early return or throw can reintroduce a #1363-class
-    // deferred-teardown hang. `executors` is read at close time, so the browser
-    // executor pushed inside the try below is covered — including when its own
-    // load/init fails with the node resources above already up.
-    //
-    // The run owns the shared globalSetup queue: every executor must close
-    // before user teardown starts, including on the signal path. The exit
-    // handler is registered for non-embedded runs so a mid-run unexpected exit
-    // prints and sets a failing code rather than ending quietly.
-    let closeExecutorsPromise: Promise<void> | undefined;
-    const closeExecutors = () => (closeExecutorsPromise ??= disposeExecutors());
-    const disposeExecutors = async () => {
-      const closePromises = executors.map((executor) =>
-        runLifecycleStep('executor cleanup', () => executor.close()),
-      );
+    // A signal can close existing executors while another is still loading.
+    // Memoize per executor so the final drain also closes late arrivals once.
+    const executorClosePromises = new Map<TestExecutor, Promise<void>>();
+    const closeExecutors = async () => {
+      const closePromises = executors.map((executor) => {
+        let promise = executorClosePromises.get(executor);
+        if (!promise) {
+          promise = runLifecycleStep('executor cleanup', () =>
+            executor.close(),
+          );
+          executorClosePromises.set(executor, promise);
+        }
+        return promise;
+      });
       await Promise.allSettled(closePromises);
       await Promise.all(closePromises);
     };
@@ -328,7 +326,14 @@ export async function runTests(context: Rstest): Promise<void> {
       signalExitCode = getSignalExitCode(signal);
       context.exitCode.raise(signalExitCode);
       for (const reporter of context.reporters) {
-        if (reporter instanceof BlobReporter) reporter.cancel();
+        if (reporter instanceof BlobReporter) {
+          try {
+            reporter.cancel();
+          } catch (error) {
+            // Invalidation must not prevent executor and global teardown.
+            logger.warn(`Failed to remove cancelled blob report: ${error}`);
+          }
+        }
       }
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
@@ -354,7 +359,9 @@ export async function runTests(context: Rstest): Promise<void> {
           planner.getExecutorRunOptions(browserProjectsToRun),
         );
         executors.push(browserExecutor);
+        if (signalExitCode !== undefined) return;
         await browserExecutor.init();
+        if (signalExitCode !== undefined) return;
         // Core-owned pre-cycle globalSetup stage over the resolved browser
         // subset. Its context-local env changes are visible to both the browser
         // cycle and node workers dispatched below.

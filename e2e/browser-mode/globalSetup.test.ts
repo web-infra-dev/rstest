@@ -304,6 +304,94 @@ describe('browser mode - globalSetup', () => {
     }
   }, 60_000);
 
+  it.skipIf(process.platform === 'win32').for(['load', 'init'])(
+    'skips browser setup when SIGINT arrives during executor %s',
+    async (phase) => {
+      const fixturesTargetPath = path.join(
+        __dirname,
+        `fixtures/fixtures-test-browser-cancel-${phase}`,
+      );
+      const { fs: fixtureFs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+        fixturesTargetPath,
+      });
+      const browserPackagePath = path.join(
+        fixturesTargetPath,
+        'node_modules/@rstest/browser',
+      );
+      fs.mkdirSync(browserPackagePath, { recursive: true });
+      const browserPackage = JSON.parse(
+        fs.readFileSync(
+          path.join(__dirname, '../../packages/browser/package.json'),
+          'utf8',
+        ),
+      );
+      fs.writeFileSync(
+        path.join(browserPackagePath, 'package.json'),
+        JSON.stringify({
+          name: '@rstest/browser',
+          version: browserPackage.version,
+          type: 'module',
+          exports: {
+            './internal': './internal.js',
+            './package.json': './package.json',
+          },
+        }),
+      );
+      const browserEntry = pathToFileURL(
+        path.join(__dirname, '../../packages/browser/dist/index.js'),
+      ).href;
+      fs.writeFileSync(
+        path.join(browserPackagePath, 'internal.js'),
+        `
+        import { existsSync } from 'node:fs';
+        import { createBrowserExecutor as create } from ${JSON.stringify(browserEntry)};
+        export * from ${JSON.stringify(browserEntry)};
+        async function pause() {
+          console.log('[executor-pending]');
+          while (!existsSync('release-executor')) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+        export async function createBrowserExecutor(...args) {
+          const executor = await create(...args);
+          if ('${phase}' === 'load') await pause();
+          return {
+            ...executor,
+            async init() {
+              console.log('[executor-init]');
+              if ('${phase}' === 'init') await pause();
+              await executor.init();
+            },
+            async close() {
+              console.log('[executor-close]');
+              await executor.close();
+            },
+          };
+        }
+      `,
+      );
+      const result = await runBrowserCliWithCwd(fixturesTargetPath);
+      const { cli } = result;
+      try {
+        await cli.waitForStdout('[executor-pending]');
+        cli.exec.process!.kill('SIGINT');
+        await cli.waitForStdout('Received SIGINT');
+        fixtureFs.create(path.join(fixturesTargetPath, 'release-executor'), '');
+        await result.expectExecFailed();
+        expect(cli.exec.process!.exitCode).toBe(130);
+        expect(cli.stdout).not.toContain('[browser-global-setup] executed');
+        expect(cli.stdout).not.toContain('[browser-global-setup-test] running');
+        expect(cli.stdout.match(/\[executor-close\]/g)).toHaveLength(1);
+        if (phase === 'load')
+          expect(cli.stdout).not.toContain('[executor-init]');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+      }
+    },
+  );
+
   it('validates the browser package before browser-only watch globalSetup', async () => {
     const fixturesTargetPath = path.join(
       __dirname,

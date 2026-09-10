@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -16,6 +16,7 @@ describe('globalSetup', async () => {
         { pool, phase: 'run-start', exitDuringCleanup: false },
         { pool, phase: 'run-end', exitDuringCleanup: false },
         { pool, phase: 'global-setup', exitDuringCleanup: false },
+        { pool, phase: 'blob-conflict', exitDuringCleanup: false },
       ]),
     )(
       'cancels $phase under $pool (cleanup calls exit: $exitDuringCleanup)',
@@ -54,6 +55,11 @@ describe('globalSetup', async () => {
           }], globalSetup:`,
           ),
         );
+        if (phase === 'blob-conflict') {
+          mkdirSync(join(fixturesTargetPath, '.rstest-reports/blob.json'), {
+            recursive: true,
+          });
+        }
         if (phase === 'global-setup') {
           fs.update(
             join(fixturesTargetPath, 'setups/defaultExport.ts'),
@@ -141,7 +147,11 @@ describe('globalSetup', async () => {
           expect(cli.stdout.match(/\[run-start\]/g)).toHaveLength(1);
           expect(
             existsSync(join(fixturesTargetPath, '.rstest-reports/blob.json')),
-          ).toBe(false);
+          ).toBe(phase === 'blob-conflict');
+          if (phase === 'blob-conflict') {
+            expect(cli.log).toContain('Failed to remove cancelled blob report');
+            expect(cli.log).not.toContain('Failed to run Rstest');
+          }
           if (exitDuringCleanup) return;
           expect(cli.stdout.match(/\[run-end\]/g)).toHaveLength(1);
           expect(cli.log).not.toContain('No test files found');
@@ -298,7 +308,7 @@ describe('globalSetup', async () => {
     });
     fs.update(
       join(fixturesTargetPath, 'globalSetup.ts'),
-      `import { existsSync } from 'node:fs';
+      `import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
