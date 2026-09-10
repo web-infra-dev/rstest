@@ -3649,16 +3649,6 @@ packages:
     resolution: {integrity: sha512-xBaJish5OeGmniDj9cW5PRa/PtmuVU3ziqrbr5xJj901ZDN4TosrVaNZpEiLZAxdfnhAe7uQ7QFWfjPe9d9K2Q==}
     engines: {node: '>= 10'}
 
-  '@rsbuild/core@2.2.4':
-    resolution: {integrity: sha512-36Znklavtu2iSp7tGsn4VLRmMik60N50SFrimSORypBaGHHreDq/IpdSFJiu9xXdy4SmzK9LkTlmvSJ9L4gvfQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    hasBin: true
-    peerDependencies:
-      core-js: '>= 3.0.0'
-    peerDependenciesMeta:
-      core-js:
-        optional: true
-
   '@rsbuild/core@2.2.5':
     resolution: {integrity: sha512-nf34ri1iZduYhHUr5Vc79L7Eml+IlN0nFIaF/g3OW4WR/gShxuf5wVXS69/H8FTHJYN4SdYlNcefSZQluEMKgA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -11338,13 +11328,6 @@ snapshots:
       '@resvg/resvg-js-win32-ia32-msvc': 2.6.2
       '@resvg/resvg-js-win32-x64-msvc': 2.6.2
 
-  '@rsbuild/core@2.2.4(@module-federation/runtime-tools@2.9.0)':
-    dependencies:
-      '@rspack/core': 2.2.3(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
-      '@swc/helpers': 0.5.23
-    transitivePeerDependencies:
-      - '@module-federation/runtime-tools'
-
   '@rsbuild/core@2.2.5(@module-federation/runtime-tools@2.9.0)':
     dependencies:
       '@rspack/core': 2.2.3(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
@@ -11430,15 +11413,6 @@ snapshots:
       vm-browserify: 1.1.2
     optionalDependencies:
       '@rsbuild/core': 2.2.5(@module-federation/runtime-tools@2.9.0)
-
-  '@rsbuild/plugin-react@2.1.0(@rsbuild/core@2.2.4(@module-federation/runtime-tools@2.9.0))':
-    dependencies:
-      '@rspack/plugin-react-refresh': 2.0.2(@rspack/core@2.2.3(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(react-refresh@0.18.0)
-      react-refresh: 0.18.0
-    optionalDependencies:
-      '@rsbuild/core': 2.2.4(@module-federation/runtime-tools@2.9.0)
-    transitivePeerDependencies:
-      - '@rspack/core'
 
   '@rsbuild/plugin-react@2.1.0(@rsbuild/core@2.2.5(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.3(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))':
     dependencies:
@@ -11813,8 +11787,8 @@ snapshots:
     dependencies:
       '@mdx-js/mdx': 3.1.1(supports-color@8.1.1)
       '@mdx-js/react': 3.1.1(@types/react@19.2.18)(react@19.2.8)
-      '@rsbuild/core': 2.2.4(@module-federation/runtime-tools@2.9.0)
-      '@rsbuild/plugin-react': 2.1.0(@rsbuild/core@2.2.4(@module-federation/runtime-tools@2.9.0))
+      '@rsbuild/core': 2.2.5(@module-federation/runtime-tools@2.9.0)
+      '@rsbuild/plugin-react': 2.1.0(@rsbuild/core@2.2.5(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.3(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rspress/shared': 2.0.21(@module-federation/runtime-tools@2.9.0)(supports-color@8.1.1)
       '@shikijs/rehype': 4.3.0
       '@types/mdast': 4.0.4
@@ -11876,7 +11850,7 @@ snapshots:
 
   '@rspress/shared@2.0.21(@module-federation/runtime-tools@2.9.0)(supports-color@8.1.1)':
     dependencies:
-      '@rsbuild/core': 2.2.4(@module-federation/runtime-tools@2.9.0)
+      '@rsbuild/core': 2.2.5(@module-federation/runtime-tools@2.9.0)
       '@shikijs/rehype': 4.3.0
       '@types/react': 19.2.18
       mdast-util-mdx-jsx: 3.2.0(supports-color@8.1.1)
