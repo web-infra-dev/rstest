@@ -448,6 +448,12 @@ describe('programmatic createRstest', () => {
       file: 'browser.test.ts',
       errors: [],
       setupRejection: expect.stringContaining('Browser globalSetup failed'),
+      buildFailure: {
+        status: 'error',
+        errors: [
+          expect.stringContaining('Browser compilation failed intentionally'),
+        ],
+      },
       cycles: [
         { status: 'pass', tests: 1, errors: [] },
         { status: 'pass', tests: 1, errors: [] },
@@ -458,6 +464,7 @@ describe('programmatic createRstest', () => {
       files: [],
       errors: [],
     });
+    expect(result.startupCompiledAtResult).toBe(true);
     expect(result.emptyProjectCycles.at(-1)).toEqual({
       status: 'pass',
       files: ['added.test.ts'],
