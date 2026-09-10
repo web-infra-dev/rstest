@@ -7,6 +7,83 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('globalSetup', async () => {
+  describe.skipIf(process.platform === 'win32')('SIGINT cancellation', () => {
+    it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
+      'cancels queued tests and tears down once under %s',
+      async (pool) => {
+        const fixturesTargetPath = join(
+          __dirname,
+          `fixtures-test-sigint-${pool}`,
+        );
+        const { fs } = await prepareFixtures({
+          fixturesPath: join(__dirname, 'fixtures/basic'),
+          fixturesTargetPath,
+        });
+        fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
+          content.replace(
+            'globalSetup:',
+            `reporters: ['default', {
+            onTestFileResult() { console.log('[unexpected-file-result]'); },
+            onTestRunEnd() { console.log('[unexpected-run-end]'); },
+          }], globalSetup:`,
+          ),
+        );
+        for (const name of ['index.test.ts', 'index1.test.ts']) {
+          fs.update(
+            join(fixturesTargetPath, name),
+            () => `
+            import { test } from '@rstest/core';
+            test('wait for cancellation', async () => {
+              console.log('[test-running]');
+              await new Promise(resolve => setTimeout(resolve, 60000));
+            }, 65000);
+          `,
+          );
+        }
+        const { cli, expectExecFailed } = await runRstestCli({
+          command: 'rstest',
+          args: [
+            'run',
+            '--pool',
+            pool,
+            '--pool.maxWorkers',
+            '1',
+            '--disableConsoleIntercept',
+          ],
+          options: {
+            nodeOptions: {
+              cwd: fixturesTargetPath,
+              env: { ISOLATE: undefined },
+            },
+          },
+        });
+        try {
+          await cli.waitForStdout('[test-running]');
+          cli.exec.process!.kill('SIGINT');
+          await expectExecFailed();
+          expect(cli.exec.process!.exitCode).toBe(130);
+          expect(cli.log).not.toContain('[unexpected-file-result]');
+          expect(cli.log).not.toContain('[unexpected-run-end]');
+          expect(cli.log).not.toContain('pool is closed');
+          expect(cli.log).not.toContain('Worker stopped');
+          expect(cli.log).not.toContain('exited unexpectedly');
+          expect(
+            cli.stdout.match(/\[global-teardown-default\] executed/g),
+          ).toHaveLength(1);
+          expect(
+            cli.stdout.match(/\[global-teardown-named\] executed/g),
+          ).toHaveLength(1);
+          expect(cli.stdout.indexOf('[rstest-dev-server] closed')).toBeLessThan(
+            cli.stdout.indexOf('[global-teardown-default] executed'),
+          );
+        } finally {
+          await cli.killProcessTree();
+          fs.delete(fixturesTargetPath);
+        }
+      },
+    );
+  });
+
   it('should run global setup file correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

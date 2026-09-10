@@ -41,6 +41,10 @@ export class Pool {
   private isClosing = false;
   private isClosed = false;
 
+  get closing(): boolean {
+    return this.isClosing;
+  }
+
   constructor(options: PoolOptions) {
     this.options = options;
   }

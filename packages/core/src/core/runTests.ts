@@ -253,12 +253,9 @@ export async function runTests(context: Rstest): Promise<void> {
     // before user teardown starts, including on the signal path. The exit
     // handler is registered for non-embedded runs so a mid-run unexpected exit
     // prints and sets a failing code rather than ending quietly.
-    let didCloseExecutors = false;
-    const closeExecutors = async () => {
-      if (didCloseExecutors) {
-        return;
-      }
-      didCloseExecutors = true;
+    let closeExecutorsPromise: Promise<void> | undefined;
+    const closeExecutors = () => (closeExecutorsPromise ??= disposeExecutors());
+    const disposeExecutors = async () => {
       try {
         const closePromises = executors.map((executor) =>
           runLifecycleStep('executor cleanup', () => executor.close()),
@@ -273,6 +270,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     };
 
+    let isInterrupted = false;
     let isTeardown = false;
     let isCleaningUp = false;
     const cleanup = async () => {
@@ -294,6 +292,7 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const unExpectedExit = (code?: number) => {
+      if (isInterrupted) return;
       if (isTeardown) {
         logger.log(
           color.yellow(
@@ -314,6 +313,7 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const handleSignal = async (signal: NodeJS.Signals) => {
+      isInterrupted = true;
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       process.exit(getSignalExitCode(signal));
@@ -370,6 +370,7 @@ export async function runTests(context: Rstest): Promise<void> {
             }),
       );
       await Promise.allSettled(cyclePromises);
+      if (isInterrupted) return;
       const outcomes = await Promise.all(cyclePromises);
 
       await finalizeRunCycle(context, {

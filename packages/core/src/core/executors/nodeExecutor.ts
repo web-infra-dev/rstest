@@ -533,14 +533,18 @@ export function createNodeExecutor(
     const coverageResourceLoaders = createCoverageResourceLoaders(returns);
 
     // Persist node results for next-run ordering. Skip partial runs
-    // (`testNamePattern` narrows within files; a bail abort synthesizes skips)
+    // (cancellation closes the executor; filters and bail omit tests)
     // so the perf-first cache is never poisoned. This is node-internal and does
     // not depend on the shared finalize, so it stays here.
     const bailLimit = context.normalizedConfig.bail;
     const bailAborted =
       bailLimit > 0 &&
       context.stateManager.getCountOfFailedTests() >= bailLimit;
-    if (!context.normalizedConfig.testNamePattern && !bailAborted) {
+    if (
+      !didClose &&
+      !context.normalizedConfig.testNamePattern &&
+      !bailAborted
+    ) {
       await writeResultsCache(
         rootPath,
         returns.flatMap((r) => r.results),
