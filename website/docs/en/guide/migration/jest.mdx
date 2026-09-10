@@ -213,6 +213,19 @@ Rstest provides an `rs` API that you can use to access Rstest's utilities, such 
 fn.mockResolvedValue('foo');
 ```
 
+For a quick trial, you can temporarily expose Rstest's utilities under Jest's
+global name from a [`setupFiles`](/config/test/setup-files) module:
+
+```ts title='rstest.setup.ts'
+import { rstest } from '@rstest/core';
+
+Object.assign(globalThis, { jest: rstest });
+```
+
+Existing global calls such as `jest.fn()`, `jest.mock()`, and
+`jest.requireActual()` then use Rstest. This alias is intended to reduce the
+initial migration diff; prefer `rs` in new code.
+
 ### Virtual module mocks
 
 When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:

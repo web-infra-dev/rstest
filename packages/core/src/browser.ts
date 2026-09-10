@@ -62,7 +62,10 @@ export { createSilentConsoleController } from './runtime/worker/silentConsole';
 export { getPrettyConsoleName } from './runtime/worker/console';
 // Core-owned mock build parameterization: the browser host registers the same
 // mock transform pipeline as the node build (web parameterization).
-export { applyWebMockRspackConfig } from './core/plugins/mockBuild';
+export {
+  applyJestMockApiAliases,
+  applyWebMockRspackConfig,
+} from './core/plugins/mockBuild';
 // The mock runtime plugin (importActual doppelganger rule + webpack runtime
 // module) is target-agnostic; the browser host registers it per project.
 export { pluginMockRuntime } from './core/plugins/mockRuntime';

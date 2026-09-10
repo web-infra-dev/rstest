@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import {
+  applyJestMockApiAliases,
   getMockRstestPluginOptions,
   injectChunkInstallMockGuard,
 } from '../../src/core/plugins/mockBuild';
@@ -12,6 +13,42 @@ describe('mock build parameterization', () => {
       importMetaPathName: true,
       hoistMockModule: true,
       manualMockRoot: '/repo/project/__mocks__',
+    });
+  });
+
+  it('maps Jest global module APIs without replacing user SWC globals', () => {
+    const config = {
+      jsc: {
+        transform: {
+          optimizer: {
+            globals: {
+              vars: {
+                existing: 'true',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    applyJestMockApiAliases(config);
+
+    expect(config.jsc.transform.optimizer.globals.vars).toEqual({
+      existing: 'true',
+      'jest.mock': 'rstest.mock',
+      'jest.mockRequire': 'rstest.mockRequire',
+      'jest.doMock': 'rstest.doMock',
+      'jest.doMockRequire': 'rstest.doMockRequire',
+      'jest.unmock': 'rstest.unmock',
+      'jest.doUnmock': 'rstest.doUnmock',
+      'jest.unmockRequire': 'rstest.unmockRequire',
+      'jest.doUnmockRequire': 'rstest.doUnmockRequire',
+      'jest.importMock': 'rstest.importMock',
+      'jest.requireMock': 'rstest.requireMock',
+      'jest.importActual': 'rstest.importActual',
+      'jest.requireActual': 'rstest.requireActual',
+      'jest.resetModules': 'rstest.resetModules',
+      'jest.hoisted': 'rstest.hoisted',
     });
   });
 });

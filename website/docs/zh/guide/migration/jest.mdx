@@ -213,6 +213,18 @@ Rstest 提供了 `rs` API，你可以使用它来访问 Rstest 的工具函数�
 fn.mockResolvedValue('foo');
 ```
 
+如需快速试用，可以在 [`setupFiles`](/config/test/setup-files) 模块中，暂时以 Jest
+的全局名称暴露 Rstest 工具方法：
+
+```ts title='rstest.setup.ts'
+import { rstest } from '@rstest/core';
+
+Object.assign(globalThis, { jest: rstest });
+```
+
+之后，`jest.fn()`、`jest.mock()` 和 `jest.requireActual()` 等现有全局调用会使用
+Rstest。此别名用于减少初次迁移的改动；新代码中应优先使用 `rs`。
+
 ### 虚拟模块 mock
 
 迁移 Jest 虚拟模块 mock 时，请先[声明模块并配置 `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)。这套配置同时适用于 Node 和浏览器模式。然后删除 Jest 的第三个参数：
