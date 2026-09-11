@@ -50,6 +50,7 @@ export { logWatchReadyMessage } from './core/cliShortcuts';
 // so the browser watch plugin applies the same rerun rules as the node
 // dev-compile pipeline, with baselines keyed per project.
 export {
+  applyRstestWatchIgnored,
   applyWatchInvalidation,
   type EntryHashSnapshot,
   type WatchInvalidationState,

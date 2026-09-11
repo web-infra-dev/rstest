@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import type { Rspack } from '@rstest/core';
 import {
+  applyRstestWatchIgnored,
   applyWatchInvalidation,
   applyWebMockRspackConfig,
   color,
@@ -309,16 +310,10 @@ export const mapViewportByProject = (
   return map;
 };
 
-const castArray = <T>(arr?: T | T[]): T[] => {
-  if (arr === undefined) {
-    return [];
-  }
-  return Array.isArray(arr) ? arr : [arr];
-};
-
 const applyDefaultWatchOptions = (
   rspackConfig: Rspack.Configuration,
   isWatchMode: boolean,
+  config: InternalContext['normalizedConfig'],
 ) => {
   rspackConfig.watchOptions ??= {};
 
@@ -327,17 +322,11 @@ const applyDefaultWatchOptions = (
     return;
   }
 
-  rspackConfig.watchOptions.ignored = castArray(
-    rspackConfig.watchOptions.ignored || [],
-  ) as string[];
-
-  if (rspackConfig.watchOptions.ignored.length === 0) {
-    rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
-  }
-
-  if (rspackConfig.output?.path) {
-    rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
-  }
+  applyRstestWatchIgnored(
+    rspackConfig,
+    config,
+    rspackConfig.output?.path ? [rspackConfig.output.path] : [],
+  );
 };
 
 type LazyCompilationModule = {
@@ -1780,7 +1769,11 @@ export const createBrowserRuntime = async ({
                         });
                       }
 
-                      applyDefaultWatchOptions(rspackConfig, isWatchMode);
+                      applyDefaultWatchOptions(
+                        rspackConfig,
+                        isWatchMode,
+                        context.normalizedConfig,
+                      );
                     },
                   },
                 },
