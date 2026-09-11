@@ -174,7 +174,9 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
       startupCompiledAtResult ??= startupCompiled;
       emptyProjectCycles.push({
         status: result.status,
-        files: result.files.map((file) => file.testPath.split('/').pop()),
+        rerunTestPaths: result.rerunTestPaths.map((testPath) =>
+          testPath.split('/').pop(),
+        ),
         errors: result.unhandledErrors.map((error) => error.message),
       });
       resolveNextCycle?.();
@@ -194,7 +196,7 @@ it('runs after an empty start', () => expect(document.createElement('main').tagN
     `__RSTEST_API_RESULT__${JSON.stringify({
       status: result.status,
       tests: result.summary.tests.total,
-      file: result.files[0]?.testPath.split('/').pop(),
+      file: result.results[0]?.testPath.split('/').pop(),
       errors: result.unhandledErrors.map((error) => error.message),
       cycles,
       setupRejection,

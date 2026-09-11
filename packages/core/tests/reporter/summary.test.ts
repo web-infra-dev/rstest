@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from 'node:util';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { DefaultReporter } from '../../src/reporter/index';
-import { emptySnapshotSummary } from './helpers';
+import { emptyRunEndPayload, emptySnapshotSummary } from './helpers';
 import type {
   Duration,
   NormalizedConfig,
@@ -117,6 +117,7 @@ describe('DefaultReporter summary streams', () => {
     });
 
     await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
       results: [fileResult],
       testResults: [testResult],
       duration,
@@ -124,7 +125,6 @@ describe('DefaultReporter summary streams', () => {
         ...emptySnapshotSummary,
         unmatched: 1,
       },
-      getSourcemap: async () => null,
     });
 
     const stderrText = stripVTControlCharacters(stderr.join('\n'));
@@ -182,11 +182,10 @@ describe('DefaultReporter summary streams', () => {
     });
 
     await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
       results: [fileResult],
       testResults: [testResult],
       duration,
-      snapshotSummary: emptySnapshotSummary,
-      getSourcemap: async () => null,
     });
 
     const stderrText = stripVTControlCharacters(stderr.join('\n'));
@@ -217,11 +216,10 @@ describe('DefaultReporter summary streams', () => {
     });
 
     await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
       results: [fileResult],
       testResults: [testResult],
       duration,
-      snapshotSummary: emptySnapshotSummary,
-      getSourcemap: async () => null,
     });
 
     expect(stdoutWrite).not.toHaveBeenCalled();
@@ -263,11 +261,10 @@ describe('DefaultReporter summary streams', () => {
     });
 
     await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
       results: [fileResult],
       testResults: [testResult],
       duration,
-      snapshotSummary: emptySnapshotSummary,
-      getSourcemap: async () => null,
     });
 
     const stdoutText = stripVTControlCharacters(stdout.join('\n'));

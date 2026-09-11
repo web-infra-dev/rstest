@@ -1,13 +1,10 @@
 import type {
   DefaultReporterOptions,
-  Duration,
-  GetSourcemap,
   NormalizedProjectConfig,
   Reporter,
   RstestTestState,
-  SnapshotSummary,
-  TestFileResult,
   TestResult,
+  TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
 import { color, flushOutputStreams } from '../utils';
@@ -88,17 +85,9 @@ export class DotReporter implements Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
-    filterRerunTestPaths,
+    rerunTestPaths,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
-  }): Promise<void> {
+  }: TestRunEndPayload): Promise<void> {
     this.flushLine();
 
     if (this.options.summary === false) {
@@ -111,7 +100,7 @@ export class DotReporter implements Reporter {
       unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
-      filterRerunTestPaths,
+      rerunTestPaths,
     });
 
     if (hasErrorLogs && this.flushOutputStreams) {

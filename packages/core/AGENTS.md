@@ -5,7 +5,7 @@ Core testing framework for Rstest.
 ## Subsystem map
 
 - `src/cli/` — CLI parsing and the CLI → config merge
-- `src/api/` — public instance API; capture reporters project internal results into host-safe return values
+- `src/api/` — public instance API; capture reporters copy reporter payloads into host-safe return values
 - `src/core/` — run orchestration: Rsbuild integration, executor seam, scheduling, state management
 - `src/core/browser/` — core-side browser-mode detail (load boundary, browser-side run planning, pre-cycle globalSetup stage)
 - `src/core/plugins/` — Rsbuild/Rspack plugins (mock seam, externals, entry assembly)

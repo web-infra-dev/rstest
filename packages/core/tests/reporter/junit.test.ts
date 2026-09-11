@@ -1,5 +1,6 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { JUnitReporter } from '../../src/reporter/junit';
+import { emptyRunEndPayload } from './helpers';
 import type { Duration, TestFileResult, TestResult } from '../../src/types';
 
 describe('JUnitReporter', () => {
@@ -74,10 +75,10 @@ describe('JUnitReporter', () => {
     });
 
     await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
       results: mockFileResults,
       testResults: mockTestResults,
       duration: mockDuration,
-      getSourcemap: async () => null,
     });
 
     // Verify that XML was generated
@@ -120,10 +121,8 @@ describe('JUnitReporter', () => {
     };
 
     await reporter.onTestRunEnd({
-      results: [],
-      testResults: [],
+      ...emptyRunEndPayload,
       duration: mockDuration,
-      getSourcemap: async () => null,
     });
 
     expect(logs.some((log) => log.includes('tests="0"'))).toBe(true);
@@ -179,10 +178,10 @@ describe('JUnitReporter', () => {
     };
 
     await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
       results: mockFileResults,
       testResults: mockTestResults,
       duration: mockDuration,
-      getSourcemap: async () => null,
     });
 
     // Verify XML is properly escaped

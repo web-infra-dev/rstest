@@ -1,16 +1,14 @@
 import { relative } from 'pathe';
 import type {
   DefaultReporterOptions,
-  Duration,
-  GetSourcemap,
   InternalContext,
   NormalizedConfig,
   NormalizedProjectConfig,
   Reporter,
   RstestTestState,
-  SnapshotSummary,
   TestFileResult,
   TestResult,
+  TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
 import { runLifecycleStep } from '../core/finalizeRun';
@@ -147,17 +145,9 @@ export class DefaultReporter implements Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
-    filterRerunTestPaths,
+    rerunTestPaths,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
-  }): Promise<void> {
+  }: TestRunEndPayload): Promise<void> {
     this.statusRenderer?.clear();
     this.nonTTYProgressNotifier?.stop();
 
@@ -171,7 +161,7 @@ export class DefaultReporter implements Reporter {
       unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
-      filterRerunTestPaths,
+      rerunTestPaths,
     });
 
     if (hasErrorLogs && this.flushOutputStreams) {

@@ -6,12 +6,14 @@ import type {
   Duration,
   NormalizedConfig,
   Reporter,
+  SerializedError,
   ShardConfig,
   SnapshotSummary,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestRunEndPayload,
   TestSuiteInfo,
   UserConsoleLog,
 } from '../types';
@@ -48,7 +50,7 @@ export type BlobData = {
   testResults: TestResult[];
   duration: Duration;
   snapshotSummary: SnapshotSummary;
-  unhandledErrors?: { message: string; stack?: string; name?: string }[];
+  unhandledErrors: SerializedError[];
   /** Keyed by {@link blobFileKey}. */
   files: Record<string, BlobFileData>;
 };
@@ -205,14 +207,7 @@ export class BlobReporter implements Reporter {
     duration,
     snapshotSummary,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    coverage?: CoverageMapData;
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-  }): Promise<void> {
+  }: TestRunEndPayload): Promise<void> {
     if (this.cancelled) return;
     const shard = this.config.shard;
     const fileName = blobFileName(shard);
@@ -225,11 +220,7 @@ export class BlobReporter implements Reporter {
       testResults,
       duration,
       snapshotSummary,
-      unhandledErrors: unhandledErrors?.map((e) => ({
-        message: e.message,
-        stack: e.stack,
-        name: e.name,
-      })),
+      unhandledErrors,
       files: Object.fromEntries(this.files),
     };
 

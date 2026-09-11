@@ -136,7 +136,7 @@ const rstest = await createRstest({
 });
 const result = await rstest.run();
 
-for (const file of result.files) {
+for (const file of result.results) {
   console.log(file.testPath, file.meta);
 
   for (const test of file.results) {

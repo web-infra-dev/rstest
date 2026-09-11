@@ -1,7 +1,5 @@
-import type { FormattedError, ListCommandCollectionResult } from '../types';
+import type { SerializedError, ListCommandCollectionResult } from '../types';
 import { parseErrorStacktrace } from '../utils/error';
-import { toSerializedError } from './result';
-import type { SerializedError } from './types';
 
 /** @experimental Subject to change until 1.0.0. */
 export class ListTestsError extends Error {
@@ -18,8 +16,10 @@ export class ListTestsError extends Error {
 export const createListTestsError = async (
   result: ListCommandCollectionResult,
 ): Promise<ListTestsError> => {
-  const serialize = async (error: FormattedError): Promise<SerializedError> => {
-    const serialized = toSerializedError(error);
+  const serialize = async (
+    error: SerializedError,
+  ): Promise<SerializedError> => {
+    const serialized = { ...error };
     if (error.stack) {
       const frames = await parseErrorStacktrace({
         stack: error.stack,

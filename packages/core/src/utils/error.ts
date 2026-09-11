@@ -2,10 +2,27 @@ import fs from 'node:fs';
 import { resolve } from 'node:path';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
-import type { FormattedError, GetSourcemap } from '../types';
+import type { SerializedError, GetSourcemap } from '../types';
 import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
+
+export const toSerializedError = (error: unknown): SerializedError => {
+  if (!error || typeof error !== 'object') {
+    return { message: String(error) };
+  }
+  const value = error as Partial<SerializedError>;
+  return {
+    name: value.name,
+    message: value.message ?? String(error),
+    stack: value.stack,
+    diff: value.diff,
+    actual: value.actual,
+    expected: value.expected,
+    retryCount: value.retryCount,
+    fullStack: value.fullStack,
+  };
+};
 
 const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 
@@ -37,7 +54,7 @@ const hintNotDefinedError = (message: string): string => {
 };
 
 export async function printError(
-  error: FormattedError,
+  error: SerializedError,
   getSourcemap: GetSourcemap,
   rootPath: string,
 ): Promise<void> {

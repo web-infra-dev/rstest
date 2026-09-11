@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'pathe';
 import type {
   CoverageMapData,
   EntryInfo,
-  FormattedError,
+  SerializedError,
   InternalContext,
   InternalProjectContext,
   RuntimeConfig,
@@ -24,6 +24,7 @@ import {
   pickColorEnv,
   toError,
 } from '../utils';
+import { toSerializedError } from '../utils/error';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import {
@@ -289,9 +290,9 @@ const workerErrorToResult = (
   projectName: string,
   context: InternalContext,
 ): { fileResult: TestFileResult; crashedResults: TestResult[] } => {
-  const error = toError(err);
+  const error = toSerializedError(toError(err));
 
-  (error as any).fullStack = true;
+  error.fullStack = true;
   if (error.message.includes('Worker exited unexpectedly')) {
     delete error.stack;
   }
@@ -383,7 +384,7 @@ export const createPool = async ({
     {
       tests: TestInfo[];
       testPath: string;
-      errors?: FormattedError[];
+      errors?: SerializedError[];
       project: string;
     }[]
   >;
@@ -694,13 +695,14 @@ export const createPool = async ({
             workerCacheLimit,
           });
 
-          return pool.collectTests(task).catch((err: FormattedError) => {
-            err.fullStack = true;
+          return pool.collectTests(task).catch((err: unknown) => {
+            const error = toSerializedError(err);
+            error.fullStack = true;
             return {
               project: projectName,
               testPath: entryInfo.testPath,
               tests: [],
-              errors: [err],
+              errors: [error],
             };
           });
         }),

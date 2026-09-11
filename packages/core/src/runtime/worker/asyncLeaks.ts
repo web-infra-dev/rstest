@@ -1,5 +1,5 @@
 import { createHook } from 'node:async_hooks';
-import type { CurrentTaskInfo, FormattedError } from '../../types';
+import type { CurrentTaskInfo, SerializedError } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
 import type { TaskContext } from './taskContext';
@@ -13,7 +13,7 @@ type AsyncLeak = {
 
 type AsyncLeakDetector = {
   enable: () => void;
-  collectErrors: () => Promise<FormattedError[]>;
+  collectErrors: () => Promise<SerializedError[]>;
   disable: () => void;
 };
 
@@ -85,7 +85,7 @@ const getCreationStack = (): string | undefined => {
     .join('\n');
 };
 
-const createLeakError = (leak: AsyncLeak): FormattedError => {
+const createLeakError = (leak: AsyncLeak): SerializedError => {
   const taskName = formatLeakTaskName(leak.task);
 
   return {
@@ -129,7 +129,7 @@ export const createAsyncLeakDetector = (
       activeResources.clear();
       hook.enable();
     },
-    async collectErrors(): Promise<FormattedError[]> {
+    async collectErrors(): Promise<SerializedError[]> {
       const { setImmediate: realSetImmediate, setTimeout: realSetTimeout } =
         getRealTimers();
 

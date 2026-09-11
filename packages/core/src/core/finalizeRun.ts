@@ -1,7 +1,13 @@
 import { resolveAndMergeRawCoverage } from '../coverage';
 import { BlobReporter } from '../reporter/blob';
-import type { Duration, ExecutorCycleOutcome, SourceMapInput } from '../types';
-import type { CoverageMap, CoverageProvider } from '../types/coverage';
+import { computeSummary } from '../reporter/utils';
+import type {
+  Duration,
+  ExecutorCycleOutcome,
+  SourceMapInput,
+  TestRunEndPayload,
+} from '../types';
+import type { CoverageProvider } from '../types/coverage';
 import {
   color,
   getNoTestFilesMessage,
@@ -11,6 +17,7 @@ import {
   type TraceRun,
 } from '../utils';
 import type { InternalContext } from '../types';
+import { toSerializedError } from '../utils/error';
 
 export const reportNoTestFiles = ({
   context,
@@ -84,30 +91,13 @@ export const notifyReportersOnTestRunStart = async (
 
 export const notifyReportersOnTestRunEnd = async ({
   context,
-  coverage,
-  duration,
-  getSourcemap,
-  unhandledErrors,
-  filterRerunTestPaths,
+  payload,
 }: {
   context: InternalContext;
-  coverage?: CoverageMap;
-  duration: Duration;
-  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
-  unhandledErrors?: Error[];
-  filterRerunTestPaths?: string[];
+  payload: TestRunEndPayload;
 }): Promise<void> => {
   for (const reporter of context.reporters) {
-    await reporter.onTestRunEnd?.({
-      results: context.reporterResults.results,
-      coverage: coverage?.toJSON(),
-      testResults: context.reporterResults.testResults,
-      unhandledErrors,
-      snapshotSummary: context.snapshotManager.summary,
-      duration,
-      getSourcemap,
-      filterRerunTestPaths,
-    });
+    await reporter.onTestRunEnd?.(payload);
     if (reporter.flushOutputStreams !== false) {
       await flushOutputStreams();
     }
@@ -296,17 +286,21 @@ export async function finalizeRunCycle(
   }
 
   if (reportersStarted) {
+    const reporterResults = context.reporterResults.results;
     await runLifecycleStep('reporter onTestRunEnd', () =>
       notifyReportersOnTestRunEnd({
         context,
-        coverage: isInterrupted() ? undefined : mergedCoverageMap,
-        duration,
-        getSourcemap,
-        unhandledErrors: errors,
-        // Only filter the failing-test summary in watch mode; a non-watch run
-        // surfaces every executor's failures (Appendix A bug 2).
-        filterRerunTestPaths:
-          isWatchMode && testPaths.length ? testPaths : undefined,
+        payload: {
+          results: reporterResults,
+          testResults: context.reporterResults.testResults,
+          summary: computeSummary(reporterResults),
+          coverage: isInterrupted() ? undefined : mergedCoverageMap?.toJSON(),
+          duration,
+          getSourcemap,
+          unhandledErrors: errors.map((error) => toSerializedError(error)),
+          snapshotSummary: context.snapshotManager.summary,
+          rerunTestPaths: isWatchMode ? testPaths : undefined,
+        },
       }),
     );
   }

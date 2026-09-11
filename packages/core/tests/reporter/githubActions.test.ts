@@ -6,7 +6,11 @@ import {
   GithubActionsReporter,
   getStepSummaryDisplayPath,
 } from '../../src/reporter/githubActions';
-import { emptyDuration, emptySnapshotSummary } from './helpers';
+import {
+  emptyDuration,
+  emptyRunEndPayload,
+  emptySnapshotSummary,
+} from './helpers';
 
 describe('getStepSummaryDisplayPath', () => {
   it('uses a placeholder for the workspace root', () => {
@@ -76,6 +80,7 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       await reporter.onTestRunEnd({
+        ...emptyRunEndPayload,
         results: [
           {
             testId: 'file-a',
@@ -140,11 +145,7 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       await reporter.onTestRunEnd({
-        results: [],
-        testResults: [],
-        duration: emptyDuration,
-        snapshotSummary: emptySnapshotSummary,
-        getSourcemap: async () => null,
+        ...emptyRunEndPayload,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -185,12 +186,8 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       await reporter.onTestRunEnd({
-        results: [],
-        testResults: [],
-        duration: emptyDuration,
-        snapshotSummary: emptySnapshotSummary,
-        getSourcemap: async () => null,
-        unhandledErrors: [new Error('global setup failed')],
+        ...emptyRunEndPayload,
+        unhandledErrors: [{ name: 'Error', message: 'global setup failed' }],
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -251,6 +248,7 @@ describe('GithubActionsReporter step summary', () => {
       const runEndPayload: Parameters<
         GithubActionsReporter['onTestRunEnd']
       >[0] = {
+        ...emptyRunEndPayload,
         results: [
           {
             testId: 'file-1',
@@ -338,6 +336,7 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       await reporter.onTestRunEnd({
+        ...emptyRunEndPayload,
         results: [
           {
             testId: 'file-1',
@@ -418,6 +417,7 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       await reporter.onTestRunEnd({
+        ...emptyRunEndPayload,
         results: [
           {
             testId: 'file-1',

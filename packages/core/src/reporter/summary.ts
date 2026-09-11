@@ -18,6 +18,7 @@ import path from 'pathe';
 import type {
   Duration,
   GetSourcemap,
+  SerializedError,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -193,34 +194,30 @@ export const printSummaryErrorLogs = async ({
   rootPath,
   unhandledErrors,
   getSourcemap,
-  filterRerunTestPaths,
+  rerunTestPaths,
 }: {
   rootPath: string;
   results: TestFileResult[];
   testResults: TestResult[];
   getSourcemap: GetSourcemap;
-  filterRerunTestPaths?: string[];
-  unhandledErrors?: Error[];
+  rerunTestPaths?: string[];
+  unhandledErrors: SerializedError[];
 }): Promise<boolean> => {
+  // An empty watch cycle keeps the full session failure list.
+  const rerun = rerunTestPaths?.length ? new Set(rerunTestPaths) : undefined;
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
         i.status === 'fail' &&
         i.errors?.length &&
-        (filterRerunTestPaths
-          ? filterRerunTestPaths.includes(i.testPath)
-          : true),
+        (rerun ? rerun.has(i.testPath) : true),
     ),
     ...testResults.filter(
-      (i) =>
-        i.status === 'fail' &&
-        (filterRerunTestPaths
-          ? filterRerunTestPaths.includes(i.testPath)
-          : true),
+      (i) => i.status === 'fail' && (rerun ? rerun.has(i.testPath) : true),
     ),
   ];
 
-  if (failedTests.length === 0 && !unhandledErrors?.length) {
+  if (failedTests.length === 0 && !unhandledErrors.length) {
     return false;
   }
 
@@ -229,7 +226,7 @@ export const printSummaryErrorLogs = async ({
   logger.stderr('');
 
   const { printError } = await import('../utils/error');
-  for (const error of unhandledErrors || []) {
+  for (const error of unhandledErrors) {
     logger.stderr(bgColor('bgRed', ' Unhandled Error '));
     await printError(error, getSourcemap, rootPath);
   }

@@ -68,7 +68,42 @@ interface Reporter {
   onTestSuiteResult?(result: TestResult): void;
   onTestCaseStart?(test: TestCaseInfo): void;
   onTestCaseResult?(result: TestResult): void;
-  onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
+  onTestRunEnd?(payload: {
+    results: TestFileResult[]; // Test file results; in watch mode, accumulated over the whole session.
+    testResults: TestResult[]; // Results of every test, not grouped by file.
+    summary: {
+      tests: {
+        total: number; // Total number of tests.
+        passed: number; // Number of passed tests.
+        failed: number; // Number of failed tests.
+        skipped: number; // Number of skipped tests.
+        todo: number; // Number of todo tests.
+      };
+      files: {
+        total: number; // Total number of test files.
+        failed: number; // Number of failed test files.
+      };
+    };
+    duration: {
+      totalTime: number; // Total duration in milliseconds.
+      buildTime: number; // Build duration in milliseconds.
+      testTime: number; // Test execution duration in milliseconds.
+    };
+    snapshotSummary: SnapshotSummary;
+    unhandledErrors: {
+      name?: string; // Error class name.
+      message: string; // Error message.
+      stack?: string; // Serialized stack trace.
+      diff?: string; // Formatted assertion diff.
+      expected?: string; // Serialized expected assertion value.
+      actual?: string; // Serialized actual assertion value.
+      retryCount?: number; // Retry attempt that produced this error.
+      fullStack?: boolean; // Whether to print the full stack trace.
+    }[];
+    coverage?: CoverageMapData; // Present when coverage is enabled.
+    rerunTestPaths?: string[]; // Watch only: files executed in the current cycle.
+    getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>; // Resolves the source map of a built file.
+  }): void | Promise<void>;
   onUserConsoleLog?(log: UserConsoleLog): void;
   onExit?(): MaybePromise<void>;
 }
@@ -81,6 +116,53 @@ Starting in v0.12.0, Rstest also calls `onExit` when the reporter's owning conte
 <ApiMeta addedVersion="0.11.1" />
 
 Metadata result fields are available on reporter results. JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+
+### onTestRunEnd
+
+<ApiMeta addedVersion="0.12.0" />
+
+`onTestRunEnd` is called when a run cycle finishes, with the results and aggregates of that cycle. Starting in v0.12.0, the payload carries `summary` and `rerunTestPaths`, and `unhandledErrors` is always an array of serialized errors.
+
+In watch mode, `results`, `testResults`, and `summary` accumulate over the whole session: each file keeps its latest result, and deleted files are removed. `rerunTestPaths` lists the files executed in the current cycle and is absent for one-shot runs. Every entry in `unhandledErrors` is a plain object that can be serialized to JSON.
+
+### TestResult
+
+`TestResult` and `TestFileResult` are exported from `@rstest/core`. Suite and case hooks receive a `TestResult`; file hooks and `onTestRunEnd` receive `TestFileResult` values, which extend `TestResult` with the results of the file's tests.
+
+- **Type:**
+
+```ts
+type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
+
+interface TestResult {
+  testId: string; // Task identifier.
+  status: TestResultStatus; // Final result status.
+  name: string; // Display name of the test, suite, or test file.
+  testPath: string; // Path of the owning test file.
+  parentNames?: string[]; // Names of the enclosing suites.
+  duration?: number; // Execution duration in milliseconds.
+  errors?: SerializedError[]; // Errors from the final attempt.
+  retryErrors?: SerializedError[]; // Errors from earlier retry attempts.
+  retryCount?: number; // Number of retry attempts performed.
+  project: string; // Project name.
+  meta?: TaskMeta; // Serializable metadata attached to the task.
+  heap?: number; // Heap usage in bytes, sampled when `logHeapUsage` is enabled.
+}
+```
+
+### TestFileResult
+
+- **Type:**
+
+```ts
+interface TestFileResult extends TestResult {
+  results: TestResult[]; // Results of the tests declared in this file.
+  snapshotResult?: SnapshotResult; // Snapshot statistics of this file.
+  coverage?: Record<string, FileCoverageData>; // Per-file coverage data when coverage is enabled.
+}
+```
+
+`SerializedError` has the same shape as the entries of `unhandledErrors` in the `onTestRunEnd` payload. `SnapshotResult` comes from `@vitest/snapshot` and `FileCoverageData` from `istanbul-lib-coverage`.
 
 ## Examples
 

@@ -1,4 +1,4 @@
-import type { FormattedError, Test, TestOptions } from '../types';
+import type { SerializedError, Test, TestOptions } from '../types';
 
 /**
  * Resolve the overloaded trailing arguments of `test` / `it` / `test.each` /
@@ -109,14 +109,14 @@ export const getRealNow = (): number => realNow();
 export const formatTestError = async (
   err: any,
   test?: Test,
-): Promise<FormattedError[]> => {
+): Promise<SerializedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
   return Promise.all(
     errors.map(async (rawError) => {
       const error =
         typeof rawError === 'string' ? { message: rawError } : rawError;
-      const errObj: FormattedError = {
+      const errObj: SerializedError = {
         fullStack: error.fullStack,
         // Some error attributes cannot be enumerated
         message: error.message,

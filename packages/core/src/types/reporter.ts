@@ -6,6 +6,7 @@ import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
 import type {
+  SerializedError,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
@@ -22,6 +23,31 @@ export type Duration = {
 };
 
 export type { SnapshotSummary };
+
+export interface TestRunSummary {
+  tests: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    todo: number;
+  };
+  files: { total: number; failed: number };
+}
+
+/** The onTestRunEnd payload. In watch mode results is the session snapshot; rerunTestPaths lists the files this cycle ran. */
+export interface TestRunEndPayload {
+  results: TestFileResult[];
+  testResults: TestResult[];
+  summary: TestRunSummary;
+  duration: Duration;
+  snapshotSummary: SnapshotSummary;
+  unhandledErrors: SerializedError[];
+  coverage?: CoverageMapData;
+  /** Watch only: the files this cycle executed. Absent on one-shot runs. */
+  rerunTestPaths?: string[];
+  getSourcemap: GetSourcemap;
+}
 
 // Deliberately omit the nominal TraceMap class so declarations inlined by the
 // main and /api entries remain structurally assignable.
@@ -250,24 +276,7 @@ export interface Reporter {
   /**
    * Called after all tests have finished running.
    */
-  onTestRunEnd?: ({
-    results,
-    coverage,
-    testResults,
-    duration,
-    getSourcemap,
-    snapshotSummary,
-    unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    coverage?: CoverageMapData;
-    testResults: TestResult[];
-    duration: Duration;
-    getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    snapshotSummary: SnapshotSummary;
-    filterRerunTestPaths?: string[];
-  }) => MaybePromise<void>;
+  onTestRunEnd?: (payload: TestRunEndPayload) => MaybePromise<void>;
 
   /**
    * Called when console log is calling.

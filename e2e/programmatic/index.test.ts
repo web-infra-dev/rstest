@@ -46,7 +46,7 @@ describe('programmatic createRstest', () => {
         tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
         files: { total: 1, failed: 0 },
       });
-      expect(result.files).toEqual([
+      expect(result.results).toEqual([
         { status: 'pass', testPath: 'sum.test.ts' },
       ]);
       expect(result.unhandledErrors).toEqual([]);
@@ -74,9 +74,32 @@ describe('programmatic createRstest', () => {
 
     expect(result.status).toBe('pass');
     expect(result.summary.tests.passed).toBe(1);
-    expect(result.files).toEqual([
+    expect(result.results).toEqual([
       { status: 'pass', testName: 'virtual/programmatic.test.ts' },
     ]);
+  });
+
+  it('keeps results for the same path in different projects', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-multi-project.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(execution.exitCode).toBe(0);
+    expect(result.status).toBe('pass');
+    expect(result.results).toEqual([
+      { project: 'project-a', testPath: 'sum.test.ts' },
+      { project: 'project-b', testPath: 'sum.test.ts' },
+    ]);
+    expect(result.summary.files).toEqual({ total: 2, failed: 0 });
+    expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
   it('returns metadata from test context and suite hooks', async ({
@@ -351,15 +374,22 @@ describe('programmatic createRstest', () => {
     expect(result.cycles).toHaveLength(2);
     expect(result.cycles[0]).toEqual({
       status: 'pass',
-      files: expect.arrayContaining(['first.test.ts', 'second.test.ts']),
+      results: expect.arrayContaining(['first.test.ts', 'second.test.ts']),
+      rerunTestPaths: expect.arrayContaining([
+        'first.test.ts',
+        'second.test.ts',
+      ]),
       tests: 2,
     });
-    expect(result.cycles[0].files).toHaveLength(2);
+    expect(result.cycles[0].results).toHaveLength(2);
+    expect(result.cycles[0].rerunTestPaths).toHaveLength(2);
     expect(result.cycles[1]).toEqual({
       status: 'pass',
-      files: ['first.test.ts'],
-      tests: 1,
+      results: expect.arrayContaining(['first.test.ts', 'second.test.ts']),
+      rerunTestPaths: ['first.test.ts'],
+      tests: 2,
     });
+    expect(result.cycles[1].results).toHaveLength(2);
     expect(result.emptyFilterFiles).toEqual([]);
     expect(result.zeroMatchCycles[0]).toEqual([]);
     expect(result.zeroMatchCycles.at(-1)).toEqual(['added.test.ts']);
@@ -461,13 +491,13 @@ describe('programmatic createRstest', () => {
     });
     expect(result.emptyProjectCycles[0]).toEqual({
       status: 'pass',
-      files: [],
+      rerunTestPaths: [],
       errors: [],
     });
     expect(result.startupCompiledAtResult).toBe(true);
     expect(result.emptyProjectCycles.at(-1)).toEqual({
       status: 'pass',
-      files: ['added.test.ts'],
+      rerunTestPaths: ['added.test.ts'],
       errors: [],
     });
     expect(cli.stdout).toContain('Waiting for file changes...');

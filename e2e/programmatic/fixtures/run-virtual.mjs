@@ -37,7 +37,7 @@ console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     status: result.status,
     summary: result.summary,
-    files: result.files.map((f) => ({
+    results: result.results.map((f) => ({
       status: f.status,
       testName: f.testPath.split('/').slice(-2).join('/'),
     })),

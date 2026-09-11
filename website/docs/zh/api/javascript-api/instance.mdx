@@ -193,66 +193,19 @@ interface RstestInstance {
 - **类型：**
 
 ```ts
-interface SerializedError {
-  name: string; // 错误类名称。
-  message: string; // 错误信息。
-  stack?: string; // 序列化后的调用栈。
-  diff?: string; // 格式化后的断言差异。
-  actual?: string; // 序列化后的断言实际值。
-  expected?: string; // 序列化后的断言预期值。
-  retryCount?: number; // 产生此错误的重试次数。
-  cause?: SerializedError; // 序列化后的错误原因。
-}
-
-interface TestCaseResult {
-  status: TestResultStatus; // 最终结果状态。
-  name: string; // 测试或测试文件的显示名称。
-  testPath: string; // 所属测试文件的路径。
-  parentNames?: string[]; // 外层测试套件的名称。
-  duration?: number; // 执行时长（毫秒）。
-  errors?: SerializedError[]; // 最后一次执行产生的错误。
-  retryErrors?: SerializedError[]; // 之前重试产生的错误。
-  retryCount?: number; // 已执行的重试次数。
-  project: string; // 项目名称。
-  meta?: TaskMeta; // 关联到任务的可序列化元数据。
-}
-
-interface TestFileRunResult extends TestCaseResult {
-  tests: TestCaseResult[]; // 当前文件中声明的测试结果。
-}
-
 type TestRunStatus = 'pass' | 'fail' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // 本次运行的整体状态。
-  files: TestFileRunResult[]; // 当前轮次执行的测试文件结果。
-  summary: {
-    tests: {
-      total: number; // 测试总数。
-      passed: number; // 通过的测试数量。
-      failed: number; // 失败的测试数量。
-      skipped: number; // 跳过的测试数量。
-      todo: number; // todo 测试数量。
-    };
-    files: {
-      total: number; // 测试文件总数。
-      failed: number; // 失败的测试文件数量。
-    };
-  };
-  unhandledErrors: SerializedError[]; // 未归属于单个测试的错误。
-  duration: {
-    total: number; // 总时长（毫秒）。
-  };
-  snapshot?: SnapshotSummary;
-  coverage?: CoverageMapData;
+  // 其余字段与 `onTestRunEnd` 的 payload 相同，去掉 `getSourcemap`。
 }
 ```
 
-当 `unhandledErrors` 不为空时，`status` 为 `'error'`。当本次运行已完成但退出状态非零时，`status` 为 `'fail'`，例如测试或测试文件失败、覆盖率未达阈值、未设置 `passWithNoTests` 时没有找到测试，或者 `globalSetup` 清理失败。其他情况下，`status` 为 `'pass'`。
+其余字段（`results`、`testResults`、`summary`、`duration`、`snapshotSummary`、`unhandledErrors`、`coverage`、`rerunTestPaths`）的说明见 Reporter API 的 [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend)。
 
-只有在测试运行开始前终止执行时，`snapshot` 才会缺失。启用覆盖率时会提供 `coverage`。
+当 `unhandledErrors` 不为空时，`status` 为 `'error'`。当本次运行已完成但退出状态非零时，`status` 为 `'fail'`，例如测试或测试文件失败、覆盖率未达阈值、未设置 `passWithNoTests` 时没有找到测试，或者 `globalSetup` 清理失败。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'fail'`。其他情况下，`status` 为 `'pass'`。
 
-`SerializedError` 是可安全序列化为 JSON 的普通对象，不是错误类实例。
+`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
 
 ## rstest.watch
 
@@ -273,7 +226,8 @@ const watcher = await rstest.watch({
   onResult(result) {
     console.log(
       result.status,
-      result.files.map((file) => file.testPath),
+      result.results.map((file) => file.testPath),
+      result.rerunTestPaths,
     );
   },
 });
@@ -281,7 +235,7 @@ const watcher = await rstest.watch({
 await watcher.close();
 ```
 
-每个已完成的轮次（包括初始轮次）之后，都会调用 `onResult`。结果按当前轮次统计：`files` 和 `summary` 只包含该轮次实际执行的文件。如需维护会话状态，请自行按 `testPath` 合并结果。
+每一轮结束后都会调用 `onResult`，第一轮也不例外。`results`、`summary` 和 `status` 反映整个 watch 会话的状态，`rerunTestPaths` 是这一轮实际执行的文件。
 
 支持浏览器项目。重跑执行出错会通过 `onResult` 以 `status: 'error'` 交付，不会关闭会话；启动失败（包括浏览器 `globalSetup` 失败）会使 `watch()` 被拒绝。
 
@@ -295,7 +249,7 @@ await watcher.close();
 
 ```ts
 interface WatchOptions {
-  onResult?: (result: TestRunResult) => void;
+  onResult?: (result: TestRunResult & { rerunTestPaths: string[] }) => void;
 }
 
 interface RstestWatcher {

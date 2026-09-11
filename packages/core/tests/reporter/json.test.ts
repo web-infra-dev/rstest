@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../../src/types';
-import { emptySnapshotSummary } from './helpers';
+import { emptyRunEndPayload, emptySnapshotSummary } from './helpers';
 
 const baseConfig = {
   passWithNoTests: false,
@@ -87,6 +87,12 @@ describe('JsonReporter', () => {
       testResults: mockTestResults,
       duration: mockDuration,
       snapshotSummary: emptySnapshotSummary,
+      summary: {
+        tests: { total: 3, passed: 1, failed: 1, skipped: 1, todo: 0 },
+        files: { total: 1, failed: 1 },
+      },
+      unhandledErrors: [],
+      getSourcemap: async () => null,
     });
 
     const report = JSON.parse(logs.join('\n'));
@@ -125,14 +131,7 @@ describe('JsonReporter', () => {
     });
 
     await reporter.onTestRunEnd({
-      results: [],
-      testResults: [],
-      duration: {
-        totalTime: 0,
-        buildTime: 0,
-        testTime: 0,
-      },
-      snapshotSummary: emptySnapshotSummary,
+      ...emptyRunEndPayload,
     });
 
     const report = JSON.parse(logs.join('\n'));
@@ -187,10 +186,8 @@ describe('JsonReporter', () => {
           }),
         runEnd: async (results: TestFileResult[]) => {
           await reporter.onTestRunEnd({
+            ...emptyRunEndPayload,
             results,
-            testResults: [],
-            duration: { totalTime: 0, buildTime: 0, testTime: 0 },
-            snapshotSummary: emptySnapshotSummary,
           });
           const report = JSON.parse(stdout.join('\n'));
           return (
@@ -231,13 +228,9 @@ describe('JsonReporter', () => {
       fileStart(PATH_A, 'jsdom');
       consoleLog(PATH_A, 'from jsdom', 'jsdom');
 
-      // `updateReporterResultState` keys the snapshot by path alone, so only
-      // the last project's result survives a shared file — the prune must not
-      // read that as "the node project's logs are stale".
-      expect(await runEnd([passedFile(PATH_A, 'jsdom')])).toEqual([
-        'a.test.ts: from node',
-        'a.test.ts: from jsdom',
-      ]);
+      expect(
+        await runEnd([passedFile(PATH_A, 'node'), passedFile(PATH_A, 'jsdom')]),
+      ).toEqual(['a.test.ts: from node', 'a.test.ts: from jsdom']);
     });
 
     it('should drop logs of files that left the result snapshot', async () => {

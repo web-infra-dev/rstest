@@ -2,7 +2,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { relative } from 'pathe';
 import type {
-  Duration,
   JsonReporterOptions,
   NormalizedConfig,
   Reporter,
@@ -10,10 +9,16 @@ import type {
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
-import { deriveRunCounts, reportedTestPaths, reporterFileKey } from './utils';
+import {
+  reportedFileKeys,
+  reporterFileKey,
+  toReportCounts,
+  toReportDuration,
+} from './utils';
 
 type JsonReport = {
   tool: 'rstest';
@@ -107,34 +112,21 @@ export class JsonReporter implements Reporter {
     duration,
     snapshotSummary,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-  }): JsonReport {
-    const { failedTests, failedFiles, counts } = deriveRunCounts({
-      results,
-      testResults,
-    });
+    summary,
+  }: TestRunEndPayload): JsonReport {
     const noTestsDiscovered = results.length === 0 && testResults.length === 0;
     const hasFailedStatus =
-      failedTests.length > 0 ||
-      failedFiles.length > 0 ||
-      (unhandledErrors?.length ?? 0) > 0 ||
+      summary.tests.failed > 0 ||
+      summary.files.failed > 0 ||
+      unhandledErrors.length > 0 ||
       (noTestsDiscovered && !this.config.passWithNoTests);
 
     return {
       tool: 'rstest',
       version: RSTEST_VERSION,
       status: hasFailedStatus ? 'fail' : 'pass',
-      summary: counts,
-      durationMs: {
-        total: duration.totalTime,
-        build: duration.buildTime,
-        tests: duration.testTime,
-      },
+      summary: toReportCounts(summary),
+      durationMs: toReportDuration(duration),
       snapshot: snapshotSummary,
       files: results.map((fileResult) => ({
         ...fileResult,
@@ -149,7 +141,7 @@ export class JsonReporter implements Reporter {
             testPath: relative(this.rootPath, log.testPath),
           }))
         : undefined,
-      unhandledErrors: unhandledErrors?.map((error) => ({
+      unhandledErrors: unhandledErrors.map((error) => ({
         message: error.message,
         stack: error.stack,
         name: error.name,
@@ -176,35 +168,20 @@ export class JsonReporter implements Reporter {
     }
   }
 
-  async onTestRunEnd({
-    results,
-    testResults,
-    duration,
-    snapshotSummary,
-    unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-  }): Promise<void> {
+  async onTestRunEnd(payload: TestRunEndPayload): Promise<void> {
+    const { results } = payload;
     // A watch session drops deleted files from the result snapshot; the buffered
     // logs have no such signal of their own, so the reported file set prunes
     // them. Without this the report would carry logs for a file it does not
     // list, and the buffer would grow for the whole session.
     if (this.logs.length) {
-      const reportedPaths = reportedTestPaths(results);
-      this.logs = this.logs.filter((log) => reportedPaths.has(log.testPath));
+      const reportedKeys = reportedFileKeys(results);
+      this.logs = this.logs.filter((log) =>
+        reportedKeys.has(reporterFileKey(log.project, log.testPath)),
+      );
     }
 
-    const report = this.createReport({
-      results,
-      testResults,
-      duration,
-      snapshotSummary,
-      unhandledErrors,
-    });
+    const report = this.createReport(payload);
 
     await this.writeReport(`${JSON.stringify(report, null, 2)}\n`);
   }

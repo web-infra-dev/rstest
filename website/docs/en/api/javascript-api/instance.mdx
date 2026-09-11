@@ -193,66 +193,19 @@ interface RstestInstance {
 - **Type:**
 
 ```ts
-interface SerializedError {
-  name: string; // Error class name.
-  message: string; // Error message.
-  stack?: string; // Serialized stack trace.
-  diff?: string; // Formatted assertion diff.
-  actual?: string; // Serialized actual assertion value.
-  expected?: string; // Serialized expected assertion value.
-  retryCount?: number; // Retry attempt that produced this error.
-  cause?: SerializedError; // Serialized error cause.
-}
-
-interface TestCaseResult {
-  status: TestResultStatus; // Final result status.
-  name: string; // Display name of the test or test file.
-  testPath: string; // Path of the owning test file.
-  parentNames?: string[]; // Names of the enclosing suites.
-  duration?: number; // Execution duration in milliseconds.
-  errors?: SerializedError[]; // Errors from the final attempt.
-  retryErrors?: SerializedError[]; // Errors from earlier retry attempts.
-  retryCount?: number; // Number of retry attempts performed.
-  project: string; // Project name.
-  meta?: TaskMeta; // Serializable metadata attached to the task.
-}
-
-interface TestFileRunResult extends TestCaseResult {
-  tests: TestCaseResult[]; // Results of tests declared in this file.
-}
-
 type TestRunStatus = 'pass' | 'fail' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // Overall status of the run.
-  files: TestFileRunResult[]; // Results of test files executed in this cycle.
-  summary: {
-    tests: {
-      total: number; // Total number of tests.
-      passed: number; // Number of passed tests.
-      failed: number; // Number of failed tests.
-      skipped: number; // Number of skipped tests.
-      todo: number; // Number of todo tests.
-    };
-    files: {
-      total: number; // Total number of test files.
-      failed: number; // Number of failed test files.
-    };
-  };
-  unhandledErrors: SerializedError[]; // Errors not attributed to an individual test.
-  duration: {
-    total: number; // Total duration in milliseconds.
-  };
-  snapshot?: SnapshotSummary;
-  coverage?: CoverageMapData;
+  // Every other field matches the `onTestRunEnd` payload, minus `getSourcemap`.
 }
 ```
 
-`status` is `'error'` when `unhandledErrors` is non-empty. It is `'fail'` when the run completed with a non-zero exit status, such as from failing tests or test files, a coverage threshold violation, no tests being found without `passWithNoTests`, or a `globalSetup` teardown failure. Otherwise, it is `'pass'`.
+The remaining fields (`results`, `testResults`, `summary`, `duration`, `snapshotSummary`, `unhandledErrors`, `coverage`, `rerunTestPaths`) are documented under [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend) in the Reporter API.
 
-`snapshot` is absent only when execution stops before a run begins. `coverage` is present when coverage is enabled.
+`status` is `'error'` when `unhandledErrors` is non-empty. It is `'fail'` when the run completed with a non-zero exit status, such as from failing tests or test files, a coverage threshold violation, no tests being found without `passWithNoTests`, or a `globalSetup` teardown failure. In watch mode, it is also `'fail'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'pass'`.
 
-`SerializedError` values are plain JSON-safe objects, not error class instances.
+Every entry in `unhandledErrors` is a plain object that can be serialized to JSON, not an `Error` instance.
 
 ## rstest.watch
 
@@ -273,7 +226,8 @@ const watcher = await rstest.watch({
   onResult(result) {
     console.log(
       result.status,
-      result.files.map((file) => file.testPath),
+      result.results.map((file) => file.testPath),
+      result.rerunTestPaths,
     );
   },
 });
@@ -281,7 +235,7 @@ const watcher = await rstest.watch({
 await watcher.close();
 ```
 
-`onResult` runs after every completed cycle, including the initial cycle. Its result is cycle-scoped: `files` and `summary` contain only files that actually ran in that cycle. To maintain session state, merge results by `testPath` yourself.
+`onResult` runs after every completed cycle, including the first. `results`, `summary`, and `status` reflect the whole watch session; `rerunTestPaths` lists the files executed in the current cycle.
 
 Browser projects are supported. A rerun execution error is delivered through `onResult` with `status: 'error'` and does not close the session; startup failures, including a browser `globalSetup` failure, reject `watch()`.
 
@@ -295,7 +249,7 @@ Errors thrown by `onResult` are isolated and do not stop the watch session. Call
 
 ```ts
 interface WatchOptions {
-  onResult?: (result: TestRunResult) => void;
+  onResult?: (result: TestRunResult & { rerunTestPaths: string[] }) => void;
 }
 
 interface RstestWatcher {

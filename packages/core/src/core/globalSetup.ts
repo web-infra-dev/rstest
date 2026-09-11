@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import type {
   EntryInfo,
-  FormattedError,
+  SerializedError,
   InternalContext,
   InternalProjectContext,
 } from '../types';
@@ -207,7 +207,7 @@ export async function runGlobalSetup(
     success: boolean;
     hasTeardown?: boolean;
     envChanges?: Record<string, string | undefined>;
-    errors?: FormattedError[];
+    errors?: SerializedError[];
   }>({
     type: 'setup',
     payload: {
