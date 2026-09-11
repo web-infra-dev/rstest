@@ -1,4 +1,14 @@
-import type { Duration, SnapshotSummary } from '../../src/types';
+import type {
+  Duration,
+  SnapshotSummary,
+  TestRunEndPayload,
+  TestRunSummary,
+} from '../../src/types';
+
+export const emptyRunSummary: TestRunSummary = {
+  tests: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0 },
+  files: { total: 0, failed: 0 },
+};
 
 export const emptySnapshotSummary: SnapshotSummary = {
   added: 0,
@@ -21,4 +31,14 @@ export const emptyDuration: Duration = {
   totalTime: 0,
   buildTime: 0,
   testTime: 0,
+};
+
+export const emptyRunEndPayload: TestRunEndPayload = {
+  results: [],
+  testResults: [],
+  summary: emptyRunSummary,
+  duration: emptyDuration,
+  snapshotSummary: emptySnapshotSummary,
+  unhandledErrors: [],
+  getSourcemap: async () => null,
 };

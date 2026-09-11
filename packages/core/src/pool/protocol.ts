@@ -1,5 +1,5 @@
 import type {
-  FormattedError,
+  SerializedError,
   RunWorkerOptions,
   Test,
   TestFileResult,
@@ -27,7 +27,7 @@ export type CollectTaskResult = {
   tests: Test[];
   testPath: string;
   project: string;
-  errors?: FormattedError[];
+  errors?: SerializedError[];
 };
 
 export type WorkerMemoryReport = {
@@ -45,11 +45,23 @@ export type TestEnvironmentModuleFallback = {
   reason: string;
 };
 
+// Worker control-channel shape reversed by deserializeError: cause is structured-cloned and reattached to Error, unlike reporter SerializedError.
+type TransportSerializedError = {
+  name?: string;
+  message: string;
+  stack?: string;
+  cause?: unknown;
+};
+
 export type WorkerResponse =
   | { type: 'started'; pid: number }
-  | { type: 'cleanupFinished'; error?: SerializedError }
+  | { type: 'cleanupFinished'; error?: TransportSerializedError }
   | { type: 'workerCleanupStarted'; taskId: number }
-  | { type: 'workerCleanupFinished'; taskId: number; error?: SerializedError }
+  | {
+      type: 'workerCleanupFinished';
+      taskId: number;
+      error?: TransportSerializedError;
+    }
   | {
       type: 'fileCleanupStarted';
       taskId: number;
@@ -74,15 +86,8 @@ export type WorkerResponse =
     }
   | {
       type: 'fatal_error';
-      error: SerializedError;
+      error: TransportSerializedError;
     };
-
-export type SerializedError = {
-  name?: string;
-  message: string;
-  stack?: string;
-  cause?: unknown;
-};
 
 export type RpcEnvelope = {
   [RPC_TAG]: true;
@@ -138,7 +143,7 @@ export const isRpcEnvelope = (message: unknown): message is RpcEnvelope => {
   return isRecord(message) && message[RPC_TAG] === true;
 };
 
-export const serializeError = (error: unknown): SerializedError => {
+export const serializeError = (error: unknown): TransportSerializedError => {
   if (error instanceof Error) {
     return {
       name: error.name,
@@ -153,7 +158,7 @@ export const serializeError = (error: unknown): SerializedError => {
   return { message: String(error) };
 };
 
-export const deserializeError = (data: SerializedError): Error => {
+export const deserializeError = (data: TransportSerializedError): Error => {
   const error = new Error(data.message);
   if (data.name) {
     try {

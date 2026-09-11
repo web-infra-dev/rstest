@@ -31,6 +31,7 @@ rs.mock('../../src/reporter/blob', () => ({
     duration: { buildTime: 0, testTime: 0, totalTime: 0 },
     files: {},
     results: [],
+    unhandledErrors: [],
     snapshotSummary: {
       added: 0,
       didUpdate: false,

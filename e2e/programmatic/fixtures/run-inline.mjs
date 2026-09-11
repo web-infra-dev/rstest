@@ -76,14 +76,14 @@ try {
       pool: effectivePool,
       status: result.status,
       summary: result.summary,
-      files: result.files.map((f) => ({
+      results: result.results.map((f) => ({
         status: f.status,
         // strip absolute path so snapshot is stable across machines
         testPath: f.testPath.split('/').pop(),
       })),
       unhandledErrors: result.unhandledErrors,
-      duration: { hasTotal: typeof result.duration.total === 'number' },
-      snapshotPresent: typeof result.snapshot === 'object',
+      duration: { hasTotal: typeof result.duration.totalTime === 'number' },
+      snapshotPresent: typeof result.snapshotSummary === 'object',
       buildFailure: buildFailureResult,
     })}__END__`,
   );

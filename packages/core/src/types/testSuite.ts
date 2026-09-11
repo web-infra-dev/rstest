@@ -41,7 +41,7 @@ export interface TaskResult {
    * Errors that occurred during the task execution. It is possible to have several errors
    * if `expect.soft()` failed multiple times or `retry` was triggered.
    */
-  errors?: FormattedError[];
+  errors?: SerializedError[];
 }
 
 export type Location = {
@@ -182,7 +182,7 @@ export type Test = TestSuite | TestCase;
 
 export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
-export type FormattedError = {
+export interface SerializedError {
   fullStack?: boolean;
   message: string;
   name?: string;
@@ -191,8 +191,7 @@ export type FormattedError = {
   expected?: string;
   actual?: string;
   retryCount?: number;
-  cause?: unknown;
-};
+}
 
 export type TestResult = {
   testId: string;
@@ -201,8 +200,8 @@ export type TestResult = {
   testPath: TestPath;
   parentNames?: string[];
   duration?: number;
-  errors?: FormattedError[];
-  retryErrors?: FormattedError[];
+  errors?: SerializedError[];
+  retryErrors?: SerializedError[];
   retryCount?: number;
   project: string;
   meta?: TaskMeta;

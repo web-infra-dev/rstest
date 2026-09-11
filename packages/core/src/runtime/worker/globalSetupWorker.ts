@@ -1,5 +1,5 @@
 import { install } from 'source-map-support';
-import type { AssetFiles, FormattedError } from '../../types';
+import type { AssetFiles, SerializedError } from '../../types';
 import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
@@ -54,7 +54,7 @@ const runGlobalSetup = async (data: {
   hasTeardown: boolean;
   teardownCount?: number;
   envChanges?: Record<string, string | undefined>;
-  errors?: FormattedError[];
+  errors?: SerializedError[];
 }> => {
   try {
     if (data.entries.length === 0) {

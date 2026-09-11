@@ -102,7 +102,7 @@ export interface ExecutorCycleOutcome {
   errors: Error[];
   /**
    * Test paths this executor ran this cycle. `finalizeRunCycle` builds the
-   * watch-mode `filterRerunTestPaths` from every outcome's paths so the
+   * watch-mode `rerunTestPaths` from every outcome's paths so the
    * failing-test summary never silently omits an executor's failures.
    */
   testPaths: string[];

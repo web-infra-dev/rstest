@@ -6,9 +6,10 @@ import type {
   Duration,
   GetSourcemap,
   ReporterWithOptions,
-  SnapshotSummary,
+  SerializedError,
   TestFileResult,
   TestResult,
+  TestRunEndPayload,
 } from '../types';
 import {
   getTaskNameWithPrefix,
@@ -21,6 +22,7 @@ import { getPlainSummaryStatusString } from './summary';
 import {
   buildPackageManagerReproCommand,
   collectFailures,
+  createUnknownFailure,
   detectPackageManagerAgent,
   escapeMarkdownTableCell,
   type FailureItem,
@@ -98,15 +100,7 @@ export class GithubActionsReporter {
     duration,
     getSourcemap,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
-  }): Promise<void> {
+  }: TestRunEndPayload): Promise<void> {
     const failures = collectFailures({
       results,
       testResults,
@@ -292,7 +286,7 @@ async function renderStepSummary({
   reportName?: string;
   failures: FailureItem[];
   getSourcemap: GetSourcemap;
-  unhandledErrors?: Error[];
+  unhandledErrors: SerializedError[];
   maxCharsPerField: number;
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
@@ -412,9 +406,10 @@ async function renderStepSummary({
       const retrySuffix = test.retryCount ? ` (retry x${test.retryCount})` : '';
       pushHeading(lines, 3, `❌ FAIL ${title}${retrySuffix}`);
 
-      for (const error of errors.length
+      const reportedErrors: SerializedError[] = errors.length
         ? errors
-        : [{ message: 'Unknown error' }]) {
+        : [createUnknownFailure()];
+      for (const error of reportedErrors) {
         const errorType = getErrorType(error);
         const message = trimForSummary(error.message, maxCharsPerField);
         const retryLabel = getRetryErrorLabel(error);

@@ -20,15 +20,18 @@ import {
   isBlobFile,
   parseBlobFile,
 } from '../reporter/blob';
+import { computeSummary } from '../reporter/utils';
 import type {
   CoverageMapData,
   Duration,
+  SerializedError,
   SnapshotSummary,
   TestFileResult,
   TestResult,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
-import { color, flushOutputStreams, logger, prettyTime } from '../utils';
+import { color, logger, prettyTime } from '../utils';
+import { notifyReportersOnTestRunEnd } from './finalizeRun';
 import type { Rstest } from './rstest';
 import { createRunnerEventSink, type RunnerEventSink } from './runnerEventSink';
 
@@ -266,7 +269,7 @@ export async function mergeReports(
   const allDurations: Duration[] = [];
   const shardDurations: { label: string; duration: Duration }[] = [];
   const allSnapshotSummaries: SnapshotSummary[] = [];
-  const allUnhandledErrors: Error[] = [];
+  const allUnhandledErrors: SerializedError[] = [];
   const mergedCoverageMap = coverageProvider?.createCoverageMap();
   let hasCoverage = false;
 
@@ -288,14 +291,7 @@ export async function mergeReports(
     // alive for its whole duration.
     blob.coverage = undefined;
 
-    if (blob.unhandledErrors) {
-      for (const e of blob.unhandledErrors) {
-        const error = new Error(e.message);
-        error.name = e.name || 'Error';
-        error.stack = e.stack;
-        allUnhandledErrors.push(error);
-      }
-    }
+    allUnhandledErrors.push(...blob.unhandledErrors);
 
     const claimed = new Set<string>();
     for (const result of blob.results) {
@@ -368,22 +364,19 @@ export async function mergeReports(
     await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
   }
 
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunEnd?.({
+  await notifyReportersOnTestRunEnd({
+    context,
+    payload: {
       results: allResults,
       coverage: mergedCoverage,
       testResults: allTestResults,
+      summary: computeSummary(allResults),
       duration: mergedDuration,
       snapshotSummary: mergedSnapshotSummary,
-      unhandledErrors: allUnhandledErrors.length
-        ? allUnhandledErrors
-        : undefined,
+      unhandledErrors: allUnhandledErrors,
       getSourcemap: async () => null,
-    });
-    if (reporter.flushOutputStreams !== false) {
-      await flushOutputStreams();
-    }
-  }
+    },
+  });
 
   const shouldGenerateCoverage =
     coverageProvider &&

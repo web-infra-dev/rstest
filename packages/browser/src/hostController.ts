@@ -11,7 +11,6 @@ import {
   createRunnerEventSink,
   createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
-  type FormattedError,
   getPrettyConsoleName,
   hasUserRstestConfigPlugins,
   type InternalContext,
@@ -1422,7 +1421,7 @@ export const listBrowserTests = async (
           name: 'BrowserCollectError',
           message: fatalError.message,
           stack: fatalError.stack,
-        } as FormattedError,
+        },
       ],
     };
     return {

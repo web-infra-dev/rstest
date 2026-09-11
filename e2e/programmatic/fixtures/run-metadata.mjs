@@ -35,8 +35,8 @@ console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     status: result.status,
     contextProjects: rstest.context.projects,
-    fileMeta: result.files[0]?.meta,
-    caseMeta: result.files[0]?.tests.map((r) => r.meta),
+    fileMeta: result.results[0]?.meta,
+    caseMeta: result.results[0]?.results.map((r) => r.meta),
     reporterFileMeta,
     reporterCaseMeta,
     suiteMeta,

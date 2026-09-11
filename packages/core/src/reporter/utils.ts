@@ -4,9 +4,11 @@ import { detect as detectPackageManager } from 'package-manager-detector/detect'
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
-  FormattedError,
+  Duration,
+  SerializedError,
   TestFileResult,
   TestResult,
+  TestRunSummary,
   UserConsoleLog,
 } from '../types';
 import {
@@ -17,57 +19,67 @@ import {
   prettyTime,
 } from '../utils';
 
-/**
- * Single owner of the run-end per-status partition and the 7-field counts
- * struct shared by the md and json reporters (previously hand-copied,
- * byte-identical, in both). Only the count derivation is shared — the pass/fail
- * verdict deliberately stays per-reporter because md and json disagree on the
- * empty-run case.
- */
-export const deriveRunCounts = ({
-  results,
-  testResults,
-}: {
-  results: TestFileResult[];
-  testResults: TestResult[];
-}): {
-  failedTests: TestResult[];
-  passedTests: TestResult[];
-  skippedTests: TestResult[];
-  todoTests: TestResult[];
-  failedFiles: TestFileResult[];
-  counts: {
-    testFiles: number;
-    failedFiles: number;
-    tests: number;
-    failedTests: number;
-    passedTests: number;
-    skippedTests: number;
-    todoTests: number;
+const testStatusSummaryKeys = {
+  pass: 'passed',
+  fail: 'failed',
+  skip: 'skipped',
+  todo: 'todo',
+} satisfies Record<
+  TestResult['status'],
+  Exclude<keyof TestRunSummary['tests'], 'total'>
+>;
+
+export const computeSummary = (
+  results: readonly TestFileResult[],
+): TestRunSummary => {
+  const summary: TestRunSummary = {
+    tests: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0 },
+    files: { total: results.length, failed: 0 },
   };
-} => {
-  const failedTests = testResults.filter((result) => result.status === 'fail');
-  const passedTests = testResults.filter((result) => result.status === 'pass');
-  const skippedTests = testResults.filter((result) => result.status === 'skip');
-  const todoTests = testResults.filter((result) => result.status === 'todo');
-  const failedFiles = results.filter((result) => result.status === 'fail');
-  return {
-    failedTests,
-    passedTests,
-    skippedTests,
-    todoTests,
-    failedFiles,
-    counts: {
-      testFiles: results.length,
-      failedFiles: failedFiles.length,
-      tests: testResults.length,
-      failedTests: failedTests.length,
-      passedTests: passedTests.length,
-      skippedTests: skippedTests.length,
-      todoTests: todoTests.length,
-    },
-  };
+
+  for (const file of results) {
+    if (file.status === 'fail') {
+      summary.files.failed++;
+    }
+    for (const test of file.results) {
+      summary.tests.total++;
+      summary.tests[testStatusSummaryKeys[test.status]]++;
+    }
+  }
+  return summary;
 };
+
+type ReportCounts = {
+  testFiles: number;
+  failedFiles: number;
+  tests: number;
+  failedTests: number;
+  passedTests: number;
+  skippedTests: number;
+  todoTests: number;
+};
+
+export const toReportCounts = (summary: TestRunSummary): ReportCounts => ({
+  testFiles: summary.files.total,
+  failedFiles: summary.files.failed,
+  tests: summary.tests.total,
+  failedTests: summary.tests.failed,
+  passedTests: summary.tests.passed,
+  skippedTests: summary.tests.skipped,
+  todoTests: summary.tests.todo,
+});
+
+type ReportDuration = {
+  total: number;
+  build: number;
+  tests: number;
+};
+
+export const toReportDuration = (duration: Duration): ReportDuration => ({
+  total: duration.totalTime,
+  build: duration.buildTime,
+  tests: duration.testTime,
+});
 
 /**
  * Keys reporter-internal per-file state (buffered console logs). A test path
@@ -80,24 +92,16 @@ export const deriveRunCounts = ({
 export const reporterFileKey = (project: string, testPath: string): string =>
   `${project}\u0000${testPath}`;
 
-/** Reads the test path back out of a {@link reporterFileKey}. */
-export const reporterFileKeyPath = (key: string): string =>
-  key.slice(key.indexOf('\u0000') + 1);
-
 /**
- * Collects the paths a run reports, so a reporter can retire buffered per-file
+ * Collects the project and path keys for files a run reports, so a reporter can retire buffered per-file
  * state. Buffers are replaced per file on `onTestFileStart`, but a deleted file
  * never starts again — only the run-end result set (already purged of deleted
  * paths by `updateReporterResultState`) can retire it.
- *
- * Deliberately coarser than {@link reporterFileKey}: `updateReporterResultState`
- * keys the snapshot by path alone, so when two projects run the same file only
- * one of them survives into the result set. Pruning at the buffer's finer
- * project+path identity would drop the other project's logs for a file the run
- * still reports.
  */
-export const reportedTestPaths = (results: TestFileResult[]): Set<string> =>
-  new Set(results.map((result) => result.testPath));
+export const reportedFileKeys = (results: TestFileResult[]): Set<string> =>
+  new Set(
+    results.map((result) => reporterFileKey(result.project, result.testPath)),
+  );
 
 const statusStr = {
   fail: '✗',
@@ -110,6 +114,10 @@ export type FailureItem = {
   test: TestResult;
   errors: NonNullable<TestResult['errors']>;
 };
+
+export const createUnknownFailure = (): SerializedError => ({
+  message: 'Unknown error',
+});
 
 const statusColor: Record<keyof typeof statusStr, (str: string) => string> = {
   fail: color.red,
@@ -176,7 +184,7 @@ export const formatFullTestName = (
 };
 
 export const getErrorType = (
-  error: Pick<FormattedError, 'name' | 'message'>,
+  error: Pick<SerializedError, 'name' | 'message'>,
 ): string => {
   const rawName = error.name || 'Error';
 
@@ -192,7 +200,7 @@ export const getErrorType = (
 };
 
 export const getRetryErrorLabel = (
-  error: Pick<FormattedError, 'retryCount'>,
+  error: Pick<SerializedError, 'retryCount'>,
 ): string | undefined => {
   if (!error.retryCount) {
     return undefined;

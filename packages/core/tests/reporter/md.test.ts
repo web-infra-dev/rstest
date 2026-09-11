@@ -1,5 +1,6 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { MdReporter, resolveOptions } from '../../src/reporter/md';
+import { computeSummary } from '../../src/reporter/utils';
 import type {
   NormalizedConfig,
   Reporter,
@@ -222,7 +223,7 @@ const createFailedTest = (
   name,
   testPath,
   project,
-  errors: [{ message: `${name} failed` }],
+  errors: [{ name: 'Error', message: `${name} failed` }],
 });
 
 const createFailedFile = (
@@ -271,7 +272,11 @@ const setupMdReporter = () => {
     runEnd: async (
       payload: Omit<
         Parameters<NonNullable<Reporter['onTestRunEnd']>>[0],
-        'duration' | 'getSourcemap' | 'snapshotSummary'
+        | 'duration'
+        | 'getSourcemap'
+        | 'snapshotSummary'
+        | 'summary'
+        | 'unhandledErrors'
       >,
     ) => {
       await reporter.onTestRunEnd({
@@ -279,6 +284,8 @@ const setupMdReporter = () => {
         duration: emptyDuration,
         getSourcemap: async () => null,
         snapshotSummary: emptySnapshotSummary,
+        summary: computeSummary(payload.results),
+        unhandledErrors: [],
       });
       return output.join('');
     },
@@ -307,7 +314,7 @@ describe('MdReporter watch reruns', () => {
         createFailedFile(PATH_B, [testB]),
       ],
       testResults: [testA, testB],
-      filterRerunTestPaths: [PATH_A],
+      rerunTestPaths: [PATH_A],
     });
 
     expect(report).toContain('[stdout] log: a second cycle');
@@ -329,11 +336,11 @@ describe('MdReporter watch reruns', () => {
     const nodeTest = createFailedTest(PATH_A, 'fails in a', 'node');
     const jsdomTest = createFailedTest(PATH_A, 'fails in a', 'jsdom');
 
-    // `updateReporterResultState` keys the snapshot by path alone, so only the
-    // last project's result survives a shared file — the prune must not read
-    // that as "the node project's logs are stale".
     const report = await runEnd({
-      results: [createFailedFile(PATH_A, [jsdomTest], 'jsdom')],
+      results: [
+        createFailedFile(PATH_A, [nodeTest], 'node'),
+        createFailedFile(PATH_A, [jsdomTest], 'jsdom'),
+      ],
       testResults: [nodeTest, jsdomTest],
     });
 

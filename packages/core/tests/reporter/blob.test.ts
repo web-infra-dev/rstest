@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withDefaultConfig } from '../../src/config';
-import { emptyDuration, emptySnapshotSummary } from './helpers';
+import { emptyRunEndPayload } from './helpers';
 import { describe, expect, it } from '@rstest/core';
 import {
   BLOB_TRACK_MATCHES_RUNNER_EVENTS,
@@ -67,10 +67,7 @@ describe('blob cancellation', () => {
         config: { ...withDefaultConfig({}), shard: { index: 2, count: 2 } },
       });
       const result = {
-        results: [],
-        testResults: [],
-        duration: emptyDuration,
-        snapshotSummary: emptySnapshotSummary,
+        ...emptyRunEndPayload,
       };
       await sibling.onTestRunEnd(result);
       if (alreadyWritten) await reporter.onTestRunEnd(result);

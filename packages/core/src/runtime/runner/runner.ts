@@ -8,7 +8,7 @@ import type {
   AfterEachListener,
   BeforeEachListener,
   CoverageProvider,
-  FormattedError,
+  SerializedError,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   Rstest,
@@ -209,7 +209,7 @@ export class TestRunner {
       project,
     } = state;
     const results: TestResult[] = [];
-    const errors: FormattedError[] = [];
+    const errors: SerializedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
 
     const runTestsCase = async (
@@ -779,7 +779,7 @@ export class TestRunner {
             // `retryErrors` aggregates every failed attempt across all
             // repeats so a final pass can surface the full flakiness picture
             // via `result.retryErrors`.
-            const retryErrors: FormattedError[] = [];
+            const retryErrors: SerializedError[] = [];
 
             hooks.onTestCaseStart?.({
               testId: test.testId,
@@ -799,7 +799,7 @@ export class TestRunner {
               let retryCount = 0;
               // Scoped per repeat so a terminal failure does not get
               // attributed errors from earlier repeats that already passed.
-              const repeatRetryErrors: FormattedError[] = [];
+              const repeatRetryErrors: SerializedError[] = [];
               do {
                 const currentResult = await runTestsCase(
                   test,

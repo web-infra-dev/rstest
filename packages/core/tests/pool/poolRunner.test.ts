@@ -170,7 +170,7 @@ class WorkerCleanupErrorWorker implements PoolWorker {
           status: 'fail',
           testId: 'file:/test.ts',
           testPath: '/test.ts',
-          errors: [{ message: 'worker cleanup failed' }],
+          errors: [{ name: 'Error', message: 'worker cleanup failed' }],
         },
       }),
     );

@@ -1,6 +1,7 @@
 import { createPool } from '../pool';
+import { toSerializedError } from '../utils/error';
 import type {
-  FormattedError,
+  SerializedError,
   ListCommandCollectOptions,
   ListCommandCollectionResult,
   ListCommandResult,
@@ -226,7 +227,7 @@ const prepareBrowserCollection = async ({
 const collectBrowserTests = async (
   prepared: PreparedBrowserCollection | undefined,
 ): Promise<{
-  errors?: FormattedError[];
+  errors?: SerializedError[];
   list: ListCommandResult[];
   close: () => Promise<void>;
 }> => {
@@ -243,7 +244,11 @@ const collectBrowserTests = async (
   };
 
   if (stage.errors.length) {
-    return { list: [], errors: stage.errors, close };
+    return {
+      list: [],
+      errors: stage.errors.map((error) => toSerializedError(error)),
+      close,
+    };
   }
 
   try {
@@ -291,7 +296,7 @@ const collectAllTests = async ({
   context: Rstest;
   planner: TestPlanner;
 }): Promise<{
-  errors?: FormattedError[];
+  errors?: SerializedError[];
   list: ListCommandResult[];
   getSourceMap: (name: string) => Promise<string | null | undefined>;
   close: () => Promise<void>;

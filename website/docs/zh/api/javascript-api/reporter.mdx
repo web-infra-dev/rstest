@@ -68,7 +68,42 @@ interface Reporter {
   onTestSuiteResult?(result: TestResult): void;
   onTestCaseStart?(test: TestCaseInfo): void;
   onTestCaseResult?(result: TestResult): void;
-  onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
+  onTestRunEnd?(payload: {
+    results: TestFileResult[]; // 测试文件结果；watch 模式下是整个会话的累计结果。
+    testResults: TestResult[]; // 所有测试用例的结果，不按文件分组。
+    summary: {
+      tests: {
+        total: number; // 测试总数。
+        passed: number; // 通过的测试数量。
+        failed: number; // 失败的测试数量。
+        skipped: number; // 跳过的测试数量。
+        todo: number; // todo 测试数量。
+      };
+      files: {
+        total: number; // 测试文件总数。
+        failed: number; // 失败的测试文件数量。
+      };
+    };
+    duration: {
+      totalTime: number; // 总时长（毫秒）。
+      buildTime: number; // 构建时长（毫秒）。
+      testTime: number; // 测试执行时长（毫秒）。
+    };
+    snapshotSummary: SnapshotSummary;
+    unhandledErrors: {
+      name?: string; // 错误类名称。
+      message: string; // 错误信息。
+      stack?: string; // 序列化后的调用栈。
+      diff?: string; // 格式化后的断言差异。
+      expected?: string; // 序列化后的断言预期值。
+      actual?: string; // 序列化后的断言实际值。
+      retryCount?: number; // 产生此错误的重试次数。
+      fullStack?: boolean; // 是否打印完整调用栈。
+    }[];
+    coverage?: CoverageMapData; // 启用覆盖率时提供。
+    rerunTestPaths?: string[]; // 仅 watch 模式：当前轮次执行的文件。
+    getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>; // 获取构建产物的 source map。
+  }): void | Promise<void>;
   onUserConsoleLog?(log: UserConsoleLog): void;
   onExit?(): MaybePromise<void>;
 }
@@ -81,6 +116,53 @@ interface Reporter {
 <ApiMeta addedVersion="0.11.1" />
 
 Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写入的可 JSON 序列化运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
+
+### onTestRunEnd
+
+<ApiMeta addedVersion="0.12.0" />
+
+每轮运行结束时调用 `onTestRunEnd`，参数里是这一轮结束时的结果和汇总。从 v0.12.0 开始，参数带上了 `summary` 和 `rerunTestPaths`，`unhandledErrors` 固定是序列化后的错误数组。
+
+watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累计结果：每个文件只保留最新一次的结果，删除的文件会移出。`rerunTestPaths` 是这一轮实际执行的文件，一次性运行没有这个字段。`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON。
+
+### TestResult
+
+`TestResult` 和 `TestFileResult` 由 `@rstest/core` 导出。套件和用例级钩子收到的是 `TestResult`，文件级钩子和 `onTestRunEnd` 收到的是 `TestFileResult`，它在 `TestResult` 的基础上多了这个文件里各个测试的结果。
+
+- **类型：**
+
+```ts
+type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
+
+interface TestResult {
+  testId: string; // 任务标识。
+  status: TestResultStatus; // 最终结果状态。
+  name: string; // 测试、套件或测试文件的显示名称。
+  testPath: string; // 所属测试文件的路径。
+  parentNames?: string[]; // 外层测试套件的名称。
+  duration?: number; // 执行时长（毫秒）。
+  errors?: SerializedError[]; // 最后一次执行产生的错误。
+  retryErrors?: SerializedError[]; // 之前重试产生的错误。
+  retryCount?: number; // 已执行的重试次数。
+  project: string; // 项目名称。
+  meta?: TaskMeta; // 关联到任务的可序列化元数据。
+  heap?: number; // 堆内存用量（字节），开启 `logHeapUsage` 时采样。
+}
+```
+
+### TestFileResult
+
+- **类型：**
+
+```ts
+interface TestFileResult extends TestResult {
+  results: TestResult[]; // 当前文件中声明的测试结果。
+  snapshotResult?: SnapshotResult; // 当前文件的快照统计。
+  coverage?: Record<string, FileCoverageData>; // 开启覆盖率时该文件的覆盖率数据。
+}
+```
+
+`SerializedError` 的结构和 `onTestRunEnd` 参数里 `unhandledErrors` 的每一项相同。`SnapshotResult` 来自 `@vitest/snapshot`，`FileCoverageData` 来自 `istanbul-lib-coverage`。
 
 ## 示例
 

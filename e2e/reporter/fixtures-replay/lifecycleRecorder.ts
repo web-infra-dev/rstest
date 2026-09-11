@@ -7,7 +7,7 @@ import type {
   TestSuiteInfo,
 } from '@rstest/core';
 
-// `UserConsoleLog` is not part of the public `@rstest/core` type exports.
+// Hook payload types are intentionally derived from Reporter, not separately exported.
 type UserConsoleLog = Parameters<NonNullable<Reporter['onUserConsoleLog']>>[0];
 
 /**

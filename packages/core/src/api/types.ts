@@ -1,27 +1,26 @@
 import type { LoadConfigOptions } from '@rsbuild/core';
 import type {
   BrowserName,
-  CoverageMapData,
-  FormattedError,
   Location as TestLocation,
   NormalizedConfig,
   RstestConfig,
   RstestOutputConfig,
+  TestRunEndPayload,
+} from '../types';
+import type { LoadedRstestConfig } from '../config';
+
+export type {
+  CoverageMapData,
   SnapshotSummary,
   TaskMeta,
   TestResultStatus,
 } from '../types';
-import type { LoadedRstestConfig } from '../config';
 
 /** @experimental Subject to change until 1.0.0. */
 export type {
-  CoverageMapData,
   NormalizedConfig,
   RstestConfig,
-  SnapshotSummary,
-  TaskMeta,
   TestLocation,
-  TestResultStatus,
   LoadedRstestConfig,
 };
 
@@ -136,7 +135,7 @@ export interface RunOptions {
 
 /** @experimental Subject to change until 1.0.0. */
 export interface WatchOptions {
-  onResult?: (result: TestRunResult) => void;
+  onResult?: (result: TestRunResult & { rerunTestPaths: string[] }) => void;
 }
 
 /** @experimental Subject to change until 1.0.0. */
@@ -172,61 +171,14 @@ export interface MergeReportsOptions {
   cleanup?: boolean;
 }
 
-/** @experimental Subject to change until 1.0.0. */
-export interface SerializedError extends Pick<
-  FormattedError,
-  'message' | 'stack' | 'diff' | 'actual' | 'expected' | 'retryCount'
-> {
-  name: string;
-  cause?: SerializedError;
-}
-
-/** @experimental Subject to change until 1.0.0. */
-export interface TestCaseResult {
-  status: TestResultStatus;
-  name: string;
-  testPath: string;
-  parentNames?: string[];
-  duration?: number;
-  errors?: SerializedError[];
-  retryErrors?: SerializedError[];
-  retryCount?: number;
-  project: string;
-  meta?: TaskMeta;
-}
-
-/** @experimental Subject to change until 1.0.0. */
-export interface TestFileRunResult extends TestCaseResult {
-  tests: TestCaseResult[];
-}
-
 // Status literals match TestResultStatus; summary count keys stay past tense.
 /** @experimental Subject to change until 1.0.0. */
 export type TestRunStatus = 'pass' | 'fail' | 'error';
 
 /** @experimental Subject to change until 1.0.0. */
-export interface TestRunResult {
+export interface TestRunResult extends Omit<TestRunEndPayload, 'getSourcemap'> {
   /** Overall status of the run. */
   status: TestRunStatus;
-  files: TestFileRunResult[];
-  /** Counts for this cycle, grouped by tests and files. */
-  summary: {
-    tests: {
-      total: number;
-      passed: number;
-      failed: number;
-      skipped: number;
-      todo: number;
-    };
-    files: {
-      total: number;
-      failed: number;
-    };
-  };
-  unhandledErrors: SerializedError[];
-  duration: { total: number };
-  snapshot?: SnapshotSummary;
-  coverage?: CoverageMapData;
 }
 
 /** @experimental Subject to change until 1.0.0. */

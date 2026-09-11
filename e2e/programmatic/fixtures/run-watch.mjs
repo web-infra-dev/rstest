@@ -82,7 +82,7 @@ try {
     },
   });
   openWatchers.add(emptyFilterWatcher);
-  const emptyFilterFiles = firstResult.files.map((file) =>
+  const emptyFilterFiles = firstResult.results.map((file) =>
     file.testPath.split('/').pop(),
   );
   await emptyFilterWatcher.close();
@@ -101,9 +101,11 @@ try {
   const zeroMatchWatcher = await zeroMatchRstest.watch({
     filters: ['"added.test.ts"'],
     onResult(result) {
-      const files = result.files.map((file) => file.testPath.split('/').pop());
-      zeroMatchCycles.push(files);
-      if (files.includes('added.test.ts')) {
+      const rerunTestPaths = result.rerunTestPaths.map((testPath) =>
+        testPath.split('/').pop(),
+      );
+      zeroMatchCycles.push(rerunTestPaths);
+      if (rerunTestPaths.includes('added.test.ts')) {
         resolveAddedTest();
       }
     },
@@ -129,9 +131,11 @@ try {
   });
   const emptyProjectWatcher = await emptyProjectRstest.watch({
     onResult(result) {
-      const files = result.files.map((file) => file.testPath.split('/').pop());
-      emptyProjectCycles.push(files);
-      if (files.includes('first.test.ts')) {
+      const rerunTestPaths = result.rerunTestPaths.map((testPath) =>
+        testPath.split('/').pop(),
+      );
+      emptyProjectCycles.push(rerunTestPaths);
+      if (rerunTestPaths.includes('first.test.ts')) {
         resolveFirstProjectTest();
       }
     },
@@ -252,7 +256,10 @@ it('does not create a snapshot', () => {
     onResult(result) {
       cycles.push({
         status: result.status,
-        files: result.files.map((file) => file.testPath.split('/').pop()),
+        results: result.results.map((file) => file.testPath.split('/').pop()),
+        rerunTestPaths: result.rerunTestPaths.map((testPath) =>
+          testPath.split('/').pop(),
+        ),
         tests: result.summary.tests.total,
       });
       if (cycles.length === 1) {

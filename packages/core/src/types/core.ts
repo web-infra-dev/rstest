@@ -10,7 +10,7 @@ import type {
 } from './config';
 import type { Reporter } from './reporter';
 import type {
-  FormattedError,
+  SerializedError,
   TestCaseInfo,
   TestFileResult,
   TestInfo,
@@ -151,12 +151,12 @@ export type ListCommandResult = {
   tests: TestInfo[];
   testPath: string;
   project: string;
-  errors?: FormattedError[];
+  errors?: SerializedError[];
 };
 
 export type ListCommandCollectionResult = {
   list: ListCommandResult[];
-  errors: FormattedError[];
+  errors: SerializedError[];
   showProject: boolean;
   getSourceMap: (name: string) => Promise<string | null | undefined>;
   /** The caller owns teardown so it can render from live collection resources first. */

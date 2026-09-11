@@ -82,23 +82,23 @@ import { relative, resolve } from 'pathe';
 import { parse as parseStackTrace } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
 import type {
-  Duration,
   GetSourcemap,
   MdReporterOptions,
   NormalizedConfig,
   Reporter,
   RstestTestState,
+  SerializedError,
   SnapshotSummary,
   SourceMapInput,
   TestFileInfo,
-  TestFileResult,
   TestResult,
+  TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
 import {
   buildPackageManagerReproCommand,
   collectFailures,
-  deriveRunCounts,
+  createUnknownFailure,
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
@@ -106,10 +106,11 @@ import {
   getErrorType,
   pushFencedBlock,
   pushHeading,
-  reportedTestPaths,
+  reportedFileKeys,
   reporterFileKey,
-  reporterFileKeyPath,
   stringifyJson,
+  toReportCounts,
+  toReportDuration,
 } from './utils';
 
 type HeaderOptions = {
@@ -866,8 +867,11 @@ export class MdReporter implements Reporter {
     }
   }
 
-  private renderUnhandledErrors(lines: string[], errors?: Error[]): void {
-    if (!this.options.errors.unhandled || !errors?.length) return;
+  private renderUnhandledErrors(
+    lines: string[],
+    errors: SerializedError[],
+  ): void {
+    if (!this.options.errors.unhandled || !errors.length) return;
 
     pushHeading(lines, 2, 'Unhandled Errors');
     for (let index = 0; index < errors.length; index += 1) {
@@ -879,7 +883,7 @@ export class MdReporter implements Reporter {
         lines,
         'json',
         stringifyJson({
-          name: error.name || 'Error',
+          name: error.name,
           message: cleanString(error.message),
           stack: error.stack ? cleanString(error.stack) : undefined,
         }),
@@ -894,41 +898,23 @@ export class MdReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    getSourcemap: GetSourcemap;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-  }): Promise<void> {
+    summary,
+  }: TestRunEndPayload): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
     // A watch session drops deleted files from the result snapshot; the buffered
     // logs have no such signal of their own, so the reported file set prunes
     // them and the buffer stays bounded across a long session.
     if (this.logsByFile.size) {
-      const reportedPaths = reportedTestPaths(results);
+      const reportedKeys = reportedFileKeys(results);
       for (const key of this.logsByFile.keys()) {
-        if (!reportedPaths.has(reporterFileKeyPath(key))) {
+        if (!reportedKeys.has(key)) {
           this.logsByFile.delete(key);
         }
       }
     }
-    // Deliberately unfiltered by `filterRerunTestPaths`: the summary counts are
-    // derived from the whole session snapshot, so scoping failures to the
-    // current watch rerun would report the two sections at different scopes.
     const failures = collectFailures({ results, testResults });
-
-    const {
-      failedTests,
-      passedTests,
-      skippedTests,
-      todoTests,
-      failedFiles,
-      counts,
-    } = deriveRunCounts({ results, testResults });
     const status =
-      failedTests.length || failedFiles.length || unhandledErrors?.length
+      summary.tests.failed || summary.files.failed || unhandledErrors.length
         ? 'fail'
         : 'pass';
 
@@ -936,12 +922,8 @@ export class MdReporter implements Reporter {
 
     const summaryPayload: Record<string, unknown> = {
       status,
-      counts,
-      durationMs: {
-        total: duration.totalTime,
-        build: duration.buildTime,
-        tests: duration.testTime,
-      },
+      counts: toReportCounts(summary),
+      durationMs: toReportDuration(duration),
     };
 
     summaryPayload.snapshot = pickSnapshotSummary(snapshotSummary);
@@ -957,9 +939,9 @@ export class MdReporter implements Reporter {
       (status === 'pass' && focusedRun)
     ) {
       this.renderTestsSection(lines, {
-        passed: passedTests,
-        skipped: skippedTests,
-        todo: todoTests,
+        passed: testResults.filter((result) => result.status === 'pass'),
+        skipped: testResults.filter((result) => result.status === 'skip'),
+        todo: testResults.filter((result) => result.status === 'todo'),
       });
     }
 
@@ -1005,9 +987,8 @@ export class MdReporter implements Reporter {
 
           lines.push(`- [F${formattedId}] ${title}`);
 
-          const primaryError = failure.errors[0] || {
-            message: 'Unknown error',
-          };
+          const primaryError: SerializedError =
+            failure.errors[0] ?? createUnknownFailure();
 
           const type = getErrorType({
             name: primaryError.name,
@@ -1068,11 +1049,11 @@ export class MdReporter implements Reporter {
           );
         }
 
+        const reportedErrors: SerializedError[] = failure.errors.length
+          ? failure.errors
+          : [createUnknownFailure()];
         const errorEntries = await Promise.all(
-          (failure.errors.length
-            ? failure.errors
-            : [{ message: 'Unknown error' }]
-          ).map(async (error) => {
+          reportedErrors.map(async (error) => {
             const candidateFrames = error.stack
               ? await parseErrorStacktrace({
                   stack: error.stack,

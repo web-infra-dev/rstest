@@ -11,6 +11,7 @@ import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
+import { reporterFileKey } from '../reporter/utils';
 import type {
   BuiltInReporterNames,
   InternalContext,
@@ -313,24 +314,26 @@ export class Rstest implements InternalContext {
     testResults: TestResult[],
     deletedEntries: string[] = [],
   ): void {
-    // Update or add results
+    const filesToUpdate = new Map<string, Set<string>>();
     results.forEach((item) => {
-      const existingIndex = this.reporterResultIndex.get(item.testPath);
+      const key = reporterFileKey(item.project, item.testPath);
+      const projectPaths = filesToUpdate.get(item.project);
+      if (projectPaths) {
+        projectPaths.add(item.testPath);
+      } else {
+        filesToUpdate.set(item.project, new Set([item.testPath]));
+      }
+      const existingIndex = this.reporterResultIndex.get(key);
       if (existingIndex !== undefined) {
         this.reporterResults.results[existingIndex] = item;
       } else {
-        this.reporterResultIndex.set(
-          item.testPath,
-          this.reporterResults.results.length,
-        );
+        this.reporterResultIndex.set(key, this.reporterResults.results.length);
         this.reporterResults.results.push(item);
       }
     });
 
-    // Clear existing test results for updated paths and add new ones
-    const testPathsToUpdate = new Set(testResults.map((r) => r.testPath));
     this.reporterResults.testResults = this.reporterResults.testResults.filter(
-      (r) => !testPathsToUpdate.has(r.testPath),
+      (result) => !filesToUpdate.get(result.project)?.has(result.testPath),
     );
     this.reporterResults.testResults.push(...testResults);
 
@@ -351,14 +354,21 @@ export class Rstest implements InternalContext {
     // see testSequencer.ts). Without this, the order files appear in reports
     // would shift run-to-run with the sequencer's scheduling. Sort is stable,
     // so individual test cases keep their in-file declaration order.
-    const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
-      a.testPath.localeCompare(b.testPath);
-    this.reporterResults.results.sort(byTestPath);
+    const byTestPathAndProject = (
+      a: { testPath: string; project: string },
+      b: { testPath: string; project: string },
+    ) =>
+      a.testPath.localeCompare(b.testPath) ||
+      a.project.localeCompare(b.project);
+    this.reporterResults.results.sort(byTestPathAndProject);
     this.reporterResultIndex.clear();
     this.reporterResults.results.forEach((result, index) => {
-      this.reporterResultIndex.set(result.testPath, index);
+      this.reporterResultIndex.set(
+        reporterFileKey(result.project, result.testPath),
+        index,
+      );
     });
-    this.reporterResults.testResults.sort(byTestPath);
+    this.reporterResults.testResults.sort(byTestPathAndProject);
   }
 }
 

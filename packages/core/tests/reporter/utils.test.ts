@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { deriveRunCounts } from '../../src/reporter/utils';
+import { computeSummary } from '../../src/reporter/utils';
 import type { TestFileResult, TestResult } from '../../src/types';
 
 const test = (status: TestResult['status'], id: string): TestResult =>
@@ -21,8 +21,8 @@ const file = (status: TestFileResult['status'], id: string): TestFileResult =>
     testId: id,
   }) as TestFileResult;
 
-describe('deriveRunCounts', () => {
-  it('partitions test results by status and derives the 7-field counts struct', () => {
+describe('computeSummary', () => {
+  it('counts file and nested test results by status', () => {
     const testResults = [
       test('pass', '1'),
       test('pass', '2'),
@@ -30,40 +30,12 @@ describe('deriveRunCounts', () => {
       test('skip', '4'),
       test('todo', '5'),
     ];
-    const results = [file('pass', 'a'), file('fail', 'b')];
+    const passedFile = file('pass', 'a');
+    passedFile.results = testResults;
 
-    const derived = deriveRunCounts({ results, testResults });
-
-    expect(derived.passedTests.map((t) => t.testId)).toEqual(['1', '2']);
-    expect(derived.failedTests.map((t) => t.testId)).toEqual(['3']);
-    expect(derived.skippedTests.map((t) => t.testId)).toEqual(['4']);
-    expect(derived.todoTests.map((t) => t.testId)).toEqual(['5']);
-    expect(derived.failedFiles.map((f) => f.testId)).toEqual(['b']);
-
-    expect(derived.counts).toEqual({
-      testFiles: 2,
-      failedFiles: 1,
-      tests: 5,
-      failedTests: 1,
-      passedTests: 2,
-      skippedTests: 1,
-      todoTests: 1,
-    });
-  });
-
-  it('returns zeroed counts for an empty run', () => {
-    const derived = deriveRunCounts({ results: [], testResults: [] });
-
-    expect(derived.failedTests).toEqual([]);
-    expect(derived.failedFiles).toEqual([]);
-    expect(derived.counts).toEqual({
-      testFiles: 0,
-      failedFiles: 0,
-      tests: 0,
-      failedTests: 0,
-      passedTests: 0,
-      skippedTests: 0,
-      todoTests: 0,
+    expect(computeSummary([passedFile, file('fail', 'b')])).toEqual({
+      tests: { total: 5, passed: 2, failed: 1, skipped: 1, todo: 1 },
+      files: { total: 2, failed: 1 },
     });
   });
 });

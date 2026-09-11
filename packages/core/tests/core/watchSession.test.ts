@@ -53,7 +53,9 @@ const createContext = (): Rstest => {
 
 const createFakeExecutor = (
   name: string,
-  onCycle?: (options: ExecutorRunCycleOptions) => void | Promise<void>,
+  onCycle?: (
+    options: ExecutorRunCycleOptions,
+  ) => void | ExecutorCycleOutcome | Promise<void | ExecutorCycleOutcome>,
 ): TestExecutor & { cycles: ExecutorRunCycleOptions[] } => {
   const cycles: ExecutorRunCycleOptions[] = [];
   return {
@@ -64,8 +66,7 @@ const createFakeExecutor = (
     close: async () => {},
     runCycle: async (options) => {
       cycles.push(options);
-      await onCycle?.(options);
-      return emptyOutcome();
+      return (await onCycle?.(options)) ?? emptyOutcome();
     },
   };
 };
@@ -575,6 +576,55 @@ describe('createWatchCycleDriver', () => {
     expect(onResult).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({ status: 'pass' }),
+    );
+  });
+
+  it('reports the session snapshot and identifies the files rerun this cycle', async () => {
+    const context = createContext();
+    const onResult = rs.fn();
+    context.reporters.push(
+      createResultReporter(context, { onResult }).reporter,
+    );
+    const driver = createDriver(context);
+    const cycleResults = [
+      {
+        testId: '/failed.test.ts',
+        name: '/failed.test.ts',
+        status: 'fail' as const,
+        testPath: '/failed.test.ts',
+        project: 'node-a',
+        results: [],
+      },
+      {
+        testId: '/passed.test.ts',
+        name: '/passed.test.ts',
+        status: 'pass' as const,
+        testPath: '/passed.test.ts',
+        project: 'node-a',
+        results: [],
+      },
+    ];
+    let cycle = 0;
+    const executor = createFakeExecutor('node', () => {
+      const result = cycleResults[cycle++]!;
+      return {
+        ...emptyOutcome(),
+        results: [result],
+        testPaths: [result.testPath],
+      };
+    });
+
+    await driver.runCycle(executor, { mode: 'all' });
+    await driver.runCycle(executor, { mode: 'on-demand' });
+
+    expect(onResult).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        status: 'fail',
+        results: cycleResults,
+        summary: expect.objectContaining({ files: { total: 2, failed: 1 } }),
+        rerunTestPaths: ['/passed.test.ts'],
+      }),
     );
   });
 

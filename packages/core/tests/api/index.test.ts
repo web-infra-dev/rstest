@@ -5,7 +5,11 @@ import stripAnsi from 'strip-ansi';
 import { createRstest } from '../../src/api';
 import type { RstestConfig } from '../../src/types';
 import { withTempDir } from '../helpers/tempDir';
-import { emptyDuration, emptySnapshotSummary } from '../reporter/helpers';
+import {
+  emptyDuration,
+  emptyRunSummary,
+  emptySnapshotSummary,
+} from '../reporter/helpers';
 
 const defaultReporterConfig = [
   [
@@ -140,7 +144,14 @@ describe('createRstest', () => {
 
       await expect(rstest.run({ project })).resolves.toMatchObject({
         status: 'pass',
+        results: [
+          expect.objectContaining({
+            project: 'rstest',
+            testPath: join(root, 'root.test.js'),
+          }),
+        ],
         summary: { tests: { total: 1 } },
+        unhandledErrors: [],
       });
     });
   });
@@ -294,8 +305,10 @@ describe('createRstest', () => {
           version: RSTEST_VERSION,
           results: [],
           testResults: [],
+          summary: emptyRunSummary,
           duration: emptyDuration,
           snapshotSummary: emptySnapshotSummary,
+          unhandledErrors: [],
           files: {},
         }),
       );
