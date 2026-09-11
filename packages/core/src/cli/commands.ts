@@ -663,6 +663,7 @@ export const runWatch = async ({
     await watchFilesForRestart({
       configFilePaths: [
         loaded.filePath,
+        ...loaded.dependencies,
         ...filterProjects(
           rstest.context.projects.map((project) => ({
             config: { name: project.name },

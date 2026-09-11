@@ -55,4 +55,30 @@ export default defineConfig({});
     // Give the OS a moment to release file handles (especially on Windows CI).
     await new Promise((resolve) => setTimeout(resolve, 1000));
   });
+
+  it('should restart when a root config dependency changes', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-config-dependency${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath,
+    });
+    const configFile = path.join(fixturesTargetPath, 'config.mjs');
+    const dependency = path.join(fixturesTargetPath, 'shared.mjs');
+    fs.create(dependency, 'export default {};');
+    fs.create(configFile, "export { default } from './shared.mjs';");
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '-c', configFile],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
+    await cli.waitForStdout('Waiting for file changes...');
+    expect(cli.stdout).toContain('Tests 2 passed');
+
+    cli.resetStd();
+    fs.update(dependency, (content) => `${content}\n// trigger restart`);
+    await cli.waitForStdout('restarting Rstest as shared.mjs changed');
+    await cli.waitForStdout('Waiting for file changes...');
+    expect(cli.stdout).toContain('Tests 2 passed');
+  });
 });
