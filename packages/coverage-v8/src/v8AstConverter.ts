@@ -106,7 +106,6 @@ type PreparedCoverage = {
   statements: StatementDescriptor[];
   branches: BranchDescriptor[];
 };
-type FileCoverageLike = FileCoverageData | { data: FileCoverageData };
 
 type ConvertOptions = {
   ast: ParseResult | (() => ParseResult);
@@ -367,6 +366,16 @@ async function prepareCoverage(
             expression.value !== 'use strict'
           ) {
             builder.addStatement(current);
+          }
+          return;
+        }
+        case 'ExportDefaultDeclaration': {
+          const declaration = current.declaration as AstNode;
+          if (
+            declaration.type !== 'FunctionDeclaration' &&
+            declaration.type !== 'ClassDeclaration'
+          ) {
+            builder.addStatement(declaration);
           }
           return;
         }
@@ -936,13 +945,7 @@ function applyCoverageToMap(
   prepared: PreparedCoverage,
   ranges: NormalizedRange[],
 ): void {
-  const data: Record<string, FileCoverageData> = {};
-
-  for (const [filename, template] of Object.entries(prepared.files)) {
-    data[filename] = getOrCreateFileCoverage(coverageMap, filename, template);
-  }
-
-  applyCoverageHits(data, prepared, ranges);
+  coverageMap.merge(applyCoverage(prepared, ranges));
 }
 
 function createFileCoverage(template: FileTemplate): FileCoverageData {
@@ -967,25 +970,6 @@ function createFileCoverage(template: FileTemplate): FileCoverageData {
   }
 
   return fileCoverage;
-}
-
-function getOrCreateFileCoverage(
-  coverageMap: CoverageMap,
-  filename: string,
-  template: FileTemplate,
-): FileCoverageData {
-  const existingCoverage = coverageMap.data[filename] as
-    FileCoverageLike | undefined;
-
-  if (existingCoverage) {
-    return 'data' in existingCoverage
-      ? existingCoverage.data
-      : existingCoverage;
-  }
-
-  coverageMap.addFileCoverage(createFileCoverage(template));
-  const fileCoverage = coverageMap.data[filename] as FileCoverageLike;
-  return 'data' in fileCoverage ? fileCoverage.data : fileCoverage;
 }
 
 function applyCoverageHits(
@@ -1014,7 +998,16 @@ function applyCoverageHits(
     for (let index = 0; index < descriptor.ranges.length; index++) {
       const range = descriptor.ranges[index]!;
       const count = getCount(range, ranges);
-      const hit = range.implicit ? count - previousHit : count;
+      let hit = count;
+      if (range.implicit) {
+        // A conditional await can count only resumptions at the if header.
+        const parent = Math.max(
+          count,
+          getCount({ startOffset: range.endOffset }, ranges),
+          previousHit,
+        );
+        hit = parent - previousHit;
+      }
       hits[index] = hits[index]! + hit;
       previousHit = hit;
     }
@@ -1183,7 +1176,7 @@ function getMostSpecificRange(ranges: RawCoverageRange[]) {
 }
 
 function getCount(
-  offset: { startOffset: number; endOffset: number },
+  offset: { startOffset: number },
   coverages: NormalizedRange[],
 ) {
   let count = 0;
