@@ -10,14 +10,14 @@ export function Features() {
   const t = useI18n<typeof import('i18n')>();
   const features = [
     {
-      title: t('reuseBuildConfig'),
-      details: t('reuseBuildConfigDesc'),
-      icon: '♻️',
+      title: t('testingReady'),
+      details: t('testingReadyDesc'),
+      icon: '🧪',
     },
     {
-      title: t('productionAccurateTesting'),
-      details: t('productionAccurateTestingDesc'),
-      icon: '🎯',
+      title: t('modernByDefault'),
+      details: t('modernByDefaultDesc'),
+      icon: '✨',
     },
     {
       title: t('blazingFast'),
@@ -25,14 +25,14 @@ export function Features() {
       icon: '⚡',
     },
     {
-      title: t('modernByDefault'),
-      details: t('modernByDefaultDesc'),
-      icon: '🧠',
+      title: t('reuseBuildConfig'),
+      details: t('reuseBuildConfigDesc'),
+      icon: '🔁',
     },
     {
-      title: t('testingReady'),
-      details: t('testingReadyDesc'),
-      icon: '🧰',
+      title: t('productionAccurateTesting'),
+      details: t('productionAccurateTestingDesc'),
+      icon: '🏗️',
     },
     {
       title: t('realBrowserTesting'),
