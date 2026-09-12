@@ -70,6 +70,23 @@ it('keeps toThrow promise-aware for regular and cross-realm regexps', async () =
   );
 });
 
+it('treats cross-realm built-ins as the same type in toStrictEqual', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  class Point {
+    x = 1;
+  }
+
+  fileExpect(vm.runInNewContext("['1']")).toStrictEqual(['1']);
+  fileExpect(vm.runInNewContext('({ x: 1 })')).toStrictEqual({ x: 1 });
+  fileExpect(vm.runInNewContext("[, '1']")).not.toStrictEqual([undefined, '1']);
+  fileExpect(
+    vm.runInNewContext('new (class Point { x = 1 })()'),
+  ).not.toStrictEqual(new Point());
+  fileExpect(new Point()).not.toStrictEqual({ x: 1 });
+  fileExpect({ x: undefined }).not.toStrictEqual({});
+});
+
 /**
  * Regression for https://github.com/web-infra-dev/rstest/issues/1376: the
  * file-level `expect` is a build-once singleton, so a reference (or a
