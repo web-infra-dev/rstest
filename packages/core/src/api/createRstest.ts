@@ -116,11 +116,14 @@ export async function createRstestInstance(
   runtime: HostRuntime,
 ): Promise<RstestInstance> {
   initRstestEnv();
+
   const cwd = options.cwd
     ? getAbsolutePath(process.cwd(), options.cwd)
     : process.cwd();
   const config = options.config ?? {};
+
   let result: LoadConfigResult<RstestConfig>;
+
   if ('content' in config && 'filePath' in config) {
     result = {
       dependencies: [],
@@ -132,6 +135,7 @@ export async function createRstestInstance(
   } else {
     result = { content: config, filePath: null, dependencies: [] };
   }
+
   const initialInputs = await resolveRunnerInputs({
     result,
     options: { configLoader: options.configLoader },
