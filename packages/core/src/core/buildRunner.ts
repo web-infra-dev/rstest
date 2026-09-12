@@ -2,22 +2,14 @@ import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import type { CommonOptions } from '../cli/init';
 import { exitReporters } from '../reporter';
-import type {
-  Project,
-  RstestCommand,
-  RstestConfig,
-  RstestInstance,
-} from '../types';
+import type { RstestCommand, RstestInstance } from '../types';
 import { logger, quoteFilter } from '../utils';
 import type { ResolvedRunnerInputs } from './resolveConfig';
 
 export type CreateRstestContextFn<
   Instance extends RstestInstance = RstestInstance,
 > = (
-  input: {
-    config: RstestConfig;
-    configFilePath?: string;
-    projects: Project[];
+  input: Pick<ResolvedRunnerInputs, 'result' | 'projects'> & {
     cwd?: string;
     trace?: boolean;
     embedded?: boolean;
@@ -214,9 +206,8 @@ const resolveEffectiveFilters = async ({
     );
   }
 
-  const { config, configFilePath, projects, cwd } = inputs;
   const rstest = createRstestContext(
-    { config, configFilePath, projects, cwd, embedded },
+    { ...inputs, embedded },
     'list',
     undefined,
   );
@@ -319,10 +310,7 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   });
   const rstest = createRstestContext(
     {
-      config: inputs.config,
-      configFilePath: inputs.configFilePath,
-      projects: inputs.projects,
-      cwd: inputs.cwd,
+      ...inputs,
       trace: options.trace,
       embedded,
     },

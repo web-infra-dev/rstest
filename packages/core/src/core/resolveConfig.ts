@@ -1,7 +1,7 @@
+import type { LoadConfigResult } from '@rsbuild/core';
 import {
   type CommonOptions,
   formatNoProjectsFoundError,
-  loadCliConfig,
   mergeWithCLIOptions,
   resolveProjects,
 } from '../cli/init';
@@ -9,17 +9,8 @@ import { clonePlainConfig, resolveExtends } from '../config';
 import type { Project, RstestConfig } from '../types';
 import { filterProjects, getAbsolutePath } from '../utils';
 
-export type RunnerConfigSource =
-  | { type: 'discover' }
-  | {
-      type: 'value';
-      config: RstestConfig;
-      configFilePath?: string;
-    };
-
 export type ResolvedRunnerInputs = {
-  config: RstestConfig;
-  configFilePath?: string;
+  result: LoadConfigResult<RstestConfig>;
   projects: Project[];
   cwd: string;
 };
@@ -31,7 +22,10 @@ export function resolveRunnerOperationInputs({
   inputs: ResolvedRunnerInputs;
   options: CommonOptions;
 }): ResolvedRunnerInputs {
-  const config = mergeWithCLIOptions(clonePlainConfig(inputs.config), options);
+  const config = mergeWithCLIOptions(
+    clonePlainConfig(inputs.result.content),
+    options,
+  );
   config.root = config.root
     ? getAbsolutePath(inputs.cwd, config.root)
     : inputs.cwd;
@@ -49,40 +43,26 @@ export function resolveRunnerOperationInputs({
   }
 
   return {
-    config,
-    configFilePath: inputs.configFilePath,
+    result: { ...inputs.result, content: config },
     projects,
     cwd: inputs.cwd,
   };
 }
 
 export async function resolveRunnerInputs({
-  source,
+  result,
   options,
   cwd,
-  tweakConfig,
 }: {
-  source: RunnerConfigSource;
+  result: LoadConfigResult<RstestConfig>;
   options: CommonOptions;
   cwd: string;
-  tweakConfig?: (config: RstestConfig) => void;
 }): Promise<ResolvedRunnerInputs> {
-  let config: RstestConfig;
-  let configFilePath: string | undefined;
-
-  if (source.type === 'discover') {
-    const loaded = await loadCliConfig(options, cwd);
-    config = loaded.content;
-    configFilePath = loaded.filePath ?? undefined;
-  } else {
-    // Cloning must preserve exclude.override until defaults are applied.
-    config = await resolveExtends(clonePlainConfig(source.config));
-    configFilePath = source.configFilePath;
-  }
+  // Cloning must preserve exclude.override until defaults are applied.
+  const config = await resolveExtends(clonePlainConfig(result.content));
 
   mergeWithCLIOptions(config, options);
   config.root = config.root ? getAbsolutePath(cwd, config.root) : cwd;
-  tweakConfig?.(config);
 
   const projects = await resolveProjects({
     config,
@@ -104,5 +84,5 @@ ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n
     names.add(project.config.name!);
   }
 
-  return { config, configFilePath, projects, cwd };
+  return { result: { ...result, content: config }, projects, cwd };
 }

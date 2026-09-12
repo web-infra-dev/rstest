@@ -1,4 +1,5 @@
 /** Instance implementation shared by the public entry and the CLI. */
+import type { LoadConfigResult } from '@rsbuild/core';
 import type { CommonOptions } from '../cli/init';
 import { initRstestEnv } from '../cli/prepare';
 import {
@@ -30,7 +31,6 @@ import type {
   CreateRstestOptions,
   ListedTest,
   ListOptions,
-  LoadedRstestConfig,
   MergeReportsOptions,
   RstestContext,
   RstestInstance,
@@ -111,37 +111,39 @@ const flattenListedTests = (
   return listed;
 };
 
-const isLoadedRstestConfig = (
-  config: RstestConfig | LoadedRstestConfig,
-): config is LoadedRstestConfig => 'content' in config && 'filePath' in config;
-
 export async function createRstestInstance(
   options: CreateRstestOptions,
   runtime: HostRuntime,
 ): Promise<RstestInstance> {
   initRstestEnv();
+
   const cwd = options.cwd
     ? getAbsolutePath(process.cwd(), options.cwd)
     : process.cwd();
   const config = options.config ?? {};
+
+  let result: LoadConfigResult<RstestConfig>;
+
+  if ('content' in config && 'filePath' in config) {
+    result = {
+      dependencies: [],
+      ...config,
+      content: config.content,
+      filePath:
+        config.filePath === null ? null : getAbsolutePath(cwd, config.filePath),
+    };
+  } else {
+    result = { content: config, filePath: null, dependencies: [] };
+  }
+
   const initialInputs = await resolveRunnerInputs({
-    source: {
-      type: 'value',
-      config: isLoadedRstestConfig(config) ? config.content : config,
-      configFilePath:
-        isLoadedRstestConfig(config) && config.filePath !== null
-          ? getAbsolutePath(cwd, config.filePath)
-          : undefined,
-    },
+    result,
     options: { configLoader: options.configLoader },
     cwd,
   });
   const initialContext = createRstestContext(
     {
-      config: initialInputs.config,
-      configFilePath: initialInputs.configFilePath,
-      projects: initialInputs.projects,
-      cwd,
+      ...initialInputs,
       embedded: runtime.embedded,
       initializeReporters: false,
     },

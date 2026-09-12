@@ -1,3 +1,4 @@
+import type { LoadConfigResult } from '@rsbuild/core';
 import type {
   ListCommandCollectOptions,
   Project,
@@ -13,16 +14,14 @@ export type CoreRstestInstance = Omit<RstestInstance, 'context'> & {
 
 export function createRstest(
   {
-    config,
+    result,
     projects,
-    configFilePath,
     trace,
     cwd = process.cwd(),
     embedded = false,
     initializeReporters,
   }: {
-    config: RstestConfig;
-    configFilePath?: string;
+    result: LoadConfigResult<RstestConfig>;
     projects: Project[];
     /** CLI-only `--trace` switch; not exposed via user config. */
     trace?: boolean;
@@ -44,13 +43,13 @@ export function createRstest(
       cwd,
       command,
       fileFilters,
-      configFilePath,
+      configFilePath: result.filePath ?? undefined,
       projects,
       trace,
       embedded,
       initializeReporters,
     },
-    config,
+    result.content,
   );
 
   const runTests = async (): Promise<void> => {
