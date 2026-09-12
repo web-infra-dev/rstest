@@ -158,6 +158,7 @@ export async function createRstestInstance(
       name: project.name,
       rootPath: project.rootPath,
       configFilePath: project.configFilePath,
+      configFileDependencies: project.configFileDependencies,
     })),
   };
 

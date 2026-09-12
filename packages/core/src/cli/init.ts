@@ -491,6 +491,12 @@ export async function resolveProjects({
 
         if (config.projects?.length) {
           const childProjects = await getProjects(config, projectRoot);
+          for (const child of childProjects) {
+            child.dependencies.push(...result.dependencies);
+            if (result.filePath) {
+              child.dependencies.push(result.filePath);
+            }
+          }
           projects.push(...childProjects);
         } else {
           projects.push(result);
@@ -510,6 +516,7 @@ export async function resolveProjects({
   return declaredProjects.map((result) => ({
     config: result.content,
     configFilePath: result.filePath ?? undefined,
+    configFileDependencies: result.dependencies,
   }));
 }
 

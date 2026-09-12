@@ -247,6 +247,7 @@ export class Rstest implements InternalContext {
 
           return {
             configFilePath: project.configFilePath,
+            configFileDependencies: project.configFileDependencies,
             rootPath: config.root,
             name: config.name,
             _globalSetups: false,

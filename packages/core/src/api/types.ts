@@ -39,6 +39,7 @@ export interface ProjectContext {
   name: string;
   rootPath: string;
   configFilePath?: string;
+  configFileDependencies?: string[];
 }
 
 /** @experimental Subject to change until 1.0.0. */

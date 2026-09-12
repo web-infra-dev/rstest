@@ -81,4 +81,39 @@ export default defineConfig({});
     await cli.waitForStdout('Waiting for file changes...');
     expect(cli.stdout).toContain('Tests 2 passed');
   });
+
+  it('watches project config dependencies', async () => {
+    const root = `${__dirname}/fixtures-test-project-dependencies-${process.env.RSTEST_OUTPUT_MODULE}`;
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath: root,
+    });
+    const configs = {
+      'root.config.mjs':
+        "export default { projects: ['./parent.config.mjs'] };",
+      'parent.config.mjs':
+        "import './parent.mjs'; export default { projects: ['./project.config.mjs'] };",
+      'parent.mjs': 'export default {};',
+      'project.config.mjs': "export { default } from './shared.mjs';",
+      'shared.mjs': "export default { name: 'watched' };",
+    };
+    for (const [file, content] of Object.entries(configs)) {
+      fs.create(path.join(root, file), content);
+    }
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '-c', 'root.config.mjs', '--project', 'watched'],
+      options: { nodeOptions: { cwd: root } },
+    });
+    await cli.waitForStdout('Waiting for file changes...');
+
+    for (const file of ['shared.mjs', 'parent.mjs', 'parent.config.mjs']) {
+      cli.resetStd();
+      fs.update(path.join(root, file), (content) => `${content}\n// changed`);
+      await cli.waitForStdout(`restarting Rstest as ${file} changed`);
+      await cli.waitForStdout('Tests 2 passed');
+      await cli.waitForStdout('Waiting for file changes...');
+    }
+  });
 });
