@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import type { LoadConfigOptions } from '@rsbuild/core';
+import type { LoadConfigOptions, LoadConfigResult } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RunOptions } from '../api/types';
@@ -336,26 +336,16 @@ export function mergeWithCLIOptions(
 
 async function resolveConfig(
   options: CommonOptions & { cwd: string },
-): Promise<{
-  config: RstestConfig;
-  configFilePath?: string;
-}> {
-  const { content: config, filePath: configFilePath } = await loadConfig({
+): Promise<LoadConfigResult<RstestConfig>> {
+  const result = await loadConfig({
     cwd: options.cwd,
     path: options.config,
     configLoader: options.configLoader,
   });
 
-  const mergedConfig = mergeWithCLIOptions(config, options);
-
-  if (!mergedConfig.root) {
-    mergedConfig.root = options.cwd;
-  }
-
-  return {
-    config: mergedConfig,
-    configFilePath: configFilePath ?? undefined,
-  };
+  mergeWithCLIOptions(result.content, options);
+  result.content.root ||= options.cwd;
+  return result;
 }
 
 export const formatNoProjectsFoundError = (
@@ -416,10 +406,7 @@ export async function resolveProjects({
     const projectPaths: string[] = [];
     const projectPatterns: string[] = [];
     const inlineProjectConfigPromises: Promise<
-      | {
-          config: RstestConfig;
-          configFilePath: string | undefined;
-        }
+      | LoadConfigResult<RstestConfig>
       | {
           error: unknown;
         }
@@ -432,7 +419,7 @@ export async function resolveProjects({
         inlineProjectConfigPromises.push(
           resolveExtends({ ...p }).then(
             (projectConfig) => ({
-              config: mergeWithCLIOptions(
+              content: mergeWithCLIOptions(
                 {
                   root: projectRoot,
                   ...projectConfig,
@@ -440,7 +427,8 @@ export async function resolveProjects({
                 },
                 options,
               ),
-              configFilePath: undefined,
+              filePath: null,
+              dependencies: [],
             }),
             (error) => ({ error }),
           ),
@@ -479,38 +467,33 @@ export async function resolveProjects({
 
     projectPaths.push(...globbedProjectPaths);
 
-    const projects: {
-      config: RstestConfig;
-      configFilePath?: string;
-    }[] = [];
+    const projects: LoadConfigResult<RstestConfig>[] = [];
 
     await Promise.all(
       projectPaths.map(async (project) => {
         const isDirectory = statSync(project).isDirectory();
         const projectRoot = isDirectory ? project : dirname(project);
-        const { config, configFilePath } = await resolveConfig({
+        const result = await resolveConfig({
           ...options,
           config: isDirectory ? undefined : project,
           cwd: projectRoot,
         });
 
-        if (configFilePath) {
-          if (resolvedProjectPaths.has(configFilePath)) {
+        if (result.filePath) {
+          if (resolvedProjectPaths.has(result.filePath)) {
             return;
           }
-          resolvedProjectPaths.add(configFilePath);
+          resolvedProjectPaths.add(result.filePath);
         }
 
+        const config = result.content;
         config.name ??= getDefaultProjectName(projectRoot);
 
         if (config.projects?.length) {
           const childProjects = await getProjects(config, projectRoot);
           projects.push(...childProjects);
         } else {
-          projects.push({
-            config,
-            configFilePath,
-          });
+          projects.push(result);
         }
       }),
     );
@@ -524,7 +507,10 @@ export async function resolveProjects({
     throw formatNoProjectsFoundError(config);
   }
 
-  return declaredProjects;
+  return declaredProjects.map((result) => ({
+    config: result.content,
+    configFilePath: result.filePath ?? undefined,
+  }));
 }
 
 export function applyAgentReporterDefault(
