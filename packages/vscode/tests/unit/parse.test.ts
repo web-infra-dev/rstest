@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
 import { parseTestFile, type Range } from '../../src/parserTest';
 
 describe('parseTestFile', () => {
@@ -403,11 +403,11 @@ describe('outer', () => {
     expect(tests).toEqual([{ name: 'skipped suite', type: 'suite' }]);
   });
 
-  it('should reject invalid syntax', () => {
-    expect(() =>
-      parseTestFile('test(', {
-        onTest: () => undefined,
-      }),
-    ).toThrow(SyntaxError);
+  it('should not report incomplete tests', () => {
+    const onTest = rs.fn();
+
+    parseTestFile('test(', { onTest });
+
+    expect(onTest).not.toHaveBeenCalled();
   });
 });

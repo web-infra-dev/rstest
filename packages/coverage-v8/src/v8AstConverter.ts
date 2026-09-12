@@ -42,9 +42,9 @@ import {
   type SourceMapInput,
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
+import type { Comment, ParseResult } from '@swc-next/parser';
+import { walk } from 'estree-walker';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
-import { walk } from 'yuku-ast';
-import type { Comment, ParseResult } from 'yuku-parser';
 
 type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
   version: number;
@@ -209,13 +209,6 @@ async function prepareCoverage(
 
   if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
     return null;
-  }
-
-  const error = parseResult.diagnostics.find(
-    (diagnostic) => diagnostic.severity === 'error',
-  );
-  if (error) {
-    throw new SyntaxError(error.message);
   }
 
   const filename = options.coverage.url.startsWith('file://')

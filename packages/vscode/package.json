@@ -272,6 +272,7 @@
     "@rsbuild/core": "~2.2.5",
     "@rslib/core": "~1.0.0",
     "@rstest/core": "workspace:*",
+    "@swc-next/parser": "0.2.0",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
@@ -286,8 +287,7 @@
     "picomatch": "^4.0.7",
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
-    "valibot": "^1.4.2",
-    "yuku-parser": "^0.9.4"
+    "valibot": "^1.4.2"
   },
   "engines": {
     "vscode": "^1.97.0"

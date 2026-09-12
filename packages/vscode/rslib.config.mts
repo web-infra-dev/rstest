@@ -1,53 +1,28 @@
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from '../core/licensePlugin';
 import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
-const require = createRequire(import.meta.url);
 const vsceTarget =
   process.env.VSCE_TARGET ?? `${process.platform}-${process.arch}`;
-// Rstest's Linux VSIX targets use glibc, whose Yuku bindings have a `-gnu` suffix.
-const yukuBindingSuffix = vsceTarget.startsWith('linux-')
+// The published Linux VSIX targets use glibc and Windows targets use MSVC.
+const swcNextBindingSuffix = vsceTarget.startsWith('linux-')
   ? `${vsceTarget}-gnu`
-  : vsceTarget;
-const yukuParserPath = require.resolve('yuku-parser');
-const yukuRequire = createRequire(yukuParserPath);
-const yukuParserPackage = yukuRequire(
-  `${dirname(yukuParserPath)}/package.json`,
+  : vsceTarget.startsWith('win32-')
+    ? `${vsceTarget}-msvc`
+    : vsceTarget;
+const swcNextRequire = createRequire(import.meta.resolve('@swc-next/parser'));
+// SWC Next computes this package name at runtime, so Rspack cannot discover it.
+const swcNextBindingPath = swcNextRequire.resolve(
+  `@swc-next/parser-binding-${swcNextBindingSuffix}`,
 );
-// Yuku computes this package name at runtime, so Rspack cannot discover it.
-const yukuBindingPath = yukuRequire.resolve(
-  `@yuku-parser/binding-${yukuBindingSuffix}`,
+
+const swcNextBindingPackage = swcNextRequire(
+  `${dirname(swcNextBindingPath)}/package.json`,
 );
-const yukuBindingPackage = yukuRequire(
-  `${dirname(yukuBindingPath)}/package.json`,
-);
-// Yuku packages omit their LICENSE files; keep the upstream notice in the
-// generated VSIX license: https://github.com/yuku-toolchain/yuku/blob/main/LICENSE
-const yukuLicenseText = `MIT License
-
-Copyright (c) 2026 Yuku
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-`;
 
 export default defineConfig({
   lib: [
@@ -74,30 +49,28 @@ export default defineConfig({
             new rspack.CopyRspackPlugin({
               patterns: [
                 {
-                  from: yukuBindingPath,
-                  to: `@yuku-parser/binding-${yukuBindingSuffix}/yuku-parser.node`,
+                  from: swcNextBindingPath,
+                  // The bundled loader resolves its local binary next to this chunk.
+                  to: `swc-next-parser.${swcNextBindingSuffix}.node`,
                 },
               ],
             }),
-            // only load & apply licensePlugin in lib build
+            // The native binary is copied, so the license scanner cannot discover it.
             process.argv.includes('--watch') || !process.argv.includes('build')
               ? null
               : await licensePlugin(
                   'rstest VS Code extension',
                   false,
-                  ['@rstest/core', 'yuku-parser'],
+                  ['@rstest/core'],
                   [
                     {
-                      name: yukuBindingPackage.name,
-                      license: yukuBindingPackage.license,
-                      licenseText: yukuLicenseText,
-                      repository: yukuBindingPackage.repository.url,
-                    },
-                    {
-                      name: yukuParserPackage.name,
-                      license: yukuParserPackage.license,
-                      licenseText: yukuLicenseText,
-                      repository: yukuParserPackage.repository.url,
+                      name: swcNextBindingPackage.name,
+                      license: swcNextBindingPackage.license,
+                      licenseText: readFileSync(
+                        `${dirname(swcNextBindingPath)}/LICENSE`,
+                        'utf8',
+                      ),
+                      repository: swcNextBindingPackage.repository.url,
                     },
                   ],
                 ),
