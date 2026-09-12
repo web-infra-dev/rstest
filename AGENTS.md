@@ -122,6 +122,7 @@ Available workflow skills in `.agents/skills/`:
 | typescript                 | TypeScript anti-slop guardrails for `.ts`, `.tsx`, and `.mts` files               |
 | verify                     | Behavioral verification rules before claiming a change works (no proxy signals)   |
 | pr-creator                 | Create a PR for the current branch                                                |
+| rstack-docs-writer         | Write or revise Markdown and MDX documentation, including READMEs and guides      |
 | create-draft-release-notes | Create or update draft GitHub releases and organize generated release notes       |
 | create-release-blog        | Draft bilingual release blog posts from a version range                           |
 | api-doc-sync               | Verify/fix that hand-written API doc signatures stay faithful to exported types   |
