@@ -94,6 +94,7 @@ type BranchRangeDescriptor = {
   startOffset: number;
   endOffset: number;
   implicit?: boolean;
+  continuationOffset?: number;
 };
 type BranchDescriptor = {
   filename: string;
@@ -271,7 +272,7 @@ async function prepareCoverage(
     Boolean(node && skippedNodes.has(node));
 
   walk(parseResult.program, {
-    enter(node) {
+    enter(node, { parent }) {
       const current = node as AstNode;
       if (nextIgnore !== false) {
         return;
@@ -438,7 +439,14 @@ async function prepareCoverage(
             branches.push(alternate);
           }
 
-          builder.addBranch('if', current, branches);
+          // An unbraced body's end can already belong to its enclosing region.
+          const continuationOffset =
+            parent &&
+            (parent.type === 'BlockStatement' || parent.type === 'Program') &&
+            current.end < parent.end
+              ? current.end
+              : undefined;
+          builder.addBranch('if', current, branches, continuationOffset);
           builder.addStatement(current);
           return;
         }
@@ -665,6 +673,7 @@ class CoverageBuilder {
     type: BranchType,
     node: AstNode,
     branches: (AstNode | null | undefined)[],
+    continuationOffset?: number,
   ) {
     const loc = this.locator.getLoc(node);
     if (loc === null) return;
@@ -683,6 +692,7 @@ class CoverageBuilder {
           startOffset: node.start,
           endOffset: node.end,
           implicit: true,
+          continuationOffset,
         });
         continue;
       }
@@ -1003,7 +1013,9 @@ function applyCoverageHits(
         // A conditional await can count only resumptions at the if header.
         const parent = Math.max(
           count,
-          getCount({ startOffset: range.endOffset }, ranges),
+          range.continuationOffset === undefined
+            ? 0
+            : getCount({ startOffset: range.continuationOffset }, ranges),
           previousHit,
         );
         hit = parent - previousHit;

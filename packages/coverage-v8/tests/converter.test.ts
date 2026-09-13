@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { createHash } from 'node:crypto';
 import type { Profiler } from 'node:inspector';
 import { rspack } from '@rsbuild/core';
 import { decodedMappings, TraceMap } from '@jridgewell/trace-mapping';
@@ -228,6 +229,55 @@ describe('coverage-v8 converter regressions', () => {
       );
       expect(branch).toBeDefined();
       expect(coverage.b[branch![0]]).toEqual([10, 2]);
+    },
+  );
+
+  it.each([
+    'for (let i = 0; i < n; i++) if (take) sink();',
+    'while (n-- > 0) if (take) sink();',
+    'for (const item of Array(n)) if (take) sink();',
+    'for (const key in Array.from({ length: n })) if (take) sink();',
+    'if (n) do if (take) sink(); while (--n);',
+    'if (n) if (take) sink();',
+    'if (n) label: if (take) sink();',
+    'for (let i = 0; i < n; i++) { if (take) sink(); }',
+    'if (n) { if (take) sink(); }',
+    'for (let i = 0; i < n; i++) if (take) break;',
+    'for (let i = 0; i < n; i++) if (take) continue;',
+    'for (let i = 0; i < n; i++) if (take) return;',
+  ])(
+    'keeps implicit-else counts inside their execution region: %s',
+    async (body) => {
+      for (const take of [false, true]) {
+        const code = `function f(n, take) {
+  ${body}
+}
+function sink() {}
+for (let i = 0; i < 100; i++) f(0, ${take});
+f(1, ${take});
+`;
+        const file = join(
+          tmpdir(),
+          'rstest-converter',
+          `region-${createHash('sha256').update(body).digest('hex')}-${take}.js`,
+        );
+        const coverage = (
+          await convertV8CoverageWithAst({
+            ast: parse(code, { sourceType: 'module', preserveParens: false }),
+            cacheKey: file,
+            code,
+            coverage: await collect(code, pathToFileURL(file).href),
+          })
+        )[file]!;
+        const branch = Object.entries(coverage.branchMap).find(
+          ([, value]) =>
+            value.type === 'if' &&
+            value.loc.start.line === 2 &&
+            value.loc.start.column === body.indexOf('if (take)') + 2,
+        );
+        expect(branch).toBeDefined();
+        expect(coverage.b[branch![0]]).toEqual(take ? [1, 0] : [0, 1]);
+      }
     },
   );
 
