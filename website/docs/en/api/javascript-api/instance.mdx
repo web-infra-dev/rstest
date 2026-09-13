@@ -111,6 +111,7 @@ interface ProjectContext {
   name: string; // Project name.
   rootPath: string; // Absolute project root path.
   configFilePath?: string; // Project config file path, when one is associated with the project.
+  configFileDependencies?: string[]; // Project config dependencies, including parent project configuration files.
 }
 
 interface RstestContext {

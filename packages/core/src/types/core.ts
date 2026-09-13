@@ -24,7 +24,11 @@ export type ProjectEntries = {
 
 export type RstestCommand = 'watch' | 'run' | 'list' | 'merge-reports';
 
-export type Project = { config: RstestConfig; configFilePath?: string };
+export type Project = {
+  config: RstestConfig;
+  configFilePath?: string;
+  configFileDependencies?: string[];
+};
 
 export type InternalProjectContext = {
   name: string;
@@ -46,6 +50,7 @@ export type InternalProjectContext = {
   /** Whether to output es module. */
   outputModule: boolean;
   configFilePath?: string;
+  configFileDependencies?: string[];
   normalizedConfig: NormalizedProjectConfig;
   _globalSetups: boolean;
 };

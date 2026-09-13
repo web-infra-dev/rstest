@@ -668,9 +668,13 @@ export const runWatch = async ({
           rstest.context.projects.map((project) => ({
             config: { name: project.name },
             configFilePath: project.configFilePath,
+            configFileDependencies: project.configFileDependencies,
           })),
           options,
-        ).map((project) => project.configFilePath),
+        ).flatMap((project) => [
+          project.configFilePath,
+          ...(project.configFileDependencies ?? []),
+        ]),
       ].filter((filePath): filePath is string => !!filePath),
       rootPath: rstest.context.rootPath,
       restart: async () => {

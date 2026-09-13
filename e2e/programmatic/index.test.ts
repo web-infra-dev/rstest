@@ -284,8 +284,8 @@ describe('programmatic createRstest', () => {
     expect(result.context).toEqual({
       rootPathMatches: true,
       projects: [
-        { name: 'alpha', rootPath: 'alpha' },
-        { name: 'beta', rootPath: 'beta' },
+        { name: 'alpha', rootPath: 'alpha', configFileDependencies: [] },
+        { name: 'beta', rootPath: 'beta', configFileDependencies: [] },
       ],
     });
     expect(result.files).toEqual([
