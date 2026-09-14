@@ -1,16 +1,18 @@
 ---
-description: Explore Rstest features, from fast Rspack-powered bundle execution and VM mode to build config reuse, browser testing, sharding, and coverage.
+description: Rstest brings fast, build-integrated testing to JavaScript and TypeScript projects, from local development to CI.
 ---
+
+import { ApiMeta } from '@components/ApiMeta';
 
 # Features
 
-Rstest is a JavaScript and TypeScript testing framework built on Rsbuild and Rspack. Its bundle-based execution model speeds up testing by reducing redundant module transformation and execution. Reuse your build configuration, test in Node.js or a browser, and run local development and CI workflows with the same runner.
+Rstest is a JavaScript and TypeScript testing framework built on Rsbuild and Rspack. Its bundle-based execution model uses Rspack's Rust-based build pipeline and SWC transforms for fast test compilation. Reuse your build configuration, test in Node.js or a browser, and run local development and CI workflows with the same runner.
 
 ## Fast bundle-based execution
 
 Rstest uses Rspack to bundle tests based on their dependency graph, with its built-in SWC loader transforming JavaScript and TypeScript. This brings build-time optimizations directly into the test workflow.
 
-Tree Shaking removes unused code, while [lazyBarrel](https://rspack.rs/guide/optimization/lazy-barrel) skips unused re-exports in side-effect-free barrel files. By reducing unnecessary module transformation and execution, the bundle model can speed up tests in large projects with complex dependency graphs.
+Optimizations such as [lazyBarrel](https://rspack.rs/guide/advanced/lazy-barrel) skip unused re-exports in side-effect-free barrel files, reducing unnecessary module processing and speeding up tests in large projects with complex dependency graphs.
 
 ## Reuse existing build setup
 
@@ -55,6 +57,8 @@ Learn more about [Module Federation testing](/integration/module-federation).
 When you modify a test file or one of its dependencies, Rstest analyzes the module graph and only reruns the affected test files. This keeps local feedback fast as the test suite grows.
 
 ### VM mode
+
+<ApiMeta addedVersion="0.12.0" />
 
 For suites where worker startup and dependency compilation take a large share of the runtime, VM mode offers `vmForks` and `vmThreads` pools. They reuse child processes or worker threads while creating a fresh `vm.Context`, module graph, and test environment for each test file.
 

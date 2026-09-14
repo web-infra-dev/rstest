@@ -1,16 +1,18 @@
 ---
-description: 了解 Rstest 的主要功能，包括基于 Rspack 的快速 bundle 执行、VM 模式、构建配置复用、浏览器测试、测试分片和覆盖率。
+description: Rstest 为 JavaScript 和 TypeScript 项目提供快速、与构建集成的测试体验，覆盖本地开发和 CI。
 ---
+
+import { ApiMeta } from '@components/ApiMeta';
 
 # 功能导航
 
-Rstest 是基于 Rsbuild 和 Rspack 的 JavaScript 与 TypeScript 测试框架，通过 bundle 执行模型减少重复的模块转换和执行，加快测试。你可以复用构建配置，在 Node.js 或浏览器中测试代码，并使用同一个 runner 完成本地开发和 CI 中的测试。
+Rstest 是基于 Rsbuild 和 Rspack 的 JavaScript 与 TypeScript 测试框架，采用 bundle 执行模型，利用 Rspack 基于 Rust 的构建流程和 SWC 转换加快测试编译。你可以复用构建配置，在 Node.js 或浏览器中测试代码，并使用同一个 runner 完成本地开发和 CI 中的测试。
 
 ## 基于 bundle 的快速执行 \{#fast-bundle-based-execution}
 
 Rstest 使用 Rspack 根据依赖图打包测试，通过其内置的 SWC loader 转换 JavaScript 和 TypeScript，将构建期优化直接用于测试。
 
-Tree Shaking 移除未使用的代码，[lazyBarrel](https://rspack.rs/zh/guide/optimization/lazy-barrel) 跳过无副作用 barrel 文件中未使用的重导出。通过减少不必要的模块转换和执行，bundle 模型可以加快依赖图复杂的大型项目的测试。
+[lazyBarrel](https://rspack.rs/zh/guide/advanced/lazy-barrel) 等优化会跳过无副作用 barrel 文件中未使用的重导出，减少不必要的模块处理，加快依赖图复杂的大型项目的测试。
 
 ## 复用现有构建配置 \{#reuse-existing-build-setup}
 
@@ -55,6 +57,8 @@ Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的 [Module 
 当你修改测试文件或其依赖模块时，Rstest 会基于模块图分析，仅重新运行受影响的测试文件。随着测试规模增长，这可以让本地反馈保持快速。
 
 ### VM 模式 \{#vm-mode}
+
+<ApiMeta addedVersion="0.12.0" />
 
 如果 worker 启动和依赖编译占用了较多测试时间，可以尝试 VM 模式提供的 `vmForks` 和 `vmThreads` pool。它们会复用子进程或 worker 线程，同时为每个测试文件创建独立的 `vm.Context`、模块图和测试环境。
 
