@@ -98,6 +98,15 @@ it('compares binary values from another realm by their bytes', () => {
   expect(view).toStrictEqual(new DataView(Uint8Array.of(1, 2).buffer));
   expect(view).not.toStrictEqual(new DataView(Uint8Array.of(1, 3).buffer));
   expect(view).not.toStrictEqual(new DataView(new ArrayBuffer(1)));
+
+  for (const [value, different] of [
+    [buffer, Uint8Array.of(1, 3).buffer],
+    [view, new DataView(Uint8Array.of(1, 3).buffer)],
+  ]) {
+    Object.defineProperty(value, Symbol.toStringTag, { value: 'Binary' });
+    Object.defineProperty(different, Symbol.toStringTag, { value: 'Binary' });
+    expect(value).not.toStrictEqual(different);
+  }
 });
 
 it('compares ordinary objects with an ArrayBuffer toStringTag', () => {

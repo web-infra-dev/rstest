@@ -477,3 +477,27 @@ it('does not treat an ArrayBuffer toStringTag as a buffer brand', () => {
   fileExpect(value).not.toStrictEqual({ ...value, value: 2 });
   fileExpect({ nested: value }).toStrictEqual({ nested: { ...value } });
 });
+
+it('compares binary brands independently of overridden tags', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  for (const [source, differentSource] of [
+    ['Uint8Array.of(1).buffer', 'Uint8Array.of(2).buffer'],
+    [
+      'new DataView(Uint8Array.of(9, 1, 9).buffer, 1, 1)',
+      'new DataView(Uint8Array.of(9, 2, 9).buffer, 1, 1)',
+    ],
+  ]) {
+    const foreign = vm.runInNewContext(
+      `Object.defineProperty(${source}, Symbol.toStringTag, { value: 'Binary' })`,
+    );
+    const equal = vm.runInNewContext(
+      `Object.defineProperty(${source}, Symbol.toStringTag, { value: 'Binary' })`,
+    );
+    const different = vm.runInNewContext(
+      `Object.defineProperty(${differentSource}, Symbol.toStringTag, { value: 'Binary' })`,
+    );
+    fileExpect(foreign).toStrictEqual(equal);
+    fileExpect(foreign).not.toStrictEqual(different);
+  }
+});

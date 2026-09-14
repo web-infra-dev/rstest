@@ -205,22 +205,33 @@ const getArrayBufferByteLength = Object.getOwnPropertyDescriptor(
   'byteLength',
 )!.get!;
 
+const dataViewDescriptors = Object.getOwnPropertyDescriptors(
+  DataView.prototype,
+);
+const getDataViewBuffer = dataViewDescriptors.buffer!.get!;
+const getDataViewByteOffset = dataViewDescriptors.byteOffset!.get!;
+const getDataViewByteLength = dataViewDescriptors.byteLength!.get!;
+
 const toLocalDataView = (value: unknown): unknown => {
-  const tag = Object.prototype.toString.call(value);
-  if (tag === '[object ArrayBuffer]') {
-    // The intrinsic getter checks the brand across realms; toStringTag can be spoofed.
-    try {
-      getArrayBufferByteLength.call(value);
-    } catch {
-      return value;
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  // Intrinsic getters check brands across realms without trusting user-defined
+  // tags or shadowed buffer/offset/length properties. Non-binary values fall through.
+  try {
+    if (ArrayBuffer.isView(value)) {
+      return new DataView(
+        getDataViewBuffer.call(value),
+        getDataViewByteOffset.call(value),
+        getDataViewByteLength.call(value),
+      );
     }
-    // The brand check above establishes the buffer type across realms.
+    getArrayBufferByteLength.call(value);
+    // The intrinsic getter establishes the buffer type across realms.
     return new DataView(value as ArrayBuffer);
+  } catch {
+    return value;
   }
-  if (ArrayBuffer.isView(value) && tag === '[object DataView]') {
-    return new DataView(value.buffer, value.byteOffset, value.byteLength);
-  }
-  return value;
 };
 
 // The upstream tester uses instanceof; local views preserve byte ranges without
