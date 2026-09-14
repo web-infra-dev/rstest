@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts/';
+import { prepareFixtures, runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -67,6 +67,53 @@ describe('test build cache config', () => {
       `buildCache timing: cold=${coldRun.durationMs}ms warm=${warmRun.durationMs}ms`,
     );
   });
+
+  it.each(['root', 'project', 'browser'])(
+    'includes %s config dependencies in build cache',
+    async (scope) => {
+      const root = join(
+        __dirname,
+        `fixtures-test-cache-dependencies-${scope}-${process.env.RSTEST_OUTPUT_MODULE}`,
+      );
+      const { fs: fixtureFs } = await prepareFixtures({
+        fixturesPath: join(__dirname, 'fixtures/buildCache'),
+        fixturesTargetPath: root,
+      });
+      const config = {
+        performance: { buildCache: true },
+        browser: { enabled: scope === 'browser', headless: true, port: 0 },
+        projects: scope === 'project' ? ['./project.config.mjs'] : undefined,
+      };
+      const configs = {
+        'config.mjs': "export { default } from './root-dependency.mjs';",
+        'root-dependency.mjs': `export default ${JSON.stringify(config)};`,
+        'project.config.mjs':
+          "export { default } from './project-dependency.mjs';",
+        'project-dependency.mjs':
+          'export default { performance: { buildCache: true } };',
+      };
+      for (const [file, content] of Object.entries(configs)) {
+        fixtureFs.create(join(root, file), content);
+      }
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '-c', 'config.mjs'],
+        options: { nodeOptions: { cwd: root, env: { DEBUG: 'rstest' } } },
+      });
+      await expectExecSuccess();
+
+      const inspected = fs.readFileSync(
+        join(root, 'dist/.rstest-temp/.rsbuild/rsbuild.config.mjs'),
+        'utf8',
+      );
+      expect(inspected).toContain('/config.mjs');
+      expect(inspected).toContain('/root-dependency.mjs');
+      if (scope === 'project') {
+        expect(inspected).toContain('/project.config.mjs');
+        expect(inspected).toContain('/project-dependency.mjs');
+      }
+    },
+  );
 
   it('should collect happy-dom build cache timing data on a non-trivial fixture', async ({
     onTestFinished,
