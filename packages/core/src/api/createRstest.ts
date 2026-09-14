@@ -127,9 +127,7 @@ export async function createRstestInstance(
   if ('content' in config && 'filePath' in config) {
     result = {
       ...config,
-      dependencies: (config.dependencies ?? []).map((file) =>
-        getAbsolutePath(cwd, file),
-      ),
+      dependencies: config.dependencies ?? [],
       content: config.content,
       filePath:
         config.filePath === null ? null : getAbsolutePath(cwd, config.filePath),

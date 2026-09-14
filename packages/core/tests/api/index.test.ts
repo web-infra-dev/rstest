@@ -61,7 +61,7 @@ describe('createRstest', () => {
               },
             },
             filePath,
-            dependencies: ['configs/shared.ts'],
+            dependencies: [join(root, 'configs/shared.ts')],
           },
         });
 
