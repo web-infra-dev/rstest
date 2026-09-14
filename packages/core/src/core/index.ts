@@ -44,6 +44,7 @@ export function createRstest(
       command,
       fileFilters,
       configFilePath: result.filePath ?? undefined,
+      configFileDependencies: result.dependencies,
       projects,
       trace,
       embedded,

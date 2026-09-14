@@ -82,6 +82,7 @@ type Options = {
   command: RstestCommand;
   fileFilters?: string[];
   configFilePath?: string;
+  configFileDependencies?: string[];
   projects: Project[];
   trace?: boolean;
   /** See the `embedded` option on `createRstest`. */
@@ -100,6 +101,7 @@ export class Rstest implements InternalContext {
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
+  public configFileDependencies: string[];
   public embedded: boolean;
   public exitCode: RstestExitCode = createExitCode();
   public workerEnv: Record<string, string | undefined> = {};
@@ -145,6 +147,7 @@ export class Rstest implements InternalContext {
       command,
       fileFilters,
       configFilePath,
+      configFileDependencies = [],
       projects,
       trace = false,
       embedded = false,
@@ -157,6 +160,7 @@ export class Rstest implements InternalContext {
     this.trace = trace;
     this.fileFilters = fileFilters;
     this.configFilePath = configFilePath;
+    this.configFileDependencies = configFileDependencies;
     this.embedded = embedded;
 
     const rootPath = userConfig.root
@@ -259,6 +263,7 @@ export class Rstest implements InternalContext {
       : [
           {
             configFilePath,
+            configFileDependencies,
             rootPath,
             _globalSetups: false,
             name: rstestConfig.name,

@@ -32,6 +32,7 @@ describe('programmatic createRstest', () => {
           {
             name: 'rstest',
             rootPath: join(fixturesDir, 'disk'),
+            configFileDependencies: [],
           },
         ],
       });
@@ -120,6 +121,7 @@ describe('programmatic createRstest', () => {
       {
         name: 'rstest',
         rootPath: join(fixturesDir, 'disk'),
+        configFileDependencies: [],
       },
     ]);
     expect(result.fileMeta).toEqual({ fileHook: 'afterAll' });

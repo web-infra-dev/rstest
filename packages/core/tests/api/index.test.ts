@@ -61,9 +61,13 @@ describe('createRstest', () => {
               },
             },
             filePath,
+            dependencies: [join(root, 'configs/shared.ts')],
           },
         });
 
+        expect(rstest.context.projects[0]?.configFileDependencies).toEqual([
+          join(root, 'configs/shared.ts'),
+        ]);
         expect(rstest.context.config.performance?.buildCache).toMatchObject({
           buildDependencies: [join(root, 'configs/cache-flags.ts')],
         });
