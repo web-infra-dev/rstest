@@ -44,6 +44,7 @@ export type HostRuntime = {
   trace?: boolean;
   packageInstallerConfirm?: PackageInstallerConfirm;
   onExitCodeChange?: (code: number) => void;
+  onFatalWatchFailure?: (error: Error) => void;
 };
 
 const toCommonOptions = ({
@@ -165,6 +166,7 @@ export async function createRstestInstance(
   const createHostContext: CreateRstestContextFn = (...args) => {
     const instance = createRstestContext(...args);
     instance.context.packageInstallerConfirm = runtime.packageInstallerConfirm;
+    instance.context.onFatalWatchFailure = runtime.onFatalWatchFailure;
     if (runtime.onExitCodeChange) {
       instance.context.exitCode.onChange(runtime.onExitCodeChange);
     }
@@ -255,6 +257,12 @@ export async function createRstestInstance(
         const initialResult = capture.nextResult();
         await engine.runTests();
         await initialResult;
+        if (engine.context.fatalWatchError) {
+          // The session ended on that cycle. Its teardown is already running;
+          // wait it out so the rejection is the last thing this run does.
+          await engine.context.closeWatchSession?.();
+          throw engine.context.fatalWatchError;
+        }
       } catch (error) {
         await exitReporters(engine.context);
         throw error;

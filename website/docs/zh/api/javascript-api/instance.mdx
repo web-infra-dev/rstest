@@ -238,7 +238,13 @@ await watcher.close();
 
 每一轮结束后都会调用 `onResult`，第一轮也不例外。`results`、`summary` 和 `status` 反映整个 watch 会话的状态，`rerunTestPaths` 是这一轮实际执行的文件。
 
-支持浏览器项目。重跑执行出错会通过 `onResult` 以 `status: 'error'` 交付，不会关闭会话；启动失败（包括浏览器 `globalSetup` 失败）会使 `watch()` 被拒绝。
+重跑执行出错会通过 `onResult` 以 `status: 'error'` 交付，不会关闭会话；启动失败会使 `watch()` 被拒绝。
+
+失败分为三类：
+
+- **启动失败**——什么都没运行：配置阶段抛错，或运行依赖的资源无法启动（dev server、浏览器等）。`run()` 和 `watch()` 都会被拒绝。
+- **启动之后的致命失败**——bundler 以不会重新挂载文件监听器的方式结束了一次编译。`run()` 正常返回 `status: 'error'`；在 watch 中，失败的那一轮仍会送达 `onResult`，随后会话关闭，若 `watch()` 尚未 resolve，则会被拒绝。
+- **可重试的失败**——`globalSetup` 抛错或编译失败，或测试文件编译失败。该轮为 `status: 'error'`，`run()` 正常返回，watch 会话保持打开并在下一次触发时重试。
 
 `onResult` 抛出的错误会被隔离，不会停止监听会话。调用 `watcher.close()` 会释放编译器、worker、文件监听器，并运行待处理的 `globalSetup` 清理函数。该方法是幂等的，重复调用会得到相同结果；清理失败时，它返回的 Promise 会被拒绝。
 

@@ -439,7 +439,7 @@ describe('programmatic createRstest', () => {
     expect(cycles[1].errors[0].stack).toContain('getRsbuildStats');
   });
 
-  it('reports fatal compilation errors in run and watch and closes', async ({
+  it('reports a fatal compilation error in run and rejects watch after it', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -462,6 +462,9 @@ describe('programmatic createRstest', () => {
         errors: [expect.stringContaining('compile exploded')],
       },
     ]);
+    expect(result.watchRejection).toEqual(
+      expect.stringContaining('compile exploded'),
+    );
   });
 
   it('rejects mixed watch when the browser cannot boot and closes the node server', async ({
@@ -483,7 +486,7 @@ describe('programmatic createRstest', () => {
     expect(result.nodeServerClosed).toBe(true);
   });
 
-  it('watches browser tests and rejects startup when globalSetup fails', async ({
+  it('watches browser tests and retries a failed globalSetup', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -502,18 +505,25 @@ describe('programmatic createRstest', () => {
       tests: 1,
       file: 'browser.test.ts',
       errors: [],
-      setupRejection: expect.stringContaining('Browser globalSetup failed'),
       buildFailure: {
         status: 'error',
         errors: [
           expect.stringContaining('Browser compilation failed intentionally'),
         ],
       },
+      buildFailureRejection: expect.stringContaining(
+        'Browser compilation failed intentionally',
+      ),
       cycles: [
         { status: 'pass', tests: 1, errors: [] },
         { status: 'pass', tests: 1, errors: [] },
       ],
     });
+    expect(result.setupCycles[0]).toEqual({
+      status: 'error',
+      errors: [expect.stringContaining('Browser setup failed intentionally')],
+    });
+    expect(result.setupCycles.at(-1)).toEqual({ status: 'pass', errors: [] });
     expect(result.emptyProjectCycles[0]).toEqual({
       status: 'pass',
       rerunTestPaths: [],

@@ -1,4 +1,5 @@
 import { createRsbuild, logger as RsbuildLogger } from '@rsbuild/core';
+import { normalize } from 'pathe';
 import type {
   EntryInfo,
   ExecutorCycleOutcome,
@@ -30,6 +31,14 @@ export type BrowserGlobalSetupStageResult = {
   env?: Record<string, string | undefined>;
   /** Setup failures; when non-empty the browser cycle must be skipped. */
   errors: Error[];
+  /**
+   * The real files this stage compiled — the `globalSetup` entries plus the
+   * project sources they import — for a caller that has to watch them (see
+   * `createBrowserSetupGate`). Virtual `data:` entries are left out: they are
+   * materialized under `.rstest-virtual/` and never exist on disk. Only
+   * collected when the stage failed; nothing watches a setup that succeeded.
+   */
+  setupPaths?: string[];
 };
 
 const emptyEntries = async () => ({});
@@ -197,6 +206,15 @@ export async function runBrowserGlobalSetupStage(
     rootPath: context.rootPath,
   });
 
+  // The graph adds the helpers the entries import, which is the only way a fix
+  // to one of those retries a failed stage. Dependencies outside both roots or
+  // inside `node_modules` are dropped: the watcher polls, and neither is what a
+  // user edits to fix a setup. The bound is either root because neither contains
+  // the other in general — a project may be rooted outside the runner root, and
+  // a project rooted at a monorepo subdirectory may import a shared helper from
+  // elsewhere under that root.
+  const runnerPrefix = `${normalize(context.rootPath)}/`;
+
   // Materialize compiled assets before closing the server so no compiler
   // lingers while user setup code runs.
   let prepared: {
@@ -205,25 +223,39 @@ export async function runBrowserGlobalSetupStage(
     globalSetupEntries: EntryInfo[];
     assetFiles: Record<string, Buffer>;
     sourceMaps: Record<string, string>;
+    dependencies: string[];
   }[];
   try {
     prepared = await Promise.all(
       candidates.map(async ({ project, entryCount }) => {
-        const { globalSetupEntries, getAssetFiles, getSourceMaps } =
-          await getRsbuildStats({
-            environmentName: project.environmentName,
-          });
+        const {
+          globalSetupEntries,
+          getAssetFiles,
+          getSourceMaps,
+          getFileDependencies,
+        } = await getRsbuildStats({
+          environmentName: project.environmentName,
+        });
         const files = globalSetupEntries.flatMap((e) => e.files!);
         const [assetFiles, sourceMaps] = await Promise.all([
           getAssetFiles(files),
           getSourceMaps(files),
         ]);
+        const projectPrefix = `${normalize(project.rootPath)}/`;
         return {
           project,
           entryCount,
           globalSetupEntries,
           assetFiles,
           sourceMaps,
+          dependencies: getFileDependencies()
+            .map((dependency) => normalize(dependency))
+            .filter(
+              (filePath) =>
+                (filePath.startsWith(projectPrefix) ||
+                  filePath.startsWith(runnerPrefix)) &&
+                !filePath.includes('/node_modules/'),
+            ),
         };
       }),
     );
@@ -265,8 +297,28 @@ export async function runBrowserGlobalSetupStage(
     }
   }
 
+  const env = ranAnySetup ? envOverlay : undefined;
+  if (!errors.length) {
+    return { env, errors };
+  }
+
+  const virtualPaths = new Set(
+    Object.values(setupFileState.virtualModules).flatMap((modules) =>
+      Object.keys(modules),
+    ),
+  );
+  // The entries belong in the set even when the compile produced no usable
+  // graph (a syntax error in the entry itself).
+  const setupPaths = new Set([
+    ...setupFileState.getSetupPaths(),
+    ...prepared.flatMap((item) => item.dependencies),
+  ]);
+
   return {
-    env: ranAnySetup ? envOverlay : undefined,
+    env,
     errors,
+    setupPaths: [...setupPaths].filter(
+      (setupPath) => !virtualPaths.has(setupPath),
+    ),
   };
 }

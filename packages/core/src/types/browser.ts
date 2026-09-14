@@ -112,6 +112,8 @@ export interface BrowserTestRunResult {
   loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];
   /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
   unhandledErrors?: Error[];
+  /** See `ExecutorCycleOutcome.fatal`, which this is projected into. */
+  fatal?: Error;
   /** Source map resolver used when reporter output is unified in core */
   getSourcemap?: GetSourcemap;
   /** Route-aware source map resolver used by core unified reporter flow */

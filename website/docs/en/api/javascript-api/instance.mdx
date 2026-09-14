@@ -238,7 +238,13 @@ await watcher.close();
 
 `onResult` runs after every completed cycle, including the first. `results`, `summary`, and `status` reflect the whole watch session; `rerunTestPaths` lists the files executed in the current cycle.
 
-Browser projects are supported. A rerun execution error is delivered through `onResult` with `status: 'error'` and does not close the session; startup failures, including a browser `globalSetup` failure, reject `watch()`.
+A rerun execution error is delivered through `onResult` with `status: 'error'` and does not close the session; startup failures reject `watch()`.
+
+Failures come in three kinds:
+
+- **Startup failure** — nothing ran: the config phase threw, or a resource the run depends on could not start (a dev server, a browser). `run()` and `watch()` both reject.
+- **Fatal failure after startup** — the bundler ended a compile in a way that reattaches no file watcher. `run()` resolves with `status: 'error'`. In watch the failed cycle still reaches `onResult`, the session then closes, and `watch()` rejects when it had not resolved yet.
+- **Retryable failure** — a `globalSetup` that threw or failed to compile, or a test file that failed to compile. The cycle is `status: 'error'`, `run()` resolves, and the watch session stays open and retries on the next trigger.
 
 Errors thrown by `onResult` are isolated and do not stop the watch session. Calling `watcher.close()` releases the compiler, workers, file watchers, and pending `globalSetup` teardown. It is idempotent, repeated calls observe the same result, and it rejects if teardown fails.
 

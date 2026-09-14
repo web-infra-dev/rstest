@@ -133,6 +133,20 @@ export type InternalContext = {
   packageInstallerConfirm?: PackageInstallerConfirm;
   /** Active watch-session closer for programmatic hosts. */
   closeWatchSession?: () => Promise<void>;
+  /**
+   * CLI-owned handler for a watch session ended by a fatal cycle. A fatal cycle
+   * that lands before `watch()` resolves also rejects it (see
+   * {@link fatalWatchError}), so the CLI can reach its exit path twice for the
+   * same failure; it exits on the first.
+   */
+  onFatalWatchFailure?: (error: Error) => void;
+  /**
+   * The fatal cycle that ended this watch session, if one did. Written before
+   * that cycle is finalized, so a host awaiting the initial result — which
+   * resolves off the same reporter fanout — can still see that the session it
+   * was about to be handed is already over, and reject instead.
+   */
+  fatalWatchError?: Error;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;
