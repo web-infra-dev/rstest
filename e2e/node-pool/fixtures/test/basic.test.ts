@@ -34,6 +34,14 @@ describe('node pool - basic', () => {
     ]);
   });
 
+  it('strictly equals built-ins created in the host realm', () => {
+    expect(new URLSearchParams('a=1').getAll('a')).toStrictEqual(['1']);
+    expect(new TextEncoder().encodeInto('a', new Uint8Array(1))).toStrictEqual({
+      read: 1,
+      written: 1,
+    });
+  });
+
   it('matches VM-realm constructors in asymmetric matchers', () => {
     expect('value').toEqual(expect.any(String));
     expect(42).toEqual(expect.any(Number));

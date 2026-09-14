@@ -20,15 +20,22 @@
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
+  arrayBufferEquality,
   ChaiStyleAssertions,
   type ChaiPlugin,
   customMatchers,
+  equals,
   GLOBAL_EXPECT,
   getState,
+  iterableEquality,
+  JEST_MATCHERS_OBJECT,
   JestAsymmetricMatchers,
   JestChaiExpect,
   JestExtend,
   setState,
+  sparseArrayEquality,
+  typeEquality,
+  wrapAssertion,
 } from '@vitest/expect';
 import {
   assert,
@@ -174,12 +181,67 @@ const CrossRealmToThrow: ChaiPlugin = (chai, utils) => {
   utils.overwriteMethod(chai.Assertion.prototype, 'toThrowError', overwrite);
 };
 
+const isNativeFunction = (fn: unknown): boolean =>
+  typeof fn === 'function' &&
+  Function.prototype.toString.call(fn).includes('[native code]');
+
+// `typeEquality` compares constructors, which differ across realms: host APIs
+// such as `URLSearchParams#getAll()` and `TextEncoder#encodeInto()` return
+// values built with host constructors. Like Jest, treat two arrays, or two
+// native built-ins with the same constructor name, as the same type. User
+// classes still need identity.
+// https://github.com/jestjs/jest/issues/2549
+// https://github.com/jestjs/jest/pull/15959
+const crossRealmTypeEquality: typeof typeEquality = (a, b) =>
+  (Array.isArray(a) && Array.isArray(b)) ||
+  (a?.constructor?.name === b?.constructor?.name &&
+    isNativeFunction(a?.constructor) &&
+    isNativeFunction(b?.constructor))
+    ? undefined
+    : typeEquality(a, b);
+
+// Keep in sync with `toStrictEqual` in `@vitest/expect`'s `JestChaiExpect`.
+const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
+  const { customEqualityTesters, matchers } = (globalThis as any)[
+    JEST_MATCHERS_OBJECT
+  ];
+  const toStrictEqual = wrapAssertion(
+    utils,
+    'toStrictEqual',
+    function (expected: unknown) {
+      const actual = utils.flag(this, 'object');
+      const pass = equals(
+        actual,
+        expected,
+        [
+          ...customEqualityTesters,
+          iterableEquality,
+          crossRealmTypeEquality,
+          sparseArrayEquality,
+          arrayBufferEquality,
+        ],
+        true,
+      );
+      return this.assert(
+        pass,
+        'expected #{this} to strictly equal #{exp}',
+        'expected #{this} to not strictly equal #{exp}',
+        expected,
+        actual,
+      );
+    },
+  );
+  utils.addMethod(chai.Assertion.prototype, 'toStrictEqual', toStrictEqual);
+  utils.addMethod(matchers, 'toStrictEqual', toStrictEqual);
+};
+
 // These plugins mutate Chai's process-level prototype, not an expect instance.
 use(JestExtend);
 use(JestChaiExpect);
 use(ChaiStyleAssertions);
 use(ReturnedAlias);
 use(CrossRealmToThrow);
+use(CrossRealmToStrictEqual);
 use(JestAsymmetricMatchers);
 
 export function createExpect({
