@@ -68,12 +68,12 @@ describe('test build cache config', () => {
     );
   });
 
-  it.each(['root', 'project', 'browser'])(
-    'includes %s config dependencies in build cache',
-    async (scope) => {
+  it.each(['node', 'browser'])(
+    'includes config dependencies in %s build cache',
+    async (mode) => {
       const root = join(
         __dirname,
-        `fixtures-test-cache-dependencies-${scope}-${process.env.RSTEST_OUTPUT_MODULE}`,
+        `fixtures-test-cache-dependencies-${mode}-${process.env.RSTEST_OUTPUT_MODULE}`,
       );
       const { fs: fixtureFs } = await prepareFixtures({
         fixturesPath: join(__dirname, 'fixtures/buildCache'),
@@ -81,16 +81,15 @@ describe('test build cache config', () => {
       });
       const config = {
         performance: { buildCache: true },
-        browser: { enabled: scope === 'browser', headless: true, port: 0 },
-        projects: scope === 'project' ? ['./project.config.mjs'] : undefined,
+        browser: { enabled: mode === 'browser', headless: true, port: 0 },
       };
       const configs = {
         'config.mjs': "export { default } from './root-dependency.mjs';",
-        'root-dependency.mjs': `export default ${JSON.stringify(config)};`,
+        'root-dependency.mjs':
+          "export default { projects: ['./project.config.mjs'] };",
         'project.config.mjs':
           "export { default } from './project-dependency.mjs';",
-        'project-dependency.mjs':
-          'export default { performance: { buildCache: true } };',
+        'project-dependency.mjs': `export default ${JSON.stringify(config)};`,
       };
       for (const [file, content] of Object.entries(configs)) {
         fixtureFs.create(join(root, file), content);
@@ -106,11 +105,8 @@ describe('test build cache config', () => {
         join(root, 'dist/.rstest-temp/.rsbuild/rsbuild.config.mjs'),
         'utf8',
       );
-      expect(inspected).toContain('/config.mjs');
-      expect(inspected).toContain('/root-dependency.mjs');
-      if (scope === 'project') {
-        expect(inspected).toContain('/project.config.mjs');
-        expect(inspected).toContain('/project-dependency.mjs');
+      for (const file of Object.keys(configs)) {
+        expect(inspected).toContain(`/${file}`);
       }
     },
   );
