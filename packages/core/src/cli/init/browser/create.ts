@@ -209,7 +209,7 @@ async function createInteractive(
     ],
   });
 
-  if (isCancel(providerSelection)) {
+  if (typeof providerSelection === 'symbol') {
     cancel('Operation cancelled.');
     process.exit(0);
   }

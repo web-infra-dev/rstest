@@ -23,7 +23,7 @@ let cliPrompts: Promise<typeof import('@clack/prompts')> | undefined;
 const cliPackageInstallerConfirm: PackageInstallerConfirm = async (options) => {
   const { confirm, isCancel } = await (cliPrompts ??= import('@clack/prompts'));
   const result = await confirm(options);
-  return isCancel(result) ? false : result;
+  return isCancel(result) ? false : result === true;
 };
 
 const cliHostRuntime = () => ({
