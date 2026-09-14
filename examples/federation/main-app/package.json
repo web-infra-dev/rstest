@@ -10,8 +10,8 @@
     "test:browser": "rstest --config rstest.browser.config.ts --reporter=verbose"
   },
   "dependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "2.9.0",
