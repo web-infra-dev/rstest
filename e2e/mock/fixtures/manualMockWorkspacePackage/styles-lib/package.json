@@ -1,0 +1,6 @@
+{
+  "name": "@rstest/test-mock-manual-mock-workspace-package-styles-lib",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js"
+}
