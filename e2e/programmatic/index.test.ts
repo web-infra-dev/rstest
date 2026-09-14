@@ -439,6 +439,31 @@ describe('programmatic createRstest', () => {
     expect(cycles[1].errors[0].stack).toContain('getRsbuildStats');
   });
 
+  it('reports fatal compilation errors in run and watch and closes', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-compile-failed.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+    expect(execution.exitCode).toBe(0);
+    expect(result.status).toBe('error');
+    expect(result.errors).toEqual([
+      expect.stringContaining('compile exploded'),
+    ]);
+    expect(result.cycles).toEqual([
+      {
+        status: 'error',
+        errors: [expect.stringContaining('compile exploded')],
+      },
+    ]);
+  });
+
   it('rejects mixed watch when the browser cannot boot and closes the node server', async ({
     onTestFinished,
   }) => {

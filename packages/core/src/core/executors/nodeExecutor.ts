@@ -19,7 +19,7 @@ import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import { shouldRunGlobalSetup, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { ProjectPlan } from '../projectPlan';
-import { createRsbuildServer } from '../rsbuild';
+import { CompileFailedError, createRsbuildServer } from '../rsbuild';
 import {
   readResultsCache,
   sequenceKey,
@@ -162,6 +162,12 @@ export type NodeExecutor = TestExecutor &
      */
     ensureRunResources(): Promise<unknown>;
     /**
+     * Whether the latest compile ended in `compiler.hooks.failed`. Rspack does
+     * not re-arm its file watcher after that, so nothing but a config restart
+     * can trigger another cycle and the ready banner would be a false promise.
+     */
+    hasCompileFailed(): boolean;
+    /**
      * Validate dependencies without starting the dev server, so mixed watch can
      * reject an invalid node project before browser globalSetup mutates state.
      */
@@ -209,6 +215,7 @@ export function createNodeExecutor(
           fileFilters?: string[];
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
+        hasCompileFailed: () => boolean;
         pool: Awaited<ReturnType<typeof createPool>>;
         cleanupTestEnvironmentModules: () => Promise<void>;
       }
@@ -235,6 +242,8 @@ export function createNodeExecutor(
   // that was already sitting in the queue from taking the rebuild's span with it
   // when it dispatches first.
   let pendingBuildTime: number | undefined;
+  let notifyCompileFailed:
+    ((hint: { isFirstCompile: boolean }) => void) | undefined;
 
   const validateRunDependencies = (): Promise<void> => {
     runDependencyValidationPromise ??= ensureTestEnvironmentDependencies(
@@ -257,18 +266,20 @@ export function createNodeExecutor(
   > => {
     const { nodeProjectsToRun: projects, entriesCache } = getPlan();
     await validateRunDependencies();
-    const { getRsbuildStats, closeServer } = await createRsbuildServer({
-      inspectedConfig: {
-        ...context.normalizedConfig,
-        projects: projects.map((p) => p.normalizedConfig),
-      },
-      isWatchMode,
-      globTestSourceEntries,
-      setupFiles: setupFileState.setupFiles,
-      globalSetupFiles: setupFileState.globalSetupFiles,
-      rsbuildInstance,
-      rootPath,
-    });
+    const { getRsbuildStats, closeServer, hasCompileFailed } =
+      await createRsbuildServer({
+        inspectedConfig: {
+          ...context.normalizedConfig,
+          projects: projects.map((p) => p.normalizedConfig),
+        },
+        isWatchMode,
+        globTestSourceEntries,
+        setupFiles: setupFileState.setupFiles,
+        globalSetupFiles: setupFileState.globalSetupFiles,
+        rsbuildInstance,
+        rootPath,
+        onCompileFailed: (hint) => notifyCompileFailed?.(hint),
+      });
 
     let testEnvironmentModules:
       Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
@@ -293,6 +304,7 @@ export function createNodeExecutor(
       runResources = {
         getRsbuildStats,
         closeServer,
+        hasCompileFailed,
         pool,
         cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
       };
@@ -490,7 +502,22 @@ export function createNodeExecutor(
 
         return { p, finalEntries, execute };
       }),
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof CompileFailedError) return error;
+      throw error;
+    });
+    if (projectPlans instanceof CompileFailedError) {
+      return {
+        results: [],
+        testResults: [],
+        errors: [projectPlans.error],
+        testPaths: [],
+        duration: {
+          buildTime: rebuildTime ?? Date.now() - cycleStart,
+          testTime: 0,
+        },
+      };
+    }
 
     const isExplicitlyScoped =
       fileFilters !== undefined || context.fileFilters !== undefined;
@@ -605,19 +632,26 @@ export function createNodeExecutor(
    * shape that would close it.
    */
   const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
+    const onCompileEnd = (isFirstCompile: boolean) => {
+      if (compileStart !== undefined) {
+        pendingBuildTime = Date.now() - compileStart;
+        compileStart = undefined;
+      }
+      return cb({ isFirstBuild: isFirstCompile });
+    };
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       compileStart = Date.now();
       if (!isFirstCompile) {
         clearScreen();
       }
     });
-    rsbuildInstance.onAfterDevCompile(({ isFirstCompile }) => {
-      if (compileStart !== undefined) {
-        pendingBuildTime = Date.now() - compileStart;
-        compileStart = undefined;
-      }
-      return cb({ isFirstBuild: isFirstCompile });
-    });
+    rsbuildInstance.onAfterDevCompile(({ isFirstCompile }) =>
+      onCompileEnd(isFirstCompile),
+    );
+    notifyCompileFailed = ({ isFirstCompile }) => {
+      // Failed compiles have no baseline to consume, so this hook need not be held.
+      void onCompileEnd(isFirstCompile);
+    };
   };
 
   // Idempotent: the single `executors.close()` exit path may race a signal
@@ -627,6 +661,7 @@ export function createNodeExecutor(
       return;
     }
     didClose = true;
+    notifyCompileFailed = undefined;
     if (runDependencyValidationPromise) {
       await runDependencyValidationPromise.catch(() => undefined);
     }
@@ -673,6 +708,7 @@ export function createNodeExecutor(
     // the invalidation that drives the initial run. In non-watch runs `runCycle`
     // triggers this lazily instead.
     ensureRunResources,
+    hasCompileFailed: () => runResources?.hasCompileFailed() ?? false,
     validateRunDependencies,
   };
 }

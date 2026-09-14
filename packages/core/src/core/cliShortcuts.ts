@@ -11,8 +11,11 @@ export const isCliShortcutsEnabled = (context: InternalContext): boolean =>
 export const logWatchReadyMessage = (
   context: InternalContext,
   enableCliShortcuts: boolean,
+  { waiting = true }: { waiting?: boolean } = {},
 ): void => {
-  logger.log(color.green('  Waiting for file changes...'));
+  if (waiting) {
+    logger.log(color.green('  Waiting for file changes...'));
+  }
 
   if (enableCliShortcuts) {
     if (context.snapshotManager.summary.unmatched) {
