@@ -200,10 +200,21 @@ const crossRealmTypeEquality: typeof typeEquality = (a, b) =>
     ? undefined
     : typeEquality(a, b);
 
+const getArrayBufferByteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype,
+  'byteLength',
+)!.get!;
+
 const toLocalDataView = (value: unknown): unknown => {
   const tag = Object.prototype.toString.call(value);
   if (tag === '[object ArrayBuffer]') {
-    // The tag identifies foreign buffers that fail the local instanceof check.
+    // The intrinsic getter checks the brand across realms; toStringTag can be spoofed.
+    try {
+      getArrayBufferByteLength.call(value);
+    } catch {
+      return value;
+    }
+    // The brand check above establishes the buffer type across realms.
     return new DataView(value as ArrayBuffer);
   }
   if (ArrayBuffer.isView(value) && tag === '[object DataView]') {

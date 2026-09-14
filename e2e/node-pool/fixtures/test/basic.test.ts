@@ -99,3 +99,9 @@ it('compares binary values from another realm by their bytes', () => {
   expect(view).not.toStrictEqual(new DataView(Uint8Array.of(1, 3).buffer));
   expect(view).not.toStrictEqual(new DataView(new ArrayBuffer(1)));
 });
+
+it('compares ordinary objects with an ArrayBuffer toStringTag', () => {
+  const value = { [Symbol.toStringTag]: 'ArrayBuffer', value: 1 };
+  expect(value).toStrictEqual({ ...value });
+  expect(value).not.toStrictEqual({ ...value, value: 2 });
+});

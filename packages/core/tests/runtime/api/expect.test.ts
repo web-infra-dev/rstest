@@ -468,3 +468,12 @@ it('compares cross-realm binary values by their bytes', () => {
     fileExpect({ value: foreign }).not.toStrictEqual({ value: different });
   }
 });
+
+it('does not treat an ArrayBuffer toStringTag as a buffer brand', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const value = { [Symbol.toStringTag]: 'ArrayBuffer', value: 1 };
+  fileExpect(value).toStrictEqual({ ...value });
+  fileExpect(value).not.toStrictEqual({ ...value, value: 2 });
+  fileExpect({ nested: value }).toStrictEqual({ nested: { ...value } });
+});
