@@ -501,3 +501,16 @@ it('compares binary brands independently of overridden tags', () => {
     fileExpect(foreign).not.toStrictEqual(different);
   }
 });
+
+it('does not treat a byteLength property as a binary brand', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const value = { byteLength: 1, nested: { value: 1 } };
+  fileExpect(value).toStrictEqual({ byteLength: 1, nested: { value: 1 } });
+  fileExpect(value).not.toStrictEqual({ byteLength: 1, nested: { value: 2 } });
+  const foreign = vm.runInNewContext(
+    "Object.defineProperty(Uint8Array.of(1, 2).buffer, 'byteLength', { value: 99 })",
+  );
+  fileExpect(foreign).toStrictEqual(Uint8Array.of(1, 2).buffer);
+  fileExpect(foreign).not.toStrictEqual(Uint8Array.of(1, 3).buffer);
+});

@@ -213,7 +213,9 @@ const getDataViewByteOffset = dataViewDescriptors.byteOffset!.get!;
 const getDataViewByteLength = dataViewDescriptors.byteLength!.get!;
 
 const toLocalDataView = (value: unknown): unknown => {
-  if (value === null || typeof value !== 'object') {
+  // Candidate check only: `in` does not invoke a getter, and a user-defined
+  // byteLength still has to pass the intrinsic brand validation below.
+  if (value === null || typeof value !== 'object' || !('byteLength' in value)) {
     return value;
   }
   // Intrinsic getters check brands across realms without trusting user-defined
