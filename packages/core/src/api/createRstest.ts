@@ -44,6 +44,7 @@ export type HostRuntime = {
   trace?: boolean;
   packageInstallerConfirm?: PackageInstallerConfirm;
   onExitCodeChange?: (code: number) => void;
+  onFatalWatchFailure?: (error: Error) => void;
 };
 
 const toCommonOptions = ({
@@ -165,6 +166,7 @@ export async function createRstestInstance(
   const createHostContext: CreateRstestContextFn = (...args) => {
     const instance = createRstestContext(...args);
     instance.context.packageInstallerConfirm = runtime.packageInstallerConfirm;
+    instance.context.onFatalWatchFailure = runtime.onFatalWatchFailure;
     if (runtime.onExitCodeChange) {
       instance.context.exitCode.onChange(runtime.onExitCodeChange);
     }

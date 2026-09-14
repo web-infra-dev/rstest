@@ -407,7 +407,6 @@ export const createRsbuildServer = async ({
     deletedEntries: string[];
   }>;
   closeServer: () => Promise<void>;
-  hasCompileFailed: () => boolean;
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
@@ -734,7 +733,6 @@ export const createRsbuildServer = async ({
     return {
       closeServer: devServer.close,
       getRsbuildStats,
-      hasCompileFailed: () => round.failed,
     };
   } catch (error) {
     await devServer.close();

@@ -14,6 +14,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('browser mode - watch', () => {
+  it('exits after a fatal browser rebuild', async () => {
+    const root = `${__dirname}/fixtures/fixtures-test-fatal-rebuild`;
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures/watch`,
+      fixturesTargetPath: root,
+    });
+    fs.update(path.join(root, 'rstest.config.mts'), (content) =>
+      `import fatalRebuild from '../../../watch/fatalRebuildPlugin.mjs';\n${content}`.replace(
+        'defineConfig({',
+        'defineConfig({ tools: { rspack: { plugins: [fatalRebuild] } },',
+      ),
+    );
+    const { cli, expectExecFailed } = await runBrowserWatchCliWithCwd(root);
+    try {
+      await cli.waitForStdout('Test Files 2 passed');
+      await cli.waitForStdout('Waiting for file changes...');
+      cli.resetStd();
+      fs.create(path.join(root, 'fatal.marker'), '');
+      fs.update(
+        path.join(root, 'src/helper.ts'),
+        (text) => `${text}\n// rebuild`,
+      );
+      await expectExecFailed();
+      expect(cli.stderr).toContain('rebuild compile exploded');
+      expect(cli.stderr).toContain('Failed to run Rstest.');
+      expect(cli.exec.process!.exitCode).toBe(1);
+      expect(cli.stdout).not.toContain('Waiting for file changes...');
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fs, root);
+    }
+  });
+
   it('re-runs on setup, source, and test-file-set changes in one session', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch`;
 

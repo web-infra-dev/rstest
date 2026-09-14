@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import type {
   EntryInfo,
+  ExecutorCycleOutcome,
   SerializedError,
   InternalContext,
   InternalProjectContext,
@@ -172,6 +173,18 @@ export class GlobalSetupWorker {
     this.child = undefined;
   }
 }
+
+/** Errors-only outcome for node in-cycle and browser pre-cycle setup failures. */
+export const globalSetupFailureOutcome = (
+  errors: Error[],
+): ExecutorCycleOutcome => ({
+  results: [],
+  testResults: [],
+  errors,
+  failure: 'setup',
+  testPaths: [],
+  duration: { buildTime: 0, testTime: 0 },
+});
 
 export async function runGlobalSetup(
   context: InternalContext,

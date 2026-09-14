@@ -10,6 +10,7 @@ import {
   applyWatchInvalidation,
   applyWebMockRspackConfig,
   color,
+  CompileFailedError,
   type EntryHashSnapshot,
   excludeVirtualSetupFromCoverage,
   getSetupFiles,
@@ -187,6 +188,12 @@ type BrowserWatchState = {
    * dead scheduler forever, and watch would silently stop rerunning.
    */
   triggerRerun?: () => Promise<void>;
+  /**
+   * Report a compile failure that happened while the session was live, bound
+   * per controller entry for the same reason `triggerRerun` is. A failed
+   * compile fires no `done` hook, so it reaches core only through this.
+   */
+  signalFatalCompile?: (error: Error) => void;
   /**
    * The headed run registry (identity + settlement owner). Lives here so a
    * re-entering controller adopts the previous entry's still-open runs
@@ -1752,7 +1759,15 @@ export const createBrowserRuntime = async ({
                             compiler.hooks.failed.tap(
                               'rstest:browser-ready',
                               (error) => {
-                                build.resolve(error);
+                                // Before the session exists, `waitForBuilds`
+                                // throws this and the launch fails with it.
+                                // Once the session is live, this hook is the
+                                // only path that reports a failed compile.
+                                build.resolve(new CompileFailedError(error));
+                                // Non-watch binds the callback after scheduling but keeps hooks disabled until teardown.
+                                if (watchState.hooksEnabled) {
+                                  watchState.signalFatalCompile?.(error);
+                                }
                               },
                             );
                             waitForBuilds.push(async () => {

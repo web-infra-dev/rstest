@@ -134,6 +134,8 @@ export type InternalContext = {
   packageInstallerConfirm?: PackageInstallerConfirm;
   /** Active watch-session closer for programmatic hosts. */
   closeWatchSession?: () => Promise<void>;
+  /** CLI-owned exit handler for a fatal cycle after watch startup. */
+  onFatalWatchFailure?: (error: Error) => void;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;

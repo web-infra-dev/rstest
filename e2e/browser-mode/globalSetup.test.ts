@@ -549,6 +549,7 @@ Module._resolveFilename = function (request, ...args) {
     try {
       await result.expectExecFailed();
 
+      expect(cli.exec.process!.exitCode).toBe(1);
       expect(cli.log).toContain(
         'Later browser globalSetup failed intentionally',
       );
@@ -890,15 +891,20 @@ it('receives globalSetup env in the added file', () => {
   }, 60_000);
 
   it('reports every project globalSetup failure in browser-only watch', async () => {
-    const { cli, expectExecFailed, expectStderrLog } = await runBrowserWatchCli(
-      'browser-global-setup-error',
-    );
+    const result = await runBrowserWatchCli('browser-global-setup-error');
+    const { cli, expectStderrLog } = result;
 
-    await expectExecFailed();
-
-    expectStderrLog(/Global setup A failed intentionally/);
-    expect(cli.log).toContain('Global setup B failed intentionally');
-    expect(cli.log).not.toContain('Project A test should not be printed');
-    expect(cli.log).not.toContain('Project B test should not be printed');
-  });
+    try {
+      await result.expectExecFailed();
+      expectStderrLog(/Global setup A failed intentionally/);
+      expectStderrLog(/Global setup B failed intentionally/);
+      expectStderrLog(/Failed to run Rstest\./);
+      expect(cli.log).not.toContain('Project A test should not be printed');
+      expect(cli.log).not.toContain('Project B test should not be printed');
+      expect(cli.log).not.toContain('Waiting for file changes...');
+      expect(cli.exec.process!.exitCode).toBe(1);
+    } finally {
+      await killCliProcessTree(cli);
+    }
+  }, 60_000);
 });
