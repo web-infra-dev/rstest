@@ -174,7 +174,6 @@ export function createWatchCycleDriver({
   getTraceRun,
   setTraceRun,
   enableCliShortcuts,
-  isSessionLive,
   isSessionClosing,
 }: {
   context: Rstest;
@@ -183,13 +182,6 @@ export function createWatchCycleDriver({
   getTraceRun: () => TraceRun;
   setTraceRun: (traceRun: TraceRun) => void;
   enableCliShortcuts: boolean;
-  /**
-   * Whether the run still has a session that could answer the ready banner. A
-   * browser launch that failed before its runtime came up leaves none,
-   * and no trigger of any kind can fire afterwards — offering
-   * to wait for file changes there would be a promise nothing can keep.
-   */
-  isSessionLive: () => boolean;
   /**
    * Whether the session teardown has started. A queued cycle must stop before
    * touching shared state or a closed executor. A cycle already in flight when
@@ -267,15 +259,47 @@ export function createWatchCycleDriver({
       if (isSessionClosing()) {
         return;
       }
-      await finalizeRunCycle(context, {
-        outcomes: [outcome],
-        mode,
-        isWatchMode: true,
-        coverageProvider,
-        reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
-        traceRun: getTraceRun(),
-      });
-      context.exitCode.finishCycle();
+      // Recorded before the round is finalized, not after: a host awaiting the
+      // initial cycle's result resolves off that same reporter fanout, so a
+      // session already over would otherwise be handed to it as a live one.
+      if (outcome.fatal) {
+        context.fatalWatchError = outcome.fatal;
+      }
+      try {
+        await finalizeRunCycle(context, {
+          outcomes: [outcome],
+          mode,
+          isWatchMode: true,
+          coverageProvider,
+          reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
+          traceRun: getTraceRun(),
+        });
+      } finally {
+        // In `finally` so a finalize that threw — a custom reporter's
+        // `onTestRunEnd`, coverage, the trace writer — cannot leave a fatal
+        // session dead-alive. Its rejection is still the caller's.
+        //
+        // Pre-allocate the next cycle's buffer so events emitted between cycles
+        // are not dropped — and, on the fatal branch below, so the teardown does
+        // not finalize the run this cycle already wrote.
+        setTraceRun(traceController.beginRun());
+        context.exitCode.finishCycle();
+        if (outcome.fatal) {
+          // The session is over — see `ExecutorCycleOutcome.fatal`. Closed here
+          // so the host writes its exit code against a torn-down session. The
+          // handler runs in `finally` because a teardown that throws (a
+          // `globalSetup` teardown, say) would otherwise leave the host with no
+          // exit path and the CLI's restart watcher holding the process open.
+          try {
+            await context.closeWatchSession?.();
+          } finally {
+            context.onFatalWatchFailure?.(outcome.fatal);
+          }
+        }
+      }
+      if (outcome.fatal) {
+        return;
+      }
     } finally {
       // In `finally`, so a startup that failed still counts as past startup —
       // see {@link WatchCycleDriver.hasSettledCycle}. The caller keeps the
@@ -283,14 +307,7 @@ export function createWatchCycleDriver({
       // will never come back.
       settled.add(executor);
     }
-    // Pre-allocate the next cycle's buffer so events emitted between cycles are
-    // not dropped.
-    setTraceRun(traceController.beginRun());
-    // The shortcuts stay armed either way; only the promise to react to file
-    // changes needs a live session behind it.
-    logWatchReadyMessage(context, enableCliShortcuts, {
-      waiting: isSessionLive(),
-    });
+    logWatchReadyMessage(context, enableCliShortcuts);
   };
 
   return {

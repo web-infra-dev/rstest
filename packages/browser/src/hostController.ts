@@ -36,6 +36,7 @@ import {
 } from './dispatchCapabilities';
 import {
   collectProjectEntries,
+  CompileFailedError,
   createBrowserRuntime,
   destroyBrowserRuntime,
   drainPendingBuildTime,
@@ -341,16 +342,12 @@ export const runBrowserController = async (
       } catch (error) {
         const originalError = toError(error);
         originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
-        return failWithError(originalError);
+        throw originalError;
       }
     }
 
     if (!containerDevServer) {
-      try {
-        containerDistPath = resolveContainerDist();
-      } catch (error) {
-        return failWithError(error);
-      }
+      containerDistPath = resolveContainerDist();
     }
   }
 
@@ -422,9 +419,24 @@ export const runBrowserController = async (
           options?.appliedModifyRstestConfigEnvironments,
       });
     } catch (error) {
-      return failWithError(error, async () => {
+      const cleanup = async () => {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-      });
+      };
+      // A compilation failure is a run outcome, the same as on the node side.
+      // Unwrapped here, the one place the tag is read: the cycle reports the
+      // error the bundler raised, and `fatal` ends the session after it.
+      if (error instanceof CompileFailedError) {
+        return {
+          ...(await failWithError(error.error, cleanup)),
+          fatal: error.error,
+        };
+      }
+      // Anything else here — config hooks, the dev servers, the provider launch
+      // — failed before a session existed, so nothing ran. That is a startup
+      // failure: it propagates and lets core reject the run instead of riding a
+      // cycle outcome that would report a session which never opened.
+      await cleanup();
+      throw error;
     }
 
     // `filesOnly` is the config-hook discovery boot, which destroys its runtime
@@ -524,6 +536,12 @@ export const runBrowserController = async (
   };
 
   /**
+   * The compile failure that ended this session, if one did. Session-wide, not
+   * per cycle like `fatalErrorRef`; see `ExecutorCycleOutcome.fatal`.
+   */
+  let fatalCompileError: Error | undefined;
+
+  /**
    * The watch session both transports hand back. Only `execute` differs — the
    * cycle's timing, its fatal-error capture window, and the error-to-outcome
    * precedence are one contract with core, so they live in one place.
@@ -535,6 +553,20 @@ export const runBrowserController = async (
     execute: (testPaths: string[]) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
+      // Signalled by a rebuild that ended in `compiler.hooks.failed`: nothing
+      // was emitted, so this cycle reports the failure instead of rerunning
+      // tests.
+      if (fatalCompileError) {
+        return {
+          ...buildRerunOutcome({
+            rerunTestPaths: [],
+            testTime: 0,
+            rawCoverage: [],
+            unhandledErrors: [fatalCompileError],
+          }),
+          fatal: fatalCompileError,
+        };
+      }
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
       // headed scheduler also uses this ref to stop the rest of a failed cycle,
@@ -604,7 +636,7 @@ export const runBrowserController = async (
   }
   if (browserCoverageCapabilityError) {
     await destroyBrowserRuntime(runtime);
-    return failWithError(browserCoverageCapabilityError);
+    throw browserCoverageCapabilityError;
   }
 
   const { browser, browserLaunchOptions, wsPort } = runtime;
@@ -1111,6 +1143,14 @@ export const runBrowserController = async (
   // The first build must not trigger a duplicate cycle, but a fatal test cycle
   // does not invalidate the session the scheduler already established.
   watchState.hooksEnabled = watchSession !== undefined;
+
+  // A failed rebuild fires no `done` hook, so the rerun trigger never runs and
+  // core would hear nothing at all. Signal a cycle of its own for it; the
+  // session's `runCycle` turns the recorded error into the fatal outcome.
+  watchState.signalFatalCompile = (error) => {
+    fatalCompileError ??= error;
+    void watchSignals.signalInvalidation([]);
+  };
 
   // A fatal error the run reported outranks its results: it rides the returned
   // outcome into core's finalize, which raises the exit code from it.

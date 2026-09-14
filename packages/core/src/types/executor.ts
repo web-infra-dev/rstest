@@ -128,6 +128,13 @@ export interface ExecutorCycleOutcome {
     loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];
   };
   /**
+   * The compile error that ended this cycle for good. Rspack reattaches no file
+   * watcher after one, so no later trigger can arrive: watch finalizes this
+   * cycle and then ends the session instead of printing a ready banner nothing
+   * can answer. Also in `errors`, which is what reports it.
+   */
+  fatal?: Error;
+  /**
    * Route-aware source map resolver. `finalizeRunCycle` tries each outcome's
    * resolver in order and falls through to `null` when none handles the path.
    */

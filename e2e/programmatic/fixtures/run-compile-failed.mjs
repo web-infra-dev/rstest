@@ -27,20 +27,27 @@ const rstest = await createRstest({
 });
 
 const result = await rstest.run();
+// A fatal compile failure leaves no watcher to retry with, so watch() reports
+// the cycle through onResult and then rejects instead of holding a dead session.
 const cycles = [];
-const watcher = await rstest.watch({
-  onResult(result) {
-    cycles.push({
-      status: result.status,
-      errors: result.unhandledErrors.map((error) => error.message),
-    });
-  },
-});
-await watcher.close();
+let watchRejection;
+try {
+  await rstest.watch({
+    onResult(result) {
+      cycles.push({
+        status: result.status,
+        errors: result.unhandledErrors.map((error) => error.message),
+      });
+    },
+  });
+} catch (error) {
+  watchRejection = error.message;
+}
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     status: result.status,
     errors: result.unhandledErrors.map((error) => error.message),
     cycles,
+    watchRejection,
   })}__END__`,
 );

@@ -64,6 +64,18 @@ type RsbuildEnvironmentConfig = rsbuild.EnvironmentConfig &
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
 
+/**
+ * Tags a `compiler.hooks.failed` error on its way out of the runtime boot, so
+ * the controller can tell a compile failure from a startup failure without
+ * reading its message. Never crosses back into core: the controller unwraps it
+ * and reports the bundler's own error.
+ */
+export class CompileFailedError extends Error {
+  constructor(readonly error: Error) {
+    super(error.message);
+  }
+}
+
 export const serializeForInlineScript = (value: unknown): string => {
   return JSON.stringify(value)
     .replace(/</g, '\\u003c')
@@ -187,6 +199,12 @@ type BrowserWatchState = {
    * dead scheduler forever, and watch would silently stop rerunning.
    */
   triggerRerun?: () => Promise<void>;
+  /**
+   * Report a compile failure that happened while the session was live, bound
+   * per controller entry for the same reason `triggerRerun` is. A failed
+   * compile fires no `done` hook, so it reaches core only through this.
+   */
+  signalFatalCompile?: (error: Error) => void;
   /**
    * The headed run registry (identity + settlement owner). Lives here so a
    * re-entering controller adopts the previous entry's still-open runs
@@ -1752,7 +1770,13 @@ export const createBrowserRuntime = async ({
                             compiler.hooks.failed.tap(
                               'rstest:browser-ready',
                               (error) => {
-                                build.resolve(error);
+                                // Before the session exists, `waitForBuilds`
+                                // throws this and the launch fails with it;
+                                // after, only this hook can report it.
+                                build.resolve(new CompileFailedError(error));
+                                if (watchState.hooksEnabled) {
+                                  watchState.signalFatalCompile?.(error);
+                                }
                               },
                             );
                             waitForBuilds.push(async () => {
