@@ -213,14 +213,17 @@ const getDataViewByteOffset = dataViewDescriptors.byteOffset!.get!;
 const getDataViewByteLength = dataViewDescriptors.byteLength!.get!;
 
 const toLocalDataView = (value: unknown): unknown => {
-  // Candidate check only: `in` does not invoke a getter, and a user-defined
-  // byteLength still has to pass the intrinsic brand validation below.
-  if (value === null || typeof value !== 'object' || !('byteLength' in value)) {
+  if (value === null || typeof value !== 'object') {
     return value;
   }
   // Intrinsic getters check brands across realms without trusting user-defined
   // tags or shadowed buffer/offset/length properties. Non-binary values fall through.
   try {
+    // `in` avoids property getters but can invoke a throwing Proxy has trap.
+    // A user-defined byteLength still needs to pass intrinsic brand validation.
+    if (!('byteLength' in value)) {
+      return value;
+    }
     if (ArrayBuffer.isView(value)) {
       return new DataView(
         getDataViewBuffer.call(value),

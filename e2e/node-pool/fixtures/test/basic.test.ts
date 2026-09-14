@@ -114,3 +114,17 @@ it('compares ordinary objects with an ArrayBuffer toStringTag', () => {
   expect(value).toStrictEqual({ ...value });
   expect(value).not.toStrictEqual({ ...value, value: 2 });
 });
+
+it('compares proxies that reject binary candidate checks', () => {
+  const handler: ProxyHandler<{ value: number }> = {
+    has(target, key) {
+      if (key === 'byteLength') {
+        throw new Error('unexpected binary probe');
+      }
+      return Reflect.has(target, key);
+    },
+  };
+  const value = new Proxy({ value: 1 }, handler);
+  expect(value).toStrictEqual(new Proxy({ value: 1 }, handler));
+  expect(value).not.toStrictEqual(new Proxy({ value: 2 }, handler));
+});

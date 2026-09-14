@@ -514,3 +514,19 @@ it('does not treat a byteLength property as a binary brand', () => {
   fileExpect(foreign).toStrictEqual(Uint8Array.of(1, 2).buffer);
   fileExpect(foreign).not.toStrictEqual(Uint8Array.of(1, 3).buffer);
 });
+
+it('compares proxies that reject the binary candidate check', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const handler: ProxyHandler<{ value: number }> = {
+    has(target, key) {
+      if (key === 'byteLength') {
+        throw new Error('unexpected binary probe');
+      }
+      return Reflect.has(target, key);
+    },
+  };
+  const value = new Proxy({ value: 1 }, handler);
+  fileExpect(value).toStrictEqual(new Proxy({ value: 1 }, handler));
+  fileExpect(value).not.toStrictEqual(new Proxy({ value: 2 }, handler));
+});
