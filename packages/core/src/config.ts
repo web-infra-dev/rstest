@@ -43,6 +43,7 @@ const DEFAULT_FORCE_RERUN_TRIGGERS = [
 export interface LoadedRstestConfig {
   content: RstestConfig;
   filePath: string | null;
+  dependencies?: string[];
 }
 
 export async function loadConfig({

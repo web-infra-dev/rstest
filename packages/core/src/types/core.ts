@@ -95,6 +95,7 @@ export type InternalContext = {
   relatedRerunFiles?: string[];
   /** The config file path. */
   configFilePath?: string;
+  configFileDependencies?: string[];
   /**
    * Run tests from one or more projects.
    */

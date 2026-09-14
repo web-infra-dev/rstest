@@ -45,7 +45,7 @@ console.log(result.status);
 
 ### Load a config file
 
-Use [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) from the main entry to load a config file, then pass its return value (`{ content, filePath }`) directly as `config`.
+Use [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) from the main entry to load a config file, then pass its return value (`{ content, filePath, dependencies }`) directly as `config`.
 
 ```ts
 import { loadConfig } from '@rstest/core';
@@ -63,6 +63,7 @@ const rstest = await createRstest({ config: loaded });
 interface LoadedRstestConfig {
   content: RstestConfig; // Loaded config content.
   filePath: string | null; // Source config file path returned by `loadConfig`, or `null`.
+  dependencies?: string[];
 }
 
 interface CreateRstestOptions {
