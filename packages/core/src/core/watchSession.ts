@@ -286,9 +286,11 @@ export function createWatchCycleDriver({
     // Pre-allocate the next cycle's buffer so events emitted between cycles are
     // not dropped.
     setTraceRun(traceController.beginRun());
-    if (isSessionLive()) {
-      logWatchReadyMessage(context, enableCliShortcuts);
-    }
+    // The shortcuts stay armed either way; only the promise to react to file
+    // changes needs a live session behind it.
+    logWatchReadyMessage(context, enableCliShortcuts, {
+      waiting: isSessionLive(),
+    });
   };
 
   return {

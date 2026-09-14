@@ -363,6 +363,13 @@ class AssetsMemorySafeMap<T = string> extends Map<string, T> {
   }
 }
 
+// Work around Rsbuild compileState.wait having no settle path on failed.
+export class CompileFailedError extends Error {
+  constructor(readonly error: Error) {
+    super(error.message);
+  }
+}
+
 export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
@@ -370,8 +377,10 @@ export const createRsbuildServer = async ({
   rsbuildInstance,
   inspectedConfig,
   isWatchMode,
+  onCompileFailed,
 }: {
   isWatchMode: boolean;
+  onCompileFailed?: (hint: { isFirstCompile: boolean }) => void;
   rsbuildInstance: RsbuildInstance;
   inspectedConfig?: InternalContext['normalizedConfig'] & {
     projects: NormalizedProjectConfig[];
@@ -398,13 +407,43 @@ export const createRsbuildServer = async ({
     deletedEntries: string[];
   }>;
   closeServer: () => Promise<void>;
+  hasCompileFailed: () => boolean;
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
+  type CompileRound = {
+    isFirstCompile: boolean;
+    failed: boolean;
+    failure: Promise<never>;
+    fail: (error: Error) => void;
+  };
+  const createCompileRound = (isFirstCompile: boolean): CompileRound => {
+    let fail!: (error: Error) => void;
+    const failure = new Promise<never>((_, reject) => {
+      fail = (error) => reject(new CompileFailedError(error));
+    });
+    void failure.catch(() => {});
+    return { isFirstCompile, failed: false, failure, fail };
+  };
+  let round = createCompileRound(true);
+  rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+    round = createCompileRound(isFirstCompile);
+  });
   rsbuildInstance.onAfterCreateCompiler(({ compiler }) => {
     // outputFileSystem to be updated later by `rsbuild-dev-middleware`
     rspackCompiler = compiler;
+    const compilers = isMultiCompiler(compiler)
+      ? compiler.compilers
+      : [compiler];
+    for (const child of compilers) {
+      child.hooks.failed.tap('rstest:compile-failed', (error) => {
+        if (round.failed) return;
+        round.failed = true;
+        round.fail(error);
+        onCompileFailed?.({ isFirstCompile: round.isFirstCompile });
+      });
+    }
   });
 
   const devServer = await rsbuildInstance.createDevServer({
@@ -487,7 +526,11 @@ export const createRsbuildServer = async ({
       environmentName: string;
       fileFilters?: string[];
     }) => {
-      const stats = await devServer.environments[environmentName]!.getStats();
+      // Fatal errors never fire done, so Rsbuild's stats waiter cannot settle.
+      const stats = await Promise.race([
+        devServer.environments[environmentName]!.getStats(),
+        round.failure,
+      ]);
 
       const enableAssetsCache = isMemorySufficient();
 
@@ -691,6 +734,7 @@ export const createRsbuildServer = async ({
     return {
       closeServer: devServer.close,
       getRsbuildStats,
+      hasCompileFailed: () => round.failed,
     };
   } catch (error) {
     await devServer.close();

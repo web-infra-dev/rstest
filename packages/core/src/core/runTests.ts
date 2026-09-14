@@ -471,9 +471,10 @@ export async function runTests(context: Rstest): Promise<void> {
     },
     enableCliShortcuts,
     // Empty launches keep watching; a browser boot failure returned as an
-    // outcome can still leave no live session.
+    // outcome can still leave no live session, and a node compile that ended in
+    // `failed` leaves no watcher to answer the banner either.
     isSessionLive: () =>
-      Boolean(nodeExecutorToRun) ||
+      (nodeExecutorToRun ? !nodeExecutorToRun.hasCompileFailed() : false) ||
       (browserExecutor?.hasWatchSession() ?? false),
     isSessionClosing: () => isSessionClosing(),
   });

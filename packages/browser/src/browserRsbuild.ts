@@ -1720,7 +1720,7 @@ export const createBrowserRuntime = async ({
                       );
                       rspackConfig.plugins.push(virtualModulesPlugin);
 
-                      if (isWatchMode && !skipProviderLaunch) {
+                      if (!skipProviderLaunch) {
                         rspackConfig.plugins.push({
                           apply(compiler: Rspack.Compiler) {
                             let build = createDeferredPromise<

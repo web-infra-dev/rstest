@@ -38,11 +38,15 @@ const createFakeRsbuild = ({
   const close = rs.fn(async () => undefined);
   let onAfterCreateCompiler: OnAfterCreateCompilerFn | undefined;
   const rsbuildInstance = {
+    onBeforeDevCompile: rs.fn(),
     onAfterCreateCompiler(callback: OnAfterCreateCompilerFn) {
       onAfterCreateCompiler = callback;
     },
     async createDevServer() {
       if (compiler) {
+        Object.assign(compiler, {
+          hooks: { failed: { tap: rs.fn() } },
+        });
         await onAfterCreateCompiler?.({ compiler, environments: {} });
       }
       return { close };
