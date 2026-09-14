@@ -200,6 +200,50 @@ const crossRealmTypeEquality: typeof typeEquality = (a, b) =>
     ? undefined
     : typeEquality(a, b);
 
+const getArrayBufferByteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype,
+  'byteLength',
+)!.get!;
+
+const dataViewDescriptors = Object.getOwnPropertyDescriptors(
+  DataView.prototype,
+);
+const getDataViewBuffer = dataViewDescriptors.buffer!.get!;
+const getDataViewByteOffset = dataViewDescriptors.byteOffset!.get!;
+const getDataViewByteLength = dataViewDescriptors.byteLength!.get!;
+
+const toLocalDataView = (value: unknown): unknown => {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  // Intrinsic getters check brands across realms without trusting user-defined
+  // tags or shadowed buffer/offset/length properties. Non-binary values fall through.
+  try {
+    // `in` avoids property getters but can invoke a throwing Proxy has trap.
+    // A user-defined byteLength still needs to pass intrinsic brand validation.
+    if (!('byteLength' in value)) {
+      return value;
+    }
+    if (ArrayBuffer.isView(value)) {
+      return new DataView(
+        getDataViewBuffer.call(value),
+        getDataViewByteOffset.call(value),
+        getDataViewByteLength.call(value),
+      );
+    }
+    getArrayBufferByteLength.call(value);
+    // The intrinsic getter establishes the buffer type across realms.
+    return new DataView(value as ArrayBuffer);
+  } catch {
+    return value;
+  }
+};
+
+// The upstream tester uses instanceof; local views preserve byte ranges without
+// copying bytes or changing the prototypes of values owned by the test.
+const crossRealmArrayBufferEquality: typeof arrayBufferEquality = (a, b) =>
+  arrayBufferEquality(toLocalDataView(a), toLocalDataView(b));
+
 // Keep in sync with `toStrictEqual` in `@vitest/expect`'s `JestChaiExpect`.
 const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
   const { customEqualityTesters, matchers } = (globalThis as any)[
@@ -218,7 +262,7 @@ const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
           iterableEquality,
           crossRealmTypeEquality,
           sparseArrayEquality,
-          arrayBufferEquality,
+          crossRealmArrayBufferEquality,
         ],
         true,
       );

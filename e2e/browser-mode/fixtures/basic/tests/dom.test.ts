@@ -70,3 +70,58 @@ describe('DOM operations', () => {
     document.body.removeChild(container);
   });
 });
+
+it('compares binary values from an iframe by their bytes', ({
+  onTestFinished,
+}) => {
+  const iframe = document.createElement('iframe');
+  document.body.appendChild(iframe);
+  onTestFinished(() => iframe.remove());
+  const realm = iframe.contentWindow;
+  if (!realm) {
+    throw new Error('iframe window is unavailable');
+  }
+  // Window's DOM type omits the realm's JavaScript constructors.
+  const foreign = realm as Window & typeof globalThis;
+  const buffer = foreign.Uint8Array.of(1, 2).buffer;
+  expect(buffer).toStrictEqual(Uint8Array.of(1, 2).buffer);
+  expect(buffer).not.toStrictEqual(Uint8Array.of(1, 3).buffer);
+  expect(buffer).not.toStrictEqual(new ArrayBuffer(1));
+  const view = new foreign.DataView(
+    foreign.Uint8Array.of(9, 1, 2, 9).buffer,
+    1,
+    2,
+  );
+  expect(view).toStrictEqual(new DataView(Uint8Array.of(1, 2).buffer));
+  expect(view).not.toStrictEqual(new DataView(Uint8Array.of(1, 3).buffer));
+  expect(view).not.toStrictEqual(new DataView(new ArrayBuffer(1)));
+
+  for (const [value, different] of [
+    [buffer, Uint8Array.of(1, 3).buffer],
+    [view, new DataView(Uint8Array.of(1, 3).buffer)],
+  ]) {
+    Object.defineProperty(value, Symbol.toStringTag, { value: 'Binary' });
+    Object.defineProperty(different, Symbol.toStringTag, { value: 'Binary' });
+    expect(value).not.toStrictEqual(different);
+  }
+});
+
+it('compares ordinary objects with an ArrayBuffer toStringTag', () => {
+  const value = { [Symbol.toStringTag]: 'ArrayBuffer', value: 1 };
+  expect(value).toStrictEqual({ ...value });
+  expect(value).not.toStrictEqual({ ...value, value: 2 });
+});
+
+it('compares proxies that reject binary candidate checks', () => {
+  const handler: ProxyHandler<{ value: number }> = {
+    has(target, key) {
+      if (key === 'byteLength') {
+        throw new Error('unexpected binary probe');
+      }
+      return Reflect.has(target, key);
+    },
+  };
+  const value = new Proxy({ value: 1 }, handler);
+  expect(value).toStrictEqual(new Proxy({ value: 1 }, handler));
+  expect(value).not.toStrictEqual(new Proxy({ value: 2 }, handler));
+});

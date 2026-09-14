@@ -438,3 +438,95 @@ describe('expect.element timeout', () => {
     expect(error).toHaveProperty('message', 'Matcher did not succeed in 1ms');
   });
 });
+
+it('compares cross-realm binary values by their bytes', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const foreignBuffer = vm.runInNewContext('Uint8Array.of(1, 2).buffer');
+  const foreignView = vm.runInNewContext(
+    'new DataView(Uint8Array.of(9, 1, 2, 9).buffer, 1, 2)',
+  );
+  for (const [foreign, equal, different, shorter] of [
+    [
+      foreignBuffer,
+      Uint8Array.of(1, 2).buffer,
+      Uint8Array.of(1, 3).buffer,
+      new ArrayBuffer(1),
+    ],
+    [
+      foreignView,
+      new DataView(Uint8Array.of(1, 2).buffer),
+      new DataView(Uint8Array.of(1, 3).buffer),
+      new DataView(new ArrayBuffer(1)),
+    ],
+  ]) {
+    fileExpect(foreign).toStrictEqual(equal);
+    fileExpect(equal).toStrictEqual(foreign);
+    fileExpect(foreign).not.toStrictEqual(different);
+    fileExpect(different).not.toStrictEqual(foreign);
+    fileExpect(foreign).not.toStrictEqual(shorter);
+    fileExpect({ value: foreign }).not.toStrictEqual({ value: different });
+  }
+});
+
+it('does not treat an ArrayBuffer toStringTag as a buffer brand', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const value = { [Symbol.toStringTag]: 'ArrayBuffer', value: 1 };
+  fileExpect(value).toStrictEqual({ ...value });
+  fileExpect(value).not.toStrictEqual({ ...value, value: 2 });
+  fileExpect({ nested: value }).toStrictEqual({ nested: { ...value } });
+});
+
+it('compares binary brands independently of overridden tags', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  for (const [source, differentSource] of [
+    ['Uint8Array.of(1).buffer', 'Uint8Array.of(2).buffer'],
+    [
+      'new DataView(Uint8Array.of(9, 1, 9).buffer, 1, 1)',
+      'new DataView(Uint8Array.of(9, 2, 9).buffer, 1, 1)',
+    ],
+  ]) {
+    const foreign = vm.runInNewContext(
+      `Object.defineProperty(${source}, Symbol.toStringTag, { value: 'Binary' })`,
+    );
+    const equal = vm.runInNewContext(
+      `Object.defineProperty(${source}, Symbol.toStringTag, { value: 'Binary' })`,
+    );
+    const different = vm.runInNewContext(
+      `Object.defineProperty(${differentSource}, Symbol.toStringTag, { value: 'Binary' })`,
+    );
+    fileExpect(foreign).toStrictEqual(equal);
+    fileExpect(foreign).not.toStrictEqual(different);
+  }
+});
+
+it('does not treat a byteLength property as a binary brand', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const value = { byteLength: 1, nested: { value: 1 } };
+  fileExpect(value).toStrictEqual({ byteLength: 1, nested: { value: 1 } });
+  fileExpect(value).not.toStrictEqual({ byteLength: 1, nested: { value: 2 } });
+  const foreign = vm.runInNewContext(
+    "Object.defineProperty(Uint8Array.of(1, 2).buffer, 'byteLength', { value: 99 })",
+  );
+  fileExpect(foreign).toStrictEqual(Uint8Array.of(1, 2).buffer);
+  fileExpect(foreign).not.toStrictEqual(Uint8Array.of(1, 3).buffer);
+});
+
+it('compares proxies that reject the binary candidate check', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const handler: ProxyHandler<{ value: number }> = {
+    has(target, key) {
+      if (key === 'byteLength') {
+        throw new Error('unexpected binary probe');
+      }
+      return Reflect.has(target, key);
+    },
+  };
+  const value = new Proxy({ value: 1 }, handler);
+  fileExpect(value).toStrictEqual(new Proxy({ value: 1 }, handler));
+  fileExpect(value).not.toStrictEqual(new Proxy({ value: 2 }, handler));
+});
