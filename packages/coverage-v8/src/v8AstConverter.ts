@@ -265,7 +265,7 @@ async function prepareCoverage(
     Boolean(node && skippedNodes.has(node));
 
   walk(parseResult.program, {
-    enter(node, { parent }) {
+    enter(node, parent) {
       const current = node as AstNode;
       if (nextIgnore !== false) {
         return;
@@ -436,6 +436,8 @@ async function prepareCoverage(
           const continuationOffset =
             parent &&
             (parent.type === 'BlockStatement' || parent.type === 'Program') &&
+            'end' in parent &&
+            typeof parent.end === 'number' &&
             current.end < parent.end
               ? current.end
               : undefined;
