@@ -282,12 +282,12 @@
     "birpc": "^4.2.0",
     "core-js-pure": "^3.50.0",
     "mocha": "^11.8.0",
-    "ovsx": "^1.1.1",
+    "ovsx": "^1.2.0",
     "picomatch": "^4.0.7",
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
-    "valibot": "^1.4.2",
-    "yuku-parser": "^0.9.4"
+    "valibot": "^1.5.0",
+    "yuku-parser": "^0.10.1"
   },
   "engines": {
     "vscode": "^1.97.0"
