@@ -1,0 +1,11 @@
+{
+  "name": "@rstest/test-mock-manual-mock-workspace-package",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@rstest/test-mock-manual-mock-workspace-package-styles-lib": "workspace:*"
+  },
+  "devDependencies": {
+    "@rstest/core": "workspace:*"
+  }
+}
