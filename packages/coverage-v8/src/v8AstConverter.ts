@@ -94,6 +94,7 @@ type BranchRangeDescriptor = {
   startOffset: number;
   endOffset: number;
   implicit?: boolean;
+  continuationOffset?: number;
 };
 type BranchDescriptor = {
   filename: string;
@@ -106,7 +107,6 @@ type PreparedCoverage = {
   statements: StatementDescriptor[];
   branches: BranchDescriptor[];
 };
-type FileCoverageLike = FileCoverageData | { data: FileCoverageData };
 
 type ConvertOptions = {
   ast: ParseResult | (() => ParseResult);
@@ -272,7 +272,7 @@ async function prepareCoverage(
     Boolean(node && skippedNodes.has(node));
 
   walk(parseResult.program, {
-    enter(node) {
+    enter(node, { parent }) {
       const current = node as AstNode;
       if (nextIgnore !== false) {
         return;
@@ -370,6 +370,16 @@ async function prepareCoverage(
           }
           return;
         }
+        case 'ExportDefaultDeclaration': {
+          const declaration = current.declaration as AstNode;
+          if (
+            declaration.type !== 'FunctionDeclaration' &&
+            declaration.type !== 'ClassDeclaration'
+          ) {
+            builder.addStatement(declaration);
+          }
+          return;
+        }
         case 'BreakStatement':
         case 'ContinueStatement':
         case 'DebuggerStatement':
@@ -429,7 +439,14 @@ async function prepareCoverage(
             branches.push(alternate);
           }
 
-          builder.addBranch('if', current, branches);
+          // An unbraced body's end can already belong to its enclosing region.
+          const continuationOffset =
+            parent &&
+            (parent.type === 'BlockStatement' || parent.type === 'Program') &&
+            current.end < parent.end
+              ? current.end
+              : undefined;
+          builder.addBranch('if', current, branches, continuationOffset);
           builder.addStatement(current);
           return;
         }
@@ -656,6 +673,7 @@ class CoverageBuilder {
     type: BranchType,
     node: AstNode,
     branches: (AstNode | null | undefined)[],
+    continuationOffset?: number,
   ) {
     const loc = this.locator.getLoc(node);
     if (loc === null) return;
@@ -674,6 +692,7 @@ class CoverageBuilder {
           startOffset: node.start,
           endOffset: node.end,
           implicit: true,
+          continuationOffset,
         });
         continue;
       }
@@ -936,13 +955,7 @@ function applyCoverageToMap(
   prepared: PreparedCoverage,
   ranges: NormalizedRange[],
 ): void {
-  const data: Record<string, FileCoverageData> = {};
-
-  for (const [filename, template] of Object.entries(prepared.files)) {
-    data[filename] = getOrCreateFileCoverage(coverageMap, filename, template);
-  }
-
-  applyCoverageHits(data, prepared, ranges);
+  coverageMap.merge(applyCoverage(prepared, ranges));
 }
 
 function createFileCoverage(template: FileTemplate): FileCoverageData {
@@ -967,25 +980,6 @@ function createFileCoverage(template: FileTemplate): FileCoverageData {
   }
 
   return fileCoverage;
-}
-
-function getOrCreateFileCoverage(
-  coverageMap: CoverageMap,
-  filename: string,
-  template: FileTemplate,
-): FileCoverageData {
-  const existingCoverage = coverageMap.data[filename] as
-    FileCoverageLike | undefined;
-
-  if (existingCoverage) {
-    return 'data' in existingCoverage
-      ? existingCoverage.data
-      : existingCoverage;
-  }
-
-  coverageMap.addFileCoverage(createFileCoverage(template));
-  const fileCoverage = coverageMap.data[filename] as FileCoverageLike;
-  return 'data' in fileCoverage ? fileCoverage.data : fileCoverage;
 }
 
 function applyCoverageHits(
@@ -1014,7 +1008,18 @@ function applyCoverageHits(
     for (let index = 0; index < descriptor.ranges.length; index++) {
       const range = descriptor.ranges[index]!;
       const count = getCount(range, ranges);
-      const hit = range.implicit ? count - previousHit : count;
+      let hit = count;
+      if (range.implicit) {
+        // A conditional await can count only resumptions at the if header.
+        const parent = Math.max(
+          count,
+          range.continuationOffset === undefined
+            ? 0
+            : getCount({ startOffset: range.continuationOffset }, ranges),
+          previousHit,
+        );
+        hit = parent - previousHit;
+      }
       hits[index] = hits[index]! + hit;
       previousHit = hit;
     }
@@ -1183,7 +1188,7 @@ function getMostSpecificRange(ranges: RawCoverageRange[]) {
 }
 
 function getCount(
-  offset: { startOffset: number; endOffset: number },
+  offset: { startOffset: number },
   coverages: NormalizedRange[],
 ) {
   let count = 0;
