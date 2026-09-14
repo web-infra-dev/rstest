@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it, rs } from '@rstest/core';
 import * as source from '../src/index';
 
@@ -84,4 +85,17 @@ describe('node pool - basic', () => {
     expect(fileGlobal[FILE_MARKER]).toBeUndefined();
     fileGlobal[FILE_MARKER] = 'basic';
   });
+});
+
+it('compares binary values from another realm by their bytes', () => {
+  const buffer = runInNewContext('Uint8Array.of(1, 2).buffer');
+  expect(buffer).toStrictEqual(Uint8Array.of(1, 2).buffer);
+  expect(buffer).not.toStrictEqual(Uint8Array.of(1, 3).buffer);
+  expect(buffer).not.toStrictEqual(new ArrayBuffer(1));
+  const view = runInNewContext(
+    'new DataView(Uint8Array.of(9, 1, 2, 9).buffer, 1, 2)',
+  );
+  expect(view).toStrictEqual(new DataView(Uint8Array.of(1, 2).buffer));
+  expect(view).not.toStrictEqual(new DataView(Uint8Array.of(1, 3).buffer));
+  expect(view).not.toStrictEqual(new DataView(new ArrayBuffer(1)));
 });

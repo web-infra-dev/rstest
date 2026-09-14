@@ -438,3 +438,33 @@ describe('expect.element timeout', () => {
     expect(error).toHaveProperty('message', 'Matcher did not succeed in 1ms');
   });
 });
+
+it('compares cross-realm binary values by their bytes', () => {
+  publishFile('/f1', 't1');
+  const fileExpect = createFileExpect(() => {});
+  const foreignBuffer = vm.runInNewContext('Uint8Array.of(1, 2).buffer');
+  const foreignView = vm.runInNewContext(
+    'new DataView(Uint8Array.of(9, 1, 2, 9).buffer, 1, 2)',
+  );
+  for (const [foreign, equal, different, shorter] of [
+    [
+      foreignBuffer,
+      Uint8Array.of(1, 2).buffer,
+      Uint8Array.of(1, 3).buffer,
+      new ArrayBuffer(1),
+    ],
+    [
+      foreignView,
+      new DataView(Uint8Array.of(1, 2).buffer),
+      new DataView(Uint8Array.of(1, 3).buffer),
+      new DataView(new ArrayBuffer(1)),
+    ],
+  ]) {
+    fileExpect(foreign).toStrictEqual(equal);
+    fileExpect(equal).toStrictEqual(foreign);
+    fileExpect(foreign).not.toStrictEqual(different);
+    fileExpect(different).not.toStrictEqual(foreign);
+    fileExpect(foreign).not.toStrictEqual(shorter);
+    fileExpect({ value: foreign }).not.toStrictEqual({ value: different });
+  }
+});

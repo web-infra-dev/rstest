@@ -200,6 +200,23 @@ const crossRealmTypeEquality: typeof typeEquality = (a, b) =>
     ? undefined
     : typeEquality(a, b);
 
+const toLocalDataView = (value: unknown): unknown => {
+  const tag = Object.prototype.toString.call(value);
+  if (tag === '[object ArrayBuffer]') {
+    // The tag identifies foreign buffers that fail the local instanceof check.
+    return new DataView(value as ArrayBuffer);
+  }
+  if (ArrayBuffer.isView(value) && tag === '[object DataView]') {
+    return new DataView(value.buffer, value.byteOffset, value.byteLength);
+  }
+  return value;
+};
+
+// The upstream tester uses instanceof; local views preserve byte ranges without
+// copying bytes or changing the prototypes of values owned by the test.
+const crossRealmArrayBufferEquality: typeof arrayBufferEquality = (a, b) =>
+  arrayBufferEquality(toLocalDataView(a), toLocalDataView(b));
+
 // Keep in sync with `toStrictEqual` in `@vitest/expect`'s `JestChaiExpect`.
 const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
   const { customEqualityTesters, matchers } = (globalThis as any)[
@@ -218,7 +235,7 @@ const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
           iterableEquality,
           crossRealmTypeEquality,
           sparseArrayEquality,
-          arrayBufferEquality,
+          crossRealmArrayBufferEquality,
         ],
         true,
       );

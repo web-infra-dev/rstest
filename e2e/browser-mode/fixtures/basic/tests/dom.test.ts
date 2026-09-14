@@ -70,3 +70,29 @@ describe('DOM operations', () => {
     document.body.removeChild(container);
   });
 });
+
+it('compares binary values from an iframe by their bytes', ({
+  onTestFinished,
+}) => {
+  const iframe = document.createElement('iframe');
+  document.body.appendChild(iframe);
+  onTestFinished(() => iframe.remove());
+  const realm = iframe.contentWindow;
+  if (!realm) {
+    throw new Error('iframe window is unavailable');
+  }
+  // Window's DOM type omits the realm's JavaScript constructors.
+  const foreign = realm as Window & typeof globalThis;
+  const buffer = foreign.Uint8Array.of(1, 2).buffer;
+  expect(buffer).toStrictEqual(Uint8Array.of(1, 2).buffer);
+  expect(buffer).not.toStrictEqual(Uint8Array.of(1, 3).buffer);
+  expect(buffer).not.toStrictEqual(new ArrayBuffer(1));
+  const view = new foreign.DataView(
+    foreign.Uint8Array.of(9, 1, 2, 9).buffer,
+    1,
+    2,
+  );
+  expect(view).toStrictEqual(new DataView(Uint8Array.of(1, 2).buffer));
+  expect(view).not.toStrictEqual(new DataView(Uint8Array.of(1, 3).buffer));
+  expect(view).not.toStrictEqual(new DataView(new ArrayBuffer(1)));
+});
