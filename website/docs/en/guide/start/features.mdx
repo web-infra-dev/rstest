@@ -1,62 +1,34 @@
 ---
-description: Explore Rstest features for build-integrated testing, including Rstack config reuse, browser mode, Playwright-driven E2E tests, sharding, and coverage.
+description: Explore Rstest features, from fast Rspack-powered bundle execution and VM mode to build config reuse, browser testing, sharding, and coverage.
 ---
 
 # Features
 
-Rstest brings testing into the Rsbuild and Rspack build pipeline. It reuses build configuration where possible, runs tests through a bundle-based execution model, and provides the core testing features needed for local development and CI.
+Rstest is a JavaScript and TypeScript testing framework built on Rsbuild and Rspack. Its bundle-based execution model speeds up testing by reducing redundant module transformation and execution. Reuse your build configuration, test in Node.js or a browser, and run local development and CI workflows with the same runner.
+
+## Fast bundle-based execution
+
+Rstest uses Rspack to bundle tests based on their dependency graph, with its built-in SWC loader transforming JavaScript and TypeScript. This brings build-time optimizations directly into the test workflow.
+
+Tree Shaking removes unused code, while [lazyBarrel](https://rspack.rs/guide/optimization/lazy-barrel) skips unused re-exports in side-effect-free barrel files. By reducing unnecessary module transformation and execution, the bundle model can speed up tests in large projects with complex dependency graphs.
 
 ## Reuse existing build setup
 
-Rstest can reuse Rsbuild and Rspack configuration, including module resolution, transforms, and plugin behavior. This reduces the need for a separate test-only build setup and keeps tests aligned with the code that ships.
+Reuse existing Rsbuild, Rslib, or Rspack configuration through [adapters](/guide/advanced/adapters), including aliases, transforms, and plugins. This reduces duplicate configuration and helps keep tests aligned with your application or library's build setup.
 
-Learn more about [Configuring Rstest](/guide/basic/configure-rstest).
+See [Configuring Rstest](/guide/basic/configure-rstest) and [Configuring SWC](/guide/basic/configure-rstest#configure-swc).
 
-### Built on Rspack
+## Test in Node.js and browsers
 
-Rstest runs tests on top of Rspack's bundling pipeline, so it can benefit from build-time optimizations such as Tree Shaking and [lazyBarrel](https://rspack.rs/guide/optimization/lazy-barrel) while keeping test behavior closer to real output.
+Run tests in the default Node.js environment, simulate the DOM for component tests, or use a real browser when browser behavior matters.
 
-### Transpiled with SWC
-
-By default, Rstest uses Rspack's built-in SWC loader to transform JavaScript and TypeScript. You can customize SWC options in the configuration file when a project needs different syntax or transform behavior.
-
-Learn more about [Configuring SWC](/guide/basic/configure-rstest#configure-swc).
-
-## Test Module Federation applications
-
-Rstest can load real [Module Federation](https://module-federation.io/) remotes in Node, JSDOM, and Browser Mode tests. With [@module-federation/rstest](https://github.com/module-federation/core), tests exercise remote loading and shared dependencies instead of replacing the federation boundary with mocks.
-
-Learn more about [Module Federation testing](/integration/module-federation).
-
-## Multi-project testing
-
-Rstest can run multiple test projects in one process, with each project keeping its own configuration and environment. This is useful for monorepos, multi-app workspaces, and projects that need separate Node, DOM, or Browser Mode test targets.
-
-Learn more about [Test projects](/guide/basic/projects).
-
-## Test sharding
-
-Rstest can split test files into shards for parallel execution. In CI, you can distribute the same test suite across multiple machines to reduce total runtime, then use the `blob` reporter and `rstest merge-reports` to merge test results and coverage data after all shards complete.
-
-Learn more about [Test sharding](/guide/basic/cli#sharding-tests).
-
-## In-source tests
-
-Rstest supports a Rust-like module testing style that lets you write test blocks directly inside source files. It works well for small utilities and helpers where keeping fast checks next to the implementation makes development easier.
-
-Learn more about [In-source tests](/config/test/include-source).
-
-## Watch mode
-
-When you modify a test file or one of its dependencies, Rstest analyzes the module graph and only reruns the affected test files. This keeps local feedback fast as the test suite grows.
-
-## DOM testing
+### DOM testing
 
 Rstest can simulate the DOM and browser APIs with jsdom or happy-dom. It supports common framework testing workflows for React and Vue, and works with Testing Library and CSS Modules.
 
 Learn more about [DOM testing](/config/test/test-environment#dom-testing).
 
-## Browser mode
+### Browser mode
 
 Rstest provides Browser Mode for tests that need a real browser instead of a simulated environment such as jsdom or happy-dom. This helps validate browser APIs, rendering behavior, and interactions that are difficult to cover in DOM simulators.
 
@@ -64,26 +36,64 @@ Browser Mode is powered by [Playwright](https://playwright.dev/) and can run tes
 
 Learn more about [Browser mode](/guide/browser-testing).
 
-## Playwright-driven E2E tests
+### Playwright-driven E2E tests
 
 Rstest can run E2E tests against a complete page or app with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright). Tests run in Node.js workers and use Playwright to drive a local dev server, preview server, or deployed URL while sharing the same Rstest runner, configuration, and reporting workflow as other tests.
 
 Learn more about [Playwright](/integration/playwright).
 
-## Code coverage
+### Test Module Federation applications
 
-Rstest supports both [istanbul](https://istanbul.js.org/) and `v8` coverage providers. Enable coverage by setting `coverage.enabled` to `true`, then choose the provider that matches your workflow.
+Rstest can load real [Module Federation](https://module-federation.io/) remotes in Node, JSDOM, and Browser Mode tests. With [@module-federation/rstest](https://github.com/module-federation/core), tests exercise remote loading and shared dependencies instead of replacing the federation boundary with mocks.
 
-Use `istanbul` when you want SWC-based instrumentation with stable Istanbul semantics, or `v8` when coverage memory usage is the main bottleneck. In headless, non-watch Chromium Browser Mode runs, `v8` collects native coverage without instrumenting application code. Headed and watch coverage is experimental; Firefox and WebKit use `istanbul`.
+Learn more about [Module Federation testing](/integration/module-federation).
 
-Learn more about [Code coverage](/config/test/coverage).
+## Get faster feedback
+
+### Watch mode
+
+When you modify a test file or one of its dependencies, Rstest analyzes the module graph and only reruns the affected test files. This keeps local feedback fast as the test suite grows.
+
+### VM mode
+
+For suites where worker startup and dependency compilation take a large share of the runtime, VM mode offers `vmForks` and `vmThreads` pools. They reuse child processes or worker threads while creating a fresh `vm.Context`, module graph, and test environment for each test file.
+
+VM pools can reduce repeated startup and compilation work. Setup files and module evaluation still run for every file, and process-level state is not isolated by the VM context. Start with the default `forks` pool and check VM compatibility before switching.
+
+See [Choosing a pool](/config/test/pool) for configuration, memory recycling, and compatibility details.
+
+### In-source tests
+
+Rstest supports a Rust-like module testing style that lets you write test blocks directly inside source files. It works well for small utilities and helpers where keeping fast checks next to the implementation makes development easier.
+
+Learn more about [In-source tests](/config/test/include-source).
+
+## Scale test runs in CI
+
+### Multi-project testing
+
+Rstest can run multiple test projects in one process, with each project keeping its own configuration and environment. This is useful for monorepos, multi-app workspaces, and projects that need separate Node, DOM, or Browser Mode test targets.
+
+Learn more about [Test projects](/guide/basic/projects).
+
+### Test sharding
+
+Rstest can split test files into shards for parallel execution. In CI, you can distribute the same test suite across multiple machines to reduce total runtime, then use the `blob` reporter and `rstest merge-reports` to merge test results and coverage data after all shards complete.
+
+Learn more about [Test sharding](/guide/basic/cli#sharding-tests).
+
+### Code coverage
+
+Collect code coverage with the `istanbul` or `v8` provider, generate reports, and enforce coverage thresholds in CI. Coverage is also available in Browser Mode, with provider support depending on the browser and run mode.
+
+See [Code coverage](/config/test/coverage) for provider selection and configuration.
 
 ## More capabilities
 
-- Jest-compatible assertions and snapshots
-- Mock and spy utilities
-- File-level sandbox isolation
-- Lifecycle hooks for setup and teardown
-- Built-in reporters and CI output
-- Filtering by directory, project, file, or test name
-- VS Code extension
+- [Jest-compatible assertions](/api/runtime-api/test-api/expect) and [snapshot testing](/guide/basic/snapshot)
+- [Mock and spy utilities](/guide/basic/mock)
+- [File-level isolation](/config/test/isolate)
+- [Lifecycle hooks for setup and teardown](/api/runtime-api/test-api/hooks)
+- [Built-in reporters and CI output](/guide/basic/reporters)
+- [Filtering by directory, project, file, or test name](/guide/basic/test-filter)
+- [VS Code extension](/guide/basic/vscode-extension)
