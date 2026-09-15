@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts/';
+import { prepareFixtures, runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -66,6 +66,43 @@ describe('test build cache config', () => {
     console.log(
       `buildCache timing: cold=${coldRun.durationMs}ms warm=${warmRun.durationMs}ms`,
     );
+  });
+
+  it('includes config dependencies in build cache', async () => {
+    const root = join(
+      __dirname,
+      `fixtures-test-cache-dependencies-${process.env.RSTEST_OUTPUT_MODULE}`,
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures/buildCache'),
+      fixturesTargetPath: root,
+    });
+    const configs = {
+      'config.mjs': "export { default } from './root-dependency.mjs';",
+      'root-dependency.mjs':
+        "export default { projects: ['./project.config.mjs'] };",
+      'project.config.mjs':
+        "export { default } from './project-dependency.mjs';",
+      'project-dependency.mjs':
+        'export default { performance: { buildCache: true } };',
+    };
+    for (const [file, content] of Object.entries(configs)) {
+      fixtureFs.create(join(root, file), content);
+    }
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'config.mjs'],
+      options: { nodeOptions: { cwd: root, env: { DEBUG: 'rstest' } } },
+    });
+    await expectExecSuccess();
+
+    const inspected = fs.readFileSync(
+      join(root, 'dist/.rstest-temp/.rsbuild/rsbuild.config.mjs'),
+      'utf8',
+    );
+    for (const file of Object.keys(configs)) {
+      expect(inspected).toContain(`/${file}`);
+    }
   });
 
   it('should collect happy-dom build cache timing data on a non-trivial fixture', async ({

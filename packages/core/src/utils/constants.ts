@@ -117,7 +117,7 @@ type BuildCacheInput = {
   buildCache?: boolean | RstestBuildCacheConfig;
   root: string;
   configFilePath?: string;
-  projectConfigFilePaths?: string[];
+  configFileDependencies?: string[];
   tsconfigPaths?: string[];
   command?: string;
   environmentName?: string;
@@ -141,7 +141,7 @@ export const normalizeBuildCache = ({
   buildCache,
   root,
   configFilePath,
-  projectConfigFilePaths = [],
+  configFileDependencies = [],
   tsconfigPaths = [],
   command,
   environmentName,
@@ -161,7 +161,7 @@ export const normalizeBuildCache = ({
     new Set(
       [
         configFilePath,
-        ...projectConfigFilePaths,
+        ...configFileDependencies,
         ...tsconfigPaths,
         ...(userConfig.buildDependencies || []),
       ]
@@ -270,17 +270,30 @@ export const resolveProjectBuildCache = ({
 }: {
   context: Pick<
     InternalContext,
-    'rootPath' | 'configFilePath' | 'command' | 'normalizedConfig' | 'projects'
+    | 'rootPath'
+    | 'configFilePath'
+    | 'configFileDependencies'
+    | 'command'
+    | 'normalizedConfig'
+    | 'projects'
   >;
   project: Pick<
     InternalProjectContext,
-    'environmentName' | 'configFilePath' | 'normalizedConfig'
+    | 'environmentName'
+    | 'configFilePath'
+    | 'configFileDependencies'
+    | 'normalizedConfig'
   >;
 }): false | RstestBuildCacheConfig =>
   normalizeBuildCache({
     buildCache: project.normalizedConfig.performance?.buildCache,
     root: project.normalizedConfig.root,
     configFilePath: project.configFilePath ?? context.configFilePath,
+    configFileDependencies: [
+      ...(context.configFilePath ? [context.configFilePath] : []),
+      ...(context.configFileDependencies ?? []),
+      ...(project.configFileDependencies ?? []),
+    ],
     tsconfigPaths: project.normalizedConfig.source?.tsconfigPath
       ? [project.normalizedConfig.source.tsconfigPath]
       : [],

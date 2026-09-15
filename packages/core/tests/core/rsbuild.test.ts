@@ -2718,6 +2718,7 @@ describe('prepareRsbuild', () => {
         rootPath,
         command: 'run',
         configFilePath: join(rootPath, 'rstest.config.ts'),
+        configFileDependencies: [join(rootPath, 'root-dependency.ts')],
         normalizedConfig: {
           root: rootPath,
           name: 'test',
@@ -2749,6 +2750,7 @@ describe('prepareRsbuild', () => {
             rootPath,
             environmentName: 'test',
             configFilePath: join(rootPath, 'projects/test/rstest.config.ts'),
+            configFileDependencies: [join(rootPath, 'project-dependency.ts')],
             normalizedConfig: {
               plugins: [],
               performance: {
@@ -2798,8 +2800,10 @@ describe('prepareRsbuild', () => {
       ],
       buildDependencies: [
         join(rootPath, 'projects/test/rstest.config.ts'),
-        join(rootPath, 'tsconfig.json'),
         join(rootPath, 'rstest.config.ts'),
+        join(rootPath, 'root-dependency.ts'),
+        join(rootPath, 'project-dependency.ts'),
+        join(rootPath, 'tsconfig.json'),
       ],
     });
 
