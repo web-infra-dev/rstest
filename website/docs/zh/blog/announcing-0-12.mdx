@@ -58,13 +58,14 @@ test('page title', async ({ page }) => {
 });
 ```
 
-内置 fixture 的默认值用 `definePlaywrightConfig` 在 `rstest.config.ts` 里设置。它通过 Rstest 已有的 `extends` 机制接入，不需要为 Playwright 单独增加配置字段，并附带一组适合 E2E 的默认值：test 与 hook 的超时为 30 秒，Locator 和 Page 断言的轮询超时为 5 秒。断言超时读取的是 `expect.poll.timeout`，也可以在单个 matcher 上覆盖。例如，设置默认的 viewport，并在 CI 上为首次重试记录 trace：
+内置 fixture 的默认值用 `definePlaywrightConfig` 在 `rstest.config.ts` 里设置。它通过 Rstest 已有的 `extends` 机制接入，不需要为 Playwright 单独增加配置字段，并附带一组适合 E2E 的默认值：test 与 hook 的超时为 30 秒，Locator 和 Page 断言的轮询超时为 5 秒。断言超时读取的是 `expect.poll.timeout`，也可以在单个 matcher 上覆盖。例如，设置默认的 viewport，并在 CI 上开启一次重试，为首次重试记录 trace：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
+  retry: process.env.CI ? 1 : 0,
   extends: definePlaywrightConfig({
     contextOptions: {
       viewport: { width: 1440, height: 900 },
@@ -74,7 +75,7 @@ export default defineConfig({
 });
 ```
 
-开启 `trace` 后，失败或重试的测试会生成 Playwright 官方的 `trace.zip`，用 `npx playwright show-trace` 就能打开。`on-first-retry` 与 `on-all-retries` 两种模式在首次尝试通过时不会启动 tracing，通过的测试没有额外开销。
+开启 `trace` 后，符合所选模式的测试会生成 Playwright 官方的 `trace.zip`，用 `npx playwright show-trace` 就能打开。`on-first-retry` 与 `on-all-retries` 只在重试时记录，需要配合 `retry` 使用；这两种模式在首次尝试时不会启动 tracing，通过的测试没有额外开销。
 
 已有的 Playwright Test 项目可以借助 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 迁移，它包含针对 Playwright 配置、fixture 与行为差异的迁移指引。
 
@@ -155,7 +156,7 @@ VM pool 不能完全替代 Node.js 原生的 loader：来自其他 realm 的值�
 
 ## 默认预打包 test environment \{#prebundle}
 
-Rstest 0.12 支持[预打包 test environment](/config/test/test-environment#environment-prebundle)，并将 `testEnvironment.prebundle` 的默认值设为 `'auto'`，内置的 `jsdom` 与 `happy-dom` 环境默认走 prebundle。
+Rstest 0.12 支持[预打包 test environment](/config/test/test-environment#环境预打包)，并将 `testEnvironment.prebundle` 的默认值设为 `'auto'`，内置的 `jsdom` 与 `happy-dom` 环境默认走 prebundle。
 
 以原生方式加载 jsdom 或 happy-dom 时，每个 worker 都要各自解析并初始化整个环境的依赖图。开启 prebundle 后，Rstest 在一个进程里只把环境构建成一份 ESM bundle，所有 worker 共享，重复的解析与初始化基本被省掉。100 个文件、1,000 个测试的基准：
 
@@ -177,7 +178,7 @@ export default defineConfig({
 });
 ```
 
-> 参考 [Environment prebundle](/config/test/test-environment#environment-prebundle) 了解更多。
+> 参考 [Environment prebundle](/config/test/test-environment#环境预打包) 了解更多。
 
 ## 其他改进 \{#other-improvements}
 

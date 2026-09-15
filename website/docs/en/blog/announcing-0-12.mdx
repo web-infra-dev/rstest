@@ -58,13 +58,14 @@ test('page title', async ({ page }) => {
 });
 ```
 
-Defaults for the built-in fixtures are set in `rstest.config.ts` with `definePlaywrightConfig`. It plugs into Rstest's existing `extends` mechanism, so no Playwright-specific config field is needed, and it brings a set of E2E-friendly defaults: a 30-second timeout for tests and hooks, and a 5-second polling timeout for Locator and Page assertions. Assertions read `expect.poll.timeout`, and each matcher can still override it. For example, set a default viewport and record a trace on the first retry in CI:
+Defaults for the built-in fixtures are set in `rstest.config.ts` with `definePlaywrightConfig`. It plugs into Rstest's existing `extends` mechanism, so no Playwright-specific config field is needed, and it brings a set of E2E-friendly defaults: a 30-second timeout for tests and hooks, and a 5-second polling timeout for Locator and Page assertions. Assertions read `expect.poll.timeout`, and each matcher can still override it. For example, set a default viewport, allow one retry in CI, and record a trace on that first retry:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 import { definePlaywrightConfig } from '@rstest/playwright/config';
 
 export default defineConfig({
+  retry: process.env.CI ? 1 : 0,
   extends: definePlaywrightConfig({
     contextOptions: {
       viewport: { width: 1440, height: 900 },
@@ -74,7 +75,7 @@ export default defineConfig({
 });
 ```
 
-With `trace` enabled, failed or retried tests produce Playwright's official `trace.zip`, which opens with `npx playwright show-trace`. The `on-first-retry` and `on-all-retries` modes do not start tracing on a passing first attempt, so passing tests pay nothing extra.
+With `trace` enabled, tests that match the selected mode produce Playwright's official `trace.zip`, which opens with `npx playwright show-trace`. The `on-first-retry` and `on-all-retries` modes record only during retries, so they need `retry` to be set; neither starts tracing on the first attempt, so passing tests pay nothing extra.
 
 An existing Playwright Test project can be migrated with the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill, which includes guidance for Playwright configuration, fixtures, and behavior differences.
 
