@@ -31,6 +31,7 @@ const cliHostRuntime = () => ({
     ? cliPackageInstallerConfirm
     : undefined,
   onExitCodeChange: setHostExitCode,
+  onFatalWatchFailure: handleUnexpectedExit,
 });
 
 type OptionConfig = {

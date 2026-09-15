@@ -547,8 +547,13 @@ Module._resolveFilename = function (request, ...args) {
     const { cli } = result;
 
     try {
+      // The failed setup is this cycle's outcome and the session stays open for
+      // a retry, so the partial teardowns drain with the session's own close.
+      await cli.waitForStdout('Waiting for file changes...');
+      cli.exec.process!.stdin!.write('q');
       await result.expectExecFailed();
 
+      expect(cli.exec.process!.exitCode).toBe(1);
       expect(cli.log).toContain(
         'Later browser globalSetup failed intentionally',
       );
@@ -865,6 +870,59 @@ it('receives globalSetup env in the added file', () => {
     60_000,
   );
 
+  it('reruns node tests once a failed browser globalSetup succeeds', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-mixed-retry',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup-mixed'),
+      fixturesTargetPath,
+    });
+    const browserSetupPath = path.join(
+      fixturesTargetPath,
+      'project-browser/globalSetup.ts',
+    );
+    const setupLine = "console.log('[mixed-browser-global-setup] executed');";
+    const failingLine =
+      "throw new Error('Browser globalSetup failed intentionally');";
+    fixtureFs.update(browserSetupPath, (content) =>
+      content.replace(setupLine, failingLine),
+    );
+    // The default reporter prints no describe title for a passing file, so the
+    // node worker reports what it sees itself.
+    fixtureFs.update(
+      path.join(fixturesTargetPath, 'project-node/tests/node.test.ts'),
+      (content) =>
+        `console.log(\`[node-sees] \${process.env.RSTEST_E2E_GS_BROWSER}\`);\n${content}`,
+    );
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = result;
+
+    try {
+      // The node side is never deferred, so its first cycle runs against a
+      // `workerEnv` the failed browser setup never wrote to.
+      await cli.waitForStdout('[node-sees] undefined');
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.log).toContain('Browser globalSetup failed intentionally');
+      cli.resetStd();
+
+      fixtureFs.update(browserSetupPath, (content) =>
+        content.replace(failingLine, setupLine),
+      );
+      // The retried stage succeeds, the browser launches, and the node cycle it
+      // triggers re-reads the env that setup has now written.
+      await cli.waitForStdout('[node-sees] from-browser-setup');
+
+      cli.exec.process!.stdin!.write('q');
+      await result.expectExecFailed();
+      expect(cli.exec.process!.exitCode).toBe(1);
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+    }
+  }, 90_000);
+
   it('runs browser globalSetup in mixed watch when only browser tests are selected', async () => {
     const result = await runBrowserWatchCli('browser-global-setup-mixed', {
       args: ['project-browser/tests/browserOnly.test.ts'],
@@ -890,15 +948,24 @@ it('receives globalSetup env in the added file', () => {
   }, 60_000);
 
   it('reports every project globalSetup failure in browser-only watch', async () => {
-    const { cli, expectExecFailed, expectStderrLog } = await runBrowserWatchCli(
-      'browser-global-setup-error',
-    );
+    const result = await runBrowserWatchCli('browser-global-setup-error');
+    const { cli, expectStderrLog } = result;
 
-    await expectExecFailed();
+    try {
+      // A failed setup is a retryable cycle outcome, not a startup rejection:
+      // the session stays open and the next trigger runs the stage again.
+      await cli.waitForStdout('Waiting for file changes...');
 
-    expectStderrLog(/Global setup A failed intentionally/);
-    expect(cli.log).toContain('Global setup B failed intentionally');
-    expect(cli.log).not.toContain('Project A test should not be printed');
-    expect(cli.log).not.toContain('Project B test should not be printed');
-  });
+      expectStderrLog(/Global setup A failed intentionally/);
+      expect(cli.log).toContain('Global setup B failed intentionally');
+      expect(cli.log).not.toContain('Project A test should not be printed');
+      expect(cli.log).not.toContain('Project B test should not be printed');
+
+      cli.exec.process!.stdin!.write('q');
+      await result.expectExecFailed();
+      expect(cli.exec.process!.exitCode).toBe(1);
+    } finally {
+      await killCliProcessTree(cli);
+    }
+  }, 60_000);
 });
