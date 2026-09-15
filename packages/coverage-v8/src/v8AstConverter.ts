@@ -42,9 +42,9 @@ import {
   type SourceMapInput,
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
+import type { Comment, ParseResult } from '@swc-next/parser';
+import { walk } from 'estree-walker';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
-import { walk } from 'yuku-ast';
-import type { Comment, ParseResult } from 'yuku-parser';
 
 type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
   version: number;
@@ -272,7 +272,7 @@ async function prepareCoverage(
     Boolean(node && skippedNodes.has(node));
 
   walk(parseResult.program, {
-    enter(node, { parent }) {
+    enter(node, parent) {
       const current = node as AstNode;
       if (nextIgnore !== false) {
         return;
@@ -443,6 +443,8 @@ async function prepareCoverage(
           const continuationOffset =
             parent &&
             (parent.type === 'BlockStatement' || parent.type === 'Program') &&
+            'end' in parent &&
+            typeof parent.end === 'number' &&
             current.end < parent.end
               ? current.end
               : undefined;

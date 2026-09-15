@@ -24,6 +24,7 @@ hoistPattern: ['@secretlint/*']
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@module-federation/*'
+  - '@swc-next/*'
   - '@rspack/*'
   - '@rsbuild/*'
   - '@rslib/*'
