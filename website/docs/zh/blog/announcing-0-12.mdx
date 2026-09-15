@@ -35,7 +35,7 @@ _2026 年 9 月 14 日_
 
 - [支持 E2E 测试](#playwright)
 - [全新的 JavaScript API](#javascript-api)
-- [新增 `vmThreads` 与 `vmForks` pool](#vm-pools)
+- [新增 vmThreads 与 vmForks pool](#vm-pools)
 - [预打包 test environment 并默认开启](#prebundle)
 - [其他改进](#other-improvements)
 
@@ -45,7 +45,7 @@ Rstest 0.12 原生提供了对 E2E 测试的支持，通过 [@rstest/playwright]
 
 单元测试、组件测试（browser mode）与 E2E 测试从此共用同一份配置、命令与 reporter，无需再为 E2E 单独维护一个 Playwright Test 项目。要在浏览器中测试组件，继续使用 browser mode；要测试完整页面或应用，则使用 `@rstest/playwright`。
 
-从 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 导入 `test` 与 `expect`，即可使用 `browser`、`context`、`page`、`request` 和 `serve` 等内置测试对象，以及 `toHaveTitle`、`toHaveText` 这类会自动重试的断言：
+从 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 导入 `test` 与 `expect`，即可使用 `browser`、`context`、`page`、`request` 和 `serve` 等内置 fixture，以及 `toHaveTitle`、`toHaveText` 这类会自动重试的断言：
 
 ```ts title="e2e.test.ts"
 import { expect, test } from '@rstest/playwright';
@@ -58,7 +58,7 @@ test('page title', async ({ page }) => {
 });
 ```
 
-内置测试对象的默认值用 `definePlaywrightConfig` 在 `rstest.config.ts` 里设置。它通过 Rstest 已有的 `extends` 机制接入，不需要为 Playwright 单独增加配置字段，并附带一组适合 E2E 的默认值：test 与 hook 的超时为 30 秒，Locator 和 Page 断言的轮询超时为 5 秒。断言超时读取的是 `expect.poll.timeout`，也可以在单个 matcher 上覆盖。例如，设置默认的 viewport，并在 CI 上为首次重试记录 trace：
+内置 fixture 的默认值用 `definePlaywrightConfig` 在 `rstest.config.ts` 里设置。它通过 Rstest 已有的 `extends` 机制接入，不需要为 Playwright 单独增加配置字段，并附带一组适合 E2E 的默认值：test 与 hook 的超时为 30 秒，Locator 和 Page 断言的轮询超时为 5 秒。断言超时读取的是 `expect.poll.timeout`，也可以在单个 matcher 上覆盖。例如，设置默认的 viewport，并在 CI 上为首次重试记录 trace：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -76,7 +76,7 @@ export default defineConfig({
 
 开启 `trace` 后，失败或重试的测试会生成 Playwright 官方的 `trace.zip`，用 `npx playwright show-trace` 就能打开。`on-first-retry` 与 `on-all-retries` 两种模式在首次尝试通过时不会启动 tracing，通过的测试没有额外开销。
 
-已有的 Playwright Test 项目可以借助 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 迁移，它包含针对 Playwright 配置、测试对象与行为差异的迁移指引。
+已有的 Playwright Test 项目可以借助 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 迁移，它包含针对 Playwright 配置、fixture 与行为差异的迁移指引。
 
 > 参考 [Playwright](/integration/playwright) 了解更多。
 
@@ -84,7 +84,7 @@ export default defineConfig({
 
 Rstest 0.12 提供了全新的 `createRstest()` API，这是 1.0 之前对 JavaScript API 的一次性重写，目的是让使用方可以通过 JavaScript API 灵活地集成并使用 Rstest。
 
-你可以使用 `createRstest()` 创建一个实例，并使用实例的 [run](/api/javascript-api/instance#rstestrun)、[watch](/api/javascript-api/instance#rstestwatch)、[listTests](/api/javascript-api/instance#rstestlisttests) 与 [mergeReports](/api/javascript-api/instance#rstestmergereports) 四个方法。`run()` 的返回值包含 `status: 'pass' | 'fail' | 'error'`，以及和自定义 reporter 在 [onTestRunEnd](/api/javascript-api/reporter#ontestrunend) 中收到的相同的返回值：
+你可以使用 `createRstest()` 创建一个实例，并使用实例的 [run](/api/javascript-api/instance#rstestrun)、[watch](/api/javascript-api/instance#rstestwatch)、[listTests](/api/javascript-api/instance#rstestlisttests) 与 [mergeReports](/api/javascript-api/instance#rstestmergereports) 四个方法。`run()` 的返回值包含 `status: 'pass' | 'fail' | 'error'`，以及与自定义 reporter 在 [onTestRunEnd](/api/javascript-api/reporter#ontestrunend) 中收到的相同的 summary：
 
 ```ts
 import { createRstest } from '@rstest/core/api';
@@ -118,7 +118,7 @@ Rstest 0.12 新增了两种 pool：[vmThreads](/config/test/pool#vmthreads) 与 
 
 在默认的 `forks` pool 与 `isolate: true` 下，每个测试文件都要启动新进程、创建新的 test environment，并从头加载模块。文件多、DOM 依赖重的套件里，这部分固定开销占了大头。
 
-在一个 2,400 个文件、20,000 个测试的 JSDom 的 benchmark 测试项目中（15 个 worker，每个进程从空 cache 启动）：
+在一个 2,400 个文件、20,000 个测试的 jsdom benchmark 项目中（15 个 worker，每个进程从空 cache 启动）：
 
 | Pool        |    总耗时 |
 | ----------- | --------: |
@@ -181,20 +181,20 @@ export default defineConfig({
 
 ## 其他改进 \{#other-improvements}
 
-- **file 与 worker 作用域的测试对象。** 具名测试对象 `test.extend(name, fn)` 现在接受 `{ scope: 'file' }` 与 `{ scope: 'worker' }`，前者在同一个测试文件内共享一个实例，后者在同一个 worker 上的多个文件间共享，清理通过 `onCleanup` 注册。只在 `beforeEach` / `afterEach` 里用到的测试对象也会按需解析，不再需要 `auto: true`。参考 [test.extend](/api/runtime-api/test-api/test#testextend)。
+- **file 与 worker 作用域的 fixture。** 具名 fixture `test.extend(name, fn)` 现在接受 `{ scope: 'file' }` 与 `{ scope: 'worker' }`，前者在同一个测试文件内共享一个实例，后者在同一个 worker 上的多个文件间共享，清理通过 `onCleanup` 注册。只在 `beforeEach` / `afterEach` 里用到的 fixture 也会按需解析，不再需要 `auto: true`。参考 [test.extend](/api/runtime-api/test-api/test#testextend)。
 - **`--onlyFailures` 只重跑失败的文件。** Rstest 会把每个文件的运行结果持久化下来，加上 `-f` 就只运行上一次失败的文件。同一份 cache 还用来给文件排序：失败的排前面，耗时长的排前面，worker 少、耗时分布不均的套件因此减少了尾部空闲。
 - **Rspack 原生 watcher。** watch 模式改用 Rspack 的 Rust 文件 watcher，`aggregateTimeout` 的默认值从 5 ms 提高到 100 ms。
 - **超时时的 `context.signal`。** 每次测试尝试都会拿到一个 `AbortSignal`，该次尝试超时时 abort，可以把它传给 `fetch` 这类支持取消的 API。
 - **task metadata。** `test('name', { meta })` 与 `ctx.task.meta` 可以给测试、suite 和文件附加元数据，子级会继承父级 suite 的元数据，reporter 与 JavaScript API 都能读到。
 - **`expect.poll` 的默认值。** `expect.poll.interval` 与 `expect.poll.timeout` 为 `expect.poll()` 提供项目级默认值。
 - **`--merge-reports` 完整重放 reporter。** 合并 blob 报告时会按原始顺序重放全部 reporter hook，在 `onTestCaseResult` 里计数的 reporter 与实时运行输出一致。
-- **browser mode 对齐 Node 模式。** browser 项目现在支持 Chromium 下的原生 V8 coverage、`rs.mock` 全家族、`includeSource`、`globalSetup`、Module Federation，以及与 Node 模式相同的 watch 快捷键。
-- **Rsbuild 插件可以读取和修改 Rstest 配置。** `api.useExposed('rstest')` 在 Node 与 browser mode 下都提供 `getRstestConfig()` 与 `modifyRstestConfig()`。Node 模式还新增了 `federation` 选项，用于兼容 Module Federation 的 remote。
+- **browser mode 对齐 Node mode。** browser 项目现在支持 Chromium 下的原生 V8 coverage、`rs.mock` 全家族、`includeSource`、`globalSetup`、Module Federation，以及与 Node mode 相同的 watch 快捷键。
+- **Rsbuild 插件可以读取和修改 Rstest 配置。** `api.useExposed('rstest')` 在 Node 与 browser mode 下都提供 `getRstestConfig()` 与 `modifyRstestConfig()`。Node mode 还新增了 `federation` 选项，用于兼容 Module Federation 的 remote。
 - **project 级 `silent`。** 多 project 配置里每个 project 可以单独设置 `silent`，browser console 的处理也按 project 隔离。
 - **VS Code 扩展。** 新增「Run in Terminal」命令，显示某个文件、suite 或用例对应的完整 `rstest` 命令；新增的设置可以固定 inspector 端口、给 worker 传环境变量、单步调试时跳过 Node 内部代码。检测到统一的 Rstack 扩展已启用时，独立扩展会自动让位。
 
 ## 升级至 Rstest 0.12
 
-把 `@rstest/*` 系列包升级到 0.12 即可。0.12 对 JavaScript API 与部分 reporter 类型做了不兼容变更，主要影响直接使用 `@rstest/core/api` 或编写自定义 reporter 的项目，迁移方法见[全新的 JavaScript API](#javascript-api)。
+把 `@rstest/*` 系列包升级到 0.12 即可。0.12 对 JavaScript API 与部分 reporter 类型做了不兼容变更，主要影响直接使用 `@rstest/core/api` 或编写自定义 reporter 的项目，详见[全新的 JavaScript API](#javascript-api)与 [Rstest instance](/api/javascript-api/instance)。
 
 完整变更请参考 [v0.12.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.12.0)。

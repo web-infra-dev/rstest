@@ -84,7 +84,7 @@ An existing Playwright Test project can be migrated with the [migrate-to-rstest]
 
 Rstest 0.12 provides a new `createRstest()` API. This is a one-time rewrite of the JavaScript API before 1.0, so that consumers can integrate and use Rstest flexibly through the JavaScript API.
 
-Use `createRstest()` to create an instance, then call its four methods: [run](/api/javascript-api/instance#rstestrun), [watch](/api/javascript-api/instance#rstestwatch), [listTests](/api/javascript-api/instance#rstestlisttests), and [mergeReports](/api/javascript-api/instance#rstestmergereports). The return value of `run()` carries `status: 'pass' | 'fail' | 'error'` together with the same values a custom reporter receives in [onTestRunEnd](/api/javascript-api/reporter#ontestrunend):
+Use `createRstest()` to create an instance, then call its four methods: [run](/api/javascript-api/instance#rstestrun), [watch](/api/javascript-api/instance#rstestwatch), [listTests](/api/javascript-api/instance#rstestlisttests), and [mergeReports](/api/javascript-api/instance#rstestmergereports). The return value of `run()` carries `status: 'pass' | 'fail' | 'error'` together with the same summary a custom reporter receives in [onTestRunEnd](/api/javascript-api/reporter#ontestrunend):
 
 ```ts
 import { createRstest } from '@rstest/core/api';
@@ -195,6 +195,6 @@ export default defineConfig({
 
 ## Upgrade to Rstest 0.12
 
-Upgrade the `@rstest/*` packages to 0.12. The release breaks the JavaScript API and some reporter types, which mainly affects projects that use `@rstest/core/api` directly or write custom reporters. See [A new JavaScript API](#javascript-api) for the migration.
+Upgrade the `@rstest/*` packages to 0.12. The release breaks the JavaScript API and some reporter types, which mainly affects projects that use `@rstest/core/api` directly or write custom reporters. See [A new JavaScript API](#javascript-api) and [Rstest instance](/api/javascript-api/instance) for details.
 
 For a full list of changes, see the [v0.12.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.12.0).
