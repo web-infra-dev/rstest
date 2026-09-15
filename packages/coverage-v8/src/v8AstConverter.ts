@@ -211,6 +211,13 @@ async function prepareCoverage(
     return null;
   }
 
+  const error = parseResult.diagnostics.find(
+    (diagnostic) => diagnostic.severity === 'error',
+  );
+  if (error) {
+    throw new SyntaxError(error.message);
+  }
+
   const filename = options.coverage.url.startsWith('file://')
     ? fileURLToPath(options.coverage.url)
     : options.coverage.url;
