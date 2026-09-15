@@ -704,6 +704,23 @@ const label = "😀";
     expect(coverage).toEqual({});
   });
 
+  it('reports parser errors when the file is not ignored', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-parser-error.js');
+    const code = 'const =;';
+
+    await expect(
+      convertV8CoverageWithAst({
+        ast: () => parseModule(code),
+        cacheKey: `${file}:parser-error`,
+        code,
+        coverage: {
+          url: pathToFileURL(file).href,
+          functions: [],
+        },
+      }),
+    ).rejects.toThrow(SyntaxError);
+  });
+
   it('invalidates prepared AST coverage when an external source map changes', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-external-map-cache');
     const generatedFile = join(root, 'dist', 'bundle.js');
