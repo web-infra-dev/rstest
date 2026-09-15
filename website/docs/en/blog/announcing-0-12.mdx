@@ -140,12 +140,12 @@ On a jsdom benchmark project of 2,400 files and 20,000 tests (15 workers, every 
 
 With these two, Rstest now offers four pools: `forks`, `threads`, `vmThreads`, and `vmForks`. Choose by scenario:
 
-| Pool        | Suitable for                                                                                                        | Not suitable for                                                                                                             |
-| ----------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `forks`     | The default. Tests use native addons (such as sharp) or `process.chdir()`, or you are unsure                        | Thousands of files that each load a large dependency such as jsdom; total time is the longest                                |
-| `threads`   | Many small files where starting a worker takes longer than the test                                                 | Tests use native addons, `process.chdir()`, or process signals                                                               |
-| `vmThreads` | Many files that each load jsdom or happy-dom; the fastest of the four                                               | Same as `threads`; in addition, cross-realm `instanceof` checks can fail and custom loaders are unsupported                  |
-| `vmForks`   | The speed of `vmThreads`, but tests need native addons or `process.chdir()`, or each worker's memory must be capped | Files must not leak process-level state such as `process.env` or cwd to each other; other limits are the same as `vmThreads` |
+| Pool        | Suitable for                                                                                                                    | Not suitable for                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `forks`     | The default. Tests use native addons (such as sharp) or `process.chdir()`, or you are unsure                                    | Thousands of files that each load a large dependency such as jsdom; total time is the longest                                |
+| `threads`   | Many small files where starting a worker takes longer than the test                                                             | Tests use native addons, `process.chdir()`, or process signals                                                               |
+| `vmThreads` | Many files that each load jsdom or happy-dom; the fastest of the four                                                           | Same as `threads`; in addition, cross-realm `instanceof` checks can fail and custom loaders are unsupported                  |
+| `vmForks`   | The speed of `vmThreads`, but tests need native addons or `process.chdir()`, or memory pressure should be controlled per worker | Files must not leak process-level state such as `process.env` or cwd to each other; other limits are the same as `vmThreads` |
 
 Before switching, confirm that the bottleneck is worker startup or module loading. Costs such as database initialization or network requests in setup files do not shrink with a different pool. Enable a pool through `pool.type`:
 
