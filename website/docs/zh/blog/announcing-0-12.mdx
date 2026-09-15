@@ -140,12 +140,12 @@ Rstest 0.12 新增了两种 pool：[vmThreads](/config/test/pool#vmthreads) 与 
 
 加上这两种，Rstest 现在共有 `forks`、`threads`、`vmThreads`、`vmForks` 四种 pool，可以按需求选择：
 
-| Pool        | 适用场景                                                                                        | 不适用场景                                                                    |
-| ----------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `forks`     | 默认选择。测试用到 native addon（如 sharp）或 `process.chdir()`，或不确定选哪个                 | 文件上千且都要加载 jsdom 这类大依赖，整体耗时最长                             |
-| `threads`   | 文件多但都很小，启动 worker 比跑测试还慢                                                        | 测试用到 native addon、`process.chdir()` 或进程信号                           |
-| `vmThreads` | 文件多且都要加载 jsdom / happy-dom，四种里最快                                                  | 与 `threads` 相同；另外跨 realm 的 `instanceof` 可能失败，不支持自定义 loader |
-| `vmForks`   | 想要 `vmThreads` 的速度，但测试需要 native addon、`process.chdir()`，或要限制单个 worker 的内存 | 文件之间不能有 `process.env`、cwd 等进程级状态残留；其余限制同 `vmThreads`    |
+| Pool        | 适用场景                                                                                          | 不适用场景                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `forks`     | 默认选择。测试用到 native addon（如 sharp）或 `process.chdir()`，或不确定选哪个                   | 文件上千且都要加载 jsdom 这类大依赖，整体耗时最长                             |
+| `threads`   | 文件多但都很小，启动 worker 比跑测试还慢                                                          | 测试用到 native addon、`process.chdir()` 或进程信号                           |
+| `vmThreads` | 文件多且都要加载 jsdom / happy-dom，四种里最快                                                    | 与 `threads` 相同；另外跨 realm 的 `instanceof` 可能失败，不支持自定义 loader |
+| `vmForks`   | 想要 `vmThreads` 的速度，但测试需要 native addon、`process.chdir()`，或希望按 worker 控制内存压力 | 文件之间不能有 `process.env`、cwd 等进程级状态残留；其余限制同 `vmThreads`    |
 
 切换前建议先确认瓶颈确实在 worker 启动或模块加载，setup 中的数据库初始化、网络请求等开销不会因更换 pool 而减少。通过 `pool.type` 启用：
 
