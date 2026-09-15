@@ -29,7 +29,7 @@ Options:
 og images are committed to rstackjs/rstack-design-resources under rstest/ so the
 assets.rspack.rs CDN can serve them (rspress.config.ts wires og:image per blog
 route). Banners are referenced by a site-relative path from the blog. Compress
-both with TinyPNG before committing.`);
+both with pngquant before committing (see website/AGENTS.md).`);
   process.exit(values.help ? 0 : 1);
 }
 
@@ -55,6 +55,8 @@ for (const [name, png] of [
 }
 
 console.log(
-  'Tip: compress the PNGs before committing — typically drops each file to ~1/4 the size with no visible loss.',
+  'Tip: compress the PNGs before committing — palette quantization typically drops each file to ~1/5 the size with no visible loss:',
 );
-console.log('  https://tinypng.com (or Squoosh / ImageOptim)');
+console.log(
+  '  pnpm dlx pngquant-bin --quality=80-95 --speed 1 --strip --output <out.png> <in.png>',
+);

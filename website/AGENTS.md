@@ -24,8 +24,16 @@ The templates live **in this repo** under `scripts/release-image/` ([satori](htt
 
 ### Release workflow
 
-1. Run `pnpm gen:release-image --version <ver> [--description "<tagline>"] --out-dir <dir>` from `website/`. The gradient is randomized every run — re-run until both images look good.
-2. Compress both PNGs with [TinyPNG](https://tinypng.com) (or Squoosh / ImageOptim / `pngquant`) — the raw resvg output is ~200 KB and palette quantization typically drops it to ~1/4 the size with no visible loss.
+1. Run `pnpm gen:release-image --version <ver> [--description "<tagline>"] --out-dir <dir>` from `website/`. The gradient is randomized every run — re-run until both images look good. The og tagline is optional; recent releases ship the og card without one.
+2. Compress both PNGs with `pngquant` — the raw resvg output is ~200 KB and palette quantization (24-bit → 8-bit indexed color, the same technique [TinyPNG](https://tinypng.com) describes) drops it to ~1/5 the size with no visible loss. No local install is needed; run it through the `pngquant-bin` wrapper:
+
+   ```bash
+   pnpm dlx pngquant-bin --quality=80-95 --speed 1 --strip --output <out>/rstest-banner-v<major>-<minor>.png <in>/rstest-banner-v<major>-<minor>.png
+   pnpm dlx pngquant-bin --quality=80-95 --speed 1 --strip --output <out>/rstest-og-image-v<major>-<minor>.png <in>/rstest-og-image-v<major>-<minor>.png
+   ```
+
+   `--quality=80-95` keeps gradients free of visible banding; `--speed 1` picks the slowest, highest-quality mode; `--strip` drops metadata. Check the compressed banner once at full size before committing.
+
 3. Commit both images to the design-resources repo under `rstest/` and open a PR — that repo is the only place release images are stored (the generation `--out-dir` is just a local staging spot). After CDN deploy they are reachable at `assets.rspack.rs/rstest/rstest-{banner,og-image}-v<major>-<minor>.png`.
 
 ### Do
