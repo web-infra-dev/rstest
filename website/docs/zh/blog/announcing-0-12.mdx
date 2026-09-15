@@ -29,14 +29,15 @@ _2026 年 9 月 14 日_
 
 我们很高兴地宣布 Rstest 0.12 已经正式发布！
 
-0.12 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 支持了 E2E 测试，在 1.0 之前正式支持了 JavaScript API，新增 VM pool 的支持与 test environment prebundle 缩短大型 jsdom / happy-dom 测试套件的运行时间。
+0.12 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 支持了 E2E 测试，支持了 Module Federation 应用的测试，新增 VM pool 的支持与 test environment prebundle 缩短大型 jsdom / happy-dom 测试套件的运行时间，并在 1.0 之前正式支持了 JavaScript API。
 
 0.12 版本的主要改进包括：
 
 - [支持 E2E 测试](#playwright)
-- [全新的 JavaScript API](#javascript-api)
+- [支持 Module Federation](#module-federation)
 - [新增 vmThreads 与 vmForks pool](#vm-pools)
-- [预打包 test environment 并默认开启](#prebundle)
+- [更快的 jsdom / happy-dom 加载](#prebundle)
+- [全新的 JavaScript API](#javascript-api)
 - [其他改进](#other-improvements)
 
 ## 支持 E2E 测试 \{#playwright}
@@ -79,39 +80,50 @@ export default defineConfig({
 
 已有的 Playwright Test 项目可以借助 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 迁移，它包含针对 Playwright 配置、fixture 与行为差异的迁移指引。
 
-> 参考 [Playwright](/integration/playwright) 了解更多。
+> 参考 [Playwright](/integration/playwright) 了解更多，完整项目可以参考 [Rstest + Playwright 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright)。
 
-## 全新的 JavaScript API \{#javascript-api}
+## 支持 Module Federation \{#module-federation}
 
-Rstest 0.12 提供了全新的 `createRstest()` API，这是 1.0 之前对 JavaScript API 的一次性重写，目的是让使用方可以通过 JavaScript API 灵活地集成并使用 Rstest。
+Rstest 0.12 支持测试 [Module Federation](https://module-federation.io/) 应用，Node、jsdom / happy-dom 与 browser mode 均可使用。host 在测试中会真正加载 remote entry、解析 shared 依赖并执行暴露模块，不需要用 mock 替换 federation 边界，可以直接验证 host 与 remote 之间的集成是否正确。
 
-你可以使用 `createRstest()` 创建一个实例，并使用实例的 [run](/api/javascript-api/instance#rstestrun)、[watch](/api/javascript-api/instance#rstestwatch)、[listTests](/api/javascript-api/instance#rstestlisttests) 与 [mergeReports](/api/javascript-api/instance#rstestmergereports) 四个方法。`run()` 的返回值包含 `status: 'pass' | 'fail' | 'error'`，以及与自定义 reporter 在 [onTestRunEnd](/api/javascript-api/reporter#ontestrunend) 中收到的相同的 summary：
+配合 [@module-federation/rstest](https://github.com/module-federation/core) 插件使用，在配置中注册 `federation` 插件并声明 remotes 与 shared：
 
-```ts
-import { createRstest } from '@rstest/core/api';
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
 
-const rstest = await createRstest({
-  cwd: './packages/app',
-  config: {
-    include: ['src/**/*.test.ts'],
-    reporters: [],
-  },
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  plugins: [
+    federation({
+      name: 'host',
+      remotes: {
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
+      },
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    }),
+  ],
 });
-
-const result = await rstest.run();
-console.log(result.status, result.summary);
 ```
 
-输出结果：
+之后像应用代码一样通过 federation specifier 导入暴露模块：
 
-```txt
-pass {
-  tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
-  files: { total: 1, failed: 0 },
-}
+```ts title="remote.test.ts"
+import { expect, it } from '@rstest/core';
+
+it('loads a federated remote', async () => {
+  const remote = await import('component-app/Button');
+
+  expect(remote.default).toBeDefined();
+});
 ```
 
-> 参考 [Rstest instance](/api/javascript-api/instance) 了解更多。
+在 Node 系的测试环境中，Rstest 新增的 `federation` 兼容模式会让 Module Federation runtime 与 Rstest 的 mock runtime、内存中的构建产物协同工作，插件会自动开启该模式，无需手动设置。browser mode 则直接使用 bundler 的 Web federation runtime，消费浏览器构建的 `remoteEntry.js`。remote 可以在 `globalSetup` 中统一构建或启动，避免每个测试文件重复启动同一个 server。
+
+> 参考 [Module Federation](/integration/module-federation) 了解更多，完整项目可以参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)与 [Browser Mode 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。
 
 ## 新增 vmThreads 与 vmForks pool \{#vm-pools}
 
@@ -154,7 +166,7 @@ VM pool 不能完全替代 Node.js 原生的 loader：来自其他 realm 的值�
 
 > 参考[如何选择 pool 类型](/config/test/pool#如何选择-pool-类型)了解完整的选择依据，以及 VM pool 的兼容范围。
 
-## 默认预打包 test environment \{#prebundle}
+## 更快的 jsdom / happy-dom 加载 \{#prebundle}
 
 Rstest 0.12 支持[预打包 test environment](/config/test/test-environment#环境预打包)，并将 `testEnvironment.prebundle` 的默认值设为 `'auto'`，内置的 `jsdom` 与 `happy-dom` 环境默认走 prebundle。
 
@@ -179,6 +191,38 @@ export default defineConfig({
 ```
 
 > 参考 [Environment prebundle](/config/test/test-environment#环境预打包) 了解更多。
+
+## 全新的 JavaScript API \{#javascript-api}
+
+Rstest 0.12 提供了全新的 `createRstest()` API，这是 1.0 之前对 JavaScript API 的一次性重写，目的是让使用方可以通过 JavaScript API 灵活地集成并使用 Rstest。
+
+你可以使用 `createRstest()` 创建一个实例，并使用实例的 [run](/api/javascript-api/instance#rstestrun)、[watch](/api/javascript-api/instance#rstestwatch)、[listTests](/api/javascript-api/instance#rstestlisttests) 与 [mergeReports](/api/javascript-api/instance#rstestmergereports) 四个方法。`run()` 的返回值包含 `status: 'pass' | 'fail' | 'error'`，以及与自定义 reporter 在 [onTestRunEnd](/api/javascript-api/reporter#ontestrunend) 中收到的相同的 summary：
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.status, result.summary);
+```
+
+输出结果：
+
+```txt
+pass {
+  tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
+  files: { total: 1, failed: 0 },
+}
+```
+
+> 参考 [Rstest instance](/api/javascript-api/instance) 了解更多。
 
 ## 其他改进 \{#other-improvements}
 

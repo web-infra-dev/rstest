@@ -29,14 +29,15 @@ _September 14, 2026_
 
 We are excited to announce the release of Rstest 0.12!
 
-Rstest 0.12 supports E2E testing with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright), officially supports a JavaScript API ahead of 1.0, and adds VM pools and test environment prebundle to cut the run time of large jsdom / happy-dom test suites.
+Rstest 0.12 supports E2E testing with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright), supports testing Module Federation applications, adds VM pools and test environment prebundle to cut the run time of large jsdom / happy-dom test suites, and officially supports a JavaScript API ahead of 1.0.
 
 The main improvements in 0.12 are:
 
 - [E2E testing support](#playwright)
-- [A new JavaScript API](#javascript-api)
+- [Module Federation support](#module-federation)
 - [New vmThreads and vmForks pools](#vm-pools)
-- [Test environment prebundle, enabled by default](#prebundle)
+- [Faster jsdom / happy-dom loading](#prebundle)
+- [A new JavaScript API](#javascript-api)
 - [Other improvements](#other-improvements)
 
 ## E2E testing support \{#playwright}
@@ -79,39 +80,50 @@ With `trace` enabled, tests that match the selected mode produce Playwright's of
 
 An existing Playwright Test project can be migrated with the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill, which includes guidance for Playwright configuration, fixtures, and behavior differences.
 
-> See [Playwright](/integration/playwright) to learn more.
+> See [Playwright](/integration/playwright) to learn more, and the [Rstest + Playwright example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright) for a complete project.
 
-## A new JavaScript API \{#javascript-api}
+## Module Federation support \{#module-federation}
 
-Rstest 0.12 provides a new `createRstest()` API. This is a one-time rewrite of the JavaScript API before 1.0, so that consumers can integrate and use Rstest flexibly through the JavaScript API.
+Rstest 0.12 supports testing [Module Federation](https://module-federation.io/) applications in Node, jsdom / happy-dom, and browser mode. During a test the host loads the real remote entry, resolves shared dependencies, and executes the exposed module, so you can verify the integration between host and remote directly instead of replacing the federation boundary with a mock.
 
-Use `createRstest()` to create an instance, then call its four methods: [run](/api/javascript-api/instance#rstestrun), [watch](/api/javascript-api/instance#rstestwatch), [listTests](/api/javascript-api/instance#rstestlisttests), and [mergeReports](/api/javascript-api/instance#rstestmergereports). The return value of `run()` carries `status: 'pass' | 'fail' | 'error'` together with the same summary a custom reporter receives in [onTestRunEnd](/api/javascript-api/reporter#ontestrunend):
+Use it together with the [@module-federation/rstest](https://github.com/module-federation/core) plugin: register the `federation` plugin in the config and declare the remotes and shared modules:
 
-```ts
-import { createRstest } from '@rstest/core/api';
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
 
-const rstest = await createRstest({
-  cwd: './packages/app',
-  config: {
-    include: ['src/**/*.test.ts'],
-    reporters: [],
-  },
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  plugins: [
+    federation({
+      name: 'host',
+      remotes: {
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
+      },
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    }),
+  ],
 });
-
-const result = await rstest.run();
-console.log(result.status, result.summary);
 ```
 
-Output:
+Then import an exposed module through its federated specifier, just as application code does:
 
-```txt
-pass {
-  tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
-  files: { total: 1, failed: 0 },
-}
+```ts title="remote.test.ts"
+import { expect, it } from '@rstest/core';
+
+it('loads a federated remote', async () => {
+  const remote = await import('component-app/Button');
+
+  expect(remote.default).toBeDefined();
+});
 ```
 
-> See [Rstest instance](/api/javascript-api/instance) to learn more.
+In Node-based test environments, the new `federation` compatibility mode lets the Module Federation runtime work with Rstest's mock runtime and in-memory build output. The plugin enables this mode automatically. Browser mode uses the bundler's web federation runtime directly and consumes the browser build's `remoteEntry.js`. Remotes can be built or started once in `globalSetup`, so every test file does not start the same server again.
+
+> See [Module Federation](/integration/module-federation) to learn more, and the [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and [Browser Mode example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) for complete projects.
 
 ## New vmThreads and vmForks pools \{#vm-pools}
 
@@ -154,7 +166,7 @@ VM pools do not fully replace the native Node.js loader: values from other realm
 
 > See [Choose a pool type](/config/test/pool#choose-a-pool-type) for the full selection guidance and what the VM pools support.
 
-## Test environment prebundle by default \{#prebundle}
+## Faster jsdom / happy-dom loading \{#prebundle}
 
 Rstest 0.12 supports [prebundle for test environments](/config/test/test-environment#environment-prebundle), and `testEnvironment.prebundle` defaults to `'auto'`, so the built-in `jsdom` and `happy-dom` environments use prebundle by default.
 
@@ -179,6 +191,38 @@ export default defineConfig({
 ```
 
 > See [Environment prebundle](/config/test/test-environment#environment-prebundle) to learn more.
+
+## A new JavaScript API \{#javascript-api}
+
+Rstest 0.12 provides a new `createRstest()` API. This is a one-time rewrite of the JavaScript API before 1.0, so that consumers can integrate and use Rstest flexibly through the JavaScript API.
+
+Use `createRstest()` to create an instance, then call its four methods: [run](/api/javascript-api/instance#rstestrun), [watch](/api/javascript-api/instance#rstestwatch), [listTests](/api/javascript-api/instance#rstestlisttests), and [mergeReports](/api/javascript-api/instance#rstestmergereports). The return value of `run()` carries `status: 'pass' | 'fail' | 'error'` together with the same summary a custom reporter receives in [onTestRunEnd](/api/javascript-api/reporter#ontestrunend):
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.status, result.summary);
+```
+
+Output:
+
+```txt
+pass {
+  tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
+  files: { total: 1, failed: 0 },
+}
+```
+
+> See [Rstest instance](/api/javascript-api/instance) to learn more.
 
 ## Other improvements \{#other-improvements}
 
