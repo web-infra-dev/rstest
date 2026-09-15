@@ -182,17 +182,17 @@ export default defineConfig({
 
 ## Other improvements \{#other-improvements}
 
-- **File- and worker-scoped fixtures.** The named fixture form `test.extend(name, fn)` now accepts `{ scope: 'file' }` and `{ scope: 'worker' }`. The former shares one instance within a test file, the latter shares it across files on the same worker, and cleanup is registered through `onCleanup`. Fixtures used only in `beforeEach` / `afterEach` are resolved on demand as well, so `auto: true` is no longer needed. See [test.extend](/api/runtime-api/test-api/test#testextend).
-- **`--onlyFailures` re-runs only failed files.** Rstest persists each file's result, and `-f` runs only the files that failed last time. The same cache also orders files: failed ones first, then the slowest first, which reduces tail idle time on suites with few workers and uneven durations.
-- **Rspack native watcher.** Watch mode now uses Rspack's Rust file watcher, and the default `aggregateTimeout` goes from 5 ms to 100 ms.
-- **`context.signal` on timeout.** Every test attempt receives an `AbortSignal` that aborts when the attempt times out. Pass it to `fetch` and other APIs that support cancellation.
-- **Task metadata.** `test('name', { meta })` and `ctx.task.meta` attach metadata to tests, suites, and files. Children inherit their parent suite's metadata, and both reporters and the JavaScript API can read it.
-- **Defaults for `expect.poll`.** `expect.poll.interval` and `expect.poll.timeout` set project-level defaults for `expect.poll()`.
-- **Full reporter replay for `--merge-reports`.** Merging blob reports replays every reporter hook in its original order, so a reporter that counts in `onTestCaseResult` matches a live run.
-- **Browser mode catches up with Node mode.** Browser projects now support native V8 coverage in Chromium, the `rs.mock` family, `includeSource`, `globalSetup`, Module Federation, and the same watch shortcuts as Node mode.
-- **Rsbuild plugins can read and modify Rstest config.** `api.useExposed('rstest')` provides `getRstestConfig()` and `modifyRstestConfig()` in both Node and browser mode. Node mode also gains a `federation` option for compatibility with Module Federation remotes.
-- **Project-level `silent`.** Each project in a multi-project config can set its own `silent`, and browser console handling is scoped per project.
-- **VS Code extension.** A new "Run in Terminal" command shows the full `rstest` command for a file, suite, or case. New settings pin the inspector port, pass environment variables to the worker, and skip Node internals when stepping into a test. When the unified Rstack extension is enabled, the standalone extension stands down automatically.
+- **File- and worker-scoped fixtures.** Fixtures from `test.extend` can share one instance per file or per worker. See [test.extend](/api/runtime-api/test-api/test#testextend).
+- **`--onlyFailures` re-runs only failed files.** Rstest remembers which files failed and can run just those. See [onlyFailures](/config/test/only-failures).
+- **Rspack native watcher.** Watch mode now detects file changes through Rspack's Rust file watcher. See [rstest watch](/guide/basic/cli#rstest-watch).
+- **`context.signal` on timeout.** Every test attempt receives an `AbortSignal` that aborts when the attempt times out. See [signal](/api/runtime-api/test-api/test#signal).
+- **Task metadata.** Tests, suites, and files can carry custom metadata that reporters and the JavaScript API can read. See [Metadata](/guide/advanced/metadata).
+- **Defaults for `expect.poll`.** The `expect.poll` config option sets project-level polling defaults. See [expect.poll](/config/test/expect#expectpoll).
+- **Full reporter replay for `--merge-reports`.** Merging blob reports replays every reporter hook in its original order. See [rstest merge-reports](/guide/basic/cli#rstest-merge-reports).
+- **Browser mode catches up with Node mode.** Browser projects now support coverage, mocking, `globalSetup`, and the other features Node mode already had. See [Browser mode](/guide/browser-testing).
+- **Rsbuild plugins can read and modify Rstest config.** An Rsbuild plugin can read the resolved Rstest config and change it before the run starts. See [Modify Rstest config in Rsbuild plugins](/config/build/plugins#modify-rstest-config).
+- **Project-level `silent`.** Each project in a multi-project config can set its own `silent`. See [silent](/config/test/silent).
+- **VS Code extension.** The extension gains a "Run in Terminal" command and new debugging settings. See [VS Code extension](/guide/basic/vscode-extension).
 
 ## Upgrade to Rstest 0.12
 
