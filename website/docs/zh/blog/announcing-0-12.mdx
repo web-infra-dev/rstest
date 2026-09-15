@@ -192,7 +192,7 @@ export default defineConfig({
 - **project 级 `silent`。** 多 project 配置里每个 project 可以单独设置 `silent`，只静音日志多的项目，其他项目的输出照常可见。参考 [silent](/config/test/silent)。
 - **VS Code 扩展。** 右键某个测试或文件选择「Run in Terminal」，即可在集成终端里以 `rstest` 命令运行它，看到完整的命令与原始输出；调试相关的新设置可以固定 inspector 端口、给 worker 传环境变量、调试时跳过 Node 内部代码。参考 [VS Code 扩展](/guide/basic/vscode-extension)。
 - **`--merge-reports` 完整重放 reporter。** 合并 blob 报告时按原始顺序重放全部 reporter hook，分片运行合并后的报告与单机运行一致，自定义 reporter 的统计不再遗漏。参考 [rstest merge-reports](/guide/basic/cli#rstest-merge-reports)。
-- **browser mode 对齐 Node mode。** browser 项目现在也支持 coverage、mock、`globalSetup` 等 Node mode 已有的能力，两种模式可以共用同一套配置与写法。参考 [浏览器模式](/guide/browser-testing)。
+- **browser mode 对齐 Node mode。** browser 项目现在也支持原生 V8 coverage、`rs.mock`、`includeSource`、`globalSetup`、Module Federation 与 watch 快捷键，用法与 Node mode 一致。参考 [浏览器模式](/guide/browser-testing)。
 
 ## 升级至 Rstest 0.12
 

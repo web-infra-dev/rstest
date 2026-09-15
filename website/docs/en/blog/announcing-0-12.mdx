@@ -188,11 +188,11 @@ export default defineConfig({
 - **`context.signal` on timeout.** Every test attempt receives an `AbortSignal`, so a timed-out test can cancel pending `fetch` calls and similar work instead of holding the worker. See [signal](/api/runtime-api/test-api/test#signal).
 - **Task metadata.** Tests, suites, and files can carry custom metadata that reporters and the JavaScript API can read, which makes it easy to group results by owner, module, or any other dimension. See [Metadata](/guide/advanced/metadata).
 - **Defaults for `expect.poll`.** Set the polling timeout and interval once in the config instead of passing them to every `expect.poll()` call. See [expect.poll](/config/test/expect#expectpoll).
-- **Full reporter replay for `--merge-reports`.** Merging blob reports replays every reporter hook in its original order, so a merged report from sharded runs matches a single-machine run and custom reporter counts stay complete. See [rstest merge-reports](/guide/basic/cli#rstest-merge-reports).
-- **Browser mode catches up with Node mode.** Browser projects now support coverage, mocking, `globalSetup`, and the other features Node mode already had, so both modes share one config and one way of writing tests. See [Browser mode](/guide/browser-testing).
 - **Rsbuild plugins can read and modify Rstest config.** A framework or tooling plugin can integrate with Rstest on its own, so users no longer edit the test config by hand. See [Modify Rstest config in Rsbuild plugins](/config/build/plugins#modify-rstest-config).
 - **Project-level `silent`.** Each project in a multi-project config can set its own `silent`, so you can mute a noisy project while keeping output from the others. See [silent](/config/test/silent).
 - **VS Code extension.** Right-click a test or file and choose "Run in Terminal" to run it as an `rstest` command in the integrated terminal, with the full command and raw output visible. New debugging settings pin the inspector port, pass environment variables to the worker, and skip Node internals while debugging. See [VS Code extension](/guide/basic/vscode-extension).
+- **Full reporter replay for `--merge-reports`.** Merging blob reports replays every reporter hook in its original order, so a merged report from sharded runs matches a single-machine run and custom reporter counts stay complete. See [rstest merge-reports](/guide/basic/cli#rstest-merge-reports).
+- **Browser mode catches up with Node mode.** Browser projects now support native V8 coverage, `rs.mock`, `includeSource`, `globalSetup`, Module Federation, and the watch shortcuts, used the same way as in Node mode. See [Browser mode](/guide/browser-testing).
 
 ## Upgrade to Rstest 0.12
 
