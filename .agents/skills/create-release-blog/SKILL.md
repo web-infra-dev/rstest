@@ -237,6 +237,13 @@ Rules for the banner image:
 - Asset URL: `https://assets.rspack.rs/rstest/rstest-banner-v<major>-<minor>.png` (no
   patch segment; blog posts are per-minor). Banners ship via PR against
   [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources).
+- Generate the banner and OG card together with `pnpm gen:release-image` from `website/`
+  and compress both with `pnpm dlx pngquant-bin` before committing them to
+  design-resources. `website/AGENTS.md` ("Release image generation") owns the exact
+  commands and flags.
+- For a local preview before the CDN asset exists, temporarily copy the banner into
+  a `public` directory under `website/docs/` (create it if absent) and point `src` at
+  `/rstest-banner-v<major>-<minor>.png`. Revert both before opening the PR.
 - Inline style: `{{ boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)' }}`. No border, no
   border-radius.
 
