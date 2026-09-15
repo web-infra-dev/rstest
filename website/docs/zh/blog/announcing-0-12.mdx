@@ -29,7 +29,7 @@ _2026 年 9 月 14 日_
 
 我们很高兴地宣布 Rstest 0.12 已经正式发布！
 
-0.12 通过 `@rstest/playwright` 支持了 E2E 测试，在 1.0 之前正式支持了 JavaScript API，新增 VM pool 的支持与 test environment prebundle 缩短大型 JSDDom / Happy Dom 测试套件的运行时间。
+0.12 通过 `@rstest/playwright` 支持了 E2E 测试，在 1.0 之前正式支持了 JavaScript API，新增 VM pool 的支持与 test environment prebundle 缩短大型 jsdom / happy-dom 测试套件的运行时间。
 
 0.12 版本的主要改进包括：
 
@@ -103,7 +103,7 @@ console.log(result.status, result.summary);
 
 输出结果：
 
-```json
+```txt
 pass {
   tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
   files: { total: 1, failed: 0 },
@@ -164,7 +164,7 @@ Rstest 0.12 支持[预打包 test environment](/config/test/test-environment#env
 | jsdom 30.0.1      | 16.99s | ⚡ 10.57s | **37.8%** |
 | happy-dom 20.11.1 |  6.35s |  ⚡ 2.98s | **53.0%** |
 
-默认 `auto` 时，Rstest 将对 `jsdom` 15–26、29–30 和 `happy-dom` 20。其他版本继续原生加载；prebundle 构建、加载或校验失败时也会回退到原生入口。如果你的环境在打包后行为不一致，可以显式关闭：
+默认 `auto` 时，Rstest 会对 `jsdom` 15–26、29–30 和 `happy-dom` 20 进行预打包。其他版本继续原生加载；prebundle 构建、加载或校验失败时也会回退到原生入口。如果你的环境在打包后行为不一致，可以显式关闭：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
