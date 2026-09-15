@@ -182,17 +182,17 @@ export default defineConfig({
 
 ## 其他改进 \{#other-improvements}
 
-- **file 与 worker 作用域的 fixture。** 具名 fixture `test.extend(name, fn)` 现在接受 `{ scope: 'file' }` 与 `{ scope: 'worker' }`，前者在同一个测试文件内共享一个实例，后者在同一个 worker 上的多个文件间共享，清理通过 `onCleanup` 注册。只在 `beforeEach` / `afterEach` 里用到的 fixture 也会按需解析，不再需要 `auto: true`。参考 [test.extend](/api/runtime-api/test-api/test#testextend)。
-- **`--onlyFailures` 只重跑失败的文件。** Rstest 会把每个文件的运行结果持久化下来，加上 `-f` 就只运行上一次失败的文件。同一份 cache 还用来给文件排序：失败的排前面，耗时长的排前面，worker 少、耗时分布不均的套件因此减少了尾部空闲。
-- **Rspack 原生 watcher。** watch 模式改用 Rspack 的 Rust 文件 watcher，`aggregateTimeout` 的默认值从 5 ms 提高到 100 ms。
-- **超时时的 `context.signal`。** 每次测试尝试都会拿到一个 `AbortSignal`，该次尝试超时时 abort，可以把它传给 `fetch` 这类支持取消的 API。
-- **task metadata。** `test('name', { meta })` 与 `ctx.task.meta` 可以给测试、suite 和文件附加元数据，子级会继承父级 suite 的元数据，reporter 与 JavaScript API 都能读到。
-- **`expect.poll` 的默认值。** `expect.poll.interval` 与 `expect.poll.timeout` 为 `expect.poll()` 提供项目级默认值。
-- **`--merge-reports` 完整重放 reporter。** 合并 blob 报告时会按原始顺序重放全部 reporter hook，在 `onTestCaseResult` 里计数的 reporter 与实时运行输出一致。
-- **browser mode 对齐 Node mode。** browser 项目现在支持 Chromium 下的原生 V8 coverage、`rs.mock` 全家族、`includeSource`、`globalSetup`、Module Federation，以及与 Node mode 相同的 watch 快捷键。
-- **Rsbuild 插件可以读取和修改 Rstest 配置。** `api.useExposed('rstest')` 在 Node 与 browser mode 下都提供 `getRstestConfig()` 与 `modifyRstestConfig()`。Node mode 还新增了 `federation` 选项，用于兼容 Module Federation 的 remote。
-- **project 级 `silent`。** 多 project 配置里每个 project 可以单独设置 `silent`，browser console 的处理也按 project 隔离。
-- **VS Code 扩展。** 新增「Run in Terminal」命令，显示某个文件、suite 或用例对应的完整 `rstest` 命令；新增的设置可以固定 inspector 端口、给 worker 传环境变量、单步调试时跳过 Node 内部代码。检测到统一的 Rstack 扩展已启用时，独立扩展会自动让位。
+- **file 与 worker 作用域的 fixture。** `test.extend` 的 fixture 可以按文件或按 worker 共享一个实例。参考 [test.extend](/api/runtime-api/test-api/test#testextend)。
+- **`--onlyFailures` 只重跑失败的文件。** Rstest 会记住哪些文件失败，并只运行这些文件。参考 [onlyFailures](/config/test/only-failures)。
+- **Rspack 原生 watcher。** watch 模式改用 Rspack 的 Rust 文件 watcher 监听文件变更。参考 [rstest watch](/guide/basic/cli#rstest-watch)。
+- **超时时的 `context.signal`。** 每次测试尝试都会拿到一个 `AbortSignal`，该次尝试超时时 abort。参考 [signal](/api/runtime-api/test-api/test#signal)。
+- **task metadata。** 测试、suite 和文件可以携带自定义元数据，reporter 与 JavaScript API 都能读到。参考 [Metadata](/guide/advanced/metadata)。
+- **`expect.poll` 的默认值。** `expect.poll` 配置项为轮询提供项目级默认值。参考 [expect.poll](/config/test/expect#expectpoll)。
+- **`--merge-reports` 完整重放 reporter。** 合并 blob 报告时会按原始顺序重放全部 reporter hook。参考 [rstest merge-reports](/guide/basic/cli#rstest-merge-reports)。
+- **browser mode 对齐 Node mode。** browser 项目现在也支持 coverage、mock、`globalSetup` 等 Node mode 已有的能力。参考 [浏览器模式](/guide/browser-testing)。
+- **Rsbuild 插件可以读取和修改 Rstest 配置。** Rsbuild 插件可以读取解析后的 Rstest 配置，并在运行开始前修改它。参考 [在 Rsbuild 插件中修改 Rstest 配置](/config/build/plugins#modify-rstest-config)。
+- **project 级 `silent`。** 多 project 配置里每个 project 可以单独设置 `silent`。参考 [silent](/config/test/silent)。
+- **VS Code 扩展。** 扩展新增了「Run in Terminal」命令和新的调试设置。参考 [VS Code 扩展](/guide/basic/vscode-extension)。
 
 ## 升级至 Rstest 0.12
 
