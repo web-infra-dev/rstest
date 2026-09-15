@@ -30,12 +30,15 @@ const HUE_PALETTE = [
 
 // Quadrant-anchored blob centers keep gradient mass off the central text
 // column (logo, wordmark, v-number) and force multi-blob renders to spread.
+// Anchors sit near the corners: the picks that made it into 0.12 all had
+// their blob cores within ~15% of a canvas corner, so the wash spills in from
+// the edge instead of floating mid-frame.
 type Quadrant = 'TL' | 'TR' | 'BL' | 'BR';
 const QUAD_CENTERS: Record<Quadrant, { x: number; y: number }> = {
-  TL: { x: 18, y: 22 },
-  TR: { x: 82, y: 22 },
-  BL: { x: 18, y: 78 },
-  BR: { x: 82, y: 78 },
+  TL: { x: 10, y: 15 },
+  TR: { x: 90, y: 15 },
+  BL: { x: 10, y: 85 },
+  BR: { x: 90, y: 85 },
 };
 
 function pickQuadrants(n: number): Quadrant[] {
@@ -61,7 +64,7 @@ function pick<T>(arr: T[]): T {
 }
 
 /**
- * Build a soft, diffuse background by stacking 1–3 ellipse-shaped radial
+ * Build a soft, diffuse background by stacking 1–2 ellipse-shaped radial
  * gradients over a white base, modeled on OpenAI's hero gradients.
  *
  * The end stop must keep the same hue and only drop alpha. Using the
@@ -72,32 +75,33 @@ function pick<T>(arr: T[]): T {
 export function randomBackground(): string {
   const base = pick(HUE_PALETTE);
 
-  const schemeRoll = Math.random();
-  const scheme: 'tonal' | 'duo' | 'tri' =
-    schemeRoll < 0.45 ? 'tonal' : schemeRoll < 0.85 ? 'duo' : 'tri';
+  // Tonal dominates and `tri` is off: every 0.12 candidate the maintainers
+  // shortlisted from ~120 renders stayed within one hue family. Two hue
+  // families is kept as a minority option; three read as noise.
+  const scheme: 'tonal' | 'duo' = Math.random() < 0.7 ? 'tonal' : 'duo';
 
   // Off-axis hues sit 90°–150° from the base. A smaller offset (e.g. cyan +
   // 60° = lavender) still reads as "same cool/warm family" and the two blobs
   // can feel like the same color when placed close together.
   const huePool: number[] = [base.h];
-  if (scheme === 'duo' || scheme === 'tri') {
+  if (scheme === 'duo') {
     huePool.push((base.h + 90 + Math.round(Math.random() * 60) + 360) % 360);
   }
-  if (scheme === 'tri') {
-    huePool.push((base.h - 90 - Math.round(Math.random() * 60) + 360) % 360);
-  }
 
-  // Weighted toward 1–2 blobs; 3+ overlapping blobs muddies the gradient.
-  const blobRoll = Math.random();
-  const blobCount = blobRoll < 0.35 ? 1 : blobRoll < 0.85 ? 2 : 3;
+  // One or two blobs only; a third overlapping blob muddies the gradient and
+  // none of the shortlisted 0.12 renders had one.
+  const blobCount = Math.random() < 0.4 ? 1 : 2;
   const quads = pickQuadrants(blobCount);
 
   // Single-blob renders need a visibility floor — otherwise a small / dim /
-  // edge-anchored blob can disappear entirely against the white base.
-  const { minAlpha, maxAlpha, minSize } =
+  // edge-anchored blob can disappear entirely against the white base. The
+  // size floor is shared: the shortlisted renders all used blobs >= 50% wide,
+  // and smaller ones read as stray spots rather than a wash.
+  const minSize = 50;
+  const { minAlpha, maxAlpha } =
     blobCount === 1
-      ? { minAlpha: 0.4, maxAlpha: 0.55, minSize: 50 }
-      : { minAlpha: 0.3, maxAlpha: 0.5, minSize: 30 };
+      ? { minAlpha: 0.4, maxAlpha: 0.55 }
+      : { minAlpha: 0.3, maxAlpha: 0.5 };
 
   const blobs = quads.map((quad) => {
     const seedHue = pick(huePool);
@@ -107,8 +111,8 @@ export function randomBackground(): string {
     const l = clamp(base.l + Math.round((Math.random() - 0.5) * 12), 55, 78);
 
     const center = QUAD_CENTERS[quad];
-    let x = Math.round(center.x + (Math.random() - 0.5) * 30); // anchor ±15%
-    let y = Math.round(center.y + (Math.random() - 0.5) * 25); // anchor ±12.5%
+    let x = Math.round(center.x + (Math.random() - 0.5) * 20); // anchor ±10%
+    let y = Math.round(center.y + (Math.random() - 0.5) * 16); // anchor ±8%
 
     const w = Math.round(minSize + Math.random() * (85 - minSize));
     // Cap blob aspect ratio at ~1.4:1 so blobs read as soft ovals rather than
