@@ -43,7 +43,7 @@ import {
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
 import type { Comment, ParseResult } from '@swc-next/parser';
-import { walk } from 'estree-walker';
+import { walk } from 'zimmerframe';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 
 type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
@@ -242,7 +242,6 @@ async function prepareCoverage(
   );
   const skippedNodes = new WeakSet<AstNode>();
   const coveredNodes = new WeakSet<AstNode>();
-  let nextIgnore: AstNode | false = false;
 
   const getIgnoreHint = (node: AstNode) => {
     for (const hint of ignoreHints) {
@@ -271,22 +270,11 @@ async function prepareCoverage(
   const isSkipped = (node: AstNode | null | undefined) =>
     Boolean(node && skippedNodes.has(node));
 
-  walk(parseResult.program, {
-    enter(node, parent) {
-      const current = node as AstNode;
-      if (nextIgnore !== false) {
-        return;
-      }
-
+  walk<AstNode, null>(parseResult.program, null, {
+    _(current, { next, path }) {
       const hint = getIgnoreHint(current);
 
-      if (hint === 'next') {
-        nextIgnore = current;
-        return;
-      }
-
-      if (isSkipped(current)) {
-        nextIgnore = current;
+      if (hint === 'next' || isSkipped(current)) {
         return;
       }
 
@@ -300,11 +288,11 @@ async function prepareCoverage(
               end: current.start + 1,
             },
           });
-          return;
+          break;
         }
         case 'FunctionExpression': {
           if (coveredNodes.has(current)) {
-            return;
+            break;
           }
 
           const body = current.body as AstNode;
@@ -315,7 +303,7 @@ async function prepareCoverage(
               end: current.start + 1,
             },
           });
-          return;
+          break;
         }
         case 'MethodDefinition': {
           const value = current.value as AstNode;
@@ -327,7 +315,7 @@ async function prepareCoverage(
             loc: value.body as AstNode,
             decl: current.key as AstNode,
           });
-          return;
+          break;
         }
         case 'Property': {
           const value = current.value as AstNode;
@@ -339,7 +327,7 @@ async function prepareCoverage(
               coverage: value,
             });
           }
-          return;
+          break;
         }
         case 'ArrowFunctionExpression': {
           let body = current.body as AstNode;
@@ -356,7 +344,7 @@ async function prepareCoverage(
           if (body.type !== 'BlockStatement') {
             builder.addStatement(body, current);
           }
-          return;
+          break;
         }
         case 'ExpressionStatement': {
           const expression = current.expression as AstNode & {
@@ -368,7 +356,7 @@ async function prepareCoverage(
           ) {
             builder.addStatement(current);
           }
-          return;
+          break;
         }
         case 'ExportDefaultDeclaration': {
           const declaration = current.declaration as AstNode;
@@ -378,7 +366,7 @@ async function prepareCoverage(
           ) {
             builder.addStatement(declaration);
           }
-          return;
+          break;
         }
         case 'BreakStatement':
         case 'ContinueStatement':
@@ -394,13 +382,13 @@ async function prepareCoverage(
         case 'WithStatement':
         case 'LabeledStatement': {
           builder.addStatement(current);
-          return;
+          break;
         }
         case 'VariableDeclarator': {
           if (current.init) {
             builder.addStatement(current.init as AstNode, current);
           }
-          return;
+          break;
         }
         case 'ClassBody': {
           const children = current.body as AstNode[];
@@ -414,7 +402,7 @@ async function prepareCoverage(
               builder.addStatement(child.value as AstNode);
             }
           }
-          return;
+          break;
         }
         case 'IfStatement': {
           const branches: (AstNode | null | undefined)[] = [];
@@ -440,17 +428,16 @@ async function prepareCoverage(
           }
 
           // An unbraced body's end can already belong to its enclosing region.
+          const parent = path.at(-1);
           const continuationOffset =
             parent &&
             (parent.type === 'BlockStatement' || parent.type === 'Program') &&
-            'end' in parent &&
-            typeof parent.end === 'number' &&
             current.end < parent.end
               ? current.end
               : undefined;
           builder.addBranch('if', current, branches, continuationOffset);
           builder.addStatement(current);
-          return;
+          break;
         }
         case 'SwitchStatement': {
           const cases = (current.cases as AstNode[]).filter(
@@ -458,7 +445,7 @@ async function prepareCoverage(
           );
           builder.addBranch('switch', current, cases);
           builder.addStatement(current);
-          return;
+          break;
         }
         case 'ConditionalExpression': {
           let consequent = current.consequent as AstNode;
@@ -487,13 +474,9 @@ async function prepareCoverage(
           }
 
           builder.addBranch('cond-expr', current, branches);
-          return;
+          break;
         }
         case 'LogicalExpression': {
-          if (isSkipped(current)) {
-            return;
-          }
-
           const branches: AstNode[] = [];
           const visit = (child: AstNode) => {
             if (child.type === 'LogicalExpression') {
@@ -510,18 +493,15 @@ async function prepareCoverage(
 
           visit(current);
           builder.addBranch('binary-expr', current, branches);
-          return;
+          break;
         }
         case 'AssignmentPattern': {
           builder.addBranch('default-arg', current, [current.right as AstNode]);
-          return;
+          break;
         }
       }
-    },
-    leave(node) {
-      if (node === nextIgnore) {
-        nextIgnore = false;
-      }
+
+      next();
     },
   });
 
