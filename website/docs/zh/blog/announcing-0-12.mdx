@@ -29,7 +29,7 @@ _2026 年 9 月 14 日_
 
 我们很高兴地宣布 Rstest 0.12 已经正式发布！
 
-0.12 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 支持了 E2E 测试，支持了 Module Federation 应用的测试，新增 VM pool 的支持与 test environment prebundle 缩短大型 jsdom / happy-dom 测试套件的运行时间，并在 1.0 之前正式支持了 JavaScript API。
+Rstest 0.12 新增 E2E 与 Module Federation 测试支持，通过 VM pool 和 test environment prebundle 提升大型测试套件性能，并正式推出新的 JavaScript API。
 
 0.12 版本的主要改进包括：
 
@@ -42,11 +42,11 @@ _2026 年 9 月 14 日_
 
 ## 支持 E2E 测试 \{#playwright}
 
-Rstest 0.12 原生提供了对 E2E 测试的支持，底层基于 Playwright，通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright)，你可以直接在 Rstest 里写 E2E 测试：用 [Playwright](https://playwright.dev/) 打开真实页面，验证本地 dev server、preview server 或线上 URL 的完整流程。
+Rstest 0.12 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 原生支持 E2E 测试，使单元测试、组件测试与 E2E 测试可以共用 Rstest 的配置、命令和 reporter。
 
-单元测试、组件测试（browser mode）与 E2E 测试从此共用同一份配置、命令与 reporter，无需再为 E2E 单独维护一个 Playwright Test 项目。要在浏览器中测试组件，继续使用 browser mode；要测试完整页面或应用，则使用 `@rstest/playwright`。完整项目可以参考 [Rstest + Playwright 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright)。
+通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright)，你可以直接在 Rstest 里写 E2E 测试：用 [Playwright](https://playwright.dev/) 打开真实页面，验证本地 dev server、preview server 或线上 URL 的完整流程。完整项目可以参考 [Rstest + Playwright 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright)。
 
-要接入 E2E 测试，测试文件从 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 导入 `test` 与 `expect`。`test` 提供 `browser`、`context`、`page`、`request` 和 `serve` 等内置 fixture，`expect` 则提供 `toHaveTitle`、`toHaveText` 这类会自动重试的断言：
+测试文件从 `@rstest/playwright` 导入 `test` 与 `expect` 即可：
 
 ```ts title="e2e.test.ts"
 import { expect, test } from '@rstest/playwright';
@@ -75,8 +75,6 @@ export default defineConfig({
   }),
 });
 ```
-
-开启 `trace` 后，符合所选模式的测试会生成 Playwright 官方的 `trace.zip`，用 `npx playwright show-trace` 就能打开。`on-first-retry` 与 `on-all-retries` 只在重试时记录，需要配合 `retry` 使用；这两种模式在首次尝试时不会启动 tracing，通过的测试没有额外开销。
 
 已有的 Playwright Test 项目可以借助 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 迁移，它包含针对 Playwright 配置、fixture 与行为差异的迁移指引。
 
@@ -127,9 +125,7 @@ it('loads a federated remote', async () => {
 
 ## 新增 vmThreads 与 vmForks pool \{#vm-pools}
 
-Rstest 0.12 新增了两种 pool：[vmThreads](/config/test/pool#vmthreads) 与 [vmForks](/config/test/pool#vmforks)。它们在测试文件之间复用 worker，同时为每个文件创建一个新的 `vm.Context`。文件仍然各自拥有独立的 JavaScript realm 与模块图，而 worker 启动、依赖解析和 V8 编译这些开销由多个文件共享。
-
-在默认的 `forks` pool 与 `isolate: true` 下，每个测试文件都要启动新进程、创建新的 test environment，并从头加载模块。文件多、DOM 依赖重的套件里，这部分固定开销占了大头。
+对于大量 jsdom / happy-dom 测试文件，Rstest 0.12 新增的 [vmThreads](/config/test/pool#vmthreads) / [vmForks](/config/test/pool#vmforks) 可以显著减少 worker 启动和模块加载开销。它们在测试文件之间复用 worker，同时为每个文件创建一个新的 `vm.Context`。文件仍然各自拥有独立的 JavaScript realm 与模块图，而 worker 启动、依赖解析和 V8 编译这些开销由多个文件共享。
 
 在一个 2,400 个文件、20,000 个测试的 jsdom benchmark 项目中（15 个 worker，每个进程从空 cache 启动）：
 
@@ -138,14 +134,14 @@ Rstest 0.12 新增了两种 pool：[vmThreads](/config/test/pool#vmthreads) 与 
 | `forks`     |   315.17s |
 | `vmThreads` | ⚡ 33.22s |
 
-加上这两种，Rstest 现在共有 `forks`、`threads`、`vmThreads`、`vmForks` 四种 pool，可以按需求选择：
+Rstest 目前提供四种 pool，可根据测试场景选择：
 
-| Pool        | 适用场景                                                                                          | 不适用场景                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `forks`     | 默认选择。测试用到 native addon（如 sharp）或 `process.chdir()`，或不确定选哪个                   | 文件上千且都要加载 jsdom 这类大依赖，整体耗时最长                             |
-| `threads`   | 文件多但都很小，启动 worker 比跑测试还慢                                                          | 测试用到 native addon、`process.chdir()` 或进程信号                           |
-| `vmThreads` | 文件多且都要加载 jsdom / happy-dom，四种里最快                                                    | 与 `threads` 相同；另外跨 realm 的 `instanceof` 可能失败，不支持自定义 loader |
-| `vmForks`   | 想要 `vmThreads` 的速度，但测试需要 native addon、`process.chdir()`，或希望按 worker 控制内存压力 | 文件之间不能有 `process.env`、cwd 等进程级状态残留；其余限制同 `vmThreads`    |
+| Pool        | 适用场景                                              | 限制                              |
+| ----------- | ----------------------------------------------------- | --------------------------------- |
+| `forks`     | 默认选择；适合 native addon、`process.chdir()` 等场景 | 大型 DOM 测试套件启动开销较高     |
+| `threads`   | 测试文件多且执行较轻                                  | 不支持部分进程级能力              |
+| `vmThreads` | 大量 jsdom / happy-dom 测试，性能最佳                 | 存在跨 realm 与自定义 loader 限制 |
+| `vmForks`   | 兼顾 VM pool 性能与进程能力                           | 需避免进程级状态残留              |
 
 切换前建议先确认瓶颈确实在 worker 启动或模块加载，setup 中的数据库初始化、网络请求等开销不会因更换 pool 而减少。通过 `pool.type` 启用：
 
@@ -168,7 +164,7 @@ VM pool 不能完全替代 Node.js 原生的 loader：来自其他 realm 的值�
 
 ## 更快的 jsdom / happy-dom 加载 \{#prebundle}
 
-Rstest 0.12 支持[预打包 test environment](/config/test/test-environment#环境预打包)，并将 `testEnvironment.prebundle` 的默认值设为 `'auto'`，内置的 `jsdom` 与 `happy-dom` 环境默认走 prebundle。
+除了通过 VM pool 降低 worker 开销，0.12 还支持通过[预打包 test environment](/config/test/test-environment#环境预打包)减少 jsdom / happy-dom 的重复加载成本，此项优化在 0.12 默认开启。
 
 此前每个 worker 都要通过 Node.js 的模块系统各自加载 jsdom 或 happy-dom，把环境里的所有模块文件逐个解析并执行。开启 prebundle 后，Rstest 先把环境构建成一份 ESM bundle，所有 worker 共用这一份，重复的解析与初始化基本被省掉。100 个文件、1,000 个测试的基准：
 
@@ -177,7 +173,7 @@ Rstest 0.12 支持[预打包 test environment](/config/test/test-environment#环
 | jsdom 30.0.1      |   16.99s | ⚡ 10.57s | **37.8%** |
 | happy-dom 20.11.1 |    6.35s |  ⚡ 2.98s | **53.0%** |
 
-默认 `auto` 时，Rstest 会对 `jsdom` 15–26、29–30 和 `happy-dom` 20 进行预打包。其他版本继续直接加载；prebundle 构建、加载或校验失败时也会回退到直接加载。如果你的环境在打包后行为不一致，可以显式关闭：
+`testEnvironment.prebundle` 默认为 `'auto'`，此时 Rstest 会对 `jsdom` 15–26、29–30 和 `happy-dom` 20 进行预打包。其他版本继续直接加载；prebundle 构建、加载或校验失败时也会回退到直接加载。如果你的环境在打包后行为不一致，可以显式关闭：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -240,6 +236,6 @@ pass {
 
 ## 升级至 Rstest 0.12
 
-把 `@rstest/*` 系列包升级到 0.12 即可。0.12 对 JavaScript API 与部分 reporter 类型做了不兼容变更，主要影响直接使用 `@rstest/core/api` 或编写自定义 reporter 的项目，详见[全新的 JavaScript API](#javascript-api)与 [Rstest instance](/api/javascript-api/instance)。
+把 `@rstest/*` 系列包升级到 0.12 即可。0.12 包含 JavaScript API 与部分 reporter 类型的不兼容变更；如果项目直接使用 `@rstest/core/api` 或自定义 reporter，建议升级前重点检查相关变更，详见[全新的 JavaScript API](#javascript-api)与 [Rstest instance](/api/javascript-api/instance)。
 
 完整变更请参考 [v0.12.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.12.0)。
