@@ -11,7 +11,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@rsbuild/plugin-react": "^2.1.0",
+    "@rsbuild/plugin-react": "catalog:",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",

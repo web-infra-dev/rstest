@@ -70,7 +70,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.2.7",
+    "@rsbuild/core": "catalog:",
     "@types/chai": "^5.2.3",
     "cjs-module-lexer": "^2.2.1"
   },
@@ -80,10 +80,10 @@
     "@clack/prompts": "^1.8.0",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.59.1",
-    "@rsbuild/plugin-less": "^2.0.1",
-    "@rsbuild/plugin-node-polyfill": "^1.4.6",
-    "@rsbuild/plugin-sass": "^2.0.1",
-    "@rslib/core": "~1.0.0",
+    "@rsbuild/plugin-less": "catalog:",
+    "@rsbuild/plugin-node-polyfill": "catalog:",
+    "@rsbuild/plugin-sass": "catalog:",
+    "@rslib/core": "catalog:",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.4.0",
     "@types/babel__code-frame": "^7.27.0",

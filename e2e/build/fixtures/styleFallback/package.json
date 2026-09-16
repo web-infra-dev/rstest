@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@rsbuild/plugin-less": "^2.0.1",
-    "@rsbuild/plugin-sass": "^2.0.1",
+    "@rsbuild/plugin-less": "catalog:",
+    "@rsbuild/plugin-sass": "catalog:",
     "@rstest/core": "workspace:*"
   }
 }

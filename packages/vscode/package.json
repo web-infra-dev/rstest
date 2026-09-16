@@ -269,8 +269,8 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.2.7",
-    "@rslib/core": "~1.0.0",
+    "@rsbuild/core": "catalog:",
+    "@rslib/core": "catalog:",
     "@rstest/core": "workspace:*",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",

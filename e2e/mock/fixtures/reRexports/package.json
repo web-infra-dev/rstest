@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "devDependencies": {
-    "@rsbuild/plugin-react": "^2.1.0",
+    "@rsbuild/plugin-react": "catalog:",
     "@rstest/core": "workspace:*",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^18.3.31",
