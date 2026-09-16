@@ -700,19 +700,19 @@ class VmExternalModules {
 
   private getCommonJsSyntheticModule(
     resolvedId: string,
-    exports: unknown,
+    cjsExports: unknown,
     interopDefault = this.interopDefault,
     namedExports?: readonly string[],
   ): vm.SyntheticModule {
     const exportNames =
       namedExports ??
-      (exports !== null &&
-      (typeof exports === 'object' || typeof exports === 'function')
-        ? Object.getOwnPropertyNames(exports)
+      (cjsExports !== null &&
+      (typeof cjsExports === 'object' || typeof cjsExports === 'function')
+        ? Object.getOwnPropertyNames(cjsExports)
         : []);
     const namespace: Record<string, unknown> =
-      exports !== null &&
-      (typeof exports === 'object' || typeof exports === 'function')
+      cjsExports !== null &&
+      (typeof cjsExports === 'object' || typeof cjsExports === 'function')
         ? Object.defineProperties(
             {},
             Object.fromEntries(
@@ -730,11 +730,11 @@ class VmExternalModules {
                     // SyntheticModule snapshots at evaluation, not on every cached
                     // import. Read getters with the original exports receiver.
                     get() {
-                      if (!Object.hasOwn(exports, name)) {
+                      if (!Object.hasOwn(cjsExports, name)) {
                         return undefined;
                       }
                       try {
-                        return Reflect.get(exports, name);
+                        return Reflect.get(cjsExports, name);
                       } catch {
                         // Node also leaves throwing CJS named getters undefined.
                         return undefined;
@@ -744,15 +744,15 @@ class VmExternalModules {
                 ]),
             ),
           )
-        : { default: exports };
+        : { default: cjsExports };
     if (
-      exports !== null &&
-      (typeof exports === 'object' || typeof exports === 'function')
+      cjsExports !== null &&
+      (typeof cjsExports === 'object' || typeof cjsExports === 'function')
     ) {
       Object.defineProperty(namespace, 'default', {
         configurable: true,
         enumerable: true,
-        value: exports,
+        value: cjsExports,
         writable: true,
       });
     }
@@ -765,7 +765,7 @@ class VmExternalModules {
       defaultExport,
       this.context,
       // Native CJS namespace shape is independent of synchronous VM graph support.
-      supportsCjsModuleExportsMarker ? { value: exports } : undefined,
+      supportsCjsModuleExportsMarker ? { value: cjsExports } : undefined,
     );
   }
 
