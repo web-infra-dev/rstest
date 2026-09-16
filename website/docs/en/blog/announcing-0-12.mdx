@@ -1,5 +1,5 @@
 ---
-description: 'Rstest 0.12 supports E2E testing with @rstest/playwright, officially supports a JavaScript API around createRstest, adds vmThreads and vmForks pools, and supports test environment prebundle.'
+description: 'Rstest 0.12 adds E2E and Module Federation testing support, speeds up large test suites with VM pools and test environment prebundle, and officially introduces a new JavaScript API.'
 date: 2026-09-14 16:00:00
 sidebar: false
 authors:
@@ -42,11 +42,11 @@ The main improvements in 0.12 are:
 
 ## E2E testing support \{#playwright}
 
-Rstest 0.12 provides native E2E testing support through [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright), so unit tests, component tests, and E2E tests can share Rstest's config, commands, and reporters.
+Rstest 0.12 supports E2E testing through [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright), which integrates [Playwright](https://playwright.dev/), so unit tests, component tests, and E2E tests can share one set of Rstest config, commands, and reporters.
 
-With [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright), you can write E2E tests directly in Rstest: open a real page with [Playwright](https://playwright.dev/) and verify the full flow against a local dev server, a preview server, or a deployed URL. See the [Rstest + Playwright example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright) for a complete project.
+You can write E2E tests directly in Rstest: open a real page with Playwright and verify the full flow against a local dev server, a preview server, or a deployed URL. See the [Rstest E2E example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright) for a complete project.
 
-Import `test` and `expect` from `@rstest/playwright` in your test files:
+To start writing E2E tests, import `test` and `expect` from `@rstest/playwright`:
 
 ```ts title="e2e.test.ts"
 import { expect, test } from '@rstest/playwright';
@@ -59,7 +59,7 @@ test('page title', async ({ page }) => {
 });
 ```
 
-Defaults for the built-in fixtures are set in `rstest.config.ts` with `definePlaywrightConfig`. It plugs into Rstest's existing `extends` mechanism and provides E2E-friendly defaults. For example, set a default viewport and record a trace on retries in CI:
+With `definePlaywrightConfig`, you get the same defaults as Playwright and can customize Playwright options as needed. For example, set a default viewport and record a trace on retries in CI:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -84,7 +84,7 @@ An existing Playwright Test project can be migrated with the [migrate-to-rstest]
 
 Rstest 0.12 supports testing [Module Federation](https://module-federation.io/) applications. Test code imports remote modules the same way a consumer application does. Rstest loads the real exposed modules and resolves the shared dependencies, so integration problems between consumer and producer show up in unit tests instead of during integration or after release.
 
-Node, jsdom / happy-dom, and browser mode are all supported, and one test project can cover both server-side and browser consumers. See the [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and the [browser mode example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) for complete projects.
+Node, jsdom / happy-dom, and browser mode are all supported. See the [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and the [browser mode example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) for complete projects.
 
 To add Module Federation testing to a project, use the [@module-federation/rstest](https://github.com/module-federation/core) plugin: register it in the config and declare the remotes and shared dependencies:
 
@@ -116,7 +116,6 @@ import { expect, it } from '@rstest/core';
 
 it('loads a federated remote', async () => {
   const remote = await import('component-app/Button');
-
   expect(remote.default).toBeDefined();
 });
 ```
@@ -129,10 +128,14 @@ For suites with many jsdom / happy-dom test files, the new [vmThreads](/config/t
 
 On a jsdom benchmark project of 2,400 files and 20,000 tests (15 workers, every process starting from an empty cache):
 
+<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+
 | Pool        | Wall time |
 | ----------- | --------: |
 | `forks`     |   315.17s |
 | `vmThreads` | ⚡ 33.22s |
+
+</div>
 
 Rstest now offers four pools. Choose by scenario:
 
@@ -168,12 +171,16 @@ Besides cutting worker costs with VM pools, 0.12 also reduces the repeated loadi
 
 Previously every worker loaded jsdom or happy-dom through Node.js's own module system, resolving and executing every module file in the environment one by one. With prebundle enabled, Rstest first builds the environment into one ESM bundle that all workers share, which removes most of that repeated work. On a benchmark of 100 files and 1,000 tests:
 
+<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+
 | Environment       | Native | Prebundle | Improvement |
 | ----------------- | -----: | --------: | ----------: |
 | jsdom 30.0.1      | 16.99s | ⚡ 10.57s |   **37.8%** |
 | happy-dom 20.11.1 |  6.35s |  ⚡ 2.98s |   **53.0%** |
 
-`testEnvironment.prebundle` defaults to `'auto'`, which applies prebundle to `jsdom` 15–26 and 29–30, and `happy-dom` 20. Other versions keep native loading, and a prebundle that fails to build, load, or validate falls back to the native entry as well. If your environment behaves differently after bundling, turn it off explicitly:
+</div>
+
+Starting from 0.12, `testEnvironment.prebundle` defaults to `'auto'`, and Rstest applies prebundle to `jsdom` 15–26 and 29–30, and `happy-dom` 20. Other versions keep native loading, and a prebundle that fails to build, load, or validate falls back to the native entry as well. If your environment behaves differently after bundling, turn it off explicitly:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -190,7 +197,7 @@ export default defineConfig({
 
 ## A new JavaScript API \{#javascript-api}
 
-Rstest 0.12 provides a new `createRstest()` API, a rewrite of the JavaScript API before 1.0 that makes it easier to integrate Rstest into tools, IDEs, and other Node.js programs. It shares the same core execution capabilities as the `rstest` command, so you can run tests, watch, list tests, and merge blob reports from code.
+Rstest 0.12 provides a new [createRstest](/api/javascript-api/instance#createrstest) API, a rewrite of the JavaScript API before 1.0 that makes it easier to integrate Rstest into tools, IDEs, and other Node.js programs. It shares the same core execution capabilities as the `rstest` command, so you can run tests, watch, list tests, and merge blob reports from code.
 
 Use `createRstest()` to create an instance, then call methods such as [run](/api/javascript-api/instance#rstestrun), [watch](/api/javascript-api/instance#rstestwatch), [listTests](/api/javascript-api/instance#rstestlisttests), and [mergeReports](/api/javascript-api/instance#rstestmergereports) to use the corresponding Rstest features.
 

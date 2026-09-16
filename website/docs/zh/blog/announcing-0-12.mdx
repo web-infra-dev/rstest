@@ -1,5 +1,5 @@
 ---
-description: 'Rstest 0.12 通过 @rstest/playwright 支持 E2E 测试，围绕 createRstest 正式支持了 JavaScript API，新增 vmThreads 与 vmForks pool，并支持预打包 test environment。'
+description: 'Rstest 0.12 新增 E2E 与 Module Federation 测试支持，通过 VM pool 和 test environment prebundle 提升大型测试套件性能，并正式推出新的 JavaScript API。'
 date: 2026-09-14 16:00:00
 sidebar: false
 authors:
@@ -42,11 +42,11 @@ Rstest 0.12 新增 E2E 与 Module Federation 测试支持，通过 VM pool 和 t
 
 ## 支持 E2E 测试 \{#playwright}
 
-Rstest 0.12 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 原生支持 E2E 测试，使单元测试、组件测试与 E2E 测试可以共用 Rstest 的配置、命令和 reporter。
+Rstest 0.12 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 集成 [Playwright](https://playwright.dev/) 支持 E2E 测试，使单元测试、组件测试与 E2E 测试可以共用一份 Rstest 的配置、命令和 reporter。
 
-通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright)，你可以直接在 Rstest 里写 E2E 测试：用 [Playwright](https://playwright.dev/) 打开真实页面，验证本地 dev server、preview server 或线上 URL 的完整流程。完整项目可以参考 [Rstest + Playwright 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright)。
+你可以直接在 Rstest 里写 E2E 测试：用 Playwright 打开真实页面，验证本地 dev server、preview server 或线上 URL 的完整流程。完整项目可以参考 [Rstest E2E 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright)。
 
-测试文件从 `@rstest/playwright` 导入 `test` 与 `expect` 即可：
+要开始编写 E2E 测试，从 `@rstest/playwright` 导入 `test` 与 `expect` 即可：
 
 ```ts title="e2e.test.ts"
 import { expect, test } from '@rstest/playwright';
@@ -59,7 +59,7 @@ test('page title', async ({ page }) => {
 });
 ```
 
-内置 fixture 的默认值用 `definePlaywrightConfig` 在 `rstest.config.ts` 里设置。它通过 Rstest 已有的 `extends` 机制接入，并提供适合 E2E 的默认配置。例如，可以设置默认 viewport，并在 CI 重试时记录 trace：
+通过 `definePlaywrightConfig`，可以复用与 Playwright 一致的默认配置，同时按需自定义 Playwright 相关选项。例如，可以设置默认 viewport，并在 CI 重试时记录 trace：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -84,7 +84,7 @@ export default defineConfig({
 
 Rstest 0.12 支持测试 [Module Federation](https://module-federation.io/) 应用。测试代码可以像消费者应用一样直接导入远程模块，Rstest 会真正加载生产者暴露的模块并解析共享依赖，消费者与生产者之间的集成问题在单元测试阶段就能发现，不必等到联调或上线。
 
-Node、jsdom / happy-dom 与 browser mode 等环境均支持，同一个测试项目可以同时覆盖服务端与浏览器端的消费者。完整项目可以参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)与 [browser mode 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。
+Node、jsdom / happy-dom 与 browser mode 等环境均支持，完整项目可以参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)与 [browser mode 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。
 
 要在项目中接入 Module Federation 测试，使用 [@module-federation/rstest](https://github.com/module-federation/core) 插件，在配置中注册并声明远程模块与共享依赖即可：
 
@@ -116,7 +116,6 @@ import { expect, it } from '@rstest/core';
 
 it('loads a federated remote', async () => {
   const remote = await import('component-app/Button');
-
   expect(remote.default).toBeDefined();
 });
 ```
@@ -129,10 +128,14 @@ it('loads a federated remote', async () => {
 
 在一个 2,400 个文件、20,000 个测试的 jsdom benchmark 项目中（15 个 worker，每个进程从空 cache 启动）：
 
+<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+
 | Pool        |    总耗时 |
 | ----------- | --------: |
 | `forks`     |   315.17s |
 | `vmThreads` | ⚡ 33.22s |
+
+</div>
 
 Rstest 目前提供四种 pool，可根据测试场景选择：
 
@@ -168,12 +171,16 @@ VM pool 不能完全替代 Node.js 原生的 loader：来自其他 realm 的值�
 
 此前每个 worker 都要通过 Node.js 的模块系统各自加载 jsdom 或 happy-dom，把环境里的所有模块文件逐个解析并执行。开启 prebundle 后，Rstest 先把环境构建成一份 ESM bundle，所有 worker 共用这一份，重复的解析与初始化基本被省掉。100 个文件、1,000 个测试的基准：
 
+<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+
 | Environment       | 直接加载 | Prebundle |      提升 |
 | ----------------- | -------: | --------: | --------: |
 | jsdom 30.0.1      |   16.99s | ⚡ 10.57s | **37.8%** |
 | happy-dom 20.11.1 |    6.35s |  ⚡ 2.98s | **53.0%** |
 
-`testEnvironment.prebundle` 默认为 `'auto'`，此时 Rstest 会对 `jsdom` 15–26、29–30 和 `happy-dom` 20 进行预打包。其他版本继续直接加载；prebundle 构建、加载或校验失败时也会回退到直接加载。如果你的环境在打包后行为不一致，可以显式关闭：
+</div>
+
+从 0.12 版本开始，`testEnvironment.prebundle` 默认为 `'auto'`，Rstest 会对 `jsdom` 15–26、29–30 和 `happy-dom` 20 进行预打包。其他版本继续直接加载；prebundle 构建、加载或校验失败时也会回退到直接加载。如果你的环境在打包后行为不一致，可以显式关闭：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -190,7 +197,7 @@ export default defineConfig({
 
 ## 全新的 JavaScript API \{#javascript-api}
 
-Rstest 0.12 提供了全新的 `createRstest()` API，这是 1.0 之前对 JavaScript API 进行的一次重写，方便将 Rstest 集成到工具、IDE 或其他 Node.js 程序中。它与 `rstest` 命令共用同一套核心执行能力，可以通过代码运行、watch、列举测试和合并 blob report。
+Rstest 0.12 提供了全新的 [createRstest](/api/javascript-api/instance#createrstest) API，这是 1.0 之前对 JavaScript API 进行的一次重写，方便将 Rstest 集成到工具、IDE 或其他 Node.js 程序中。它与 `rstest` 命令共用同一套核心执行能力，可以通过代码运行、watch、列举测试和合并 blob report。
 
 你可以使用 `createRstest()` 创建一个实例，并使用实例的 [run](/api/javascript-api/instance#rstestrun)、[watch](/api/javascript-api/instance#rstestwatch)、[listTests](/api/javascript-api/instance#rstestlisttests) 与 [mergeReports](/api/javascript-api/instance#rstestmergereports) 等方法调用 Rstest 的具体功能。
 
