@@ -354,6 +354,18 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
+  e2e/mock/fixtures/manualMockWorkspacePackage/consumer:
+    dependencies:
+      '@rstest/test-mock-manual-mock-workspace-package-styles-lib':
+        specifier: workspace:*
+        version: link:../styles-lib
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../../packages/core
+
+  e2e/mock/fixtures/manualMockWorkspacePackage/styles-lib: {}
+
   e2e/mock/fixtures/reRexports:
     devDependencies:
       '@rsbuild/plugin-react':
