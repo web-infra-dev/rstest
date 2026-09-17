@@ -10,8 +10,8 @@
     "test:watch": "rstest --watch"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.2.7",
-    "@rsbuild/plugin-svelte": "^2.0.1",
+    "@rsbuild/core": "catalog:",
+    "@rsbuild/plugin-svelte": "catalog:",
     "@rstest/adapter-rsbuild": "workspace:*",
     "@rstest/core": "workspace:*",
     "happy-dom": "^20.14.5",

@@ -4,6 +4,54 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@rsbuild/core':
+      specifier: ~2.2.7
+      version: 2.2.7
+    '@rsbuild/plugin-babel':
+      specifier: ^2.1.0
+      version: 2.1.0
+    '@rsbuild/plugin-less':
+      specifier: ^2.0.1
+      version: 2.0.1
+    '@rsbuild/plugin-node-polyfill':
+      specifier: ^1.4.6
+      version: 1.4.6
+    '@rsbuild/plugin-react':
+      specifier: ^2.1.0
+      version: 2.1.0
+    '@rsbuild/plugin-sass':
+      specifier: ^2.0.1
+      version: 2.0.1
+    '@rsbuild/plugin-svelte':
+      specifier: ^2.0.1
+      version: 2.0.1
+    '@rsbuild/plugin-svgr':
+      specifier: ^2.0.5
+      version: 2.0.5
+    '@rsbuild/plugin-vue':
+      specifier: ^2.0.1
+      version: 2.0.1
+    '@rsbuild/plugin-vue-jsx':
+      specifier: ^2.0.1
+      version: 2.0.1
+    '@rslib/core':
+      specifier: ~1.0.1
+      version: 1.0.1
+    '@rspack/cli':
+      specifier: ~2.2.5
+      version: 2.2.5
+    '@rspack/core':
+      specifier: ~2.2.5
+      version: 2.2.5
+    '@rspack/dev-server':
+      specifier: ~2.2.1
+      version: 2.2.1
+    '@rspack/plugin-react-refresh':
+      specifier: ~2.0.2
+      version: 2.0.2
+
 packageExtensionsChecksum: sha256-/oXUNlAVRCvDfhpsbH+E7MlrA1cfGnTrmqgmHjY2sMM=
 
 patchedDependencies:
@@ -92,13 +140,13 @@ importers:
         specifier: 2.9.0
         version: 2.9.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rstest/core@packages+core)(typescript@6.0.3)
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/browser':
         specifier: workspace:*
@@ -194,10 +242,10 @@ importers:
   e2e/adapter-rspack/fixtures:
     devDependencies:
       '@rspack/cli':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.1(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
       '@rstest/adapter-rspack':
         specifier: workspace:*
@@ -228,10 +276,10 @@ importers:
   e2e/build/fixtures/styleFallback:
     devDependencies:
       '@rsbuild/plugin-less':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rsbuild/plugin-sass':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))
       '@rstest/core':
         specifier: workspace:*
@@ -255,10 +303,10 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@testing-library/dom':
         specifier: ^10.4.1
@@ -369,7 +417,7 @@ importers:
   e2e/mock/fixtures/reRexports:
     devDependencies:
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/core':
         specifier: workspace:*
@@ -413,7 +461,7 @@ importers:
   e2e/playwright/fixtures:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rstest/core':
         specifier: workspace:*
@@ -444,10 +492,10 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@testing-library/dom':
         specifier: ^10.4.1
@@ -478,10 +526,10 @@ importers:
         version: 3.5.42(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-vue':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@vue/compiler-sfc@3.5.42)(vue@3.5.42(typescript@6.0.3))
       '@rstest/core':
         specifier: workspace:*
@@ -531,7 +579,7 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@types/react':
         specifier: ^19.3.0
@@ -577,16 +625,16 @@ importers:
         version: 3.5.42(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-babel':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(supports-color@8.1.1)
       '@rsbuild/plugin-vue':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@vue/compiler-sfc@3.5.42)(vue@3.5.42(typescript@6.0.3))
       '@rsbuild/plugin-vue-jsx':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@babel/core@7.29.7(supports-color@8.1.1))(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(supports-color@8.1.1)
       '@rstest/browser':
         specifier: workspace:*
@@ -620,7 +668,7 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/browser':
         specifier: workspace:*
@@ -662,10 +710,10 @@ importers:
         specifier: 2.9.0
         version: 2.9.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rstest/core@packages+core)(typescript@6.0.3)
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/core':
         specifier: workspace:*
@@ -693,10 +741,10 @@ importers:
         specifier: 2.9.0
         version: 2.9.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rstest/core@packages+core)(typescript@6.0.3)
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/browser':
         specifier: workspace:*
@@ -729,7 +777,7 @@ importers:
         specifier: 2.9.0
         version: 2.9.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(typescript@6.0.3)
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       serve:
         specifier: 14.2.6
@@ -753,7 +801,7 @@ importers:
   examples/playwright:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rstest/core':
         specifier: workspace:*
@@ -778,10 +826,10 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/core':
         specifier: workspace:*
@@ -818,10 +866,10 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
@@ -861,16 +909,16 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rspack/cli':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.1(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
       '@rspack/dev-server':
-        specifier: ~2.2.1
+        specifier: 'catalog:'
         version: 2.2.1(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rspack/plugin-react-refresh':
-        specifier: ~2.0.2
+        specifier: 'catalog:'
         version: 2.0.2(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(react-refresh@0.19.0)
       '@rstest/adapter-rspack':
         specifier: workspace:*
@@ -913,13 +961,13 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rspack/cli':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.1(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
       '@rspack/dev-server':
-        specifier: ~2.2.1
+        specifier: 'catalog:'
         version: 2.2.1(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rstest/adapter-rspack':
         specifier: workspace:*
@@ -949,10 +997,10 @@ importers:
   examples/svelte-rsbuild:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-svelte':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@babel/core@7.29.7(supports-color@8.1.1))(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(less@4.6.7)(postcss@8.5.19)(sass@1.100.0)(svelte@5.57.0)(typescript@6.0.3)
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
@@ -977,16 +1025,16 @@ importers:
         version: 3.5.42(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-babel':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(supports-color@8.1.1)
       '@rsbuild/plugin-vue':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@vue/compiler-sfc@3.5.42)(vue@3.5.42(typescript@6.0.3))
       '@rsbuild/plugin-vue-jsx':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@babel/core@7.29.7(supports-color@8.1.1))(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(supports-color@8.1.1)
       '@rstest/core':
         specifier: workspace:*
@@ -1010,10 +1058,10 @@ importers:
   packages/adapter-rsbuild:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1025,7 +1073,7 @@ importers:
   packages/adapter-rslib:
     devDependencies:
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1043,13 +1091,13 @@ importers:
   packages/adapter-rspack:
     devDependencies:
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rspack/cli':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.1(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.2.5
+        specifier: 'catalog:'
         version: 2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
       '@rstest/core':
         specifier: workspace:*
@@ -1080,7 +1128,7 @@ importers:
         version: 8.21.3
     devDependencies:
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/browser-ui':
         specifier: workspace:*
@@ -1116,7 +1164,7 @@ importers:
   packages/browser-react:
     devDependencies:
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1159,13 +1207,13 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
-        specifier: ^2.1.0
+        specifier: 'catalog:'
         version: 2.1.0(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rsbuild/plugin-svgr':
-        specifier: ^2.0.5
+        specifier: 'catalog:'
         version: 2.0.5(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))(supports-color@8.1.1)(typescript@6.0.3)
       '@tailwindcss/postcss':
         specifier: ^4.3.3
@@ -1186,7 +1234,7 @@ importers:
   packages/core:
     dependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@types/chai':
         specifier: ^5.2.3
@@ -1211,16 +1259,16 @@ importers:
         specifier: ^7.59.1
         version: 7.59.1(@types/node@22.18.6)
       '@rsbuild/plugin-less':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.5(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
       '@rsbuild/plugin-node-polyfill':
-        specifier: ^1.4.6
+        specifier: 'catalog:'
         version: 1.4.6(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))
       '@rsbuild/plugin-sass':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/tsconfig':
         specifier: workspace:*
@@ -1352,10 +1400,10 @@ importers:
         version: 0.0.33
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1407,10 +1455,10 @@ importers:
         version: 0.10.1
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1440,7 +1488,7 @@ importers:
   packages/playwright:
     devDependencies:
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1458,10 +1506,10 @@ importers:
   packages/vscode:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.2.7
+        specifier: 'catalog:'
         version: 2.2.7(@module-federation/runtime-tools@2.9.0)
       '@rslib/core':
-        specifier: ~1.0.1
+        specifier: 'catalog:'
         version: 1.0.1(@microsoft/api-extractor@7.59.1(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.0)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
@@ -1547,7 +1595,7 @@ importers:
         specifier: ^2.6.2
         version: 2.6.2
       '@rsbuild/plugin-sass':
-        specifier: ^2.0.1
+        specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.2.7(@module-federation/runtime-tools@2.9.0))
       '@rspress/core':
         specifier: 2.0.21

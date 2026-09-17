@@ -14,9 +14,9 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@rspack/cli": "~2.2.5",
-    "@rspack/core": "~2.2.5",
-    "@rspack/dev-server": "~2.2.1",
+    "@rspack/cli": "catalog:",
+    "@rspack/core": "catalog:",
+    "@rspack/dev-server": "catalog:",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
