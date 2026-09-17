@@ -1,0 +1,141 @@
+---
+description: Load and test real Module Federation remotes with Rstest in Node, JSDOM, and Browser Mode.
+---
+
+# Module Federation
+
+[Module Federation](https://module-federation.io/) lets separately built applications expose and consume modules at runtime. Test the federation boundary with Rstest when you need confidence that a host can load a real remote, resolve its shared dependencies, and execute the exposed module correctly.
+
+[@module-federation/rstest](https://github.com/module-federation/core) configures Module Federation for the Rstest build. It supports Node and JSDOM test environments as well as Browser Mode.
+
+## Install
+
+Add `@module-federation/rstest` to an existing Rstest project.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @module-federation/rstest -D" />
+
+The plugin configures the test host that consumes federated modules. Build the remote with its own Module Federation build plugin, for example [Rslib's `mf` format](https://rslib.rs/guide/advanced/module-federation).
+
+## Basic usage
+
+Register the `federation` plugin with the same remote name that application code imports. The simplest setup consumes a Node-targeted remote built to a local CommonJS entry, so no server is involved:
+
+```ts title="rstest.config.ts"
+import path from 'node:path';
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [
+    federation({
+      name: 'host',
+      remoteType: 'commonjs',
+      remotes: {
+        remote: `commonjs ${path.resolve(__dirname, '../remote/dist/mf/remoteEntry.cjs')}`,
+      },
+    }),
+  ],
+});
+```
+
+Then import an exposed module through its federated specifier, just as application code does. Loading it with a dynamic `import()` lets the remote container initialize first:
+
+```ts title="tests/federated-modules.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('calls the federated formatPrice module', async () => {
+  const { default: formatPrice } = await import('remote/formatPrice');
+
+  expect(formatPrice(1250)).toBe('$12.50');
+});
+```
+
+This exercises remote loading and the Module Federation runtime instead of replacing the federation boundary with a mock. For type checking, declare the federated specifiers in a `remotes.d.ts` file:
+
+```ts title="remotes.d.ts"
+declare module 'remote/formatPrice' {
+  const formatPrice: (cents: number, currency?: string) => string;
+  export default formatPrice;
+}
+```
+
+## Configure remotes
+
+The `federation()` plugin accepts the same options as the Module Federation build plugin: `remotes`, `shared`, `remoteType`, and so on. Two points matter for tests:
+
+- **Remote entry target.** Node and JSDOM tests run in Rstest's Node-based runner, so point them at a Node-targeted remote entry such as `remoteEntry.cjs`. Browser Mode consumes the browser build's `remoteEntry.js`.
+- **HTTP remotes.** A remote served over HTTP uses a URL such as `remote@http://localhost:3001/remoteEntry.cjs` with `remoteType: 'script'`. Start the server before tests run; see [Serve remotes with `globalSetup`](#serve-remotes-with-globalsetup).
+
+### The plugin and the `federation` option
+
+The [`federation`](/config/test/federation) config option is only a runtime compatibility switch inside Rstest. It installs the shims that let a federation runtime load chunks inside Rstest's Node worker, and it configures nothing about Module Federation itself: no remotes, no exposes, no shared modules.
+
+The `federation()` plugin does the actual configuration and, for Node-based test environments, turns that switch on for you. You do not need to set `federation: true` again when using the plugin in Node or JSDOM tests. Browser Mode is different; see [Browser mode](#browser-mode).
+
+## Serve remotes with `globalSetup`
+
+A remote served over HTTP must be reachable before test workers import the host application. Use [`globalSetup`](/config/test/global-setup) to start the server once and stop it in `teardown`, instead of starting it from every test file:
+
+```ts title="global-setup.ts"
+import { createServer, type Server } from 'node:http';
+
+let server: Server;
+
+export async function setup() {
+  server = createServer(/* serve the remote's build output */);
+  await new Promise<void>((resolve) => server.listen(3001, resolve));
+}
+
+export async function teardown() {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}
+```
+
+```ts title="rstest.config.ts"
+export default defineConfig({
+  globalSetup: './global-setup.ts',
+  // ...
+});
+```
+
+## Browser mode
+
+Set up [Browser Mode](/guide/browser-testing/getting-started) when the remote must run in a real browser, then keep the same `federation` plugin in that project's Rstest configuration. The plugin detects `browser.enabled` from the resolved configuration and uses the web federation runtime instead of Node-specific defaults. Point the remote at the browser build's `remoteEntry.js`:
+
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  federation: true,
+  globalSetup: './global-setup.ts',
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+  plugins: [
+    pluginReact(),
+    federation({
+      name: 'host',
+      remoteType: 'script',
+      remotes: { remote: 'remote@http://localhost:3001/mf/remoteEntry.js' },
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    }),
+  ],
+});
+```
+
+In Browser Mode the plugin does not turn on the `federation` option for you. However, `globalSetup` files always run in a Node process, and their build output carries the same federation runtime, which throws on load without the switch, so the remote server never starts. Set `federation: true` yourself whenever a Browser Mode project uses `globalSetup`.
+
+## Further reading
+
+- [`federation`](/config/test/federation) reference for the standalone config option, CLI flag, and Rstest runtime behavior.
+- [Official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration, plugin options, and producer builds.
+- [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node): a local CommonJS remote built with Rslib and tested without an HTTP server.
+- [Browser example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser): a federated React component served over HTTP and tested in Chromium.

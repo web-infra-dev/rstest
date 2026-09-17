@@ -16,7 +16,7 @@
   },
   {
     "text": "Integrations",
-    "link": "/integration/module-federation",
+    "link": "/integration/rslint",
     "activeMatch": "/integration/",
     "position": "right"
   },

@@ -3,7 +3,6 @@
     "type": "section-header",
     "label": "集成"
   },
-  "module-federation",
   "rslint",
   {
     "type": "custom-link",
