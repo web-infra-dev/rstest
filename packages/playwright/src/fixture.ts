@@ -889,6 +889,7 @@ const playwrightFixtures = {
     let activeArtifacts: TraceArtifacts | undefined;
     let traceStarted = false;
     let cleanupPromise: Promise<void> | undefined;
+    let finishCleanupPromise: Promise<void> | undefined;
     let finalized = false;
     let traceReported = false;
     let releaseBrowser: ReturnType<typeof retainBrowser> | undefined;
@@ -912,46 +913,52 @@ const playwrightFixtures = {
       finalized = true;
     };
 
-    const finishContextCleanup = async (scheduleBrowserCleanup: boolean) => {
-      try {
-        if (stagedTraceDir && stagedTracePath) {
-          try {
-            if (task.result?.status === 'fail' && artifacts) {
-              activeArtifacts = await reserveTraceArtifacts(artifacts);
-              try {
-                await copyFile(stagedTracePath, activeArtifacts.tracePath);
-              } catch (error) {
-                await rm(activeArtifacts.dir, {
-                  recursive: true,
-                  force: true,
-                });
-                activeArtifacts = undefined;
-                throw error;
-              }
-            }
-          } finally {
-            await rm(stagedTraceDir, { recursive: true, force: true });
-            stagedTraceDir = undefined;
-            stagedTracePath = undefined;
-          }
-        }
-
-        await finalizeTrace();
-      } finally {
-        await releaseBrowser?.(scheduleBrowserCleanup);
+    const finishContextCleanup = (scheduleBrowserCleanup: boolean) => {
+      if (finishCleanupPromise) {
+        return finishCleanupPromise;
       }
+
+      finishCleanupPromise = (async () => {
+        try {
+          if (stagedTraceDir && stagedTracePath) {
+            try {
+              if (task.result?.status === 'fail' && artifacts) {
+                activeArtifacts = await reserveTraceArtifacts(artifacts);
+                try {
+                  await copyFile(stagedTracePath, activeArtifacts.tracePath);
+                } catch (error) {
+                  await rm(activeArtifacts.dir, {
+                    recursive: true,
+                    force: true,
+                  });
+                  activeArtifacts = undefined;
+                  throw error;
+                }
+              }
+            } finally {
+              await rm(stagedTraceDir, { recursive: true, force: true });
+              stagedTraceDir = undefined;
+              stagedTracePath = undefined;
+            }
+          }
+
+          await finalizeTrace();
+        } finally {
+          await releaseBrowser?.(scheduleBrowserCleanup);
+        }
+      })();
+
+      return finishCleanupPromise;
     };
 
     const cleanupContext = () => {
       if (cleanupPromise) {
-        // A second invocation only happens when the first cleanup rejected
-        // (e.g. context.close threw during onTestFinished) and the runner
-        // subsequently marked the test failed, then fired onTestFailed.
-        // Finalize with the updated status so staged traces are promoted
-        // and the retained browser is released.
-        return cleanupPromise.catch(() =>
-          finishContextCleanup(task.result?.status !== 'fail'),
-        );
+        return cleanupPromise.catch(async (error) => {
+          if (task.result?.status === 'fail' && !finalized) {
+            await finishContextCleanup(false);
+          }
+          throw error;
+        });
       }
 
       cleanupPromise = (async () => {
