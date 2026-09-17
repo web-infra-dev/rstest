@@ -918,7 +918,7 @@ const playwrightFixtures = {
         return finishCleanupPromise;
       }
 
-      finishCleanupPromise = (async () => {
+      const cleanup = (async () => {
         try {
           if (stagedTraceDir && stagedTracePath) {
             try {
@@ -948,7 +948,14 @@ const playwrightFixtures = {
         }
       })();
 
-      return finishCleanupPromise;
+      finishCleanupPromise = cleanup;
+      void cleanup.catch(() => {
+        if (finishCleanupPromise === cleanup) {
+          finishCleanupPromise = undefined;
+        }
+      });
+
+      return cleanup;
     };
 
     const cleanupContext = () => {
