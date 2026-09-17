@@ -4,7 +4,6 @@
     "label": "Integrations"
   },
   "module-federation",
-  "playwright",
   "rslint",
   {
     "type": "custom-link",

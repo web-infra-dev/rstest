@@ -57,4 +57,4 @@ export default defineConfig({
 
 在 Browser Mode 的并发测试中，使用测试作用域内的 `expect` fixture，才能按该测试的剩余时间计算。文件级共享 `expect` 和 `describe.concurrent` 中的 hook 使用配置的轮询超时。详见[浏览器断言超时](/api/runtime-api/browser-mode/assertion)。
 
-使用 [`definePlaywrightConfig`](/integration/playwright#e2e-defaults) 时，helper 将 `expect.poll.timeout` 的默认值设为 `5000ms`。显式的 `expect.poll.timeout` 会同时覆盖轮询和 Playwright Locator/Page 断言的超时。不使用 helper 时，Node Mode 默认使用 `1000ms`。
+使用 [`definePlaywrightConfig`](/guide/basic/e2e-testing#e2e-defaults) 时，helper 将 `expect.poll.timeout` 的默认值设为 `5000ms`。显式的 `expect.poll.timeout` 会同时覆盖轮询和 Playwright Locator/Page 断言的超时。不使用 helper 时，Node Mode 默认使用 `1000ms`。

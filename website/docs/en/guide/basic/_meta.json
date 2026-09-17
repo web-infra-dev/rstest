@@ -5,6 +5,7 @@
   "test-filter",
   "mock",
   "snapshot",
+  "e2e-testing",
   "projects",
   "reporters",
   "vscode-extension",

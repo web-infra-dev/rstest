@@ -57,4 +57,4 @@ An explicit per-call timeout takes precedence over this configuration. For `expe
 
 In Browser Mode concurrent tests, use the test-scoped `expect` fixture to account for that test's remaining time. Shared file-level `expect` and hooks in `describe.concurrent` use the configured polling timeout instead. See [Browser Mode assertion timeouts](/api/runtime-api/browser-mode/assertion).
 
-When using [`definePlaywrightConfig`](/integration/playwright#e2e-defaults), the helper defaults `expect.poll.timeout` to `5000ms`. An explicit `expect.poll.timeout` overrides that value for both polling and Playwright locator/page assertions. Without the helper, Node Mode defaults to `1000ms`.
+When using [`definePlaywrightConfig`](/guide/basic/e2e-testing#e2e-defaults), the helper defaults `expect.poll.timeout` to `5000ms`. An explicit `expect.poll.timeout` overrides that value for both polling and Playwright locator/page assertions. Without the helper, Node Mode defaults to `1000ms`.

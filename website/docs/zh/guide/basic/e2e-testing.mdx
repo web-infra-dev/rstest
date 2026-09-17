@@ -1,71 +1,29 @@
 ---
-description: 本指南介绍如何使用 @rstest/playwright，在运行于 Node.js worker 的 Rstest 测试中驱动 Playwright。
+description: 本 E2E 测试指南介绍如何使用 @rstest/playwright，在运行于 Node.js worker 的 Rstest 测试中测试完整页面和应用。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
-# Playwright
+# E2E 测试
 
 <ApiMeta addedVersion="0.11.1" />
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 为运行在 Node.js worker 中的 Rstest 测试提供 [Playwright](https://playwright.dev/) fixtures 和 Playwright 风格的断言。它适合对一个完整页面或应用做 E2E 测试，例如本地 dev server、preview server 或线上 URL。测试代码运行在 Node.js 中，并通过 Playwright 控制页面。
+E2E 测试（端到端测试）从用户的角度验证一个完整的页面或应用：打开页面、点击、输入，然后检查页面上真实呈现的结果。Rstest 通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 集成 [Playwright](https://playwright.dev/) fixtures 和 Playwright 风格的断言。
 
-## 与原生 Playwright 的区别
-
-`@rstest/playwright` 和原生 Playwright 主要区别在 runner 和配置方式：
-
-| 项目     | `@rstest/playwright`                            | 原生 Playwright                               |
-| -------- | ----------------------------------------------- | --------------------------------------------- |
-| Runner   | Rstest runner                                   | Playwright Test runner                        |
-| 配置方式 | `rstest.config.ts` 和 `playwright` fixture 覆盖 | `playwright.config.ts`                        |
-| 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
-
-如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
-
-## 与 Rstest browser mode 的区别
-
-两者的主要区别是适用场景：Rstest browser mode 会对测试模块进行 web 打包，并在浏览器运行时中执行测试代码；`@rstest/playwright` 会控制一个由应用或服务端准备好的页面。
-
-| 场景                                              | 推荐方案                                                           |
-| ------------------------------------------------- | ------------------------------------------------------------------ |
-| 测试组件，并使用 Rstest 的 web 打包和浏览器运行时 | [Rstest browser mode](/guide/browser-testing) 和 `@rstest/browser` |
-| 通过 `page.goto()` 测试完整页面或应用             | `@rstest/playwright`                                               |
-| 驱动已有 dev server、preview server 或线上 URL    | `@rstest/playwright`                                               |
-| 需要浏览器内组件测试能力                          | [Rstest browser mode](/guide/browser-testing)                      |
-
-由于 `@rstest/playwright` 控制的是外部页面，而不是 Rstest browser mode 的 runner iframe，因此它不走 Browser UI 的预览 iframe。需要本地可视化调试时，可以使用 `PWDEBUG=1` 开启 headed 模式。
-
-## 迁移到 @rstest/playwright
-
-如果要将现有的 Playwright Test 项目迁移到 `@rstest/playwright`，可以让支持 Skills 的 Coding Agent 使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 辅助完成迁移。Agent Skills 是可以安装到 Coding Agent 中的领域知识包，能够帮助 Agent 针对特定场景提供更准确的建议或执行操作。[skills](https://www.npmjs.com/package/skills) 包用于将这些 skill 安装到 Coding Agent 中。`migrate-to-rstest` skill 包含针对 Playwright 配置、fixtures 和行为一致性的迁移指南。
-
-先安装该 skill：
-
-<PackageManagerTabs
-  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
-  dlx
-/>
-
-然后复制下面的 prompt 并发送给你的 Coding Agent：
-
-<Prompt
-  title="将 Playwright 迁移到 @rstest/playwright"
-  description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
-/>
+测试代码运行在 Node.js worker 中，由 Playwright 驱动真实浏览器访问本地 dev server、preview server 或线上 URL，并和项目里的其他 Rstest 测试共用同一套 runner、配置和报告。如果要测的是单个组件而不是整个应用，请看 [浏览器模式](/guide/browser-testing)。
 
 ## 安装
 
 安装两个包：
 
 - [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) 提供 Rstest fixtures 和断言。
-- [playwright](https://www.npmjs.com/package/playwright) 提供 browser automation runtime。
+- [playwright](https://www.npmjs.com/package/playwright) 提供浏览器自动化运行时。
 
 <PackageManagerTabs command="add @rstest/playwright playwright -D" />
 
-安装 Playwright 使用的 Chromium browser binary：
+安装 Playwright 使用的 Chromium 浏览器：
 
 ```bash
 pnpm exec playwright install chromium
@@ -86,7 +44,7 @@ test('page title', async ({ page }) => {
 });
 ```
 
-也可以从 `@rstest/playwright` 直接导入常规 lifecycle helpers：
+也可以从 `@rstest/playwright` 直接导入 `describe`、`beforeEach` 等生命周期方法：
 
 ```ts
 import { beforeEach, describe, test } from '@rstest/playwright';
@@ -102,7 +60,7 @@ describe('checkout', () => {
 });
 ```
 
-如果测试模块在 Node 侧没有需要隔离的副作用，可以在 `rstest.config.ts` 中设置 `isolate: false`，从而在不同测试文件间复用 worker module cache，减少重复启动 Playwright 的开销：
+如果测试模块在 Node 侧没有需要隔离的副作用，可以在 `rstest.config.ts` 中设置 `isolate: false`，从而在不同测试文件间复用 worker 的模块缓存，减少重复启动 Playwright 的开销：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -132,7 +90,7 @@ export default defineConfig({
 });
 ```
 
-`definePlaywrightConfig` 会为当前 project 配置默认的 `playwright` fixture。如果使用多 project 配置，请将它添加到每个使用 `@rstest/playwright` 的 Node.js project 的 `extends` 中。配置值必须支持 JSON 序列化，不支持 `launchOptions.logger` 等函数、class instance、client certificate 中直接传入的 `Buffer`，以及依赖当前测试或 retry context 的值。此类配置请改用 `certPath`/`keyPath`/`pfxPath` 或 `test.extend`。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
+`definePlaywrightConfig` 会为当前 project 配置默认的 `playwright` fixture。如果使用多 project 配置，请将它添加到每个使用 `@rstest/playwright` 的 Node.js project 的 `extends` 中。配置值必须支持 JSON 序列化，不支持 `launchOptions.logger` 等函数、类实例、客户端证书中直接传入的 `Buffer`，以及依赖当前测试或重试上下文的值。此类配置请改用 `certPath`/`keyPath`/`pfxPath` 或 `test.extend`。如果多个测试文件需要使用另一组选项，可以在共享模块中通过 `test.extend` 覆盖 fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
 
 ```ts title="tests/e2e.ts"
 import { expect, test as base } from '@rstest/playwright';
@@ -255,9 +213,9 @@ describe('dashboard', () => {
 });
 ```
 
-Hook 的作用域是所在的 `describe` block，而不是某个 extended test 对象。因此，该 block 内的每个测试都必须提供 hook 请求的 fixture；否则，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture。`afterEach` 和 `beforeEach` 返回的 cleanup 函数同样支持这一行为。在一次 test attempt 内，hooks 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
+Hook 的作用域是所在的 `describe` 块，而不是某个扩展后的 test 对象。因此，该块内的每个测试都必须提供 hook 请求的 fixture；否则，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture。`afterEach` 和 `beforeEach` 返回的清理函数同样支持这一行为。在一次测试执行内，hook 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
 
-请在 hook 参数中通过直接对象解构声明 fixture 依赖。在 hook 函数体内解构 named context 不会请求 fixture。使用 fixture 的 callback 不支持 rest property 和默认值。
+请在 hook 参数中通过直接对象解构声明 fixture 依赖。在 hook 函数体内再解构 context 对象不会请求 fixture。使用 fixture 的回调不支持剩余属性（rest property）和默认值。
 
 ### 在 `test.for` 中使用 fixture
 
@@ -317,7 +275,7 @@ test('multiple pages', async ({ context }) => {
 
 ### `request`
 
-当你只需要 Playwright 的 API client，而不需要启动 browser 时，可以使用 `request`：
+当你只需要 Playwright 的 API 客户端，而不需要启动浏览器时，可以使用 `request`：
 
 ```ts
 import { expect, test } from '@rstest/playwright';
@@ -399,7 +357,7 @@ export default defineConfig({
 });
 ```
 
-matcher 的 `{ timeout }` 优先于 `expect.poll.timeout`，`.not` 和 `expect.soft` 也遵循这一规则。helper 将 `expect.poll.timeout` 的默认值设为 `5000ms`；未使用 helper 且未显式配置时，Node Mode 默认使用 `1000ms`。即使不使用 helper，显式配置也能生效；组合多个 helper 时，也不再有另一套断言超时需要合并。
+matcher 的 `{ timeout }` 优先于 `expect.poll.timeout`，`.not` 和 `expect.soft` 也遵循这一规则。helper 将 `expect.poll.timeout` 的默认值设为 `5000ms`；未使用 helper 且未显式配置时，Node 模式默认使用 `1000ms`。即使不使用 helper，显式配置也能生效；组合多个 helper 时，也不再有另一套断言超时需要合并。
 
 外层 test 或 hook 的超时仍可能提前结束断言。Playwright 断言保留固定的 `50ms` 重试间隔，`expect.poll.interval` 只控制 `expect.poll()`。`page.setDefaultTimeout()` 控制 Playwright 操作的超时，不控制这些断言的超时。Rstest 不读取 `playwright.config.ts`；迁移时请将 Playwright Test 的 `expect.timeout` 改为 Rstest 的 `expect.poll.timeout`。
 
@@ -553,3 +511,49 @@ test('home page', async ({ onTestFailed, page, serve }) => {
 ```
 
 这种方式不会阻塞测试运行，同时可以把失败时的页面状态保留下来作为 artifact。完整的 Rsbuild + Playwright 示例可以参考 `examples/playwright`。
+
+## 对比其他方案
+
+### Rstest 浏览器模式
+
+Rstest 浏览器模式会把测试模块打包后放进浏览器运行时执行，适合测试组件；`@rstest/playwright` 控制的是一个已经由应用或 server 准备好的页面，适合测试完整应用。
+
+| 场景                                              | 推荐方案                                                         |
+| ------------------------------------------------- | ---------------------------------------------------------------- |
+| 测试组件，并使用 Rstest 的 web 打包和浏览器运行时 | [Rstest 浏览器模式](/guide/browser-testing) 和 `@rstest/browser` |
+| 通过 `page.goto()` 测试完整页面或应用             | `@rstest/playwright`                                             |
+| 驱动已有 dev server、preview server 或线上 URL    | `@rstest/playwright`                                             |
+| 需要浏览器内组件测试能力                          | [Rstest 浏览器模式](/guide/browser-testing)                      |
+
+因为 `@rstest/playwright` 控制的是外部页面，不在 Rstest 的浏览器 runner 里执行测试，所以它不走 Browser UI 的预览 iframe。需要看着浏览器调试时，使用上面介绍的 headed 模式。
+
+### 原生 Playwright
+
+`@rstest/playwright` 和原生 Playwright 的区别主要在 runner 和配置方式：
+
+| 项目     | `@rstest/playwright`                            | 原生 Playwright                               |
+| -------- | ----------------------------------------------- | --------------------------------------------- |
+| Runner   | Rstest runner                                   | Playwright Test runner                        |
+| 配置方式 | `rstest.config.ts` 和 `playwright` fixture 覆盖 | `playwright.config.ts`                        |
+| 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
+
+如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
+
+## 从 Playwright 迁移
+
+已有的 Playwright Test 项目可以交给支持 Skills 的 Coding Agent 迁移，使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill。Agent Skills 是安装到 Coding Agent 里的领域知识包，让 Agent 在特定场景下给出更准确的建议或直接执行操作，[skills](https://www.npmjs.com/package/skills) 包负责安装它们。`migrate-to-rstest` skill 包含 Playwright 配置、fixtures 和行为一致性的迁移指南。
+
+先安装该 skill：
+
+<PackageManagerTabs
+  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
+  dlx
+/>
+
+然后复制下面的 prompt 并发送给你的 Coding Agent：
+
+<Prompt
+  title="将 Playwright 迁移到 @rstest/playwright"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
+/>
