@@ -1,60 +1,18 @@
 ---
-description: This guide covers how to use @rstest/playwright to drive Playwright from Rstest tests running in Node.js workers.
+description: This E2E testing guide covers how to use @rstest/playwright to test complete pages and apps from Rstest tests running in Node.js workers.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
-# Playwright
+# E2E testing
 
 <ApiMeta addedVersion="0.11.1" />
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides [Playwright](https://playwright.dev/) fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
+End-to-end (E2E) tests verify a complete page or app the way a user would: open the page, click and type, then check what is actually rendered. Rstest integrates [Playwright](https://playwright.dev/) fixtures and Playwright-style assertions through [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright).
 
-## vs native Playwright
-
-`@rstest/playwright` and native Playwright use different runners and configuration files:
-
-| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
-| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| Runner        | Rstest runner                                         | Playwright Test runner                             |
-| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
-| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
-
-Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
-
-## vs Rstest browser mode
-
-The main difference is the testing scenario: Rstest browser mode web-bundles test modules and runs test code in a browser runtime, while `@rstest/playwright` controls a page that is already prepared by your app or server.
-
-| Scenario                                                        | Recommended                                                          |
-| --------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Test a component with Rstest's web bundling and browser runtime | [Rstest browser mode](/guide/browser-testing) with `@rstest/browser` |
-| Test a complete app or page through `page.goto()`               | `@rstest/playwright`                                                 |
-| Drive an existing dev server, preview server, or deployed URL   | `@rstest/playwright`                                                 |
-| Need in-browser component test utilities                        | [Rstest browser mode](/guide/browser-testing)                        |
-
-Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `PWDEBUG=1`.
-
-## Migrate to @rstest/playwright
-
-To migrate an existing Playwright Test project to `@rstest/playwright`, use the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill with a Coding Agent that supports Skills. Agent Skills are domain-specific knowledge packs that help Coding Agents provide more accurate suggestions or perform actions for a specific scenario. The [skills](https://www.npmjs.com/package/skills) package installs these skills into a Coding Agent. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
-
-Install the skill first:
-
-<PackageManagerTabs
-  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
-  dlx
-/>
-
-Then copy the following prompt and send it to your Coding Agent:
-
-<Prompt
-  title="Migrate Playwright to @rstest/playwright"
-  description="Copy this prompt and send it to your Coding Agent."
-  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
-/>
+The test code runs in Node.js workers and uses Playwright to drive a real browser against a local dev server, a preview server, or a deployed URL, sharing the same runner, configuration, and reporting as the rest of your Rstest tests. To test a single component instead of a whole app, see [browser mode](/guide/browser-testing) instead.
 
 ## Install
 
@@ -553,3 +511,49 @@ test('home page', async ({ onTestFailed, page, serve }) => {
 ```
 
 This keeps the test runner non-blocking while preserving the failed page state as an artifact. See `examples/playwright` for a complete Rsbuild + Playwright example.
+
+## Compared with other approaches
+
+### Rstest browser mode
+
+Rstest browser mode bundles test modules and runs them in a browser runtime, which suits component tests. `@rstest/playwright` controls a page that is already prepared by your app or server, which suits testing a complete app.
+
+| Scenario                                                        | Recommended                                                          |
+| --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Test a component with Rstest's web bundling and browser runtime | [Rstest browser mode](/guide/browser-testing) with `@rstest/browser` |
+| Test a complete app or page through `page.goto()`               | `@rstest/playwright`                                                 |
+| Drive an existing dev server, preview server, or deployed URL   | `@rstest/playwright`                                                 |
+| Need in-browser component test utilities                        | [Rstest browser mode](/guide/browser-testing)                        |
+
+Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode as described above.
+
+### Native Playwright
+
+`@rstest/playwright` and native Playwright differ mainly in the runner and configuration files:
+
+| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
+| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Runner        | Rstest runner                                         | Playwright Test runner                             |
+| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
+| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
+
+Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
+
+## Migrate from Playwright
+
+An existing Playwright Test project can be migrated by a Coding Agent that supports Skills, using the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill. Agent Skills are domain knowledge packs installed into a Coding Agent so it gives more accurate suggestions or performs actions for a specific scenario; the [skills](https://www.npmjs.com/package/skills) package installs them. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
+
+Install the skill first:
+
+<PackageManagerTabs
+  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
+  dlx
+/>
+
+Then copy the following prompt and send it to your Coding Agent:
+
+<Prompt
+  title="Migrate Playwright to @rstest/playwright"
+  description="Copy this prompt and send it to your Coding Agent."
+  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
+/>

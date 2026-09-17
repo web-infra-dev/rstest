@@ -113,7 +113,11 @@ export default defineConfig({
         },
         {
           from: '/guide/integration/playwright',
-          to: '/integration/playwright',
+          to: '/guide/basic/e2e-testing',
+        },
+        {
+          from: '/integration/playwright',
+          to: '/guide/basic/e2e-testing',
         },
         {
           from: '/guide/integration/rslint',
@@ -145,7 +149,7 @@ export default defineConfig({
         },
         {
           from: '/guide/advanced/playwright',
-          to: '/integration/playwright',
+          to: '/guide/basic/e2e-testing',
         },
         {
           from: '/zh/guide/advanced/debugging',
@@ -181,7 +185,11 @@ export default defineConfig({
         },
         {
           from: '/zh/guide/integration/playwright',
-          to: '/zh/integration/playwright',
+          to: '/zh/guide/basic/e2e-testing',
+        },
+        {
+          from: '/zh/integration/playwright',
+          to: '/zh/guide/basic/e2e-testing',
         },
         {
           from: '/zh/guide/integration/rslint',
@@ -213,7 +221,7 @@ export default defineConfig({
         },
         {
           from: '/zh/guide/advanced/playwright',
-          to: '/zh/integration/playwright',
+          to: '/zh/guide/basic/e2e-testing',
         },
       ],
     }),
