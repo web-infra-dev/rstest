@@ -6,7 +6,7 @@ description: Enable Module Federation support.
 
 import { ApiMeta } from '@components/ApiMeta';
 
-<ApiMeta addedVersion="0.11.4" />
+<ApiMeta addedVersion="0.11.10" />
 
 - **Type:** `boolean`
 - **Default:** `false`
@@ -39,7 +39,9 @@ export default defineConfig({
 
 ## Testing a federated app
 
-`federation` only prepares the test runtime; it does not configure remotes, exposes, or shared modules. When you use [@module-federation/rstest](https://github.com/module-federation/core), the plugin configures the Module Federation build and automatically enables Rstest's compatibility mode for Node-based test environments, so you do not need to set `federation: true` again there. In Browser Mode the plugin does not enable it. However, `globalSetup` files always run in a Node process, and their build output carries the same federation runtime, which throws on load without the switch. Set `federation: true` yourself whenever a Browser Mode project uses `globalSetup`.
+`federation` only turns on Rstest's test runtime support; it does not configure remotes, exposes, or shared modules. When you use [@module-federation/rstest](https://github.com/module-federation/core), the plugin configures the Module Federation build and automatically enables Rstest's compatibility mode for Node-based test environments, so you do not need to set `federation: true` again there.
+
+In Browser Mode the plugin does not turn on the `federation` option. However, `globalSetup` files always run in a Node process, and their build output carries the same federation runtime, which throws on load without the switch. Set `federation: true` yourself whenever a Browser Mode project uses `globalSetup`.
 
 Start with the [Module Federation guide](/guide/advanced/module-federation) for installation and the Rstest testing workflow. See the [official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration and the complete plugin options.
 

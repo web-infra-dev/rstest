@@ -6,7 +6,7 @@ description: 启用模块联邦支持。
 
 import { ApiMeta } from '@components/ApiMeta';
 
-<ApiMeta addedVersion="0.11.4" />
+<ApiMeta addedVersion="0.11.10" />
 
 - **类型：** `boolean`
 - **默认值：** `false`
@@ -39,7 +39,9 @@ export default defineConfig({
 
 ## 测试联邦应用
 
-`federation` 只负责准备测试运行时，不会配置远程模块、暴露模块或共享依赖。使用 [@module-federation/rstest](https://github.com/module-federation/core) 时，该插件会配置模块联邦构建，并为基于 Node 的测试环境自动启用 Rstest 兼容模式，因此在这些环境下不需要再设置 `federation: true`。Browser Mode 下插件不会自动打开 `federation` 配置项。但 `globalSetup` 文件始终在 Node 进程里执行，产物里同样带着模块联邦运行时，没有这个开关，`globalSetup` 文件一加载就会报错。所以 Browser Mode 项目只要用了 `globalSetup`，就要手动写上 `federation: true`。
+`federation` 只负责开启 Rstest 的测试运行时支持，不会配置远程模块、暴露模块或共享依赖。使用 [@module-federation/rstest](https://github.com/module-federation/core) 时，该插件会配置模块联邦构建，并为基于 Node 的测试环境自动启用 Rstest 兼容模式，因此在这些环境下不需要再设置 `federation: true`。
+
+Browser Mode 下插件不会自动打开 `federation` 配置项。但 `globalSetup` 文件始终在 Node 进程里执行，产物里同样带着模块联邦运行时，没有这个开关，`globalSetup` 文件一加载就会报错。所以 Browser Mode 项目只要用了 `globalSetup`，就要手动写上 `federation: true`。
 
 安装方式和 Rstest 测试流程，请先阅读[模块联邦指南](/guide/advanced/module-federation)。复用已有的 Rsbuild 模块联邦配置以及完整插件选项，请参考 [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)。
 

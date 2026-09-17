@@ -6,11 +6,11 @@ description: 使用 Rstest 在 Node、JSDOM 和 Browser Mode 中加载并测试�
 
 [模块联邦（Module Federation）](https://module-federation.io/) 支持不同应用在独立构建后，于运行时暴露和消费模块。当你需要确认消费者能否加载真实的生产者、解析共享依赖并正确执行暴露模块时，可以用 Rstest 测试这条联邦边界。
 
-[@module-federation/rstest](https://github.com/module-federation/core) 为 Rstest 构建配置模块联邦。它支持 Node 和 JSDOM 测试环境以及 Browser Mode，因此同一个测试项目可以覆盖服务端与浏览器端的消费者。
+[@module-federation/rstest](https://github.com/module-federation/core) 为 Rstest 构建配置模块联邦。它支持 Node 和 JSDOM 测试环境以及 Browser Mode。
 
 ## 安装
 
-将 `@module-federation/rstest` 添加到现有 Rstest 项目。Node 和 JSDOM 测试需要 `@rstest/core@0.11.4` 或更高版本，Browser Mode 需要 `@rstest/core@0.11.10` 或更高版本。
+将 `@module-federation/rstest` 添加到现有 Rstest 项目。
 
 import { PackageManagerTabs } from '@theme';
 

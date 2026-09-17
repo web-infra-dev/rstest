@@ -6,11 +6,11 @@ description: Load and test real Module Federation remotes with Rstest in Node, J
 
 [Module Federation](https://module-federation.io/) lets separately built applications expose and consume modules at runtime. Test the federation boundary with Rstest when you need confidence that a host can load a real remote, resolve its shared dependencies, and execute the exposed module correctly.
 
-[@module-federation/rstest](https://github.com/module-federation/core) configures Module Federation for the Rstest build. It supports Node and JSDOM test environments as well as Browser Mode, so the same test project can cover server and browser consumers.
+[@module-federation/rstest](https://github.com/module-federation/core) configures Module Federation for the Rstest build. It supports Node and JSDOM test environments as well as Browser Mode.
 
 ## Install
 
-Add `@module-federation/rstest` to an existing Rstest project. Node and JSDOM tests need `@rstest/core@0.11.4` or newer; Browser Mode needs `@rstest/core@0.11.10` or newer.
+Add `@module-federation/rstest` to an existing Rstest project.
 
 import { PackageManagerTabs } from '@theme';
 
