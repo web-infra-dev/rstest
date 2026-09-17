@@ -131,7 +131,7 @@ export default defineConfig({
 });
 ```
 
-In Browser Mode the plugin does not turn on the `federation` option for you. Set `federation: true` yourself when the project uses `globalSetup`: the setup file runs in a Node worker with the same federation build, and without the switch the federation runtime throws while the file loads, so the remote server never starts.
+In Browser Mode the plugin does not turn on the `federation` option for you. However, `globalSetup` files always run in a Node process, and their build output carries the same federation runtime, which throws on load without the switch, so the remote server never starts. Set `federation: true` yourself whenever a Browser Mode project uses `globalSetup`.
 
 ## Further reading
 
