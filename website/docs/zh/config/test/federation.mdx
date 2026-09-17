@@ -16,12 +16,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 Rstest 在 Node Mode（包括 `jsdom` 等 DOM 模拟环境）和 Browser Mode 中均支持模块联邦。
 
-Rstest 在单个 worker 运行时中执行测试产物，以保证模块 mock 始终生效。而模块联邦运行时会自行加载远程入口和 chunk，通过 Node 的 `fs`/`vm`/`eval` 或 HTTP，这发生在该运行时之外。启用 `federation` 后，Rstest 会安装额外的运行时垫片，让两者协同工作：
-
-- 为外部化的动态导入提供 `globalThis` 兜底实现，使通过 `vm`/`eval` 执行的模块联邦运行时 chunk 仍能使用 Node 原生动态导入加载模块。
-- 防止模块联邦的占位 chunk 处理器（`consumes` / `remotes`）在模块联邦运行时初始化前抛出异常。
-- 阻止模块联邦运行时插件替换 Rstest 的 chunk 加载处理器，否则 chunk 会在测试运行时之外执行并丢失 mock。
-- 面向 Node 的模块联邦运行会使用 Rstest 的 CommonJS worker loader；Rstest 会将 `output.chunkLoading` 强制为 `'require'`，使 async chunks 通过 Rstest 的模块加载器从内存构建产物中加载，而不经过文件系统。
+启用后，Rstest 会给测试 worker 安装运行时垫片，让模块联邦运行时能通过 Rstest 的模块加载器加载远程入口和 chunk，模块 mock 保持生效。
 
 import { Tab, Tabs } from '@theme';
 
