@@ -161,12 +161,6 @@ it('loads a federated remote', async () => {
 
 Rstest 目前提供四种 pool，可根据测试场景选择：
 
-<WebOnly>
-  <PoolPicker />
-</WebOnly>
-
-<MdOnly>
-
 | Pool        | 适用场景                                              | 限制                              |
 | ----------- | ----------------------------------------------------- | --------------------------------- |
 | `forks`     | 默认选择；适合 native addon、`process.chdir()` 等场景 | 大型 DOM 测试套件启动开销较高     |
@@ -174,7 +168,9 @@ Rstest 目前提供四种 pool，可根据测试场景选择：
 | `vmThreads` | 大量 jsdom / happy-dom 测试，性能最佳                 | 存在跨 realm 与自定义 loader 限制 |
 | `vmForks`   | 兼顾 VM pool 性能与进程能力                           | 需避免进程级状态残留              |
 
-</MdOnly>
+<WebOnly>
+  <PoolPicker />
+</WebOnly>
 
 切换前建议先确认瓶颈确实在 worker 启动或模块加载，setup 中的数据库初始化、网络请求等开销不会因更换 pool 而减少。通过 `pool.type` 启用：
 

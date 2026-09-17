@@ -161,12 +161,6 @@ On a jsdom benchmark project of 2,400 files and 20,000 tests (15 workers, every 
 
 Rstest now offers four pools. Choose by scenario:
 
-<WebOnly>
-  <PoolPicker />
-</WebOnly>
-
-<MdOnly>
-
 | Pool        | Suitable for                                                           | Limitations                                     |
 | ----------- | ---------------------------------------------------------------------- | ----------------------------------------------- |
 | `forks`     | The default; suits native addons, `process.chdir()`, and similar needs | High startup cost for large DOM test suites     |
@@ -174,7 +168,9 @@ Rstest now offers four pools. Choose by scenario:
 | `vmThreads` | Many jsdom / happy-dom tests; the fastest option                       | Cross-realm and custom loader limitations       |
 | `vmForks`   | VM pool speed plus process-level capabilities                          | Process-level state must not leak between files |
 
-</MdOnly>
+<WebOnly>
+  <PoolPicker />
+</WebOnly>
 
 Before switching, confirm that the bottleneck is worker startup or module loading. Costs such as database initialization or network requests in setup files do not shrink with a different pool. Enable a pool through `pool.type`:
 
