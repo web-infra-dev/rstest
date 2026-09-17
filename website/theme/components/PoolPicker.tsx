@@ -261,66 +261,6 @@ const NEEDS: Need[] = [
   },
 ];
 
-// Static spec sheet per pool, from /config/test/pool "Pool types".
-const FACTS: Record<Pool, Record<Lang, [string, string][]>> = {
-  forks: {
-    zh: [
-      ['worker', '子进程，每文件新建'],
-      ['隔离', '进程级'],
-      ['进程 API', '完整'],
-      ['memoryLimit', '仅 isolate: false'],
-    ],
-    en: [
-      ['worker', 'child process per file'],
-      ['isolation', 'process'],
-      ['process API', 'full'],
-      ['memoryLimit', 'isolate: false only'],
-    ],
-  },
-  threads: {
-    zh: [
-      ['worker', 'worker thread，每文件新建'],
-      ['隔离', '线程级，共享进程'],
-      ['进程 API', '无 chdir / 信号'],
-      ['memoryLimit', '不支持'],
-    ],
-    en: [
-      ['worker', 'worker thread per file'],
-      ['isolation', 'thread, shared process'],
-      ['process API', 'no chdir / signals'],
-      ['memoryLimit', 'unsupported'],
-    ],
-  },
-  vmThreads: {
-    zh: [
-      ['worker', 'worker thread，跨文件复用'],
-      ['隔离', '每文件 vm.Context'],
-      ['进程 API', '无 chdir / 信号'],
-      ['memoryLimit', '默认开启'],
-    ],
-    en: [
-      ['worker', 'worker thread, reused'],
-      ['isolation', 'vm.Context per file'],
-      ['process API', 'no chdir / signals'],
-      ['memoryLimit', 'on by default'],
-    ],
-  },
-  vmForks: {
-    zh: [
-      ['worker', '子进程，跨文件复用'],
-      ['隔离', '每文件 vm.Context'],
-      ['进程 API', '完整'],
-      ['memoryLimit', '默认开启，按 RSS 调度'],
-    ],
-    en: [
-      ['worker', 'child process, reused'],
-      ['isolation', 'vm.Context per file'],
-      ['process API', 'full'],
-      ['memoryLimit', 'on by default, RSS-aware'],
-    ],
-  },
-};
-
 const MARK: Record<Verdict, string> = {
   best: '✓',
   ok: '✓',
@@ -457,14 +397,6 @@ export function PoolPicker() {
                 {text.verdict[verdict]}
               </span>
             </div>
-            <dl className={styles.facts}>
-              {FACTS[pool][lang].map(([key, value]) => (
-                <div key={key} className={styles.fact}>
-                  <dt>{key}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
             {checks.length > 0 && (
               <ul className={styles.checks}>
                 {checks.map((check) => (

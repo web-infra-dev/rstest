@@ -85,7 +85,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .tilePool {
@@ -123,40 +123,13 @@
   }
 }
 
-.facts {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0 !important;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.fact {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 8px;
-
-  dt {
-    margin: 0;
-    font-family: var(--rp-font-family-mono);
-    color: var(--rp-c-text-3);
-  }
-
-  dd {
-    margin: 0;
-    color: var(--rp-c-text-2);
-  }
-}
-
 .checks {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 10px 0 0 !important;
-  padding: 10px 0 0 !important;
-  border-top: 1px dashed var(--rp-c-divider-light);
+  margin: 0 !important;
+  padding: 0 !important;
   font-size: 12px;
   line-height: 1.5;
 }
