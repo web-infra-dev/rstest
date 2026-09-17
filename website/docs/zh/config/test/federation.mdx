@@ -37,7 +37,7 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-## 测试联邦应用
+## 测试联邦应用 \{#testing-a-federated-app}
 
 `federation` 只负责开启 Rstest 的测试运行时支持，不会配置远程模块、暴露模块或共享依赖。使用 [@module-federation/rstest](https://github.com/module-federation/core) 时，该插件会配置模块联邦构建，并为基于 Node 的测试环境自动启用 Rstest 兼容模式，因此在这些环境下不需要再设置 `federation: true`。
 

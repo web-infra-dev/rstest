@@ -67,6 +67,7 @@ flexbugs
 fnames
 frontends
 fullhash
+globalsetup
 Grotesk
 gzipped
 icss

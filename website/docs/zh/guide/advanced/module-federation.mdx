@@ -8,7 +8,7 @@ description: 使用 Rstest 在 Node、JSDOM 和 Browser Mode 中加载并测试�
 
 [@module-federation/rstest](https://github.com/module-federation/core) 为 Rstest 构建配置模块联邦。它支持 Node 和 JSDOM 测试环境以及 Browser Mode。
 
-## 安装
+## 安装 \{#install}
 
 将 `@module-federation/rstest` 添加到现有 Rstest 项目。
 
@@ -18,7 +18,7 @@ import { PackageManagerTabs } from '@theme';
 
 该插件只负责配置消费远程模块的测试消费者。生产者仍需使用自己的模块联邦构建插件进行构建，例如 [Rslib 的 `mf` 格式](https://rslib.rs/guide/advanced/module-federation)。
 
-## 基本用法
+## 基本用法 \{#basic-usage}
 
 注册 `federation` 插件，并使用与应用代码导入一致的生产者名称。最简单的形式是消费一个构建到本地 CommonJS 入口的 Node 生产者，不需要启动任何服务：
 
@@ -61,20 +61,20 @@ declare module 'remote/formatPrice' {
 }
 ```
 
-## 配置远程模块
+## 配置远程模块 \{#configure-remotes}
 
 `federation()` 插件接受和模块联邦构建插件相同的选项：`remotes`、`shared`、`remoteType` 等。测试里要注意两点：
 
 - **远程入口的目标环境。** Node 和 JSDOM 测试运行在 Rstest 的 Node runner 里，所以要指向面向 Node 的远程入口，例如 `remoteEntry.cjs`。Browser Mode 消费的是浏览器构建产物中的 `remoteEntry.js`。
-- **HTTP 生产者。** 通过 HTTP 提供的生产者写成 `remote@http://localhost:3001/remoteEntry.cjs` 这样的地址，并设置 `remoteType: 'script'`。服务要在测试运行前启动，见[用 `globalSetup` 启动生产者](#serve-remotes)。
+- **HTTP 生产者。** 通过 HTTP 提供的生产者写成 `remote@http://localhost:3001/remoteEntry.cjs` 这样的地址，并设置 `remoteType: 'script'`。服务要在测试运行前启动，见[用 `globalSetup` 启动生产者](#serve-remotes-with-globalsetup)。
 
-### 插件和 `federation` 配置项的关系
+### 插件和 `federation` 配置项的关系 \{#the-plugin-and-the-federation-option}
 
 [`federation`](/config/test/federation) 配置项只是 Rstest 内部的运行时兼容开关。它负责安装垫片，让模块联邦运行时能在 Rstest 的 Node worker 里加载 chunk，本身不配置任何模块联邦的内容：没有远程模块，没有暴露模块，也没有共享依赖。
 
 `federation()` 插件才做真正的配置，并且在基于 Node 的测试环境下会自动打开这个开关。因此在 Node 和 JSDOM 测试里使用插件时，不需要再设置 `federation: true`。Browser Mode 的情况不同，见 [Browser mode](#browser-mode)。
 
-## 用 `globalSetup` 启动生产者 \{#serve-remotes}
+## 用 `globalSetup` 启动生产者 \{#serve-remotes-with-globalsetup}
 
 通过 HTTP 提供的生产者，必须在测试 worker 导入消费者应用之前就能访问。使用 [`globalSetup`](/config/test/global-setup) 统一启动服务，并在 `teardown` 里停止，不要在每个测试文件里各起一次：
 
@@ -133,7 +133,7 @@ export default defineConfig({
 
 Browser Mode 下插件不会自动打开 `federation` 配置项。但 `globalSetup` 文件始终在 Node 进程里执行，产物里同样带着模块联邦运行时，没有这个开关，`globalSetup` 文件一加载就会报错，生产者服务也就起不来。所以 Browser Mode 项目只要用了 `globalSetup`，就要手动写上 `federation: true`。
 
-## 了解更多
+## 了解更多 \{#further-reading}
 
 - [`federation`](/config/test/federation) 参考文档介绍了独立配置项、CLI flag 和 Rstest 运行时行为。
 - [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)介绍了如何复用 Rsbuild 的模块联邦配置、插件选项和生产者构建。
