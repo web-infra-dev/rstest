@@ -318,7 +318,7 @@ function rate(selected: Set<string>, lang: Lang): Rated[] {
       };
     });
     if (checks.length === 0) {
-      return { pool, verdict: pool === 'forks' ? 'best' : 'ok', checks };
+      return { pool, verdict: 'ok', checks };
     }
     const worst = checks.reduce(
       (acc, rule) => (RANK[rule.verdict] < RANK[acc] ? rule.verdict : acc),
