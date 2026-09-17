@@ -3,9 +3,9 @@
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: 24px;
   margin: 20px 0 28px;
-  padding: 20px 0;
-  border-top: 1px solid var(--rp-c-divider-light);
-  border-bottom: 1px solid var(--rp-c-divider-light);
+  padding: 20px;
+  border: 1px solid var(--rp-c-divider-light);
+  border-radius: 12px;
 }
 
 .needs,
@@ -140,5 +140,6 @@
 @media (max-width: 720px) {
   .root {
     grid-template-columns: 1fr;
+    padding: 16px;
   }
 }
