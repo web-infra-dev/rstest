@@ -1,0 +1,288 @@
+---
+description: 'Rstest 0.12 adds E2E and Module Federation testing support, speeds up large test suites with VM pools and test environment prebundle, and officially introduces a new JavaScript API.'
+date: 2026-09-14 16:00:00
+sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+    github: '9aoy'
+  - name: Max
+    avatar: 'https://github.com/fi3ework.png'
+    github: 'fi3ework'
+---
+
+import { BenchBars } from '@components/BenchBars';
+import { MdOnly } from '@components/MdOnly';
+import { WebOnly } from '@components/WebOnly';
+import { BlogAuthors } from '@rstackjs/doc-ui/blog-authors';
+
+# Announcing Rstest 0.12
+
+_September 14, 2026_
+
+<BlogAuthors />
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-12.png"
+  alt="Rstest 0.12"
+  style={{
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+  }}
+/>
+
+We are excited to announce the release of Rstest 0.12!
+
+Rstest 0.12 adds E2E and Module Federation testing support, speeds up large test suites with VM pools and test environment prebundle, and officially introduces a new JavaScript API.
+
+The main improvements in 0.12 are:
+
+- [E2E testing support](#playwright)
+- [Module Federation testing support](#module-federation)
+- [New vmThreads and vmForks pools](#vm-pools)
+- [Faster jsdom / happy-dom loading](#prebundle)
+- [A new JavaScript API](#javascript-api)
+- [Other improvements](#other-improvements)
+
+## E2E testing support \{#playwright}
+
+Rstest 0.12 supports E2E testing through [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright), which integrates [Playwright](https://playwright.dev/), so unit tests, component tests, and E2E tests can share one set of Rstest config, commands, and reporters.
+
+You can write E2E tests directly in Rstest: open a real page with Playwright and verify the full flow against a local dev server, a preview server, or a deployed URL. See the [Rstest E2E example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/playwright) for a complete project.
+
+To start writing E2E tests, import `test` and `expect` from `@rstest/playwright`:
+
+```ts title="e2e.test.ts"
+import { expect, test } from '@rstest/playwright';
+
+test('page title', async ({ page }) => {
+  await page.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(page.locator('h1')).toHaveText('Example Domain');
+});
+```
+
+With `definePlaywrightConfig`, you get the same defaults as Playwright and can customize Playwright options as needed. For example, set a default viewport and record a trace on retries in CI:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { definePlaywrightConfig } from '@rstest/playwright/config';
+
+export default defineConfig({
+  retry: process.env.CI ? 1 : 0,
+  extends: definePlaywrightConfig({
+    contextOptions: {
+      viewport: { width: 1440, height: 900 },
+    },
+    trace: process.env.CI ? 'on-first-retry' : 'off',
+  }),
+});
+```
+
+An existing Playwright Test project can be migrated with the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill, which includes guidance for Playwright configuration, fixtures, and behavior differences.
+
+> See [E2E testing](/guide/basic/e2e-testing) to learn more.
+
+## Module Federation testing support \{#module-federation}
+
+Rstest 0.12 supports testing [Module Federation](https://module-federation.io/) applications. Test code imports remote modules the same way a consumer application does. Rstest loads the real exposed modules and resolves the shared dependencies, so integration problems between consumer and producer show up in unit tests instead of during integration or after release.
+
+Module Federation is supported in Rstest's Node, jsdom, happy-dom, and browser mode. See the [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and the [browser mode example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) for complete projects.
+
+To add Module Federation testing to a project, use the [@module-federation/rstest](https://github.com/module-federation/core) plugin: register it in the config and declare the remotes and shared dependencies:
+
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  plugins: [
+    federation({
+      name: 'host',
+      remotes: {
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
+      },
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    }),
+  ],
+});
+```
+
+Then import the exposed modules just as application code does:
+
+```ts title="remote.test.ts"
+import { expect, it } from '@rstest/core';
+
+it('loads a federated remote', async () => {
+  const remote = await import('component-app/Button');
+  expect(remote.default).toBeDefined();
+});
+```
+
+> See [Module Federation](/guide/advanced/module-federation) to learn more.
+
+## New vmThreads and vmForks pools \{#vm-pools}
+
+For suites with many jsdom / happy-dom test files, the new [vmThreads](/config/test/pool#vmthreads) / [vmForks](/config/test/pool#vmforks) pools in Rstest 0.12 cut worker startup and module loading costs substantially. They reuse workers across test files and create a fresh `vm.Context` for each file. Every file still has its own JavaScript realm and module graph, while worker startup, dependency resolution, and V8 compilation are shared by many files.
+
+On a jsdom benchmark project of 2,400 files and 20,000 tests (15 workers, every process starting from an empty cache):
+
+<WebOnly>
+  <BenchBars
+    groups={[
+      {
+        bars: [
+          { label: 'forks', value: 315.17 },
+          {
+            label: 'vmThreads',
+            value: 33.22,
+            highlight: true,
+            note: '9.5× faster',
+          },
+        ],
+      },
+    ]}
+  />
+</WebOnly>
+
+<MdOnly>
+
+| Pool        | Wall time |
+| ----------- | --------: |
+| `forks`     |   315.17s |
+| `vmThreads` | ⚡ 33.22s |
+
+</MdOnly>
+
+Rstest now offers four pools. Choose by scenario:
+
+| Pool        | Suitable for                                                           | Limitations                                     |
+| ----------- | ---------------------------------------------------------------------- | ----------------------------------------------- |
+| `forks`     | The default; suits native addons, `process.chdir()`, and similar needs | High startup cost for large DOM test suites     |
+| `threads`   | Many light test files                                                  | Some process-level capabilities are unavailable |
+| `vmThreads` | Many jsdom / happy-dom tests; the fastest option                       | Cross-realm and custom loader limitations       |
+| `vmForks`   | VM pool speed plus process-level capabilities                          | Process-level state must not leak between files |
+
+Before switching, confirm that the bottleneck is worker startup or module loading. Costs such as database initialization or network requests in setup files do not shrink with a different pool. Enable a pool through `pool.type`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'vmThreads',
+    memoryLimit: '256MB',
+  },
+});
+```
+
+For suites with many test files, you can use [pool.memoryLimit](/config/test/pool#poolmemorylimit) to limit the memory usage of a single worker. Once the threshold is exceeded, Rstest automatically replaces it with a new worker.
+
+> See [Choose a pool type](/config/test/pool#choose-a-pool-type) for the full selection guidance and what the VM pools support.
+
+## Faster jsdom / happy-dom loading \{#prebundle}
+
+Besides cutting worker costs with VM pools, 0.12 also supports and enables by default [test environment prebundle](/config/test/test-environment#environment-prebundle), which reduces the repeated loading cost of jsdom / happy-dom.
+
+Previously every worker loaded jsdom or happy-dom through Node.js's own module system, resolving and executing every module file in the environment one by one. With prebundle enabled, Rstest first builds the environment into one ESM bundle that all workers share, which removes most of that repeated work. On a benchmark of 100 files and 1,000 tests:
+
+<WebOnly>
+  <BenchBars
+    groups={[
+      {
+        label: 'jsdom 30.0.1',
+        bars: [
+          { label: 'Native', value: 16.99 },
+          { label: 'Prebundle', value: 10.57, highlight: true, note: '-37.8%' },
+        ],
+      },
+      {
+        label: 'happy-dom 20.11.1',
+        bars: [
+          { label: 'Native', value: 6.35 },
+          { label: 'Prebundle', value: 2.98, highlight: true, note: '-53.0%' },
+        ],
+      },
+    ]}
+  />
+</WebOnly>
+
+<MdOnly>
+
+| Environment       | Native | Prebundle | Improvement |
+| ----------------- | -----: | --------: | ----------: |
+| jsdom 30.0.1      | 16.99s | ⚡ 10.57s |   **37.8%** |
+| happy-dom 20.11.1 |  6.35s |  ⚡ 2.98s |   **53.0%** |
+
+</MdOnly>
+
+Starting from 0.12, `testEnvironment.prebundle` defaults to `'auto'`, and Rstest applies prebundle to `jsdom` 15–26 and 29–30, and `happy-dom` 20. Other versions keep native loading, and a prebundle that fails to build, load, or validate falls back to the native entry as well. If your environment behaves differently after bundling, turn it off explicitly:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    prebundle: false,
+  },
+});
+```
+
+> See [Environment prebundle](/config/test/test-environment#environment-prebundle) to learn more.
+
+## A new JavaScript API \{#javascript-api}
+
+Rstest 0.12 provides a new [createRstest](/api/javascript-api/instance#createrstest) API, a rewrite of the JavaScript API before 1.0 that makes it easier to integrate Rstest into tools, IDEs, and other Node.js programs. It shares the same core execution capabilities as the `rstest` command, so you can run tests, watch, list tests, and merge blob reports from code.
+
+Use `createRstest()` to create an instance, then call methods such as [run](/api/javascript-api/instance#rstestrun), [watch](/api/javascript-api/instance#rstestwatch), [listTests](/api/javascript-api/instance#rstestlisttests), and [mergeReports](/api/javascript-api/instance#rstestmergereports) to use the corresponding Rstest features.
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.status, result.summary);
+```
+
+Output:
+
+```txt
+pass {
+  tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
+  files: { total: 1, failed: 0 },
+}
+```
+
+> See [Rstest instance](/api/javascript-api/instance) to learn more.
+
+## Other improvements \{#other-improvements}
+
+- **File- and worker-scoped fixtures.** Fixtures from `test.extend` can share one instance per file or per worker, so expensive setup such as a database connection or a browser instance is not repeated for every test. See [test.extend](/api/runtime-api/test-api/test#testextend).
+- **`--onlyFailures` re-runs only failed files.** Rstest remembers which files failed last time and runs just those after a fix, instead of the whole suite. The same record also schedules failed and slow files first, so feedback arrives sooner. See [onlyFailures](/config/test/only-failures).
+- **Rspack native watcher.** Watch mode now uses Rspack's Rust file watcher, which detects changes incrementally and stays stable and responsive when many files change at once. See [rstest watch](/guide/basic/cli#rstest-watch).
+- **`context.signal` on timeout.** Every test attempt receives an `AbortSignal`, so a timed-out test can cancel pending `fetch` calls and similar work instead of holding the worker. See [signal](/api/runtime-api/test-api/test#signal).
+- **Task metadata.** Tests, suites, and files can carry custom metadata, which makes it easy to group results by owner, module, or any other dimension. See [Metadata](/guide/advanced/metadata).
+- **Defaults for `expect.poll`.** Set the polling timeout and interval once in the config instead of passing them to every `expect.poll()` call. See [expect.poll](/config/test/expect#expectpoll).
+- **Rsbuild plugins can read and modify Rstest config.** A framework or tooling plugin can integrate with Rstest on its own, so users no longer edit the test config by hand. See [Modify Rstest config in Rsbuild plugins](/config/build/plugins#modify-rstest-config).
+- **Project-level `silent`.** Each project in a multi-project config can set its own `silent`, so you can mute a noisy project while keeping output from the others. See [silent](/config/test/silent).
+- **VS Code extension.** Right-click a test or file and choose "Run in Terminal" to run it as an `rstest` command in the integrated terminal, with the full command and raw output visible. New debugging settings pin the inspector port, pass environment variables to the worker, and skip Node internals while debugging. See [VS Code extension](/guide/basic/vscode-extension).
+- **Full reporter replay for `--merge-reports`.** Merging blob reports replays every reporter hook in its original order, so a merged report from sharded runs matches a single-machine run and custom reporter counts stay complete. See [rstest merge-reports](/guide/basic/cli#rstest-merge-reports).
+- **Browser mode catches up with Node mode.** Browser projects now support native V8 coverage, `rs.mock`, `includeSource`, `globalSetup`, Module Federation, and the watch shortcuts, used the same way as in Node mode. See [Browser mode](/guide/browser-testing).
+
+## Upgrade to Rstest 0.12
+
+Upgrade the `@rstest/*` packages to 0.12. The release includes breaking changes to the JavaScript API and some reporter types. If your project uses `@rstest/core/api` directly or has custom reporters, review those changes before upgrading. See [A new JavaScript API](#javascript-api) and [Rstest instance](/api/javascript-api/instance) for details.
+
+For a full list of changes, see the [v0.12.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.12.0).

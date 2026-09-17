@@ -1,0 +1,91 @@
+.root {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 20px 0 28px;
+}
+
+.group,
+.row {
+  display: contents;
+}
+
+.groupLabel {
+  grid-column: 1 / -1;
+  margin: 8px 0 0 !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rp-c-text-1);
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--rp-font-family-mono);
+  font-size: 13px;
+  color: var(--rp-c-text-2);
+}
+
+.track {
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--rp-c-text-3) 14%, transparent);
+}
+
+.fill,
+.fillHighlight {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fill {
+  background: color-mix(in srgb, var(--rp-c-text-3) 55%, transparent);
+}
+
+.fillHighlight {
+  background: linear-gradient(279deg, #ff8b00 35.21%, #f93920 63.34%);
+}
+
+.value,
+.valueVisible {
+  min-width: 60px;
+  text-align: right;
+  font-family: var(--rp-font-family-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--rp-c-text-1);
+  transition: opacity 0.6s ease;
+}
+
+.value {
+  opacity: 0;
+}
+
+.valueVisible {
+  opacity: 1;
+}
+
+.note {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--rp-c-brand) 40%, transparent);
+  color: var(--rp-c-brand);
+  font-family: var(--rp-font-family-base);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill,
+  .fillHighlight,
+  .value,
+  .valueVisible {
+    transition: none;
+  }
+}
