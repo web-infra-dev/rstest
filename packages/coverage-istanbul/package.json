@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.11.12",
+  "version": "0.12.0",
   "description": "Istanbul coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -53,6 +53,6 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@rstest/core": "^0.11.0"
+    "@rstest/core": "^0.12.0"
   }
 }
