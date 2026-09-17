@@ -102,7 +102,14 @@ class Cli {
     }
 
     return new Promise<void>((resolve) => {
-      treeKill(pid, 'SIGKILL', () => resolve());
+      const finish = () => resolve();
+
+      child.once('exit', finish);
+      treeKill(pid, 'SIGKILL', () => {
+        if (child.exitCode != null || child.signalCode != null) {
+          finish();
+        }
+      });
     });
   };
 
