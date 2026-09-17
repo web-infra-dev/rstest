@@ -13,7 +13,6 @@ authors:
 
 import { BenchBars } from '@components/BenchBars';
 import { MdOnly } from '@components/MdOnly';
-import { PoolPicker } from '@components/PoolPicker';
 import { WebOnly } from '@components/WebOnly';
 import { BlogAuthors } from '@rstackjs/doc-ui/blog-authors';
 
@@ -167,10 +166,6 @@ Rstest now offers four pools. Choose by scenario:
 | `threads`   | Many light test files                                                  | Some process-level capabilities are unavailable |
 | `vmThreads` | Many jsdom / happy-dom tests; the fastest option                       | Cross-realm and custom loader limitations       |
 | `vmForks`   | VM pool speed plus process-level capabilities                          | Process-level state must not leak between files |
-
-<WebOnly>
-  <PoolPicker />
-</WebOnly>
 
 Before switching, confirm that the bottleneck is worker startup or module loading. Costs such as database initialization or network requests in setup files do not shrink with a different pool. Enable a pool through `pool.type`:
 
