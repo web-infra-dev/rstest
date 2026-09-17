@@ -11,6 +11,10 @@ authors:
     github: 'fi3ework'
 ---
 
+import { BenchBars } from '@components/BenchBars';
+import { MdOnly } from '@components/MdOnly';
+import { PoolPicker } from '@components/PoolPicker';
+import { WebOnly } from '@components/WebOnly';
 import { BlogAuthors } from '@rstackjs/doc-ui/blog-authors';
 
 # Rstest 0.12 发布
@@ -128,16 +132,40 @@ it('loads a federated remote', async () => {
 
 在一个 2,400 个文件、20,000 个测试的 jsdom benchmark 项目中（15 个 worker，每个进程从空 cache 启动）：
 
-<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+<WebOnly>
+  <BenchBars
+    groups={[
+      {
+        bars: [
+          { label: 'forks', value: 315.17 },
+          {
+            label: 'vmThreads',
+            value: 33.22,
+            highlight: true,
+            note: '快 9.5 倍',
+          },
+        ],
+      },
+    ]}
+  />
+</WebOnly>
+
+<MdOnly>
 
 | Pool        |    总耗时 |
 | ----------- | --------: |
 | `forks`     |   315.17s |
 | `vmThreads` | ⚡ 33.22s |
 
-</div>
+</MdOnly>
 
 Rstest 目前提供四种 pool，可根据测试场景选择：
+
+<WebOnly>
+  <PoolPicker />
+</WebOnly>
+
+<MdOnly>
 
 | Pool        | 适用场景                                              | 限制                              |
 | ----------- | ----------------------------------------------------- | --------------------------------- |
@@ -145,6 +173,8 @@ Rstest 目前提供四种 pool，可根据测试场景选择：
 | `threads`   | 测试文件多且执行较轻                                  | 不支持部分进程级能力              |
 | `vmThreads` | 大量 jsdom / happy-dom 测试，性能最佳                 | 存在跨 realm 与自定义 loader 限制 |
 | `vmForks`   | 兼顾 VM pool 性能与进程能力                           | 需避免进程级状态残留              |
+
+</MdOnly>
 
 切换前建议先确认瓶颈确实在 worker 启动或模块加载，setup 中的数据库初始化、网络请求等开销不会因更换 pool 而减少。通过 `pool.type` 启用：
 
@@ -169,14 +199,35 @@ export default defineConfig({
 
 此前每个 worker 都要通过 Node.js 的模块系统各自加载 jsdom 或 happy-dom，把环境里的所有模块文件逐个解析并执行。开启 prebundle 后，Rstest 先把环境构建成一份 ESM bundle，所有 worker 共用这一份，重复的解析与初始化基本被省掉。100 个文件、1,000 个测试的基准：
 
-<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+<WebOnly>
+  <BenchBars
+    groups={[
+      {
+        label: 'jsdom 30.0.1',
+        bars: [
+          { label: '直接加载', value: 16.99 },
+          { label: 'Prebundle', value: 10.57, highlight: true, note: '-37.8%' },
+        ],
+      },
+      {
+        label: 'happy-dom 20.11.1',
+        bars: [
+          { label: '直接加载', value: 6.35 },
+          { label: 'Prebundle', value: 2.98, highlight: true, note: '-53.0%' },
+        ],
+      },
+    ]}
+  />
+</WebOnly>
+
+<MdOnly>
 
 | Environment       | 直接加载 | Prebundle |      提升 |
 | ----------------- | -------: | --------: | --------: |
 | jsdom 30.0.1      |   16.99s | ⚡ 10.57s | **37.8%** |
 | happy-dom 20.11.1 |    6.35s |  ⚡ 2.98s | **53.0%** |
 
-</div>
+</MdOnly>
 
 从 0.12 版本开始，`testEnvironment.prebundle` 默认为 `'auto'`，Rstest 会对 `jsdom` 15–26、29–30 和 `happy-dom` 20 进行预打包。其他版本继续直接加载；prebundle 构建、加载或校验失败时也会回退到直接加载。如果你的环境在打包后行为不一致，可以显式关闭：
 

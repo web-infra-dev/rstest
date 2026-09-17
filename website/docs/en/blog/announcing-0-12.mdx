@@ -11,6 +11,10 @@ authors:
     github: 'fi3ework'
 ---
 
+import { BenchBars } from '@components/BenchBars';
+import { MdOnly } from '@components/MdOnly';
+import { PoolPicker } from '@components/PoolPicker';
+import { WebOnly } from '@components/WebOnly';
 import { BlogAuthors } from '@rstackjs/doc-ui/blog-authors';
 
 # Announcing Rstest 0.12
@@ -128,16 +132,40 @@ For suites with many jsdom / happy-dom test files, the new [vmThreads](/config/t
 
 On a jsdom benchmark project of 2,400 files and 20,000 tests (15 workers, every process starting from an empty cache):
 
-<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+<WebOnly>
+  <BenchBars
+    groups={[
+      {
+        bars: [
+          { label: 'forks', value: 315.17 },
+          {
+            label: 'vmThreads',
+            value: 33.22,
+            highlight: true,
+            note: '9.5× faster',
+          },
+        ],
+      },
+    ]}
+  />
+</WebOnly>
+
+<MdOnly>
 
 | Pool        | Wall time |
 | ----------- | --------: |
 | `forks`     |   315.17s |
 | `vmThreads` | ⚡ 33.22s |
 
-</div>
+</MdOnly>
 
 Rstest now offers four pools. Choose by scenario:
+
+<WebOnly>
+  <PoolPicker />
+</WebOnly>
+
+<MdOnly>
 
 | Pool        | Suitable for                                                           | Limitations                                     |
 | ----------- | ---------------------------------------------------------------------- | ----------------------------------------------- |
@@ -145,6 +173,8 @@ Rstest now offers four pools. Choose by scenario:
 | `threads`   | Many light test files                                                  | Some process-level capabilities are unavailable |
 | `vmThreads` | Many jsdom / happy-dom tests; the fastest option                       | Cross-realm and custom loader limitations       |
 | `vmForks`   | VM pool speed plus process-level capabilities                          | Process-level state must not leak between files |
+
+</MdOnly>
 
 Before switching, confirm that the bottleneck is worker startup or module loading. Costs such as database initialization or network requests in setup files do not shrink with a different pool. Enable a pool through `pool.type`:
 
@@ -169,14 +199,35 @@ Besides cutting worker costs with VM pools, 0.12 also supports and enables by de
 
 Previously every worker loaded jsdom or happy-dom through Node.js's own module system, resolving and executing every module file in the environment one by one. With prebundle enabled, Rstest first builds the environment into one ESM bundle that all workers share, which removes most of that repeated work. On a benchmark of 100 files and 1,000 tests:
 
-<div style={{ fontVariantNumeric: 'tabular-nums' }}>
+<WebOnly>
+  <BenchBars
+    groups={[
+      {
+        label: 'jsdom 30.0.1',
+        bars: [
+          { label: 'Native', value: 16.99 },
+          { label: 'Prebundle', value: 10.57, highlight: true, note: '-37.8%' },
+        ],
+      },
+      {
+        label: 'happy-dom 20.11.1',
+        bars: [
+          { label: 'Native', value: 6.35 },
+          { label: 'Prebundle', value: 2.98, highlight: true, note: '-53.0%' },
+        ],
+      },
+    ]}
+  />
+</WebOnly>
+
+<MdOnly>
 
 | Environment       | Native | Prebundle | Improvement |
 | ----------------- | -----: | --------: | ----------: |
 | jsdom 30.0.1      | 16.99s | ⚡ 10.57s |   **37.8%** |
 | happy-dom 20.11.1 |  6.35s |  ⚡ 2.98s |   **53.0%** |
 
-</div>
+</MdOnly>
 
 Starting from 0.12, `testEnvironment.prebundle` defaults to `'auto'`, and Rstest applies prebundle to `jsdom` 15–26 and 29–30, and `happy-dom` 20. Other versions keep native loading, and a prebundle that fails to build, load, or validate falls back to the native entry as well. If your environment behaves differently after bundling, turn it off explicitly:
 

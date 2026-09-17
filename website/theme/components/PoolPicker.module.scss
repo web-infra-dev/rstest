@@ -1,0 +1,144 @@
+.root {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 24px;
+  margin: 20px 0 28px;
+  padding: 20px 0;
+  border-top: 1px solid var(--rp-c-divider-light);
+  border-bottom: 1px solid var(--rp-c-divider-light);
+}
+
+.needs,
+.result {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  margin: 0 !important;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--rp-c-text-1);
+}
+
+.hint {
+  margin: 2px 0 14px !important;
+  font-size: 13px;
+  color: var(--rp-c-text-2);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.option,
+.optionActive {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--rp-c-divider);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--rp-c-text-2);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background-color 0.2s;
+
+  &:hover {
+    border-color: var(--rp-c-brand);
+    color: var(--rp-c-text-1);
+  }
+}
+
+.optionActive {
+  border-color: var(--rp-c-brand);
+  background: color-mix(in srgb, var(--rp-c-brand) 10%, transparent);
+  color: var(--rp-c-brand);
+}
+
+.result {
+  justify-content: center;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--rp-c-brand) 35%, transparent);
+  background: color-mix(in srgb, var(--rp-c-brand) 5%, transparent);
+}
+
+.recommended {
+  margin: 0 !important;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rp-c-text-2);
+}
+
+.pool {
+  margin: 4px 0 10px !important;
+  font-family: var(--rp-font-family-mono);
+  font-size: 24px;
+  font-weight: 700;
+  animation: pop 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+
+  a {
+    color: var(--rp-c-brand);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.why,
+.caveat {
+  margin: 0 !important;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.why {
+  color: var(--rp-c-text-1);
+}
+
+.caveat {
+  color: var(--rp-c-text-2);
+}
+
+.snippet {
+  margin: 12px 0 0 !important;
+  font-family: var(--rp-font-family-mono);
+  font-size: 12px;
+  color: var(--rp-c-text-2);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pool {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .root {
+    grid-template-columns: 1fr;
+  }
+}
