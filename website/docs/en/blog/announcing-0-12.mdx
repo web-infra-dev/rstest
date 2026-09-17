@@ -84,7 +84,7 @@ An existing Playwright Test project can be migrated with the [migrate-to-rstest]
 
 Rstest 0.12 supports testing [Module Federation](https://module-federation.io/) applications. Test code imports remote modules the same way a consumer application does. Rstest loads the real exposed modules and resolves the shared dependencies, so integration problems between consumer and producer show up in unit tests instead of during integration or after release.
 
-Node, jsdom / happy-dom, and browser mode are all supported. See the [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and the [browser mode example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) for complete projects.
+Module Federation is supported in Rstest's Node, jsdom, happy-dom, and browser mode. See the [Node example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and the [browser mode example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) for complete projects.
 
 To add Module Federation testing to a project, use the [@module-federation/rstest](https://github.com/module-federation/core) plugin: register it in the config and declare the remotes and shared dependencies:
 
@@ -159,15 +159,13 @@ export default defineConfig({
 });
 ```
 
-The new `pool.memoryLimit` option decides when a reused worker is recycled: after each file, Rstest checks the worker's V8 heap usage and swaps in a new worker once the threshold is reached. For VM pools the default is `system memory / maxWorkers`. `forks` with `isolate: false` can use the option too, in which case the child process's RSS is checked instead.
-
-VM pools do not fully replace the native Node.js loader: values from other realms fail `instanceof` checks, custom loaders are unsupported, and synchronous `require(esm)` needs Node.js 24.9 or later.
+For suites with many test files, [pool.memoryLimit](/config/test/pool#poolmemorylimit) caps the memory of a single worker: once the threshold is reached, Rstest replaces it with a new worker.
 
 > See [Choose a pool type](/config/test/pool#choose-a-pool-type) for the full selection guidance and what the VM pools support.
 
 ## Faster jsdom / happy-dom loading \{#prebundle}
 
-Besides cutting worker costs with VM pools, 0.12 also reduces the repeated loading cost of jsdom / happy-dom through [test environment prebundle](/config/test/test-environment#environment-prebundle), which is enabled by default in 0.12.
+Besides cutting worker costs with VM pools, 0.12 also supports and enables by default [test environment prebundle](/config/test/test-environment#environment-prebundle), which reduces the repeated loading cost of jsdom / happy-dom.
 
 Previously every worker loaded jsdom or happy-dom through Node.js's own module system, resolving and executing every module file in the environment one by one. With prebundle enabled, Rstest first builds the environment into one ESM bundle that all workers share, which removes most of that repeated work. On a benchmark of 100 files and 1,000 tests:
 

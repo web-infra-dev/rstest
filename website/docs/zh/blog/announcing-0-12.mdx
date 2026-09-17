@@ -84,7 +84,7 @@ export default defineConfig({
 
 Rstest 0.12 支持测试 [Module Federation](https://module-federation.io/) 应用。测试代码可以像消费者应用一样直接导入远程模块，Rstest 会真正加载生产者暴露的模块并解析共享依赖，消费者与生产者之间的集成问题在单元测试阶段就能发现，不必等到联调或上线。
 
-Node、jsdom / happy-dom 与 browser mode 等环境均支持，完整项目可以参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)与 [browser mode 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。
+在 Rstest 的 Node、jsdom、happy-dom、browser mode 模式中，均支持 Module Federation。完整项目可以参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)与 [browser mode 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。
 
 要在项目中接入 Module Federation 测试，使用 [@module-federation/rstest](https://github.com/module-federation/core) 插件，在配置中注册并声明远程模块与共享依赖即可：
 
@@ -159,15 +159,13 @@ export default defineConfig({
 });
 ```
 
-配套新增的 `pool.memoryLimit` 决定何时回收被复用的 worker：每个文件结束后检查 worker 的 V8 heap 用量，达到阈值就换一个新的。VM pool 的默认值是「系统内存 / maxWorkers」。`isolate: false` 的 `forks` 也可以使用这个选项，此时检查的是子进程的 RSS。
-
-VM pool 不能完全替代 Node.js 原生的 loader：来自其他 realm 的值通不过 `instanceof` 检查，不支持自定义 loader，同步 `require(esm)` 需要 Node.js 24.9 以上。
+测试文件很多时，可以用 [pool.memoryLimit](/config/test/pool#poolmemorylimit) 限制单个 worker 的内存占用，超过阈值 Rstest 会自动换新 worker。
 
 > 参考[如何选择 pool 类型](/config/test/pool#如何选择-pool-类型)了解完整的选择依据，以及 VM pool 的兼容范围。
 
 ## 更快的 jsdom / happy-dom 加载 \{#prebundle}
 
-除了通过 VM pool 降低 worker 开销，0.12 还支持通过[预打包 test environment](/config/test/test-environment#环境预打包)减少 jsdom / happy-dom 的重复加载成本，此项优化在 0.12 默认开启。
+除了通过 VM pool 降低 worker 开销，0.12 还支持并默认开启[预打包 test environment](/config/test/test-environment#环境预打包)，减少 jsdom / happy-dom 的重复加载成本。
 
 此前每个 worker 都要通过 Node.js 的模块系统各自加载 jsdom 或 happy-dom，把环境里的所有模块文件逐个解析并执行。开启 prebundle 后，Rstest 先把环境构建成一份 ESM bundle，所有 worker 共用这一份，重复的解析与初始化基本被省掉。100 个文件、1,000 个测试的基准：
 
