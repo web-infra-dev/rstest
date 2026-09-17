@@ -888,7 +888,8 @@ const playwrightFixtures = {
     const artifacts = getTraceArtifacts(playwright, task);
     let activeArtifacts: TraceArtifacts | undefined;
     let traceStarted = false;
-    let released = false;
+    let cleanupPromise: Promise<void> | undefined;
+    let finishCleanupPromise: Promise<void> | undefined;
     let finalized = false;
     let traceReported = false;
     let releaseBrowser: ReturnType<typeof retainBrowser> | undefined;
@@ -912,93 +913,123 @@ const playwrightFixtures = {
       finalized = true;
     };
 
-    const finishContextCleanup = async (scheduleBrowserCleanup: boolean) => {
-      try {
-        if (stagedTraceDir && stagedTracePath) {
+    const finishContextCleanup = (scheduleBrowserCleanup: boolean) => {
+      if (finishCleanupPromise) {
+        return finishCleanupPromise;
+      }
+
+      const cleanup = (async () => {
+        try {
+          if (stagedTraceDir && stagedTracePath) {
+            try {
+              if (task.result?.status === 'fail' && artifacts) {
+                activeArtifacts = await reserveTraceArtifacts(artifacts);
+                try {
+                  await copyFile(stagedTracePath, activeArtifacts.tracePath);
+                } catch (error) {
+                  await rm(activeArtifacts.dir, {
+                    recursive: true,
+                    force: true,
+                  });
+                  activeArtifacts = undefined;
+                  throw error;
+                }
+              }
+            } finally {
+              await rm(stagedTraceDir, { recursive: true, force: true });
+              stagedTraceDir = undefined;
+              stagedTracePath = undefined;
+            }
+          }
+
+          await finalizeTrace();
+        } finally {
+          await releaseBrowser?.(scheduleBrowserCleanup);
+        }
+      })();
+
+      finishCleanupPromise = cleanup;
+      void cleanup.catch(() => {
+        if (finishCleanupPromise === cleanup) {
+          finishCleanupPromise = undefined;
+        }
+      });
+
+      return cleanup;
+    };
+
+    const cleanupContext = () => {
+      if (cleanupPromise) {
+        // The first cleanup error has already been recorded by the runner
+        // before onTestFailed invokes this compensation path.
+        return cleanupPromise.catch(async () => {
+          if (task.result?.status === 'fail' && !finalized) {
+            await finishContextCleanup(false);
+          }
+        });
+      }
+
+      cleanupPromise = (async () => {
+        try {
           try {
-            if (task.result?.status === 'fail' && artifacts) {
-              activeArtifacts = await reserveTraceArtifacts(artifacts);
-              try {
-                await copyFile(stagedTracePath, activeArtifacts.tracePath);
-              } catch (error) {
-                await rm(activeArtifacts.dir, {
-                  recursive: true,
-                  force: true,
-                });
-                activeArtifacts = undefined;
-                throw error;
+            if (artifacts && traceStarted) {
+              const shouldSaveTrace =
+                artifacts.options.mode === 'on' ||
+                artifacts.options.mode === 'on-first-retry' ||
+                artifacts.options.mode === 'on-all-retries' ||
+                task.result?.status === 'fail';
+              const shouldStageTrace =
+                artifacts.options.mode === 'retain-on-failure' &&
+                task.result?.status !== 'fail';
+
+              if (shouldSaveTrace) {
+                activeArtifacts = await reserveTraceArtifacts(artifacts);
+                try {
+                  await context.tracing.stop({
+                    path: activeArtifacts.tracePath,
+                  });
+                } catch (error) {
+                  await rm(activeArtifacts.dir, {
+                    recursive: true,
+                    force: true,
+                  });
+                  activeArtifacts = undefined;
+                  throw error;
+                }
+              } else if (shouldStageTrace) {
+                stagedTraceDir = await mkdtemp(
+                  join(tmpdir(), 'rstest-playwright-trace-'),
+                );
+                stagedTracePath = join(stagedTraceDir, 'trace.zip');
+                try {
+                  await context.tracing.stop({ path: stagedTracePath });
+                } catch (error) {
+                  await rm(stagedTraceDir, {
+                    recursive: true,
+                    force: true,
+                  });
+                  stagedTraceDir = undefined;
+                  stagedTracePath = undefined;
+                  throw error;
+                }
+              } else {
+                await context.tracing.stop();
               }
             }
           } finally {
-            await rm(stagedTraceDir, { recursive: true, force: true });
-            stagedTraceDir = undefined;
-            stagedTracePath = undefined;
+            await context.close();
           }
+        } catch (error) {
+          if (task.result?.status === 'fail') {
+            await finishContextCleanup(false);
+          }
+          throw error;
         }
 
-        await finalizeTrace();
-      } finally {
-        await releaseBrowser?.(scheduleBrowserCleanup);
-      }
-    };
-
-    const cleanupContext = async () => {
-      if (released) {
         await finishContextCleanup(task.result?.status !== 'fail');
-        return;
-      }
+      })();
 
-      released = true;
-
-      try {
-        try {
-          if (artifacts && traceStarted) {
-            const shouldSaveTrace =
-              artifacts.options.mode === 'on' ||
-              artifacts.options.mode === 'on-first-retry' ||
-              artifacts.options.mode === 'on-all-retries' ||
-              task.result?.status === 'fail';
-            const shouldStageTrace =
-              artifacts.options.mode === 'retain-on-failure' &&
-              task.result?.status !== 'fail';
-
-            if (shouldSaveTrace) {
-              activeArtifacts = await reserveTraceArtifacts(artifacts);
-              try {
-                await context.tracing.stop({ path: activeArtifacts.tracePath });
-              } catch (error) {
-                await rm(activeArtifacts.dir, { recursive: true, force: true });
-                activeArtifacts = undefined;
-                throw error;
-              }
-            } else if (shouldStageTrace) {
-              stagedTraceDir = await mkdtemp(
-                join(tmpdir(), 'rstest-playwright-trace-'),
-              );
-              stagedTracePath = join(stagedTraceDir, 'trace.zip');
-              try {
-                await context.tracing.stop({ path: stagedTracePath });
-              } catch (error) {
-                await rm(stagedTraceDir, { recursive: true, force: true });
-                stagedTraceDir = undefined;
-                stagedTracePath = undefined;
-                throw error;
-              }
-            } else {
-              await context.tracing.stop();
-            }
-          }
-        } finally {
-          await context.close();
-        }
-      } catch (error) {
-        if (task.result?.status === 'fail') {
-          await finishContextCleanup(false);
-        }
-        throw error;
-      }
-
-      await finishContextCleanup(task.result?.status !== 'fail');
+      return cleanupPromise;
     };
 
     onTestFailed(cleanupContext, 0);
