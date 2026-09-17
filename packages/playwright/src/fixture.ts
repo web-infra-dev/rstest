@@ -944,7 +944,14 @@ const playwrightFixtures = {
 
     const cleanupContext = () => {
       if (cleanupPromise) {
-        return cleanupPromise;
+        // A second invocation only happens when the first cleanup rejected
+        // (e.g. context.close threw during onTestFinished) and the runner
+        // subsequently marked the test failed, then fired onTestFailed.
+        // Finalize with the updated status so staged traces are promoted
+        // and the retained browser is released.
+        return cleanupPromise.catch(() =>
+          finishContextCleanup(task.result?.status !== 'fail'),
+        );
       }
 
       cleanupPromise = (async () => {
