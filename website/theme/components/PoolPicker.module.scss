@@ -55,14 +55,19 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 20px;
+  gap: 10px;
+  margin-top: 16px;
+
+  &[data-compact='true'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .tile {
   display: flex;
   flex-direction: column;
-  padding: 14px 16px 12px;
+  gap: 8px;
+  padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid var(--rp-c-divider-light);
   transition:
@@ -85,12 +90,11 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
 }
 
 .tilePool {
   font-family: var(--rp-font-family-mono);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--rp-c-text-1);
   text-decoration: none !important;
@@ -170,7 +174,8 @@
     padding: 16px;
   }
 
-  .grid {
-    grid-template-columns: 1fr;
+  .grid,
+  .grid[data-compact='true'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

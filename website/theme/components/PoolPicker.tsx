@@ -383,7 +383,7 @@ export function PoolPicker() {
           );
         })}
       </div>
-      <div className={styles.grid}>
+      <div className={styles.grid} data-compact={selected.size === 0}>
         {rate(selected, lang).map(({ pool, verdict, checks }) => (
           <div key={pool} className={styles.tile} data-verdict={verdict}>
             <div className={styles.tileHead}>
