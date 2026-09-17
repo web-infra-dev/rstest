@@ -87,7 +87,7 @@
 
 .tileHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -109,21 +109,26 @@
 }
 
 .tileVerdict {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--rp-c-divider);
+  font-size: 11px;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
   color: var(--rp-c-text-2);
 
   [data-verdict='best'] & {
-    color: var(--rp-c-brand);
+    border-color: transparent;
+    background: var(--rp-c-brand);
+    color: #fff;
   }
 
   [data-verdict='limited'] & {
     color: #d97706;
-  }
-
-  [data-verdict='no'] & {
-    text-decoration: line-through;
   }
 }
 
