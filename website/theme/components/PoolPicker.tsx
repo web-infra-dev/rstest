@@ -292,7 +292,8 @@ const TEXT: Record<
 interface Rated {
   pool: Pool;
   verdict: Verdict;
-  reasons: string[];
+  /** One sentence: the blocker for limited/no, the upside for best/ok. */
+  reason: string;
 }
 
 function rate(selected: Set<string>, lang: Lang): Rated[] {
@@ -303,7 +304,7 @@ function rate(selected: Set<string>, lang: Lang): Rated[] {
       return {
         pool,
         verdict: pool === 'forks' ? 'best' : 'ok',
-        reasons: pool === 'forks' ? [TEXT[lang].empty] : [],
+        reason: pool === 'forks' ? TEXT[lang].empty : '',
       };
     }
     const worst = own.reduce(
@@ -316,16 +317,11 @@ function rate(selected: Set<string>, lang: Lang): Rated[] {
           ? 'best'
           : 'ok'
         : worst;
-    // Blocking reasons first, then the upsides, so a "limited" row still says
-    // what the pool is good at.
-    const reasons = [
-      ...new Set(
-        [...own]
-          .sort((a, b) => RANK[a.verdict] - RANK[b.verdict])
-          .map((rule) => rule.reason[lang]),
-      ),
-    ];
-    return { pool, verdict, reasons };
+    const pick =
+      RANK[verdict] >= RANK.ok
+        ? (own.find((rule) => rule.verdict === verdict) ?? own[0])
+        : (own.find((rule) => rule.verdict === worst) ?? own[0]);
+    return { pool, verdict, reason: pick.reason[lang] };
   });
   // Always recommend something: when no pool is a clean fit, the best
   // remaining option(s) become the recommendation.
@@ -378,22 +374,45 @@ export function PoolPicker() {
           );
         })}
       </div>
-      <ul className={styles.results}>
-        {rate(selected, lang).map(({ pool, verdict, reasons }) => (
-          <li key={pool} className={styles.result} data-verdict={verdict}>
-            <Link
-              className={styles.pool}
-              href={toUrl(`/config/test/pool#${pool.toLowerCase()}`)}
-            >
-              {pool}
-            </Link>
-            <span className={styles.verdict}>{text.verdict[verdict]}</span>
-            <span className={styles.reasons}>
-              {reasons.join(lang === 'zh' ? '；' : '; ')}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {(() => {
+        const rated = rate(selected, lang);
+        const best = rated.filter((item) => item.verdict === 'best');
+        const rest = rated.filter((item) => item.verdict !== 'best');
+        return (
+          <>
+            <div className={styles.best}>
+              {best.map(({ pool, reason }) => (
+                <Link
+                  key={pool}
+                  className={styles.bestCard}
+                  href={toUrl(`/config/test/pool#${pool.toLowerCase()}`)}
+                >
+                  <span className={styles.bestTag}>{text.verdict.best}</span>
+                  <span className={styles.bestPool}>{pool}</span>
+                  <span className={styles.bestReason}>{reason}</span>
+                </Link>
+              ))}
+            </div>
+            <ul className={styles.rest}>
+              {rest.map(({ pool, verdict, reason }) => (
+                <li
+                  key={pool}
+                  className={styles.restItem}
+                  data-verdict={verdict}
+                >
+                  <span className={styles.restPool}>{pool}</span>
+                  <span className={styles.restVerdict}>
+                    {text.verdict[verdict]}
+                  </span>
+                  {reason && (
+                    <span className={styles.restReason}>{reason}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        );
+      })()}
     </div>
   );
 }
