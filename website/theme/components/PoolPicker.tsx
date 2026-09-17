@@ -335,7 +335,7 @@ function rate(selected: Set<string>, lang: Lang): Rated[] {
   // Always recommend something: when no pool is a clean fit, the best
   // remaining option(s) become the recommendation.
   const top = Math.max(...rated.map((item) => RANK[item.verdict]));
-  if (top < RANK.best && top > RANK.no) {
+  if (needs.length > 0 && top < RANK.best && top > RANK.no) {
     for (const item of rated) {
       if (RANK[item.verdict] === top) {
         item.verdict = 'best';
