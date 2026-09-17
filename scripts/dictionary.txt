@@ -218,5 +218,5 @@ webm
 webp
 worktree
 worktrees
-yuku
 Zenbook
+zimmerframe

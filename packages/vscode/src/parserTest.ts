@@ -1,4 +1,18 @@
-import { type Node, parse } from 'yuku-parser';
+import { type Lang, parseSync, type SourceType } from '@swc-next/parser';
+
+type Node = {
+  type: string;
+  start: number;
+  end: number;
+  name?: string;
+  value?: unknown;
+  callee?: Node;
+  object?: Node;
+  arguments?: Node[];
+  quasis?: { value: { cooked?: string; raw: string } }[];
+  expressions?: Node[];
+  [key: string]: unknown;
+};
 
 export class Range {
   constructor(
@@ -25,18 +39,13 @@ export const parseTestFile = (
     ): (() => void) | void;
   },
 ) => {
-  const result = parse(code, {
-    lang: 'tsx',
+  const result = parseSync(code, {
+    // SWC Next declares these runtime strings as ambient const enums, which
+    // cannot be referenced when isolatedModules is enabled.
+    lang: 'tsx' as Lang,
     preserveParens: false,
-    sourceType: 'module',
+    sourceType: 'module' as SourceType,
   });
-  const error = result.diagnostics.find(
-    (diagnostic) => diagnostic.severity === 'error',
-  );
-  if (error) {
-    throw new SyntaxError(error.message);
-  }
-
   const offsetToRange = (start: number, end: number): Range => {
     const lines = code.substring(0, start).split('\n');
     const startLine = Math.max(0, lines.length - 1);
@@ -56,10 +65,14 @@ export const parseTestFile = (
     if (node?.type !== 'TemplateLiteral') {
       return null;
     }
+    if (!node.quasis || !node.expressions) {
+      return null;
+    }
+    const expressions = node.expressions;
 
     return node.quasis
       .map((quasi, index) => {
-        const expression = index < node.expressions.length ? '${...}' : '';
+        const expression = index < expressions.length ? '${...}' : '';
         return `${quasi.value.cooked ?? quasi.value.raw}${expression}`;
       })
       .join('');
@@ -71,11 +84,11 @@ export const parseTestFile = (
     if (node.type === 'CallExpression') {
       let functionName: string | undefined;
 
-      if (node.callee.type === 'Identifier') {
+      if (node.callee?.type === 'Identifier') {
         functionName = node.callee.name;
       } else if (
-        node.callee.type === 'MemberExpression' &&
-        node.callee.object.type === 'Identifier'
+        node.callee?.type === 'MemberExpression' &&
+        node.callee.object?.type === 'Identifier'
       ) {
         functionName = node.callee.object.name;
       }
@@ -88,7 +101,7 @@ export const parseTestFile = (
       ) {
         exit = events.onTest(
           offsetToRange(node.start, node.end),
-          getStringLiteralValue(node.arguments[0]) || 'unnamed test',
+          getStringLiteralValue(node.arguments?.[0]) || 'unnamed test',
           functionName,
         );
       }
