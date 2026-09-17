@@ -261,19 +261,84 @@ const NEEDS: Need[] = [
   },
 ];
 
+// Static spec sheet per pool, from /config/test/pool "Pool types".
+const FACTS: Record<Pool, Record<Lang, [string, string][]>> = {
+  forks: {
+    zh: [
+      ['worker', '子进程，每文件新建'],
+      ['隔离', '进程级'],
+      ['进程 API', '完整'],
+      ['memoryLimit', '仅 isolate: false'],
+    ],
+    en: [
+      ['worker', 'child process per file'],
+      ['isolation', 'process'],
+      ['process API', 'full'],
+      ['memoryLimit', 'isolate: false only'],
+    ],
+  },
+  threads: {
+    zh: [
+      ['worker', 'worker thread，每文件新建'],
+      ['隔离', '线程级，共享进程'],
+      ['进程 API', '无 chdir / 信号'],
+      ['memoryLimit', '不支持'],
+    ],
+    en: [
+      ['worker', 'worker thread per file'],
+      ['isolation', 'thread, shared process'],
+      ['process API', 'no chdir / signals'],
+      ['memoryLimit', 'unsupported'],
+    ],
+  },
+  vmThreads: {
+    zh: [
+      ['worker', 'worker thread，跨文件复用'],
+      ['隔离', '每文件 vm.Context'],
+      ['进程 API', '无 chdir / 信号'],
+      ['memoryLimit', '默认开启'],
+    ],
+    en: [
+      ['worker', 'worker thread, reused'],
+      ['isolation', 'vm.Context per file'],
+      ['process API', 'no chdir / signals'],
+      ['memoryLimit', 'on by default'],
+    ],
+  },
+  vmForks: {
+    zh: [
+      ['worker', '子进程，跨文件复用'],
+      ['隔离', '每文件 vm.Context'],
+      ['进程 API', '完整'],
+      ['memoryLimit', '默认开启，按 RSS 调度'],
+    ],
+    en: [
+      ['worker', 'child process, reused'],
+      ['isolation', 'vm.Context per file'],
+      ['process API', 'full'],
+      ['memoryLimit', 'on by default, RSS-aware'],
+    ],
+  },
+};
+
+const MARK: Record<Verdict, string> = {
+  best: '✓',
+  ok: '✓',
+  limited: '△',
+  no: '✕',
+};
+
 const TEXT: Record<
   Lang,
   {
     title: string;
     hint: string;
-    empty: string;
     verdict: Record<Verdict, string>;
   }
 > = {
   en: {
     title: 'What does your test suite need?',
     hint: 'Pick any that apply. Each pool is rated against the selection.',
-    empty: 'The default; start here',
     verdict: {
       best: 'Recommended',
       ok: 'Works',
@@ -284,44 +349,48 @@ const TEXT: Record<
   zh: {
     title: '你的测试套件需要什么？',
     hint: '可多选，下面按所选条件给出每种 pool 的适配情况。',
-    empty: '默认选择，从这里开始',
     verdict: { best: '推荐', ok: '可用', limited: '受限', no: '不适用' },
   },
 };
 
-interface Rated {
-  pool: Pool;
+interface Check {
+  label: string;
   verdict: Verdict;
-  /** One sentence: the blocker for limited/no, the upside for best/ok. */
   reason: string;
 }
 
+interface Rated {
+  pool: Pool;
+  verdict: Verdict;
+  checks: Check[];
+}
+
 function rate(selected: Set<string>, lang: Lang): Rated[] {
-  const rules = NEEDS.filter((n) => selected.has(n.id)).flatMap((n) => n.rules);
+  const needs = NEEDS.filter((n) => selected.has(n.id));
   const rated = POOLS.map<Rated>((pool) => {
-    const own = rules.filter((rule) => rule.pool === pool);
-    if (own.length === 0) {
+    const checks = needs.map<Check>((need) => {
+      const rule =
+        need.rules.find((item) => item.pool === pool) ?? need.rules[0];
       return {
-        pool,
-        verdict: pool === 'forks' ? 'best' : 'ok',
-        reason: pool === 'forks' ? TEXT[lang].empty : '',
+        label: need.label[lang],
+        verdict: rule.verdict,
+        reason: rule.reason[lang],
       };
+    });
+    if (checks.length === 0) {
+      return { pool, verdict: pool === 'forks' ? 'best' : 'ok', checks };
     }
-    const worst = own.reduce(
+    const worst = checks.reduce(
       (acc, rule) => (RANK[rule.verdict] < RANK[acc] ? rule.verdict : acc),
       'best' as Verdict,
     );
     const verdict: Verdict =
       RANK[worst] >= RANK.ok
-        ? own.some((rule) => rule.verdict === 'best')
+        ? checks.some((rule) => rule.verdict === 'best')
           ? 'best'
           : 'ok'
         : worst;
-    const pick =
-      RANK[verdict] >= RANK.ok
-        ? (own.find((rule) => rule.verdict === verdict) ?? own[0])
-        : (own.find((rule) => rule.verdict === worst) ?? own[0]);
-    return { pool, verdict, reason: pick.reason[lang] };
+    return { pool, verdict, checks };
   });
   // Always recommend something: when no pool is a clean fit, the best
   // remaining option(s) become the recommendation.
@@ -375,21 +444,45 @@ export function PoolPicker() {
         })}
       </div>
       <div className={styles.grid}>
-        {rate(selected, lang).map(({ pool, verdict, reason }) => (
-          <Link
-            key={pool}
-            className={styles.tile}
-            data-verdict={verdict}
-            href={toUrl(`/config/test/pool#${pool.toLowerCase()}`)}
-          >
-            <span className={styles.tileHead}>
-              <span className={styles.tilePool}>{pool}</span>
+        {rate(selected, lang).map(({ pool, verdict, checks }) => (
+          <div key={pool} className={styles.tile} data-verdict={verdict}>
+            <div className={styles.tileHead}>
+              <Link
+                className={styles.tilePool}
+                href={toUrl(`/config/test/pool#${pool.toLowerCase()}`)}
+              >
+                {pool}
+              </Link>
               <span className={styles.tileVerdict}>
                 {text.verdict[verdict]}
               </span>
-            </span>
-            <span className={styles.tileReason}>{reason}</span>
-          </Link>
+            </div>
+            <dl className={styles.facts}>
+              {FACTS[pool][lang].map(([key, value]) => (
+                <div key={key} className={styles.fact}>
+                  <dt>{key}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {checks.length > 0 && (
+              <ul className={styles.checks}>
+                {checks.map((check) => (
+                  <li
+                    key={check.label}
+                    className={styles.check}
+                    data-verdict={check.verdict}
+                  >
+                    <span className={styles.mark}>{MARK[check.verdict]}</span>
+                    <span className={styles.checkLabel}>{check.label}</span>
+                    {RANK[check.verdict] < RANK.ok && (
+                      <span className={styles.checkReason}>{check.reason}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ))}
       </div>
     </div>
