@@ -333,7 +333,7 @@ function rate(selected: Set<string>, lang: Lang): Rated[] {
       }
     }
   }
-  return rated.sort((a, b) => RANK[b.verdict] - RANK[a.verdict]);
+  return rated;
 }
 
 export function PoolPicker() {
@@ -374,45 +374,24 @@ export function PoolPicker() {
           );
         })}
       </div>
-      {(() => {
-        const rated = rate(selected, lang);
-        const best = rated.filter((item) => item.verdict === 'best');
-        const rest = rated.filter((item) => item.verdict !== 'best');
-        return (
-          <>
-            <div className={styles.best}>
-              {best.map(({ pool, reason }) => (
-                <Link
-                  key={pool}
-                  className={styles.bestCard}
-                  href={toUrl(`/config/test/pool#${pool.toLowerCase()}`)}
-                >
-                  <span className={styles.bestTag}>{text.verdict.best}</span>
-                  <span className={styles.bestPool}>{pool}</span>
-                  <span className={styles.bestReason}>{reason}</span>
-                </Link>
-              ))}
-            </div>
-            <ul className={styles.rest}>
-              {rest.map(({ pool, verdict, reason }) => (
-                <li
-                  key={pool}
-                  className={styles.restItem}
-                  data-verdict={verdict}
-                >
-                  <span className={styles.restPool}>{pool}</span>
-                  <span className={styles.restVerdict}>
-                    {text.verdict[verdict]}
-                  </span>
-                  {reason && (
-                    <span className={styles.restReason}>{reason}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </>
-        );
-      })()}
+      <div className={styles.grid}>
+        {rate(selected, lang).map(({ pool, verdict, reason }) => (
+          <Link
+            key={pool}
+            className={styles.tile}
+            data-verdict={verdict}
+            href={toUrl(`/config/test/pool#${pool.toLowerCase()}`)}
+          >
+            <span className={styles.tileHead}>
+              <span className={styles.tilePool}>{pool}</span>
+              <span className={styles.tileVerdict}>
+                {text.verdict[verdict]}
+              </span>
+            </span>
+            <span className={styles.tileReason}>{reason}</span>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
