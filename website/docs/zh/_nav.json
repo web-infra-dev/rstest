@@ -16,7 +16,7 @@
   },
   {
     "text": "集成",
-    "link": "/integration/module-federation",
+    "link": "/integration/rslint",
     "activeMatch": "/integration/",
     "position": "right"
   },

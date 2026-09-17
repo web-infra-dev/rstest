@@ -44,9 +44,9 @@ export default defineConfig({
 
 ## Testing a federated app
 
-`federation` only prepares the test runtime; it does not configure remotes, exposes, or shared modules. When you use [@module-federation/rstest](https://github.com/module-federation/core), the plugin configures the Module Federation build and automatically enables Rstest's compatibility mode for Node-based test environments, so do not also set `federation: true`.
+`federation` only prepares the test runtime; it does not configure remotes, exposes, or shared modules. When you use [@module-federation/rstest](https://github.com/module-federation/core), the plugin configures the Module Federation build and automatically enables Rstest's compatibility mode for Node-based test environments, so you do not need to set `federation: true` again there. In Browser Mode the plugin does not enable it; set `federation: true` yourself when the project uses `globalSetup`.
 
-Start with the [Module Federation guide](/integration/module-federation) for installation and the Rstest testing workflow. See the [official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration and the complete plugin options.
+Start with the [Module Federation guide](/guide/advanced/module-federation) for installation and the Rstest testing workflow. See the [official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration and the complete plugin options.
 
 ```ts title="rstest.config.ts"
 import { federation } from '@module-federation/rstest';
@@ -67,4 +67,4 @@ export default defineConfig({
 });
 ```
 
-This Node-based example consumes a Node-targeted `remoteEntry.cjs`. Browser Mode should consume the browser build's `remoteEntry.js`. See the [Module Federation guide](/integration/module-federation) for the distinction and the [federation example](https://github.com/web-infra-dev/rstest/tree/main/examples/federation) for a complete setup with Browser Mode, HTTP remotes, local CommonJS remotes, and SSR tests.
+This Node-based example consumes a Node-targeted `remoteEntry.cjs`. Browser Mode should consume the browser build's `remoteEntry.js`. See the [Module Federation guide](/guide/advanced/module-federation) for the distinction and the [Node](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node) and [Browser](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser) examples for complete setups.

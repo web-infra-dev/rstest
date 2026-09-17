@@ -105,11 +105,15 @@ export default defineConfig({
         },
         {
           from: '^/guide/integration$',
-          to: '/integration/module-federation',
+          to: '/integration/rslint',
         },
         {
           from: '/guide/integration/module-federation',
-          to: '/integration/module-federation',
+          to: '/guide/advanced/module-federation',
+        },
+        {
+          from: '/integration/module-federation',
+          to: '/guide/advanced/module-federation',
         },
         {
           from: '/guide/integration/playwright',
@@ -177,11 +181,15 @@ export default defineConfig({
         },
         {
           from: '^/zh/guide/integration$',
-          to: '/zh/integration/module-federation',
+          to: '/zh/integration/rslint',
         },
         {
           from: '/zh/guide/integration/module-federation',
-          to: '/zh/integration/module-federation',
+          to: '/zh/guide/advanced/module-federation',
+        },
+        {
+          from: '/zh/integration/module-federation',
+          to: '/zh/guide/advanced/module-federation',
         },
         {
           from: '/zh/guide/integration/playwright',
