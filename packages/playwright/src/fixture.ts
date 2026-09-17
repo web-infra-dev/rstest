@@ -953,11 +953,12 @@ const playwrightFixtures = {
 
     const cleanupContext = () => {
       if (cleanupPromise) {
-        return cleanupPromise.catch(async (error) => {
+        // The first cleanup error has already been recorded by the runner
+        // before onTestFailed invokes this compensation path.
+        return cleanupPromise.catch(async () => {
           if (task.result?.status === 'fail' && !finalized) {
             await finishContextCleanup(false);
           }
-          throw error;
         });
       }
 
