@@ -24,6 +24,7 @@ import {
 } from './browser/loader';
 import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { createBrowserSetupGate } from './browser/globalSetupGate';
 import {
   type BrowserGlobalSetupStageResult,
   globalSetupFailureOutcome,
@@ -458,7 +459,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // `ensureRunResources()` does further down; the ordering that matters is the
   // launch, and the launch is the first browser cycle, deferred until those node
   // resources are up.
-  let browserExecutor: BrowserTestExecutor | undefined;
+  let loadedBrowserExecutor: BrowserTestExecutor | undefined;
   // Assigned once the teardown below exists; until then nothing can be closing.
   let isSessionClosing = () => false;
   const watchDriver = createWatchCycleDriver({
@@ -470,62 +471,19 @@ export async function runTests(context: Rstest): Promise<void> {
       activeTraceRun = traceRun;
     },
     enableCliShortcuts,
-    // Empty launches keep watching; a browser boot failure returned as an
-    // outcome can still leave no live session, and a node compile that ended in
-    // `failed` leaves no watcher to answer the banner either.
-    isSessionLive: () =>
-      (nodeExecutorToRun ? !nodeExecutorToRun.hasCompileFailed() : false) ||
-      (browserExecutor?.hasWatchSession() ?? false),
     isSessionClosing: () => isSessionClosing(),
   });
 
   if (hasBrowserTestsToRun) {
     const browserProjectsToRun = planner.getBrowserProjectsToRun();
-    browserExecutor = await loadBrowserExecutor(
+    loadedBrowserExecutor = await loadBrowserExecutor(
       context,
       browserProjectsToRun,
       coverageProvider,
       planner.getExecutorRunOptions(browserProjectsToRun),
     );
-    await browserExecutor.init();
-    const executor = browserExecutor;
-    // The host resolves the rerun scope before signalling (its file-set diff is
-    // consumed once), so the hint's filters are the scope this trigger asked
-    // for — the cycle's own is that, plus whatever any signal folded into it.
-    executor.onInvalidate(({ fileFilters }) =>
-      watchDriver.runCycle(executor, {
-        mode: 'on-demand',
-        fileFilters,
-        trigger: 'invalidation',
-      }),
-    );
+    await loadedBrowserExecutor.init();
   }
-
-  let nodeFileFilterPatterns = context.fileFilters;
-  let nodeFileFilters =
-    nodeFileFilterPatterns !== undefined
-      ? await planner.globTestEntries(nodeFileFilterPatterns)
-      : undefined;
-  const browserTarget = browserExecutor;
-  const watchTargets: WatchSessionTargets = {
-    node: nodeExecutorToRun
-      ? {
-          runCycle: (options) =>
-            watchDriver.runCycle(nodeExecutorToRun, {
-              ...options,
-              fileFilters: options?.fileFilters ?? nodeFileFilters,
-            }),
-          globTestEntries: (filters) => planner.globTestEntries(filters),
-          setFileFilters: (fileFilters) => {
-            nodeFileFilterPatterns = undefined;
-            nodeFileFilters = fileFilters;
-          },
-        }
-      : undefined,
-    browser: browserTarget && {
-      rerun: (testPaths) => browserTarget.requestRerun(testPaths),
-    },
-  };
 
   // One teardown for the `q` shortcut, the fatal-signal handler, and the
   // config-change restart hook. The browser side closes first: its runtime owns
@@ -533,7 +491,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const watchTeardown = createWatchTeardown({
     context,
     executors: [
-      ...(browserExecutor ? [browserExecutor] : []),
+      ...(loadedBrowserExecutor ? [loadedBrowserExecutor] : []),
       ...(nodeExecutor ? [nodeExecutor] : []),
     ],
     traceController,
@@ -550,6 +508,73 @@ export async function runTests(context: Rstest): Promise<void> {
   watchTeardown.addCleanup(
     registerWatchSignalExit(context, closeActiveWatchSession),
   );
+
+  let nodeFileFilterPatterns = context.fileFilters;
+  let nodeFileFilters =
+    nodeFileFilterPatterns !== undefined
+      ? await planner.globTestEntries(nodeFileFilterPatterns)
+      : undefined;
+  // Declared ahead of the gate below, which reruns the node side from inside a
+  // browser cycle once a failed setup recovers.
+  const nodeWatchTarget: WatchSessionTargets['node'] = nodeExecutorToRun
+    ? {
+        runCycle: (options) =>
+          watchDriver.runCycle(nodeExecutorToRun, {
+            ...options,
+            fileFilters: options?.fileFilters ?? nodeFileFilters,
+          }),
+        globTestEntries: (filters) => planner.globTestEntries(filters),
+        setFileFilters: (fileFilters) => {
+          nodeFileFilterPatterns = undefined;
+          nodeFileFilters = fileFilters;
+        },
+      }
+    : undefined;
+
+  // Runs the browser projects' globalSetup and defers the launch until it
+  // succeeds; see `createBrowserSetupGate`.
+  const browserExecutor = loadedBrowserExecutor
+    ? createBrowserSetupGate({
+        context,
+        planner,
+        watchDriver,
+        watchTeardown,
+        executor: loadedBrowserExecutor,
+        onSetupSucceeded: () => {
+          // The node side is never deferred, so in a mixed watch it already ran
+          // a cycle against a `workerEnv` the failed setups had not written yet.
+          // Queued, not awaited: this fires from inside the browser cycle the
+          // driver is still serializing, which the node one would wait out.
+          void nodeWatchTarget
+            ?.runCycle({ mode: 'all', trigger: 'run-all' })
+            .catch((error) =>
+              logger.error(
+                color.red('Node rerun after browser globalSetup failed:'),
+                error,
+              ),
+            );
+        },
+      })
+    : undefined;
+  if (browserExecutor) {
+    // The host resolves the rerun scope before signalling (its file-set diff is
+    // consumed once), so the hint's filters are the scope this trigger asked
+    // for — the cycle's own is that, plus whatever any signal folded into it.
+    browserExecutor.onInvalidate(({ fileFilters }) =>
+      watchDriver.runCycle(browserExecutor, {
+        mode: 'on-demand',
+        fileFilters,
+        trigger: 'invalidation',
+      }),
+    );
+  }
+
+  const watchTargets: WatchSessionTargets = {
+    node: nodeWatchTarget,
+    browser: browserExecutor && {
+      rerun: (testPaths) => browserExecutor.requestRerun(testPaths),
+    },
+  };
 
   // Installed before the first cycle so the ready banner can never appear
   // before stdin has an owner (a keystroke answering it would be swallowed).
@@ -576,10 +601,6 @@ export async function runTests(context: Rstest): Promise<void> {
     watchTeardown.addCleanup(closeCliShortcuts);
   }
 
-  // Carried only by the initial browser cycle: that cycle is the host launch,
-  // and the host stores the change-set for the session, so a rerun's options
-  // never need it (the executor drops them).
-  let browserWatchEnv: Record<string, string | undefined> | undefined;
   try {
     if (browserExecutor) {
       // Ahead of the node dev server, for the reason the non-watch assembly runs
@@ -596,33 +617,11 @@ export async function runTests(context: Rstest): Promise<void> {
       if (watchTeardown.isClosing()) {
         return;
       }
-      const stage = await watchTeardown.track(
-        runBrowserGlobalSetupStage(context, planner.getBrowserProjectsToRun(), {
-          entriesCache: planner.getPlan().entriesCache,
-          watch: true,
-        }),
-      );
-      if (stage.errors.length) {
-        // Reported through the same finalize every cycle uses, so a watch
-        // session that dies in setup still leaves the reporters a run — and
-        // then rethrown, because a watch session that never opened has to end
-        // the process rather than sit on a stdin owner nothing can answer.
-        await notifyReportersOnTestRunStart(context);
-        await finalizeRunCycle(context, {
-          outcomes: [globalSetupFailureOutcome(stage.errors)],
-          mode: 'all',
-          isWatchMode: true,
-          coverageProvider,
-          reportOnFailure: coverage.reportOnFailure,
-          traceRun: activeTraceRun,
-        });
-        throw new AggregateError(stage.errors, 'Browser globalSetup failed');
-      }
+      await browserExecutor.runInitialStage();
       if (watchTeardown.isClosing()) {
         await closeWatchSession();
         return;
       }
-      browserWatchEnv = stage.env;
     }
 
     if (nodeExecutorToRun) {
@@ -653,11 +652,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (browserExecutor) {
       // Deferred to here so node env-dependency validation failures never leave a
       // browser host running — the same ordering the pre-seam code had.
-      const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
-        mode: 'all',
-        env: browserWatchEnv,
-      });
-      await initialBrowserCycle;
+      await watchDriver.runCycle(browserExecutor, { mode: 'all' });
     }
   } catch (error) {
     // A close already under way owns the exit; re-throwing its victim's

@@ -8,13 +8,16 @@ const root = join(fixtureDir, `.browser-${process.pid}`);
 const cycles = [];
 let watcher;
 let resolveNextCycle;
+// Long enough for the cycle that re-compiles a fixed globalSetup, runs it, and
+// then launches the browser its failure deferred — not just a plain rerun.
+const CYCLE_TIMEOUT_MS = 60_000;
 const waitForCycle = async (change) => {
   let timer;
   const nextCycle = new Promise((resolve, reject) => {
     resolveNextCycle = resolve;
     timer = setTimeout(
       () => reject(new Error('Browser watch cycle timed out')),
-      20_000,
+      CYCLE_TIMEOUT_MS,
     );
   });
   try {
@@ -84,12 +87,24 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
     cwd: root,
     config: { ...config, globalSetup: ['./globalSetup.ts'] },
   });
-  let setupRejection;
-  try {
-    watcher = await failedSetupRstest.watch();
-  } catch (error) {
-    setupRejection = error.message;
-  }
+  // A browser globalSetup failure is a retryable cycle outcome, not a startup
+  // rejection: the session stays open, and saving a fixed setup file retries the
+  // stage and launches the browser.
+  const setupCycles = [];
+  watcher = await failedSetupRstest.watch({
+    onResult(result) {
+      setupCycles.push({
+        status: result.status,
+        errors: result.unhandledErrors.map((error) => error.message),
+      });
+      resolveNextCycle?.();
+    },
+  });
+  await waitForCycle(() =>
+    writeFile(join(root, 'globalSetup.ts'), 'export default () => {};'),
+  );
+  await watcher.close();
+  watcher = undefined;
 
   const emptyRoot = join(root, 'empty');
   await mkdir(emptyRoot, { recursive: true });
@@ -111,17 +126,23 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
       },
     },
   });
+  // A fatal compile failure reattaches no watcher, so the cycle is reported and
+  // the session then ends — `watch()` rejects instead of handing back a session
+  // that can never rerun.
   let buildFailure;
-  watcher = await failedBuildRstest.watch({
-    onResult(result) {
-      buildFailure = {
-        status: result.status,
-        errors: result.unhandledErrors.map((error) => error.message),
-      };
-    },
-  });
-  await watcher.close();
-  watcher = undefined;
+  let buildFailureRejection;
+  try {
+    await failedBuildRstest.watch({
+      onResult(result) {
+        buildFailure = {
+          status: result.status,
+          errors: result.unhandledErrors.map((error) => error.message),
+        };
+      },
+    });
+  } catch (error) {
+    buildFailureRejection = error.message;
+  }
 
   const emptyProjectCycles = [];
   let startupCompiled = false;
@@ -167,8 +188,6 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
       },
     },
   });
-  await watcher?.close();
-  watcher = undefined;
   watcher = await emptyRstest.watch({
     onResult(result) {
       startupCompiledAtResult ??= startupCompiled;
@@ -199,8 +218,9 @@ it('runs after an empty start', () => expect(document.createElement('main').tagN
       file: result.results[0]?.testPath.split('/').pop(),
       errors: result.unhandledErrors.map((error) => error.message),
       cycles,
-      setupRejection,
+      setupCycles,
       buildFailure,
+      buildFailureRejection,
       emptyProjectCycles,
       startupCompiledAtResult,
     })}__END__`,

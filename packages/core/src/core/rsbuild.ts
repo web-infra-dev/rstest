@@ -399,6 +399,12 @@ export const createRsbuildServer = async ({
     setupEntries: EntryInfo[];
     globalSetupEntries: EntryInfo[];
     assetNames: string[];
+    /**
+     * Every source file this compile read, from the Rspack compilation graph —
+     * the entries plus everything they import. Absolute, unfiltered (node_modules
+     * included); a caller that watches them narrows the set itself.
+     */
+    getFileDependencies: () => string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     /** affected test entries only available in watch mode */
@@ -407,7 +413,6 @@ export const createRsbuildServer = async ({
     deletedEntries: string[];
   }>;
   closeServer: () => Promise<void>;
-  hasCompileFailed: () => boolean;
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
@@ -701,6 +706,7 @@ export const createRsbuildServer = async ({
         setupEntries,
         globalSetupEntries,
         assetNames,
+        getFileDependencies: () => [...stats.compilation.fileDependencies],
         getAssetFiles: async (names: string[]) => {
           return Object.fromEntries(
             await Promise.all(
@@ -734,7 +740,6 @@ export const createRsbuildServer = async ({
     return {
       closeServer: devServer.close,
       getRsbuildStats,
-      hasCompileFailed: () => round.failed,
     };
   } catch (error) {
     await devServer.close();
