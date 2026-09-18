@@ -8,12 +8,16 @@ import type { MessageHandler, WorkerChannel } from '../workerChannel';
 export abstract class BaseChannel implements WorkerChannel {
   protected abstract readonly source: NodeJS.EventEmitter;
 
-  async send(envelope: Envelope): Promise<void> {
+  send(envelope: Envelope): void {
     try {
-      await this.post(envelope);
+      this.post(envelope);
     } catch {
       // channel may already be closed during shutdown — ignore
     }
+  }
+
+  waitForPendingWrites(): Promise<void> {
+    return Promise.resolve();
   }
 
   on(handler: MessageHandler): void {
@@ -24,5 +28,5 @@ export abstract class BaseChannel implements WorkerChannel {
     this.source.off('message', handler);
   }
 
-  protected abstract post(envelope: Envelope): void | Promise<void>;
+  protected abstract post(envelope: Envelope): void;
 }

@@ -41,7 +41,11 @@ import {
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { loadCachedAssets, workerAssetCache } from './vm/assetCache';
-import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
+import {
+  createRuntimeRpc,
+  createWorkerRpcOptions,
+  waitForPendingRpcWrites,
+} from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -1071,7 +1075,7 @@ export const runInPool = async (
   const pendingRunnerHooks = new Set<Promise<void>>();
 
   const trackRunnerHook = (call: Promise<void>): Promise<void> => {
-    if (!isVmPool && !detectAsyncLeaks) {
+    if (!isVmPool) {
       return call;
     }
     pendingRunnerHooks.add(call);
@@ -1082,16 +1086,6 @@ export const runInPool = async (
       },
     );
     return call;
-  };
-
-  const waitForPendingRunnerHooks = async (): Promise<void> => {
-    if (pendingRunnerHooks.size === 0) {
-      return;
-    }
-
-    const pendingHooks = [...pendingRunnerHooks];
-    pendingRunnerHooks.clear();
-    await Promise.all(pendingHooks);
   };
 
   const exit = process.exit.bind(process);
@@ -1467,10 +1461,7 @@ export const runInPool = async (
     const results = await runner.runTests(testPath, runnerHooks, api);
 
     if (asyncLeakDetector) {
-      // Test result notifications use the worker IPC channel. Wait for the
-      // final batch to drain before sampling async resources, but keep result
-      // notifications asynchronous during test execution.
-      await waitForPendingRunnerHooks();
+      await waitForPendingRpcWrites();
 
       // Undo any time mocking before collecting leaks and before a reused worker
       // runs the next file. This must cover BOTH full fake timers and a

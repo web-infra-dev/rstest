@@ -5,6 +5,9 @@ import { channel } from './channels';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
+export const waitForPendingRpcWrites = (): Promise<void> =>
+  channel.waitForPendingWrites();
+
 type WorkerRpcOptions = Pick<
   BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'
@@ -17,7 +20,7 @@ export function createWorkerRpcOptions({
 }): WorkerRpcOptions {
   return {
     post(v) {
-      return channel.send(wrapRpc(v));
+      channel.send(wrapRpc(v));
     },
     on(fn) {
       const handler = (message: any, ...extras: any) => {
