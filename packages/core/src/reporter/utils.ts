@@ -169,9 +169,14 @@ export const logCase = (
 
   logger.log(`  ${icon} ${nameStr}${color.gray(duration)}${retry}${heap}`);
 
-  if (result.errors) {
-    for (const error of result.errors) {
-      logger.log(color.red(`    ${error.message}`));
+  const errors = result.status === 'pass' ? result.retryErrors : result.errors;
+  if (errors) {
+    for (const error of errors) {
+      const message =
+        result.status === 'pass'
+          ? `Previous failure: ${error.message}`
+          : error.message;
+      logger.log(color.red(`    ${message}`));
     }
   }
 };
