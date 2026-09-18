@@ -54,16 +54,16 @@ export default defineConfig({
                 },
               ],
             }),
-            // The native binary is copied, so the license scanner cannot discover it.
+            // SWC Next packages share one license, including the copied native binary.
             process.argv.includes('--watch') || !process.argv.includes('build')
               ? null
               : await licensePlugin(
                   'rstest VS Code extension',
                   false,
-                  ['@rstest/core'],
+                  ['@rstest/core', '@swc-next/parser', '@swc-next/decoder'],
                   [
                     {
-                      name: swcNextBindingPackage.name,
+                      name: `@swc-next/parser, @swc-next/decoder, ${swcNextBindingPackage.name}`,
                       license: swcNextBindingPackage.license,
                       licenseText: readFileSync(
                         `${dirname(swcNextBindingPath)}/LICENSE`,
