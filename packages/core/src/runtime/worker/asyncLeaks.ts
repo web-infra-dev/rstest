@@ -36,6 +36,9 @@ const IGNORED_ASYNC_RESOURCE_TYPES = new Set([
   'PerformanceObserver',
   'PIPEWRAP',
   'PROCESSWRAP',
+  // Forked workers can still be flushing an Rstest IPC result when leak
+  // collection starts; the write is owned by the runner, not the test.
+  'WRITEWRAP',
   'RANDOMBYTESREQUEST',
   'SIGNREQUEST',
   'WORKER',
