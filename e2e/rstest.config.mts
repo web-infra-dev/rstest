@@ -40,6 +40,19 @@ export default defineConfig({
   // Retry failed test cases in CI to reduce flaky failures without rerunning
   // the whole suite; keep local runs strict for faster feedback.
   retry: process.env.CI ? 2 : 0,
+  reporters: process.env.CI
+    ? [
+        'default',
+        [
+          'github-actions',
+          {
+            summary: {
+              maxCharsPerField: 10_000,
+            },
+          },
+        ],
+      ]
+    : ['default'],
   slowTestThreshold: 2_000,
   // Stabilize date/time based e2e fixtures across different runner timezones.
   // Some fixtures use `new Date('YYYY-MM-DD')` (UTC parsing) but assert on local
