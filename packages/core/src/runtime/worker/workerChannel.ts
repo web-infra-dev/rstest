@@ -9,6 +9,7 @@ export type MessageHandler = (message: unknown, ...extras: unknown[]) => void;
  */
 export interface WorkerChannel {
   send(envelope: Envelope): void;
+  waitForPendingWrites(): Promise<void>;
   on(handler: MessageHandler): void;
   off(handler: MessageHandler): void;
 }

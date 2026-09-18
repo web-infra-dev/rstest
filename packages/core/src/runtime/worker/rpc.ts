@@ -5,6 +5,9 @@ import { channel } from './channels';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
+export const waitForPendingRpcWrites = (): Promise<void> =>
+  channel.waitForPendingWrites();
+
 type WorkerRpcOptions = Pick<
   BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'

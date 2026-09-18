@@ -41,7 +41,11 @@ import {
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { loadCachedAssets, workerAssetCache } from './vm/assetCache';
-import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
+import {
+  createRuntimeRpc,
+  createWorkerRpcOptions,
+  waitForPendingRpcWrites,
+} from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -1457,6 +1461,8 @@ export const runInPool = async (
     const results = await runner.runTests(testPath, runnerHooks, api);
 
     if (asyncLeakDetector) {
+      await waitForPendingRpcWrites();
+
       // Undo any time mocking before collecting leaks and before a reused worker
       // runs the next file. This must cover BOTH full fake timers and a
       // date-only `setSystemTime()` pin (which leaves `isFakeTimers()` false);

@@ -16,6 +16,10 @@ export abstract class BaseChannel implements WorkerChannel {
     }
   }
 
+  waitForPendingWrites(): Promise<void> {
+    return Promise.resolve();
+  }
+
   on(handler: MessageHandler): void {
     this.source.on('message', handler);
   }
