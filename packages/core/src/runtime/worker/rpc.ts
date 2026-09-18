@@ -17,7 +17,7 @@ export function createWorkerRpcOptions({
 }): WorkerRpcOptions {
   return {
     post(v) {
-      channel.send(wrapRpc(v));
+      return channel.send(wrapRpc(v));
     },
     on(fn) {
       const handler = (message: any, ...extras: any) => {

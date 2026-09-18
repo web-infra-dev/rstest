@@ -8,7 +8,7 @@ export type MessageHandler = (message: unknown, ...extras: unknown[]) => void;
  * `worker_threads.Worker` or a `child_process.fork`.
  */
 export interface WorkerChannel {
-  send(envelope: Envelope): void;
+  send(envelope: Envelope): Promise<void>;
   on(handler: MessageHandler): void;
   off(handler: MessageHandler): void;
 }

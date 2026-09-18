@@ -844,7 +844,7 @@ export class TestRunner {
               result.retryErrors = retryErrors;
             }
             result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
-            hooks.onTestCaseResult?.(result);
+            await hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
           },

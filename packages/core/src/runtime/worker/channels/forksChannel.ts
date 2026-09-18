@@ -6,8 +6,17 @@ export class ForksChannel extends BaseChannel {
   private readonly processSend: typeof process.send =
     process.send?.bind(process);
 
-  protected post(envelope: Envelope): void {
-    if (!this.processSend) return;
-    this.processSend(envelope);
+  protected post(envelope: Envelope): Promise<void> {
+    if (!this.processSend) return Promise.resolve();
+
+    return new Promise<void>((resolve, reject) => {
+      this.processSend!(envelope, (error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 }
