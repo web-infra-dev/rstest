@@ -987,6 +987,7 @@ const loadFiles = async ({
     assetFiles,
     interopDefault,
     vmContext,
+    cacheCompilation: vmContext !== undefined,
   });
 };
 
