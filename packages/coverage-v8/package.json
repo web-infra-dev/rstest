@@ -38,8 +38,8 @@
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
     "picomatch": "^4.0.7",
-    "yuku-ast": "^0.10.1",
-    "yuku-parser": "^0.10.1"
+    "yuku-ast": "^0.10.2",
+    "yuku-parser": "^0.10.2"
   },
   "devDependencies": {
     "@rsbuild/core": "catalog:",

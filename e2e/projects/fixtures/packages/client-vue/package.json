@@ -16,6 +16,6 @@
     "@rstest/core": "workspace:*",
     "@vue/compiler-dom": "^3.5.42",
     "@vue/server-renderer": "^3.5.42",
-    "@vue/test-utils": "^2.5.0"
+    "@vue/test-utils": "^2.5.1"
   }
 }

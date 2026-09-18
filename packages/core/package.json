@@ -77,7 +77,7 @@
   "devDependencies": {
     "@antfu/install-pkg": "^1.1.0",
     "@babel/code-frame": "^7.29.7",
-    "@clack/prompts": "^1.8.0",
+    "@clack/prompts": "^1.8.1",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.59.1",
     "@rsbuild/plugin-less": "catalog:",
@@ -104,7 +104,7 @@
     "deepmerge": "^4.3.1",
     "happy-dom": "^20.14.5",
     "jsdom": "^29.1.1",
-    "memfs": "^4.76.0",
+    "memfs": "^4.78.0",
     "package-manager-detector": "^1.8.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
