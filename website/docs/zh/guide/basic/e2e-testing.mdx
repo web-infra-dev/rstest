@@ -44,6 +44,32 @@ test('page title', async ({ page }) => {
 });
 ```
 
+### Playwright 类型 {#playwright-types}
+
+<ApiMeta addedVersion="0.12.1" />
+
+`@rstest/playwright` 会重新导出常用的 Playwright 类型，因此测试辅助函数可以和 `test`、`expect` 使用同一个入口：
+
+```ts
+import { expect, test, type Locator, type Page } from '@rstest/playwright';
+
+const getHeading = (page: Page): Locator => page.locator('h1');
+
+test('page heading', async ({ page }) => {
+  await expect(getHeading(page)).toHaveText('Example Domain');
+});
+```
+
+这些仅类型导出包括 `APIRequestContext`、`APIResponse`、`Browser`、`BrowserContext`、`BrowserContextOptions`、`BrowserType`、`Frame`、`LaunchOptions`、`Locator`、`Page`、`Request`、`Response` 和 `Route`。
+
+`@rstest/playwright` 是 Rstest 的集成层，而不是 `playwright` 包的替代品。它不会 re-export `chromium`、`firefox`、`webkit` 或 `request` 等运行时 API。如果确实需要这些 API，请直接从 `playwright` 导入：
+
+```ts
+import { chromium, request } from 'playwright';
+```
+
+一般的 E2E 测试直接使用 `browser`、`context`、`page` 和 `request` fixtures 即可，Rstest 会按照 fixture 生命周期创建并清理这些资源。
+
 也可以从 `@rstest/playwright` 直接导入 `describe`、`beforeEach` 等生命周期方法：
 
 ```ts

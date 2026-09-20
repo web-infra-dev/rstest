@@ -47,6 +47,28 @@ test('page title', async ({ page }) => {
 });
 ```
 
+### Playwright types
+
+`@rstest/playwright` re-exports commonly used Playwright types so test helpers can use the same entry point as `test` and `expect`:
+
+```ts
+import { expect, test, type Locator, type Page } from '@rstest/playwright';
+
+const getHeading = (page: Page): Locator => page.locator('h1');
+
+test('page heading', async ({ page }) => {
+  await expect(getHeading(page)).toHaveText('Example Domain');
+});
+```
+
+`@rstest/playwright` is an Rstest integration layer, not a replacement for the `playwright` package. It re-exports selected types only and intentionally leaves runtime APIs such as `chromium`, `firefox`, `webkit`, and `request` in `playwright`:
+
+```ts
+import { chromium, request } from 'playwright';
+```
+
+For normal E2E tests, use the `browser`, `context`, `page`, and `request` fixtures instead. Rstest manages their lifecycle for you.
+
 ## Fixtures
 
 `test` extends Rstest with these Playwright fixtures:

@@ -12,8 +12,10 @@ import {
   resolveLaunchOptions,
   shouldCaptureTrace,
 } from '../src/fixture';
-import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
+  Browser,
+  BrowserContext,
+  Page,
   PlaywrightFixture,
   PlaywrightFixtures,
   PlaywrightOptions,
