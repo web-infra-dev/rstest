@@ -47,6 +47,22 @@ test('page title', async ({ page }) => {
 });
 ```
 
+### Playwright types
+
+`@rstest/playwright` re-exports commonly used Playwright types so test helpers can use the same entry point as `test` and `expect`:
+
+```ts
+import { expect, test, type Locator, type Page } from '@rstest/playwright';
+
+const getHeading = (page: Page): Locator => page.locator('h1');
+
+test('page heading', async ({ page }) => {
+  await expect(getHeading(page)).toHaveText('Example Domain');
+});
+```
+
+The package re-exports types only; import other Playwright runtime APIs directly from `playwright`.
+
 ## Fixtures
 
 `test` extends Rstest with these Playwright fixtures:

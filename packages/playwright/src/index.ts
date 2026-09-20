@@ -8,6 +8,21 @@ export {
   test,
 } from './fixture';
 export type {
+  APIRequestContext,
+  APIResponse,
+  Browser,
+  BrowserContext,
+  BrowserContextOptions,
+  BrowserType,
+  Frame,
+  LaunchOptions,
+  Locator,
+  Page,
+  Request,
+  Response,
+  Route,
+} from 'playwright';
+export type {
   LocatorAssertions,
   InViewportOptions,
   MatcherOptions,

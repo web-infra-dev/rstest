@@ -1,5 +1,5 @@
 import { expect, rstest, test } from '@rstest/core';
-import type { Page } from 'playwright';
+import type { Page } from '../src';
 
 const createPage = (title: string) =>
   ({

@@ -1,6 +1,6 @@
 import { describe, expect as rstestExpect, it, rs, rstest } from '@rstest/core';
-import type { Locator, Page } from 'playwright';
 import { expect, test } from '../src';
+import type { Locator, Page } from '../src';
 
 const createLocator = ({
   attributes = {},
