@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
-describe.sequential('browser mode - coverage', () => {
+describe('browser mode - coverage', () => {
   it('should collect coverage data from browser tests with build cache enabled', async () => {
     const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
     const cacheDir = join(fixtureDir, '.cache/browser-coverage');

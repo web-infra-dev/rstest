@@ -17,7 +17,7 @@ const shouldRunHeadedPlaywrightTests =
   canRunHeadedPlaywrightTests &&
   Boolean(process.env.CI || process.env.RSTEST_E2E_RUN_HEADED);
 
-describe.sequential('@rstest/playwright', () => {
+describe('@rstest/playwright', () => {
   it('runs with Playwright fixtures and assertions', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

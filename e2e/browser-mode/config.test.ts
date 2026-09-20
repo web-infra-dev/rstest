@@ -7,7 +7,7 @@ import { runBrowserCli } from './utils';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe.sequential('browser mode - config options', () => {
+describe('browser mode - config options', () => {
   it('should work with global config', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('config');
     await expectExecSuccess();

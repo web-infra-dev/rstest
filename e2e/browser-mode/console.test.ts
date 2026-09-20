@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
-describe.sequential('browser mode - console forwarding', () => {
+describe('browser mode - console forwarding', () => {
   it.for([
     { disableConsoleIntercept: false },
     { disableConsoleIntercept: true },
