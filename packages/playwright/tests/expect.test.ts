@@ -160,6 +160,24 @@ describe('@rstest/playwright expect', () => {
     }
   });
 
+  it('caps explicit assertion timeouts at the active test deadline', async () => {
+    const getCurrentTimeout = rstest
+      .spyOn(rstest, 'getCurrentTimeout')
+      .mockReturnValue(20);
+    const locator = {
+      ...createLocator({ texts: ['Hello'] }),
+      isVisible: () => new Promise<boolean>(() => {}),
+    } as unknown as Locator;
+
+    try {
+      await rstestExpect(
+        expect(locator).toBeVisible({ timeout: 100 }),
+      ).rejects.toThrow('Playwright assertion timed out after 20ms.');
+    } finally {
+      getCurrentTimeout.mockRestore();
+    }
+  });
+
   it('supports viewport assertions', async () => {
     const locator = createLocator({ texts: ['Hello'] });
 

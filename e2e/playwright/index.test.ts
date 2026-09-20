@@ -183,6 +183,23 @@ describe('@rstest/playwright', () => {
     );
   });
 
+  it('caps explicit Playwright assertion timeouts at the test deadline', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'expect-timeout.test.ts',
+        '-t',
+        'caps explicit assertion timeout',
+      ],
+      options: { nodeOptions: { cwd: join(__dirname, 'fixtures') } },
+    });
+
+    await expectExecFailed();
+    expect(cli.stdout).toContain('Expected locator to be visible.');
+    expect(cli.stdout).not.toContain('Test timed out in 1000ms');
+  });
+
   it('reuses and cleans up a browser across worker files', async () => {
     const cleanupMarker = join(
       __dirname,

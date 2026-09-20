@@ -12,6 +12,30 @@ test('reports the element assertion before the test timeout', async () => {
     .toHaveText('6');
 }, 500);
 
+test('caps explicit element assertion timeout at the test deadline', async () => {
+  const count = document.createElement('div');
+  count.setAttribute('aria-label', 'explicit-count');
+  count.textContent = '5';
+  document.body.appendChild(count);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await expect
+    .element(page.getByLabel('explicit-count', { exact: true }))
+    .toHaveText('6', { timeout: 5000 });
+}, 500);
+
+test('caps explicit zero element timeout at the test deadline', async () => {
+  const count = document.createElement('div');
+  count.setAttribute('aria-label', 'explicit-zero-count');
+  count.textContent = '5';
+  document.body.appendChild(count);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await expect
+    .element(page.getByLabel('explicit-zero-count', { exact: true }))
+    .toHaveText('6', { timeout: 0 });
+}, 500);
+
 test('uses the Browser Mode poll timeout by default', async () => {
   const count = document.createElement('div');
   count.setAttribute('aria-label', 'default-count');
@@ -71,7 +95,11 @@ describe('suite hook assertion timeout', () => {
     count.textContent = '5';
     document.body.appendChild(count);
 
-    await expect.element(page.getByLabel('before-all-count')).toHaveText('6');
+    // Keep the matcher failure well ahead of the hook deadline so the test
+    // verifies assertion error attribution without racing the hook watchdog.
+    await expect
+      .element(page.getByLabel('before-all-count'))
+      .toHaveText('6', { timeout: 500 });
   }, 2000);
 
   afterAll(async () => {
@@ -80,7 +108,9 @@ describe('suite hook assertion timeout', () => {
     count.textContent = '5';
     document.body.appendChild(count);
 
-    await expect.element(page.getByLabel('after-all-count')).toHaveText('6');
+    await expect
+      .element(page.getByLabel('after-all-count'))
+      .toHaveText('6', { timeout: 500 });
   }, 2000);
 
   test('runs suite hooks', () => {});

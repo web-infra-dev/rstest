@@ -436,7 +436,11 @@ export class TestRunner {
 
         if (test.fails) {
           try {
-            await runTest?.(test.context);
+            if (runTest) {
+              await this.runWithActiveTimeout(test, runTest, () =>
+                runTest(test.context),
+              );
+            }
             this.afterRunTest(test);
 
             result = {
@@ -471,7 +475,11 @@ export class TestRunner {
           }
         } else {
           try {
-            await runTest?.(test.context);
+            if (runTest) {
+              await this.runWithActiveTimeout(test, runTest, () =>
+                runTest(test.context),
+              );
+            }
             this.afterRunTest(test);
             result = {
               testId: test.testId,

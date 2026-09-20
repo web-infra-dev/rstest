@@ -122,7 +122,7 @@ export const getGlobalExpect = (): RstestExpect =>
 
 type ElementExpectHandler = (
   locator: unknown,
-  options: { getTimeout: () => number },
+  options: { getTimeout: (timeout?: number) => number },
 ) => unknown;
 
 let elementExpectHandler: ElementExpectHandler | undefined;
@@ -382,7 +382,7 @@ export function createExpect({
       );
     }
 
-    const getTimeout = (): number => {
+    const getTimeout = (timeout?: number): number => {
       const currentTest = getElementTest ? getElementTest() : getCurrentTest();
       const pollTimeout =
         getWorkerState().runtimeConfig.expect?.poll?.timeout ??
@@ -390,9 +390,13 @@ export function createExpect({
       const remainingTestTimeout = currentTest
         ? getRemainingTestTimeout(currentTest, TEST_TIMEOUT_BUFFER)
         : undefined;
+      const configuredTimeout =
+        timeout === 0 && remainingTestTimeout !== undefined
+          ? remainingTestTimeout
+          : (timeout ?? pollTimeout);
       return remainingTestTimeout === undefined
-        ? pollTimeout
-        : Math.min(pollTimeout, remainingTestTimeout);
+        ? configuredTimeout
+        : Math.min(configuredTimeout, remainingTestTimeout);
     };
     const assertion = elementExpectHandler(locator, { getTimeout });
     const { assertionCalls } = getState(expect);

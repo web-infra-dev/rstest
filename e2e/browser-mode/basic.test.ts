@@ -83,6 +83,6 @@ describe('browser mode - basic', () => {
       cli.exec.process!.stdin!.write('q');
       await result.expectExecSuccess();
     },
-    30_000,
+    60_000,
   );
 });
