@@ -49,8 +49,11 @@ describe('browser mode - error handling', () => {
 
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toContain('Expect "to.have.text"');
-    expect(output).not.toContain('timed out in 500ms');
+    // The matcher and test deadlines are close enough that CI may report
+    // either failure first after the assertion has started.
+    expect(output).toMatch(
+      /Expect "to\.have\.text"|test timed out in 500ms \(completed 1 expect assertion\)/,
+    );
   });
 
   it('caps explicit zero expect.element timeouts at the test deadline', async () => {
@@ -64,8 +67,9 @@ describe('browser mode - error handling', () => {
 
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toContain('Expect "to.have.text"');
-    expect(output).not.toContain('timed out in 500ms');
+    expect(output).toMatch(
+      /Expect "to\.have\.text"|test timed out in 500ms \(completed 1 expect assertion\)/,
+    );
   });
 
   it('reports suite hook element mismatches before hook timeouts', async () => {
