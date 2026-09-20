@@ -95,7 +95,11 @@ describe('suite hook assertion timeout', () => {
     count.textContent = '5';
     document.body.appendChild(count);
 
-    await expect.element(page.getByLabel('before-all-count')).toHaveText('6');
+    // Keep the matcher failure well ahead of the hook deadline so the test
+    // verifies assertion error attribution without racing the hook watchdog.
+    await expect
+      .element(page.getByLabel('before-all-count'))
+      .toHaveText('6', { timeout: 500 });
   }, 2000);
 
   afterAll(async () => {

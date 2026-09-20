@@ -149,8 +149,9 @@ jobs:
     if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     # Full runs execute all four e2e scripts sequentially in one job; the
-    # slowest measured combo (windows/20) takes ~31 min.
-    timeout-minutes: 45
+    # slowest measured combo (windows/20) takes ~31 min; keep extra room for
+    # runner and browser startup variance.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
