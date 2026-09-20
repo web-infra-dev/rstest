@@ -290,6 +290,28 @@ describe('expect.element timeout', () => {
     expect(timeout).toBeLessThanOrEqual(850);
   });
 
+  it('caps an explicit zero element timeout at the remaining test timeout', () => {
+    let timeout: number | undefined;
+    const startTime = Date.now() - 200;
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: { expect: { poll: { timeout: 1000 } } },
+        }) as WorkerState,
+      getCurrentTest: () =>
+        ({ timeout: 1000, startTime }) as unknown as TestCase,
+    });
+    registerElementExpect((_locator, options) => {
+      timeout = options.getTimeout(0);
+      return {};
+    });
+
+    (localExpect as typeof localExpect & ElementExpect).element('locator');
+
+    expect(timeout).toBeGreaterThan(500);
+    expect(timeout).toBeLessThanOrEqual(850);
+  });
+
   it('uses the poll timeout when the test timeout is disabled', () => {
     let timeout: number | undefined;
     const localExpect = createExpect({

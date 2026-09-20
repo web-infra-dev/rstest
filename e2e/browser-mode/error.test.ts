@@ -53,6 +53,21 @@ describe('browser mode - error handling', () => {
     expect(output).not.toContain('timed out in 500ms');
   });
 
+  it('caps explicit zero expect.element timeouts at the test deadline', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: [
+        'tests/elementAssertionTimeout.test.ts',
+        '--testNamePattern',
+        'caps explicit zero element timeout',
+      ],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Expect "to.have.text"');
+    expect(output).not.toContain('timed out in 500ms');
+  });
+
   it('reports suite hook element mismatches before hook timeouts', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('error', {
       args: [

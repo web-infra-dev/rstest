@@ -387,10 +387,13 @@ export function createExpect({
       const pollTimeout =
         getWorkerState().runtimeConfig.expect?.poll?.timeout ??
         DEFAULT_EXPECT_POLL_TIMEOUT;
-      const configuredTimeout = timeout ?? pollTimeout;
       const remainingTestTimeout = currentTest
         ? getRemainingTestTimeout(currentTest, TEST_TIMEOUT_BUFFER)
         : undefined;
+      const configuredTimeout =
+        timeout === 0 && remainingTestTimeout !== undefined
+          ? remainingTestTimeout
+          : (timeout ?? pollTimeout);
       return remainingTestTimeout === undefined
         ? configuredTimeout
         : Math.min(configuredTimeout, remainingTestTimeout);

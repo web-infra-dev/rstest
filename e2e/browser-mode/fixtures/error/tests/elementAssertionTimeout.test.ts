@@ -24,6 +24,18 @@ test('caps explicit element assertion timeout at the test deadline', async () =>
     .toHaveText('6', { timeout: 5000 });
 }, 500);
 
+test('caps explicit zero element timeout at the test deadline', async () => {
+  const count = document.createElement('div');
+  count.setAttribute('aria-label', 'explicit-zero-count');
+  count.textContent = '5';
+  document.body.appendChild(count);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await expect
+    .element(page.getByLabel('explicit-zero-count', { exact: true }))
+    .toHaveText('6', { timeout: 0 });
+}, 500);
+
 test('uses the Browser Mode poll timeout by default', async () => {
   const count = document.createElement('div');
   count.setAttribute('aria-label', 'default-count');
