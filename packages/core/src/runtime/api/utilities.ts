@@ -473,8 +473,7 @@ const buildRstestUtilities = async (): Promise<{
 
     getCurrentTimeout: () => {
       const { testRunner } = fileContext();
-      const timeoutContext =
-        testRunner.getCurrentTimeoutContext() ?? testRunner.getCurrentTest();
+      const timeoutContext = testRunner.getCurrentTimeoutContext();
       return timeoutContext
         ? getRemainingTestTimeout(timeoutContext, TEST_TIMEOUT_BUFFER)
         : undefined;

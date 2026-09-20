@@ -17,7 +17,7 @@ const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
 const createElementExpect = (
   locator: Locator,
   isNot: boolean,
-  getDefaultTimeout: () => number,
+  getTimeout: (timeout?: number) => number,
 ): BrowserElementExpect => {
   const callExpect = async (
     method: string,
@@ -30,7 +30,7 @@ const createElementExpect = (
       method,
       args,
       isNot,
-      timeout: timeout ?? getDefaultTimeout(),
+      timeout: getTimeout(timeout),
       timeoutIsExplicit: timeout !== undefined,
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
   };
@@ -145,7 +145,7 @@ const createElementExpect = (
     configurable: false,
     enumerable: false,
     get() {
-      return createElementExpect(locator, !isNot, getDefaultTimeout);
+      return createElementExpect(locator, !isNot, getTimeout);
     },
   });
   return withNot;

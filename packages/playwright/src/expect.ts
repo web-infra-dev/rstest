@@ -329,7 +329,10 @@ const waitForExpectation = async (
 ) => {
   const configuredTimeout =
     options?.timeout ?? rstest.getConfig().expect.poll.timeout;
-  const activeTimeout = rstest.getCurrentTimeout();
+  const activeTimeout =
+    typeof rstest.getCurrentTimeout === 'function'
+      ? rstest.getCurrentTimeout()
+      : undefined;
   const timeout =
     activeTimeout === undefined
       ? configuredTimeout
