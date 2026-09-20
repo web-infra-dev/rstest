@@ -44,6 +44,24 @@ test('page title', async ({ page }) => {
 });
 ```
 
+### Playwright types
+
+<ApiMeta addedVersion="0.12.1" />
+
+`@rstest/playwright` re-exports commonly used Playwright types, so test helpers can use the same entry point as `test` and `expect`:
+
+```ts
+import { expect, test, type Locator, type Page } from '@rstest/playwright';
+
+const getHeading = (page: Page): Locator => page.locator('h1');
+
+test('page heading', async ({ page }) => {
+  await expect(getHeading(page)).toHaveText('Example Domain');
+});
+```
+
+The type-only exports include `APIRequestContext`, `APIResponse`, `Browser`, `BrowserContext`, `BrowserContextOptions`, `BrowserType`, `Frame`, `LaunchOptions`, `Locator`, `Page`, `Request`, `Response`, and `Route`. Import other Playwright runtime APIs directly from `playwright`.
+
 Regular lifecycle helpers are also available from `@rstest/playwright`:
 
 ```ts
