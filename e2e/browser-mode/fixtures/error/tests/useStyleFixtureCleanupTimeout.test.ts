@@ -15,7 +15,7 @@ const fixtureTest = test.extend<{ count: HTMLDivElement }>({
     }, 1500);
     await expect
       .element(page.getByLabel('use-style-cleanup-count'))
-      .toHaveText('6');
+      .toHaveText('6', { timeout: 500 });
   },
 });
 

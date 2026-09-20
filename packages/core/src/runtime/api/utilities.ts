@@ -10,6 +10,7 @@ import type {
 import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
 import { fileContext } from '../fileContext';
 import { getRealTimers } from '../util';
+import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
@@ -468,6 +469,15 @@ const buildRstestUtilities = async (): Promise<{
         retry,
         expect: { ...expect, poll: { ...expect.poll } },
       };
+    },
+
+    getCurrentTimeout: () => {
+      const { testRunner } = fileContext();
+      const timeoutContext =
+        testRunner.getCurrentTimeoutContext() ?? testRunner.getCurrentTest();
+      return timeoutContext
+        ? getRemainingTestTimeout(timeoutContext, TEST_TIMEOUT_BUFFER)
+        : undefined;
     },
 
     resetConfig: () => {

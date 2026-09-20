@@ -581,6 +581,13 @@ export interface RstestUtilities {
    * get runtime config for the current test.
    */
   getConfig: () => RuntimeOptions & Pick<RuntimeConfig, 'expect'>;
+  /**
+   * Returns the remaining time for the active test or hook operation.
+   *
+   * @internal Used by integrations that run asynchronous operations outside
+   * the core runner, such as `@rstest/playwright`.
+   */
+  getCurrentTimeout: () => number | undefined;
 
   /**
    * Reset runtime config that were changed with `rstest.setConfig`.

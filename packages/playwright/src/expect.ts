@@ -327,7 +327,13 @@ const waitForExpectation = async (
   check: () => Promise<void>,
   options?: MatcherOptions,
 ) => {
-  const timeout = options?.timeout ?? rstest.getConfig().expect.poll.timeout;
+  const configuredTimeout =
+    options?.timeout ?? rstest.getConfig().expect.poll.timeout;
+  const activeTimeout = rstest.getCurrentTimeout();
+  const timeout =
+    activeTimeout === undefined
+      ? configuredTimeout
+      : Math.min(configuredTimeout, activeTimeout);
   const deadline = getRealNow() + timeout;
   let lastError: unknown;
   let firstAttempt = true;

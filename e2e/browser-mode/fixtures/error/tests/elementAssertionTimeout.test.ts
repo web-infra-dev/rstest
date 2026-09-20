@@ -80,7 +80,9 @@ describe('suite hook assertion timeout', () => {
     count.textContent = '5';
     document.body.appendChild(count);
 
-    await expect.element(page.getByLabel('after-all-count')).toHaveText('6');
+    await expect
+      .element(page.getByLabel('after-all-count'))
+      .toHaveText('6', { timeout: 500 });
   }, 2000);
 
   test('runs suite hooks', () => {});
