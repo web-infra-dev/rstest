@@ -6,7 +6,7 @@ import { killCliProcessTree, runBrowserCli, runBrowserWatchCli } from './utils';
 // block. The browser project discovers those source files as test entries and
 // defines `import.meta.rstest` in the client build, matching the node
 // behavior.
-describe('browser mode - in-source testing', () => {
+describe.sequential('browser mode - in-source testing', () => {
   it('discovers and runs import.meta.rstest blocks in the browser project', async () => {
     // Verbose reporter prints test-case names, so the assertion proves the
     // in-source case actually executed (not just that the file was listed).

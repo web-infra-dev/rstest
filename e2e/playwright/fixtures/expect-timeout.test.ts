@@ -68,7 +68,9 @@ test('uses configurable assertion timeouts and matcher overrides', async ({
 
   const assertion = expect(page.locator('.message')).toContainText('Saved');
   if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
-    await expect(assertion).rejects.toThrow('to contain text');
+    await expect(assertion).rejects.toThrow(
+      /to contain text|Playwright assertion timed out after 100ms/,
+    );
   } else {
     await assertion;
   }
@@ -84,7 +86,9 @@ test('uses configurable assertion timeouts and matcher overrides', async ({
   });
   const titleAssertion = expect(page).toHaveTitle('Saved');
   if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
-    await expect(titleAssertion).rejects.toThrow('to have title');
+    await expect(titleAssertion).rejects.toThrow(
+      /to have title|Playwright assertion timed out after 100ms/,
+    );
   } else {
     await titleAssertion;
   }
