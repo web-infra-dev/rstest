@@ -60,7 +60,15 @@ test('page heading', async ({ page }) => {
 });
 ```
 
-这些仅类型导出包括 `APIRequestContext`、`APIResponse`、`Browser`、`BrowserContext`、`BrowserContextOptions`、`BrowserType`、`Frame`、`LaunchOptions`、`Locator`、`Page`、`Request`、`Response` 和 `Route`。其他 Playwright 运行时 API 请直接从 `playwright` 导入。
+这些仅类型导出包括 `APIRequestContext`、`APIResponse`、`Browser`、`BrowserContext`、`BrowserContextOptions`、`BrowserType`、`Frame`、`LaunchOptions`、`Locator`、`Page`、`Request`、`Response` 和 `Route`。
+
+`@rstest/playwright` 是 Rstest 的集成层，而不是 `playwright` 包的替代品。它不会 re-export `chromium`、`firefox`、`webkit` 或 `request` 等运行时 API。如果确实需要这些 API，请直接从 `playwright` 导入：
+
+```ts
+import { chromium, request } from 'playwright';
+```
+
+一般的 E2E 测试直接使用 `browser`、`context`、`page` 和 `request` fixtures 即可，Rstest 会按照 fixture 生命周期创建并清理这些资源。
 
 也可以从 `@rstest/playwright` 直接导入 `describe`、`beforeEach` 等生命周期方法：
 

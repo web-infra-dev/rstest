@@ -60,7 +60,15 @@ test('page heading', async ({ page }) => {
 });
 ```
 
-The type-only exports include `APIRequestContext`, `APIResponse`, `Browser`, `BrowserContext`, `BrowserContextOptions`, `BrowserType`, `Frame`, `LaunchOptions`, `Locator`, `Page`, `Request`, `Response`, and `Route`. Import other Playwright runtime APIs directly from `playwright`.
+The type-only exports include `APIRequestContext`, `APIResponse`, `Browser`, `BrowserContext`, `BrowserContextOptions`, `BrowserType`, `Frame`, `LaunchOptions`, `Locator`, `Page`, `Request`, `Response`, and `Route`.
+
+`@rstest/playwright` is an Rstest integration layer, not a replacement for the `playwright` package. It intentionally does not re-export runtime APIs such as `chromium`, `firefox`, `webkit`, or `request`. Import those APIs directly from `playwright` when you need them:
+
+```ts
+import { chromium, request } from 'playwright';
+```
+
+For normal E2E tests, use the `browser`, `context`, `page`, and `request` fixtures instead. Rstest creates and cleans up those resources according to the fixture lifecycle.
 
 Regular lifecycle helpers are also available from `@rstest/playwright`:
 

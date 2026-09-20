@@ -61,7 +61,13 @@ test('page heading', async ({ page }) => {
 });
 ```
 
-The package re-exports types only; import other Playwright runtime APIs directly from `playwright`.
+`@rstest/playwright` is an Rstest integration layer, not a replacement for the `playwright` package. It re-exports selected types only and intentionally leaves runtime APIs such as `chromium`, `firefox`, `webkit`, and `request` in `playwright`:
+
+```ts
+import { chromium, request } from 'playwright';
+```
+
+For normal E2E tests, use the `browser`, `context`, `page`, and `request` fixtures instead. Rstest manages their lifecycle for you.
 
 ## Fixtures
 
