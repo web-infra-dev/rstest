@@ -29,6 +29,7 @@ export const createWatchSignals = (
    * mid-cycle would otherwise wait out a run the user has already superseded.
    */
   let interruptInFlightRun: (() => Promise<void>) | undefined;
+  let abortSession: (() => Promise<void>) | undefined;
 
   /**
    * The cycle core is running for the scope last signalled. Only an explicit
@@ -49,6 +50,15 @@ export const createWatchSignals = (
     },
     setInterrupt(fn: () => Promise<void>): void {
       interruptInFlightRun = fn;
+    },
+    async interrupt(): Promise<void> {
+      await interruptInFlightRun?.();
+    },
+    setAbort(fn: () => Promise<void>): void {
+      abortSession = fn;
+    },
+    async abort(): Promise<void> {
+      await abortSession?.();
     },
     /**
      * Hand the scope this trigger resolved to core, which resets the cycle state,

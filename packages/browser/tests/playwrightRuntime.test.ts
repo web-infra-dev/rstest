@@ -65,6 +65,9 @@ describe('launchPlaywrightBrowser', () => {
         launch: {
           channel: 'chrome',
           timeout: 1234,
+          handleSIGINT: true,
+          handleSIGTERM: true,
+          handleSIGHUP: true,
         },
       },
     });
@@ -86,6 +89,9 @@ describe('launchPlaywrightBrowser', () => {
         channel: 'chrome',
         timeout: 1234,
         headless: true,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
         args: [
           '--disable-popup-blocking',
           '--no-first-run',
@@ -133,6 +139,9 @@ describe('launchPlaywrightBrowser', () => {
       {
         args: ['--user-defined-arg'],
         headless: true,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
       },
     ]);
   });

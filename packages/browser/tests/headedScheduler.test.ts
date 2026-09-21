@@ -187,6 +187,7 @@ describe('createHeadedScheduler', () => {
       handlers: { handleTestFileComplete: async () => {} },
       fatalErrorRef,
       watchSignals: {
+        setAbort: () => {},
         setDispatchRerun: () => {},
         signalInvalidation: async () => ({ cycle: Promise.resolve() }),
       },

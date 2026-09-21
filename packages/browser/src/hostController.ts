@@ -97,7 +97,7 @@ import type {
   BrowserWatchSession,
   DispatchPageResolver,
 } from './schedulerSeam';
-import { registerWatchCleanup, watchContext } from './watchRuntime';
+import { cleanupWatchRuntime, watchContext } from './watchRuntime';
 import { createWatchSignals } from './watchSignals';
 
 /**
@@ -150,6 +150,7 @@ const resolveProviderForTestPath = ({
 // ============================================================================
 
 export type BrowserControllerOptions = BrowserTestRunOptions & {
+  signal?: AbortSignal;
   /**
    * Watch only: core's watch-cycle driver (see `TestExecutor.onInvalidate`).
    * Its promise settles when the cycle it queued has finalized, which only an
@@ -439,10 +440,34 @@ export const runBrowserController = async (
     // session re-entering on a destroyed runtime.
     if (isWatchMode && !filesOnly && !browserCoverageCapabilityError) {
       watchContext.runtime = runtime;
-      registerWatchCleanup(context.embedded);
     }
   }
 
+  const signal = options?.signal;
+  let closePromise: Promise<void> | undefined;
+  const closeRuntime = (): Promise<void> => {
+    return (closePromise ??=
+      isWatchMode && watchContext.runtime === runtime
+        ? cleanupWatchRuntime()
+        : destroyBrowserRuntime(runtime));
+  };
+  const onAbort = () => {
+    void watchSignals
+      .interrupt()
+      .then(() => watchSignals.abort())
+      .then(closeRuntime)
+      .catch((error) => {
+        logger.error(color.red(`Error during cleanup: ${error}`));
+      });
+  };
+  // addEventListener does not fire for an already-aborted signal. An abort during
+  // runtime creation (browser launch and dev-server compile) must close it here:
+  // a throwing cycle never assigns the deferredClose used by non-watch close().
+  if (signal?.aborted) {
+    await closeRuntime();
+    signal.throwIfAborted();
+  }
+  signal?.addEventListener('abort', onAbort, { once: true });
   const watchState = runtime.watchState;
 
   // Track initial test files for watch mode (from this controller's freshly
@@ -621,16 +646,16 @@ export const runBrowserController = async (
       hasFailure: false,
       getSourcemap: getBrowserSourcemap,
       resolveSourcemap: resolveBrowserSourcemap,
-      close: () => destroyBrowserRuntime(runtime),
+      close: closeRuntime,
     };
   }
 
   if (totalTests === 0 && !isWatchMode) {
-    await destroyBrowserRuntime(runtime);
+    await closeRuntime();
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
   if (browserCoverageCapabilityError) {
-    await destroyBrowserRuntime(runtime);
+    await closeRuntime();
     throw browserCoverageCapabilityError;
   }
 
@@ -1114,7 +1139,7 @@ export const runBrowserController = async (
     createWatchSession,
     collectProjectEntries: () => collectProjectEntries(context),
     logWatchReady: () => logWatchReadyMessage(context, enableCliShortcuts),
-    destroyRuntime: () => destroyBrowserRuntime(runtime),
+    destroyRuntime: closeRuntime,
   };
 
   const { testTime, rawCoverage, watchSession, close } = useHeadlessDirect

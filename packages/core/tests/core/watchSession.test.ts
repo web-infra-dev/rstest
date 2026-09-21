@@ -7,7 +7,6 @@ import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
   createWatchTeardown,
-  registerWatchSignalExit,
 } from '../../src/core/watchSession';
 import type {
   ExecutorCycleOutcome,
@@ -15,7 +14,6 @@ import type {
   TestExecutor,
 } from '../../src/types';
 import type { TraceController, TraceRun } from '../../src/utils';
-import { FATAL_SIGNALS } from '../../src/utils/signals';
 
 const rootPath = join(__dirname, 'fixtures/watch-session');
 
@@ -146,30 +144,50 @@ const createDriver = (
   });
 };
 
-describe('registerWatchSignalExit', () => {
-  it('removes every session signal handler when disposed', () => {
-    const context = createContext();
-    context.embedded = false;
-    const listenerCounts = FATAL_SIGNALS.map((signal) =>
-      process.listenerCount(signal),
-    );
-    const remove = registerWatchSignalExit(context, async () => {});
-
-    try {
-      expect(
-        FATAL_SIGNALS.map((signal) => process.listenerCount(signal)),
-      ).toEqual(listenerCounts.map((count) => count + 1));
-    } finally {
-      remove();
-    }
-
-    expect(
-      FATAL_SIGNALS.map((signal) => process.listenerCount(signal)),
-    ).toEqual(listenerCounts);
-  });
-});
-
 describe('createWatchTeardown', () => {
+  it('closes in lifecycle order', async () => {
+    const context = createContext();
+    const events: string[] = [];
+    context.exitCode.onCycleEnd(() => events.push('finishCycle'));
+    context.reporters = [
+      {
+        onExit: () => {
+          events.push('onExit');
+        },
+      },
+    ];
+    context.globalTeardownCallbacks.push(async () => {
+      events.push('globalTeardown');
+      return true;
+    });
+    const executor = createFakeExecutor('browser');
+    executor.interrupt = async () => {
+      expect(teardown.isClosing()).toBe(true);
+      events.push('interrupt');
+    };
+    executor.close = async () => {
+      events.push('close');
+    };
+    const teardown = createWatchTeardown({
+      context,
+      executors: [executor],
+      traceController: {
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
+    });
+
+    await teardown.close();
+
+    expect(events).toEqual([
+      'interrupt',
+      'close',
+      'globalTeardown',
+      'finishCycle',
+      'onExit',
+    ]);
+  });
+
   it('defers a cleanup registered while close is in flight', async () => {
     const context = createContext();
     let releaseClose: () => void = () => {};

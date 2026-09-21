@@ -132,6 +132,10 @@ export async function launchPlaywrightBrowser({
 
   const browser = await browserType.launch({
     ...launchOptions,
+    // The host (Rstest CLI or embedder) owns signal handling, not Playwright.
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
     headless,
     args: launchArgs,
   });
