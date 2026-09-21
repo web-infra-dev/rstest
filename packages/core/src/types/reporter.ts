@@ -5,6 +5,7 @@ import type {
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
+import type { NormalizedConfig } from './config';
 import type {
   SerializedError,
   TestCaseInfo,
@@ -24,6 +25,13 @@ export type Duration = {
 
 export type { SnapshotSummary };
 
+export type TestRunStatus = 'passed' | 'failed' | 'error';
+
+export interface TestRunStartPayload {
+  /** Files selected for this run, or this watch cycle, before execution. */
+  files: Pick<TestFileInfo, 'testPath' | 'project' | 'testId'>[];
+}
+
 export interface TestRunSummary {
   tests: {
     total: number;
@@ -31,21 +39,26 @@ export interface TestRunSummary {
     failed: number;
     skipped: number;
     todo: number;
+    flaky: number;
   };
   files: { total: number; failed: number };
 }
 
 /** The onTestRunEnd payload. In watch mode results is the session snapshot; rerunTestPaths lists the files this cycle ran. */
 export interface TestRunEndPayload {
+  status: TestRunStatus;
   results: TestFileResult[];
   testResults: TestResult[];
   summary: TestRunSummary;
   duration: Duration;
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   snapshotSummary: SnapshotSummary;
   unhandledErrors: SerializedError[];
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   coverage?: CoverageMapData;
   /** Watch only: the files this cycle executed. Absent on one-shot runs. */
   rerunTestPaths?: string[];
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   getSourcemap: GetSourcemap;
 }
 
@@ -66,6 +79,11 @@ export type BuiltInReporterNames =
   | 'junit'
   | 'json'
   | 'blob';
+
+export interface ReporterContext {
+  rootPath: string;
+  config: NormalizedConfig;
+}
 
 export type DefaultReporterOptions = {
   /**
@@ -227,11 +245,10 @@ type BuiltinReporterOptions = {
   blob: BlobReporterOptions;
 };
 
-export type ReporterWithOptions<
-  Name extends BuiltInReporterNames = BuiltInReporterNames,
-> = Name extends keyof BuiltinReporterOptions
-  ? [Name, Partial<BuiltinReporterOptions[Name]>]
-  : [Name, Record<string, unknown>];
+export type ReporterWithOptions<Name extends string = BuiltInReporterNames> =
+  Name extends BuiltInReporterNames
+    ? [Name, Partial<BuiltinReporterOptions[Name]>]
+    : [Name, Record<string, unknown>];
 
 export interface Reporter {
   /**
@@ -242,37 +259,37 @@ export interface Reporter {
   /**
    * Called before test file run.
    */
-  onTestFileStart?: (test: TestFileInfo) => void;
+  onTestFileStart?: (test: TestFileInfo) => MaybePromise<void>;
   /**
    * Called after tests in file collected.
    */
-  onTestFileReady?: (test: TestFileInfo) => void;
+  onTestFileReady?: (test: TestFileInfo) => MaybePromise<void>;
   /**
    * Called when the test file has finished running.
    */
-  onTestFileResult?: (test: TestFileResult) => void;
+  onTestFileResult?: (test: TestFileResult) => MaybePromise<void>;
   /**
    * Called before running the test suite.
    */
-  onTestSuiteStart?: (test: TestSuiteInfo) => void;
+  onTestSuiteStart?: (test: TestSuiteInfo) => MaybePromise<void>;
   /**
    * Called when the suite has finished running or was just skipped.
    *
    * `result.errors` contains only suite hooks errors
    */
-  onTestSuiteResult?: (result: TestResult) => void;
+  onTestSuiteResult?: (result: TestResult) => MaybePromise<void>;
   /**
    * Called when the test has finished running or was just skipped.
    */
-  onTestCaseResult?: (result: TestResult) => void;
+  onTestCaseResult?: (result: TestResult) => MaybePromise<void>;
   /**
    * Called before running the test case.
    */
-  onTestCaseStart?: (test: TestCaseInfo) => void;
+  onTestCaseStart?: (test: TestCaseInfo) => MaybePromise<void>;
   /**
    * Called before all tests start
    */
-  onTestRunStart?: () => MaybePromise<void>;
+  onTestRunStart?: (payload: TestRunStartPayload) => MaybePromise<void>;
   /**
    * Called after all tests have finished running.
    */
@@ -281,7 +298,7 @@ export interface Reporter {
   /**
    * Called when console log is calling.
    */
-  onUserConsoleLog?: (log: UserConsoleLog) => void;
+  onUserConsoleLog?: (log: UserConsoleLog) => MaybePromise<void>;
 
   /**
    * Called when the reporter's owning context is released.

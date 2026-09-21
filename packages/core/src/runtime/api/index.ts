@@ -2,10 +2,10 @@ import { normalize } from 'pathe';
 import type {
   Rstest,
   RstestExpect,
+  RawTestFileResult,
+  RawTestInfo,
   RunnerHooks,
   TestCase,
-  TestFileResult,
-  TestInfo,
   WorkerState,
 } from '../../types';
 import { createRunner, runnerAPI } from '../runner';
@@ -62,8 +62,8 @@ export const createRstestRuntime = async (
       testPath: string,
       hooks: RunnerHooks,
       api: Rstest,
-    ) => Promise<TestFileResult>;
-    collectTests: () => Promise<TestInfo[]>;
+    ) => Promise<RawTestFileResult>;
+    collectTests: () => Promise<RawTestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
     getRootSuiteListeners: () => RootSuiteListeners;
     setRootSuiteListeners: (listeners: RootSuiteListeners) => void;

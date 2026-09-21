@@ -7,7 +7,7 @@ import type {
   BeforeAllListener,
   BeforeEachListener,
   TaskMeta,
-  TestResult,
+  RawTestResult,
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
@@ -27,7 +27,7 @@ export interface TestContext {
     /** Current retry index, starting at 0 for the initial attempt. */
     retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
-    result?: TestResult;
+    result?: RawTestResult;
     /** Mutable metadata copied to the current test result. */
     meta: TaskMeta;
   };

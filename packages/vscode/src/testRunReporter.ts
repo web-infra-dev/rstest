@@ -125,15 +125,15 @@ export class TestRunReporter implements Reporter {
 
     switch (test.status) {
       case 'todo':
-      case 'skip':
+      case 'skipped':
         this.run?.skipped(fileItem);
         this.errorStore?.clear(fileItem);
         break;
-      case 'pass':
+      case 'passed':
         this.run?.passed(fileItem, test.duration);
         this.errorStore?.clear(fileItem);
         break;
-      case 'fail': {
+      case 'failed': {
         // When a file fails before any test case runs (a syntax/collection
         // error or a worker crash during collection), the errors live only on
         // the file result and no onTestCaseResult fires to surface or store
@@ -188,20 +188,20 @@ export class TestRunReporter implements Reporter {
     }
 
     switch (result.status) {
-      case 'pass': {
+      case 'passed': {
         this.run?.passed(testItem, result.duration);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
         this.errorStore?.clear(testItem);
         break;
       }
-      case 'skip':
+      case 'skipped':
       case 'todo': {
         this.run?.skipped(testItem);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
         this.errorStore?.clear(testItem);
         break;
       }
-      case 'fail': {
+      case 'failed': {
         const errors = await this.createErrors(result.errors, result.testPath);
         this.run?.failed(testItem, errors, result.duration);
         this.diagnostics?.setForTest(

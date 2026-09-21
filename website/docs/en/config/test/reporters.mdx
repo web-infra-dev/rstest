@@ -7,8 +7,12 @@ description: Configure which reporters to use for test result output.
 - **Type:**
 
 ```ts
-type Reporter = ReporterName | [ReporterName, ReporterOptions];
-type Reporters = Reporter | Reporter[];
+type ReporterConfig =
+  | BuiltInReporterNames
+  | (string & {})
+  | [name: string, options: Record<string, unknown>]
+  | Reporter;
+type Reporters = ReporterConfig | ReporterConfig[];
 ```
 
 - **Reporter options reference:** Reporter option types are defined in [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
@@ -90,16 +94,22 @@ export default defineConfig({
 
 #### Using custom reporters
 
-You can create and use custom reporters by providing a reporter class or object that implements the reporter interface:
+You can use a custom reporter module by passing its module specifier, or a tuple with options. The module must default export a reporter class. Rstest constructs it with the options (an empty object for the string form) and a context containing `rootPath` and the resolved `config`:
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
-import { CustomReporter } from './custom-reporter';
 
 export default defineConfig({
-  reporters: [CustomReporter],
+  reporters: './custom-reporter.js',
+});
+
+// To pass options:
+export const configWithOptions = defineConfig({
+  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
 });
 ```
+
+You can also pass an already constructed object that implements the `Reporter` interface. Reporter classes cannot be passed directly.
 
 ### Related documentation
 

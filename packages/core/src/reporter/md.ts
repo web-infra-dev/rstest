@@ -24,7 +24,7 @@
  *
  * - Tests
  *   - Printed when `options.testLists === 'always'`, or when
- *     `status === 'pass' && focusedRun === true`.
+ *     `status === 'passed' && focusedRun === true`.
  *   - Contains `### Passed` and `### Skipped` lists; `### Todo` is printed only
  *     when `todoTests.length > 0`.
  *   - Lists are truncated to `DEFAULT_TEST_LIST_MAX_ITEMS` and may include a
@@ -35,7 +35,7 @@
  *   - When there are no failures (`failures.length === 0`):
  *     - Prints `No test failures reported.`
  *     - Additionally prints `Note: all tests passed. Lists omitted for brevity.`
- *       only when `status === 'pass' && focusedRun === false` and
+ *       only when `status === 'passed' && focusedRun === false` and
  *       `options.testLists !== 'always'`.
  *   - When failures exist:
  *     - If truncated (`failures.length > options.failures.max`):
@@ -899,6 +899,7 @@ export class MdReporter implements Reporter {
     snapshotSummary,
     unhandledErrors,
     summary,
+    status,
   }: TestRunEndPayload): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
     // A watch session drops deleted files from the result snapshot; the buffered
@@ -913,10 +914,6 @@ export class MdReporter implements Reporter {
       }
     }
     const failures = collectFailures({ results, testResults });
-    const status =
-      summary.tests.failed || summary.files.failed || unhandledErrors.length
-        ? 'fail'
-        : 'pass';
 
     const focusedRun = this.isFocusedRun({ testResults });
 
@@ -936,11 +933,11 @@ export class MdReporter implements Reporter {
 
     if (
       this.options.testLists === 'always' ||
-      (status === 'pass' && focusedRun)
+      (status === 'passed' && focusedRun)
     ) {
       this.renderTestsSection(lines, {
-        passed: testResults.filter((result) => result.status === 'pass'),
-        skipped: testResults.filter((result) => result.status === 'skip'),
+        passed: testResults.filter((result) => result.status === 'passed'),
+        skipped: testResults.filter((result) => result.status === 'skipped'),
         todo: testResults.filter((result) => result.status === 'todo'),
       });
     }
@@ -950,7 +947,7 @@ export class MdReporter implements Reporter {
     if (!failures.length) {
       lines.push('No test failures reported.');
       if (
-        status === 'pass' &&
+        status === 'passed' &&
         !focusedRun &&
         this.options.testLists !== 'always'
       ) {

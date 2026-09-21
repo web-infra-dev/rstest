@@ -77,8 +77,8 @@ export class NonTTYProgressNotifier {
         Array.from(runningModules.values()).flatMap(({ results }) => results),
       );
 
-    const passed = allResults.filter((r) => r.status === 'pass').length;
-    const failed = allResults.filter((r) => r.status === 'fail').length;
+    const passed = allResults.filter((r) => r.status === 'passed').length;
+    const failed = allResults.filter((r) => r.status === 'failed').length;
     const elapsed = prettyTime(Date.now() - this.startTime!);
 
     const filePart = `test files: ${doneFiles} done${runningModules.size ? `, ${runningModules.size} running` : ''}`;

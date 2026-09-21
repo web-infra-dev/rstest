@@ -100,7 +100,7 @@ export class DefaultReporter implements Reporter {
     const hideSkippedTestFiles =
       projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
 
-    if (hideSkippedTestFiles && test.status === 'skip') {
+    if (hideSkippedTestFiles && test.status === 'skipped') {
       return;
     }
 
@@ -118,7 +118,7 @@ export class DefaultReporter implements Reporter {
       for (const result of test.results) {
         const isDisplayed =
           showAllCases ||
-          result.status === 'fail' ||
+          result.status === 'failed' ||
           (result.duration ?? 0) > slowTestThreshold ||
           (result.retryCount ?? 0) > 0;
         if (isDisplayed) {
