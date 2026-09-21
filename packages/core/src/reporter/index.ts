@@ -1,4 +1,3 @@
-import { relative } from 'pathe';
 import type {
   DefaultReporterOptions,
   InternalContext,
@@ -49,16 +48,9 @@ export class DefaultReporter implements Reporter {
     this.testState = testState;
     this.flushOutputStreams = !options.logger;
     if (isTTY() || options.logger) {
-      this.statusRenderer = new StatusRenderer(
-        rootPath,
-        testState,
-        options.logger,
-      );
+      this.statusRenderer = new StatusRenderer(testState, options.logger);
     } else {
-      this.nonTTYProgressNotifier = new NonTTYProgressNotifier(
-        rootPath,
-        testState,
-      );
+      this.nonTTYProgressNotifier = new NonTTYProgressNotifier(testState);
     }
   }
 
@@ -92,28 +84,43 @@ export class DefaultReporter implements Reporter {
     this.statusRenderer?.onTestCaseResult();
   }
 
+  protected resolveFileOptions(project: string): {
+    hideSkippedTestFiles: boolean;
+    hideSkippedTests: boolean;
+    slowTestThreshold: number;
+  } {
+    const projectConfig = this.projectConfigs.get(project);
+    return {
+      hideSkippedTestFiles:
+        projectConfig?.hideSkippedTestFiles ??
+        this.config.hideSkippedTestFiles ??
+        false,
+      hideSkippedTests:
+        projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests,
+      slowTestThreshold:
+        projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold,
+    };
+  }
+
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
     this.nonTTYProgressNotifier?.notifyOutput();
 
-    const projectConfig = this.projectConfigs.get(test.project);
-    const hideSkippedTestFiles =
-      projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
+    const { hideSkippedTestFiles, hideSkippedTests, slowTestThreshold } =
+      this.resolveFileOptions(test.project);
 
     if (hideSkippedTestFiles && test.status === 'skipped') {
       return;
     }
 
-    const relativePath = relative(this.rootPath, test.testPath);
-    const slowTestThreshold =
-      projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
-
     const logResults = () => {
-      logFileTitle(test, relativePath, false, this.options.showProjectName);
+      logFileTitle(
+        test,
+        test.relativeTestPath,
+        false,
+        this.options.showProjectName,
+      );
       const showAllCases = this.testState.getTestFiles()?.length === 1;
-
-      const hideSkippedTests =
-        projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
       for (const result of test.results) {
         const isDisplayed =
@@ -143,6 +150,7 @@ export class DefaultReporter implements Reporter {
     results,
     testResults,
     duration,
+    summary,
     getSourcemap,
     snapshotSummary,
     rerunTestPaths,
@@ -170,8 +178,8 @@ export class DefaultReporter implements Reporter {
 
     printSummaryLog({
       results,
-      testResults,
       duration,
+      summary,
       rootPath: this.rootPath,
       snapshotSummary,
     });

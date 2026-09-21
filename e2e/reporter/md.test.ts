@@ -318,12 +318,12 @@ describe('md', () => {
       codeFrame (error 1):
 
       \`\`\`text
-       6 |     console.warn('hello from console.warn');
-       7 |     console.error('hello from console.error');
-       8 |     expect(1).toBe(2);
-         |               ^
-       9 |   });
-      10 | });
+         6 |     console.warn('hello from console.warn');
+         7 |     console.error('hello from console.error');
+      >  8 |     expect(1).toBe(2);
+           |               ^
+         9 |   });
+        10 | });
       \`\`\`
 
       console:

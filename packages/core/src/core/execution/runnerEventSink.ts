@@ -241,7 +241,10 @@ export function createRunnerEventSink(
   return {
     discardAttempt(testPath) {
       attempts.set(testPath, (attempts.get(testPath) ?? 0) + 1);
-      context.stateManager.onTestFileStart(testPath);
+      context.stateManager.onTestFileStart({
+        testPath,
+        relativeTestPath: relative(context.rootPath, testPath),
+      });
       for (const reporter of reporters) {
         if (reporter instanceof BlobReporter) {
           reporter.discardAttempt(projectConfig.name, testPath);
@@ -274,7 +277,7 @@ export function createRunnerEventSink(
     },
     async onTestFileStart(test) {
       const enriched = enrichFileInfo(test);
-      context.stateManager.onTestFileStart(enriched.testPath);
+      context.stateManager.onTestFileStart(enriched);
       await dispatch('onTestFileStart', enriched);
     },
     async onTestFileReady(test) {
