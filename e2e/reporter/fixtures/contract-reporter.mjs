@@ -26,8 +26,9 @@ export default class ContractReporter {
   async onTestCaseStart(test) {
     this.record('start-enter', test);
     // Prove overlap even when worker transport takes longer than the timer.
-    const { promise, resolve } = Promise.withResolvers();
-    this.pendingStarts.set(test.testId, resolve);
+    const promise = new Promise((resolve) => {
+      this.pendingStarts.set(test.testId, resolve);
+    });
     await promise;
     await setTimeout(50);
     this.record('start-exit', test);
@@ -49,7 +50,7 @@ export default class ContractReporter {
     this.events.push({ event, testId: test.testId, testPath: test.testPath });
   }
 
-  onTestRunEnd({ status }) {
+  onTestRunEnd({ status, unhandledErrors }) {
     this.events.push({ event: 'run-end' });
     console.log(
       '__RSTEST_REPORTER_CONTRACT__' +
@@ -60,6 +61,7 @@ export default class ContractReporter {
           name: this.context.config.name,
           selection: this.selection,
           status,
+          unhandledErrors,
           events: this.events,
         }) +
         '__END__',

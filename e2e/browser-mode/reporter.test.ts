@@ -15,12 +15,25 @@ describe('browser mode - reporter lifecycle hooks', () => {
       env: { RSTEST_THROW_RUN_START: '1' },
     });
     await expectExecFailed();
-    expect(cli.stdout + cli.stderr).toContain('run-start rejected');
-    expect(cli.stdout).not.toContain('__RSTEST_REPORTER_CONTRACT__');
+    const payload = parseMarkerPayload<{
+      status: string;
+      unhandledErrors: { message: string }[];
+      events: { event: string }[];
+    }>(cli.stdout, '__RSTEST_REPORTER_CONTRACT__');
+    expect(payload.status).toBe('error');
+    expect(payload.unhandledErrors.length).toBeGreaterThan(0);
+    expect(
+      payload.unhandledErrors.every(
+        ({ message }) => message === 'run-start rejected',
+      ),
+    ).toBe(true);
+    expect(payload.events).toEqual([{ event: 'run-end' }]);
+    expect(getHookCount(cli.stdout, 'onTestRunStart')).toBe(1);
+    expect(getHookCount(cli.stdout, 'onTestRunEnd')).toBe(1);
   });
 
   it.for([true, false])(
-    'joins async hooks and reports selection (filtered: %s)',
+    'reports async hook sequence and selection (filtered: %s)',
     async (filtered) => {
       const { expectExecSuccess, cli } = await runBrowserCli('reporter', {
         args: filtered ? ['--project', 'browser'] : [],
@@ -57,7 +70,6 @@ describe('browser mode - reporter lifecycle hooks', () => {
           'file-result',
         ]);
       }
-      expect(payload.events.at(-1)?.event).toBe('run-end');
     },
   );
 });

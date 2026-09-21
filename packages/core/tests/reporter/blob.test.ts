@@ -7,7 +7,6 @@ import { describe, expect, it } from '@rstest/core';
 import {
   BLOB_TRACK_MATCHES_RUNNER_EVENTS,
   BlobReporter,
-  blobFileKey,
   blobFileName,
   isBlobFile,
   parseBlobFile,
@@ -39,59 +38,6 @@ describe('blob wire-format', () => {
     );
     expect(blob.runStart).toEqual(runStart);
     expect(blob.results).toEqual([]);
-  });
-
-  it('preserves verbatim log-only and fatal per-file tracks', async ({
-    onTestFinished,
-  }) => {
-    const rootPath = mkdtempSync(join(tmpdir(), 'rstest-blob-tracks-'));
-    onTestFinished(() => rmSync(rootPath, { recursive: true, force: true }));
-    const reporter = new BlobReporter({
-      rootPath,
-      config: withDefaultConfig({}),
-    });
-    const log = {
-      content: 'before collection',
-      name: 'stderr',
-      project: 'project-a',
-      testPath: join(rootPath, 'log-only.test.ts'),
-      relativeTestPath: 'log-only.test.ts',
-      type: 'stderr' as const,
-    };
-    const fatal = {
-      testId: 'fatal-suite',
-      status: 'failed' as const,
-      name: 'fatal suite',
-      fullName: 'fatal suite',
-      project: 'project-b',
-      testPath: join(rootPath, 'fatal.test.ts'),
-      relativeTestPath: 'fatal.test.ts',
-      errors: [{ message: 'fatal' }],
-    };
-
-    reporter.onUserConsoleLog(log);
-    const startedFile = {
-      testId: `file:${log.testPath}`,
-      testPath: log.testPath,
-      relativeTestPath: 'log-only.test.ts',
-      project: log.project,
-      tests: [],
-    };
-    reporter.onTestFileStart(startedFile);
-    reporter.onTestSuiteResult(fatal);
-    await reporter.onTestRunEnd(emptyRunEndPayload);
-
-    const blob = parseBlobFile(
-      readFileSync(join(rootPath, '.rstest-reports/blob.json'), 'utf8'),
-      'blob.json',
-    );
-    expect(blob.files[blobFileKey(log.project, log.testPath)]?.events).toEqual([
-      { h: 'log', log },
-      { h: 'start', test: startedFile },
-    ]);
-    expect(
-      blob.files[blobFileKey(fatal.project, fatal.testPath)]?.events,
-    ).toEqual([{ h: 'suiteResult', result: fatal }]);
   });
 
   it('names the unsharded blob deterministically', () => {

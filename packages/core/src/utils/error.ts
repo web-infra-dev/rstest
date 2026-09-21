@@ -4,7 +4,7 @@ import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { SerializedError, GetSourcemap } from '../types';
 import { globalApis } from './constants';
-import { color, isColorSupported, isDebug, logger } from './logger';
+import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
 
 export const toSerializedError = (error: unknown): SerializedError => {
@@ -128,7 +128,7 @@ export async function printError(
 async function printCodeFrame(frame: StackFrame) {
   const { renderCodeFrame } = await import('./codeFrame');
   const result = await renderCodeFrame(frame, {
-    ansi: isColorSupported,
+    ansi: color.isColorSupported,
     linesAbove: 2,
     linesBelow: 2,
   });

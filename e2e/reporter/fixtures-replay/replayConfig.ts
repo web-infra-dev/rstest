@@ -9,8 +9,13 @@ import { LifecycleRecorder } from './lifecycleRecorder';
  * one and the same run — see the note on `captureReplay` in
  * `../mergeReports.test.ts`.
  */
-export const replayConfig = (overrides: RstestConfig): RstestConfig =>
+export const replayConfig = ({
+  extraReporters = [],
+  ...overrides
+}: RstestConfig & {
+  extraReporters?: Extract<RstestConfig['reporters'], unknown[]>;
+}): RstestConfig =>
   defineConfig({
-    reporters: [new LifecycleRecorder(), 'blob'],
+    reporters: [new LifecycleRecorder(), ...extraReporters, 'blob'],
     ...overrides,
   });

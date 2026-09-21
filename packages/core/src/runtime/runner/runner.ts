@@ -525,7 +525,7 @@ export class TestRunner {
           meta: test.meta,
         });
       };
-      if (result?.status === 'fail') {
+      if (result?.status === 'failed') {
         await captureFailedAttempt();
       }
 
@@ -548,7 +548,7 @@ export class TestRunner {
         result.errors ??= [];
         result.errors.push(...(await formatTestError(hookResult.error)));
         test.context.task.result = result;
-        if (result.status === 'fail' && !failureScreenshotCaptured) {
+        if (!failureScreenshotCaptured) {
           await captureFailedAttempt();
         }
         if (hookResult.phase === 'callback') {

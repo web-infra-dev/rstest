@@ -6,9 +6,11 @@ import {
   describe,
   expect,
   it,
+  type TestRunStartPayload,
   type onTestFinished as OnTestFinished,
 } from '@rstest/core';
-import { runRstestCli } from '../scripts/';
+import { normalize } from 'pathe';
+import { parseMarkerPayload, runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(__dirname, './fixtures');
@@ -82,6 +84,11 @@ describe('--onlyFailures', () => {
     );
     onTestFinished(() => removeExtra());
 
+    const selection = (stdout: string) =>
+      parseMarkerPayload<{ selection: TestRunStartPayload }>(
+        stdout,
+        '__RSTEST_REPORTER_CONTRACT__',
+      ).selection.files;
     // `--onlyFailures` re-runs only the failed `first` file (still failing); the
     // never-run `extra` file is not selected (matches Jest / pytest `--lf`).
     const only = await run(onTestFinished, { FAIL_FIRST: '1' }, [
@@ -95,6 +102,13 @@ describe('--onlyFailures', () => {
     ).not.toContain('extra');
     expect(ran).toEqual(['first']);
     only.expectLog('onlyFailures: running 1 of 4 test files (3 deselected).');
+    expect(selection(only.cli.stdout)).toEqual([
+      {
+        project: 'selection',
+        testPath: normalize(join(fixtures, 'first.test.ts')),
+        testId: `file:${normalize(join(fixtures, 'first.test.ts'))}`,
+      },
+    ]);
   }, 90_000);
 
   it('runs all tests with a notice once the failure is fixed', async ({

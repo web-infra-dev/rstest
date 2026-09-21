@@ -28,7 +28,7 @@ export type RunnerHooks = {
   /**
    * Called when a test attempt fails, before afterEach hooks and fixture cleanup.
    */
-  onTestCaseFailure?: (test: TestCaseInfo) => Promise<void>;
+  onTestCaseFailure?: (test: RawTestCaseInfo) => Promise<void>;
 
   /**
    * Called after the test is finished running.

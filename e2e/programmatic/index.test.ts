@@ -381,7 +381,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result.statuses).toEqual(['pass', 'pass']);
+    expect(result.statuses).toEqual(['passed', 'passed']);
     const expectTrace = (trace: Record<string, any>, dir: string) => {
       expect(trace).toEqual({
         traceDir: joinPosix(result.root, dir),

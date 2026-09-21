@@ -32,7 +32,10 @@ import type {
 import type { CoverageMap } from '../types/coverage';
 import { color, logger, prettyTime } from '../utils';
 import { toSerializedError } from '../utils/error';
-import { notifyReportersOnTestRunEnd, resolveRunStatus } from './execution/finalizeRun';
+import {
+  notifyReportersOnTestRunEnd,
+  resolveRunStatus,
+} from './execution/finalizeRun';
 import type { Rstest } from './rstest';
 import {
   createRunnerEventSink,
@@ -204,9 +207,11 @@ async function replayTestFile(
         pending.push(sink.onTestCaseStart(event.test));
         break;
       case 'caseResult':
-        pending.push(sink.onTestCaseResult(event.result).then(() =>
-          sink.awaitTestCaseResults(event.result.testPath),
-        ));
+        pending.push(
+          sink
+            .onTestCaseResult(event.result)
+            .then(() => sink.awaitTestCaseResults(event.result.testPath)),
+        );
         break;
       case 'log':
         pending.push(sink.emitConsoleLog(event.log));

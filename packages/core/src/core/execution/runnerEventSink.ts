@@ -123,30 +123,32 @@ export function createRunnerEventSink(
   }
   const run = pending;
 
+  // Blob replay already carries enrichment from the recording run's root.
+  // Defaults precede the payload so replay preserves those recorded values.
   const enrichTask = <T extends RawTestCaseInfo | RawTestSuiteInfo>(
     task: T,
   ): T & { fullName: string; relativeTestPath: string } => ({
-    ...task,
     fullName: getTaskNameWithPrefix(task),
     relativeTestPath: relative(context.rootPath, task.testPath),
+    ...task,
   });
   const enrichInfo = (test: RawTestInfo): TestInfo =>
     test.type === 'suite'
       ? { ...enrichTask(test), tests: test.tests.map(enrichInfo) }
       : enrichTask(test);
   const enrichFileInfo = (test: RawTestFileInfo): TestFileInfo => ({
-    ...test,
     relativeTestPath: relative(context.rootPath, test.testPath),
+    ...test,
     tests: test.tests.map(enrichInfo),
   });
   const enrichResult = (result: RawTestResult): TestResult => ({
-    ...result,
     fullName: getTaskNameWithPrefix(result),
     relativeTestPath: relative(context.rootPath, result.testPath),
+    ...result,
   });
   const enrichLog = (log: RawUserConsoleLog): UserConsoleLog => ({
-    ...log,
     relativeTestPath: relative(context.rootPath, log.testPath),
+    ...log,
   });
 
   const fileHooks = (file: { project: string; testPath: string }) => {
@@ -225,12 +227,15 @@ export function createRunnerEventSink(
           if (expectedAttempt === attempts.get(payload.testPath)) {
             return invokeHooks(hook, payload);
           }
+          return;
         })
       : invokeHooks(hook, payload);
     const hooks = fileHooks(payload);
-    const tracked = delivery.catch((error) => {
-      run.errors.push(toError(error));
-    }).finally(() => hooks.delete(tracked));
+    const tracked = delivery
+      .catch((error) => {
+        run.errors.push(toError(error));
+      })
+      .finally(() => hooks.delete(tracked));
     hooks.add(tracked);
     return tracked;
   };
@@ -299,9 +304,9 @@ export function createRunnerEventSink(
       if (pending) await joinHooks(pending);
       const results = result.results.map(enrichResult);
       const enriched: TestFileResult = {
+        summary: getFileSummary(results),
         ...enrichResult(result),
         results,
-        summary: getFileSummary(results),
       };
       context.stateManager.onTestFileResult(enriched);
       await dispatch('onTestFileResult', enriched);

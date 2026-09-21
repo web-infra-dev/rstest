@@ -614,6 +614,12 @@ describe('createWatchCycleDriver', () => {
 
   it('drops a queued cycle when teardown finishes before it starts', async () => {
     const context = createContext();
+    let runStarts = 0;
+    context.reporters.push({
+      onTestRunStart() {
+        runStarts++;
+      },
+    });
     const { executor, release, started } = createGatedExecutor('node');
     const teardown = createWatchTeardown({
       context,
