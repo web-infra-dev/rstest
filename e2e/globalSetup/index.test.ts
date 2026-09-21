@@ -297,6 +297,106 @@ describe('globalSetup', async () => {
     expectStderrLog(/globalSetup\.ts:3/);
   });
 
+  it('accepts a teardown-only global setup and runs its teardown', async () => {
+    const fixturesTargetPath = join(
+      __dirname,
+      'fixtures-test-globalsetup-teardown-only',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures/basic'),
+      fixturesTargetPath,
+    });
+    fs.update(
+      join(fixturesTargetPath, 'rstest.config.ts'),
+      `import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globalSetup: ['./setups/defaultExport.ts'],
+});
+`,
+    );
+    fs.update(
+      join(fixturesTargetPath, 'setups/defaultExport.ts'),
+      `export const teardown = () => { console.log('[teardown-only] executed'); };\n`,
+    );
+    fs.update(
+      join(fixturesTargetPath, 'index.test.ts'),
+      `import { beforeAll, it } from '@rstest/core';
+
+beforeAll(() => {
+  console.log('[rstest] Running basic tests');
+});
+
+it('runs after global setup', () => {});
+`,
+    );
+    fs.delete(join(fixturesTargetPath, 'index1.test.ts'));
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+          env: { ISOLATE: undefined },
+        },
+      },
+    });
+
+    try {
+      await expectExecSuccess();
+      expect(cli.stdout.indexOf('[rstest] Running basic tests')).toBeLessThan(
+        cli.stdout.indexOf('[teardown-only] executed'),
+      );
+    } finally {
+      await cli.killProcessTree();
+      fs.delete(fixturesTargetPath);
+    }
+  });
+
+  it('fails when a global setup has no relevant export', async () => {
+    const fixturesTargetPath = join(
+      __dirname,
+      'fixtures-test-globalsetup-no-exports',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures/basic'),
+      fixturesTargetPath,
+    });
+    fs.update(
+      join(fixturesTargetPath, 'rstest.config.ts'),
+      `import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globalSetup: ['./setups/defaultExport.ts'],
+});
+`,
+    );
+    fs.update(
+      join(fixturesTargetPath, 'setups/defaultExport.ts'),
+      `export const value = true;\n`,
+    );
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+          env: { ISOLATE: undefined },
+        },
+      },
+    });
+
+    try {
+      await expectExecFailed();
+      expectStderrLog(
+        /Invalid globalSetup file .*: must export setup, teardown or a default function/,
+      );
+    } finally {
+      await cli.killProcessTree();
+      fs.delete(fixturesTargetPath);
+    }
+  });
+
   it('rejects node watch startup when globalSetup throws', async () => {
     const fixturesTargetPath = join(
       __dirname,

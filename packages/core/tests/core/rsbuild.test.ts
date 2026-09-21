@@ -8,6 +8,7 @@ import type {
 import { join, normalize } from 'pathe';
 import { withDefaultConfig } from '../../src/config';
 import { listTests } from '../../src/core/listTests';
+import { runBrowserGlobalSetupStage } from '../../src/core/browser/globalSetupStage';
 import { Rstest } from '../../src/core/rstest';
 import {
   createRsbuildServer,
@@ -1152,6 +1153,57 @@ describe('prepareRsbuild', () => {
 
     expect(project.normalizedConfig.federation).toBe(true);
     expect(project.outputModule).toBe(false);
+  });
+
+  it('restores federation config in place after a failed globalSetup compile', async () => {
+    await withTempDir('rstest-browser-global-setup-', async (root) => {
+      const globalSetupPath = join(root, 'globalSetup.ts');
+      writeFileSync(globalSetupPath, 'export default () => {};\n');
+      const context = new Rstest(
+        { cwd: root, command: 'run', embedded: true, projects: [] },
+        {
+          root,
+          browser: { enabled: true, provider: 'playwright' },
+          globalSetup: [globalSetupPath],
+          federation: false,
+          output: { module: true },
+          plugins: [
+            {
+              name: 'reject-stage-config',
+              setup(api) {
+                api
+                  .useExposed<RstestExposeAPI>('rstest')
+                  ?.modifyRstestConfig((config) => {
+                    config.federation = true;
+                  });
+                api.modifyEnvironmentConfig(() => {
+                  expect(project.normalizedConfig.federation).toBe(true);
+                  expect(project.outputModule).toBe(false);
+                  throw new Error(
+                    'Stage compile failed after applying callbacks',
+                  );
+                });
+              },
+            } satisfies RsbuildPlugin,
+          ],
+        },
+      );
+      const project = context.projects[0]!;
+
+      await expect(
+        runBrowserGlobalSetupStage(context, [project], {
+          entriesCache: new Map([
+            [
+              project.environmentName,
+              { entries: { test: join(root, 'test.ts') } },
+            ],
+          ]),
+        }),
+      ).rejects.toThrow('Stage compile failed after applying callbacks');
+
+      expect(project.normalizedConfig.federation).toBe(false);
+      expect(project.outputModule).toBe(true);
+    });
   });
 
   it('should force require-based chunk loading for federation projects', async () => {

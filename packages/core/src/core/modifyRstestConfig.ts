@@ -38,6 +38,14 @@ type InitModifyRstestConfigHooksOptions = {
     project: InternalProjectContext,
   ) => RstestEnvironmentConfig;
   appliedEnvironmentNames?: Set<string>;
+  /**
+   * Compile a browser project's globalSetup for Node. `getRstestConfig()` reports
+   * `browser.enabled: false` so plugins pick their Node behavior. Unlike
+   * `appliedEnvironmentNames` (which skips a replay), callbacks are replayed on a
+   * clone and only `federation` is written back: discovery already applied them to
+   * the project, so replaying appends or relative roots would apply them twice.
+   */
+  nodeGlobalSetupCompile?: boolean;
 };
 
 type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
@@ -514,18 +522,25 @@ const applyProjectModifyRstestConfig = async (
   context: InternalContext,
   project: InternalProjectContext,
   callbacks: ModifyRstestConfigCallback[] | undefined,
+  nodeGlobalSetupCompile: boolean,
 ): Promise<void> => {
   if (!callbacks?.length) {
     return;
   }
 
   const modifiedConfig = await applyModifyRstestConfig(
-    project.normalizedConfig,
+    nodeGlobalSetupCompile
+      ? clonePlainConfig(project.normalizedConfig)
+      : project.normalizedConfig,
     context,
     project,
     callbacks,
   );
-  Object.assign(project.normalizedConfig, modifiedConfig);
+  if (nodeGlobalSetupCompile) {
+    project.normalizedConfig.federation = modifiedConfig.federation;
+  } else {
+    Object.assign(project.normalizedConfig, modifiedConfig);
+  }
   syncProjectDerivedFields(project);
 };
 
@@ -543,10 +558,17 @@ const createRstestExposeAPI = (
   context: InternalContext,
   project: InternalProjectContext,
   modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
+  nodeGlobalSetupCompile: boolean,
 ): RstestExposeAPI => ({
   getRstestConfig: () =>
     clonePlainConfig({
       ...project.normalizedConfig,
+      browser: {
+        ...project.normalizedConfig.browser,
+        enabled: nodeGlobalSetupCompile
+          ? false
+          : project.normalizedConfig.browser.enabled,
+      },
       projects: context.originalConfig.projects,
       pool: context.normalizedConfig.pool,
       reporters: context.normalizedConfig.reporters,
@@ -590,6 +612,7 @@ export const initModifyRstestConfigHooks = (
     onModifyRstestConfigApplied,
     onRsbuildConfigResolved,
     appliedEnvironmentNames = new Set<string>(),
+    nodeGlobalSetupCompile = false,
   } = options;
   const modifyRstestConfigCallbacks = new Map<
     string,
@@ -608,7 +631,12 @@ export const initModifyRstestConfigHooks = (
       if (!callbacks?.length) {
         continue;
       }
-      await applyProjectModifyRstestConfig(context, project, callbacks);
+      await applyProjectModifyRstestConfig(
+        context,
+        project,
+        callbacks,
+        nodeGlobalSetupCompile,
+      );
       appliedEnvironmentNames.add(project.environmentName);
       applied = true;
     }
@@ -619,7 +647,12 @@ export const initModifyRstestConfigHooks = (
   for (const project of exposeProjects) {
     rsbuildInstance.expose(
       'rstest',
-      createRstestExposeAPI(context, project, modifyRstestConfigCallbacks),
+      createRstestExposeAPI(
+        context,
+        project,
+        modifyRstestConfigCallbacks,
+        nodeGlobalSetupCompile,
+      ),
       {
         environment: project.environmentName,
       },

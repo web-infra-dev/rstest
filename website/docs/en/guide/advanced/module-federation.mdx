@@ -110,7 +110,6 @@ import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  federation: true,
   globalSetup: './global-setup.ts',
   browser: {
     enabled: true,
@@ -130,8 +129,6 @@ export default defineConfig({
   ],
 });
 ```
-
-In Browser Mode the plugin does not turn on the `federation` option for you. However, `globalSetup` files always run in a Node process, and their build output carries the same federation runtime, which throws on load without the switch, so the remote server never starts. Set `federation: true` yourself whenever a Browser Mode project uses `globalSetup`.
 
 ## Further reading
 

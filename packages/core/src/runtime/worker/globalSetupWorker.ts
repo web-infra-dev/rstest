@@ -8,10 +8,39 @@ import { installGracefulExit } from './setup';
 
 installGracefulExit();
 
-let teardownCallbacks: (() => Promise<void> | void)[] = [];
+let teardownCallbacks: TeardownCallback[] = [];
 // Track environment variable changes
 let initialEnv: Record<string, string | undefined> = {};
 let envChanges: Record<string, string | undefined> = {};
+
+type TeardownCallback = () => Promise<void> | void;
+
+type GlobalSetupExports = {
+  default?: unknown;
+  setup?: unknown;
+  teardown?: unknown;
+};
+
+const resolveGlobalSetupExports = async (
+  module: unknown,
+  testPath: string,
+): Promise<TeardownCallback | undefined> => {
+  const exports = (module ?? {}) as GlobalSetupExports;
+
+  if (typeof exports.setup === 'function') {
+    await exports.setup();
+  } else if (typeof exports.default === 'function') {
+    return await exports.default();
+  } else if (typeof exports.teardown !== 'function') {
+    throw new Error(
+      `Invalid globalSetup file ${testPath}: must export setup, teardown or a default function`,
+    );
+  }
+
+  return typeof exports.teardown === 'function'
+    ? (exports.teardown as TeardownCallback)
+    : undefined;
+};
 
 function trackEnvChanges() {
   // Store initial environment before setup
@@ -104,22 +133,10 @@ const runGlobalSetup = async (data: {
         interopDefault: data.interopDefault,
       });
 
-      let teardownCallback: (() => Promise<void> | void) | undefined;
-
-      // Handle different global setup file formats
-      if (module && typeof module === 'object') {
-        // Format 1: Named setup/teardown functions
-        if (module.setup && typeof module.setup === 'function') {
-          await module.setup();
-          if (module.teardown && typeof module.teardown === 'function') {
-            teardownCallback = module.teardown;
-          }
-        }
-        // Format 2: Default function returning teardown
-        else if (module.default && typeof module.default === 'function') {
-          teardownCallback = await module.default();
-        }
-      }
+      const teardownCallback = await resolveGlobalSetupExports(
+        module,
+        testPath,
+      );
 
       if (teardownCallback) {
         teardownCallbacks.push(teardownCallback);

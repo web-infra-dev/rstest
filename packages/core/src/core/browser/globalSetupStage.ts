@@ -50,6 +50,11 @@ const emptyEntries = async () => ({});
  * are honored. The public `global-setup` docs state the same guarantee; keep
  * the two in step.
  *
+ * The stage also replays those plugin callbacks (`nodeGlobalSetupCompile`)
+ * against the shared project objects and temporarily writes `federation` and
+ * `outputModule` onto them, restoring both in a `finally`; `outputModule` is
+ * saved explicitly rather than re-derived from `federation`.
+ *
  * Known limitation: browser projects share one run cycle, so any project's
  * setup failure skips the whole browser cycle (node isolates failures per
  * project). Exit code and error reporting still surface the failure.
@@ -110,6 +115,26 @@ export async function runBrowserGlobalSetupStage(
     return { errors: [] };
   }
 
+  const savedConfigs = candidates.map(({ project }) => ({
+    project,
+    federation: project.normalizedConfig.federation,
+    outputModule: project.outputModule,
+  }));
+  try {
+    return await compileAndRunGlobalSetup(context, candidates, watch);
+  } finally {
+    for (const { project, federation, outputModule } of savedConfigs) {
+      project.normalizedConfig.federation = federation;
+      project.outputModule = outputModule;
+    }
+  }
+}
+
+async function compileAndRunGlobalSetup(
+  context: InternalContext,
+  candidates: { project: InternalProjectContext; entryCount: number }[],
+  watch: boolean | undefined,
+): Promise<BrowserGlobalSetupStageResult> {
   const candidateProjects = candidates.map(({ project }) => project);
   const setupFileState = createSetupFileState();
   setupFileState.refresh({
@@ -164,11 +189,7 @@ export async function runBrowserGlobalSetupStage(
     candidateProjects,
     candidateProjects,
     {
-      // Discovery already applied these callbacks. This compile only needs to
-      // expose the settled project config before user plugin setup runs.
-      appliedEnvironmentNames: new Set(
-        candidateProjects.map((project) => project.environmentName),
-      ),
+      nodeGlobalSetupCompile: true,
     },
   );
 
