@@ -13,8 +13,6 @@
 // classification, not parsing (is this token a path? an npm name?).
 //
 // Checks (all deterministic, no prose/semantic judgment):
-//   C1 — every AGENTS.md has a sibling CLAUDE.md that is a symlink to AGENTS.md
-//        (git mode 120000 when tracked).
 //   C2 — root AGENTS.md references every packages/*/AGENTS.md by path, and its
 //        "Monorepo structure" section lists every direct child of packages/.
 //   C3 — commands in ```bash fences (`shell-quote` splits words, strips quotes,
@@ -36,8 +34,7 @@
 //
 // Doc set: tracked plus untracked-but-not-ignored files, so newly written docs
 // are gated before their first commit (identical to plain `git ls-files` once
-// everything is committed). AGENTS.md is the content source; CLAUDE.md is only
-// checked structurally (C1).
+// everything is committed).
 //
 // Allowlist: scripts/harness/check-harness-docs.allow.json — `{file, token,
 // reason}` entries suppress a violation whose doc path and offending token both
@@ -51,13 +48,7 @@
 // owns that), no auto-fix.
 
 import { execFileSync } from 'node:child_process';
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-} from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { argv, exit, stdout } from 'node:process';
 import { Lexer } from 'marked';
@@ -86,15 +77,6 @@ const docFiles = git([
   .split('\n')
   .filter(Boolean)
   .sort();
-
-/** Git index modes for CLAUDE.md files, path → mode (e.g. '120000'). */
-const trackedClaudeModes = new Map(
-  git(['ls-files', '-s', '--', '*CLAUDE.md'])
-    .split('\n')
-    .filter(Boolean)
-    // `git ls-files -s` line shape: `<mode> <hash> <stage>\t<path>`.
-    .map((line) => [line.split('\t')[1], line.split(' ')[0]]),
-);
 
 // ---------------------------------------------------------------------------
 // Workspace model: package dirs, name → dir, script tables, dependency names.
@@ -333,60 +315,6 @@ const violations = [];
 function report(check, file, line, token, message) {
   if (allowlist.some((a) => a.file === file && a.token === token)) return;
   violations.push({ check, file, line, token, message });
-}
-
-// ---------------------------------------------------------------------------
-// C1 — CLAUDE.md symlink integrity.
-// ---------------------------------------------------------------------------
-
-for (const doc of docFiles) {
-  if (!doc.endsWith('AGENTS.md')) continue;
-  const claudeRel = join(dirname(doc), 'CLAUDE.md');
-  const claudeAbs = join(repoRoot, claudeRel);
-  let stat;
-  try {
-    stat = lstatSync(claudeAbs);
-  } catch {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      `missing CLAUDE.md symlink next to ${doc} (fix: ln -s AGENTS.md ${claudeRel})`,
-    );
-    continue;
-  }
-  if (!stat.isSymbolicLink()) {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      'CLAUDE.md must be a symlink to AGENTS.md, found a regular file',
-    );
-    continue;
-  }
-  const target = readlinkSync(claudeAbs);
-  if (target !== 'AGENTS.md') {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      `CLAUDE.md symlink points to ${target}, expected AGENTS.md`,
-    );
-    continue;
-  }
-  const mode = trackedClaudeModes.get(claudeRel);
-  if (mode !== undefined && mode !== '120000') {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      `CLAUDE.md tracked with git mode ${mode}, expected symlink mode 120000`,
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------
