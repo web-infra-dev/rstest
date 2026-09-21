@@ -23,7 +23,7 @@ export class TestStateManager {
     const currentModule = this.runningModules.get(testPath);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
-        (result) => result.status === 'fail',
+        (result) => result.status === 'failed',
       ).length;
     }
     this.runningModules.set(testPath, { runningTests: [], results: [] });
@@ -45,7 +45,7 @@ export class TestStateManager {
       }
       currentModule.results.push(result);
     }
-    if (result.status === 'fail') {
+    if (result.status === 'failed') {
       this.failedTestCount++;
     }
   }
@@ -76,14 +76,14 @@ export class TestStateManager {
     const currentModule = this.runningModules.get(test.testPath);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
-        (result) => result.status === 'fail',
+        (result) => result.status === 'failed',
       ).length;
     }
     this.runningModules.delete(test.testPath);
     this.failedTestCount +=
       test.results.length > 0
-        ? test.results.filter((result) => result.status === 'fail').length
-        : test.status === 'fail'
+        ? test.results.filter((result) => result.status === 'failed').length
+        : test.status === 'failed'
           ? 1
           : 0;
     this.testModules.push(test);

@@ -1,9 +1,9 @@
 import type { BrowserViewport } from '@rstest/core/internal/browser';
 import type {
   BrowserRuntimeConfig,
-  TestFileResult,
-  TestInfo,
-  TestResult,
+  RawTestFileResult,
+  RawTestInfo,
+  RawTestResult,
 } from '@rstest/core/internal/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 
@@ -61,7 +61,7 @@ export type FileCleanupDispatchMethod =
 
 export type FileCleanupDispatchPayload = {
   projectName: string;
-  result?: TestFileResult;
+  result?: RawTestFileResult;
   runId?: string;
   testPath: string;
 };
@@ -177,8 +177,8 @@ export type BrowserClientMessage =
       type: 'file-start';
       payload: { testPath: string; projectName: string };
     }
-  | { type: 'case-result'; payload: TestResult }
-  | { type: 'file-complete'; payload: TestFileResult }
+  | { type: 'case-result'; payload: RawTestResult }
+  | { type: 'file-complete'; payload: RawTestFileResult }
   | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
@@ -188,7 +188,7 @@ export type BrowserClientMessage =
   // Collect mode messages
   | {
       type: 'collect-result';
-      payload: { testPath: string; project: string; tests: TestInfo[] };
+      payload: { testPath: string; project: string; tests: RawTestInfo[] };
     }
   | { type: 'collect-complete' }
   // Unified RPC envelope for all runner -> container/host capability calls.

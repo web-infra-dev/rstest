@@ -1,8 +1,8 @@
 import type {
   SerializedError,
   RunWorkerOptions,
-  Test,
-  TestFileResult,
+  RawTestInfo,
+  RawTestFileResult,
 } from '../types';
 
 const WORKER_REQUEST_TAG = '__rstest_worker_request__' as const;
@@ -24,7 +24,7 @@ export type WorkerRequest =
     };
 
 export type CollectTaskResult = {
-  tests: Test[];
+  tests: RawTestInfo[];
   testPath: string;
   project: string;
   errors?: SerializedError[];
@@ -65,13 +65,13 @@ export type WorkerResponse =
   | {
       type: 'fileCleanupStarted';
       taskId: number;
-      result?: TestFileResult;
+      result?: RawTestFileResult;
     }
   | { type: 'fileCleanupFinished'; taskId: number }
   | {
       type: 'runFinished';
       taskId: number;
-      result: TestFileResult;
+      result: RawTestFileResult;
       memory?: WorkerMemoryReport;
     }
   | {

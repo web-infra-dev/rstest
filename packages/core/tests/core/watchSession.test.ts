@@ -65,6 +65,7 @@ const createFakeExecutor = (
     init: async () => {},
     close: async () => {},
     runCycle: async (options) => {
+      await options.onSelected?.([]);
       cycles.push(options);
       return (await onCycle?.(options)) ?? emptyOutcome();
     },
@@ -245,10 +246,20 @@ describe('createWatchCycleDriver', () => {
       context.stateManager.onTestFileResult({
         testId: '/fail.test.ts',
         name: '/fail.test.ts',
-        status: 'fail',
+        fullName: '/fail.test.ts',
+        status: 'failed',
         testPath: '/fail.test.ts',
+        relativeTestPath: 'fail.test.ts',
         project: 'node-a',
         results: [],
+        summary: {
+          total: 0,
+          passed: 0,
+          failed: 0,
+          skipped: 0,
+          todo: 0,
+          flaky: 0,
+        },
       });
     });
     const seen: number[] = [];
@@ -574,7 +585,7 @@ describe('createWatchCycleDriver', () => {
     expect(executor.cycles).toHaveLength(3);
     expect(onResult).toHaveBeenNthCalledWith(
       3,
-      expect.objectContaining({ status: 'pass' }),
+      expect.objectContaining({ status: 'passed' }),
     );
   });
 
@@ -589,18 +600,38 @@ describe('createWatchCycleDriver', () => {
       {
         testId: '/failed.test.ts',
         name: '/failed.test.ts',
-        status: 'fail' as const,
+        fullName: '/failed.test.ts',
+        status: 'failed' as const,
         testPath: '/failed.test.ts',
+        relativeTestPath: 'failed.test.ts',
         project: 'node-a',
         results: [],
+        summary: {
+          total: 0,
+          passed: 0,
+          failed: 0,
+          skipped: 0,
+          todo: 0,
+          flaky: 0,
+        },
       },
       {
         testId: '/passed.test.ts',
         name: '/passed.test.ts',
-        status: 'pass' as const,
+        fullName: '/passed.test.ts',
+        status: 'passed' as const,
         testPath: '/passed.test.ts',
+        relativeTestPath: 'passed.test.ts',
         project: 'node-a',
         results: [],
+        summary: {
+          total: 0,
+          passed: 0,
+          failed: 0,
+          skipped: 0,
+          todo: 0,
+          flaky: 0,
+        },
       },
     ];
     let cycle = 0;
@@ -619,7 +650,7 @@ describe('createWatchCycleDriver', () => {
     expect(onResult).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        status: 'fail',
+        status: 'failed',
         results: cycleResults,
         summary: expect.objectContaining({ files: { total: 2, failed: 1 } }),
         rerunTestPaths: ['/passed.test.ts'],

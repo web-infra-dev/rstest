@@ -44,9 +44,9 @@ export const getSummaryStatusString = (
     return color.dim(`no ${name}`);
   }
 
-  const passed = tasks.filter((result) => result.status === 'pass');
-  const failed = tasks.filter((result) => result.status === 'fail');
-  const skipped = tasks.filter((result) => result.status === 'skip');
+  const passed = tasks.filter((result) => result.status === 'passed');
+  const failed = tasks.filter((result) => result.status === 'failed');
+  const skipped = tasks.filter((result) => result.status === 'skipped');
   const todo = tasks.filter((result) => result.status === 'todo');
 
   const status = [
@@ -75,9 +75,9 @@ export const getPlainSummaryStatusString = (
     return `no ${name}`;
   }
 
-  const failed = tasks.filter((result) => result.status === 'fail');
-  const passed = tasks.filter((result) => result.status === 'pass');
-  const skipped = tasks.filter((result) => result.status === 'skip');
+  const failed = tasks.filter((result) => result.status === 'failed');
+  const passed = tasks.filter((result) => result.status === 'passed');
+  const skipped = tasks.filter((result) => result.status === 'skipped');
   const todo = tasks.filter((result) => result.status === 'todo');
 
   const icon = failed.length > 0 ? '❌' : '✅';
@@ -208,12 +208,12 @@ export const printSummaryErrorLogs = async ({
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
-        i.status === 'fail' &&
+        i.status === 'failed' &&
         i.errors?.length &&
         (rerun ? rerun.has(i.testPath) : true),
     ),
     ...testResults.filter(
-      (i) => i.status === 'fail' && (rerun ? rerun.has(i.testPath) : true),
+      (i) => i.status === 'failed' && (rerun ? rerun.has(i.testPath) : true),
     ),
   ];
 

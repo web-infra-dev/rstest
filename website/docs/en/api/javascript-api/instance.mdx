@@ -195,7 +195,7 @@ interface RstestInstance {
 - **Type:**
 
 ```ts
-type TestRunStatus = 'pass' | 'fail' | 'error';
+type TestRunStatus = 'passed' | 'failed' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // Overall status of the run.
@@ -205,7 +205,7 @@ interface TestRunResult {
 
 The remaining fields (`results`, `testResults`, `summary`, `duration`, `snapshotSummary`, `unhandledErrors`, `coverage`, `rerunTestPaths`) are documented under [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend) in the Reporter API.
 
-`status` is `'error'` when `unhandledErrors` is non-empty. It is `'fail'` when the run completed with a non-zero exit status, such as from failing tests or test files, a coverage threshold violation, no tests being found without `passWithNoTests`, or a `globalSetup` teardown failure. In watch mode, it is also `'fail'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'pass'`.
+`status` is `'error'` when `unhandledErrors` is non-empty. It is `'failed'` when the run completed with a non-zero exit status, such as from failing tests or test files, a coverage threshold violation, no tests being found without `passWithNoTests`, or a `globalSetup` teardown failure. In watch mode, it is also `'failed'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'passed'`.
 
 Every entry in `unhandledErrors` is a plain object that can be serialized to JSON, not an `Error` instance.
 

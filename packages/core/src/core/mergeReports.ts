@@ -9,6 +9,7 @@ import {
 import { isAbsolute, join, relative } from 'pathe';
 import {
   cleanCoverageReports,
+  cloneCoverageMapData,
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../coverage';
@@ -22,7 +23,6 @@ import {
 } from '../reporter/blob';
 import { computeSummary } from '../reporter/utils';
 import type {
-  CoverageMapData,
   Duration,
   SerializedError,
   SnapshotSummary,
@@ -31,9 +31,14 @@ import type {
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
 import { color, logger, prettyTime } from '../utils';
-import { notifyReportersOnTestRunEnd } from './finalizeRun';
+import { toSerializedError } from '../utils/error';
+import { notifyReportersOnTestRunEnd, resolveRunStatus } from './finalizeRun';
 import type { Rstest } from './rstest';
-import { createRunnerEventSink, type RunnerEventSink } from './runnerEventSink';
+import {
+  createRunnerEventSink,
+  drainReporterHooks,
+  type RunnerEventSink,
+} from './runnerEventSink';
 
 const DEFAULT_BLOB_DIR = '.rstest-reports';
 
@@ -180,34 +185,36 @@ async function replayTestFile(
   sink: RunnerEventSink,
   { result: fileResult, data }: ReplayFile,
 ): Promise<void> {
+  const pending: Promise<void>[] = [];
   for (const event of data.events) {
     switch (event.h) {
       case 'start':
-        await sink.onTestFileStart(event.test);
+        pending.push(sink.onTestFileStart(event.test));
         break;
       case 'ready':
-        await sink.onTestFileReady(event.test);
+        pending.push(sink.onTestFileReady(event.test));
         break;
       case 'suiteStart':
-        await sink.onTestSuiteStart(event.test);
+        pending.push(sink.onTestSuiteStart(event.test));
         break;
       case 'suiteResult':
-        await sink.onTestSuiteResult(event.result);
+        pending.push(sink.onTestSuiteResult(event.result));
         break;
       case 'caseStart':
-        sink.onTestCaseStart(event.test);
+        pending.push(sink.onTestCaseStart(event.test));
         break;
       case 'caseResult':
-        await sink.onTestCaseResult(event.result);
+        pending.push(sink.onTestCaseResult(event.result).then(() => undefined));
         break;
       case 'log':
-        await sink.emitConsoleLog(event.log);
+        pending.push(sink.emitConsoleLog(event.log));
         break;
       default:
         event satisfies never;
     }
   }
 
+  await Promise.all(pending);
   if (fileResult) {
     await sink.onTestFileResult(fileResult);
   }
@@ -318,11 +325,13 @@ export async function mergeReports(
     .filter((result) => result !== undefined);
   const mergedDuration = mergeDurations(allDurations);
   const mergedSnapshotSummary = mergeSnapshots(allSnapshotSummaries);
-  const mergedCoverage: CoverageMapData | undefined =
-    hasCoverage && mergedCoverageMap ? mergedCoverageMap.toJSON() : undefined;
+  const mergedCoverage =
+    hasCoverage && mergedCoverageMap
+      ? cloneCoverageMapData(mergedCoverageMap)
+      : undefined;
 
   const hasFailure =
-    allResults.some((r) => r.status === 'fail') ||
+    allResults.some((r) => r.status === 'failed') ||
     allUnhandledErrors.length > 0;
 
   if (hasFailure) {
@@ -330,7 +339,9 @@ export async function mergeReports(
   }
 
   for (const reporter of context.reporters) {
-    await reporter.onTestRunStart?.();
+    await reporter.onTestRunStart?.({
+      files: blobs.flatMap((blob) => blob.runStart.files),
+    });
   }
 
   // Print per-shard durations
@@ -364,19 +375,11 @@ export async function mergeReports(
     await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
   }
 
-  await notifyReportersOnTestRunEnd({
-    context,
-    payload: {
-      results: allResults,
-      coverage: mergedCoverage,
-      testResults: allTestResults,
-      summary: computeSummary(allResults),
-      duration: mergedDuration,
-      snapshotSummary: mergedSnapshotSummary,
-      unhandledErrors: allUnhandledErrors,
-      getSourcemap: async () => null,
-    },
-  });
+  const reporterErrors = await drainReporterHooks(context);
+  if (reporterErrors.length) {
+    context.exitCode.raise(1);
+    allUnhandledErrors.push(...reporterErrors.map(toSerializedError));
+  }
 
   const shouldGenerateCoverage =
     coverageProvider &&
@@ -386,6 +389,26 @@ export async function mergeReports(
     const { generateCoverage } = await import('../coverage/generate');
     await generateCoverage(context, mergedCoverageMap, coverageProvider);
   }
+
+  const summary = computeSummary(allResults);
+  await notifyReportersOnTestRunEnd({
+    context,
+    payload: {
+      results: allResults,
+      coverage: mergedCoverage,
+      testResults: allTestResults,
+      summary,
+      status: resolveRunStatus({
+        exitCode: context.exitCode.current,
+        summary,
+        unhandledErrors: allUnhandledErrors,
+      }),
+      duration: mergedDuration,
+      snapshotSummary: mergedSnapshotSummary,
+      unhandledErrors: allUnhandledErrors,
+      getSourcemap: async () => null,
+    },
+  });
 
   if (cleanup && existsSync(blobDir)) {
     if (shouldGenerateCoverage) {

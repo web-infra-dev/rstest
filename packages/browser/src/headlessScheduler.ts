@@ -1,6 +1,6 @@
 import type {
   InternalContext,
-  TestFileResult,
+  RawTestFileResult,
 } from '@rstest/core/internal/browser';
 import {
   color,
@@ -83,7 +83,7 @@ type HeadlessSchedulerDeps = {
   ) => HostDispatchRouter;
   handlers: {
     handleFatal: (payload: FatalPayload) => Promise<void>;
-    handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
+    handleTestFileComplete: (payload: RawTestFileResult) => Promise<void>;
   };
   watchSignals: Pick<
     WatchSignals,
@@ -295,7 +295,7 @@ export const createHeadlessScheduler = async ({
       {
         timer?: ReturnType<typeof setTimeout>;
         finished: boolean;
-        result?: TestFileResult;
+        result?: RawTestFileResult;
       }
     >();
 
@@ -662,9 +662,9 @@ export const createHeadlessScheduler = async ({
   // Bailed files never run, so they carry no case results — mirror the node
   // pool's skip result (`runInPool.ts`) so the summary reports them as skipped
   // rather than dropping them silently.
-  const makeSkippedFileResult = (file: TestFileInfo): TestFileResult => ({
+  const makeSkippedFileResult = (file: TestFileInfo): RawTestFileResult => ({
     testId: getFileTaskId(file.testPath),
-    status: 'skip',
+    status: 'skipped',
     name: '',
     testPath: file.testPath,
     project: file.projectName,

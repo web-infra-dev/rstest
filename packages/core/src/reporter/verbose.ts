@@ -46,7 +46,7 @@ export class VerboseReporter extends DefaultReporter {
     const hideSkippedTestFiles =
       projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
 
-    if (hideSkippedTestFiles && test.status === 'skip') {
+    if (hideSkippedTestFiles && test.status === 'skipped') {
       return;
     }
 

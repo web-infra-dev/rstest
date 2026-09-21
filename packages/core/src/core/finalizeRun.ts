@@ -1,11 +1,13 @@
-import { resolveAndMergeRawCoverage } from '../coverage';
+import { cloneCoverageMapData, resolveAndMergeRawCoverage } from '../coverage';
 import { BlobReporter } from '../reporter/blob';
 import { computeSummary } from '../reporter/utils';
 import type {
   Duration,
   ExecutorCycleOutcome,
+  SelectedTestFile,
   SourceMapInput,
   TestRunEndPayload,
+  TestRunStartPayload,
 } from '../types';
 import type { CoverageProvider } from '../types/coverage';
 import {
@@ -18,6 +20,8 @@ import {
 } from '../utils';
 import type { InternalContext } from '../types';
 import { toSerializedError } from '../utils/error';
+import { getFileTaskId } from '../utils/helper';
+import { drainReporterHooks } from './runnerEventSink';
 
 export const reportNoTestFiles = ({
   context,
@@ -83,11 +87,53 @@ export const reportNoTestFiles = ({
 
 export const notifyReportersOnTestRunStart = async (
   context: InternalContext,
+  files: SelectedTestFile[],
 ): Promise<void> => {
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunStart?.();
+  const payload: TestRunStartPayload = {
+    files: files.map((file) => ({
+      ...file,
+      testId: getFileTaskId(file.testPath),
+    })),
+  };
+  // Selection can finish before workers exist; signal-only hooks need a referenced handle until they settle.
+  const keepAlive = setInterval(() => {}, 2 ** 30);
+  try {
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunStart?.(payload);
+    }
+  } finally {
+    clearInterval(keepAlive);
   }
 };
+
+export const createRunStartBarrier = (
+  context: InternalContext,
+  executorCount: number,
+): Array<(files: SelectedTestFile[]) => Promise<void>> => {
+  const selections = Array.from({ length: executorCount }, () =>
+    Promise.withResolvers<SelectedTestFile[]>(),
+  );
+  const started = Promise.all(selections.map(({ promise }) => promise)).then(
+    (files) => notifyReportersOnTestRunStart(context, files.flat()),
+  );
+  return selections.map(({ resolve }) => (files) => {
+    resolve(files);
+    return started;
+  });
+};
+
+export const resolveRunStatus = ({
+  exitCode,
+  summary,
+  unhandledErrors,
+}: Pick<TestRunEndPayload, 'summary' | 'unhandledErrors'> & {
+  exitCode: number;
+}): TestRunEndPayload['status'] =>
+  unhandledErrors.length
+    ? 'error'
+    : exitCode !== 0 || summary.files.failed > 0
+      ? 'failed'
+      : 'passed';
 
 export const notifyReportersOnTestRunEnd = async ({
   context,
@@ -209,7 +255,10 @@ export async function finalizeRunCycle(
 
   const results = outcomes.flatMap((o) => o.results);
   const testResults = outcomes.flatMap((o) => o.testResults);
-  const errors = outcomes.flatMap((o) => o.errors);
+  const errors = [
+    ...outcomes.flatMap((o) => o.errors),
+    ...(await drainReporterHooks(context)),
+  ];
 
   // Coverage flows through the outcome contract: merge every executor's istanbul
   // `map` into the run's map, then resolve the concatenated v8 `raw` batches.
@@ -267,7 +316,7 @@ export async function finalizeRunCycle(
   };
 
   const isFailure =
-    results.some((r) => r.status === 'fail') || errors.length > 0;
+    results.some((r) => r.status === 'failed') || errors.length > 0;
   const noTestsDiscovered = results.length === 0 && errors.length === 0;
   const testPaths = outcomes.flatMap((o) => o.testPaths);
 
@@ -285,25 +334,10 @@ export async function finalizeRunCycle(
     context.exitCode.raise(1);
   }
 
-  if (reportersStarted) {
-    const reporterResults = context.reporterResults.results;
-    await runLifecycleStep('reporter onTestRunEnd', () =>
-      notifyReportersOnTestRunEnd({
-        context,
-        payload: {
-          results: reporterResults,
-          testResults: context.reporterResults.testResults,
-          summary: computeSummary(reporterResults),
-          coverage: isInterrupted() ? undefined : mergedCoverageMap?.toJSON(),
-          duration,
-          getSourcemap,
-          unhandledErrors: errors.map((error) => toSerializedError(error)),
-          snapshotSummary: context.snapshotManager.summary,
-          rerunTestPaths: isWatchMode ? testPaths : undefined,
-        },
-      }),
-    );
-  }
+  const collectedCoverage =
+    !isInterrupted() && mergedCoverageMap
+      ? cloneCoverageMapData(mergedCoverageMap)
+      : undefined;
 
   const defersCoverageReport =
     coverageProvider?.supportsDeferredCoverageFinalization === true &&
@@ -333,6 +367,33 @@ export async function finalizeRunCycle(
   }
 
   await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+
+  if (reportersStarted) {
+    const reporterResults = context.reporterResults.results;
+    const summary = computeSummary(reporterResults);
+    const unhandledErrors = errors.map(toSerializedError);
+    await runLifecycleStep('reporter onTestRunEnd', () =>
+      notifyReportersOnTestRunEnd({
+        context,
+        payload: {
+          results: reporterResults,
+          testResults: context.reporterResults.testResults,
+          summary,
+          status: resolveRunStatus({
+            exitCode: context.exitCode.current,
+            summary,
+            unhandledErrors,
+          }),
+          coverage: collectedCoverage,
+          duration,
+          getSourcemap,
+          unhandledErrors,
+          snapshotSummary: context.snapshotManager.summary,
+          rerunTestPaths: isWatchMode ? testPaths : undefined,
+        },
+      }),
+    );
+  }
 
   if (!isInterrupted() && isFailure) {
     const bail = context.normalizedConfig.bail;

@@ -209,6 +209,7 @@ const createConsoleLog = (
   content,
   name: 'log',
   testPath,
+  relativeTestPath: testPath.slice(`${ROOT_PATH}/`.length),
   project,
   type: 'stdout',
 });
@@ -219,9 +220,11 @@ const createFailedTest = (
   project = 'default',
 ): TestResult => ({
   testId: `${project}:${testPath}#${name}`,
-  status: 'fail',
+  status: 'failed',
   name,
+  fullName: name,
   testPath,
+  relativeTestPath: testPath.slice(`${ROOT_PATH}/`.length),
   project,
   errors: [{ name: 'Error', message: `${name} failed` }],
 });
@@ -232,11 +235,21 @@ const createFailedFile = (
   project = 'default',
 ): TestFileResult => ({
   testId: `${project}:${testPath}`,
-  status: 'fail',
+  status: 'failed',
   name: testPath,
+  fullName: testPath,
   testPath,
+  relativeTestPath: testPath.slice(`${ROOT_PATH}/`.length),
   project,
   results,
+  summary: {
+    total: results.length,
+    passed: 0,
+    failed: results.length,
+    skipped: 0,
+    todo: 0,
+    flaky: 0,
+  },
 });
 
 const setupMdReporter = () => {
@@ -262,6 +275,7 @@ const setupMdReporter = () => {
       reporter.onTestFileStart({
         testId: `${project}:${testPath}`,
         testPath,
+        relativeTestPath: testPath.slice(`${ROOT_PATH}/`.length),
         project,
         tests: [],
       }),
@@ -277,10 +291,12 @@ const setupMdReporter = () => {
         | 'snapshotSummary'
         | 'summary'
         | 'unhandledErrors'
+        | 'status'
       >,
     ) => {
       await reporter.onTestRunEnd({
         ...payload,
+        status: 'failed',
         duration: emptyDuration,
         getSourcemap: async () => null,
         snapshotSummary: emptySnapshotSummary,

@@ -15,7 +15,7 @@ type TestFileTitleProps = {
 };
 
 /** Statuses that trigger a flash animation on icon change */
-const FLASH_STATUSES: TestStatus[] = ['pass', 'fail'];
+const FLASH_STATUSES: TestStatus[] = ['passed', 'failed'];
 
 export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   icon,

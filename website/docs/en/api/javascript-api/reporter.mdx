@@ -1,15 +1,27 @@
 ---
 title: Reporter
-description: The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
+description: The Reporter API allows you to create custom test result processors and output formatters.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Reporter API
 
-The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
+The Reporter API allows you to create custom test result processors and output formatters.
 
 > **Note**: For usage examples and configuration guidance, see the [Reporters guide](/guide/basic/reporters).
+
+## Stability
+
+<ApiMeta addedVersion="1.0.0" />
+
+The hook set, payload field names, and status literals are **Stable**. The semantics of `getSourcemap`, `snapshotSummary`, `coverage`, `heap`, and `meta` are **Best-effort** and may change independently of the stable contract.
+
+## Dispatch semantics
+
+Runner hooks start in event arrival order, without chaining promises, so a later event's hooks can start before an earlier event's hooks resolve. Before `onTestFileResult`, Rstest waits for all pending start, ready, suite, case, and console hooks belonging to that file; before `onTestRunEnd`, it waits for all pending hooks in the run. Hook failures are attributed to the reporter and hook name and surfaced as reporter errors; the same rules apply to Node, browser mode, and blob replay, while `onExit` remains unchanged.
+
+`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Selection happens before execution, so files remain listed even if bail prevents them from running. Import `TestRunStartPayload` from `@rstest/core`.
 
 ## Using custom reporter
 
@@ -61,14 +73,16 @@ The `Reporter` interface provides lifecycle hooks for test execution. Each hook 
 
 ```ts
 interface Reporter {
-  onTestFileStart?(test: TestFileInfo): void;
-  onTestFileReady?(test: TestFileInfo): void;
-  onTestFileResult?(test: TestFileResult): void;
-  onTestSuiteStart?(test: TestSuiteInfo): void;
-  onTestSuiteResult?(result: TestResult): void;
-  onTestCaseStart?(test: TestCaseInfo): void;
-  onTestCaseResult?(result: TestResult): void;
+  onTestRunStart?(payload: TestRunStartPayload): MaybePromise<void>;
+  onTestFileStart?(test: TestFileInfo): MaybePromise<void>;
+  onTestFileReady?(test: TestFileInfo): MaybePromise<void>;
+  onTestFileResult?(test: TestFileResult): MaybePromise<void>;
+  onTestSuiteStart?(test: TestSuiteInfo): MaybePromise<void>;
+  onTestSuiteResult?(result: TestResult): MaybePromise<void>;
+  onTestCaseStart?(test: TestCaseInfo): MaybePromise<void>;
+  onTestCaseResult?(result: TestResult): MaybePromise<void>;
   onTestRunEnd?(payload: {
+    status: TestRunStatus;
     results: TestFileResult[]; // Test file results; in watch mode, accumulated over the whole session.
     testResults: TestResult[]; // Results of every test, not grouped by file.
     summary: {
@@ -78,6 +92,7 @@ interface Reporter {
         failed: number; // Number of failed tests.
         skipped: number; // Number of skipped tests.
         todo: number; // Number of todo tests.
+        flaky: number; // Passed tests that required a retry.
       };
       files: {
         total: number; // Total number of test files.
@@ -103,8 +118,8 @@ interface Reporter {
     coverage?: CoverageMapData; // Present when coverage is enabled.
     rerunTestPaths?: string[]; // Watch only: files executed in the current cycle.
     getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>; // Resolves the source map of a built file.
-  }): void | Promise<void>;
-  onUserConsoleLog?(log: UserConsoleLog): void;
+  }): MaybePromise<void>;
+  onUserConsoleLog?(log: UserConsoleLog): MaybePromise<void>;
   onExit?(): MaybePromise<void>;
 }
 ```
@@ -123,6 +138,10 @@ Metadata result fields are available on reporter results. JSON-serializable runt
 
 `onTestRunEnd` is called when a run cycle finishes, with the results and aggregates of that cycle. Starting in v0.12.0, the payload carries `summary` and `rerunTestPaths`, and `unhandledErrors` is always an array of serialized errors.
 
+<ApiMeta addedVersion="1.0.0" />
+
+Coverage generation and threshold checks finish before `onTestRunEnd`, so the coverage table now prints before the run summary. The host computes `status` once: unhandled errors produce `'error'`; otherwise a non-zero exit code or failed files produce `'failed'`; otherwise the status is `'passed'`. The public API's `TestRunResult` is the same payload without `getSourcemap`.
+
 In watch mode, `results`, `testResults`, and `summary` accumulate over the whole session: each file keeps its latest result, and deleted files are removed. `rerunTestPaths` lists the files executed in the current cycle and is absent for one-shot runs. Every entry in `unhandledErrors` is a plain object that can be serialized to JSON.
 
 ### TestResult
@@ -132,13 +151,15 @@ In watch mode, `results`, `testResults`, and `summary` accumulate over the whole
 - **Type:**
 
 ```ts
-type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
+type TestResultStatus = 'skipped' | 'passed' | 'failed' | 'todo';
 
 interface TestResult {
   testId: string; // Task identifier.
   status: TestResultStatus; // Final result status.
   name: string; // Display name of the test, suite, or test file.
+  fullName: string; // Parent suite names and name, joined with ` > `.
   testPath: string; // Path of the owning test file.
+  relativeTestPath: string; // POSIX path relative to rootPath.
   parentNames?: string[]; // Names of the enclosing suites.
   duration?: number; // Execution duration in milliseconds.
   errors?: SerializedError[]; // Errors from the final attempt.
@@ -157,6 +178,14 @@ interface TestResult {
 ```ts
 interface TestFileResult extends TestResult {
   results: TestResult[]; // Results of the tests declared in this file.
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    todo: number;
+    flaky: number;
+  };
   snapshotResult?: SnapshotResult; // Snapshot statistics of this file.
   coverage?: Record<string, FileCoverageData>; // Per-file coverage data when coverage is enabled.
 }
@@ -177,13 +206,13 @@ const simpleReporter: Reporter = {
   },
 
   onTestCaseResult(result) {
-    const status = result.status === 'pass' ? '✅' : '❌';
+    const status = result.status === 'passed' ? '✅' : '❌';
     console.log(`${status} ${result.name}`);
   },
 
   onTestRunEnd({ results }) {
-    const passed = results.filter((r) => r.status === 'pass').length;
-    const failed = results.filter((r) => r.status === 'fail').length;
+    const passed = results.filter((r) => r.status === 'passed').length;
+    const failed = results.filter((r) => r.status === 'failed').length;
     console.log(`\n📊 ${passed} passed, ${failed} failed`);
   },
 };

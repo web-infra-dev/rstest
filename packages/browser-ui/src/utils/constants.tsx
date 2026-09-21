@@ -8,8 +8,8 @@ import {
 import React from 'react';
 import type { BrowserHostConfig } from '../types';
 
-export type TestStatus = 'idle' | 'running' | 'pass' | 'fail';
-export type CaseStatus = TestStatus | 'skip';
+export type TestStatus = 'idle' | 'running' | 'passed' | 'failed';
+export type CaseStatus = TestStatus | 'skipped';
 
 type StatusMeta = {
   label: string;
@@ -28,12 +28,12 @@ export const STATUS_META: Record<TestStatus, StatusMeta> = {
     color: 'var(--ds-amber-700)',
     icon: <Loader size={14} className="animate-spin" strokeWidth={2.5} />,
   },
-  pass: {
+  passed: {
     label: 'Pass',
     color: 'var(--ds-green-700)',
     icon: <CheckCircle2 size={14} strokeWidth={2.5} />,
   },
-  fail: {
+  failed: {
     label: 'Fail',
     color: 'var(--ds-red-800)',
     icon: <XCircle size={14} strokeWidth={2.5} />,
@@ -42,7 +42,7 @@ export const STATUS_META: Record<TestStatus, StatusMeta> = {
 
 export const CASE_STATUS_META: Record<CaseStatus, StatusMeta> = {
   ...STATUS_META,
-  skip: {
+  skipped: {
     label: 'Skip',
     color: 'var(--accents-4)',
     icon: <CircleDashed size={14} strokeWidth={2.5} />,

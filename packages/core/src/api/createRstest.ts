@@ -16,6 +16,7 @@ import { exitReporters } from '../reporter';
 import type {
   InternalContext,
   ListCommandResult,
+  RawTestInfo,
   RstestConfig,
   TestInfo,
 } from '../types';
@@ -81,7 +82,7 @@ const flattenListedTests = (
   }
 
   const listed: ListedTest[] = [];
-  const visit = (test: TestInfo): void => {
+  const visit = (test: RawTestInfo): void => {
     if (
       test.type === 'case' ||
       (options.includeSuites &&

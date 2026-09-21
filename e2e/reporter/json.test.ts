@@ -36,7 +36,7 @@ describe('json reporter', () => {
     const report = parseJsonReport(cli.stdout);
 
     expect(report.tool).toBe('rstest');
-    expect(report.status).toBe('fail');
+    expect(report.status).toBe('failed');
     expect(report.summary).toEqual({
       testFiles: 1,
       failedFiles: 1,
@@ -79,10 +79,10 @@ describe('json reporter', () => {
 
     const report = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
 
-    expect(report.status).toBe('fail');
+    expect(report.status).toBe('failed');
     expect(report.durationMs.tests).toBeGreaterThan(0);
     expect(report.files).toHaveLength(1);
     expect(report.tests).toHaveLength(3);
-    expect(report.tests[2].status).toBe('skip');
+    expect(report.tests[2].status).toBe('skipped');
   });
 });

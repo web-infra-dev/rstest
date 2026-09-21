@@ -15,7 +15,7 @@ import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import { logWatchReadyMessage, type setupCliShortcuts } from './cliShortcuts';
 import {
   finalizeRunCycle,
-  notifyReportersOnTestRunStart,
+  createRunStartBarrier,
   runLifecycleStep,
 } from './finalizeRun';
 import {
@@ -235,10 +235,7 @@ export function createWatchCycleDriver({
   const firstCycle = (executor: TestExecutor) => {
     let first = firstCycles.get(executor);
     if (!first) {
-      let resolve!: (cycle: Promise<void>) => void;
-      const promise = new Promise<void>((accept) => {
-        resolve = accept;
-      });
+      const { promise, resolve } = Promise.withResolvers<void>();
       // runCycle callers may observe the same rejection directly.
       void promise.catch(() => {});
       first = { promise, resolve };
@@ -272,7 +269,7 @@ export function createWatchCycleDriver({
     const isFirstCycle = !settled.has(executor);
     prepareWatchCycleState(context, { isFirstCycle });
     try {
-      await notifyReportersOnTestRunStart(context);
+      const onSelected = createRunStartBarrier(context, 1)[0]!;
       let outcome: ExecutorCycleOutcome;
       try {
         outcome =
@@ -285,12 +282,15 @@ export function createWatchCycleDriver({
             updateSnapshot,
             env,
             onTraceEvents,
+            onSelected,
           }));
       } catch (error) {
         if (isFirstCycle) {
           throw error;
         }
         outcome = globalSetupFailureOutcome([toError(error)]);
+      } finally {
+        await onSelected([]);
       }
       if (isSessionClosing()) {
         return;

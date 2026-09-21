@@ -1,5 +1,10 @@
 import { HostDispatchRouter } from './dispatchRouter';
-import type { ReporterHookArg } from './hostPayloads';
+import type {
+  TestCaseStartPayload,
+  TestFileReadyPayload,
+  TestSuiteResultPayload,
+  TestSuiteStartPayload,
+} from './hostPayloads';
 import {
   DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_NAMESPACE_SNAPSHOT,
@@ -25,19 +30,12 @@ type RunnerPayload<TType extends BrowserClientMessage['type']> =
     ? TPayload
     : never;
 
-type RunnerDispatchFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
-type RunnerDispatchSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
-type RunnerDispatchSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
-type RunnerDispatchCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
-
 type RunnerDispatchCallbacks = {
   onTestFileStart: (payload: RunnerPayload<'file-start'>) => Promise<void>;
-  onTestFileReady: (payload: RunnerDispatchFileReadyPayload) => Promise<void>;
-  onTestSuiteStart: (payload: RunnerDispatchSuiteStartPayload) => Promise<void>;
-  onTestSuiteResult: (
-    payload: RunnerDispatchSuiteResultPayload,
-  ) => Promise<void>;
-  onTestCaseStart: (payload: RunnerDispatchCaseStartPayload) => Promise<void>;
+  onTestFileReady: (payload: TestFileReadyPayload) => Promise<void>;
+  onTestSuiteStart: (payload: TestSuiteStartPayload) => Promise<void>;
+  onTestSuiteResult: (payload: TestSuiteResultPayload) => Promise<void>;
+  onTestCaseStart: (payload: TestCaseStartPayload) => Promise<void>;
   onTestCaseResult: (payload: RunnerPayload<'case-result'>) => Promise<void>;
   onTestFileComplete: (
     payload: RunnerPayload<'file-complete'>,
@@ -122,15 +120,13 @@ export const createHostDispatchRouter = ({
     'file-start': (args) =>
       runnerCallbacks.onTestFileStart(args as RunnerPayload<'file-start'>),
     'file-ready': (args) =>
-      runnerCallbacks.onTestFileReady(args as RunnerDispatchFileReadyPayload),
+      runnerCallbacks.onTestFileReady(args as TestFileReadyPayload),
     'suite-start': (args) =>
-      runnerCallbacks.onTestSuiteStart(args as RunnerDispatchSuiteStartPayload),
+      runnerCallbacks.onTestSuiteStart(args as TestSuiteStartPayload),
     'suite-result': (args) =>
-      runnerCallbacks.onTestSuiteResult(
-        args as RunnerDispatchSuiteResultPayload,
-      ),
+      runnerCallbacks.onTestSuiteResult(args as TestSuiteResultPayload),
     'case-start': (args) =>
-      runnerCallbacks.onTestCaseStart(args as RunnerDispatchCaseStartPayload),
+      runnerCallbacks.onTestCaseStart(args as TestCaseStartPayload),
     'case-result': (args) =>
       runnerCallbacks.onTestCaseResult(args as RunnerPayload<'case-result'>),
     'file-complete': (args) =>

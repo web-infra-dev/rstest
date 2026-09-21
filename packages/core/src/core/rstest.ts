@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { SnapshotManager } from '@vitest/snapshot/manager';
 import { join } from 'pathe';
 import { isCI } from 'std-env';
@@ -20,6 +21,7 @@ import type {
   NormalizedProjectConfig,
   Project,
   Reporter,
+  ReporterContext,
   RstestCommand,
   RstestConfig,
   RstestTestState,
@@ -111,7 +113,7 @@ export class Rstest implements InternalContext {
   public packageInstallerConfirm?: PackageInstallerConfirm;
   public closeWatchSession?: () => Promise<void>;
   public onFatalWatchFailure?: (error: Error) => void;
-  public reporters: Reporter[];
+  public reporters: Reporter[] = [];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
   public version: string;
@@ -126,6 +128,7 @@ export class Rstest implements InternalContext {
     testResults: [],
   };
   private reporterResultIndex = new Map<string, number>();
+  private reportersInitialized = false;
   public stateManager: TestStateManager = new TestStateManager();
 
   public testState: RstestTestState = {
@@ -274,46 +277,15 @@ export class Rstest implements InternalContext {
           },
         ];
 
-    // Create a map of project name to project config for reporters
-    const projectConfigs = new Map(
-      this.projects.map((p) => [p.name, p.normalizedConfig]),
-    );
+    this.reportersInitialized = !initializeReporters || command === 'list';
+  }
 
-    const reporters =
-      initializeReporters && command !== 'list'
-        ? createReporters(rstestConfig.reporters, {
-            rootPath,
-            config: rstestConfig,
-            testState: this.testState,
-            fileFilters: this.fileFilters,
-            projectConfigs,
-            options: {
-              showProjectName: projects.length > 1,
-            },
-          }).filter((r) => {
-            // Exclude blob reporter when merging (we consume blobs, not produce them)
-            if (command === 'merge-reports' && r instanceof BlobReporter) {
-              return false;
-            }
-            return true;
-          })
-        : [];
-
-    // Like sharding above: blob reports feed the one-shot `merge-reports` CI
-    // workflow, and recording across watch reruns has no coherent semantics
-    // (a rerun replaces results the recorded events no longer match).
-    if (
-      command === 'watch' &&
-      reporters.some((r) => r instanceof BlobReporter)
-    ) {
-      // Sync scope; sync onExit hooks run eagerly, async ones never reject.
-      void exitReporters({ reporters });
-      throw new Error(
-        'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
-      );
+  public async initializeReporters(): Promise<void> {
+    if (this.reportersInitialized) {
+      return;
     }
-
-    this.reporters = reporters;
+    this.reportersInitialized = true;
+    this.reporters = await createReporters(this);
   }
 
   public updateReporterResultState(
@@ -397,24 +369,49 @@ const reportersMap = {
   blob: BlobReporter,
 } satisfies Record<BuiltInReporterNames, new (...args: any[]) => unknown>;
 
-function createReporters(
-  reporters: RstestConfig['reporters'],
-  initConfig: any = {},
-): (Reporter | GithubActionsReporter | JUnitReporter)[] {
-  const result: (Reporter | GithubActionsReporter | JUnitReporter)[] = [];
+const isBuiltInReporterName = (name: string): name is BuiltInReporterNames =>
+  name in reportersMap;
+
+async function createReporters(context: InternalContext): Promise<Reporter[]> {
+  const result: Reporter[] = [];
+  const initConfig = {
+    rootPath: context.rootPath,
+    config: context.normalizedConfig,
+    testState: context.testState,
+    fileFilters: context.fileFilters,
+    projectConfigs: new Map(
+      context.projects.map((project) => [
+        project.name,
+        project.normalizedConfig,
+      ]),
+    ),
+  };
+  let resolver:
+    | InstanceType<
+        typeof import('@rsbuild/core').rspack.experiments.resolver.ResolverFactory
+      >
+    | undefined;
   try {
-    for (const reporter of castArray(reporters)) {
+    for (const reporter of castArray(context.normalizedConfig.reporters)) {
+      if (typeof reporter === 'function') {
+        throw new Error(
+          'Reporter classes cannot be passed directly. Pass a reporter instance or [moduleName, options].',
+        );
+      }
       if (typeof reporter === 'string' || Array.isArray(reporter)) {
         const [name, options = {}] =
           typeof reporter === 'string' ? [reporter, {}] : reporter;
         // built-in reporters
-        if (name in reportersMap) {
-          const Reporter = reportersMap[name];
+        if (isBuiltInReporterName(name)) {
+          // Registration pairs the name with its heterogeneous built-in options.
+          const Reporter = reportersMap[name] as new (
+            config: typeof initConfig & { options: object },
+          ) => Reporter;
           result.push(
             new Reporter({
               ...initConfig,
               options: {
-                ...(initConfig.options || {}),
+                showProjectName: context.projects.length > 1,
                 ...options,
               },
             }),
@@ -422,18 +419,52 @@ function createReporters(
           continue;
         }
 
-        // TODO: load third-party reporters
-        throw new Error(
-          `Reporter ${name} not found. Please install it or use a built-in reporter.`,
-        );
+        if (!resolver) {
+          const { rspack } = await import('@rsbuild/core');
+          // Dynamic import must not select tryResolve's require condition.
+          resolver = new rspack.experiments.resolver.ResolverFactory({
+            conditionNames: ['node', 'import'],
+            extensions: ['.js', '.json', '.node'],
+          });
+        }
+        let modulePath: string;
+        try {
+          const resolved = resolver.sync(initConfig.rootPath, name);
+          if (!resolved.path) throw new Error(resolved.error);
+          modulePath = resolved.path;
+        } catch (error) {
+          throw new Error(`Failed to resolve reporter module "${name}".`, {
+            cause: error,
+          });
+        }
+        const loaded = await import(pathToFileURL(modulePath).href);
+        if (typeof loaded.default !== 'function') {
+          throw new Error(
+            `Reporter module "${name}" must have a reporter class as its default export.`,
+          );
+        }
+        const reporterContext: ReporterContext = {
+          rootPath: initConfig.rootPath,
+          config: initConfig.config,
+        };
+        result.push(new loaded.default(options, reporterContext));
+      } else {
+        result.push(reporter);
       }
-
-      result.push(reporter);
     }
-    return result;
+    if (
+      context.command === 'watch' &&
+      result.some((reporter) => reporter instanceof BlobReporter)
+    ) {
+      throw new Error(
+        'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
+      );
+    }
+    return context.command === 'merge-reports'
+      ? result.filter((reporter) => !(reporter instanceof BlobReporter))
+      : result;
   } catch (error) {
-    // Sync scope; sync onExit hooks run eagerly, async ones never reject.
-    void exitReporters({ reporters: result });
+    await exitReporters({ reporters: result });
     throw error;
   }
 }

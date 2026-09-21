@@ -8,9 +8,12 @@ overviewHeaders: []
 - **类型：**
 
 ```ts
-type Reporter = ReporterName | [ReporterName, ReporterOptions];
-
-type Reporters = Reporter | Reporter[];
+type ReporterConfig =
+  | BuiltInReporterNames
+  | (string & {})
+  | [name: string, options: Record<string, unknown>]
+  | Reporter;
+type Reporters = ReporterConfig | ReporterConfig[];
 ```
 
 - **Reporter options 参考：** 各报告器的 options 类型定义在 [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
@@ -105,16 +108,22 @@ export default defineConfig({
 
 #### 使用自定义报告器
 
-你可以通过提供实现报告器接口的报告器类或对象来创建和使用自定义报告器：
+你可以传入自定义 Reporter module 的 module specifier，也可以用 tuple 传入 options。该 module 必须 default export 一个 Reporter class。Rstest 会使用 options（字符串形式对应空对象）和包含 `rootPath`、resolved `config` 的 context 创建实例：
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
-import { CustomReporter } from './custom-reporter';
 
 export default defineConfig({
-  reporters: [CustomReporter],
+  reporters: './custom-reporter.js',
+});
+
+// To pass options:
+export const configWithOptions = defineConfig({
+  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
 });
 ```
+
+你也可以传入已经创建、实现了 `Reporter` interface 的对象，但不能直接传入 Reporter class。
 
 ### 相关文档
 

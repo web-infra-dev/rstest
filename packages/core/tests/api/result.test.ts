@@ -21,13 +21,16 @@ export type TestRunResultHasNoFunctions = Assert<
 
 const rootPath = join(__dirname, '../..');
 
-const createFileResult = (status: 'pass' | 'fail'): TestFileResult => ({
+const createFileResult = (status: 'passed' | 'failed'): TestFileResult => ({
   testId: '/first.test.ts',
   name: '/first.test.ts',
+  fullName: '/first.test.ts',
   status,
   testPath: '/first.test.ts',
+  relativeTestPath: 'first.test.ts',
   project: 'node-a',
   results: [],
+  summary: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0, flaky: 0 },
 });
 
 const createPayload = (
@@ -38,7 +41,14 @@ const createPayload = (
   results,
   testResults: [],
   summary: {
-    tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0 },
+    tests: {
+      total: 1,
+      passed: 1,
+      failed: 0,
+      skipped: 0,
+      todo: 0,
+      flaky: 0,
+    },
     files: { total: 1, failed: 0 },
   },
   duration: { totalTime: 3, buildTime: 1, testTime: 2 },
@@ -58,27 +68,27 @@ describe('createResultReporter', () => {
     );
     const onResult = rs.fn();
     const capture = createResultReporter(context, { onResult });
-    const results = [createFileResult('pass')];
+    const results = [createFileResult('passed')];
     const payload = createPayload(context, results);
 
     capture.reporter.onTestRunEnd?.(payload);
-    results.push({ ...createFileResult('pass'), testPath: '/later.test.ts' });
+    results.push({ ...createFileResult('passed'), testPath: '/later.test.ts' });
     payload.testResults.push({
-      ...createFileResult('pass'),
+      ...createFileResult('passed'),
       name: 'later test',
       testPath: '/later.test.ts',
     });
     context.exitCode.finishCycle();
 
     expect(onResult).toHaveBeenCalledWith({
-      results: [createFileResult('pass')],
+      results: [createFileResult('passed')],
       testResults: [],
       summary: payload.summary,
       duration: payload.duration,
       snapshotSummary: payload.snapshotSummary,
       unhandledErrors: [],
       rerunTestPaths: ['/first.test.ts'],
-      status: 'pass',
+      status: 'passed',
     });
     expect(onResult.mock.calls[0]![0]).not.toHaveProperty('getSourcemap');
   });

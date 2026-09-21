@@ -63,7 +63,7 @@ describe('dispatch capabilities', () => {
       args: {
         testId: 'suite-1',
         testPath: '/tests/a.test.ts',
-        status: 'pass',
+        status: 'passed',
         name: 'suite',
         parentNames: [],
         project: 'browser',
