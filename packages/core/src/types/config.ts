@@ -25,6 +25,9 @@ export type RstestExposeAPI = {
    *
    * The returned config uses a read-only type. Opaque values retain their
    * original identity and behavior.
+   *
+   * When Rstest compiles a browser project's `globalSetup` for Node, the
+   * returned config reports `browser.enabled: false`.
    */
   getRstestConfig: () => Readonly<ResolvedRstestConfig>;
   /**

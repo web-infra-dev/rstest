@@ -110,7 +110,6 @@ import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  federation: true,
   globalSetup: './global-setup.ts',
   browser: {
     enabled: true,
@@ -130,8 +129,6 @@ export default defineConfig({
   ],
 });
 ```
-
-Browser Mode 下插件不会自动打开 `federation` 配置项。但 `globalSetup` 文件始终在 Node 进程里执行，产物里同样带着模块联邦运行时，没有这个开关，`globalSetup` 文件一加载就会报错，生产者服务也就起不来。所以 Browser Mode 项目只要用了 `globalSetup`，就要手动写上 `federation: true`。
 
 ## 了解更多 \{#further-reading}
 
