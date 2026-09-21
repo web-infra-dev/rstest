@@ -1,0 +1,1 @@
+throw new Error('BROWSER_ENTRY_LOAD_FAILURE');

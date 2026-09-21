@@ -2,6 +2,19 @@ import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
 
 describe('browser mode - error handling', () => {
+  it('reports a test entry load failure as a failed file', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/loadError.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toMatch(/✗.*loadError\.test\.ts/);
+    expect(output).toContain('Test Files 1 failed');
+    expect(output).toContain('BROWSER_ENTRY_LOAD_FAILURE');
+    expect(output).not.toContain('Unhandled Error');
+  });
+
   it('should handle runtime, assertion, and timeout errors', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('error', {
       args: [

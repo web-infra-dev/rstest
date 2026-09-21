@@ -137,7 +137,7 @@ describe('browser mode - watch', () => {
     await deleteFixtureTarget(fs, fixturesTargetPath);
   }, 60_000);
 
-  it('recovers when the initial browser cycle fails fatally', async () => {
+  it('reports a failed file and recovers when its setup fails to load', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-initial-fatal`;
     const setupPath = path.join(fixturesTargetPath, 'setup.ts');
     const initialFatal = "throw new Error('initial browser setup failed');\n";
@@ -154,6 +154,8 @@ describe('browser mode - watch', () => {
     try {
       await cli.waitForStderr('initial browser setup failed');
       await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.stdout).toContain('Test Files 1 failed');
+      expect(`${cli.stdout}\n${cli.stderr}`).not.toContain('Unhandled Error');
 
       cli.resetStd();
       fs.update(setupPath, (content) => content.replace(initialFatal, ''));

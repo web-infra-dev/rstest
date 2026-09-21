@@ -12,6 +12,7 @@ import type {
   FileCleanupHooks,
   RunnerHooks,
   RuntimeConfig,
+  TestFileResult,
   WorkerState,
 } from '@rstest/core/internal/browser-runtime';
 import {
@@ -20,6 +21,7 @@ import {
   cleanupWorkerFixtures as cleanupWorkerFixtureInstances,
   FIXTURE_CLEANUP_TIMEOUT_MS,
   formatConsoleArgs,
+  formatTestError,
   globalApis,
   getRealTimers,
   RSTEST_API_GLOBAL_KEY,
@@ -928,33 +930,42 @@ const run = async () => {
       try {
         setRpcPhase('framework');
 
-        // Setup modules are cached when a non-isolated browser worker runs
-        // multiple files. Replay their root hooks on each fresh runtime so
-        // setup hooks retain per-file semantics without recreating the worker.
-        if (setupListeners) {
-          runtime.runner.setRootSuiteListeners(setupListeners);
+        let result: TestFileResult;
+        try {
+          // Setup modules are cached when a non-isolated browser worker runs
+          // multiple files. Replay their root hooks on each fresh runtime so
+          // setup hooks retain per-file semantics without recreating the worker.
+          if (setupListeners) {
+            runtime.runner.setRootSuiteListeners(setupListeners);
+          }
+          await loadSetupFiles();
+          setupListeners ??= runtime.runner.getRootSuiteListeners();
+
+          const beforeScripts = getScriptUrls();
+          await currentTestContext.loadTest(key);
+
+          // Inline snapshots need the newly loaded chunk's source map.
+          const chunkUrl = findNewScriptUrl(beforeScripts, getScriptUrls());
+          if (chunkUrl) {
+            await preloadTestFileSourceMap(chunkUrl);
+          }
+
+          result = await runtime.runner.runTests(
+            testPath,
+            runnerHooks,
+            runtime.api,
+          );
+        } catch (error) {
+          result = {
+            testId: getFileTaskId(testPath),
+            project: projectRuntime.name,
+            testPath,
+            status: 'fail',
+            name: '',
+            results: [],
+            errors: await formatTestError(error),
+          };
         }
-        await loadSetupFiles();
-        setupListeners ??= runtime.runner.getRootSuiteListeners();
-
-        // Record script URLs before loading the test file
-        const beforeScripts = getScriptUrls();
-
-        // Load the test file dynamically using this project's context
-        await currentTestContext.loadTest(key);
-
-        // Find the newly loaded chunk and preload its source map (for inline snapshots)
-        const afterScripts = getScriptUrls();
-        const chunkUrl = findNewScriptUrl(beforeScripts, afterScripts);
-        if (chunkUrl) {
-          await preloadTestFileSourceMap(chunkUrl);
-        }
-
-        const result = await runtime.runner.runTests(
-          testPath,
-          runnerHooks,
-          runtime.api,
-        );
 
         // Headed execution and single-file batches are file-like even when the
         // config keeps worker fixtures. Finish that cleanup before publishing
@@ -1017,6 +1028,7 @@ const run = async () => {
           type: 'file-complete',
           payload: result,
         });
+        // Failures outside a file's load and run (runtime bootstrap, result publishing) end the batch as fatal.
       } catch (_error) {
         let error =
           _error instanceof Error ? _error : new Error(String(_error));

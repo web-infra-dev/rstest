@@ -16,7 +16,7 @@ export { createRstestRuntime } from './runtime/api';
 export { registerElementExpect } from './runtime/api/expect';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
-export { getRealTimers, setRealTimers } from './runtime/util';
+export { formatTestError, getRealTimers, setRealTimers } from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
 export type { TaskContext } from './runtime/worker/taskContext';
