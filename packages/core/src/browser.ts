@@ -32,6 +32,7 @@ export type {
 export { browserIgnoredRuntimeConfigKeys } from './core/executorCapabilities';
 // Single core-owned RuntimeConfig projection (node inherit / browser static)
 export { projectRuntimeConfig } from './core/runtimeConfigProjection';
+export { CompileFailedError } from './core/rsbuild';
 // Shared runner-event pump so the browser host feeds stateManager and fans out
 // to reporters through the same implementation as the node pool.
 export {

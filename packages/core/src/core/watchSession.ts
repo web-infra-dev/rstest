@@ -12,14 +12,17 @@ import {
   type TraceRun,
 } from '../utils';
 import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
-import { globalSetupFailureOutcome } from './browser/globalSetupStage';
 import { logWatchReadyMessage, type setupCliShortcuts } from './cliShortcuts';
 import {
   finalizeRunCycle,
   notifyReportersOnTestRunStart,
   runLifecycleStep,
 } from './finalizeRun';
-import { GLOBAL_TEARDOWN_ERROR, runGlobalTeardown } from './globalSetup';
+import {
+  GLOBAL_TEARDOWN_ERROR,
+  globalSetupFailureOutcome,
+  runGlobalTeardown,
+} from './globalSetup';
 import type { Rstest } from './rstest';
 import {
   collectFailedTestPaths,
@@ -54,6 +57,7 @@ export type WatchCycleOptions = {
   mode?: 'all' | 'on-demand';
   fileFilters?: string[];
   trigger?: WatchCycleTrigger;
+  outcome?: ExecutorCycleOutcome;
   /**
    * Only for a trigger that asks for one, which is the `u` shortcut. Left out,
    * a cycle takes the session's configured value — the `u` handler also flips
@@ -87,6 +91,11 @@ export type WatchCycleOptions = {
  */
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
+  /**
+   * Await node startup, whose first cycle is started by a compiler callback.
+   * Browser startup awaits runCycle directly.
+   */
+  firstCycle(executor: TestExecutor): Promise<void>;
   /**
    * Whether every one of `executors` has settled its first cycle of this
    * session. Shortcuts are installed before the first one so the ready banner
@@ -174,7 +183,6 @@ export function createWatchCycleDriver({
   getTraceRun,
   setTraceRun,
   enableCliShortcuts,
-  isSessionLive,
   isSessionClosing,
 }: {
   context: Rstest;
@@ -183,13 +191,6 @@ export function createWatchCycleDriver({
   getTraceRun: () => TraceRun;
   setTraceRun: (traceRun: TraceRun) => void;
   enableCliShortcuts: boolean;
-  /**
-   * Whether the run still has a session that could answer the ready banner. A
-   * browser launch that failed before its runtime came up leaves none,
-   * and no trigger of any kind can fire afterwards — offering
-   * to wait for file changes there would be a promise nothing can keep.
-   */
-  isSessionLive: () => boolean;
   /**
    * Whether the session teardown has started. A queued cycle must stop before
    * touching shared state or a closed executor. A cycle already in flight when
@@ -227,11 +228,36 @@ export function createWatchCycleDriver({
   // cycle across every executor, so anything dispatched earlier has already
   // reached its `finally` by the time the next one asks.
   const settled = new Set<TestExecutor>();
+  const firstCycles = new Map<
+    TestExecutor,
+    { promise: Promise<void>; resolve: (cycle: Promise<void>) => void }
+  >();
+  const firstCycle = (executor: TestExecutor) => {
+    let first = firstCycles.get(executor);
+    if (!first) {
+      let resolve!: (cycle: Promise<void>) => void;
+      const promise = new Promise<void>((accept) => {
+        resolve = accept;
+      });
+      // runCycle callers may observe the same rejection directly.
+      void promise.catch(() => {});
+      first = { promise, resolve };
+      firstCycles.set(executor, first);
+    }
+    return first;
+  };
 
   const runOne = async (
     executor: TestExecutor,
     {
-      options: { mode = 'all', fileFilters, trigger, updateSnapshot, env },
+      options: {
+        mode = 'all',
+        fileFilters,
+        trigger,
+        updateSnapshot,
+        env,
+        outcome: suppliedOutcome,
+      },
     }: PendingCycle,
   ): Promise<void> => {
     if (isSessionClosing()) {
@@ -249,15 +275,17 @@ export function createWatchCycleDriver({
       await notifyReportersOnTestRunStart(context);
       let outcome: ExecutorCycleOutcome;
       try {
-        outcome = await executor.runCycle({
-          buildId,
-          mode,
-          fileFilters,
-          fromInvalidation: trigger === 'invalidation',
-          updateSnapshot,
-          env,
-          onTraceEvents,
-        });
+        outcome =
+          suppliedOutcome ??
+          (await executor.runCycle({
+            buildId,
+            mode,
+            fileFilters,
+            fromInvalidation: trigger === 'invalidation',
+            updateSnapshot,
+            env,
+            onTraceEvents,
+          }));
       } catch (error) {
         if (isFirstCycle) {
           throw error;
@@ -267,6 +295,12 @@ export function createWatchCycleDriver({
       if (isSessionClosing()) {
         return;
       }
+      const sessionEndingError =
+        outcome.failure === 'fatal'
+          ? outcome.errors[0]
+          : isFirstCycle && outcome.failure === 'setup'
+            ? new AggregateError(outcome.errors, 'Global setup failed')
+            : undefined;
       await finalizeRunCycle(context, {
         outcomes: [outcome],
         mode,
@@ -275,7 +309,19 @@ export function createWatchCycleDriver({
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
         traceRun: getTraceRun(),
       });
+      setTraceRun(traceController.beginRun());
       context.exitCode.finishCycle();
+      if (sessionEndingError && !isFirstCycle) {
+        try {
+          await context.closeWatchSession?.();
+        } finally {
+          context.onFatalWatchFailure?.(sessionEndingError);
+        }
+      }
+      if (sessionEndingError) {
+        if (isFirstCycle) throw sessionEndingError;
+        return;
+      }
     } finally {
       // In `finally`, so a startup that failed still counts as past startup —
       // see {@link WatchCycleDriver.hasSettledCycle}. The caller keeps the
@@ -283,14 +329,7 @@ export function createWatchCycleDriver({
       // will never come back.
       settled.add(executor);
     }
-    // Pre-allocate the next cycle's buffer so events emitted between cycles are
-    // not dropped.
-    setTraceRun(traceController.beginRun());
-    // The shortcuts stay armed either way; only the promise to react to file
-    // changes needs a live session behind it.
-    logWatchReadyMessage(context, enableCliShortcuts, {
-      waiting: isSessionLive(),
-    });
+    logWatchReadyMessage(context, enableCliShortcuts);
   };
 
   return {
@@ -326,12 +365,14 @@ export function createWatchCycleDriver({
         entry.isOpen = false;
         return runOne(executor, entry);
       });
+      if (!pending.has(executor)) firstCycle(executor).resolve(entry.cycle);
       pending.set(executor, entry);
       // The caller still observes the rejection; the chain must not hand it to
       // the next trigger, which would wedge the session.
       tail = entry.cycle.catch(() => {});
       return entry.cycle;
     },
+    firstCycle: (executor) => firstCycle(executor).promise,
     hasSettledCycle: (executors) =>
       executors.every((executor) => settled.has(executor)),
   };

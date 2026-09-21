@@ -100,6 +100,8 @@ export interface ExecutorCycleOutcome {
   testResults: TestResult[];
   /** Launch/setup failures surfaced outside any test (e.g. browser launch). */
   errors: Error[];
+  /** Setup failures end the first watch cycle; fatal compile failures end any cycle. */
+  failure?: 'setup' | 'fatal';
   /**
    * Test paths this executor ran this cycle. `finalizeRunCycle` builds the
    * watch-mode `rerunTestPaths` from every outcome's paths so the
@@ -198,13 +200,8 @@ export interface TestExecutor {
    * against its own file-set diff first. It resolves once the resulting cycle
    * (if any) has completed, so a caller may restore state it toggled for it.
    *
-   * A transport left with nothing to schedule on must say so rather than resolve
-   * in silence, as though the rerun happened. Core gates rerun keys until every
-   * executor has *settled* its first cycle, not succeeded at it, so arriving here
-   * without a session means that startup opened none — and the keys are still
-   * installed either way, because the run outlives it: a mixed run's other side
-   * keeps watching, and even a single-executor run stays up on the CLI's
-   * config-restart watcher.
+   * Core arms rerun keys after every executor settles its first cycle. Startup
+   * failures close the session; ordinary test failures leave it ready to rerun.
    */
   requestRerun?(testPaths?: string[]): Promise<void>;
 }

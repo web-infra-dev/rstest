@@ -84,11 +84,22 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
     cwd: root,
     config: { ...config, globalSetup: ['./globalSetup.ts'] },
   });
+  const setupCycles = [];
   let setupRejection;
   try {
-    watcher = await failedSetupRstest.watch();
+    await failedSetupRstest.watch({
+      onResult(result) {
+        setupCycles.push({
+          status: result.status,
+          errors: result.unhandledErrors.map((error) => error.message),
+        });
+      },
+    });
   } catch (error) {
-    setupRejection = error.message;
+    setupRejection = {
+      message: error.message,
+      errors: error.errors.map((error) => error.message),
+    };
   }
 
   const emptyRoot = join(root, 'empty');
@@ -111,17 +122,22 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
       },
     },
   });
+  // A fatal compile failure leaves no watcher to retry with: the cycle is reported,
+  // the session ends, and `watch()` rejects.
   let buildFailure;
-  watcher = await failedBuildRstest.watch({
-    onResult(result) {
-      buildFailure = {
-        status: result.status,
-        errors: result.unhandledErrors.map((error) => error.message),
-      };
-    },
-  });
-  await watcher.close();
-  watcher = undefined;
+  let buildFailureRejection;
+  try {
+    await failedBuildRstest.watch({
+      onResult(result) {
+        buildFailure = {
+          status: result.status,
+          errors: result.unhandledErrors.map((error) => error.message),
+        };
+      },
+    });
+  } catch (error) {
+    buildFailureRejection = error.message;
+  }
 
   const emptyProjectCycles = [];
   let startupCompiled = false;
@@ -167,8 +183,6 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
       },
     },
   });
-  await watcher?.close();
-  watcher = undefined;
   watcher = await emptyRstest.watch({
     onResult(result) {
       startupCompiledAtResult ??= startupCompiled;
@@ -199,8 +213,10 @@ it('runs after an empty start', () => expect(document.createElement('main').tagN
       file: result.results[0]?.testPath.split('/').pop(),
       errors: result.unhandledErrors.map((error) => error.message),
       cycles,
+      setupCycles,
       setupRejection,
       buildFailure,
+      buildFailureRejection,
       emptyProjectCycles,
       startupCompiledAtResult,
     })}__END__`,

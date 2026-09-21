@@ -7,6 +7,7 @@ import {
   type ExecutorInvalidationCallback,
   type ListBrowserTestsOptions,
   color,
+  CompileFailedError,
   createCoverageProvider,
   createRunnerEventSink,
   createSilentConsoleController,
@@ -289,21 +290,19 @@ export const runBrowserController = async (
   };
 
   const failWithError = async (
-    error: unknown,
-    cleanup?: () => Promise<void>,
+    error: Error,
+    cleanup: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
     // The error rides the returned result into the cycle outcome, and core's
     // `finalizeRunCycle` raises the exit code from it — on both commands.
-    const normalizedError = toError(error);
-
-    if (cleanup && !isWatchMode) {
-      return buildErrorResult(normalizedError, cleanup);
+    if (!isWatchMode) {
+      return buildErrorResult(error, cleanup);
     }
 
     try {
-      return buildErrorResult(normalizedError);
+      return buildErrorResult(error);
     } finally {
-      await cleanup?.();
+      await cleanup();
     }
   };
 
@@ -341,16 +340,12 @@ export const runBrowserController = async (
       } catch (error) {
         const originalError = toError(error);
         originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
-        return failWithError(originalError);
+        throw originalError;
       }
     }
 
     if (!containerDevServer) {
-      try {
-        containerDistPath = resolveContainerDist();
-      } catch (error) {
-        return failWithError(error);
-      }
+      containerDistPath = resolveContainerDist();
     }
   }
 
@@ -422,9 +417,21 @@ export const runBrowserController = async (
           options?.appliedModifyRstestConfigEnvironments,
       });
     } catch (error) {
-      return failWithError(error, async () => {
+      const cleanup = async () => {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-      });
+      };
+      // A compilation failure is a run outcome, the same as on the node side.
+      // Unwrapped here, the one place the tag is read: the cycle reports the
+      // error the bundler raised, and the driver ends the session after it.
+      if (error instanceof CompileFailedError) {
+        return {
+          ...(await failWithError(error.error, cleanup)),
+          failure: 'fatal',
+        };
+      }
+      // That is a startup failure: it propagates so core rejects the run.
+      await cleanup();
+      throw error;
     }
 
     // `filesOnly` is the config-hook discovery boot, which destroys its runtime
@@ -524,6 +531,12 @@ export const runBrowserController = async (
   };
 
   /**
+   * The compile failure that ended this session, if one did. Session-wide, not
+   * per cycle like `fatalErrorRef`; see `ExecutorCycleOutcome.failure`.
+   */
+  let fatalCompileError: Error | undefined;
+
+  /**
    * The watch session both transports hand back. Only `execute` differs — the
    * cycle's timing, its fatal-error capture window, and the error-to-outcome
    * precedence are one contract with core, so they live in one place.
@@ -535,6 +548,20 @@ export const runBrowserController = async (
     execute: (testPaths: string[]) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
+      // Signalled by a rebuild that ended in `compiler.hooks.failed`: nothing
+      // was emitted, so this cycle reports the failure instead of rerunning
+      // tests.
+      if (fatalCompileError) {
+        return {
+          ...buildRerunOutcome({
+            rerunTestPaths: [],
+            testTime: 0,
+            rawCoverage: [],
+            unhandledErrors: [fatalCompileError],
+          }),
+          failure: 'fatal',
+        };
+      }
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
       // headed scheduler also uses this ref to stop the rest of a failed cycle,
@@ -604,7 +631,7 @@ export const runBrowserController = async (
   }
   if (browserCoverageCapabilityError) {
     await destroyBrowserRuntime(runtime);
-    return failWithError(browserCoverageCapabilityError);
+    throw browserCoverageCapabilityError;
   }
 
   const { browser, browserLaunchOptions, wsPort } = runtime;
@@ -1112,10 +1139,18 @@ export const runBrowserController = async (
   // does not invalidate the session the scheduler already established.
   watchState.hooksEnabled = watchSession !== undefined;
 
+  // Record the error and signal an invalidation; `runCycle` turns it into the fatal outcome.
+  watchState.signalFatalCompile = (error) => {
+    fatalCompileError ??= error;
+    void watchSignals.signalInvalidation([]);
+  };
+
   // A fatal error the run reported outranks its results: it rides the returned
   // outcome into core's finalize, which raises the exit code from it.
   if (fatalErrorRef.current) {
-    const errorResult = await failWithError(fatalErrorRef.current, close);
+    const errorResult = await failWithError(fatalErrorRef.current, async () => {
+      await close?.();
+    });
     return {
       ...errorResult,
       rawCoverage,

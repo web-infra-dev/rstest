@@ -142,7 +142,6 @@ const createDriver = (
       activeTraceRun = run;
     },
     enableCliShortcuts: false,
-    isSessionLive: () => true,
     isSessionClosing,
   });
 };

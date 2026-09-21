@@ -39,6 +39,43 @@ const expectRerun = (
 // TODO: The following error occurs only on Windows CI. It should appear in the Rspack version range from 1.5.0 to 1.6.0-beta.0.
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
+  it('exits after a fatal node rebuild', async () => {
+    const root = `${__dirname}/fixtures-test-fatal-rebuild`;
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath: root,
+    });
+    fs.update(path.join(root, 'rstest.config.mts'), (content) =>
+      `import fatalRebuild from '../fatalRebuildPlugin.mjs';\n${content}`.replace(
+        'defineConfig({',
+        'defineConfig({ tools: { rspack: { plugins: [fatalRebuild] } },',
+      ),
+    );
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch'],
+      options: { nodeOptions: { cwd: root } },
+    });
+    try {
+      await cli.waitForStdout('Test Files 2 passed');
+      await cli.waitForStdout('Waiting for file changes...');
+      cli.resetStd();
+      fs.create(path.join(root, 'fatal.marker'), '');
+      fs.update(
+        path.join(root, 'src/shared.ts'),
+        (text) => `${text}\n// rebuild`,
+      );
+      await expectExecFailed();
+      expect(cli.stderr).toContain('rebuild compile exploded');
+      expect(cli.stderr).toContain('Failed to run Rstest.');
+      expect(cli.exec.process!.exitCode).toBe(1);
+      expect(cli.stdout).not.toContain('Waiting for file changes...');
+    } finally {
+      await cli.killProcessTree();
+      fs.delete(root);
+    }
+  });
+
   it('invalidates vmThreads source and setup caches after rebuilds', async ({
     onTestFinished,
   }) => {

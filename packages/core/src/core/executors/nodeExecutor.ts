@@ -16,7 +16,11 @@ import type {
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
-import { shouldRunGlobalSetup, runGlobalSetup } from '../globalSetup';
+import {
+  globalSetupFailureOutcome,
+  shouldRunGlobalSetup,
+  runGlobalSetup,
+} from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { ProjectPlan } from '../projectPlan';
 import { CompileFailedError, createRsbuildServer } from '../rsbuild';
@@ -162,12 +166,6 @@ export type NodeExecutor = TestExecutor &
      */
     ensureRunResources(): Promise<unknown>;
     /**
-     * Whether the latest compile ended in `compiler.hooks.failed`. Rspack does
-     * not re-arm its file watcher after that, so nothing but a config restart
-     * can trigger another cycle and the ready banner would be a false promise.
-     */
-    hasCompileFailed(): boolean;
-    /**
      * Validate dependencies without starting the dev server, so mixed watch can
      * reject an invalid node project before browser globalSetup mutates state.
      */
@@ -215,7 +213,6 @@ export function createNodeExecutor(
           fileFilters?: string[];
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
-        hasCompileFailed: () => boolean;
         pool: Awaited<ReturnType<typeof createPool>>;
         cleanupTestEnvironmentModules: () => Promise<void>;
       }
@@ -266,20 +263,19 @@ export function createNodeExecutor(
   > => {
     const { nodeProjectsToRun: projects, entriesCache } = getPlan();
     await validateRunDependencies();
-    const { getRsbuildStats, closeServer, hasCompileFailed } =
-      await createRsbuildServer({
-        inspectedConfig: {
-          ...context.normalizedConfig,
-          projects: projects.map((p) => p.normalizedConfig),
-        },
-        isWatchMode,
-        globTestSourceEntries,
-        setupFiles: setupFileState.setupFiles,
-        globalSetupFiles: setupFileState.globalSetupFiles,
-        rsbuildInstance,
-        rootPath,
-        onCompileFailed: (hint) => notifyCompileFailed?.(hint),
-      });
+    const { getRsbuildStats, closeServer } = await createRsbuildServer({
+      inspectedConfig: {
+        ...context.normalizedConfig,
+        projects: projects.map((p) => p.normalizedConfig),
+      },
+      isWatchMode,
+      globTestSourceEntries,
+      setupFiles: setupFileState.setupFiles,
+      globalSetupFiles: setupFileState.globalSetupFiles,
+      rsbuildInstance,
+      rootPath,
+      onCompileFailed: (hint) => notifyCompileFailed?.(hint),
+    });
 
     let testEnvironmentModules:
       Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
@@ -304,7 +300,6 @@ export function createNodeExecutor(
       runResources = {
         getRsbuildStats,
         closeServer,
-        hasCompileFailed,
         pool,
         cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
       };
@@ -456,10 +451,8 @@ export function createNodeExecutor(
             );
             if (!success) {
               return {
-                results: [],
-                testResults: [],
+                ...globalSetupFailureOutcome(errors ?? []),
                 bundleCoverage: [],
-                errors,
                 assetNames,
                 getAssetFiles,
                 getSourceMaps,
@@ -511,6 +504,7 @@ export function createNodeExecutor(
         results: [],
         testResults: [],
         errors: [projectPlans.error],
+        failure: 'fatal',
         testPaths: [],
         duration: {
           buildTime: rebuildTime ?? Date.now() - cycleStart,
@@ -583,9 +577,12 @@ export function createNodeExecutor(
       results: returns.flatMap((r) => r.results),
       testResults: returns.flatMap((r) => r.testResults),
       errors: [
-        ...returns.flatMap((r) => r.errors || []),
+        ...returns.flatMap((r) => ('errors' in r ? r.errors : [])),
         ...workerCleanupErrors,
       ],
+      failure: returns.some((r) => 'failure' in r && r.failure === 'setup')
+        ? 'setup'
+        : undefined,
       testPaths: currentEntries.map((e) => e.testPath),
       deletedTestPaths: currentDeletedEntries,
       duration: { buildTime, testTime },
@@ -632,12 +629,18 @@ export function createNodeExecutor(
    * shape that would close it.
    */
   const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
-    const onCompileEnd = (isFirstCompile: boolean) => {
+    const onCompileEnd = async (isFirstCompile: boolean) => {
       if (compileStart !== undefined) {
         pendingBuildTime = Date.now() - compileStart;
         compileStart = undefined;
       }
-      return cb({ isFirstBuild: isFirstCompile });
+      try {
+        await cb({ isFirstBuild: isFirstCompile });
+      } catch (error) {
+        // The driver delivers initial rejection through its first-cycle Promise.
+        // Compiler callbacks must not also turn it into a failed compilation.
+        if (!isFirstCompile) throw error;
+      }
     };
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       compileStart = Date.now();
@@ -708,7 +711,6 @@ export function createNodeExecutor(
     // the invalidation that drives the initial run. In non-watch runs `runCycle`
     // triggers this lazily instead.
     ensureRunResources,
-    hasCompileFailed: () => runResources?.hasCompileFailed() ?? false,
     validateRunDependencies,
   };
 }

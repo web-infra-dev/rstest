@@ -26,11 +26,10 @@ import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
-  globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import { createNodeExecutor } from './executors/nodeExecutor';
-import { runGlobalTeardown } from './globalSetup';
+import { globalSetupFailureOutcome, runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import { createTestPlanner } from './planner';
 import type { Rstest } from './rstest';
@@ -470,12 +469,6 @@ export async function runTests(context: Rstest): Promise<void> {
       activeTraceRun = traceRun;
     },
     enableCliShortcuts,
-    // Empty launches keep watching; a browser boot failure returned as an
-    // outcome can still leave no live session, and a node compile that ended in
-    // `failed` leaves no watcher to answer the banner either.
-    isSessionLive: () =>
-      (nodeExecutorToRun ? !nodeExecutorToRun.hasCompileFailed() : false) ||
-      (browserExecutor?.hasWatchSession() ?? false),
     isSessionClosing: () => isSessionClosing(),
   });
 
@@ -603,20 +596,9 @@ export async function runTests(context: Rstest): Promise<void> {
         }),
       );
       if (stage.errors.length) {
-        // Reported through the same finalize every cycle uses, so a watch
-        // session that dies in setup still leaves the reporters a run — and
-        // then rethrown, because a watch session that never opened has to end
-        // the process rather than sit on a stdin owner nothing can answer.
-        await notifyReportersOnTestRunStart(context);
-        await finalizeRunCycle(context, {
-          outcomes: [globalSetupFailureOutcome(stage.errors)],
-          mode: 'all',
-          isWatchMode: true,
-          coverageProvider,
-          reportOnFailure: coverage.reportOnFailure,
-          traceRun: activeTraceRun,
+        await watchDriver.runCycle(browserExecutor, {
+          outcome: globalSetupFailureOutcome(stage.errors),
         });
-        throw new AggregateError(stage.errors, 'Browser globalSetup failed');
       }
       if (watchTeardown.isClosing()) {
         await closeWatchSession();
@@ -626,24 +608,22 @@ export async function runTests(context: Rstest): Promise<void> {
     }
 
     if (nodeExecutorToRun) {
-      // The node executor's rebuilds are the watch trigger; its initial compile
-      // signals too, which is what drives the first node cycle.
       nodeExecutorToRun.onInvalidate(async ({ isFirstBuild }) => {
         if (nodeFileFilterPatterns !== undefined) {
           nodeFileFilters = await planner.globTestEntries(
             nodeFileFilterPatterns,
           );
         }
-        return watchDriver.runCycle(nodeExecutorToRun, {
+        await watchDriver.runCycle(nodeExecutorToRun, {
           mode: isFirstBuild ? 'all' : 'on-demand',
           fileFilters: nodeFileFilters,
           trigger: 'invalidation',
         });
       });
-      // Start the node dev server now that the subscriber is in place. `runCycle`
-      // (invoked from that callback) reuses these resources via the in-flight
-      // guard rather than starting a second server.
+      // Start node resources after subscribing, then await the first cycle
+      // dispatched by the compiler callback.
       await nodeExecutorToRun.ensureRunResources();
+      await watchDriver.firstCycle(nodeExecutorToRun);
       if (watchTeardown.isClosing()) {
         await closeWatchSession();
         return;
@@ -651,13 +631,12 @@ export async function runTests(context: Rstest): Promise<void> {
     }
 
     if (browserExecutor) {
-      // Deferred to here so node env-dependency validation failures never leave a
-      // browser host running — the same ordering the pre-seam code had.
-      const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
+      // Launch only after node startup succeeds, so a rejected node session
+      // cannot leave a browser host running.
+      await watchDriver.runCycle(browserExecutor, {
         mode: 'all',
         env: browserWatchEnv,
       });
-      await initialBrowserCycle;
     }
   } catch (error) {
     // A close already under way owns the exit; re-throwing its victim's
