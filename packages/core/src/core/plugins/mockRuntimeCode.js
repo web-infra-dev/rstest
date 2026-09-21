@@ -199,6 +199,7 @@ const restoreOriginalFactory = (id) => {
   if (factory) {
     __webpack_modules__[id] = factory;
   }
+  delete __webpack_require__.rstest_original_module_values[id];
   delete __webpack_module_cache__[id];
 };
 
