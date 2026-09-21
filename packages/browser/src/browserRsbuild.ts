@@ -1179,6 +1179,11 @@ const closeAllProjectServers = (
 ): Promise<unknown> =>
   Promise.allSettled([...servers].map((server) => server.devServer.close()));
 
+const closeWebSocketServer = (server: WebSocketServer): Promise<void> =>
+  new Promise((resolve) => {
+    server.close(() => resolve());
+  });
+
 // Copy a proxied fetch Response's status + headers onto the Node response,
 // dropping content-length (the body is re-sent, so the original length may not
 // match).
@@ -1205,7 +1210,7 @@ export const destroyBrowserRuntime = async (
   }
   await closeAllProjectServers(runtime.projectServers.values());
   try {
-    runtime.wss?.close();
+    await closeWebSocketServer(runtime.wss);
   } catch {
     // ignore
   }
@@ -2069,11 +2074,11 @@ export const createBrowserRuntime = async ({
       watchState,
     };
   } catch (error) {
-    wss.close();
     await Promise.allSettled([
       browser?.close(),
       closeAllProjectServers(projectServers.values()),
     ]);
+    await closeWebSocketServer(wss);
     throw error;
   }
 };
