@@ -146,6 +146,7 @@ __webpack_require__ = new Proxy(__webpack_require__, {
 //#endregion
 
 __webpack_require__.rstest_original_modules = {};
+__webpack_require__.rstest_original_module_values = {};
 __webpack_require__.rstest_original_module_factories = {};
 
 // Clean request (e.g. `node:child_process`) -> the module id the mock was
@@ -217,16 +218,30 @@ const evaluateOriginalModule = (id) => {
   if (hasOwn(__webpack_require__.rstest_original_modules, id)) {
     return __webpack_require__.rstest_original_modules[id];
   }
+  if (hasOwn(__webpack_require__.rstest_original_module_values, id)) {
+    return __webpack_require__.rstest_original_module_values[id];
+  }
 
   const factory = __webpack_require__.rstest_original_module_factories[id];
   if (!factory) {
     return undefined;
   }
 
-  const moduleInstance = { exports: {} };
-  factory(moduleInstance, moduleInstance.exports, __webpack_require__);
-  __webpack_require__.rstest_original_modules[id] = moduleInstance.exports;
-  return moduleInstance.exports;
+  const mockedFactory = __webpack_modules__[id];
+  const mockedCacheEntry = __webpack_module_cache__[id];
+  delete __webpack_module_cache__[id];
+  __webpack_modules__[id] = factory;
+  try {
+    const originalModule = __webpack_require__(id);
+    __webpack_require__.rstest_original_module_values[id] = originalModule;
+    return originalModule;
+  } finally {
+    __webpack_modules__[id] = mockedFactory;
+    delete __webpack_module_cache__[id];
+    if (mockedCacheEntry) {
+      __webpack_module_cache__[id] = mockedCacheEntry;
+    }
+  }
 };
 
 /**
