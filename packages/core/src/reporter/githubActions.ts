@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { normalize, relative } from 'pathe';
+import { normalize } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
   Duration,
@@ -11,15 +11,10 @@ import type {
   TestResult,
   TestRunEndPayload,
 } from '../types';
-import {
-  getTaskNameWithPrefix,
-  logger,
-  prettyTime,
-  TEST_DELIMITER,
-} from '../utils';
+import { logger, prettyTime, TEST_DELIMITER } from '../utils';
 import { formatStack } from '../utils/error';
 import { isFlakyResult } from '../utils/testSummary';
-import { getPlainSummaryStatusString } from './summary';
+import { formatStatusCounts } from './summary';
 import {
   buildPackageManagerReproCommand,
   collectFailures,
@@ -27,11 +22,12 @@ import {
   detectPackageManagerAgent,
   escapeMarkdownTableCell,
   type FailureItem,
-  formatFullTestName,
+  getFileSummary,
   getErrorType,
   getRetryErrorLabel,
   pushFencedBlock,
   pushHeading,
+  truncateString,
 } from './utils';
 
 export class GithubActionsReporter {
@@ -102,6 +98,7 @@ export class GithubActionsReporter {
     getSourcemap,
     unhandledErrors,
     status,
+    summary,
   }: TestRunEndPayload): Promise<void> {
     const failures = collectFailures({
       results,
@@ -115,8 +112,8 @@ export class GithubActionsReporter {
 
       for (const { test, errors } of failures) {
         const { testPath } = test;
-        const nameStr = getTaskNameWithPrefix(test);
-        const shortPath = relative(this.rootPath, testPath);
+        const nameStr = test.fullName;
+        const shortPath = test.relativeTestPath;
         const title = `${shortPath} ${TEST_DELIMITER} ${nameStr}`;
 
         for (const error of errors) {
@@ -167,6 +164,7 @@ export class GithubActionsReporter {
           getSourcemap,
           unhandledErrors,
           status,
+          summary,
           maxCharsPerField: this.summaryMaxCharsPerField,
         }),
       );
@@ -282,6 +280,7 @@ async function renderStepSummary({
   unhandledErrors,
   maxCharsPerField,
   status,
+  summary,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
@@ -293,12 +292,14 @@ async function renderStepSummary({
   unhandledErrors: SerializedError[];
   maxCharsPerField: number;
   status: TestRunEndPayload['status'];
+  summary: TestRunEndPayload['summary'];
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
+  const trim = (value: string) => truncateString(value, maxCharsPerField, '…');
   const packageManagerAgent = await detectPackageManagerAgent(rootPath);
   const displayPath = getStepSummaryDisplayPath(rootPath);
   const flakyTests = collectFlakyTests(testResults);
-  const hasFlakyTests = flakyTests.length > 0;
+  const hasFlakyTests = summary.tests.flaky > 0;
   const isSuccess = status === 'passed';
   const reportIcon = isSuccess ? (hasFlakyTests ? '⚠️' : '✅') : '❌';
   const projectLabel = getStepSummaryProjectLabel({
@@ -323,17 +324,17 @@ async function renderStepSummary({
   lines.push('| | Result |');
   lines.push('| :-- | :-- |');
   lines.push(
-    `| **Test Files** | ${escapeMarkdownTableCell(getPlainSummaryStatusString(results))} |`,
+    `| **Test Files** | ${escapeMarkdownTableCell(formatStatusCounts(getFileSummary(results), 'plain'))} |`,
   );
   lines.push(
-    `| **Tests** | ${escapeMarkdownTableCell(getPlainSummaryStatusString(testResults))} |`,
+    `| **Tests** | ${escapeMarkdownTableCell(formatStatusCounts(summary.tests, 'plain'))} |`,
   );
   lines.push(
     `| **Duration** | ${prettyTime(duration.totalTime)} (build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}) |`,
   );
-  if (flakyTests.length > 0) {
+  if (hasFlakyTests) {
     lines.push(
-      `| **Flaky Tests** | ${formatFlakyTestCount(flakyTests.length)} |`,
+      `| **Flaky Tests** | ${formatFlakyTestCount(summary.tests.flaky)} |`,
     );
   }
   lines.push('');
@@ -349,8 +350,8 @@ async function renderStepSummary({
     }
 
     for (const flakyTest of flakyTests.slice(0, STEP_SUMMARY_MAX_FLAKY_TESTS)) {
-      const relativePath = relative(rootPath, flakyTest.testPath);
-      const fullName = formatFullTestName(flakyTest);
+      const relativePath = flakyTest.relativeTestPath;
+      const fullName = flakyTest.fullName;
       const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
       lines.push(
         `- \`${title}\` (passed after retry x${flakyTest.retryCount})`,
@@ -373,20 +374,11 @@ async function renderStepSummary({
       if (!error) continue;
 
       pushHeading(lines, 3, `❌ FAIL Unhandled Error ${index + 1}`);
-      lines.push(
-        `**${error.name || 'Error'}**: ${trimForSummary(
-          error.message,
-          maxCharsPerField,
-        )}`,
-      );
+      lines.push(`**${error.name || 'Error'}**: ${trim(error.message)}`);
       lines.push('');
 
       if (error.stack) {
-        pushFencedBlock(
-          lines,
-          '',
-          stripAnsi(trimForSummary(error.stack, maxCharsPerField)),
-        );
+        pushFencedBlock(lines, '', stripAnsi(trim(error.stack)));
       }
     }
 
@@ -404,8 +396,8 @@ async function renderStepSummary({
       if (!failure) continue;
 
       const { test, errors } = failure;
-      const relativePath = relative(rootPath, test.testPath);
-      const fullName = formatFullTestName(test);
+      const relativePath = test.relativeTestPath;
+      const fullName = test.fullName;
       const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
       const retrySuffix = test.retryCount ? ` (retry x${test.retryCount})` : '';
       pushHeading(lines, 3, `❌ FAIL ${title}${retrySuffix}`);
@@ -415,7 +407,7 @@ async function renderStepSummary({
         : [createUnknownFailure()];
       for (const error of reportedErrors) {
         const errorType = getErrorType(error);
-        const message = trimForSummary(error.message, maxCharsPerField);
+        const message = trim(error.message);
         const retryLabel = getRetryErrorLabel(error);
         lines.push(
           `**${retryLabel ? `${retryLabel} - ` : ''}${errorType}**: ${message}`,
@@ -423,11 +415,7 @@ async function renderStepSummary({
         lines.push('');
 
         if (error.diff) {
-          pushFencedBlock(
-            lines,
-            'diff',
-            stripAnsi(trimForSummary(error.diff, maxCharsPerField)),
-          );
+          pushFencedBlock(lines, 'diff', stripAnsi(trim(error.diff)));
         }
 
         if (error.stack) {
@@ -468,18 +456,6 @@ async function renderStepSummary({
   lines.push('');
 
   return `${lines.join('\n')}\n`;
-}
-
-function trimForSummary(input: string, maxChars: number): string {
-  if (input.length <= maxChars) {
-    return input;
-  }
-
-  if (maxChars === 0) {
-    return '';
-  }
-
-  return `${input.slice(0, maxChars - 1)}…`;
 }
 
 function collectFlakyTests(testResults: TestResult[]): TestResult[] {

@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from 'node:util';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { DefaultReporter } from '../../src/reporter/index';
+import { computeSummary } from '../../src/reporter/utils';
 import { emptyRunEndPayload, emptySnapshotSummary } from './helpers';
 import type {
   Duration,
@@ -32,7 +33,7 @@ const createFailureResults = () => {
   const testResult: TestResult = {
     status: 'failed',
     name: 'should fail',
-    fullName: 'suite  should fail',
+    fullName: 'suite > should fail',
     testPath: '/test/root/example.test.ts',
     relativeTestPath: 'example.test.ts',
     duration: 200,
@@ -126,6 +127,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
       snapshotSummary: {
         ...emptySnapshotSummary,
         unmatched: 1,
@@ -203,6 +205,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
     });
 
     const stderrText = stripVTControlCharacters(stderr.join('\n'));
@@ -237,6 +240,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
     });
 
     expect(stdoutWrite).not.toHaveBeenCalled();
@@ -294,6 +298,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
     });
 
     const stdoutText = stripVTControlCharacters(stdout.join('\n'));

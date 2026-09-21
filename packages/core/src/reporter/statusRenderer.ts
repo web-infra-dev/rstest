@@ -1,36 +1,26 @@
-import { relative } from 'pathe';
 import type { RstestTestState, TestCaseInfo, TestResult } from '../types';
-import {
-  bgColor,
-  color,
-  getTaskNameWithPrefix,
-  POINTER,
-  prettyTestPath,
-  prettyTime,
-} from '../utils';
+import { bgColor, color, POINTER, prettyTestPath, prettyTime } from '../utils';
 import {
   DurationLabel,
-  getSummaryStatusString,
+  formatStatusCounts,
   TestFileSummaryLabel,
   TestSummaryLabel,
 } from './summary';
+import { getFileSummary } from './utils';
 import {
   WindowRenderer,
   type Options as WindowRendererOptions,
 } from './windowedRenderer';
 
 export class StatusRenderer {
-  private readonly rootPath: string;
   private readonly renderer: WindowRenderer;
   private startTime: number | undefined = undefined;
   private readonly testState: RstestTestState;
 
   constructor(
-    rootPath: string,
     state: RstestTestState,
     logger?: WindowRendererOptions['logger'],
   ) {
-    this.rootPath = rootPath;
     this.renderer = new WindowRenderer({
       getWindow: () => this.getContent(),
       logger: logger ?? {
@@ -62,13 +52,12 @@ export class StatusRenderer {
       );
     };
 
-    for (const [module, { runningTests }] of runningModules.entries()) {
-      const relativePath = relative(this.rootPath, module);
+    for (const { runningTests, relativeTestPath } of runningModules.values()) {
       summary.push(
-        `${bgColor('bgYellow', ' RUNS ')} ${prettyTestPath(relativePath)}`,
+        `${bgColor('bgYellow', ' RUNS ')} ${prettyTestPath(relativeTestPath)}`,
       );
       if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
-        let caseLog = ` ${color.gray(POINTER)} ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
+        let caseLog = ` ${color.gray(POINTER)} ${runningTests[0]!.fullName} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
 
         if (runningTests.length > 1) {
           caseLog += color.gray(` and ${runningTests.length - 1} more cases`);
@@ -84,7 +73,7 @@ export class StatusRenderer {
       summary.push(`${TestFileSummaryLabel} ${runningModules.size} total`);
     } else {
       summary.push(
-        `${TestFileSummaryLabel} ${getSummaryStatusString(testModules, '', false)} ${color.dim('|')} ${runningModules.size + testModules.length} total`,
+        `${TestFileSummaryLabel} ${formatStatusCounts(getFileSummary(testModules), 'ansi', '', false)} ${color.dim('|')} ${runningModules.size + testModules.length} total`,
       );
     }
 
@@ -94,7 +83,7 @@ export class StatusRenderer {
 
     if (testResults.length) {
       summary.push(
-        `${TestSummaryLabel} ${getSummaryStatusString(testResults, '', false)}`,
+        `${TestSummaryLabel} ${formatStatusCounts(getFileSummary(testResults), 'ansi', '', false)}`,
       );
     }
 
