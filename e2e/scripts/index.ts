@@ -5,7 +5,7 @@ import type {
   onTestFinished as onRstestFinished,
 } from '@rstest/core';
 import stripAnsi from 'strip-ansi';
-import type { Options, Result } from 'tinyexec';
+import type { Options, Output, Result } from 'tinyexec';
 import { x } from 'tinyexec';
 import treeKill from 'tree-kill';
 
@@ -67,6 +67,18 @@ class Cli {
         listener();
       }
     });
+
+    const originalThen = exec.then.bind(exec);
+    exec.then = <TResult1 = Output, TResult2 = never>(
+      onfulfilled?:
+        ((value: Output) => TResult1 | PromiseLike<TResult1>) | null,
+      onrejected?:
+        ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) =>
+      originalThen(async (output) => {
+        await this.waitForStreamsEnd();
+        return onfulfilled ? onfulfilled(output) : (output as TResult1);
+      }, onrejected);
 
     this.execKill = this.exec.kill.bind(this.exec);
 

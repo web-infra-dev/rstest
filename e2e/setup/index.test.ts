@@ -18,16 +18,15 @@ describe('test setup file', async () => {
       },
     });
 
-    await cli.exec;
+    await expectExecSuccess();
     const logs = cli.stdout
       .split('\n')
       .filter((log) => log.startsWith('[afterAll]'));
-    await expectExecSuccess();
     expect(logs).toEqual(['[afterAll] setup']);
   });
 
   it('should test error when run setup file failed', async () => {
-    const { cli, expectStderrLog } = await runRstestCli({
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -37,8 +36,7 @@ describe('test setup file', async () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
     // test error log
     expectStderrLog(/Rstest setup error/);
     expectStderrLog(/rstest.setup.ts:1:7/);
@@ -94,9 +92,8 @@ describe('test setup file', async () => {
       },
     });
 
-    await cli.exec;
-    const logs = cli.stdout.split('\n');
     await expectExecSuccess();
+    const logs = cli.stdout.split('\n');
 
     // `ctx.filepath` is OS-native (#1465), so build the expected suffix with
     // `join` to match backslashes on Windows and forward slashes on POSIX.
