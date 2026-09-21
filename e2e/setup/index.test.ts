@@ -26,7 +26,7 @@ describe('test setup file', async () => {
   });
 
   it('should test error when run setup file failed', async () => {
-    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
