@@ -63,6 +63,7 @@ export class LifecycleRecorder implements Reporter {
 
   onTestFileResult(result: TestFileResult): void {
     this.record('onTestFileResult', result.testId, result.status);
+    console.log(`__RSTEST_FILE_RESULT__${JSON.stringify(result)}__END__`);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {

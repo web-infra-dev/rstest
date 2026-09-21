@@ -138,12 +138,16 @@ describe('createRunnerEventSink', () => {
       testPath: '/a.test.ts',
       project: 'test',
       name: 'case',
-      status: 'pass' as const,
+      status: 'passed' as const,
       errors: [],
     };
 
     await sink.onTestCaseResult(result);
-    expect(onStateCaseResult).toHaveBeenCalledWith(result);
+    expect(onStateCaseResult).toHaveBeenCalledWith({
+      ...result,
+      fullName: 'case',
+      relativeTestPath: '../a.test.ts',
+    });
     await caseResultStarted;
     expect(order).toEqual(['case-start']);
 
@@ -152,7 +156,7 @@ describe('createRunnerEventSink', () => {
       project: 'test',
       testPath: '/a.test.ts',
       name: '/a.test.ts',
-      status: 'pass',
+      status: 'passed',
       errors: [],
       results: [result],
     });
@@ -182,14 +186,14 @@ describe('createRunnerEventSink', () => {
       testPath: '/a.test.ts',
       project: 'test',
       name: 'case',
-      status: 'fail' as const,
+      status: 'failed' as const,
       errors: [],
     };
     const delivered = first.onTestCaseResult(failure);
     const success = {
       ...failure,
       testPath: '/b.test.ts',
-      status: 'pass' as const,
+      status: 'passed' as const,
     };
     const otherDelivered = second.onTestCaseResult(success);
     expect(await first.getCountOfFailedTests()).toBe(1);
@@ -205,7 +209,7 @@ describe('createRunnerEventSink', () => {
         project: 'test',
         testPath: '/a.test.ts',
         name: '/a.test.ts',
-        status: 'pass',
+        status: 'passed',
         errors: [],
         results: [],
       }),
@@ -214,12 +218,16 @@ describe('createRunnerEventSink', () => {
         project: 'test',
         testPath: '/b.test.ts',
         name: '/b.test.ts',
-        status: 'pass',
+        status: 'passed',
         errors: [],
         results: [success],
       }),
     ]);
-    expect(onTestCaseResult).toHaveBeenCalledExactlyOnceWith(success);
+    expect(onTestCaseResult).toHaveBeenCalledExactlyOnceWith({
+      ...success,
+      fullName: 'case',
+      relativeTestPath: '../b.test.ts',
+    });
   });
 
   it('starts arriving hooks immediately and joins them before the file result', async () => {
@@ -370,7 +378,9 @@ describe('createRunnerEventSink', () => {
     await sink.onConsoleLog(log('hello'));
 
     expect(order).toEqual(['open', 'file', 'open']);
-    expect(calls.reporterConsole).toEqual([log('hello')]);
+    expect(calls.reporterConsole).toEqual([
+      { ...log('hello'), relativeTestPath: 'a.test.ts' },
+    ]);
   });
 
   it('onConsoleLog honors the per-project onConsoleLog filter', async () => {
