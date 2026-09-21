@@ -149,7 +149,7 @@ it('runs the added file', () => expect(document.createElement('main').tagName).t
   );
 
   it.runIf(shouldRunHeadedBrowserTests)(
-    'should keep the watch session live after an initial fatal error',
+    'reports a failed file and keeps headed watch live when setup fails to load',
     async () => {
       const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-initial-fatal`;
       const setupPath = path.join(fixturesTargetPath, 'setup.ts');
@@ -175,6 +175,8 @@ it('runs the added file', () => expect(document.createElement('main').tagName).t
       try {
         await waitForOutput('initial headed setup failed');
         await waitForOutput('Waiting for file changes...');
+        expect(cli.stdout).toContain('Test Files 1 failed');
+        expect(`${cli.stdout}\n${cli.stderr}`).not.toContain('Unhandled Error');
 
         fs.update(setupPath, (content) => content.replace(initialFatal, ''));
         await cli.waitForStdout(
