@@ -74,27 +74,21 @@
  * - The user provided a name filter (`config.testNamePattern`).
  * - Heuristic: small result set (`testResults.length > 0 && testResults.length <= FOCUSED_RUN_MAX_TESTS`).
  */
-import fs from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, resolve as nodeResolve } from 'node:path';
-import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { relative, resolve } from 'pathe';
-import { parse as parseStackTrace } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
 import type {
-  GetSourcemap,
   MdReporterOptions,
   NormalizedConfig,
   Reporter,
   RstestTestState,
   SerializedError,
   SnapshotSummary,
-  SourceMapInput,
   TestFileInfo,
   TestResult,
   TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
+import { parseErrorStacktrace, stackIgnores } from '../utils/error';
 import {
   buildPackageManagerReproCommand,
   collectFailures,
@@ -102,15 +96,14 @@ import {
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
-  formatFullTestName,
   getErrorType,
+  PerFileEventBuffer,
   pushFencedBlock,
   pushHeading,
-  reportedFileKeys,
-  reporterFileKey,
   stringifyJson,
   toReportCounts,
   toReportDuration,
+  truncateString,
 } from './utils';
 
 type HeaderOptions = {
@@ -163,17 +156,10 @@ const DEFAULT_TEST_LIST_MAX_ITEMS = 50;
 const FOCUSED_RUN_MAX_TESTS = 10;
 
 type StackFrame = {
-  file?: string;
-  methodName?: string;
-  lineNumber?: number;
-  column?: number;
-};
-
-type CodeFrameOptions = {
-  linesAbove: number;
-  linesBelow: number;
-  line?: number;
-  column?: number;
+  file?: string | null;
+  methodName?: string | null;
+  lineNumber?: number | null;
+  column?: number | null;
 };
 
 type FormattedStackFrame = {
@@ -182,8 +168,6 @@ type FormattedStackFrame = {
   column?: number;
   method?: string;
 };
-
-const require = createRequire(import.meta.url);
 
 const defaultOptions: ResolvedOptions = {
   preset: 'normal',
@@ -272,62 +256,6 @@ const resolveToggleOption = <T extends Record<string, unknown>>(
   return { ...base, ...input };
 };
 
-const resolveHeader = (input: MdReporterOptions['header']): HeaderOptions =>
-  resolveToggleOption(input, defaultOptions.header, { env: false });
-
-const resolveReproduction = (
-  input: MdReporterOptions['reproduction'],
-): ResolvedOptions['reproduction'] => {
-  if (input === false) return false;
-  if (input === true || input === undefined) return defaultOptions.reproduction;
-  return input;
-};
-
-const resolveFailures = (
-  input: MdReporterOptions['failures'],
-  preset: Partial<ResolvedOptions> | undefined,
-): FailuresOptions => ({
-  max: input?.max ?? preset?.failures?.max ?? defaultOptions.failures.max,
-});
-
-const resolveCodeFrame = (
-  input: MdReporterOptions['codeFrame'],
-  preset: Partial<ResolvedOptions> | undefined,
-): CodeFrameResolved =>
-  resolveToggleOption(
-    input,
-    defaultOptions.codeFrame,
-    { ...defaultOptions.codeFrame, enabled: false },
-    preset?.codeFrame,
-  );
-
-const resolveCandidateFiles = (
-  input: MdReporterOptions['candidateFiles'],
-): CandidateFilesResolved =>
-  resolveToggleOption(input, defaultOptions.candidateFiles, {
-    ...defaultOptions.candidateFiles,
-    enabled: false,
-  });
-
-const resolveConsole = (
-  input: MdReporterOptions['console'],
-  preset: Partial<ResolvedOptions> | undefined,
-): ConsoleResolved =>
-  resolveToggleOption(
-    input,
-    defaultOptions.console,
-    { ...defaultOptions.console, enabled: false },
-    preset?.console,
-  );
-
-const resolveErrors = (input: MdReporterOptions['errors']): ErrorsResolved =>
-  resolveToggleOption(input, defaultOptions.errors, { unhandled: false });
-
-const resolveStack = (
-  input: MdReporterOptions['stack'],
-  preset: Partial<ResolvedOptions> | undefined,
-): StackMode => input ?? preset?.stack ?? defaultOptions.stack;
-
 /** @internal Exported for testing only. */
 export const resolveOptions = (
   userOptions: MdReporterOptions = {},
@@ -337,30 +265,56 @@ export const resolveOptions = (
 
   return {
     preset: presetName,
-    header: resolveHeader(userOptions.header),
-    reproduction: resolveReproduction(userOptions.reproduction),
+    header: resolveToggleOption(userOptions.header, defaultOptions.header, {
+      env: false,
+    }),
+    reproduction:
+      userOptions.reproduction === true ||
+      userOptions.reproduction === undefined
+        ? defaultOptions.reproduction
+        : userOptions.reproduction,
     testLists: userOptions.testLists ?? defaultOptions.testLists,
-    failures: resolveFailures(userOptions.failures, preset),
-    codeFrame: resolveCodeFrame(userOptions.codeFrame, preset),
-    stack: resolveStack(userOptions.stack, preset),
-    candidateFiles: resolveCandidateFiles(userOptions.candidateFiles),
-    console: resolveConsole(userOptions.console, preset),
-    errors: resolveErrors(userOptions.errors),
+    failures: {
+      max:
+        userOptions.failures?.max ??
+        preset.failures?.max ??
+        defaultOptions.failures.max,
+    },
+    codeFrame: resolveToggleOption(
+      userOptions.codeFrame,
+      defaultOptions.codeFrame,
+      { ...defaultOptions.codeFrame, enabled: false },
+      preset.codeFrame,
+    ),
+    stack: userOptions.stack ?? preset.stack ?? defaultOptions.stack,
+    candidateFiles: resolveToggleOption(
+      userOptions.candidateFiles,
+      defaultOptions.candidateFiles,
+      { ...defaultOptions.candidateFiles, enabled: false },
+    ),
+    console: resolveToggleOption(
+      userOptions.console,
+      defaultOptions.console,
+      { ...defaultOptions.console, enabled: false },
+      preset.console,
+    ),
+    errors: resolveToggleOption(userOptions.errors, defaultOptions.errors, {
+      unhandled: false,
+    }),
   };
 };
 
 const formatFailureTitle = (
   failure: FailureItem,
   index: number,
-  rootPath: string,
 ): {
   relativePath: string;
   fullName: string;
   title: string;
   formattedId: string;
 } => {
-  const relativePath = relative(rootPath, failure.test.testPath);
-  const fullName = formatFullTestName(failure.test);
+  const relativePath = failure.test.relativeTestPath;
+  const fullName = failure.test.fullName;
   return {
     relativePath,
     fullName,
@@ -375,15 +329,6 @@ const TRUNCATION_SUFFIX = '... [truncated]';
 
 const FAILURE_LIST_VALUE_MAX_CHARS = 200;
 
-const truncateString = (value: string, maxChars: number): string => {
-  if (maxChars <= 0) return '';
-  if (value.length <= maxChars) return value;
-  if (maxChars <= TRUNCATION_SUFFIX.length) {
-    return TRUNCATION_SUFFIX.slice(0, maxChars);
-  }
-  return `${value.slice(0, maxChars - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`;
-};
-
 const toSingleLine = (value: string): string => {
   return value.replace(/\r?\n/g, '\\n').replace(/\s+/g, ' ').trim();
 };
@@ -396,12 +341,13 @@ const formatFailureListValue = (value: unknown): string => {
   return truncateString(
     toSingleLine(cleanString(raw)),
     FAILURE_LIST_VALUE_MAX_CHARS,
+    TRUNCATION_SUFFIX,
   );
 };
 
 const formatPath = (
   rootPath: string,
-  filePath?: string,
+  filePath?: string | null,
 ): string | undefined => {
   if (!filePath) return undefined;
   if (filePath.includes('://') || filePath.startsWith('node:')) {
@@ -469,7 +415,7 @@ const resolveStackPayload = ({
     return {
       topFrame: topFrame
         ? {
-            file: formatPath(rootPath, topFrame.file),
+            file: formatPath(rootPath, topFrame.file) ?? undefined,
             line: topFrame.lineNumber ?? null,
             column: topFrame.column ?? null,
             method: topFrame.methodName ?? null,
@@ -491,12 +437,13 @@ const formatConsoleLog = (
   const content = truncateString(
     cleanString(log.content),
     options.console.maxCharsPerEntry,
+    TRUNCATION_SUFFIX,
   );
   return `[${log.type}] ${log.name}: ${content}`;
 };
 
 const buildCandidateFiles = (
-  frames: { file?: string; lineNumber?: number }[],
+  frames: { file?: string | null; lineNumber?: number | null }[],
   rootPath: string,
   maxCandidateFiles: number,
 ): { path: string; line?: number }[] => {
@@ -505,13 +452,10 @@ const buildCandidateFiles = (
   frames.forEach((frame, index) => {
     if (!frame.file) return;
     const formattedPath = formatPath(rootPath, frame.file) || frame.file;
-    if (stackIgnores.some((entry) => formattedPath.match(entry))) {
-      return;
-    }
     const entry = scores.get(formattedPath) || { score: 0, line: undefined };
     const weight = Math.max(1, 10 - index);
     entry.score += weight;
-    entry.line = entry.line ?? frame.lineNumber;
+    entry.line = entry.line ?? frame.lineNumber ?? undefined;
     scores.set(formattedPath, entry);
   });
 
@@ -546,195 +490,12 @@ const buildReproCommand = (
     reproMode === 'file+name',
   );
 
-const normalizeFilePath = (value?: string | null): string | undefined => {
-  if (!value) return undefined;
-  if (value.startsWith('file://')) {
-    try {
-      return new URL(value).pathname;
-    } catch {
-      return value;
-    }
-  }
-  return value;
-};
-
-const isRelativePath = (value: string): boolean => /^\.\.\/?/.test(value);
-
-const stackIgnores: (RegExp | string)[] = [
-  /\/node_modules\//,
-  /\/rstest\/packages\/core\/dist/,
-  /\/@rstest\/core/,
-  /\/chai/,
-  /\/node:\w+/,
-  /webpack\/runtime/,
-  /webpack\\runtime/,
-  '<anonymous>',
-];
-
-const trimLeadingNodeFrames = (frames: StackFrame[]): StackFrame[] => {
-  let startIndex = 0;
-  while (startIndex < frames.length) {
-    const file = frames[startIndex]?.file;
-    if (file?.startsWith('node:')) {
-      startIndex += 1;
-      continue;
-    }
-    break;
-  }
-  return frames.slice(startIndex);
-};
-
-const dropNodeFrames = (frames: StackFrame[]): StackFrame[] =>
-  frames.filter((frame) => !frame.file?.startsWith('node:'));
-
-const resolveModuleRoot = (spec: string): string | null => {
-  try {
-    if (typeof import.meta.resolve === 'function') {
-      const resolved = import.meta.resolve(`${spec}/package.json`);
-      const filePath = resolved.startsWith('file://')
-        ? new URL(resolved).pathname
-        : resolved;
-      return dirname(filePath);
-    }
-  } catch {
-    // fallback below
-  }
-
-  try {
-    return dirname(require.resolve(`${spec}/package.json`));
-  } catch {
-    return null;
-  }
-};
-
-const excludedRoots: string[] = (() => {
-  const resolvedRoots: string[] = [];
-  const candidates = ['@rstest/core'];
-  for (const spec of candidates) {
-    const root = resolveModuleRoot(spec);
-    if (root) {
-      resolvedRoots.push(root);
-    }
-  }
-  return resolvedRoots;
-})();
-
-const parseErrorStacktrace = async ({
-  stack,
-  getSourcemap,
-  fullStack = false,
-}: {
-  stack: string;
-  getSourcemap?: GetSourcemap;
-  fullStack?: boolean;
-}): Promise<StackFrame[]> => {
-  // Cache TraceMap per file to avoid redundant VLQ decoding when multiple
-  // stack frames originate from the same source file.
-  const traceMapCache = new Map<string, TraceMap>();
-
-  const frames = parseStackTrace(stack)
-    .filter((frame) => {
-      if (fullStack) return true;
-      if (!frame.file) return false;
-      const filePath = normalizeFilePath(frame.file) || '';
-      if (excludedRoots.some((root) => filePath.startsWith(root))) {
-        return false;
-      }
-      return !stackIgnores.some((entry) => filePath.match(entry));
-    })
-    .map(async (frame) => {
-      const file = normalizeFilePath(frame.file);
-      if (!file || !getSourcemap) {
-        return {
-          ...frame,
-          file,
-        };
-      }
-
-      const sourcemap: SourceMapInput | null = await getSourcemap(file);
-      if (!sourcemap) {
-        return {
-          ...frame,
-          file,
-        };
-      }
-
-      let traceMap = traceMapCache.get(file);
-      if (!traceMap) {
-        traceMap = new TraceMap(sourcemap);
-        traceMapCache.set(file, traceMap);
-      }
-      const { line, column, source, name } = originalPositionFor(traceMap, {
-        line: frame.lineNumber || 1,
-        column: frame.column || 1,
-      });
-
-      if (!source) {
-        return null;
-      }
-
-      const mappedFile = isRelativePath(source)
-        ? nodeResolve(file || '', '../', source)
-        : (() => {
-            try {
-              return new URL(source).pathname;
-            } catch {
-              return source;
-            }
-          })();
-
-      return {
-        ...frame,
-        file: mappedFile,
-        lineNumber: line || frame.lineNumber,
-        column: column || frame.column,
-        methodName: name || frame.methodName,
-      };
-    });
-
-  const resolvedFrames = await Promise.all(frames);
-  const filteredFrames = resolvedFrames.filter(
-    (frame) => frame !== null,
-  ) as StackFrame[];
-  return dropNodeFrames(trimLeadingNodeFrames(filteredFrames));
-};
-
-const createCodeFrame = (
-  filePath: string,
-  { linesAbove, linesBelow, line, column }: CodeFrameOptions,
-): string | null => {
-  if (!filePath || !fs.existsSync(filePath)) {
-    return null;
-  }
-
-  const source = fs.readFileSync(filePath, 'utf-8');
-  const sourceLines = source.split(/\r?\n/);
-  const lineNumber = Math.max(1, line || 1);
-  const columnNumber = Math.max(1, column || 1);
-  const start = Math.max(1, lineNumber - linesAbove);
-  const end = Math.min(sourceLines.length, lineNumber + linesBelow);
-  const lineWidth = String(end).length;
-  const frameLines: string[] = [];
-
-  for (let i = start; i <= end; i += 1) {
-    const linePrefix = String(i).padStart(lineWidth, ' ');
-    const lineContent = sourceLines[i - 1] ?? '';
-    frameLines.push(`${linePrefix} | ${lineContent}`);
-    if (i === lineNumber) {
-      const marker = ' '.repeat(Math.max(0, columnNumber - 1));
-      frameLines.push(`${' '.repeat(lineWidth)} | ${marker}^`);
-    }
-  }
-
-  return frameLines.join('\n');
-};
-
 export class MdReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
   private readonly fileFilters: string[];
   private readonly options: ResolvedOptions;
-  private logsByFile = new Map<string, string[]>();
+  private readonly logs = new PerFileEventBuffer<string>();
 
   constructor({
     rootPath,
@@ -792,8 +553,8 @@ export class MdReporter implements Reporter {
     const displayed = truncated ? tests.slice(0, limit) : tests;
 
     for (const test of displayed) {
-      const relativePath = relative(this.rootPath, test.testPath);
-      const fullName = formatFullTestName(test);
+      const relativePath = test.relativeTestPath;
+      const fullName = test.fullName;
       const title = fullName ? `${relativePath} :: ${fullName}` : relativePath;
       lines.push(`- ${title}`);
     }
@@ -806,16 +567,13 @@ export class MdReporter implements Reporter {
 
   // A watch rerun replays the whole file, so its previous logs are stale.
   onTestFileStart(test: TestFileInfo): void {
-    this.logsByFile.delete(reporterFileKey(test.project, test.testPath));
+    this.logs.reset(test);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
     if (!this.options.console.enabled) return;
 
-    const key = reporterFileKey(log.project, log.testPath);
-    const logs = this.logsByFile.get(key) || [];
-    logs.push(formatConsoleLog(log, this.options));
-    this.logsByFile.set(key, logs);
+    this.logs.push(formatConsoleLog(log, this.options), log);
   }
 
   private renderFrontMatter(lines: string[]): void {
@@ -905,14 +663,7 @@ export class MdReporter implements Reporter {
     // A watch session drops deleted files from the result snapshot; the buffered
     // logs have no such signal of their own, so the reported file set prunes
     // them and the buffer stays bounded across a long session.
-    if (this.logsByFile.size) {
-      const reportedKeys = reportedFileKeys(results);
-      for (const key of this.logsByFile.keys()) {
-        if (!reportedKeys.has(key)) {
-          this.logsByFile.delete(key);
-        }
-      }
-    }
+    this.logs.prune(results);
     const failures = collectFailures({ results, testResults });
 
     const focusedRun = this.isFocusedRun({ testResults });
@@ -980,7 +731,7 @@ export class MdReporter implements Reporter {
           if (!failure) continue;
 
           const { relativePath, fullName, title, formattedId } =
-            formatFailureTitle(failure, index, rootPath);
+            formatFailureTitle(failure, index);
 
           lines.push(`- [F${formattedId}] ${title}`);
 
@@ -1029,7 +780,7 @@ export class MdReporter implements Reporter {
         if (!failure) continue;
 
         const { relativePath, fullName, title, formattedId } =
-          formatFailureTitle(failure, index, rootPath);
+          formatFailureTitle(failure, index);
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {
@@ -1056,16 +807,19 @@ export class MdReporter implements Reporter {
                   stack: error.stack,
                   getSourcemap,
                   fullStack: false,
+                  ignore: [...stackIgnores, /\/node_modules\//, /\/chai/],
                 })
               : [];
 
             const fullFrames =
               error.fullStack && error.stack
-                ? await parseErrorStacktrace({
-                    stack: error.stack,
-                    getSourcemap,
-                    fullStack: true,
-                  })
+                ? (
+                    await parseErrorStacktrace({
+                      stack: error.stack,
+                      getSourcemap,
+                      fullStack: true,
+                    })
+                  ).filter((frame) => !frame.file?.startsWith('node:'))
                 : candidateFrames;
 
             const trimmedFrames = resolveStackFrames(fullFrames, this.options);
@@ -1097,9 +851,9 @@ export class MdReporter implements Reporter {
           errors: errorEntries.map(({ error, topFrame, stackFrames }) => {
             const mappedStackFrames = stackFrames.map((frame) => ({
               file: formatPath(rootPath, frame.file),
-              line: frame.lineNumber,
-              column: frame.column,
-              method: frame.methodName,
+              line: frame.lineNumber ?? undefined,
+              column: frame.column ?? undefined,
+              method: frame.methodName ?? undefined,
             }));
 
             // Prefer diff over full expected/actual to reduce output size
@@ -1153,11 +907,11 @@ export class MdReporter implements Reporter {
             if (!entry?.topFrame?.file || !entry.topFrame.lineNumber) {
               continue;
             }
-            const codeFrame = createCodeFrame(entry.topFrame.file, {
+            const { renderCodeFrame } = await import('../utils/codeFrame');
+            const codeFrame = await renderCodeFrame(entry.topFrame, {
+              ansi: false,
               linesAbove: this.options.codeFrame.linesAbove,
               linesBelow: this.options.codeFrame.linesBelow,
-              line: entry.topFrame.lineNumber,
-              column: entry.topFrame.column || 1,
             });
             if (codeFrame) {
               lines.push(`codeFrame (error ${errorIndex + 1}):`);
@@ -1167,10 +921,7 @@ export class MdReporter implements Reporter {
         }
 
         if (this.options.console.enabled) {
-          const consoleLogs =
-            this.logsByFile.get(
-              reporterFileKey(failure.test.project, failure.test.testPath),
-            ) || [];
+          const consoleLogs = this.logs.get(failure.test);
           const limitedLogs = consoleLogs.slice(
             Math.max(
               0,

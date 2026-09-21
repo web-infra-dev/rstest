@@ -371,6 +371,17 @@ describe('GithubActionsReporter step summary', () => {
 
       await reporter.onTestRunEnd({
         ...emptyRunEndPayload,
+        summary: {
+          files: { total: 1, failed: 0 },
+          tests: {
+            total: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            todo: 0,
+            flaky: 1,
+          },
+        },
         results: [
           {
             testId: 'file-1',
@@ -396,7 +407,7 @@ describe('GithubActionsReporter step summary', () => {
             testId: 'test-1',
             status: 'passed',
             name: 'retries then passes',
-            fullName: 'describe flaky  retries then passes',
+            fullName: 'describe flaky > retries then passes',
             parentNames: ['describe flaky'],
             testPath,
             relativeTestPath: 'tests/flaky.test.ts',
@@ -490,7 +501,7 @@ describe('GithubActionsReporter step summary', () => {
             testId: 'test-1',
             status: 'failed',
             name: 'fails after retries',
-            fullName: 'describe retry  fails after retries',
+            fullName: 'describe retry > fails after retries',
             parentNames: ['describe retry'],
             testPath,
             relativeTestPath: 'tests/retry.test.ts',

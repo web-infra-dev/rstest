@@ -1,4 +1,3 @@
-import { relative } from 'pathe';
 import type {
   NormalizedConfig,
   NormalizedProjectConfig,
@@ -42,24 +41,17 @@ export class VerboseReporter extends DefaultReporter {
     this.statusRenderer?.onTestFileResult();
     this.nonTTYProgressNotifier?.notifyOutput();
 
-    const projectConfig = this.projectConfigs.get(test.project);
-    const hideSkippedTestFiles =
-      projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
+    const { hideSkippedTestFiles, hideSkippedTests, slowTestThreshold } =
+      this.resolveFileOptions(test.project);
 
     if (hideSkippedTestFiles && test.status === 'skipped') {
       return;
     }
 
-    const relativePath = relative(this.rootPath, test.testPath);
-    const slowTestThreshold =
-      projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
-    const hideSkippedTests =
-      projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
-
     const logResults = () => {
       logFileTitle(
         test,
-        relativePath,
+        test.relativeTestPath,
         true,
         this.verboseOptions.showProjectName,
       );
