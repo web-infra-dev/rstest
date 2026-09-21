@@ -209,7 +209,7 @@ export function createRunnerEventSink(
     },
     async onTestFileStart(test) {
       const enriched = enrichFileInfo(test);
-      context.stateManager.onTestFileStart(enriched.testPath);
+      context.stateManager.onTestFileStart(enriched);
       await dispatch('onTestFileStart', enriched);
     },
     async onTestFileReady(test) {

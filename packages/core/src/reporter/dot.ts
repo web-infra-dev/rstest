@@ -83,6 +83,7 @@ export class DotReporter implements Reporter {
     results,
     testResults,
     duration,
+    summary,
     getSourcemap,
     snapshotSummary,
     rerunTestPaths,
@@ -109,8 +110,8 @@ export class DotReporter implements Reporter {
 
     printSummaryLog({
       results,
-      testResults,
       duration,
+      summary,
       rootPath: this.rootPath,
       snapshotSummary,
     });

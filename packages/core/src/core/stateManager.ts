@@ -1,38 +1,38 @@
-import type { TestCaseInfo, TestFileResult, TestResult } from '../types';
+import type {
+  RstestTestState,
+  TestCaseInfo,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+} from '../types';
 
 export class TestStateManager {
-  public runningModules: Map<
-    string,
-    {
-      runningTests: TestCaseInfo[];
-      results: TestResult[];
-    }
-  > = new Map<
-    string,
-    {
-      runningTests: TestCaseInfo[];
-      results: TestResult[];
-    }
-  >();
+  public runningModules: ReturnType<RstestTestState['getRunningModules']> =
+    new Map();
 
   public testModules: TestFileResult[] = [];
   public testFiles: string[] | undefined = undefined;
   private failedTestCount = 0;
 
-  onTestFileStart(testPath: string): void {
+  onTestFileStart({ testPath, relativeTestPath }: TestFileInfo): void {
     const currentModule = this.runningModules.get(testPath);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
         (result) => result.status === 'failed',
       ).length;
     }
-    this.runningModules.set(testPath, { runningTests: [], results: [] });
+    this.runningModules.set(testPath, {
+      relativeTestPath,
+      runningTests: [],
+      results: [],
+    });
   }
 
   onTestCaseResult(result: TestResult): void {
     const currentModule = this.runningModules.get(result.testPath);
     if (!currentModule) {
       this.runningModules.set(result.testPath, {
+        relativeTestPath: result.relativeTestPath,
         runningTests: [],
         results: [result],
       });
@@ -54,6 +54,7 @@ export class TestStateManager {
     const currentModule = this.runningModules.get(test.testPath);
     if (!currentModule) {
       this.runningModules.set(test.testPath, {
+        relativeTestPath: test.relativeTestPath,
         runningTests: [test],
         results: [],
       });

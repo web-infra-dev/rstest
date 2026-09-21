@@ -20,6 +20,7 @@ import type {
 } from '../types';
 import type { BlobReporterOptions } from '../types/reporter';
 import { color } from '../utils';
+import { PerFileEventBuffer } from './utils';
 
 /**
  * One recorded lifecycle event: the hook that fired, with the payload the
@@ -124,7 +125,7 @@ export class BlobReporter implements Reporter {
   private runStart: TestRunStartPayload = { files: [] };
   // One track per file, for a single one-shot run: watch mode is rejected at
   // reporter construction (`rstest.ts`), so no track ever spans two cycles.
-  private readonly files = new Map<string, BlobFileData>();
+  private readonly events = new PerFileEventBuffer<BlobFileEvent>();
 
   constructor({
     rootPath,
@@ -146,59 +147,31 @@ export class BlobReporter implements Reporter {
   }
 
   onTestFileStart(test: TestFileInfo): void {
-    this.fileData(test.project, test.testPath).events.push({
-      h: 'start',
-      test,
-    });
+    this.events.push({ h: 'start', test }, test);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
-    this.fileData(log.project, log.testPath).events.push({ h: 'log', log });
+    this.events.push({ h: 'log', log }, log);
   }
 
   onTestFileReady(test: TestFileInfo): void {
-    this.fileData(test.project, test.testPath).events.push({
-      h: 'ready',
-      test,
-    });
+    this.events.push({ h: 'ready', test }, test);
   }
 
   onTestSuiteStart(test: TestSuiteInfo): void {
-    this.fileData(test.project, test.testPath).events.push({
-      h: 'suiteStart',
-      test,
-    });
+    this.events.push({ h: 'suiteStart', test }, test);
   }
 
   onTestSuiteResult(result: TestResult): void {
-    this.fileData(result.project, result.testPath).events.push({
-      h: 'suiteResult',
-      result,
-    });
+    this.events.push({ h: 'suiteResult', result }, result);
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    this.fileData(test.project, test.testPath).events.push({
-      h: 'caseStart',
-      test,
-    });
+    this.events.push({ h: 'caseStart', test }, test);
   }
 
   onTestCaseResult(result: TestResult): void {
-    this.fileData(result.project, result.testPath).events.push({
-      h: 'caseResult',
-      result,
-    });
-  }
-
-  private fileData(project: string, testPath: string): BlobFileData {
-    const key = blobFileKey(project, testPath);
-    let data = this.files.get(key);
-    if (!data) {
-      data = { events: [] };
-      this.files.set(key, data);
-    }
-    return data;
+    this.events.push({ h: 'caseResult', result }, result);
   }
 
   cancel(): void {
@@ -230,7 +203,14 @@ export class BlobReporter implements Reporter {
       duration,
       snapshotSummary,
       unhandledErrors,
-      files: Object.fromEntries(this.files),
+      files: Object.fromEntries(
+        this.events
+          .entries()
+          .map(([file, events]) => [
+            blobFileKey(file.project, file.testPath),
+            { events },
+          ]),
+      ),
     };
 
     mkdirSync(this.outputDir, { recursive: true });

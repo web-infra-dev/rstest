@@ -58,6 +58,7 @@ export type InternalProjectContext = {
 type RunningModules = Map<
   string,
   {
+    relativeTestPath: string;
     runningTests: TestCaseInfo[];
     results: TestResult[];
   }
