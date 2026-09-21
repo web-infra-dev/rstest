@@ -22,17 +22,21 @@ describe('JsonReporter', () => {
 
     const mockTestResults: TestResult[] = [
       {
-        status: 'pass',
+        status: 'passed',
         name: 'should pass',
+        fullName: 'should pass',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 100,
         project: 'default',
         testId: '1',
       },
       {
-        status: 'fail',
+        status: 'failed',
         name: 'should fail',
+        fullName: 'should fail',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 200,
         errors: [
           {
@@ -45,9 +49,11 @@ describe('JsonReporter', () => {
         testId: '2',
       },
       {
-        status: 'skip',
+        status: 'skipped',
         name: 'should skip',
+        fullName: 'should skip',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 0,
         project: 'default',
         testId: '3',
@@ -56,13 +62,23 @@ describe('JsonReporter', () => {
 
     const mockFileResults: TestFileResult[] = [
       {
-        status: 'fail',
+        status: 'failed',
         name: 'test1.test.ts',
+        fullName: 'test1.test.ts',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 300,
         results: mockTestResults,
         project: 'default',
         testId: 'file-1',
+        summary: {
+          total: 3,
+          passed: 1,
+          failed: 1,
+          skipped: 1,
+          todo: 0,
+          flaky: 0,
+        },
       },
     ];
 
@@ -83,12 +99,20 @@ describe('JsonReporter', () => {
     });
 
     await reporter.onTestRunEnd({
+      status: 'failed',
       results: mockFileResults,
       testResults: mockTestResults,
       duration: mockDuration,
       snapshotSummary: emptySnapshotSummary,
       summary: {
-        tests: { total: 3, passed: 1, failed: 1, skipped: 1, todo: 0 },
+        tests: {
+          total: 3,
+          passed: 1,
+          failed: 1,
+          skipped: 1,
+          todo: 0,
+          flaky: 0,
+        },
         files: { total: 1, failed: 1 },
       },
       unhandledErrors: [],
@@ -98,7 +122,7 @@ describe('JsonReporter', () => {
     const report = JSON.parse(logs.join('\n'));
 
     expect(report.tool).toBe('rstest');
-    expect(report.status).toBe('fail');
+    expect(report.status).toBe('failed');
     expect(report.summary).toEqual({
       testFiles: 1,
       failedFiles: 1,
@@ -113,32 +137,36 @@ describe('JsonReporter', () => {
     expect(report.tests[1].errors[0].message).toBe('Test failed');
   });
 
-  it('should mark zero-test runs as failed when passWithNoTests is false', async () => {
-    const reporter = new JsonReporter({
-      config: baseConfig,
-      rootPath: '/test/root',
-      options: {},
-    });
+  it.for(['failed', 'error'] as const)(
+    'preserves the host status %s for empty runs',
+    async (status) => {
+      const reporter = new JsonReporter({
+        config: baseConfig,
+        rootPath: '/test/root',
+        options: {},
+      });
 
-    const logs: string[] = [];
+      const logs: string[] = [];
 
-    rs.spyOn(console, 'log').mockImplementation((...args) => {
-      logs.push(args.join(' '));
-    });
+      rs.spyOn(console, 'log').mockImplementation((...args) => {
+        logs.push(args.join(' '));
+      });
 
-    onTestFinished(() => {
-      rs.resetAllMocks();
-    });
+      onTestFinished(() => {
+        rs.resetAllMocks();
+      });
 
-    await reporter.onTestRunEnd({
-      ...emptyRunEndPayload,
-    });
+      await reporter.onTestRunEnd({
+        ...emptyRunEndPayload,
+        status,
+      });
 
-    const report = JSON.parse(logs.join('\n'));
+      const report = JSON.parse(logs.join('\n'));
 
-    expect(report.status).toBe('fail');
-    expect(report.summary.tests).toBe(0);
-  });
+      expect(report.status).toBe(status);
+      expect(report.summary.tests).toBe(0);
+    },
+  );
 
   describe('console logs', () => {
     const PATH_A = '/test/root/a.test.ts';
@@ -146,11 +174,21 @@ describe('JsonReporter', () => {
 
     const passedFile = (testPath: string, project: string): TestFileResult => ({
       testId: `${project}:${testPath}`,
-      status: 'pass',
+      status: 'passed',
       name: testPath,
+      fullName: testPath,
       testPath,
+      relativeTestPath: testPath.slice('/test/root/'.length),
       project,
       results: [],
+      summary: {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        todo: 0,
+        flaky: 0,
+      },
     });
 
     const setup = () => {
@@ -173,6 +211,7 @@ describe('JsonReporter', () => {
           reporter.onTestFileStart({
             testId: `${project}:${testPath}`,
             testPath,
+            relativeTestPath: testPath.slice('/test/root/'.length),
             project,
             tests: [],
           }),
@@ -181,6 +220,7 @@ describe('JsonReporter', () => {
             content,
             name: 'log',
             testPath,
+            relativeTestPath: testPath.slice('/test/root/'.length),
             project,
             type: 'stdout',
           }),

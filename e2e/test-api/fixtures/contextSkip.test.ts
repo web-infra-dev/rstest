@@ -30,7 +30,7 @@ afterEach((context) => {
   afterEachCalls++;
 
   if (context.task.name === 'skips the current test body') {
-    expect(context.task.result?.status).toBe('skip');
+    expect(context.task.result?.status).toBe('skipped');
   }
 });
 

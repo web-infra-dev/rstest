@@ -6,6 +6,7 @@ import {
   buildBrowserCoverageMap,
   type ExecutorCycleOutcome,
   type ExecutorInvalidationCallback,
+  type ExecutorRunCycleOptions,
   type ListBrowserTestsOptions,
   color,
   CompileFailedError,
@@ -25,11 +26,13 @@ import {
   projectRuntimeConfig,
   PhaseTracker,
   type RunnerEventSink,
+  type RawTestFileResult,
+  type RawTestResult,
+  type RawUserConsoleLog,
   resolveSnapshotPathDefault,
   serializableConfig,
   type TestFileResult,
   type TestResult,
-  type UserConsoleLog,
 } from '@rstest/core/internal/browser';
 import { basename, dirname, join, normalize } from 'pathe';
 import { getTestPathKey } from './pathUtils';
@@ -274,6 +277,7 @@ export type BrowserControllerOptions = BrowserTestRunOptions & {
    * explicit request may wait for (see `signalInvalidation`).
    */
   onInvalidate?: ExecutorInvalidationCallback;
+  onSelected?: ExecutorRunCycleOptions['onSelected'];
 };
 
 export type BrowserControllerResult = BrowserTestRunResult & {
@@ -707,9 +711,7 @@ export const runBrowserController = async (
    * The watch session both transports hand back. Only `execute` differs — the
    * cycle's timing, its fatal-error capture window, and the error-to-outcome
    * precedence are one contract with core, so they live in one place.
-   *
-   * `execute`'s synchronous prefix runs before `runCycle` ever suspends, which
-   * is what lets the headed transport claim its cycle scope inside it.
+   * Execution starts only after core has reported the selected scope.
    */
   const createWatchSession = (
     execute: (
@@ -717,7 +719,7 @@ export const runBrowserController = async (
       updateSnapshot: BrowserHostConfig['snapshot']['updateSnapshot'],
     ) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
-    runCycle: async (testPaths, updateSnapshot) => {
+    runCycle: async (testPaths, updateSnapshot, onSelected) => {
       // Signalled by a rebuild that ended in `compiler.hooks.failed`: nothing
       // was emitted, so this cycle reports the failure instead of rerunning
       // tests.
@@ -732,6 +734,15 @@ export const runBrowserController = async (
           failure: 'fatal',
         };
       }
+      const selectedPaths = new Set(testPaths.map(getTestPathKey));
+      await onSelected?.(
+        watchState.lastTestFiles
+          .filter((file) => selectedPaths.has(getTestPathKey(file.testPath)))
+          .map((file) => ({
+            testPath: file.testPath,
+            project: file.projectName,
+          })),
+      );
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
       // headed scheduler also uses this ref to stop the rest of a failed cycle,
@@ -813,6 +824,17 @@ export const runBrowserController = async (
       projectName: entry.project.name,
     })),
   );
+  try {
+    await options?.onSelected?.(
+      allTestFiles.map((file) => ({
+        testPath: file.testPath,
+        project: file.projectName,
+      })),
+    );
+  } catch (error) {
+    await destroyBrowserRuntime(runtime);
+    throw error;
+  }
 
   // Only include browser mode projects in runtime configs
   // Normalize projectRoot to posix format for cross-platform compatibility
@@ -1372,7 +1394,9 @@ export const runBrowserController = async (
     sinkForProjectName(payload.project).onTestCaseStart(payload);
   };
 
-  const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
+  const handleTestCaseResult = async (
+    payload: RawTestResult,
+  ): Promise<void> => {
     const screenshotKey = getFailureScreenshotKey(
       payload.project,
       payload.testPath,
@@ -1381,9 +1405,9 @@ export const runBrowserController = async (
     const failureScreenshot = failureScreenshots.get(screenshotKey);
     failureScreenshots.delete(screenshotKey);
     let screenshotPathToRemove: string | undefined;
-    if (payload.status === 'fail' && failureScreenshot) {
+    if (payload.status === 'failed' && failureScreenshot) {
       logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
-    } else if (payload.status !== 'fail') {
+    } else if (payload.status !== 'failed') {
       const project = browserProjects.find(
         (item) => item.name === payload.project,
       );
@@ -1398,11 +1422,13 @@ export const runBrowserController = async (
           })
         : failureScreenshot;
     }
-    caseResults.push(payload);
+    const result = await sinkForProjectName(payload.project).onTestCaseResult(
+      payload,
+    );
+    caseResults.push(result);
     phaseTrackers
       ?.get(trackerKey(payload.project, payload.testPath))
       ?.recordCaseResult(payload);
-    await sinkForProjectName(payload.project).onTestCaseResult(payload);
 
     silentConsoleControllerForProjectName(
       payload.project,
@@ -1425,7 +1451,7 @@ export const runBrowserController = async (
   };
 
   const handleTestFileComplete = async (
-    payload: TestFileResult,
+    payload: RawTestFileResult,
   ): Promise<void> => {
     const key = trackerKey(payload.project, payload.testPath);
     const screenshotCounts = screenshotCountsByFile.get(key);
@@ -1449,9 +1475,6 @@ export const runBrowserController = async (
         unmatched: snapshotResult.unmatched + screenshotCounts.unmatched,
       };
     }
-    reporterResults.push(payload);
-    context.updateReporterResultState([payload], payload.results);
-
     if (phaseTrackers) {
       const key = trackerKey(payload.project, payload.testPath);
       const tracker = phaseTrackers.get(key);
@@ -1473,13 +1496,15 @@ export const runBrowserController = async (
       testPath: payload.testPath,
     });
 
-    // Feeds stateManager, fans out onTestFileResult to reporters, and ingests
-    // payload.snapshotResult (the snapshotManager.add moved into the sink).
-    await sinkForProjectName(payload.project).onTestFileResult(payload);
+    const result = await sinkForProjectName(payload.project).onTestFileResult(
+      payload,
+    );
+    reporterResults.push(result);
+    context.updateReporterResultState([result], result.results);
   };
 
   const handleLog = async (payload: LogPayload): Promise<void> => {
-    const log: UserConsoleLog = {
+    const log: RawUserConsoleLog = {
       content: payload.content,
       // Same colored level label as the node worker's CustomConsole.
       name: getPrettyConsoleName(payload.level),
@@ -1636,9 +1661,7 @@ export const runBrowserController = async (
       buildTime,
       testTime,
     },
-    hasFailure: reporterResults.some(
-      (result: TestFileResult) => result.status === 'fail',
-    ),
+    hasFailure: reporterResults.some((result) => result.status === 'failed'),
     rawCoverage,
     loadAssetFiles: loadBrowserCoverageAssetFiles,
     loadSourceMaps: loadBrowserCoverageSourceMaps,

@@ -14,7 +14,7 @@ type TestSuiteTitleProps = {
 };
 
 /** Statuses that trigger a flash animation on icon change */
-const FLASH_STATUSES: CaseStatus[] = ['pass', 'fail', 'skip'];
+const FLASH_STATUSES: CaseStatus[] = ['passed', 'failed', 'skipped'];
 
 export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
   icon,

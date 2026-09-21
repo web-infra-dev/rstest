@@ -22,7 +22,7 @@ import {
   type InspectOptions,
   inspect,
 } from 'node:util';
-import type { CurrentTaskInfo, UserConsoleLog } from '../../types';
+import type { CurrentTaskInfo, RawUserConsoleLog } from '../../types';
 import { prettyTime } from '../../utils/helper';
 import { color } from '../../utils/logger';
 
@@ -69,7 +69,7 @@ export function createCustomConsole({
   printConsoleTrace,
   getCurrentTask,
 }: {
-  onConsoleLog: (log: UserConsoleLog) => void;
+  onConsoleLog: (log: RawUserConsoleLog) => void;
   testPath: string;
   project: string;
   printConsoleTrace: boolean;

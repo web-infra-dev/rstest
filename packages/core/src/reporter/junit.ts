@@ -143,10 +143,12 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
-    const failures = testCases.filter((test) => test.status === 'fail').length;
+    const failures = testCases.filter(
+      (test) => test.status === 'failed',
+    ).length;
     const errors = 0; // No separate error tracking; set to 0 for clarity
     const skipped = testCases.filter(
-      (test) => test.status === 'skip' || test.status === 'todo',
+      (test) => test.status === 'skipped' || test.status === 'todo',
     ).length;
     const totalTime = testCases.reduce((sum, test) => sum + test.time, 0);
 
@@ -178,10 +180,10 @@ export class JUnitReporter implements Reporter {
             let testcaseXml = `
     <testcase name="${this.escapeXml(testcase.name)}" classname="${this.escapeXml(testcase.classname)}" time="${testcase.time}">`;
 
-            if (testcase.status === 'skip' || testcase.status === 'todo') {
+            if (testcase.status === 'skipped' || testcase.status === 'todo') {
               testcaseXml += `
       <skipped/>`;
-            } else if (testcase.status === 'fail' && testcase.errors) {
+            } else if (testcase.status === 'failed' && testcase.errors) {
               testcase.errors.forEach((error) => {
                 testcaseXml += `
       <failure message="${error.message}" type="${error.type}">${error.details || ''}</failure>`;
@@ -232,11 +234,11 @@ export class JUnitReporter implements Reporter {
 
     const totalTests = testResults.length;
     const totalFailures = testResults.filter(
-      (test) => test.status === 'fail',
+      (test) => test.status === 'failed',
     ).length;
     const totalErrors = 0; // This framework does not distinguish between failures and errors, so errors are always reported as zero.
     const totalSkipped = testResults.filter(
-      (test) => test.status === 'skip' || test.status === 'todo',
+      (test) => test.status === 'skipped' || test.status === 'todo',
     ).length;
     const totalTime = duration.testTime / 1000; // Convert to seconds
 

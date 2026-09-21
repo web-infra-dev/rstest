@@ -902,7 +902,7 @@ export function createCli(): CAC {
           path,
           cleanup: options.cleanup,
         });
-        if (result.status !== 'pass') {
+        if (result.status !== 'passed') {
           setHostExitCode(1);
         }
       } catch (err) {

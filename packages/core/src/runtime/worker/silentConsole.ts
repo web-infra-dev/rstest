@@ -1,4 +1,4 @@
-import type { RuntimeConfig, UserConsoleLog } from '../../types';
+import type { RawUserConsoleLog, RuntimeConfig } from '../../types';
 import { getFileTaskId } from '../../utils/helper';
 
 type ConsoleWriter = (payload: {
@@ -6,7 +6,7 @@ type ConsoleWriter = (payload: {
   type: 'stderr' | 'stdout';
 }) => void;
 
-const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+const getBufferedLogTaskId = (log: RawUserConsoleLog): string => {
   if (log.taskId) {
     return log.taskId;
   }
@@ -30,13 +30,13 @@ export const createSilentConsoleController = ({
   writeOriginalLog,
 }: {
   runtimeConfig: Pick<RuntimeConfig, 'disableConsoleIntercept' | 'silent'>;
-  emitInterceptedLog: (log: UserConsoleLog) => Promise<void> | void;
+  emitInterceptedLog: (log: RawUserConsoleLog) => Promise<void> | void;
   writeOriginalLog: ConsoleWriter;
 }) => {
-  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+  const bufferedConsoleLogs = new Map<string, RawUserConsoleLog[]>();
   const suiteIdsByChain = new Map<string, string>();
 
-  const emitLog = (log: UserConsoleLog): void => {
+  const emitLog = (log: RawUserConsoleLog): void => {
     if (runtimeConfig.disableConsoleIntercept) {
       writeOriginalLog({
         content: `${log.content}\n`,
@@ -49,7 +49,7 @@ export const createSilentConsoleController = ({
   };
 
   return {
-    onConsoleLog(log: UserConsoleLog): void {
+    onConsoleLog(log: RawUserConsoleLog): void {
       if (runtimeConfig.silent === true) {
         return;
       }
@@ -83,12 +83,12 @@ export const createSilentConsoleController = ({
       testPath,
     }: {
       taskId: string;
-      status: 'skip' | 'pass' | 'fail' | 'todo';
+      status: 'skipped' | 'passed' | 'failed' | 'todo';
       taskParentNames?: string[];
       taskType?: 'file' | 'suite' | 'case';
       testPath: string;
     }): void {
-      if (status !== 'fail') {
+      if (status !== 'failed') {
         bufferedConsoleLogs.delete(taskId);
         return;
       }

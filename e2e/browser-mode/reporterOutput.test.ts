@@ -29,7 +29,7 @@ describe('browser mode - browser-only reporter output', () => {
 
     const report = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
     expect(report.tool).toBe('rstest');
-    expect(report.status).toBe('pass');
+    expect(report.status).toBe('passed');
     expect(report.summary.tests).toBe(2);
     expect(report.summary.passedTests).toBe(2);
 

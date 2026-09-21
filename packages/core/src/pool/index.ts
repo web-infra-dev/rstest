@@ -9,9 +9,11 @@ import type {
   InternalProjectContext,
   RuntimeConfig,
   RuntimeRPC,
+  RawTestFileResult,
+  RawTestInfo,
+  RawTestResult,
   TestCaseInfo,
   TestFileResult,
-  TestInfo,
   TestResult,
   TestEnvironmentModuleReference,
 } from '../types';
@@ -310,7 +312,7 @@ const workerErrorToResult = (
   testPath: string,
   projectName: string,
   context: InternalContext,
-): { fileResult: TestFileResult; crashedResults: TestResult[] } => {
+): { fileResult: RawTestFileResult; crashedResults: RawTestResult[] } => {
   const error = toSerializedError(toError(err));
 
   error.fullStack = true;
@@ -326,8 +328,8 @@ const workerErrorToResult = (
   const runningTests = runningModule?.runningTests;
   const completedResults = runningModule?.results || [];
 
-  let results = completedResults;
-  let crashedResults: TestResult[] = [];
+  let results: RawTestResult[] = completedResults;
+  let crashedResults: RawTestResult[] = [];
   // The crash error stays at the file level unless we can attribute it to a
   // running case below, in which case it moves onto that case.
   let errors = [error];
@@ -348,7 +350,7 @@ const workerErrorToResult = (
 
     crashedResults = runningTests.map((test) => ({
       testId: test.testId,
-      status: 'fail',
+      status: 'failed',
       name: test.name,
       testPath: test.testPath,
       parentNames: test.parentNames,
@@ -367,7 +369,7 @@ const workerErrorToResult = (
       testId: getFileTaskId(testPath),
       project: projectName,
       testPath,
-      status: 'fail',
+      status: 'failed',
       name: '',
       results,
       errors,
@@ -408,7 +410,7 @@ export const createPool = async ({
   }>;
   collectTests: (params: PoolDispatchParams) => Promise<
     {
-      tests: TestInfo[];
+      tests: RawTestInfo[];
       testPath: string;
       errors?: SerializedError[];
       project: string;
@@ -606,11 +608,7 @@ export const createPool = async ({
               // manager is intentionally not touched here to avoid
               // double-counting.
               for (const caseResult of crashedResults) {
-                await Promise.all(
-                  context.reporters.map((reporter) =>
-                    reporter.onTestCaseResult?.(caseResult),
-                  ),
-                );
+                await sink.emitTestCaseResult(caseResult);
               }
               return fileResult;
             });
@@ -638,8 +636,8 @@ export const createPool = async ({
               onTraceEvents?.(result.traceEvents);
               delete result.traceEvents;
             }
-            await sink.onTestFileResult(result);
-            return { result, bundleCoverage };
+            const enrichedResult = await sink.onTestFileResult(result);
+            return { result: enrichedResult, bundleCoverage };
           } finally {
             // Unblock the next entry even if `buildTask` threw before the
             // dispatch above ran — otherwise the whole chain would deadlock.

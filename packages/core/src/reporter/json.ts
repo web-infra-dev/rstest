@@ -23,7 +23,7 @@ import {
 type JsonReport = {
   tool: 'rstest';
   version: string;
-  status: 'pass' | 'fail';
+  status: TestRunEndPayload['status'];
   summary: {
     testFiles: number;
     failedFiles: number;
@@ -57,18 +57,18 @@ type JsonReport = {
       fullName: string;
     }
   >;
-  consoleLogs?: Array<UserConsoleLog & { testPath: string }>;
+  consoleLogs?: Array<
+    Omit<UserConsoleLog, 'relativeTestPath'> & { testPath: string }
+  >;
   unhandledErrors?: { message: string; stack?: string; name?: string }[];
 };
 
 export class JsonReporter implements Reporter {
-  private readonly config: NormalizedConfig;
   private readonly rootPath: string;
   private readonly outputPath?: string;
   private logs: UserConsoleLog[] = [];
 
   constructor({
-    config,
     rootPath,
     options,
   }: {
@@ -76,7 +76,6 @@ export class JsonReporter implements Reporter {
     rootPath: string;
     options?: JsonReporterOptions;
   }) {
-    this.config = config;
     this.rootPath = rootPath;
     this.outputPath = options?.outputPath;
   }
@@ -113,18 +112,12 @@ export class JsonReporter implements Reporter {
     snapshotSummary,
     unhandledErrors,
     summary,
+    status,
   }: TestRunEndPayload): JsonReport {
-    const noTestsDiscovered = results.length === 0 && testResults.length === 0;
-    const hasFailedStatus =
-      summary.tests.failed > 0 ||
-      summary.files.failed > 0 ||
-      unhandledErrors.length > 0 ||
-      (noTestsDiscovered && !this.config.passWithNoTests);
-
     return {
       tool: 'rstest',
       version: RSTEST_VERSION,
-      status: hasFailedStatus ? 'fail' : 'pass',
+      status,
       summary: toReportCounts(summary),
       durationMs: toReportDuration(duration),
       snapshot: snapshotSummary,
@@ -136,9 +129,9 @@ export class JsonReporter implements Reporter {
       })),
       tests: testResults.map((test) => this.normalizeTest(test)),
       consoleLogs: this.logs.length
-        ? this.logs.map((log) => ({
+        ? this.logs.map(({ relativeTestPath, ...log }) => ({
             ...log,
-            testPath: relative(this.rootPath, log.testPath),
+            testPath: relativeTestPath,
           }))
         : undefined,
       unhandledErrors: unhandledErrors.map((error) => ({

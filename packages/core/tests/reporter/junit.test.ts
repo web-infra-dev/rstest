@@ -13,17 +13,21 @@ describe('JUnitReporter', () => {
     const mockTestResults: TestResult[] = [
       {
         testId: 'test-1',
-        status: 'pass',
+        status: 'passed',
         name: 'should pass',
+        fullName: 'should pass',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 100,
         project: 'default',
       },
       {
         testId: 'test-2',
-        status: 'fail',
+        status: 'failed',
         name: 'should fail',
+        fullName: 'should fail',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 200,
         errors: [
           {
@@ -37,9 +41,11 @@ describe('JUnitReporter', () => {
       },
       {
         testId: 'test-3',
-        status: 'skip',
+        status: 'skipped',
         name: 'should skip',
+        fullName: 'should skip',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 0,
         project: 'default',
       },
@@ -48,12 +54,22 @@ describe('JUnitReporter', () => {
     const mockFileResults: TestFileResult[] = [
       {
         testId: 'test-4',
-        status: 'fail',
+        status: 'failed',
         name: 'test1.test.ts',
+        fullName: 'test1.test.ts',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 300,
         results: mockTestResults,
         project: 'default',
+        summary: {
+          total: 3,
+          passed: 1,
+          failed: 1,
+          skipped: 1,
+          todo: 0,
+          flaky: 0,
+        },
       },
     ];
 
@@ -144,9 +160,11 @@ describe('JUnitReporter', () => {
     const mockTestResults: TestResult[] = [
       {
         testId: 'test-5',
-        status: 'fail',
+        status: 'failed',
         name: 'test with <xml> & "quotes" & \'apos\'',
+        fullName: 'test with <xml> & "quotes" & \'apos\'',
         testPath: '/test/root/test.test.ts',
+        relativeTestPath: 'test.test.ts',
         duration: 100,
         errors: [
           {
@@ -162,12 +180,22 @@ describe('JUnitReporter', () => {
     const mockFileResults: TestFileResult[] = [
       {
         testId: 'test-6',
-        status: 'fail',
+        status: 'failed',
         name: 'test.test.ts',
+        fullName: 'test.test.ts',
         testPath: '/test/root/test.test.ts',
+        relativeTestPath: 'test.test.ts',
         duration: 100,
         results: mockTestResults,
         project: 'default',
+        summary: {
+          total: 1,
+          passed: 0,
+          failed: 1,
+          skipped: 0,
+          todo: 0,
+          flaky: 0,
+        },
       },
     ];
 

@@ -6,6 +6,7 @@ export default replayConfig({
   include: ['lifecycle.test.ts'],
   reporters: [
     new LifecycleRecorder(),
+    ['../fixtures/contract-reporter.mjs', { marker: 'replay' }],
     'blob',
     {
       async onTestCaseResult() {
