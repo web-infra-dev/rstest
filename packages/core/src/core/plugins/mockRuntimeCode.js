@@ -146,6 +146,7 @@ __webpack_require__ = new Proxy(__webpack_require__, {
 //#endregion
 
 __webpack_require__.rstest_original_modules = {};
+__webpack_require__.rstest_original_module_values = {};
 __webpack_require__.rstest_original_module_factories = {};
 
 // Clean request (e.g. `node:child_process`) -> the module id the mock was
@@ -198,6 +199,7 @@ const restoreOriginalFactory = (id) => {
   if (factory) {
     __webpack_modules__[id] = factory;
   }
+  delete __webpack_require__.rstest_original_module_values[id];
   delete __webpack_module_cache__[id];
 };
 
@@ -207,6 +209,39 @@ const captureOriginalFactory = (id) => {
   if (!hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
     __webpack_require__.rstest_original_module_factories[id] =
       __webpack_modules__[id];
+  }
+};
+
+// Evaluate an original module in an isolated module record. Auto-mocks use
+// this only when their replacement is first required, so registering a mock
+// does not execute the target or its dependency graph.
+const evaluateOriginalModule = (id) => {
+  if (hasOwn(__webpack_require__.rstest_original_modules, id)) {
+    return __webpack_require__.rstest_original_modules[id];
+  }
+  if (hasOwn(__webpack_require__.rstest_original_module_values, id)) {
+    return __webpack_require__.rstest_original_module_values[id];
+  }
+
+  const factory = __webpack_require__.rstest_original_module_factories[id];
+  if (!factory) {
+    return undefined;
+  }
+
+  const mockedFactory = __webpack_modules__[id];
+  const mockedCacheEntry = __webpack_module_cache__[id];
+  delete __webpack_module_cache__[id];
+  __webpack_modules__[id] = factory;
+  try {
+    const originalModule = __webpack_require__(id);
+    __webpack_require__.rstest_original_module_values[id] = originalModule;
+    return originalModule;
+  } finally {
+    __webpack_modules__[id] = mockedFactory;
+    delete __webpack_module_cache__[id];
+    if (mockedCacheEntry) {
+      __webpack_module_cache__[id] = mockedCacheEntry;
+    }
   }
 };
 
@@ -269,16 +304,8 @@ __webpack_require__.rstest_do_unmock_require =
 //#region rs.requireActual
 __webpack_require__.rstest_require_actual =
   __webpack_require__.rstest_import_actual = (id) => {
-    if (hasOwn(__webpack_require__.rstest_original_modules, id)) {
-      return __webpack_require__.rstest_original_modules[id];
-    }
-
     if (hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
-      const mod = __webpack_require__.rstest_original_module_factories[id];
-      const moduleInstance = { exports: {} };
-      mod(moduleInstance, moduleInstance.exports, __webpack_require__);
-      __webpack_require__.rstest_original_modules[id] = moduleInstance.exports;
-      return moduleInstance.exports;
+      return evaluateOriginalModule(id);
     }
     // Use fallback module if the module is not mocked.
     return __webpack_require__(id);
@@ -336,52 +363,70 @@ const getMockImplementation = (mockType = 'mock') => {
         );
       }
 
-      // For spy/mock options, we need the original module
-      // If it wasn't already loaded, load it now (unavoidable for this feature)
-      if (!wasAlreadyLoaded) {
-        try {
-          requiredModule = __webpack_require__(id);
-        } catch {
+      const createMockFactory = (originalModule) => {
+        if (!originalModule) {
           const optionName = isSpy ? 'spy' : 'mock';
           throw new Error(
             `[Rstest] rs.${mockType}('${id}', { ${optionName}: true }) failed: cannot load original module`,
           );
         }
-      }
 
-      if (!requiredModule) {
-        const optionName = isSpy ? 'spy' : 'mock';
-        throw new Error(
-          `[Rstest] rs.${mockType}('${id}', { ${optionName}: true }) failed: cannot load original module`,
-        );
-      }
-      const mockedModule = isPromise(requiredModule)
-        ? requiredModule.then((originalModule) =>
-            createMockedModule(originalModule, isSpy),
-          )
-        : createMockedModule(requiredModule, isSpy);
+        const mockedModule = isPromise(originalModule)
+          ? originalModule.then((resolvedModule) =>
+              createMockedModule(resolvedModule, isSpy),
+            )
+          : createMockedModule(originalModule, isSpy);
 
-      const finalModFactory = function (
-        __webpack_module__,
-        __webpack_exports__,
-        __webpack_require__,
-      ) {
-        if (isPromise(mockedModule)) {
-          __webpack_module__.exports = mockedModule;
-          return;
-        }
-
-        if (isMockRequire) {
-          __webpack_module__.exports = mockedModule;
-          return;
-        }
-
-        defineExportsWithCjsInterop(
-          mockedModule,
+        return function (
+          __webpack_module__,
           __webpack_exports__,
           __webpack_require__,
-        );
+        ) {
+          if (isPromise(mockedModule)) {
+            __webpack_module__.exports = mockedModule;
+            return;
+          }
+
+          if (isMockRequire) {
+            __webpack_module__.exports = mockedModule;
+            return;
+          }
+
+          defineExportsWithCjsInterop(
+            mockedModule,
+            __webpack_exports__,
+            __webpack_require__,
+          );
+        };
       };
+
+      // If the target was already loaded, preserve the existing behavior and
+      // mock that instance immediately. Otherwise defer evaluation until the
+      // mocked module is first required, after all hoisted mock registrations
+      // have completed.
+      const finalModFactory = wasAlreadyLoaded
+        ? createMockFactory(requiredModule)
+        : function (
+            __webpack_module__,
+            __webpack_exports__,
+            __webpack_require__,
+          ) {
+            let originalModule;
+            try {
+              originalModule = evaluateOriginalModule(id);
+            } catch {
+              const optionName = isSpy ? 'spy' : 'mock';
+              throw new Error(
+                `[Rstest] rs.${mockType}('${id}', { ${optionName}: true }) failed: cannot load original module`,
+              );
+            }
+
+            createMockFactory(originalModule)(
+              __webpack_module__,
+              __webpack_exports__,
+              __webpack_require__,
+            );
+          };
 
       installFactory(finalModFactory);
       return;

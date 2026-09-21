@@ -38,6 +38,16 @@ describe('rs.mock with { mock: true }', () => {
     expect(increment(999)).toBe(100);
   });
 
+  it('recreates the mocked module after resetModules', async () => {
+    const first = await import('../src/increment');
+
+    rs.resetModules();
+
+    const second = await import('../src/increment');
+    expect(second).not.toBe(first);
+    expect(rs.isMockFunction(second.increment)).toBe(true);
+  });
+
   it('should allow configuring mock implementations', async () => {
     const { increment } = await import('../src/increment');
 
