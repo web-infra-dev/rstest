@@ -1,8 +1,48 @@
+import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
+import { WebSocket, WebSocketServer } from 'ws';
 import {
   createBrowserContextExcludeRegExp,
+  destroyBrowserRuntime,
+  type BrowserRuntime,
   toContextKey,
 } from '../src/browserRsbuild';
+
+describe('browser runtime lifecycle', () => {
+  it('waits for the WebSocket server to close before resolving teardown', async () => {
+    const wss = new WebSocketServer({ port: 0 });
+    await once(wss, 'listening');
+    const address = wss.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('WebSocket server did not expose a TCP address.');
+    }
+
+    const client = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    await once(client, 'open');
+    const runtime = {
+      browser: { close: async () => {} },
+      projectServers: new Map(),
+      tempDir: join(tmpdir(), 'rstest-browser-runtime-test'),
+      wss,
+    } as BrowserRuntime;
+    let teardownSettled = false;
+    const teardown = destroyBrowserRuntime(runtime).then(() => {
+      teardownSettled = true;
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(teardownSettled).toBe(false);
+    } finally {
+      const clientClosed = once(client, 'close');
+      client.close();
+      await clientClosed;
+      await teardown;
+    }
+  });
+});
 
 describe('browser config resolution', () => {
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {
