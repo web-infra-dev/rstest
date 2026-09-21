@@ -13,22 +13,20 @@
 // classification, not parsing (is this token a path? an npm name?).
 //
 // Checks (all deterministic, no prose/semantic judgment):
-//   C1 — every AGENTS.md has a sibling CLAUDE.md that is a symlink to AGENTS.md
-//        (git mode 120000 when tracked).
-//   C2 — root AGENTS.md references every packages/*/AGENTS.md by path, and its
+//   C1 — root AGENTS.md references every packages/*/AGENTS.md by path, and its
 //        "Monorepo structure" section lists every direct child of packages/.
-//   C3 — commands in ```bash fences (`shell-quote` splits words, strips quotes,
+//   C2 — commands in ```bash fences (`shell-quote` splits words, strips quotes,
 //        and drops comments): `pnpm --filter <pkg> <script>` scripts
 //        exist in the target package; `npm run <script>` scripts exist in the
 //        doc's owning package; bare `pnpm <script>` resolves to a root script
 //        (or, in a package doc, to a root or owning-package script).
-//   C4 — inline-code tokens shaped like repo paths exist on disk (resolved
+//   C3 — inline-code tokens shaped like repo paths exist on disk (resolved
 //        against the doc's directory first, then the doc's owning package dir,
 //        then the repo root). Trailing
 //        `:line` anchors are stripped — paths are validated, line numbers are
 //        not. Runtime/output prefixes (dist/, coverage/, node_modules/,
 //        .rstest-temp) are skipped by rule, not allowlist.
-//   C5 — inline-code npm-name tokens inside `## Dependencies` / `## Tech stack`
+//   C4 — inline-code npm-name tokens inside `## Dependencies` / `## Tech stack`
 //        sections of a package doc must appear in that package's package.json
 //        (deps/devDeps/peerDeps/optionalDeps). Bare single-word tokens are only
 //        checked when they are a known dependency name somewhere in the
@@ -36,8 +34,7 @@
 //
 // Doc set: tracked plus untracked-but-not-ignored files, so newly written docs
 // are gated before their first commit (identical to plain `git ls-files` once
-// everything is committed). AGENTS.md is the content source; CLAUDE.md is only
-// checked structurally (C1).
+// everything is committed).
 //
 // Allowlist: scripts/harness/check-harness-docs.allow.json — `{file, token,
 // reason}` entries suppress a violation whose doc path and offending token both
@@ -51,13 +48,7 @@
 // owns that), no auto-fix.
 
 import { execFileSync } from 'node:child_process';
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-} from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { argv, exit, stdout } from 'node:process';
 import { Lexer } from 'marked';
@@ -86,15 +77,6 @@ const docFiles = git([
   .split('\n')
   .filter(Boolean)
   .sort();
-
-/** Git index modes for CLAUDE.md files, path → mode (e.g. '120000'). */
-const trackedClaudeModes = new Map(
-  git(['ls-files', '-s', '--', '*CLAUDE.md'])
-    .split('\n')
-    .filter(Boolean)
-    // `git ls-files -s` line shape: `<mode> <hash> <stage>\t<path>`.
-    .map((line) => [line.split('\t')[1], line.split(' ')[0]]),
-);
 
 // ---------------------------------------------------------------------------
 // Workspace model: package dirs, name → dir, script tables, dependency names.
@@ -185,7 +167,7 @@ const DEP_FIELDS = [
 
 /** Workspace package name → absolute dir. */
 const nameToDir = new Map();
-/** Every dependency name declared anywhere in the workspace (for C5 gating). */
+/** Every dependency name declared anywhere in the workspace (for C4 gating). */
 const knownDepNames = new Set();
 for (const dir of workspaceDirs) {
   const pkg = readPkg(dir);
@@ -216,9 +198,9 @@ function declaredDeps(dir) {
 // ---------------------------------------------------------------------------
 
 /**
- * Flatten a doc into ordered events: `heading` (section state for C2/C5),
- * `command` (one per line of a ```bash fence, for C3) and `codespan` (inline
- * code outside code blocks, for C4/C5).
+ * Flatten a doc into ordered events: `heading` (section state for C1/C4),
+ * `command` (one per line of a ```bash fence, for C2) and `codespan` (inline
+ * code outside code blocks, for C3/C4).
  *
  * marked owns the grammar, so info strings, longer fences and inline code in
  * tables, lists and blockquotes are seen the way a renderer sees them. Line
@@ -336,61 +318,7 @@ function report(check, file, line, token, message) {
 }
 
 // ---------------------------------------------------------------------------
-// C1 — CLAUDE.md symlink integrity.
-// ---------------------------------------------------------------------------
-
-for (const doc of docFiles) {
-  if (!doc.endsWith('AGENTS.md')) continue;
-  const claudeRel = join(dirname(doc), 'CLAUDE.md');
-  const claudeAbs = join(repoRoot, claudeRel);
-  let stat;
-  try {
-    stat = lstatSync(claudeAbs);
-  } catch {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      `missing CLAUDE.md symlink next to ${doc} (fix: ln -s AGENTS.md ${claudeRel})`,
-    );
-    continue;
-  }
-  if (!stat.isSymbolicLink()) {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      'CLAUDE.md must be a symlink to AGENTS.md, found a regular file',
-    );
-    continue;
-  }
-  const target = readlinkSync(claudeAbs);
-  if (target !== 'AGENTS.md') {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      `CLAUDE.md symlink points to ${target}, expected AGENTS.md`,
-    );
-    continue;
-  }
-  const mode = trackedClaudeModes.get(claudeRel);
-  if (mode !== undefined && mode !== '120000') {
-    report(
-      'C1',
-      claudeRel,
-      null,
-      'CLAUDE.md',
-      `CLAUDE.md tracked with git mode ${mode}, expected symlink mode 120000`,
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// C2 — root index completeness.
+// C1 — root index completeness.
 // ---------------------------------------------------------------------------
 
 const rootDoc = parsedDoc('AGENTS.md').text;
@@ -410,7 +338,7 @@ const structureSection = (() => {
 })();
 if (structureSection === null) {
   report(
-    'C2',
+    'C1',
     'AGENTS.md',
     null,
     'Monorepo structure',
@@ -428,7 +356,7 @@ for (const entry of readdirSync(join(repoRoot, 'packages'), {
     !rootDoc.includes(`packages/${name}/AGENTS.md`)
   ) {
     report(
-      'C2',
+      'C1',
       'AGENTS.md',
       null,
       `packages/${name}/AGENTS.md`,
@@ -440,7 +368,7 @@ for (const entry of readdirSync(join(repoRoot, 'packages'), {
     !structureSection.includes(`\`packages/${name}/\``)
   ) {
     report(
-      'C2',
+      'C1',
       'AGENTS.md',
       null,
       `packages/${name}/`,
@@ -450,7 +378,7 @@ for (const entry of readdirSync(join(repoRoot, 'packages'), {
 }
 
 // ---------------------------------------------------------------------------
-// C3 — command/script validity in ```bash fences.
+// C2 — command/script validity in ```bash fences.
 // ---------------------------------------------------------------------------
 
 // pnpm subcommands / bins that are not workspace scripts.
@@ -513,7 +441,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
         : nameToDir.get(spec);
       if (!pkgDir || !readPkg(pkgDir)) {
         report(
-          'C3',
+          'C2',
           doc,
           line,
           command,
@@ -524,7 +452,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
       if (isScriptPlaceholder(script)) continue;
       if (!scriptsOf(pkgDir).has(script)) {
         report(
-          'C3',
+          'C2',
           doc,
           line,
           command,
@@ -540,7 +468,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
       const owning = owningPackageDir(docDirAbs);
       if (!scriptsOf(owning).has(script)) {
         report(
-          'C3',
+          'C2',
           doc,
           line,
           command,
@@ -563,7 +491,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
         (owning !== repoRoot && scriptsOf(owning).has(word));
       if (!ok) {
         report(
-          'C3',
+          'C2',
           doc,
           line,
           command,
@@ -575,7 +503,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
 }
 
 // ---------------------------------------------------------------------------
-// C4 — inline-code path existence.
+// C3 — inline-code path existence.
 // ---------------------------------------------------------------------------
 
 // Runtime/output paths: never on disk in a clean checkout, skipped by rule.
@@ -633,7 +561,7 @@ function checkPathToken(doc, docDirAbs, owningDirAbs, line, token) {
   if (existsSync(resolve(owningDirAbs, path))) return;
   if (existsSync(resolve(repoRoot, path))) return;
   report(
-    'C4',
+    'C3',
     doc,
     line,
     token,
@@ -642,7 +570,7 @@ function checkPathToken(doc, docDirAbs, owningDirAbs, line, token) {
 }
 
 // ---------------------------------------------------------------------------
-// C5 — dependency-name claims in Dependencies / Tech stack sections.
+// C4 — dependency-name claims in Dependencies / Tech stack sections.
 // ---------------------------------------------------------------------------
 
 const DEP_SECTION_RE = /^(?:Dependencies|Tech stack)$/i;
@@ -664,7 +592,7 @@ function checkDepToken(doc, pkgDir, line, token) {
   }
   if (!declaredDeps(pkgDir).has(name)) {
     report(
-      'C5',
+      'C4',
       doc,
       line,
       token,
@@ -674,7 +602,7 @@ function checkDepToken(doc, pkgDir, line, token) {
 }
 
 // ---------------------------------------------------------------------------
-// Scan every doc for C3/C4/C5.
+// Scan every doc for C2/C3/C4.
 // ---------------------------------------------------------------------------
 
 for (const doc of docFiles) {
@@ -695,7 +623,7 @@ for (const doc of docFiles) {
     }
 
     checkPathToken(doc, docDirAbs, owning, event.line, event.text);
-    // C5 only applies to package docs (root has no dependency sections).
+    // C4 only applies to package docs (root has no dependency sections).
     if (depSectionLevel > 0 && owning !== repoRoot) {
       checkDepToken(doc, owning, event.line, event.text);
     }

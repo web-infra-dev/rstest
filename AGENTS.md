@@ -20,7 +20,7 @@ When working on code in a specific package, read that package's `AGENTS.md` file
 
 If a package does not have its own `AGENTS.md`, follow this root file and copy the closest local patterns.
 
-A new `AGENTS.md` needs a sibling `CLAUDE.md` symlink (`ln -s AGENTS.md CLAUDE.md`). `pnpm check-harness-docs` enforces that, plus the command, path, and dependency claims written inside `AGENTS.md`/`SKILL.md` files.
+`pnpm check-harness-docs` validates the package index and the command, path, and dependency claims written inside `AGENTS.md`/`SKILL.md` files.
 
 **Altitude rule**: document only what the code cannot express — cross-boundary data flow, invariants, coupling points, pitfalls — phrased as constraints on future changes. No file inventories, no `file:line` references (the checker validates paths, not line numbers — line refs are undetectable drift); refer to symbols. A claim you cannot verify gets deleted, not hedged.
 
