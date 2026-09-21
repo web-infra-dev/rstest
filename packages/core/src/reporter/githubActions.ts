@@ -18,6 +18,7 @@ import {
   TEST_DELIMITER,
 } from '../utils';
 import { formatStack } from '../utils/error';
+import { isFlakyResult } from '../utils/testSummary';
 import { getPlainSummaryStatusString } from './summary';
 import {
   buildPackageManagerReproCommand,
@@ -100,6 +101,7 @@ export class GithubActionsReporter {
     duration,
     getSourcemap,
     unhandledErrors,
+    status,
   }: TestRunEndPayload): Promise<void> {
     const failures = collectFailures({
       results,
@@ -164,6 +166,7 @@ export class GithubActionsReporter {
           failures,
           getSourcemap,
           unhandledErrors,
+          status,
           maxCharsPerField: this.summaryMaxCharsPerField,
         }),
       );
@@ -278,6 +281,7 @@ async function renderStepSummary({
   getSourcemap,
   unhandledErrors,
   maxCharsPerField,
+  status,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
@@ -288,14 +292,14 @@ async function renderStepSummary({
   getSourcemap: GetSourcemap;
   unhandledErrors: SerializedError[];
   maxCharsPerField: number;
+  status: TestRunEndPayload['status'];
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
   const packageManagerAgent = await detectPackageManagerAgent(rootPath);
   const displayPath = getStepSummaryDisplayPath(rootPath);
-  const hasUnhandledErrors = (unhandledErrors?.length ?? 0) > 0;
   const flakyTests = collectFlakyTests(testResults);
   const hasFlakyTests = flakyTests.length > 0;
-  const isSuccess = failures.length === 0 && !hasUnhandledErrors;
+  const isSuccess = status === 'passed';
   const reportIcon = isSuccess ? (hasFlakyTests ? '⚠️' : '✅') : '❌';
   const projectLabel = getStepSummaryProjectLabel({
     reportName,
@@ -479,9 +483,7 @@ function trimForSummary(input: string, maxChars: number): string {
 }
 
 function collectFlakyTests(testResults: TestResult[]): TestResult[] {
-  return testResults.filter(
-    (result) => result.status === 'pass' && (result.retryCount ?? 0) > 0,
-  );
+  return testResults.filter(isFlakyResult);
 }
 
 function getPreviousFailureSummary(testResult: TestResult): string | undefined {

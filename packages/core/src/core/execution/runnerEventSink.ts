@@ -3,17 +3,55 @@ import type {
   InternalProjectContext,
   MaybePromise,
   Reporter,
+  RawTestCaseInfo,
+  RawTestFileInfo,
+  RawTestFileResult,
+  RawTestInfo,
+  RawTestResult,
+  RawTestSuiteInfo,
+  RawUserConsoleLog,
   RuntimeRPC,
-  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
-  TestSuiteInfo,
   UserConsoleLog,
 } from '../../types';
-import { color, logger, toError } from '../../utils';
+import { relative } from 'pathe';
+import { reporterFileKey } from '../../reporter/utils';
+import { color, getTaskNameWithPrefix, logger, toError } from '../../utils';
+import { getFileSummary } from '../../utils/testSummary';
 import { resolveSnapshotPathDefault } from '../../utils/snapshotPath';
 import { BlobReporter } from '../../reporter/blob';
+
+type PendingReporterHooks = {
+  files: Map<string, Set<Promise<void>>>;
+  errors: Error[];
+};
+
+const pendingHooks = new WeakMap<InternalContext, PendingReporterHooks>();
+
+const joinHooks = async (pending: Set<Promise<void>>): Promise<void> => {
+  while (pending.size) {
+    await Promise.all(pending);
+  }
+};
+
+export async function drainReporterHooks(
+  context: InternalContext,
+): Promise<Error[]> {
+  const pending = pendingHooks.get(context);
+  if (!pending) {
+    return [];
+  }
+  for (;;) {
+    const all = [...pending.files.values()].flatMap((file) => [...file]);
+    if (!all.length) break;
+    await Promise.all(all);
+  }
+  pending.files.clear();
+  return pending.errors.splice(0);
+}
 
 /**
  * The single event pump for runner lifecycle events, shared by the node pool
@@ -40,7 +78,7 @@ interface HostDrivenEvents {
    * calls it after `pool.runTest` returns, the browser host after a client
    * file completes.
    */
-  onTestFileResult(result: TestFileResult): Promise<void>;
+  onTestFileResult(result: RawTestFileResult): Promise<TestFileResult>;
   /**
    * Reporter fanout without the filter, for output already filtered once — the
    * merge-reports replay, whose logs only reached the blob because the
@@ -49,21 +87,22 @@ interface HostDrivenEvents {
    * let a merge-side config silently swallow logs the recording run captured.
    * Carries no project-scoped behavior, so any project's sink will do.
    */
-  emitConsoleLog(log: UserConsoleLog): Promise<void>;
+  emitConsoleLog(log: RawUserConsoleLog): Promise<void>;
+  /** Emits a synthesized case result without recording it in state. */
+  emitTestCaseResult(result: RawTestResult): Promise<TestResult>;
 }
 
 export interface RunnerEventSink extends HostDrivenEvents {
-  /** FIRE-AND-FORGET on both transports (matches node's unawaited fanout). */
-  onTestCaseStart(test: TestCaseInfo): void;
   /** Attempt-local lifecycle hook; it is not exposed to reporters. */
-  onTestCaseFailure(test: TestCaseInfo): Promise<void>;
-  onTestFileStart(test: TestFileInfo): Promise<void>;
-  onTestFileReady(test: TestFileInfo): Promise<void>;
-  onTestSuiteStart(test: TestSuiteInfo): Promise<void>;
-  onTestSuiteResult(result: TestResult): Promise<void>;
-  onTestCaseResult(result: TestResult): Promise<void>;
+  onTestCaseFailure(test: RawTestCaseInfo): Promise<void>;
+  onTestCaseStart(test: RawTestCaseInfo): Promise<void>;
+  onTestFileStart(test: RawTestFileInfo): Promise<void>;
+  onTestFileReady(test: RawTestFileInfo): Promise<void>;
+  onTestSuiteStart(test: RawTestSuiteInfo): Promise<void>;
+  onTestSuiteResult(result: RawTestResult): Promise<void>;
+  onTestCaseResult(result: RawTestResult): Promise<TestResult>;
   /** Applies the owning project's `onConsoleLog` filter before reporter fanout. */
-  onConsoleLog(log: UserConsoleLog): Promise<void>;
+  onConsoleLog(log: RawUserConsoleLog): Promise<void>;
   getCountOfFailedTests(): number;
   /** Resolves via the owning project's `resolveSnapshotPath` (per-project). */
   resolveSnapshotPath(testPath: string): string;
@@ -77,20 +116,92 @@ export function createRunnerEventSink(
   const attempts = new Map<string, number>();
   const pendingCaseResultDeliveries = new Map<string, Promise<void>>();
 
-  const fanoutConsoleLog = (log: UserConsoleLog): Promise<void> =>
-    fanout(log.testPath, (reporter) => reporter.onUserConsoleLog?.(log));
+  let pending = pendingHooks.get(context);
+  if (!pending) {
+    pending = { files: new Map(), errors: [] };
+    pendingHooks.set(context, pending);
+  }
+  const run = pending;
 
-  // The worker forwards console output fire-and-forget: a delivery failure is
-  // dropped in the worker, and an error thrown here cannot travel back to fail
-  // the originating test. A user `onConsoleLog` filter or a reporter
-  // `onUserConsoleLog` that throws is a real defect, though, so surface it
-  // here — where it occurs — rather than letting it vanish.
-  const guarded = async (handle: () => Promise<void>): Promise<void> => {
-    try {
-      await handle();
-    } catch (error) {
-      logger.error(color.red('Failed to handle console log:'), toError(error));
+  const enrichTask = <T extends RawTestCaseInfo | RawTestSuiteInfo>(
+    task: T,
+  ): T & { fullName: string; relativeTestPath: string } => ({
+    ...task,
+    fullName: getTaskNameWithPrefix(task),
+    relativeTestPath: relative(context.rootPath, task.testPath),
+  });
+  const enrichInfo = (test: RawTestInfo): TestInfo =>
+    test.type === 'suite'
+      ? { ...enrichTask(test), tests: test.tests.map(enrichInfo) }
+      : enrichTask(test);
+  const enrichFileInfo = (test: RawTestFileInfo): TestFileInfo => ({
+    ...test,
+    relativeTestPath: relative(context.rootPath, test.testPath),
+    tests: test.tests.map(enrichInfo),
+  });
+  const enrichResult = (result: RawTestResult): TestResult => ({
+    ...result,
+    fullName: getTaskNameWithPrefix(result),
+    relativeTestPath: relative(context.rootPath, result.testPath),
+  });
+  const enrichLog = (log: RawUserConsoleLog): UserConsoleLog => ({
+    ...log,
+    relativeTestPath: relative(context.rootPath, log.testPath),
+  });
+
+  const fileHooks = (file: { project: string; testPath: string }) => {
+    const key = reporterFileKey(file.project, file.testPath);
+    let hooks = run.files.get(key);
+    if (!hooks) {
+      hooks = new Set();
+      run.files.set(key, hooks);
     }
+    return hooks;
+  };
+
+  const invokeHooks = async <
+    K extends Exclude<
+      keyof Reporter,
+      'flushOutputStreams' | 'onTestRunStart' | 'onTestRunEnd' | 'onExit'
+    >,
+  >(
+    hook: K,
+    payload: Parameters<NonNullable<Reporter[K]>>[0],
+  ): Promise<void> => {
+    const dispatched: Promise<void>[] = [];
+    for (const [index, reporter] of reporters.entries()) {
+      const recordError = (error: unknown) => {
+        run.errors.push(
+          new Error(
+            `Reporter ${reporter.constructor.name} (#${index + 1}) ${hook} failed: ${toError(error).message}`,
+            { cause: error },
+          ),
+        );
+      };
+      let result: MaybePromise<void>;
+      try {
+        // The hook key correlates its callback with this payload type.
+        const invoke = reporter[hook] as
+          | ((
+              payload: Parameters<NonNullable<Reporter[K]>>[0],
+            ) => MaybePromise<void>)
+          | undefined;
+        result = invoke?.call(reporter, payload);
+      } catch (error) {
+        recordError(error);
+        continue;
+      }
+      if (!result?.then) continue;
+      const hooks = fileHooks(payload);
+      const promise = Promise.resolve(result)
+        .catch(recordError)
+        .finally(() => {
+          hooks.delete(promise);
+        });
+      hooks.add(promise);
+      dispatched.push(promise);
+    }
+    await Promise.all(dispatched);
   };
 
   // State is recorded the moment an event arrives; reporters hear it only once
@@ -98,14 +209,30 @@ export function createRunnerEventSink(
   // transport awaits its file-start send, so a later event can reach here
   // while the file-start handler is still opening the run — gating every
   // fanout, not just the first, is what keeps `onTestRunStart` ahead of all.
-  const fanout = async (
-    testPath: string,
-    notify: (reporter: Reporter) => MaybePromise<void>,
-    expectedAttempt = attempts.get(testPath),
+  const dispatch = <
+    K extends Exclude<
+      keyof Reporter,
+      'flushOutputStreams' | 'onTestRunStart' | 'onTestRunEnd' | 'onExit'
+    >,
+  >(
+    hook: K,
+    payload: Parameters<NonNullable<Reporter[K]>>[0],
   ): Promise<void> => {
-    await context.openReporterRun?.();
-    if (expectedAttempt !== attempts.get(testPath)) return;
-    await Promise.all(reporters.map(notify));
+    const expectedAttempt = attempts.get(payload.testPath);
+    const opened = context.openReporterRun?.();
+    const delivery = opened
+      ? opened.then(() => {
+          if (expectedAttempt === attempts.get(payload.testPath)) {
+            return invokeHooks(hook, payload);
+          }
+        })
+      : invokeHooks(hook, payload);
+    const hooks = fileHooks(payload);
+    const tracked = delivery.catch((error) => {
+      run.errors.push(toError(error));
+    }).finally(() => hooks.delete(tracked));
+    hooks.add(tracked);
+    return tracked;
   };
   const awaitTestCaseResults = async (testPath: string): Promise<void> => {
     await pendingCaseResultDeliveries.get(testPath);
@@ -123,84 +250,90 @@ export function createRunnerEventSink(
     },
     awaitTestCaseResults,
     onTestCaseStart(test) {
-      context.stateManager.onTestCaseStart(test);
-      // Fire-and-forget: reporter case-start hooks are not awaited (parity with
-      // the node pool), so they never gate the runner's next step.
-      void fanout(test.testPath, (reporter) =>
-        reporter.onTestCaseStart?.(test),
-      );
+      const enriched = enrichTask(test);
+      context.stateManager.onTestCaseStart(enriched);
+      return dispatch('onTestCaseStart', enriched);
     },
     async onTestCaseFailure() {},
     async onTestCaseResult(result) {
-      context.stateManager.onTestCaseResult(result);
-      const expectedAttempt = attempts.get(result.testPath);
+      const enriched = enrichResult(result);
+      context.stateManager.onTestCaseResult(enriched);
       const previous =
         pendingCaseResultDeliveries.get(result.testPath) ?? Promise.resolve();
-      const delivery = previous
-        .then(() =>
-          fanout(
-            result.testPath,
-            (reporter) => reporter.onTestCaseResult?.(result),
-            expectedAttempt,
-          ),
-        )
-        .catch((error) => {
-          logger.error(
-            color.red('Failed to handle test case result:'),
-            toError(error),
-          );
-        });
+      const delivery = Promise.all([
+        previous,
+        dispatch('onTestCaseResult', enriched),
+      ]).then(() => {});
       pendingCaseResultDeliveries.set(result.testPath, delivery);
       void delivery.then(() => {
         if (pendingCaseResultDeliveries.get(result.testPath) === delivery) {
           pendingCaseResultDeliveries.delete(result.testPath);
         }
       });
+      return enriched;
     },
     async onTestFileStart(test) {
-      context.stateManager.onTestFileStart(test.testPath);
-      await fanout(test.testPath, (reporter) =>
-        reporter.onTestFileStart?.(test),
-      );
+      const enriched = enrichFileInfo(test);
+      context.stateManager.onTestFileStart(enriched.testPath);
+      await dispatch('onTestFileStart', enriched);
     },
     async onTestFileReady(test) {
-      await fanout(test.testPath, (reporter) =>
-        reporter.onTestFileReady?.(test),
-      );
+      const enriched = enrichFileInfo(test);
+      await dispatch('onTestFileReady', enriched);
     },
     async onTestSuiteStart(test) {
-      await fanout(test.testPath, (reporter) =>
-        reporter.onTestSuiteStart?.(test),
-      );
+      const enriched = enrichTask(test);
+      await dispatch('onTestSuiteStart', enriched);
     },
     async onTestSuiteResult(result) {
-      await fanout(result.testPath, (reporter) =>
-        reporter.onTestSuiteResult?.(result),
-      );
+      const enriched = enrichResult(result);
+      await dispatch('onTestSuiteResult', enriched);
     },
     async onTestFileResult(result) {
-      context.stateManager.onTestFileResult(result);
-      await awaitTestCaseResults(result.testPath);
-      await fanout(result.testPath, (reporter) =>
-        reporter.onTestFileResult?.(result),
+      const pending = run.files.get(
+        reporterFileKey(result.project, result.testPath),
       );
-      if (result.snapshotResult) {
-        context.snapshotManager.add(result.snapshotResult);
+      if (pending) await joinHooks(pending);
+      const results = result.results.map(enrichResult);
+      const enriched: TestFileResult = {
+        ...enrichResult(result),
+        results,
+        summary: getFileSummary(results),
+      };
+      context.stateManager.onTestFileResult(enriched);
+      await dispatch('onTestFileResult', enriched);
+      if (enriched.snapshotResult) {
+        context.snapshotManager.add(enriched.snapshotResult);
       }
+      return enriched;
     },
     async onConsoleLog(log) {
       if (projectConfig.disableConsoleIntercept) {
         return;
       }
-      await guarded(async () => {
+      // Worker log delivery is fire-and-forget; report filter errors here.
+      // Reporter hook errors are recorded by dispatch in run.errors.
+      try {
         if (projectConfig.onConsoleLog?.(log.content, log.type) === false) {
           return;
         }
-        await fanoutConsoleLog(log);
-      });
+      } catch (error) {
+        logger.error(
+          color.red('Failed to handle console log:'),
+          toError(error),
+        );
+        return;
+      }
+      await dispatch('onUserConsoleLog', enrichLog(log));
     },
     emitConsoleLog(log) {
-      return guarded(() => fanoutConsoleLog(log));
+      const enriched = enrichLog(log);
+      return dispatch('onUserConsoleLog', enriched);
+    },
+    async emitTestCaseResult(result) {
+      const enriched = enrichResult(result);
+      await dispatch('onTestCaseResult', enriched);
+      return enriched;
     },
     getCountOfFailedTests() {
       // `stateManager` is cleared before every cycle (the non-watch
@@ -234,9 +367,11 @@ export function sinkToRuntimeRpc(
     onTestFileReady: (test) => sink.onTestFileReady(test),
     onTestSuiteStart: (test) => sink.onTestSuiteStart(test),
     onTestSuiteResult: (result) => sink.onTestSuiteResult(result),
-    onTestCaseStart: async (test) => sink.onTestCaseStart(test),
     onTestCaseFailure: (test) => sink.onTestCaseFailure(test),
-    onTestCaseResult: (result) => sink.onTestCaseResult(result),
+    onTestCaseStart: (test) => sink.onTestCaseStart(test),
+    onTestCaseResult: async (result) => {
+      await sink.onTestCaseResult(result);
+    },
     getCountOfFailedTests: async () => sink.getCountOfFailedTests(),
     onConsoleLog: (log) => sink.onConsoleLog(log),
     resolveSnapshotPath: (testPath) => sink.resolveSnapshotPath(testPath),

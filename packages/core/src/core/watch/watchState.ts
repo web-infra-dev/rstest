@@ -41,7 +41,7 @@ export function prepareWatchCycleState(
 /** Test paths whose latest run failed — the `f` shortcut's rerun set. */
 export const collectFailedTestPaths = (context: InternalContext): string[] =>
   context.reporterResults.results
-    .filter((result) => result.status === 'fail')
+    .filter((result) => result.status === 'failed')
     .map((result) => result.testPath);
 
 /** Test paths with unmatched snapshots — the `u` shortcut's rerun set. */

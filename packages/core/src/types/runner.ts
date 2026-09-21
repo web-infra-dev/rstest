@@ -1,8 +1,8 @@
 import type {
-  TestCaseInfo,
-  TestFileInfo,
-  TestResult,
-  TestSuiteInfo,
+  RawTestCaseInfo,
+  RawTestFileInfo,
+  RawTestResult,
+  RawTestSuiteInfo,
 } from './testSuite';
 
 export type RunnerHooks = {
@@ -14,16 +14,16 @@ export type RunnerHooks = {
   onSnapshotSetupEnd?: () => Promise<void>;
   onSnapshotFinishStart?: () => Promise<void>;
   onSnapshotFinishEnd?: () => Promise<void>;
-  onTestSuiteStart?: (test: TestSuiteInfo) => Promise<void>;
-  onTestSuiteResult?: (result: TestResult) => Promise<void>;
+  onTestSuiteStart?: (test: RawTestSuiteInfo) => Promise<void>;
+  onTestSuiteResult?: (result: RawTestResult) => Promise<void>;
   /**
    * Called after tests in file collected.
    */
-  onTestFileReady?: (test: TestFileInfo) => Promise<void>;
+  onTestFileReady?: (test: RawTestFileInfo) => Promise<void>;
   /**
    * Called before running the test case.
    */
-  onTestCaseStart?: (test: TestCaseInfo) => Promise<void>;
+  onTestCaseStart?: (test: RawTestCaseInfo) => Promise<void>;
 
   /**
    * Called when a test attempt fails, before afterEach hooks and fixture cleanup.
@@ -33,7 +33,7 @@ export type RunnerHooks = {
   /**
    * Called after the test is finished running.
    */
-  onTestCaseResult?: (result: TestResult) => Promise<void>;
+  onTestCaseResult?: (result: RawTestResult) => Promise<void>;
 
   /**
    * The number of failed tests.

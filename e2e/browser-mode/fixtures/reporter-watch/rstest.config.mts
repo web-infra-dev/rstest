@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Reporter } from '@rstest/core';
+import type { Reporter, TestRunStartPayload } from '@rstest/core';
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS } from '../ports';
 
@@ -11,8 +11,9 @@ const writeReportLog = (event: string) => {
 };
 
 class WatchLifecycleReporter implements Reporter {
-  onTestRunStart() {
+  onTestRunStart(payload: TestRunStartPayload) {
     writeReportLog('onTestRunStart');
+    writeReportLog(JSON.stringify(payload));
   }
 
   onTestRunEnd() {

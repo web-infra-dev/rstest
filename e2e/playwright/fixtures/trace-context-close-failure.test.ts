@@ -50,7 +50,7 @@ test.sequential('verifies context close failure trace metadata', async () => {
   const summary = JSON.parse(
     await readFile(join(traceDir, 'trace-summary.json'), 'utf-8'),
   );
-  expect(summary.test.status).toBe('fail');
+  expect(summary.test.status).toBe('failed');
   expect(summary.error.message).toContain('context close trace failure');
   expect((await stat(join(traceDir, 'debug.md'))).size).toBeGreaterThan(0);
   console.log('RSTEST_PLAYWRIGHT_TRACE_CONTEXT_CLOSE_FAIL_OK');

@@ -16,6 +16,7 @@ import {
 } from '../utils';
 import {
   finalizeRunCycle,
+  createRunStartBarrier,
   notifyReportersOnTestRunStart,
   runLifecycleStep,
 } from './execution/finalizeRun';
@@ -349,25 +350,38 @@ export async function runTests(context: Rstest): Promise<void> {
       }
 
       const reportersStarted = !isInterrupted;
-      if (reportersStarted) await notifyReportersOnTestRunStart(context);
+      const selections = reportersStarted && executorsToRun.length > 0
+        ? createRunStartBarrier(context, executorsToRun.length)
+        : [];
+      if (reportersStarted && executorsToRun.length === 0) {
+        await notifyReportersOnTestRunStart(context, []);
+      }
       // Settle every cycle before propagating a failure: a fail-fast
       // `Promise.all` would reach the `finally` teardown while a sibling
       // executor is still mid-cycle, truncating its tests and firing global
       // teardown early. The re-await unwraps the already-settled promises,
       // rejecting with the first failure in executor order.
-      const cyclePromises = !isInterrupted
-        ? executorsToRun.map((executor) =>
-            executor === browserExecutor && browserStage.errors.length
-              ? Promise.resolve(cycleFailureOutcome(browserStage.errors))
-              : executor.runCycle({
-                  buildId: 1,
-                  mode: 'all',
-                  updateSnapshot: snapshotManager.options.updateSnapshot,
-                  env: browserStage.env,
-                  onTraceEvents: forwardBrowserTraceEvents,
-                }),
-          )
-        : [];
+      const cyclePromises =
+        !isInterrupted
+          ? executorsToRun.map(async (executor, index) => {
+              try {
+                return executor === browserExecutor &&
+                  browserStage.errors.length
+                  ? cycleFailureOutcome(browserStage.errors)
+                  : await executor.runCycle({
+                      buildId: 1,
+                      mode: 'all',
+                      updateSnapshot: snapshotManager.options.updateSnapshot,
+                      env: browserStage.env,
+                      onTraceEvents: forwardBrowserTraceEvents,
+                      onSelected: selections[index],
+                    });
+              } finally {
+                // Empty or failed executors must release sibling selections.
+                await selections[index]!([]);
+              }
+            })
+          : [];
       const settledCycles = await Promise.allSettled(cyclePromises);
       const outcomes = settledCycles.flatMap((cycle) => {
         if (cycle.status === 'fulfilled') return [cycle.value];
