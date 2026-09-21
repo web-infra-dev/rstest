@@ -14,7 +14,10 @@ export class TestStateManager {
   public testFiles: string[] | undefined = undefined;
   private failedTestCount = 0;
 
-  onTestFileStart({ testPath, relativeTestPath }: Pick<TestFileInfo, 'testPath' | 'relativeTestPath'>): void {
+  onTestFileStart({
+    testPath,
+    relativeTestPath,
+  }: Pick<TestFileInfo, 'testPath' | 'relativeTestPath'>): void {
     const currentModule = this.runningModules.get(testPath);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(

@@ -1,6 +1,10 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { exitReporters } from '../../reporter';
-import type { ExecutorCycleOutcome, SelectedTestFile, TestExecutor } from '../../types';
+import type {
+  ExecutorCycleOutcome,
+  SelectedTestFile,
+  TestExecutor,
+} from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import {
   clearScreen,
@@ -223,7 +227,10 @@ export function createWatchCycleDriver({
   const firstCycle = (executor: TestExecutor) => {
     let first = firstCycles.get(executor);
     if (!first) {
-      const { promise, resolve } = Promise.withResolvers<void>();
+      let resolve!: (cycle: Promise<void>) => void;
+      const promise = new Promise<void>((accept) => {
+        resolve = accept;
+      });
       // runCycle callers may observe the same rejection directly.
       void promise.catch(() => {});
       first = { promise, resolve };

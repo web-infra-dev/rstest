@@ -34,7 +34,7 @@ export class ControlledWorker extends EventEmitter implements PoolWorker {
       if (this.autoFinish) this.finish();
     }
   });
-  finish(status: 'pass' | 'fail' = 'pass') {
+  finish(status: 'passed' | 'failed' = 'passed') {
     const request = this.request!;
     this.request = undefined;
     this.emit(

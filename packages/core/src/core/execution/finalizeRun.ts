@@ -1,4 +1,7 @@
-import { cloneCoverageMapData, resolveAndMergeRawCoverage } from '../../coverage';
+import {
+  cloneCoverageMapData,
+  resolveAndMergeRawCoverage,
+} from '../../coverage';
 import { BlobReporter } from '../../reporter/blob';
 import { computeSummary } from '../../reporter/utils';
 import type {
@@ -98,9 +101,13 @@ export const createRunStartBarrier = (
   context: InternalContext,
   executorCount: number,
 ): Array<(files: SelectedTestFile[]) => Promise<void>> => {
-  const selections = Array.from({ length: executorCount }, () =>
-    Promise.withResolvers<SelectedTestFile[]>(),
-  );
+  const selections = Array.from({ length: executorCount }, () => {
+    let resolve!: (files: SelectedTestFile[]) => void;
+    const promise = new Promise<SelectedTestFile[]>((accept) => {
+      resolve = accept;
+    });
+    return { promise, resolve };
+  });
   const started = Promise.all(selections.map(({ promise }) => promise)).then(
     (files) => notifyReportersOnTestRunStart(context, files.flat()),
   );

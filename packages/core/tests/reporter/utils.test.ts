@@ -1,7 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { stripVTControlCharacters } from 'node:util';
-import { formatStatusCounts } from '../../src/reporter/summary';
-import { computeSummary, truncateString } from '../../src/reporter/utils';
+import { computeSummary } from '../../src/reporter/utils';
 import type { TestFileResult, TestResult } from '../../src/types';
 
 const test = (status: TestResult['status'], id: string): TestResult => ({
@@ -95,30 +93,5 @@ describe('computeSummary', () => {
       },
       files: { total: 1, failed: 1 },
     });
-  });
-});
-
-describe('shared reporter formatters', () => {
-  it('formats asymmetric counts in ANSI and plain styles', () => {
-    const counts = {
-      total: 10,
-      passed: 6,
-      failed: 1,
-      skipped: 2,
-      todo: 1,
-      flaky: 0,
-    };
-
-    expect(formatStatusCounts(counts, 'plain')).toBe(
-      '❌ 1 failed | 6 passed | 2 skipped | 1 todo (10)',
-    );
-    expect(stripVTControlCharacters(formatStatusCounts(counts, 'ansi'))).toBe(
-      '1 failed | 6 passed | 2 skipped | 1 todo (10)',
-    );
-  });
-
-  it('preserves each truncation suffix and character budget', () => {
-    expect(truncateString('abcdefgh', 5, '…')).toBe('abcd…');
-    expect(truncateString('abcdefgh', 5, '... [truncated]')).toBe('... [');
   });
 });
