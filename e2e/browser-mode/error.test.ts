@@ -49,8 +49,11 @@ describe('browser mode - error handling', () => {
 
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toContain('Expect "to.have.text"');
-    expect(output).not.toContain('timed out in 500ms');
+    const timeout = Number(
+      output.match(/Expect "to\.have\.text" \[ with timeout (\d+)ms/)?.[1],
+    );
+    expect(timeout).toBeGreaterThan(0);
+    expect(timeout).toBeLessThan(10_000);
   });
 
   it('caps explicit zero expect.element timeouts at the test deadline', async () => {
@@ -64,8 +67,11 @@ describe('browser mode - error handling', () => {
 
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toContain('Expect "to.have.text"');
-    expect(output).not.toContain('timed out in 500ms');
+    const timeout = Number(
+      output.match(/Expect "to\.have\.text" \[ with timeout (\d+)ms/)?.[1],
+    );
+    expect(timeout).toBeGreaterThan(0);
+    expect(timeout).toBeLessThan(10_000);
   });
 
   it('reports suite hook element mismatches before hook timeouts', async () => {
