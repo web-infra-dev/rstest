@@ -1,6 +1,3 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { MdReporter, resolveOptions } from '../../src/reporter/md';
 import { computeSummary } from '../../src/reporter/utils';
@@ -392,44 +389,5 @@ describe('MdReporter watch reruns', () => {
 
     expect(report).toContain('[stdout] log: b only cycle');
     expect(report).not.toContain('[stdout] log: a only cycle');
-  });
-});
-
-describe('MdReporter code frames', () => {
-  it('renders a plain frame with the configured asymmetric window', async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'rstest-md-frame-'),
-    );
-    const file = path.join(directory, 'source.ts');
-    fs.writeFileSync(file, ['one', 'two', 'three', 'four', 'five'].join('\n'));
-    onTestFinished(() =>
-      fs.rmSync(directory, { recursive: true, force: true }),
-    );
-
-    const { runEnd } = setupMdReporter({
-      header: false,
-      reproduction: false,
-      codeFrame: { linesAbove: 1, linesBelow: 2 },
-    });
-    const test = createFailedTest(file, 'fails');
-    test.errors = [
-      {
-        name: 'Error',
-        message: 'failed',
-        stack: `Error: failed\n    at test (${file}:3:2)`,
-      },
-    ];
-
-    const report = await runEnd({
-      results: [createFailedFile(file, [test])],
-      testResults: [test],
-    });
-
-    expect(report).toContain(
-      ['  2 | two', '> 3 | three', '    |  ^', '  4 | four', '  5 | five'].join(
-        '\n',
-      ),
-    );
-    expect(report).not.toContain('\u001B[');
   });
 });

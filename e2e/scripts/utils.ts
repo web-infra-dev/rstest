@@ -43,3 +43,30 @@ export const parseMarkerPayload = <T>(stdout: string, marker: string): T => {
   }
   return JSON.parse(stdout.slice(start + marker.length, end)) as T;
 };
+
+export const expectReporterHookJoins = async (
+  events: { event: string; testId?: string; testPath?: string }[],
+) => {
+  const { expect } = await import('@rstest/core');
+  const starts = events.filter(({ event }) => event === 'start-enter');
+  expect(starts.length).toBeGreaterThan(0);
+  for (const start of starts) {
+    const indexOf = (event: string) =>
+      events.findIndex(
+        (entry) => entry.event === event && entry.testId === start.testId,
+      );
+    const resultEnter = indexOf('result-enter');
+    const startExit = indexOf('start-exit');
+    const resultExit = indexOf('result-exit');
+    const fileResult = events.findIndex(
+      (entry) =>
+        entry.event === 'file-result' && entry.testPath === start.testPath,
+    );
+    expect(resultEnter).toBeGreaterThan(-1);
+    expect(startExit).toBeGreaterThan(resultEnter);
+    expect(resultExit).toBeGreaterThan(resultEnter);
+    expect(fileResult).toBeGreaterThan(startExit);
+    expect(fileResult).toBeGreaterThan(resultExit);
+  }
+  expect(events.at(-1)?.event).toBe('run-end');
+};

@@ -21,8 +21,6 @@ The hook set, payload field names, and status literals are **Stable**. The seman
 
 Runner hooks start in event arrival order, without chaining promises, so a later event's hooks can start before an earlier event's hooks resolve. Before `onTestFileResult`, Rstest waits for all pending start, ready, suite, case, and console hooks belonging to that file; before `onTestRunEnd`, it waits for all pending hooks in the run. Hook failures are attributed to the reporter and hook name and surfaced as reporter errors; the same rules apply to Node, browser mode, and blob replay, while `onExit` remains unchanged.
 
-`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Selection happens before execution, so files remain listed even if bail prevents them from running. Import `TestRunStartPayload` from `@rstest/core`.
-
 ## Using custom reporter
 
 Create a custom reporter by implementing the `Reporter` interface:
@@ -131,6 +129,24 @@ Starting in v0.12.0, Rstest also calls `onExit` when the reporter's owning conte
 <ApiMeta addedVersion="0.11.1" />
 
 Metadata result fields are available on reporter results. JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+
+### onTestRunStart
+
+<ApiMeta addedVersion="1.0.0" />
+
+`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Selection happens before execution, so files remain listed even if bail prevents them from running. Import `TestRunStartPayload` from `@rstest/core`.
+
+- **Type:**
+
+```ts
+interface TestRunStartPayload {
+  files: {
+    testPath: string;
+    project: string;
+    testId: string;
+  }[];
+}
+```
 
 ### onTestRunEnd
 

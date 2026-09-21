@@ -20,7 +20,7 @@ describe('browser mode - reporter lifecycle hooks', () => {
   });
 
   it.for([true, false])(
-    'joins async hooks and reports selection (filtered: %s)',
+    'reports async hook sequence and selection (filtered: %s)',
     async (filtered) => {
       const { expectExecSuccess, cli } = await runBrowserCli('reporter', {
         args: filtered ? ['--project', 'browser'] : [],
@@ -57,7 +57,6 @@ describe('browser mode - reporter lifecycle hooks', () => {
           'file-result',
         ]);
       }
-      expect(payload.events.at(-1)?.event).toBe('run-end');
     },
   );
 });

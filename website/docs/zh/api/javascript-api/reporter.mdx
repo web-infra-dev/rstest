@@ -21,8 +21,6 @@ Hook 集合、payload 字段名和 status 字面量属于 **Stable**。`getSourc
 
 Runner hooks 按事件到达顺序开始执行，不串联 Promise，因此后一个事件的 hooks 可以在前一个事件的 hooks 完成前开始。调用 `onTestFileResult` 前，Rstest 会等待该文件尚未完成的 start、ready、suite、case 和 console hooks；调用 `onTestRunEnd` 前，会等待本轮所有尚未完成的 hooks。Hook 失败会作为 reporter error 上报，并注明 reporter 和 hook 名称；Node、browser mode 和 blob replay 遵循相同规则，`onExit` 行为不变。
 
-`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。文件在执行前选定，因此即使 bail 阻止了后续执行，这些文件仍会出现在列表中。`TestRunStartPayload` 可从 `@rstest/core` 导入。
-
 ## 使用自定义报告器
 
 通过实现 `Reporter` 接口来创建自定义报告器：
@@ -131,6 +129,24 @@ interface Reporter {
 <ApiMeta addedVersion="0.11.1" />
 
 Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写入的可 JSON 序列化运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
+
+### onTestRunStart
+
+<ApiMeta addedVersion="1.0.0" />
+
+`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。文件在执行前选定，因此即使 bail 阻止了后续执行，这些文件仍会出现在列表中。`TestRunStartPayload` 可从 `@rstest/core` 导入。
+
+- **类型：**
+
+```ts
+interface TestRunStartPayload {
+  files: {
+    testPath: string;
+    project: string;
+    testId: string;
+  }[];
+}
+```
 
 ### onTestRunEnd
 

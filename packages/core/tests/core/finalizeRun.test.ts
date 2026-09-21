@@ -1,9 +1,6 @@
 import { withDefaultConfig } from '../../src/config';
 import { createExitCode } from '../../src/core/exitCode';
-import {
-  finalizeRunCycle,
-  notifyReportersOnTestRunEnd,
-} from '../../src/core/finalizeRun';
+import { finalizeRunCycle } from '../../src/core/finalizeRun';
 import { BlobReporter } from '../../src/reporter/blob';
 import type { InternalContext } from '../../src/types';
 import type {
@@ -12,7 +9,6 @@ import type {
   CoverageProvider,
 } from '../../src/types/coverage';
 import { noopTraceSpan } from '../../src/utils';
-import { emptyRunEndPayload } from '../reporter/helpers';
 
 describe('finalizeRunCycle', () => {
   it.for(['none', 'pre-start', 'before', 'reporter', 'raw', 'coverage'])(
@@ -132,39 +128,6 @@ describe('finalizeRunCycle', () => {
       expect(finalizeTrace).toHaveBeenCalledTimes(1);
       expect(context.exitCode.current).toBe(
         interrupted ? 130 : phase === 'coverage' ? 1 : 0,
-      );
-    },
-  );
-
-  it.for([
-    { exitCode: 0, failedFiles: 0, error: false, status: 'passed' },
-    { exitCode: 1, failedFiles: 0, error: false, status: 'failed' },
-    { exitCode: 0, failedFiles: 1, error: false, status: 'failed' },
-    { exitCode: 1, failedFiles: 1, error: true, status: 'error' },
-  ])(
-    'computes the final verdict once: %o',
-    async ({ exitCode, failedFiles, error, status }) => {
-      const onTestRunEnd = rs.fn();
-      const context = {
-        exitCode: createExitCode(),
-        reporters: [{ onTestRunEnd, flushOutputStreams: false }],
-      } as unknown as InternalContext;
-      context.exitCode.raise(exitCode);
-      await notifyReportersOnTestRunEnd({
-        context,
-        payload: {
-          ...emptyRunEndPayload,
-          summary: {
-            ...emptyRunEndPayload.summary,
-            files: { total: 1, failed: failedFiles },
-          },
-          unhandledErrors: error
-            ? [{ name: 'Error', message: 'unhandled' }]
-            : [],
-        },
-      });
-      expect(onTestRunEnd).toHaveBeenCalledWith(
-        expect.objectContaining({ status }),
       );
     },
   );

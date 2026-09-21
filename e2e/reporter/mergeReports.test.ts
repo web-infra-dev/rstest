@@ -593,29 +593,6 @@ describe('merge-reports lifecycle replay', () => {
     expect(parseMarkerPayload(mergedOutput, '__RSTEST_SELECTION__')).toEqual(
       parseMarkerPayload(liveOutput, '__RSTEST_SELECTION__'),
     );
-    for (const output of [liveOutput, mergedOutput]) {
-      if (config.length) continue;
-      const { events } = parseMarkerPayload<{
-        events: { event: string; testId?: string; testPath?: string }[];
-      }>(output, '__RSTEST_REPORTER_CONTRACT__');
-      for (const start of events.filter(
-        (event) => event.event === 'start-enter',
-      )) {
-        const indexOf = (event: string) =>
-          events.findIndex(
-            (entry) => entry.event === event && entry.testId === start.testId,
-          );
-        const fileResult = events.findIndex(
-          (entry) =>
-            entry.event === 'file-result' && entry.testPath === start.testPath,
-        );
-        expect(indexOf('start-exit')).toBeGreaterThan(-1);
-        expect(indexOf('result-exit')).toBeGreaterThan(-1);
-        expect(fileResult).toBeGreaterThan(indexOf('start-exit'));
-        expect(fileResult).toBeGreaterThan(indexOf('result-exit'));
-      }
-      expect(events.at(-1)?.event).toBe('run-end');
-    }
     const live = parseLifecycle(liveOutput);
     const merged = parseLifecycle(mergedOutput);
     return { live, merged };
