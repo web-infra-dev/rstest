@@ -13,6 +13,7 @@ it('defers auto-mock evaluation until all hoisted mocks are registered', () => {
 });
 
 it('keeps manual __mocks__ and factory mocks working', () => {
+  // @ts-expect-error: the manual mock adds this property.
   expect(redux.mocked).toBe('redux_yes');
   expect(rs.isMockFunction(leaf)).toBe(true);
 });
