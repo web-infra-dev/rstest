@@ -4,11 +4,11 @@ import type { EnvironmentName } from './config';
 import type { RstestPoolType } from './config';
 import type { InternalContext, InternalProjectContext } from './core';
 import type {
-  TestCaseInfo,
-  TestFileInfo,
-  TestResult,
-  TestSuiteInfo,
-  UserConsoleLog,
+  RawTestCaseInfo,
+  RawTestFileInfo,
+  RawTestResult,
+  RawTestSuiteInfo,
+  RawUserConsoleLog,
 } from './testSuite';
 import type { DistPath, TestPath } from './utils';
 
@@ -41,8 +41,8 @@ export type ServerRPC = object;
 
 /** Runtime to Server */
 export type RuntimeRPC = {
-  onTestFileStart: (test: TestFileInfo) => Promise<void>;
-  onTestFileReady: (test: TestFileInfo) => Promise<void>;
+  onTestFileStart: (test: RawTestFileInfo) => Promise<void>;
+  onTestFileReady: (test: RawTestFileInfo) => Promise<void>;
   getAssetsByEntry: (
     assetNames?: string[],
     sourceMapNames?: string[],
@@ -50,12 +50,12 @@ export type RuntimeRPC = {
     assetFiles: AssetFiles;
     sourceMaps: Record<string, string>;
   }>;
-  onTestSuiteStart: (test: TestSuiteInfo) => Promise<void>;
-  onTestSuiteResult: (result: TestResult) => Promise<void>;
-  onTestCaseStart: (test: TestCaseInfo) => Promise<void>;
-  onTestCaseResult: (result: TestResult) => Promise<void>;
+  onTestSuiteStart: (test: RawTestSuiteInfo) => Promise<void>;
+  onTestSuiteResult: (result: RawTestResult) => Promise<void>;
+  onTestCaseStart: (test: RawTestCaseInfo) => Promise<void>;
+  onTestCaseResult: (result: RawTestResult) => Promise<void>;
   getCountOfFailedTests: () => Promise<number>;
-  onConsoleLog: (log: UserConsoleLog) => void;
+  onConsoleLog: (log: RawUserConsoleLog) => void;
   resolveSnapshotPath: (filepath: string) => string;
 };
 
@@ -116,7 +116,7 @@ export type TestEnvironmentModuleReference = {
 };
 
 export type CurrentTaskInfo = Pick<
-  UserConsoleLog,
+  RawUserConsoleLog,
   'taskId' | 'taskName' | 'taskParentNames' | 'taskType' | 'testPath'
 >;
 

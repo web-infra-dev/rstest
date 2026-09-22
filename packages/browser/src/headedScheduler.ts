@@ -1,6 +1,6 @@
 import type {
   InternalContext,
-  TestFileResult,
+  RawTestFileResult,
 } from '@rstest/core/internal/browser';
 import {
   color,
@@ -58,7 +58,7 @@ type HeadedSchedulerDeps = {
     // For the one result the host authors itself (the cleanup-timeout
     // failure); every runner-authored result flows through the dispatch
     // router instead.
-    handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
+    handleTestFileComplete: (payload: RawTestFileResult) => Promise<void>;
   };
   fatalErrorRef: { current: Error | null };
   watchSignals: Pick<WatchSignals, 'setDispatchRerun' | 'signalInvalidation'>;

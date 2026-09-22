@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { relative } from 'pathe';
 import type {
   JsonReporterOptions,
   NormalizedConfig,
@@ -12,18 +11,13 @@ import type {
   TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
-import { getTaskNameWithPrefix, logger } from '../utils';
-import {
-  reportedFileKeys,
-  reporterFileKey,
-  toReportCounts,
-  toReportDuration,
-} from './utils';
+import { logger } from '../utils';
+import { PerFileEventBuffer, toReportCounts, toReportDuration } from './utils';
 
 type JsonReport = {
   tool: 'rstest';
   version: string;
-  status: 'pass' | 'fail';
+  status: TestRunEndPayload['status'];
   summary: {
     testFiles: number;
     failedFiles: number;
@@ -57,27 +51,23 @@ type JsonReport = {
       fullName: string;
     }
   >;
-  consoleLogs?: Array<UserConsoleLog & { testPath: string }>;
+  consoleLogs?: Array<
+    Omit<UserConsoleLog, 'relativeTestPath'> & { testPath: string }
+  >;
   unhandledErrors?: { message: string; stack?: string; name?: string }[];
 };
 
 export class JsonReporter implements Reporter {
-  private readonly config: NormalizedConfig;
-  private readonly rootPath: string;
   private readonly outputPath?: string;
-  private logs: UserConsoleLog[] = [];
+  private readonly logs = new PerFileEventBuffer<UserConsoleLog>();
 
   constructor({
-    config,
-    rootPath,
     options,
   }: {
     config: NormalizedConfig;
     rootPath: string;
     options?: JsonReporterOptions;
   }) {
-    this.config = config;
-    this.rootPath = rootPath;
     this.outputPath = options?.outputPath;
   }
 
@@ -85,24 +75,17 @@ export class JsonReporter implements Reporter {
   // Dropping them in place keeps `consoleLogs` in global arrival order, which is
   // the only temporal signal the payload carries.
   onTestFileStart(test: TestFileInfo): void {
-    if (!this.logs.length) {
-      return;
-    }
-    const key = reporterFileKey(test.project, test.testPath);
-    this.logs = this.logs.filter(
-      (log) => reporterFileKey(log.project, log.testPath) !== key,
-    );
+    this.logs.reset(test);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
-    this.logs.push(log);
+    this.logs.push(log, log);
   }
 
   private normalizeTest(test: TestResult): JsonReport['tests'][number] {
     return {
       ...test,
-      testPath: relative(this.rootPath, test.testPath),
-      fullName: getTaskNameWithPrefix(test),
+      testPath: test.relativeTestPath,
     };
   }
 
@@ -113,32 +96,26 @@ export class JsonReporter implements Reporter {
     snapshotSummary,
     unhandledErrors,
     summary,
+    status,
   }: TestRunEndPayload): JsonReport {
-    const noTestsDiscovered = results.length === 0 && testResults.length === 0;
-    const hasFailedStatus =
-      summary.tests.failed > 0 ||
-      summary.files.failed > 0 ||
-      unhandledErrors.length > 0 ||
-      (noTestsDiscovered && !this.config.passWithNoTests);
-
+    const logs = this.logs.get();
     return {
       tool: 'rstest',
       version: RSTEST_VERSION,
-      status: hasFailedStatus ? 'fail' : 'pass',
+      status,
       summary: toReportCounts(summary),
       durationMs: toReportDuration(duration),
       snapshot: snapshotSummary,
       files: results.map((fileResult) => ({
         ...fileResult,
-        testPath: relative(this.rootPath, fileResult.testPath),
-        fullName: getTaskNameWithPrefix(fileResult),
+        testPath: fileResult.relativeTestPath,
         results: fileResult.results.map((test) => this.normalizeTest(test)),
       })),
       tests: testResults.map((test) => this.normalizeTest(test)),
-      consoleLogs: this.logs.length
-        ? this.logs.map((log) => ({
+      consoleLogs: logs.length
+        ? logs.map(({ relativeTestPath, ...log }) => ({
             ...log,
-            testPath: relative(this.rootPath, log.testPath),
+            testPath: relativeTestPath,
           }))
         : undefined,
       unhandledErrors: unhandledErrors.map((error) => ({
@@ -174,12 +151,7 @@ export class JsonReporter implements Reporter {
     // logs have no such signal of their own, so the reported file set prunes
     // them. Without this the report would carry logs for a file it does not
     // list, and the buffer would grow for the whole session.
-    if (this.logs.length) {
-      const reportedKeys = reportedFileKeys(results);
-      this.logs = this.logs.filter((log) =>
-        reportedKeys.has(reporterFileKey(log.project, log.testPath)),
-      );
-    }
+    this.logs.prune(results);
 
     const report = this.createReport(payload);
 

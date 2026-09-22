@@ -1,21 +1,5 @@
 import type { InternalContext, Reporter } from '../types';
-import type { TestRunResult, TestRunStatus, WatchOptions } from './types';
-
-type CapturedCycle = Omit<TestRunResult, 'status'>;
-
-const getStatus = (
-  context: InternalContext,
-  captured: CapturedCycle,
-): TestRunStatus => {
-  if (captured.unhandledErrors.length > 0) {
-    return 'error';
-  }
-  // Watch resets exitCode each cycle, but the session summary retains earlier failures.
-  if (context.exitCode.current !== 0 || captured.summary.files.failed > 0) {
-    return 'fail';
-  }
-  return 'pass';
-};
+import type { TestRunResult, WatchOptions } from './types';
 
 export type ResultReporter = {
   reporter: Reporter;
@@ -26,17 +10,14 @@ export function createResultReporter(
   context: InternalContext,
   { onResult }: Pick<WatchOptions, 'onResult'> = {},
 ): ResultReporter {
-  let captured: CapturedCycle | undefined;
+  let captured: TestRunResult | undefined;
   let resolveResult: ((result: TestRunResult) => void) | undefined;
 
   const removeCycleEndListener = context.exitCode.onCycleEnd(() => {
     if (!captured) {
       return;
     }
-    const result: TestRunResult = {
-      ...captured,
-      status: getStatus(context, captured),
-    };
+    const result = captured;
     captured = undefined;
     resolveResult?.(result);
     resolveResult = undefined;

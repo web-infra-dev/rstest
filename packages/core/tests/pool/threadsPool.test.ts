@@ -54,7 +54,7 @@ describe('ThreadsPool - basic', () => {
     const pool = new Pool(createPoolOptions());
     try {
       const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
+      expect(result.status).toBe('passed');
     } finally {
       await pool.close();
     }
@@ -192,7 +192,7 @@ describe('ThreadsPool - isolate', () => {
       ).rejects.toThrow('intentional crash');
 
       const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
+      expect(result.status).toBe('passed');
     } finally {
       await pool.close();
     }
@@ -220,7 +220,7 @@ describe('ThreadsPool - failure recovery', () => {
         pool.runTest(createTask('run', { __testMode: 'exit-silent' })),
       ).rejects.toThrow();
       const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
+      expect(result.status).toBe('passed');
     } finally {
       await pool.close();
     }
@@ -257,7 +257,7 @@ describe('ThreadsPool - capacity', () => {
 
       expect(results).toHaveLength(taskCount);
       for (const r of results) {
-        expect(r.status).toBe('pass');
+        expect(r.status).toBe('passed');
       }
 
       const intervals = results.map((r) => ({

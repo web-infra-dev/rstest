@@ -132,7 +132,10 @@ export async function createBrowserExecutor(
         // value, so the two cycles cannot fold). Sending the flag out of band —
         // straight to the host, driver-side options unchanged — is the one shape
         // that folds a rebuild's files into the `u` scope.
-        const cycle = watchSession.runCycle(opts.fileFilters ?? []);
+        const cycle = watchSession.runCycle(
+          opts.fileFilters ?? [],
+          opts.onSelected,
+        );
         inFlightCycle = cycle;
         try {
           return await cycle;
@@ -148,6 +151,7 @@ export async function createBrowserExecutor(
         allowEmptyRun,
         appliedModifyRstestConfigEnvironments,
         onTraceEvents: opts.onTraceEvents,
+        onSelected: opts.onSelected,
         env: opts.env,
         updateSnapshot: opts.updateSnapshot,
         onInvalidate: isWatchMode

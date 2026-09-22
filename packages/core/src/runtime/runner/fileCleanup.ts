@@ -1,4 +1,4 @@
-import type { TestFileResult } from '../../types';
+import type { RawTestFileResult } from '../../types';
 import type { MaybePromise } from '../../types';
 
 type FileCleanup = () => MaybePromise<void>;
@@ -39,9 +39,9 @@ export const createFileCleanupTimeoutResult = ({
 }: {
   message: string;
   projectName: string;
-  result?: TestFileResult;
+  result?: RawTestFileResult;
   testPath: string;
-}): TestFileResult => {
+}): RawTestFileResult => {
   const error = new Error(message);
   return {
     ...(result ?? {
@@ -51,7 +51,7 @@ export const createFileCleanupTimeoutResult = ({
       testId: `file:${testPath}`,
       testPath,
     }),
-    status: 'fail',
+    status: 'failed',
     errors: [
       ...(result?.errors ?? []),
       {

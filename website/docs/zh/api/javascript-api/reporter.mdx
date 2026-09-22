@@ -1,15 +1,25 @@
 ---
 title: Reporter
-description: Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
+description: Reporter API 允许你创建自定义测试结果处理器和输出格式器。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Reporter API
 
-Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
+Reporter API 允许你创建自定义测试结果处理器和输出格式器。
 
 > **注意**：使用示例和配置指南，请参阅 [报告器指南](/guide/basic/reporters)。
+
+## 稳定性 \{#stability}
+
+<ApiMeta addedVersion="1.0.0" />
+
+Hook 集合、payload 字段名和 status 字面量属于 **Stable**。`getSourcemap`、`snapshotSummary`、`coverage`、`heap` 和 `meta` 的语义属于 **Best-effort**，可能独立于稳定 contract 发生变化。
+
+## Dispatch 语义 \{#dispatch-semantics}
+
+Runner hooks 按事件到达顺序开始执行，不串联 Promise，因此后一个事件的 hooks 可以在前一个事件的 hooks 完成前开始。调用 `onTestFileResult` 前，Rstest 会等待该文件尚未完成的 start、ready、suite、case 和 console hooks；调用 `onTestRunEnd` 前，会等待本轮所有尚未完成的 hooks。Hook 失败会作为 reporter error 上报，并注明 reporter 和 hook 名称；Node、browser mode 和 blob replay 遵循相同规则，`onExit` 行为不变。
 
 ## 使用自定义报告器
 
@@ -61,14 +71,16 @@ export default defineConfig({
 
 ```ts
 interface Reporter {
-  onTestFileStart?(test: TestFileInfo): void;
-  onTestFileReady?(test: TestFileInfo): void;
-  onTestFileResult?(test: TestFileResult): void;
-  onTestSuiteStart?(test: TestSuiteInfo): void;
-  onTestSuiteResult?(result: TestResult): void;
-  onTestCaseStart?(test: TestCaseInfo): void;
-  onTestCaseResult?(result: TestResult): void;
+  onTestRunStart?(payload: TestRunStartPayload): MaybePromise<void>;
+  onTestFileStart?(test: TestFileInfo): MaybePromise<void>;
+  onTestFileReady?(test: TestFileInfo): MaybePromise<void>;
+  onTestFileResult?(test: TestFileResult): MaybePromise<void>;
+  onTestSuiteStart?(test: TestSuiteInfo): MaybePromise<void>;
+  onTestSuiteResult?(result: TestResult): MaybePromise<void>;
+  onTestCaseStart?(test: TestCaseInfo): MaybePromise<void>;
+  onTestCaseResult?(result: TestResult): MaybePromise<void>;
   onTestRunEnd?(payload: {
+    status: TestRunStatus;
     results: TestFileResult[]; // 测试文件结果；watch 模式下是整个会话的累计结果。
     testResults: TestResult[]; // 所有测试用例的结果，不按文件分组。
     summary: {
@@ -78,6 +90,7 @@ interface Reporter {
         failed: number; // 失败的测试数量。
         skipped: number; // 跳过的测试数量。
         todo: number; // todo 测试数量。
+        flaky: number; // 重试后通过的测试数量。
       };
       files: {
         total: number; // 测试文件总数。
@@ -103,8 +116,8 @@ interface Reporter {
     coverage?: CoverageMapData; // 启用覆盖率时提供。
     rerunTestPaths?: string[]; // 仅 watch 模式：当前轮次执行的文件。
     getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>; // 获取构建产物的 source map。
-  }): void | Promise<void>;
-  onUserConsoleLog?(log: UserConsoleLog): void;
+  }): MaybePromise<void>;
+  onUserConsoleLog?(log: UserConsoleLog): MaybePromise<void>;
   onExit?(): MaybePromise<void>;
 }
 ```
@@ -117,11 +130,33 @@ interface Reporter {
 
 Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写入的可 JSON 序列化运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
 
+### onTestRunStart
+
+<ApiMeta addedVersion="1.0.0" />
+
+`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。文件在执行前选定，因此即使 bail 阻止了后续执行，这些文件仍会出现在列表中。`TestRunStartPayload` 可从 `@rstest/core` 导入。
+
+- **类型：**
+
+```ts
+interface TestRunStartPayload {
+  files: {
+    testPath: string;
+    project: string;
+    testId: string;
+  }[];
+}
+```
+
 ### onTestRunEnd
 
 <ApiMeta addedVersion="0.12.0" />
 
 每轮运行结束时调用 `onTestRunEnd`，参数里是这一轮结束时的结果和汇总。从 v0.12.0 开始，参数带上了 `summary` 和 `rerunTestPaths`，`unhandledErrors` 固定是序列化后的错误数组。
+
+<ApiMeta addedVersion="1.0.0" />
+
+Coverage 生成和 threshold 检查会在 `onTestRunEnd` 前完成，因此 coverage 表格现在先于运行摘要打印。Host 统一计算一次 `status`：有 unhandled errors 时为 `'error'`；否则，exit code 非零或有失败文件时为 `'failed'`；其余情况为 `'passed'`。Public API 的 `TestRunResult` 与这个 payload 相同，只去掉了 `getSourcemap`。
 
 watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累计结果：每个文件只保留最新一次的结果，删除的文件会移出。`rerunTestPaths` 是这一轮实际执行的文件，一次性运行没有这个字段。`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON。
 
@@ -132,13 +167,15 @@ watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累�
 - **类型：**
 
 ```ts
-type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
+type TestResultStatus = 'skipped' | 'passed' | 'failed' | 'todo';
 
 interface TestResult {
   testId: string; // 任务标识。
   status: TestResultStatus; // 最终结果状态。
   name: string; // 测试、套件或测试文件的显示名称。
+  fullName: string; // 外层 suite 名称与 name，以 ` > ` 连接。
   testPath: string; // 所属测试文件的路径。
+  relativeTestPath: string; // 相对于 rootPath 的 POSIX 路径。
   parentNames?: string[]; // 外层测试套件的名称。
   duration?: number; // 执行时长（毫秒）。
   errors?: SerializedError[]; // 最后一次执行产生的错误。
@@ -157,6 +194,14 @@ interface TestResult {
 ```ts
 interface TestFileResult extends TestResult {
   results: TestResult[]; // 当前文件中声明的测试结果。
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    todo: number;
+    flaky: number;
+  };
   snapshotResult?: SnapshotResult; // 当前文件的快照统计。
   coverage?: Record<string, FileCoverageData>; // 开启覆盖率时该文件的覆盖率数据。
 }
@@ -177,13 +222,13 @@ const simpleReporter: Reporter = {
   },
 
   onTestCaseResult(result) {
-    const status = result.status === 'pass' ? '✅' : '❌';
+    const status = result.status === 'passed' ? '✅' : '❌';
     console.log(`${status} ${result.name}`);
   },
 
   onTestRunEnd({ results }) {
-    const passed = results.filter((r) => r.status === 'pass').length;
-    const failed = results.filter((r) => r.status === 'fail').length;
+    const passed = results.filter((r) => r.status === 'passed').length;
+    const failed = results.filter((r) => r.status === 'failed').length;
     console.log(`\n📊 ${passed} passed, ${failed} failed`);
   },
 };

@@ -11,8 +11,8 @@ import type {
   RunnerHooks,
   RuntimeRPC,
   RunWorkerOptions,
-  TestFileResult,
-  TestInfo,
+  RawTestFileResult,
+  RawTestInfo,
   WorkerState,
 } from '../../types';
 import type { TestEnvironmentModuleFallback } from '../../pool/protocol';
@@ -1003,10 +1003,10 @@ export const runInPool = async (
   } = {},
 ): Promise<
   | {
-      tests: TestInfo[];
+      tests: RawTestInfo[];
       testPath: string;
     }
-  | TestFileResult
+  | RawTestFileResult
 > => {
   isTeardown = false;
   const {
@@ -1169,7 +1169,7 @@ export const runInPool = async (
       | {
           project: string;
           testPath: string;
-          tests: TestInfo[];
+          tests: RawTestInfo[];
           errors: Awaited<ReturnType<typeof formatTestError>>;
         }
       | undefined;
@@ -1253,11 +1253,11 @@ export const runInPool = async (
         }
       : undefined,
   );
-  let runResult: TestFileResult = {
+  let runResult: RawTestFileResult = {
     testId: getFileTaskId(testPath),
     project,
     testPath,
-    status: 'fail',
+    status: 'failed',
     name: '',
     results: [],
     errors: [],
@@ -1295,7 +1295,7 @@ export const runInPool = async (
         testId: getFileTaskId(testPath),
         project,
         testPath,
-        status: 'skip',
+        status: 'skipped',
         name: '',
         results: [],
       };
@@ -1359,7 +1359,9 @@ export const runInPool = async (
     }
 
     tracker.transition('tests');
-    const collectCoverage = async (result: TestFileResult): Promise<void> => {
+    const collectCoverage = async (
+      result: RawTestFileResult,
+    ): Promise<void> => {
       if (!coverageProvider) {
         return;
       }
@@ -1400,7 +1402,7 @@ export const runInPool = async (
       tracker.transition('tests');
     };
 
-    let fileCleanupResult: TestFileResult | undefined;
+    let fileCleanupResult: RawTestFileResult | undefined;
     const runnerHooks: RunnerHooks & FileCleanupHooks = {
       onTestFileReady: (test) => trackRunnerHook(rpc.onTestFileReady(test)),
       onTestSuiteStart: (test) =>
@@ -1471,14 +1473,14 @@ export const runInPool = async (
       api.rstest.useRealTimers();
       const asyncLeakErrors = await asyncLeakDetector.collectErrors();
       if (asyncLeakErrors.length > 0) {
-        results.status = 'fail';
+        results.status = 'failed';
         results.errors = (results.errors || []).concat(asyncLeakErrors);
       }
     }
 
     lifecycleHooks.onTaskErrorHandlingChange?.(false);
     if (unhandledErrors.length > 0) {
-      results.status = 'fail';
+      results.status = 'failed';
       results.errors = (results.errors || []).concat(
         ...(await formatTestError(unhandledErrors)),
       );
@@ -1499,7 +1501,7 @@ export const runInPool = async (
       testId: getFileTaskId(testPath),
       project,
       testPath,
-      status: 'fail',
+      status: 'failed',
       name: '',
       results: [],
       errors: await formatTestError(err),
@@ -1515,7 +1517,7 @@ export const runInPool = async (
       if (isolate || isVmPool) {
         const workerCleanupError = await cleanupWorkerFixtureScope();
         if (workerCleanupError) {
-          runResult.status = 'fail';
+          runResult.status = 'failed';
           runResult.errors = [
             ...(runResult.errors ?? []),
             ...(await formatTestError(workerCleanupError)),
@@ -1537,7 +1539,7 @@ export const runInPool = async (
     }
     tracker.end();
     if (teardownErrors.length > 0) {
-      runResult.status = 'fail';
+      runResult.status = 'failed';
       runResult.errors = [
         ...(runResult.errors ?? []),
         ...(await formatTestError(teardownErrors)),

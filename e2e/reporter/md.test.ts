@@ -54,7 +54,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "fail",
+        "status": "failed",
         "counts": {
           "testFiles": 1,
           "failedFiles": 1,
@@ -90,7 +90,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/index.test.ts",
         "project": "rstest",
         "fullName": "agent-md > fails with diff",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -154,7 +154,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "fail",
+        "status": "failed",
         "counts": {
           "testFiles": 1,
           "failedFiles": 1,
@@ -190,7 +190,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/snapshotMismatch.test.ts",
         "project": "rstest",
         "fullName": "agent-md > fails with snapshot mismatch",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -256,7 +256,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "fail",
+        "status": "failed",
         "counts": {
           "testFiles": 1,
           "failedFiles": 1,
@@ -292,7 +292,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/console.test.ts",
         "project": "rstest",
         "fullName": "agent-md > fails with console output",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -318,12 +318,12 @@ describe('md', () => {
       codeFrame (error 1):
 
       \`\`\`text
-       6 |     console.warn('hello from console.warn');
-       7 |     console.error('hello from console.error');
-       8 |     expect(1).toBe(2);
-         |               ^
-       9 |   });
-      10 | });
+         6 |     console.warn('hello from console.warn');
+         7 |     console.error('hello from console.error');
+      >  8 |     expect(1).toBe(2);
+           |               ^
+         9 |   });
+        10 | });
       \`\`\`
 
       console:
@@ -375,7 +375,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "fail",
+        "status": "failed",
         "counts": {
           "testFiles": 1,
           "failedFiles": 1,
@@ -411,7 +411,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/throw.test.ts",
         "project": "rstest",
         "fullName": "agent-md > fails with thrown error",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -465,7 +465,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "fail",
+        "status": "failed",
         "counts": {
           "testFiles": 1,
           "failedFiles": 1,
@@ -501,7 +501,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/timeout.test.ts",
         "project": "rstest",
         "fullName": "agent-md > fails with timeout",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -557,7 +557,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "fail",
+        "status": "failed",
         "counts": {
           "testFiles": 1,
           "failedFiles": 1,
@@ -637,7 +637,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/truncated.test.ts",
         "project": "rstest",
         "fullName": "agent-md > truncated case 1",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -675,7 +675,7 @@ describe('md', () => {
         "testPath": "fixtures/agent-md/truncated.test.ts",
         "project": "rstest",
         "fullName": "agent-md > truncated case 2",
-        "status": "fail",
+        "status": "failed",
         "duration": 0,
         "retryCount": 0,
         "errors": [
@@ -735,7 +735,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "pass",
+        "status": "passed",
         "counts": {
           "testFiles": 2,
           "failedFiles": 0,
@@ -803,7 +803,7 @@ describe('md', () => {
 
       \`\`\`json
       {
-        "status": "pass",
+        "status": "passed",
         "counts": {
           "testFiles": 2,
           "failedFiles": 0,

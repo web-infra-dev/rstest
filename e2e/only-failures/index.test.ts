@@ -6,9 +6,11 @@ import {
   describe,
   expect,
   it,
+  type TestRunStartPayload,
   type onTestFinished as OnTestFinished,
 } from '@rstest/core';
-import { runRstestCli } from '../scripts/';
+import { normalize } from 'pathe';
+import { parseMarkerPayload, runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(__dirname, './fixtures');
@@ -65,13 +67,24 @@ describe('--onlyFailures', () => {
     const full = await run(onTestFinished, { FAIL_FIRST: '1' });
     await full.expectExecFailed();
     expect(ranFiles(full.cli.stdout)).toEqual(['first', 'second', 'third']);
-
+    const selection = (stdout: string) =>
+      parseMarkerPayload<{ selection: TestRunStartPayload }>(
+        stdout,
+        '__RSTEST_REPORTER_CONTRACT__',
+      ).selection.files;
     // `--onlyFailures` re-runs only the failed `first` file (still failing).
     const only = await run(onTestFinished, { FAIL_FIRST: '1' }, [
       '--onlyFailures',
     ]);
     await only.expectExecFailed();
     expect(ranFiles(only.cli.stdout)).toEqual(['first']);
+    expect(selection(only.cli.stdout)).toEqual([
+      {
+        project: 'selection',
+        testPath: normalize(join(fixtures, 'first.test.ts')),
+        testId: `file:${normalize(join(fixtures, 'first.test.ts'))}`,
+      },
+    ]);
     only.expectLog('onlyFailures: running 1 of 3 test files (2 deselected).');
   }, 90_000);
 

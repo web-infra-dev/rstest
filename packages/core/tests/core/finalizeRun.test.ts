@@ -3,15 +3,29 @@ import { createExitCode } from '../../src/core/exitCode';
 import { finalizeRunCycle } from '../../src/core/finalizeRun';
 import { BlobReporter } from '../../src/reporter/blob';
 import type { InternalContext } from '../../src/types';
-import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
+import type {
+  CoverageMap,
+  CoverageMapData,
+  CoverageProvider,
+} from '../../src/types/coverage';
 import { noopTraceSpan } from '../../src/utils';
 
 describe('finalizeRunCycle', () => {
-  it.for(['none', 'pre-start', 'before', 'reporter', 'raw'])(
+  it.for(['none', 'pre-start', 'before', 'reporter', 'raw', 'coverage'])(
     'finalizes blob runs with interruption at %s',
     async (phase) => {
       let interrupted = phase === 'before' || phase === 'pre-start';
       const generatedReports: number[] = [];
+      const collectedFile = {
+        path: '/collected.ts',
+        statementMap: {},
+        fnMap: {},
+        branchMap: {},
+        s: { 0: 3 },
+        f: {},
+        b: {},
+      };
+      const coverageData: CoverageMapData = { '/collected.ts': collectedFile };
       const coverageMap: CoverageMap = {
         data: {},
         addFileCoverage() {},
@@ -19,12 +33,14 @@ describe('finalizeRunCycle', () => {
         fileCoverageFor() {
           throw new Error('No file coverage');
         },
-        filter() {},
+        filter() {
+          delete coverageData['/collected.ts'];
+        },
         getCoverageSummary() {
           throw new Error('No coverage summary');
         },
         merge() {},
-        toJSON: () => ({}),
+        toJSON: () => coverageData,
       };
       const coverageProvider = {
         init() {},
@@ -41,13 +57,22 @@ describe('finalizeRunCycle', () => {
         generateCoverageForUntestedFiles: async () => [],
         async generateReports() {
           generatedReports.push(1);
+          if (phase === 'coverage') context.exitCode.raise(1);
         },
         cleanup() {},
       } satisfies CoverageProvider;
       const blobReporter = Object.create(
         BlobReporter.prototype,
       ) as BlobReporter;
-      blobReporter.onTestRunEnd = rs.fn(async () => {
+      blobReporter.onTestRunEnd = rs.fn(async (payload) => {
+        if (!interrupted) {
+          expect(payload.coverage).toEqual({ '/collected.ts': collectedFile });
+          expect(coverageData).toEqual({});
+        }
+        if (phase === 'coverage') {
+          expect(payload.status).toBe('failed');
+          expect(generatedReports).toEqual([1]);
+        }
         if (phase === 'reporter') {
           await Promise.resolve();
           interrupted = true;
@@ -93,13 +118,17 @@ describe('finalizeRunCycle', () => {
         },
       });
 
-      expect(generatedReports).toEqual(interrupted ? [] : [1]);
+      expect(generatedReports).toEqual(
+        interrupted && phase !== 'reporter' ? [] : [1],
+      );
       expect(blobReporter.onTestRunEnd).toHaveBeenCalledTimes(
         phase === 'pre-start' ? 0 : 1,
       );
       expect(context.updateReporterResultState).toHaveBeenCalledTimes(1);
       expect(finalizeTrace).toHaveBeenCalledTimes(1);
-      expect(context.exitCode.current).toBe(interrupted ? 130 : 0);
+      expect(context.exitCode.current).toBe(
+        interrupted ? 130 : phase === 'coverage' ? 1 : 0,
+      );
     },
   );
 });

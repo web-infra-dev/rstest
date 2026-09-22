@@ -530,6 +530,26 @@ export function createNodeExecutor(
       });
     }
 
+    await opts.onSelected?.(
+      projectPlans.flatMap(({ p, finalEntries }) =>
+        finalEntries.map(({ testPath }) => ({ testPath, project: p.name })),
+      ),
+    );
+
+    // A run-start hook can yield to cancellation before setup or workers begin.
+    if (didClose) {
+      return {
+        results: [],
+        testResults: [],
+        errors: [],
+        testPaths: [],
+        duration: {
+          buildTime: rebuildTime ?? Date.now() - cycleStart,
+          testTime: 0,
+        },
+      };
+    }
+
     const returns = await Promise.all(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
     );

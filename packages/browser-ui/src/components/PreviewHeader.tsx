@@ -40,9 +40,9 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
 
   // Map internal status to Geist scale name
   const colorKey =
-    status === 'pass'
+    status === 'passed'
       ? 'green'
-      : status === 'fail'
+      : status === 'failed'
         ? 'red'
         : status === 'running'
           ? 'amber'

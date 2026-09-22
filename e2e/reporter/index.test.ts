@@ -1,7 +1,12 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { parseMarkerPayload, runRstestCli } from '../scripts';
+import { normalize } from 'pathe';
+import {
+  expectReporterHookJoins,
+  parseMarkerPayload,
+  runRstestCli,
+} from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -13,6 +18,76 @@ const parseReporterMetadata = (stdout: string) =>
   );
 
 describe.concurrent('reporters', () => {
+  it.for(['string', 'tuple'])(
+    'loads a %s module with options and context and joins overlapping async hooks',
+    async (form, { onTestFinished }) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'fixtures/contract.config.mjs',
+          ...(form === 'string'
+            ? ['--reporters', './fixtures/contract-reporter.mjs']
+            : []),
+        ],
+        onTestFinished,
+        options: { nodeOptions: { cwd: __dirname } },
+      });
+      await expectExecSuccess();
+      const payload = parseMarkerPayload<{
+        options: Record<string, unknown>;
+        rootPath: string;
+        name: string;
+        status: string;
+        selection: {
+          files: { testId: string; testPath: string; project: string }[];
+        };
+        events: { event: string; testId?: string; testPath?: string }[];
+      }>(cli.stdout, '__RSTEST_REPORTER_CONTRACT__');
+      expect(payload.options).toEqual(
+        form === 'tuple' ? { marker: 'custom-options' } : {},
+      );
+      expect(payload).toMatchObject({
+        rootPath: __dirname,
+        name: 'contract',
+        status: 'passed',
+      });
+      expect(payload.selection.files).toEqual(
+        ['focusedSkip.test.ts', 'many.test.ts'].map((name) => {
+          const testPath = normalize(
+            join(__dirname, 'fixtures/agent-md-pass', name),
+          );
+          return { testPath, testId: `file:${testPath}`, project: 'contract' };
+        }),
+      );
+      const { events } = payload;
+      const starts = events.filter(({ event }) => event === 'start-enter');
+      expect(starts).toHaveLength(14);
+      await expectReporterHookJoins(events);
+      expect(
+        events.filter(({ event }) => event === 'file-result'),
+      ).toHaveLength(2);
+    },
+  );
+
+  it('rejects a bare reporter class through the CLI', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'fixtures/contract.config.mjs'],
+      onTestFinished,
+      options: {
+        nodeOptions: { cwd: __dirname, env: { RSTEST_BARE_REPORTER: '1' } },
+      },
+    });
+    await expectExecFailed();
+    expect(cli.stdout + cli.stderr).toContain(
+      'Reporter classes cannot be passed directly. Pass a reporter instance or [moduleName, options].',
+    );
+  });
+
   it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

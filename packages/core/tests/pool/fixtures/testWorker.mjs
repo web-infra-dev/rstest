@@ -78,7 +78,7 @@ const makeRunResult = (request, extra) => ({
   testId: getFileTaskId(request.options?.entryInfo?.testPath ?? '/test.ts'),
   testPath: request.options?.entryInfo?.testPath ?? '/test.ts',
   project: 'default',
-  status: 'pass',
+  status: 'passed',
   name: '',
   results: [],
   // Test-only fields so the test can verify pool behavior. Under threads

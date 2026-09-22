@@ -140,7 +140,7 @@ export class Worker {
         );
       }
       if (
-        result.status === 'fail' &&
+        result.status === 'failed' &&
         result.summary.tests.failed === 0 &&
         result.summary.files.failed === 0
       ) {

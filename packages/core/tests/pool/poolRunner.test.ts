@@ -57,7 +57,7 @@ class CleanupTimeoutWorker implements PoolWorker {
             unmatched: 0,
             updated: 0,
           },
-          status: 'pass',
+          status: 'passed',
           testId: 'file:/test.ts',
           testPath: '/test.ts',
         },
@@ -167,7 +167,7 @@ class WorkerCleanupErrorWorker implements PoolWorker {
           name: '',
           project: 'default',
           results: [],
-          status: 'fail',
+          status: 'failed',
           testId: 'file:/test.ts',
           testPath: '/test.ts',
           errors: [{ name: 'Error', message: 'worker cleanup failed' }],
@@ -245,7 +245,7 @@ class MemoryReportingWorker implements PoolWorker {
               name: '',
               project: 'default',
               results: [],
-              status: 'pass',
+              status: 'passed',
               testId: 'file:/test.ts',
               testPath: '/test.ts',
             },
@@ -311,7 +311,7 @@ describe('PoolRunner file fixture cleanup watchdog', () => {
           coverageRaw: { preserved: true },
           meta: { preserved: true },
           snapshotResult: expect.objectContaining({ added: 1 }),
-          status: 'fail',
+          status: 'failed',
           errors: [
             expect.objectContaining({
               message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
@@ -394,7 +394,7 @@ describe('PoolRunner worker fixture cleanup', () => {
     await expect(runner.runTest(createTask())).resolves.toEqual(
       expect.objectContaining({
         coverageRaw: { preserved: true },
-        status: 'fail',
+        status: 'failed',
         errors: [expect.objectContaining({ message: 'worker cleanup failed' })],
       }),
     );

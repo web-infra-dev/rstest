@@ -190,7 +190,7 @@ it('observes the env deletion in the reused worker', () => {
     `__RSTEST_API_RESULT__${JSON.stringify({
       results: [resultA.status, resultB.status],
       initializedEnv,
-      reusedWorkerDeletion: reusedWorkerResult.status === 'pass',
+      reusedWorkerDeletion: reusedWorkerResult.status === 'passed',
       observedMutations,
       successHostState,
       failure: {

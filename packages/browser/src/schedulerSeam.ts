@@ -1,4 +1,7 @@
-import type { ExecutorCycleOutcome } from '@rstest/core/internal/browser';
+import type {
+  ExecutorCycleOutcome,
+  ExecutorRunCycleOptions,
+} from '@rstest/core/internal/browser';
 import type { BrowserDispatchRequest } from './protocol';
 import type { BrowserProviderPage } from './providers';
 
@@ -19,7 +22,10 @@ import type { BrowserProviderPage } from './providers';
  */
 export type BrowserWatchSession = {
   /** Execute the scope the last trigger resolved, as one cycle outcome. */
-  runCycle: (testPaths: string[]) => Promise<ExecutorCycleOutcome>;
+  runCycle: (
+    testPaths: string[],
+    onSelected?: ExecutorRunCycleOptions['onSelected'],
+  ) => Promise<ExecutorCycleOutcome>;
   /** Explicit path-scoped rerun request (a CLI shortcut's browser fanout). */
   requestRerun: (testPaths?: string[]) => Promise<void>;
 };

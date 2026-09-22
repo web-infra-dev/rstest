@@ -111,7 +111,8 @@ export const writeResultsCache = async (
       // and skip/todo carry no meaningful timing — both preserve the previous
       // smoothed duration instead of poisoning the average with a missing or
       // near-zero sample.
-      const isPassFail = result.status === 'pass' || result.status === 'fail';
+      const isPassFail =
+        result.status === 'passed' || result.status === 'failed';
       let duration = prev?.duration;
       if (isPassFail && result.duration != null) {
         duration =
@@ -125,7 +126,7 @@ export const writeResultsCache = async (
 
       files[key] = {
         duration,
-        failed: result.status === 'fail',
+        failed: result.status === 'failed',
         at: now,
       };
     }

@@ -3,7 +3,9 @@ import type { TraceEvent } from '../utils/trace';
 import type { InternalProjectContext, ListCommandResult } from './core';
 import type { CoverageMapData, RawCoverageResolveOptions } from './coverage';
 import type { SourceMapInput } from './reporter';
-import type { TestFileResult, TestResult } from './testSuite';
+import type { TestFileInfo, TestFileResult, TestResult } from './testSuite';
+
+export type SelectedTestFile = Pick<TestFileInfo, 'testPath' | 'project'>;
 
 /**
  * Options for a single {@link TestExecutor.runCycle}. Core owns cycle
@@ -53,6 +55,8 @@ export interface ExecutorRunCycleOptions {
    */
   env?: Record<string, string | undefined>;
   onTraceEvents?: (events: TraceEvent[]) => void;
+  /** Await core's run-start barrier after selection, before runner events. */
+  onSelected?: (files: SelectedTestFile[]) => Promise<void>;
 }
 
 /**

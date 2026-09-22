@@ -1,5 +1,5 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
-import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
+import type { RawTestFileResult, RuntimeRPC, ServerRPC } from '../types';
 import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
 import { toError } from '../utils';
 import {
@@ -41,8 +41,8 @@ type TaskKind = 'run' | 'collect';
 type PendingTask = {
   kind: TaskKind;
   taskId: number;
-  provisionalResult?: TestFileResult;
-  resolve: (result: TestFileResult | CollectTaskResult) => void;
+  provisionalResult?: RawTestFileResult;
+  resolve: (result: RawTestFileResult | CollectTaskResult) => void;
   reject: (err: Error) => void;
 };
 
@@ -195,8 +195,8 @@ export class PoolRunner {
     });
   }
 
-  runTest(task: PoolTask): Promise<TestFileResult> {
-    return this.runTaskInternal('run', task) as Promise<TestFileResult>;
+  runTest(task: PoolTask): Promise<RawTestFileResult> {
+    return this.runTaskInternal('run', task) as Promise<RawTestFileResult>;
   }
 
   collectTests(task: PoolTask): Promise<CollectTaskResult> {
@@ -358,7 +358,7 @@ export class PoolRunner {
   private runTaskInternal(
     kind: TaskKind,
     task: PoolTask,
-  ): Promise<TestFileResult | CollectTaskResult> {
+  ): Promise<RawTestFileResult | CollectTaskResult> {
     if (this.state !== 'STARTED') {
       return Promise.reject(
         new Error(
@@ -382,7 +382,7 @@ export class PoolRunner {
     this.worker.resetCapturedStderr();
 
     const taskId = ++nextTaskSeq;
-    return new Promise<TestFileResult | CollectTaskResult>(
+    return new Promise<RawTestFileResult | CollectTaskResult>(
       (resolve, reject) => {
         this.currentTask = { kind, taskId, resolve, reject };
 
@@ -484,7 +484,7 @@ export class PoolRunner {
   private resolveTask(
     kind: TaskKind,
     taskId: number,
-    result: TestFileResult | CollectTaskResult,
+    result: RawTestFileResult | CollectTaskResult,
   ): void {
     const task = this.currentTask;
     if (!task || task.kind !== kind || task.taskId !== taskId) return;

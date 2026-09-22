@@ -176,11 +176,11 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
           childStatuses.push(c.status);
         }
 
-        if (childStatuses.some((s) => s === 'fail')) return 'fail';
+        if (childStatuses.some((s) => s === 'failed')) return 'failed';
         if (childStatuses.some((s) => s === 'running')) return 'running';
-        if (childStatuses.every((s) => s === 'pass')) return 'pass';
-        if (childStatuses.every((s) => s === 'skip')) return 'skip';
-        if (childStatuses.some((s) => s === 'pass')) return 'pass';
+        if (childStatuses.every((s) => s === 'passed')) return 'passed';
+        if (childStatuses.every((s) => s === 'skipped')) return 'skipped';
+        if (childStatuses.some((s) => s === 'passed')) return 'passed';
         return 'idle';
       };
 
@@ -314,15 +314,15 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
           (f) => statusMap[f.testPath] ?? 'idle',
         );
         let projectStatus: TestStatus = 'idle';
-        if (fileStatuses.some((s) => s === 'fail')) {
-          projectStatus = 'fail';
+        if (fileStatuses.some((s) => s === 'failed')) {
+          projectStatus = 'failed';
         } else if (fileStatuses.some((s) => s === 'running')) {
           projectStatus = 'running';
         } else if (
           fileStatuses.length > 0 &&
-          fileStatuses.every((s) => s === 'pass')
+          fileStatuses.every((s) => s === 'passed')
         ) {
-          projectStatus = 'pass';
+          projectStatus = 'passed';
         }
         const projectMeta = STATUS_META[projectStatus];
 

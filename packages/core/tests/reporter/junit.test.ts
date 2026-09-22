@@ -13,17 +13,21 @@ describe('JUnitReporter', () => {
     const mockTestResults: TestResult[] = [
       {
         testId: 'test-1',
-        status: 'pass',
+        status: 'passed',
         name: 'should pass',
+        fullName: 'should pass',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 100,
         project: 'default',
       },
       {
         testId: 'test-2',
-        status: 'fail',
+        status: 'failed',
         name: 'should fail',
+        fullName: 'should fail',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 200,
         errors: [
           {
@@ -37,9 +41,11 @@ describe('JUnitReporter', () => {
       },
       {
         testId: 'test-3',
-        status: 'skip',
+        status: 'skipped',
         name: 'should skip',
+        fullName: 'should skip',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 0,
         project: 'default',
       },
@@ -48,12 +54,22 @@ describe('JUnitReporter', () => {
     const mockFileResults: TestFileResult[] = [
       {
         testId: 'test-4',
-        status: 'fail',
+        status: 'failed',
         name: 'test1.test.ts',
+        fullName: 'test1.test.ts',
         testPath: '/test/root/test1.test.ts',
+        relativeTestPath: 'test1.test.ts',
         duration: 300,
         results: mockTestResults,
         project: 'default',
+        summary: {
+          total: 3,
+          passed: 1,
+          failed: 1,
+          skipped: 1,
+          todo: 0,
+          flaky: 0,
+        },
       },
     ];
 
@@ -129,6 +145,97 @@ describe('JUnitReporter', () => {
     expect(logs.some((log) => log.includes('failures="0"'))).toBe(true);
   });
 
+  it('uses authoritative summaries and durations', async () => {
+    const logs: string[] = [];
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    const reporter = new JUnitReporter({ rootPath: '/test/root' });
+    const testResult: TestResult = {
+      testId: 'case-1',
+      status: 'passed',
+      name: 'short name',
+      fullName: 'suite > authoritative name',
+      testPath: '/different/root/test.test.ts',
+      relativeTestPath: 'payload/test.test.ts',
+      duration: 10,
+      project: 'default',
+    };
+    const fileResult: TestFileResult = {
+      ...testResult,
+      testId: 'file-1',
+      fullName: 'ignored file name',
+      duration: 4200,
+      results: [testResult],
+      summary: {
+        total: 9,
+        passed: 2,
+        failed: 3,
+        skipped: 1,
+        todo: 3,
+        flaky: 0,
+      },
+    };
+
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      results: [fileResult],
+      testResults: [testResult],
+      summary: {
+        tests: {
+          total: 20,
+          passed: 8,
+          failed: 4,
+          skipped: 2,
+          todo: 5,
+          flaky: 1,
+        },
+        files: { total: 1, failed: 1 },
+      },
+      duration: { totalTime: 9900, buildTime: 700, testTime: 8700 },
+    });
+
+    const xml = logs.join('\n');
+    expect(xml).toContain(
+      '<testsuites name="rstest tests" tests="20" failures="4" errors="0" skipped="7" time="8.7"',
+    );
+    expect(xml).toContain(
+      '<testsuite name="payload/test.test.ts" tests="9" failures="3" errors="0" skipped="4" time="4.2"',
+    );
+    expect(xml).toContain(
+      '<testcase name="suite &gt; authoritative name" classname="payload/test.test.ts" time="0.01">',
+    );
+  });
+
+  it('reports escaped unhandled errors as suite stderr', async () => {
+    const logs: string[] = [];
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    const reporter = new JUnitReporter({ rootPath: '/test/root' });
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      unhandledErrors: [
+        {
+          name: 'UnhandledError',
+          message: 'crashed <before> & after',
+          stack:
+            'UnhandledError: crashed <before> & after\n    at setup.ts:1:1',
+        },
+      ],
+    });
+
+    const xml = logs.join('\n');
+    expect(xml).toContain('errors="1"');
+    expect(xml).toContain('<testsuite name="rstest unhandled errors"');
+    expect(xml).toContain(
+      '<system-err>UnhandledError: crashed &lt;before&gt; &amp; after',
+    );
+    expect(xml).not.toContain('crashed <before> & after');
+  });
+
   it('should escape XML special characters', async () => {
     // Mock console.log to capture output
     const logs: string[] = [];
@@ -144,9 +251,11 @@ describe('JUnitReporter', () => {
     const mockTestResults: TestResult[] = [
       {
         testId: 'test-5',
-        status: 'fail',
+        status: 'failed',
         name: 'test with <xml> & "quotes" & \'apos\'',
+        fullName: 'test with <xml> & "quotes" & \'apos\'',
         testPath: '/test/root/test.test.ts',
+        relativeTestPath: 'test.test.ts',
         duration: 100,
         errors: [
           {
@@ -162,12 +271,22 @@ describe('JUnitReporter', () => {
     const mockFileResults: TestFileResult[] = [
       {
         testId: 'test-6',
-        status: 'fail',
+        status: 'failed',
         name: 'test.test.ts',
+        fullName: 'test.test.ts',
         testPath: '/test/root/test.test.ts',
+        relativeTestPath: 'test.test.ts',
         duration: 100,
         results: mockTestResults,
         project: 'default',
+        summary: {
+          total: 1,
+          passed: 0,
+          failed: 1,
+          skipped: 0,
+          todo: 0,
+          flaky: 0,
+        },
       },
     ];
 

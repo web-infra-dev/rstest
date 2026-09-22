@@ -11,9 +11,9 @@ import type {
 import type { Reporter } from './reporter';
 import type {
   SerializedError,
+  RawTestInfo,
   TestCaseInfo,
   TestFileResult,
-  TestInfo,
   TestResult,
 } from './testSuite';
 
@@ -58,6 +58,7 @@ export type InternalProjectContext = {
 type RunningModules = Map<
   string,
   {
+    relativeTestPath: string;
     runningTests: TestCaseInfo[];
     results: TestResult[];
   }
@@ -137,6 +138,8 @@ export type InternalContext = {
   /** CLI-owned exit handler for a fatal cycle after watch startup. */
   onFatalWatchFailure?: (error: Error) => void;
   reporters: Reporter[];
+  /** Resolve and construct configured third-party reporters. */
+  initializeReporters: () => Promise<void>;
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;
   reporterResults: {
@@ -156,7 +159,7 @@ export type ListCommandCollectOptions = {
 };
 
 export type ListCommandResult = {
-  tests: TestInfo[];
+  tests: RawTestInfo[];
   testPath: string;
   project: string;
   errors?: SerializedError[];
