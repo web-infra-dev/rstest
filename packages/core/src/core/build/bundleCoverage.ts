@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'pathe';
-import { color, logger } from '../utils';
+import { color, logger } from '../../utils';
 
 const BUNDLE_COVERAGE_DEBUG = 'rstest:bundle-coverage';
 

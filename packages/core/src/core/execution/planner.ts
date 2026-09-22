@@ -1,18 +1,21 @@
 import type { RsbuildInstance } from '@rsbuild/core';
-import type { InternalProjectContext } from '../types';
-import { filterFiles, type TraceEvent } from '../utils';
+import type { InternalProjectContext } from '../../types';
+import { filterFiles, type TraceEvent } from '../../utils';
 import {
   type BrowserRunPlan,
   createBrowserRunPlanner,
-} from './browser/runPlanner';
+} from '../browser/runPlanner';
 import {
   createProjectPlanState,
   type ProjectPlan,
   syncNodeProjects,
 } from './projectPlan';
-import { prepareRsbuild } from './rsbuild';
-import type { Rstest } from './rstest';
-import { createSetupFileState, type SetupFileState } from './setupFileState';
+import { prepareRsbuild } from '../build/rsbuild';
+import type { Rstest } from '../rstest';
+import {
+  createSetupFileState,
+  type SetupFileState,
+} from '../config/setupFileState';
 
 /**
  * The node build machinery a `NodeExecutor` is constructed from, brought up by

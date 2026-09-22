@@ -2,12 +2,12 @@ import type {
   InternalContext,
   InternalProjectContext,
   ProjectEntries,
-} from '../types';
+} from '../../types';
 import {
   applyEnvironmentComment,
   getShardedFiles,
   type ShardCounts,
-} from '../utils';
+} from '../../utils';
 import {
   getEnvironmentKey,
   groupProjectEntriesByEnvironment,

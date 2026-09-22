@@ -1,6 +1,6 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
-import type { RstestExitCode } from '../core/exitCode';
-import type { TestStateManager } from '../core/stateManager';
+import type { RstestExitCode } from '../core/execution/exitCode';
+import type { TestStateManager } from '../core/execution/stateManager';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import type {
   EnvironmentName,

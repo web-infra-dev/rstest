@@ -5,7 +5,7 @@ import type {
   RsbuildConfig,
   RsbuildInstance,
 } from '@rsbuild/core';
-import { clonePlainConfig, mergeRstestConfig } from '../config';
+import { clonePlainConfig, mergeRstestConfig } from '../../config';
 import type {
   EnvironmentWithOptions,
   InternalContext,
@@ -14,7 +14,7 @@ import type {
   NormalizedConfig,
   NormalizedProjectConfig,
   RstestExposeAPI,
-} from '../types';
+} from '../../types';
 import {
   castArray,
   ENV,
@@ -27,7 +27,7 @@ import {
   isPlainObject,
   normalizeBuildCache,
   TS_CONFIG_FILE,
-} from '../utils';
+} from '../../utils';
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 

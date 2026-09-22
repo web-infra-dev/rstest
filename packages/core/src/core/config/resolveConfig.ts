@@ -4,10 +4,10 @@ import {
   formatNoProjectsFoundError,
   mergeWithCLIOptions,
   resolveProjects,
-} from '../cli/init';
-import { clonePlainConfig, resolveExtends } from '../config';
-import type { Project, RstestConfig } from '../types';
-import { filterProjects, getAbsolutePath } from '../utils';
+} from '../../cli/init';
+import { clonePlainConfig, resolveExtends } from '../../config';
+import type { Project, RstestConfig } from '../../types';
+import { filterProjects, getAbsolutePath } from '../../utils';
 
 export type ResolvedRunnerInputs = {
   result: LoadConfigResult<RstestConfig>;

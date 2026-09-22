@@ -1,5 +1,5 @@
 import { describe, expect, it, rs } from '@rstest/core';
-import { createCoverageResourceLoaders } from '../../src/core/executors/nodeExecutor';
+import { createCoverageResourceLoaders } from '../../src/core/execution/nodeExecutor';
 
 describe('createCoverageResourceLoaders', () => {
   it('loads resources by normalized aliases using canonical asset names', async () => {

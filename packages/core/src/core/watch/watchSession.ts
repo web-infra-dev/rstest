@@ -1,7 +1,7 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { exitReporters } from '../reporter';
-import type { ExecutorCycleOutcome, TestExecutor } from '../types';
-import type { CoverageProvider } from '../types/coverage';
+import { exitReporters } from '../../reporter';
+import type { ExecutorCycleOutcome, TestExecutor } from '../../types';
+import type { CoverageProvider } from '../../types/coverage';
 import {
   clearScreen,
   color,
@@ -10,20 +10,20 @@ import {
   type TraceController,
   type TraceEvent,
   type TraceRun,
-} from '../utils';
-import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+} from '../../utils';
+import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
 import { logWatchReadyMessage, type setupCliShortcuts } from './cliShortcuts';
 import {
   finalizeRunCycle,
   notifyReportersOnTestRunStart,
   runLifecycleStep,
-} from './finalizeRun';
+} from '../execution/finalizeRun';
 import {
   GLOBAL_TEARDOWN_ERROR,
   globalSetupFailureOutcome,
   runGlobalTeardown,
-} from './globalSetup';
-import type { Rstest } from './rstest';
+} from '../execution/globalSetup';
+import type { Rstest } from '../rstest';
 import {
   collectFailedTestPaths,
   collectUnmatchedSnapshotTestPaths,

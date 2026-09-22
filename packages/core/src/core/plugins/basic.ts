@@ -9,7 +9,7 @@ import {
 import { createVmTimersShim } from '../../runtime/worker/vm/timers';
 import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
-import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
+import { runtimeChunkNameForEnvironment } from '../build/runtimeChunk';
 import {
   applyMockExportsPresence,
   forceWebpackRuntimeMode,

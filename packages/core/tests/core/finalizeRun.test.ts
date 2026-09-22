@@ -1,6 +1,6 @@
 import { withDefaultConfig } from '../../src/config';
-import { createExitCode } from '../../src/core/exitCode';
-import { finalizeRunCycle } from '../../src/core/finalizeRun';
+import { createExitCode } from '../../src/core/execution/exitCode';
+import { finalizeRunCycle } from '../../src/core/execution/finalizeRun';
 import { BlobReporter } from '../../src/reporter/blob';
 import type { InternalContext } from '../../src/types';
 import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';

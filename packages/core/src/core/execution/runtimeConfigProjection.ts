@@ -2,8 +2,8 @@ import type {
   BrowserRuntimeConfig,
   InternalProjectContext,
   RuntimeConfig,
-} from '../types';
-import { resolveTaskColorEnv } from '../utils/logger';
+} from '../../types';
+import { resolveTaskColorEnv } from '../../utils/logger';
 
 type EnvSource = Record<string, string | undefined>;
 

@@ -29,16 +29,16 @@ export type {
 // The executor-capability table's list of RuntimeConfig keys the browser wire
 // ignores/strips; the browser config validation iterates it so a new
 // ignored/stripped row can't become a silent no-op (#1389).
-export { browserIgnoredRuntimeConfigKeys } from './core/executorCapabilities';
+export { browserIgnoredRuntimeConfigKeys } from './core/execution/executorCapabilities';
 // Single core-owned RuntimeConfig projection (node inherit / browser static)
-export { projectRuntimeConfig } from './core/runtimeConfigProjection';
-export { CompileFailedError } from './core/rsbuild';
+export { projectRuntimeConfig } from './core/execution/runtimeConfigProjection';
+export { CompileFailedError } from './core/build/rsbuild';
 // Shared runner-event pump so the browser host feeds stateManager and fans out
 // to reporters through the same implementation as the node pool.
 export {
   createRunnerEventSink,
   type RunnerEventSink,
-} from './core/runnerEventSink';
+} from './core/execution/runnerEventSink';
 // Shared snapshot path resolver so the browser host matches the node pool
 export {
   resolveSnapshotPathDefault,
@@ -46,7 +46,7 @@ export {
 } from './utils/snapshotPath';
 // Shared watch-ready banner so the browser host prints the same hint text as
 // the node watch loop.
-export { logWatchReadyMessage } from './core/cliShortcuts';
+export { logWatchReadyMessage } from './core/watch/cliShortcuts';
 // Shared watch invalidation policy (chunk-hash diff + setup-change=>rerun-all)
 // so the browser watch plugin applies the same rerun rules as the node
 // dev-compile pipeline, with baselines keyed per project.
@@ -55,7 +55,7 @@ export {
   applyWatchInvalidation,
   type EntryHashSnapshot,
   type WatchInvalidationState,
-} from './core/watchInvalidation';
+} from './core/watch/watchInvalidation';
 // Shared silent-console buffering engine so the browser host replays
 // `silent: 'passed-only'` logs through the same controller as the node worker.
 export { createSilentConsoleController } from './runtime/worker/silentConsole';
@@ -80,7 +80,7 @@ export {
   getUserRstestConfigPluginProjects,
   hasUserRstestConfigPlugins,
   initModifyRstestConfigHooks,
-} from './core/modifyRstestConfig';
+} from './core/config/modifyRstestConfig';
 // Trace primitives — the browser host instantiates PhaseTracker per test file
 // and forwards its events via `BrowserTestRunOptions.onTraceEvents`.
 export { PhaseTracker } from './runtime/worker/phaseTracker';

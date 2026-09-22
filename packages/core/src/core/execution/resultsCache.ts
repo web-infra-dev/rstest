@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative } from 'pathe';
-import type { TestFileResult } from '../types';
-import { logger, RESULTS_CACHE_DIR } from '../utils';
+import type { TestFileResult } from '../../types';
+import { logger, RESULTS_CACHE_DIR } from '../../utils';
 
 /**
  * Persistent, best-effort record of each test file's last-known runtime and

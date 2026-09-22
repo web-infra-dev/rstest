@@ -14,8 +14,8 @@ import {
   createRsbuildServer,
   excludeVirtualSetupFromCoverage,
   prepareRsbuild,
-} from '../../src/core/rsbuild';
-import { createSetupFileState } from '../../src/core/setupFileState';
+} from '../../src/core/build/rsbuild';
+import { createSetupFileState } from '../../src/core/config/setupFileState';
 import type {
   InternalContext,
   ResolvedRstestConfig,

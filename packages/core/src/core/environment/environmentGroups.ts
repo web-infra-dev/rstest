@@ -3,12 +3,12 @@ import type {
   NormalizedProjectConfig,
   ProjectEntries,
   TestEnvironmentModuleReference,
-} from '../types';
-import type { EnvironmentComment } from '../utils';
+} from '../../types';
+import type { EnvironmentComment } from '../../utils';
 import {
   applyEnvironmentComment,
   parseEnvironmentCommentFromFile,
-} from '../utils';
+} from '../../utils';
 
 const stableJson = (value: unknown): string => {
   if (Array.isArray(value)) {

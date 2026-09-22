@@ -10,7 +10,7 @@ import {
   isTTY,
   logger,
 } from '../utils';
-import { isRelatedRun } from '../core/buildRunner';
+import { isRelatedRun } from '../core/execution/buildRunner';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { setHostExitCode } from './exitCode';
 import type { CommonOptions } from './init';

@@ -1,10 +1,10 @@
 import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
-import type { CommonOptions } from '../cli/init';
-import { exitReporters } from '../reporter';
-import type { RstestCommand, RstestInstance } from '../types';
-import { logger, quoteFilter } from '../utils';
-import type { ResolvedRunnerInputs } from './resolveConfig';
+import type { CommonOptions } from '../../cli/init';
+import { exitReporters } from '../../reporter';
+import type { RstestCommand, RstestInstance } from '../../types';
+import { logger, quoteFilter } from '../../utils';
+import type { ResolvedRunnerInputs } from '../config/resolveConfig';
 
 export type CreateRstestContextFn<
   Instance extends RstestInstance = RstestInstance,

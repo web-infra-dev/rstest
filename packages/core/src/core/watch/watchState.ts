@@ -1,4 +1,4 @@
-import type { InternalContext } from '../types';
+import type { InternalContext } from '../../types';
 
 /**
  * Reset what a watch cycle must not inherit, before either executor streams

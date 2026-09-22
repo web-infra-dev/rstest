@@ -4,9 +4,9 @@ import {
   ensurePackageInstalled,
   isPackageInstalled,
   type InstallPackageOptions,
-} from '../utils/packageInstaller';
-import type { EnvironmentName } from '../types';
-import { color } from '../utils';
+} from '../../utils/packageInstaller';
+import type { EnvironmentName } from '../../types';
+import { color } from '../../utils';
 
 export type EnvironmentDependencyName = Extract<
   EnvironmentName,

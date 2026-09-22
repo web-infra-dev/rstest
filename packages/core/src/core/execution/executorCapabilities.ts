@@ -1,4 +1,4 @@
-import type { RuntimeConfig } from '../types';
+import type { RuntimeConfig } from '../../types';
 
 export type CapabilityStatus =
   /** Consumed by this executor. */

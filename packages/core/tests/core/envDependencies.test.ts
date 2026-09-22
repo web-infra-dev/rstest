@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from 'node:util';
 import path from 'node:path';
 import { afterEach, describe, expect, it, rs } from '@rstest/core';
 import { withTempDir } from '../helpers/tempDir';
-import { ensureTestEnvironmentDependencies } from '../../src/core/envDependencies';
+import { ensureTestEnvironmentDependencies } from '../../src/core/environment/envDependencies';
 
 const isMockPackageInstalled = (packageName: string, root: string) => {
   return fs.existsSync(path.join(root, 'node_modules', packageName));

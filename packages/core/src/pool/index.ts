@@ -35,20 +35,20 @@ import {
 } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { assertWorkerEnvironmentOptions } from './workerOptions';
-import { getEnvironmentKey } from '../core/environmentGroups';
-import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
-import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
-import { composeWorkerEnv } from '../core/workerEnv';
+import { getEnvironmentKey } from '../core/environment/environmentGroups';
+import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/environment/envDependencies';
+import { projectRuntimeConfig } from '../core/execution/runtimeConfigProjection';
+import { composeWorkerEnv } from '../core/environment/workerEnv';
 import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import {
   type BundleCoverageResult,
   isBundleCoverageDebugEnabled,
-} from '../core/bundleCoverage';
+} from '../core/build/bundleCoverage';
 import {
   createRunnerEventSink,
   type RunnerEventSink,
   sinkToRuntimeRpc,
-} from '../core/runnerEventSink';
+} from '../core/execution/runnerEventSink';
 import { Pool } from './pool';
 import type { PoolTask, PoolWorkerKind } from './types';
 

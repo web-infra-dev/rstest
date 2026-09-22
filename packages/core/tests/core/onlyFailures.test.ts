@@ -1,11 +1,11 @@
 import { describe, expect, it } from '@rstest/core';
-import { applyOnlyFailuresSelection } from '../../src/core/onlyFailures';
+import { applyOnlyFailuresSelection } from '../../src/core/execution/onlyFailures';
 import {
   type CachedFileResult,
   type ResultsCacheData,
   sequenceKey,
-} from '../../src/core/resultsCache';
-import type { SequenceHints } from '../../src/core/testSequencer';
+} from '../../src/core/execution/resultsCache';
+import type { SequenceHints } from '../../src/core/execution/testSequencer';
 
 const rootPath = '/root';
 

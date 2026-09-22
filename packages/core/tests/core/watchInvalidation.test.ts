@@ -3,7 +3,7 @@ import {
   applyWatchInvalidation,
   type EntryHashSnapshot,
   type WatchInvalidationState,
-} from '../../src/core/watchInvalidation';
+} from '../../src/core/watch/watchInvalidation';
 
 const snapshot = (
   entries: Record<string, Record<string, string>>,

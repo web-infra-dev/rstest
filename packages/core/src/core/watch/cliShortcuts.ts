@@ -1,5 +1,5 @@
-import type { InternalContext } from '../types';
-import { clearScreen, color, isTTY, logger } from '../utils';
+import type { InternalContext } from '../../types';
+import { clearScreen, color, isTTY, logger } from '../../utils';
 
 export const isCliShortcutsEnabled = (context: InternalContext): boolean =>
   !context.embedded && isTTY('stdin');

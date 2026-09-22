@@ -37,8 +37,8 @@ import {
   resolveBuildCacheDependencyPaths,
   TS_CONFIG_FILE,
 } from '../utils';
-import { createExitCode, type RstestExitCode } from './exitCode';
-import { TestStateManager } from './stateManager';
+import { createExitCode, type RstestExitCode } from './execution/exitCode';
+import { TestStateManager } from './execution/stateManager';
 
 /**
  * Only letters, numbers, "-", "_", and "$" are allowed.

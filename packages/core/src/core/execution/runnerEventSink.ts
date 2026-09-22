@@ -8,9 +8,9 @@ import type {
   TestResult,
   TestSuiteInfo,
   UserConsoleLog,
-} from '../types';
-import { color, logger, toError } from '../utils';
-import { resolveSnapshotPathDefault } from '../utils/snapshotPath';
+} from '../../types';
+import { color, logger, toError } from '../../utils';
+import { resolveSnapshotPathDefault } from '../../utils/snapshotPath';
 
 /**
  * The single event pump for runner lifecycle events, shared by the node pool

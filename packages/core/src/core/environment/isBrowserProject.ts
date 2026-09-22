@@ -1,4 +1,4 @@
-import type { InternalProjectContext } from '../types';
+import type { InternalProjectContext } from '../../types';
 
 /**
  * The single routing predicate for browser vs node mode. `browser.enabled` is

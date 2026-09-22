@@ -1,4 +1,4 @@
-import type { InternalProjectContext, ProjectEntries } from '../types';
+import type { InternalProjectContext, ProjectEntries } from '../../types';
 import { groupProjectEntriesByEnvironment } from './environmentGroups';
 import { isBrowserProject } from './isBrowserProject';
 

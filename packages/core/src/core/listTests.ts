@@ -10,7 +10,7 @@ import {
   shouldRunGlobalSetup,
   runGlobalSetup,
   runGlobalTeardown,
-} from './globalSetup';
+} from './execution/globalSetup';
 import {
   type BrowserGlobalSetupStageResult,
   runBrowserGlobalSetupStage,
@@ -20,12 +20,15 @@ import {
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
-import { ensureTestEnvironmentDependencies } from './envDependencies';
-import { createRsbuildServer } from './rsbuild';
-import { isBrowserProject, isNodeProject } from './isBrowserProject';
-import { createTestPlanner, type TestPlanner } from './planner';
+import { ensureTestEnvironmentDependencies } from './environment/envDependencies';
+import { createRsbuildServer } from './build/rsbuild';
+import {
+  isBrowserProject,
+  isNodeProject,
+} from './environment/isBrowserProject';
+import { createTestPlanner, type TestPlanner } from './execution/planner';
 import type { Rstest } from './rstest';
-import { prepareTestEnvironmentModules } from './testEnvironmentModule';
+import { prepareTestEnvironmentModules } from './environment/testEnvironmentModule';
 
 /**
  * Collect tests from node mode projects using the planner's node build and the

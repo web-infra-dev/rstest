@@ -2,16 +2,16 @@ import type {
   InternalContext,
   InternalProjectContext,
   ProjectEntries,
-} from '../types';
+} from '../../types';
 import {
   getTestEntries,
   logShardMessage,
   resolveShardedEntries,
   type ShardCounts,
-} from '../utils';
-import { resolveRunnableProjectsByEntries } from './environmentEntries';
-import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
-import { isNodeProject } from './isBrowserProject';
+} from '../../utils';
+import { resolveRunnableProjectsByEntries } from '../environment/environmentEntries';
+import { refreshEnvironmentPartitionEntries } from '../environment/environmentPartitions';
+import { isNodeProject } from '../environment/isBrowserProject';
 
 export const getProjectEntries = async ({
   context,

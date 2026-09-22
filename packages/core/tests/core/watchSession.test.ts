@@ -1,14 +1,14 @@
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, rs } from '@rstest/core';
 import { createResultReporter } from '../../src/api/result';
-import { isCliShortcutsEnabled } from '../../src/core/cliShortcuts';
+import { isCliShortcutsEnabled } from '../../src/core/watch/cliShortcuts';
 import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
   createWatchTeardown,
   registerWatchSignalExit,
-} from '../../src/core/watchSession';
+} from '../../src/core/watch/watchSession';
 import type {
   ExecutorCycleOutcome,
   ExecutorRunCycleOptions,

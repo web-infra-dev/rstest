@@ -14,25 +14,25 @@ import type {
   RawCoverageResolveOptions,
 } from '../../types/coverage';
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
-import { writeBundleCoverageResults } from '../bundleCoverage';
-import { ensureTestEnvironmentDependencies } from '../envDependencies';
+import { writeBundleCoverageResults } from '../build/bundleCoverage';
+import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
   globalSetupFailureOutcome,
   shouldRunGlobalSetup,
   runGlobalSetup,
-} from '../globalSetup';
-import { applyOnlyFailuresSelection } from '../onlyFailures';
-import type { ProjectPlan } from '../projectPlan';
-import { CompileFailedError, createRsbuildServer } from '../rsbuild';
+} from './globalSetup';
+import { applyOnlyFailuresSelection } from './onlyFailures';
+import type { ProjectPlan } from './projectPlan';
+import { CompileFailedError, createRsbuildServer } from '../build/rsbuild';
 import {
   readResultsCache,
   sequenceKey,
   writeResultsCache,
-} from '../resultsCache';
+} from './resultsCache';
 import type { Rstest } from '../rstest';
-import type { SetupFileState } from '../setupFileState';
-import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
-import { type SequenceHints, sortTestEntries } from '../testSequencer';
+import type { SetupFileState } from '../config/setupFileState';
+import { prepareTestEnvironmentModules } from '../environment/testEnvironmentModule';
+import { type SequenceHints, sortTestEntries } from './testSequencer';
 
 type RsbuildStats = Awaited<
   ReturnType<Awaited<ReturnType<typeof createRsbuildServer>>['getRsbuildStats']>

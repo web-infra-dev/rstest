@@ -7,7 +7,7 @@ import type {
   InternalProjectContext,
   TestEnvironmentPrebundle,
 } from '../../src/types';
-import { prepareTestEnvironmentModules } from '../../src/core/testEnvironmentModule';
+import { prepareTestEnvironmentModules } from '../../src/core/environment/testEnvironmentModule';
 import { logger } from '../../src/utils';
 
 const createProject = (

@@ -15,13 +15,13 @@ import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
 import type {
   InternalProjectContext,
   TestEnvironmentModuleReference,
-} from '../types';
-import { ADDITIONAL_NODE_BUILTINS, logger } from '../utils';
+} from '../../types';
+import { ADDITIONAL_NODE_BUILTINS, logger } from '../../utils';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
-} from '../runtime/worker/runtimeHooks';
+} from '../../runtime/worker/runtimeHooks';
 import {
   createTestEnvironmentLoadError,
   environmentDependencyPackages,
@@ -29,7 +29,7 @@ import {
   getTestEnvironmentResolutionRoots,
   type EnvironmentDependencyName,
 } from './envDependencies';
-import { getMockRstestPluginOptions } from './plugins/mockBuild';
+import { getMockRstestPluginOptions } from '../plugins/mockBuild';
 
 export type PreparedTestEnvironmentModules = {
   modules: ReadonlyMap<string, TestEnvironmentModuleReference>;

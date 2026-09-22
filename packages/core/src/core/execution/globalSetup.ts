@@ -7,16 +7,16 @@ import type {
   SerializedError,
   InternalContext,
   InternalProjectContext,
-} from '../types';
+} from '../../types';
 import {
   bgColor,
   color,
   getForceColorEnv,
   getWorkerSerialization,
   killAndWait,
-} from '../utils';
-import { prepareAssetFilesForIPC } from '../utils/assetFiles';
-import { composeWorkerEnv } from './workerEnv';
+} from '../../utils';
+import { prepareAssetFilesForIPC } from '../../utils/assetFiles';
+import { composeWorkerEnv } from '../environment/workerEnv';
 
 /**
  * Runs setup once per project, only when the project has running tests.

@@ -1,4 +1,4 @@
-import { color, logger } from '../utils';
+import { color, logger } from '../../utils';
 import { type ResultsCacheData, sequenceKey } from './resultsCache';
 import { filterFailedEntries, type SequenceHints } from './testSequencer';
 

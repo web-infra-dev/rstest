@@ -5,10 +5,10 @@ import type {
   InternalContext,
   InternalProjectContext,
   NormalizedProjectConfig,
-} from '../types';
-import { getTestEntries, normalizeExactPathMatch } from '../utils';
-import { createSetupFileState } from './setupFileState';
-import { prepareRsbuild } from './rsbuild';
+} from '../../types';
+import { getTestEntries, normalizeExactPathMatch } from '../../utils';
+import { createSetupFileState } from '../config/setupFileState';
+import { prepareRsbuild } from '../build/rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
 

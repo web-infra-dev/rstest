@@ -8,41 +8,41 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
-import { excludeVirtualSetupFromCoverage } from '../coverage';
+import { excludeVirtualSetupFromCoverage } from '../../coverage';
 import type {
   EntryInfo,
   InternalContext,
   InternalProjectContext,
   NormalizedProjectConfig,
-} from '../types';
-import { isDebug } from '../utils';
-import { isMemorySufficient } from '../utils/memory';
-import { pluginBasic } from './plugins/basic';
-import { pluginEntryWatch } from './plugins/entry';
-import { pluginExternal } from './plugins/external';
-import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
-import { pluginInspect } from './plugins/inspect';
-import { isNodeProject } from './isBrowserProject';
-import { pluginMockRuntime } from './plugins/mockRuntime';
+} from '../../types';
+import { isDebug } from '../../utils';
+import { isMemorySufficient } from '../../utils/memory';
+import { pluginBasic } from '../plugins/basic';
+import { pluginEntryWatch } from '../plugins/entry';
+import { pluginExternal } from '../plugins/external';
+import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
+import { pluginInspect } from '../plugins/inspect';
+import { isNodeProject } from '../environment/isBrowserProject';
+import { pluginMockRuntime } from '../plugins/mockRuntime';
 import {
   pluginCacheControl,
   type TestEntryPathState,
-} from './plugins/moduleCacheControl';
+} from '../plugins/moduleCacheControl';
 import {
   getRsbuildEnvironmentConfig,
   initModifyRstestConfigHooks,
-} from './modifyRstestConfig';
+} from '../config/modifyRstestConfig';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
 import {
   createSetupFileState,
   type SetupFileProjects,
   type SetupFileState,
-} from './setupFileState';
+} from '../config/setupFileState';
 import {
   applyWatchInvalidation,
   type EntryHashSnapshot,
   type WatchInvalidationState,
-} from './watchInvalidation';
+} from '../watch/watchInvalidation';
 
 type WatchBuildData = {
   invalidation?: WatchInvalidationState;
@@ -51,7 +51,7 @@ type WatchBuildData = {
   runtimeChunkFiles?: string[];
 };
 
-export { excludeVirtualSetupFromCoverage } from '../coverage';
+export { excludeVirtualSetupFromCoverage } from '../../coverage';
 
 const getRuntimeChunkFiles = ({
   chunks,
@@ -136,7 +136,7 @@ export const addCoveragePlugin = async (
   } = context;
 
   if (coverage?.enabled && command !== 'list') {
-    const { loadCoverageProvider } = await import('../coverage');
+    const { loadCoverageProvider } = await import('../../coverage');
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
       context.rootPath,

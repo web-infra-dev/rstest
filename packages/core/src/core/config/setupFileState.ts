@@ -1,9 +1,9 @@
-import type { InternalProjectContext } from '../types';
+import type { InternalProjectContext } from '../../types';
 import {
   collectSetupPaths,
   getSetupFiles,
   materializeVirtualSetupFiles,
-} from '../utils/getSetupFiles';
+} from '../../utils/getSetupFiles';
 
 export type SetupFileProjects = {
   setupProjects: InternalProjectContext[];

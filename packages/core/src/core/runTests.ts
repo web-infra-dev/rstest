@@ -16,22 +16,28 @@ import {
   finalizeRunCycle,
   notifyReportersOnTestRunStart,
   runLifecycleStep,
-} from './finalizeRun';
+} from './execution/finalizeRun';
 import {
   type BrowserTestExecutor,
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
 import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
-import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { isCliShortcutsEnabled, setupCliShortcuts } from './watch/cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
-import { createNodeExecutor } from './executors/nodeExecutor';
-import { globalSetupFailureOutcome, runGlobalTeardown } from './globalSetup';
-import { isBrowserProject, isNodeProject } from './isBrowserProject';
-import { createTestPlanner } from './planner';
+import { createNodeExecutor } from './execution/nodeExecutor';
+import {
+  globalSetupFailureOutcome,
+  runGlobalTeardown,
+} from './execution/globalSetup';
+import {
+  isBrowserProject,
+  isNodeProject,
+} from './environment/isBrowserProject';
+import { createTestPlanner } from './execution/planner';
 import type { Rstest } from './rstest';
 import {
   createWatchCycleDriver,
@@ -39,7 +45,7 @@ import {
   createWatchTeardown,
   registerWatchSignalExit,
   type WatchSessionTargets,
-} from './watchSession';
+} from './watch/watchSession';
 
 export async function runTests(context: Rstest): Promise<void> {
   // High-level flow (post-executor-seam):

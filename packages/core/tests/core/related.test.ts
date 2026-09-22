@@ -1,4 +1,4 @@
-import { resolveStatsPathCandidate } from '../../src/core/related';
+import { resolveStatsPathCandidate } from '../../src/core/execution/related';
 import { filterFiles } from '../../src/utils/testFiles';
 
 // Run `fn` with a stubbed `process.platform` so both platform branches of

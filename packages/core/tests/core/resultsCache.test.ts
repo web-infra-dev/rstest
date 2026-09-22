@@ -7,7 +7,7 @@ import {
   type ResultsCacheData,
   sequenceKey,
   writeResultsCache,
-} from '../../src/core/resultsCache';
+} from '../../src/core/execution/resultsCache';
 import type { TestFileResult, TestResultStatus } from '../../src/types';
 
 const CACHE_REL = 'node_modules/.cache/.rstest-results/results.json';

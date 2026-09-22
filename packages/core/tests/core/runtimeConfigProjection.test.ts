@@ -1,4 +1,4 @@
-import { projectRuntimeConfig } from '../../src/core/runtimeConfigProjection';
+import { projectRuntimeConfig } from '../../src/core/execution/runtimeConfigProjection';
 import type { InternalProjectContext } from '../../src/types';
 import { serializableConfig } from '../../src/utils/helper';
 import { unwrapRegex } from '../../src/utils/regexpWireFormat';

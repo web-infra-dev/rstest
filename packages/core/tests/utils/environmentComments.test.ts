@@ -2,8 +2,8 @@ import { withTempDir } from '../helpers/tempDir';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { normalize } from 'pathe';
-import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
-import { createProjectPlanState } from '../../src/core/projectPlan';
+import { groupProjectEntriesByEnvironment } from '../../src/core/environment/environmentGroups';
+import { createProjectPlanState } from '../../src/core/execution/projectPlan';
 import type { InternalContext, InternalProjectContext } from '../../src/types';
 import {
   applyEnvironmentComment,

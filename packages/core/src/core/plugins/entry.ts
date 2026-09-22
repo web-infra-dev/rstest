@@ -1,7 +1,7 @@
 import { rspack, type RsbuildPlugin, type Rspack } from '@rsbuild/core';
 import path from 'pathe';
 import type { InternalContext } from '../../types';
-import { applyRstestWatchIgnored } from '../watchInvalidation';
+import { applyRstestWatchIgnored } from '../watch/watchInvalidation';
 import type { TestEntryPathState } from './moduleCacheControl';
 
 class TestFileWatchPlugin {

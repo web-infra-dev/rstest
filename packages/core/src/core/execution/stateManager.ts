@@ -1,4 +1,4 @@
-import type { TestCaseInfo, TestFileResult, TestResult } from '../types';
+import type { TestCaseInfo, TestFileResult, TestResult } from '../../types';
 
 export class TestStateManager {
   public runningModules: Map<

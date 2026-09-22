@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
-import { createTestPlanner } from '../../src/core/planner';
-import { prepareRsbuild } from '../../src/core/rsbuild';
+import { createTestPlanner } from '../../src/core/execution/planner';
+import { prepareRsbuild } from '../../src/core/build/rsbuild';
 import { Rstest } from '../../src/core/rstest';
 
 const originalDebug = process.env.DEBUG;
@@ -20,7 +20,7 @@ afterAll(() => {
 // so this is where it has to be pinned: the spy is the only thing that can tell
 // "skipped the node build" apart from "built it and nobody used it". Defined
 // inside the factory because `rs.mock` is hoisted above the imports.
-rs.mock('../../src/core/rsbuild', () => ({
+rs.mock('../../src/core/build/rsbuild', () => ({
   prepareRsbuild: rs.fn(async () => ({
     initConfigs: rs.fn(async () => []),
   })),

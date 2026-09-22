@@ -13,8 +13,8 @@
  */
 
 import type { Rspack } from '@rsbuild/core';
-import type { NormalizedConfig } from '../types';
-import { castArray, getTempRstestOutputDirGlob } from '../utils';
+import type { NormalizedConfig } from '../../types';
+import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
 export const applyRstestWatchIgnored = (
   rspackConfig: Rspack.Configuration,

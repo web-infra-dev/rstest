@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
-import type { RunnerLifecycleEvent } from '../core/runnerEventSink';
+import type { RunnerLifecycleEvent } from '../core/execution/runnerEventSink';
 import type {
   CoverageMapData,
   Duration,

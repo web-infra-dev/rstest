@@ -1,13 +1,13 @@
-import { resolveAndMergeRawCoverage } from '../coverage';
-import { BlobReporter } from '../reporter/blob';
-import { computeSummary } from '../reporter/utils';
+import { resolveAndMergeRawCoverage } from '../../coverage';
+import { BlobReporter } from '../../reporter/blob';
+import { computeSummary } from '../../reporter/utils';
 import type {
   Duration,
   ExecutorCycleOutcome,
   SourceMapInput,
   TestRunEndPayload,
-} from '../types';
-import type { CoverageProvider } from '../types/coverage';
+} from '../../types';
+import type { CoverageProvider } from '../../types/coverage';
 import {
   color,
   getNoTestFilesMessage,
@@ -15,9 +15,9 @@ import {
   flushOutputStreams,
   logger,
   type TraceRun,
-} from '../utils';
-import type { InternalContext } from '../types';
-import { toSerializedError } from '../utils/error';
+} from '../../utils';
+import type { InternalContext } from '../../types';
+import { toSerializedError } from '../../utils/error';
 
 export const reportNoTestFiles = ({
   context,
@@ -318,7 +318,7 @@ export async function finalizeRunCycle(
     !defersCoverageReport &&
     (!isFailure || reportOnFailure)
   ) {
-    const { generateCoverage } = await import('../coverage/generate');
+    const { generateCoverage } = await import('../../coverage/generate');
     await runLifecycleStep(
       'coverage report generation',
       async () =>
