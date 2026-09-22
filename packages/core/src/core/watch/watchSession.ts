@@ -634,6 +634,9 @@ export function createWatchTeardown({
 
   const close = async (): Promise<void> => {
     try {
+      await step('executor interrupt', () =>
+        Promise.all(executors.map((executor) => executor.interrupt?.())),
+      );
       // The phase's own rejection is the caller's to report; here it only has
       // to be settled.
       await pending?.catch(() => undefined);
@@ -656,6 +659,8 @@ export function createWatchTeardown({
             cleanup();
           }
         } finally {
+          // API result capture must settle before onExit releases its listeners.
+          context.exitCode.finishCycle();
           await exitReporters(context);
         }
       }

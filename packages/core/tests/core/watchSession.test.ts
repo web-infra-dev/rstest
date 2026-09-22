@@ -170,6 +170,49 @@ describe('registerWatchSignalExit', () => {
 });
 
 describe('createWatchTeardown', () => {
+  it('closes in lifecycle order', async () => {
+    const events: string[] = [];
+    const context = createContext();
+    context.exitCode.onCycleEnd(() => events.push('finishCycle'));
+    context.reporters = [
+      {
+        onExit: () => {
+          events.push('onExit');
+        },
+      },
+    ];
+    context.globalTeardownCallbacks.push(async () => {
+      events.push('globalTeardown');
+      return true;
+    });
+    const executor = createFakeExecutor('browser');
+    executor.interrupt = async () => {
+      expect(teardown.isClosing()).toBe(true);
+      events.push('interrupt');
+    };
+    executor.close = async () => {
+      events.push('close');
+    };
+    const teardown = createWatchTeardown({
+      context,
+      executors: [executor],
+      traceController: {
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
+    });
+
+    await teardown.close();
+
+    expect(events).toEqual([
+      'interrupt',
+      'close',
+      'globalTeardown',
+      'finishCycle',
+      'onExit',
+    ]);
+  });
+
   it('defers a cleanup registered while close is in flight', async () => {
     const context = createContext();
     let releaseClose: () => void = () => {};
