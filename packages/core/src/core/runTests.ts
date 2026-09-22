@@ -1,4 +1,5 @@
 import { BlobReporter } from '../reporter/blob';
+import { exitReporters } from '../reporter';
 import {
   cleanCoverageReports,
   createCoverageProviderWithLog,
@@ -22,7 +23,7 @@ import {
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
-import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+import { registerFatalSignalExit } from './signalExit';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
@@ -37,7 +38,6 @@ import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
   createWatchTeardown,
-  registerWatchSignalExit,
   type WatchSessionTargets,
 } from './watchSession';
 
@@ -173,53 +173,7 @@ export async function runTests(context: Rstest): Promise<void> {
     : undefined;
   await nodeExecutor?.init();
 
-  // Nothing to run on either side: route the empty run through the shared
-  // finalize like every other non-watch path. This is also where an empty
-  // `--related` resolution lands — the plan globs nothing for it, so no executor
-  // is ever launched and the no-test-files verdict comes from the one finalize.
-  if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
-    // Constructing a browser executor normally validates its config, and this
-    // branch may reach the end without one — so ask for the check directly
-    // unless the discovery boot already validated after config hooks ran.
-    //
-    // This reaches empty *mixed* runs, not only browser-only ones: an empty
-    // mixed run whose `@rstest/browser` is missing or version-mismatched
-    // reports that and exits instead of finalizing with "no test files found"
-    // and hiding it. Deliberate — a broken install is the more useful verdict,
-    // and the loader's exit no longer drags the unexpected-exit banner with it.
-    //
-    // Equally deliberate is what this branch does NOT cover: a run with node
-    // tests skips the check even when its filters left the browser side empty
-    // (`--related` on node-only sources must not touch an invalid browser
-    // config — pinned in `e2e/filter/related.test.ts`), while `list` validates
-    // that shape. The policy is per-command, so it lives here, not on the
-    // planner.
-    if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
-      await validateBrowserRunConfig(context, browserProjects);
-    }
-    // An empty run is still a run as far as reporters are concerned. Every
-    // other shape pairs a start with its end — the non-watch run below, every
-    // watch cycle — and this branch was the one that finalized without ever
-    // starting, which a reporter that opens state on `onTestRunStart` cannot
-    // tell apart from a run that never happened.
-    await notifyReportersOnTestRunStart(context);
-    await finalizeRunCycle(context, {
-      outcomes: [],
-      mode: 'all',
-      isWatchMode,
-      coverageProvider,
-      reportOnFailure: coverage.reportOnFailure,
-      traceRun: activeTraceRun,
-    });
-    if (nodeExecutor) {
-      await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
-    }
-    await runLifecycleStep('trace shutdown', () =>
-      traceController.shutdown(activeTraceRun),
-    );
-    context.exitCode.finishCycle();
-    return;
-  }
+  const isEmptyRun = !hasNodeTestsToRun && !hasBrowserTestsToRun;
 
   // `hasNodeTestsToRun` implies the planner brought up a node build, so this is
   // the single handle every node-side gate below reads — carrying the narrowing
@@ -229,7 +183,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // ===================================================================
   // Non-watch: one executor loop, one finalize, one close exit path.
   // ===================================================================
-  if (!isWatchMode) {
+  if (!isWatchMode || isEmptyRun) {
     // Start the node resources (dev server, env-dependency validation, pool)
     // BEFORE constructing the browser executor, so an early node dependency
     // failure (e.g. missing `jsdom`) never leaves a browser host mid-launch —
@@ -239,7 +193,8 @@ export async function runTests(context: Rstest): Promise<void> {
       await nodeExecutorToRun.ensureRunResources();
     }
 
-    const executors: TestExecutor[] = nodeExecutorToRun
+    const executors: TestExecutor[] = nodeExecutor ? [nodeExecutor] : [];
+    const executorsToRun: TestExecutor[] = nodeExecutorToRun
       ? [nodeExecutorToRun]
       : [];
 
@@ -261,45 +216,49 @@ export async function runTests(context: Rstest): Promise<void> {
       await Promise.all(closePromises);
     };
 
-    let signalExitCode: number | undefined;
+    let isInterrupted = false;
     let resolveRunFinished!: () => void;
     const runFinished = new Promise<void>((resolve) => {
       resolveRunFinished = resolve;
     });
     let isTeardown = false;
-    let isCleaningUp = false;
-    const cleanup = async () => {
-      if (isCleaningUp) {
-        return;
-      }
-      isCleaningUp = true;
-      try {
+    let releasePromise: Promise<void> | undefined;
+    const releaseRun = () =>
+      (releasePromise ??= (async () => {
         try {
-          await closeExecutors();
-        } finally {
-          // Closing unblocks the cycle; its finalizer must finish before exit.
-          await runFinished;
-        }
-        if (!isTeardown) {
-          await runLifecycleStep('trace run finalize', () =>
-            activeTraceRun.finalize(),
+          try {
+            await closeExecutors();
+          } finally {
+            // Closing unblocks the cycle; its finalizer must finish before exit.
+            await runFinished;
+          }
+          if (!isTeardown) {
+            await runLifecycleStep('trace run finalize', () =>
+              activeTraceRun.finalize(),
+            );
+          }
+          if (!isInterrupted) {
+            // On interrupt the registrar owns exit; trace must not wait for
+            // another signal after the one that already started shutdown.
+            disposeSignals();
+            await runLifecycleStep('trace wait for exit', () =>
+              traceController.waitForExit(),
+            );
+          }
+          await runLifecycleStep('trace controller cleanup', () =>
+            traceController.close(),
           );
+        } finally {
+          process.off('exit', unExpectedExit);
+          // API result capture must settle before onExit releases its listeners.
+          context.exitCode.finishCycle();
+          await exitReporters(context);
         }
-        await runLifecycleStep('trace controller cleanup', () =>
-          traceController.close(),
-        );
-      } catch (error) {
-        logger.log(color.red(`Error during cleanup: ${error}`));
-      }
-    };
+      })());
 
     const unExpectedExit = (code?: number) => {
-      if (signalExitCode !== undefined) {
-        process.exitCode = Math.max(
-          Number(process.exitCode) || 0,
-          signalExitCode,
-          context.exitCode.current,
-        );
+      if (isInterrupted) {
+        process.exitCode = context.exitCode.current;
         return;
       }
       if (isTeardown) {
@@ -321,32 +280,40 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     };
 
-    const handleSignal = async (signal: NodeJS.Signals) => {
-      signalExitCode = getSignalExitCode(signal);
-      context.exitCode.raise(signalExitCode);
-      for (const reporter of context.reporters) {
-        if (reporter instanceof BlobReporter) {
-          try {
-            reporter.cancel();
-          } catch (error) {
-            // Invalidation must not prevent executor and global teardown.
-            logger.warn(`Failed to remove cancelled blob report: ${error}`);
+    const disposeSignals = registerFatalSignalExit(context, {
+      interrupt: async () => {
+        isInterrupted = true;
+        for (const reporter of context.reporters) {
+          if (reporter instanceof BlobReporter) {
+            try {
+              reporter.cancel();
+            } catch (error) {
+              // Invalidation must not prevent executor and global teardown.
+              logger.warn(`Failed to remove cancelled blob report: ${error}`);
+            }
           }
         }
-      }
-      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-      await cleanup();
-      process.exit(context.exitCode.current);
-    };
+        await Promise.all(executors.map((executor) => executor.interrupt?.()));
+      },
+      release: releaseRun,
+    });
 
     if (!context.embedded) {
       process.on('exit', unExpectedExit);
-      for (const signal of FATAL_SIGNALS) {
-        process.on(signal, handleSignal);
-      }
     }
 
     try {
+      // Empty mixed runs still validate the browser install; node-only filters
+      // with work must not load a browser executor they will never use.
+      // This is per-command policy, kept out of the planner; the exclusion is
+      // pinned in e2e/filter/related.test.ts.
+      if (
+        isEmptyRun &&
+        browserProjects.length &&
+        !planner.hasValidatedBrowserConfig()
+      ) {
+        await validateBrowserRunConfig(context, browserProjects);
+      }
       let browserStage: BrowserGlobalSetupStageResult = { errors: [] };
       let browserExecutor: TestExecutor | undefined;
       if (hasBrowserTestsToRun) {
@@ -358,11 +325,12 @@ export async function runTests(context: Rstest): Promise<void> {
           planner.getExecutorRunOptions(browserProjectsToRun),
         );
         executors.push(browserExecutor);
-        if (signalExitCode === undefined) await browserExecutor.init();
+        executorsToRun.push(browserExecutor);
+        if (!isInterrupted) await browserExecutor.init();
         // Core-owned pre-cycle globalSetup stage over the resolved browser
         // subset. Its context-local env changes are visible to both the browser
         // cycle and node workers dispatched below.
-        if (signalExitCode === undefined) {
+        if (!isInterrupted) {
           browserStage = await runBrowserGlobalSetupStage(
             context,
             browserProjectsToRun,
@@ -371,42 +339,38 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       }
 
-      const reportersStarted = signalExitCode === undefined;
+      const reportersStarted = !isInterrupted;
       if (reportersStarted) await notifyReportersOnTestRunStart(context);
       // Settle every cycle before propagating a failure: a fail-fast
       // `Promise.all` would reach the `finally` teardown while a sibling
       // executor is still mid-cycle, truncating its tests and firing global
       // teardown early. The re-await unwraps the already-settled promises,
       // rejecting with the first failure in executor order.
-      const cyclePromises =
-        signalExitCode === undefined
-          ? executors.map((executor) =>
-              executor === browserExecutor && browserStage.errors.length
-                ? Promise.resolve(
-                    globalSetupFailureOutcome(browserStage.errors),
-                  )
-                : executor.runCycle({
-                    buildId: 1,
-                    mode: 'all',
-                    updateSnapshot: snapshotManager.options.updateSnapshot,
-                    env: browserStage.env,
-                    onTraceEvents: forwardBrowserTraceEvents,
-                  }),
-            )
-          : [];
+      const cyclePromises = !isInterrupted
+        ? executorsToRun.map((executor) =>
+            executor === browserExecutor && browserStage.errors.length
+              ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+              : executor.runCycle({
+                  buildId: 1,
+                  mode: 'all',
+                  updateSnapshot: snapshotManager.options.updateSnapshot,
+                  env: browserStage.env,
+                  onTraceEvents: forwardBrowserTraceEvents,
+                }),
+          )
+        : [];
       const settledCycles = await Promise.allSettled(cyclePromises);
-      const outcomes =
-        signalExitCode === undefined
-          ? await Promise.all(cyclePromises)
-          : settledCycles.flatMap((cycle) =>
-              cycle.status === 'fulfilled' ? [cycle.value] : [],
-            );
+      const outcomes = !isInterrupted
+        ? await Promise.all(cyclePromises)
+        : settledCycles.flatMap((cycle) =>
+            cycle.status === 'fulfilled' ? [cycle.value] : [],
+          );
 
       await finalizeRunCycle(context, {
         outcomes,
         mode: 'all',
         isWatchMode: false,
-        isInterrupted: () => signalExitCode !== undefined,
+        isInterrupted: () => isInterrupted,
         reportersStarted,
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
@@ -426,21 +390,10 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       } finally {
         resolveRunFinished();
-        if (signalExitCode !== undefined) context.exitCode.finishCycle();
-        if (!context.embedded && signalExitCode === undefined) {
-          process.off('exit', unExpectedExit);
-          for (const signal of FATAL_SIGNALS) {
-            process.off(signal, handleSignal);
-          }
-        }
+        await releaseRun();
       }
     }
 
-    if (signalExitCode !== undefined) return;
-    await runLifecycleStep('trace wait for exit', () =>
-      traceController.waitForExit(),
-    );
-    context.exitCode.finishCycle();
     return;
   }
 
@@ -541,7 +494,9 @@ export async function runTests(context: Rstest): Promise<void> {
     context.closeWatchSession?.() ?? closeWatchSession();
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(
-    registerWatchSignalExit(context, closeActiveWatchSession),
+    registerFatalSignalExit(context, {
+      release: closeActiveWatchSession,
+    }),
   );
 
   // Installed before the first cycle so the ready banner can never appear

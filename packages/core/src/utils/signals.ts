@@ -3,6 +3,15 @@ import { constants as osConstants } from 'node:os';
 /** Signals every run path treats as fatal and cleans up on. */
 export const FATAL_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const;
 
+export const onFatalSignal = (
+  listener: (signal: NodeJS.Signals) => void,
+): (() => void) => {
+  for (const signal of FATAL_SIGNALS) process.on(signal, listener);
+  return () => {
+    for (const signal of FATAL_SIGNALS) process.off(signal, listener);
+  };
+};
+
 /**
  * POSIX-conventional exit code for a signal-terminated process: 128 + signal
  * number, falling back to 1 for unknown signals. Shared by the node watch

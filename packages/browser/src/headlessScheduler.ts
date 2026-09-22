@@ -748,6 +748,27 @@ export const createHeadlessScheduler = async ({
     return rawCoverage;
   };
 
+  // Invalidating the token first makes every late dispatch from the cancelled
+  // run a no-op. Cancellation deliberately does not await run.done: the run's
+  // own cycle awaits it, so a queued replacement or the session abort's runtime
+  // teardown can start at once.
+  //
+  // This callback never tears down browser contexts. A rebuild trigger reaches
+  // it inside the bundler's dev-compile hook; a page still fetching from the dev
+  // server that hook is holding up cannot be closed, so the run would never end.
+  // Signalling is enough: the run's own teardown closes page and context as it
+  // unwinds, and every page operation it can be sitting in is bounded by the
+  // driver's own timeout. On session abort, the controller destroys the runtime
+  // after this callback returns.
+  watchSignals.setInterrupt(async () => {
+    const active = runLifecycle.activeSession;
+    if (!active || active.cancelled) {
+      return;
+    }
+    runLifecycle.invalidateActiveToken();
+    await runLifecycle.cancel(active, { waitForDone: false });
+  });
+
   const testStart = Date.now();
   const rawCoverage = await runFilesWithPool(allTestFiles);
   const testTime = Date.now() - testStart;
@@ -764,27 +785,6 @@ export const createHeadlessScheduler = async ({
         watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
       );
     };
-
-    // Cutting the in-flight run short lets its cycle finalize with what it had
-    // and the queued replacement start immediately; invalidating the token
-    // first makes every late dispatch from it a no-op. Deliberately not
-    // awaiting `run.done` — the cancelled run's own cycle is what awaits it.
-    //
-    // Unlike every other cancel this one does not tear the run's browser
-    // contexts down, because a rebuild trigger reaches it from inside the
-    // bundler's dev-compile hook: a page still fetching from the dev server
-    // that same hook is holding up cannot be closed, and the run it belongs
-    // to then never ends. Signalling the cancel is enough — the run's own
-    // teardown closes page and context as soon as it unwinds, and every page
-    // operation it can be sitting in is bounded by the driver's own timeout.
-    watchSignals.setInterrupt(async () => {
-      const active = runLifecycle.activeSession;
-      if (!active || active.cancelled) {
-        return;
-      }
-      runLifecycle.invalidateActiveToken();
-      await runLifecycle.cancel(active, { waitForDone: false });
-    });
 
     watchSignals.setDispatchRerun(async () => {
       const newProjectEntries = await collectProjectEntries();

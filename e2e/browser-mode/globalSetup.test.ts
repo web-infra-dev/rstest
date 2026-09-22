@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -840,6 +841,83 @@ it('receives globalSetup env in the added file', () => {
         setupMarker: '[browser-global-setup] executed',
         teardownMarker: '[browser-global-teardown] executed',
       }),
+    60_000,
+  );
+
+  it.skipIf(process.platform === 'win32').each([
+    { command: 'run', signal: 'SIGINT', inFlight: true },
+    { command: 'watch', signal: 'SIGTERM', inFlight: true },
+  ] as const)(
+    'handles $signal during a browser $command cycle',
+    async ({ command, signal, inFlight }) => {
+      const fixturesTargetPath = path.join(
+        __dirname,
+        `fixtures/fixtures-test-browser-${command}-${signal.toLowerCase()}-signal`,
+      );
+      const { fs: fixtureFs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+        fixturesTargetPath,
+      });
+      const testPath = path.join(
+        fixturesTargetPath,
+        'tests/globalSetup.test.ts',
+      );
+      fixtureFs.update(
+        path.join(fixturesTargetPath, 'rstest.config.mts'),
+        (content) =>
+          content.replace(
+            "globalSetup: ['./globalSetup.ts'],",
+            `globalSetup: ['./globalSetup.ts'],
+  reporters: ['default', {
+    onTestCaseStart(test) { if (test.name === 'interrupted browser test') console.log('[interrupted-test-started]'); },
+    onExit() { console.log('[reporter-exit]'); }
+  }],`,
+          ),
+      );
+      const writeSlowTest = () =>
+        fixtureFs.update(
+          testPath,
+          () => `import { it } from '@rstest/core';
+
+it('interrupted browser test', async () => {
+  await new Promise((resolve) => setTimeout(resolve, 60_000));
+}, 65_000);`,
+        );
+      if (command === 'run') writeSlowTest();
+      const result = await (command === 'watch'
+        ? runBrowserWatchCliWithCwd(fixturesTargetPath)
+        : runBrowserCliWithCwd(fixturesTargetPath));
+      const { cli } = result;
+
+      try {
+        if (command === 'watch') {
+          await cli.waitForStdout('Waiting for file changes...');
+          cli.resetStd();
+          if (inFlight) writeSlowTest();
+        }
+        if (inFlight) await cli.waitForStdout('[interrupted-test-started]');
+
+        cli.exec.process!.kill(signal);
+        await result.expectExecFailed();
+
+        expect(cli.exec.process!.exitCode).toBe(
+          128 + constants.signals[signal],
+        );
+        expect(cli.stdout).toContain('[browser-global-teardown] executed');
+        expect(cli.stdout.match(/\[reporter-exit\]/g)).toHaveLength(1);
+        if (inFlight) {
+          expect(cli.stdout).not.toMatch(/✓ .*globalSetup\.test\.ts/);
+        }
+        expect(cli.log).not.toContain('Unhandled Error');
+        expect(cli.stdout).not.toContain('Waiting for file changes...');
+        expect(
+          cli.stdout.indexOf('[browser-global-teardown] executed'),
+        ).toBeLessThan(cli.stdout.indexOf('[reporter-exit]'));
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+      }
+    },
     60_000,
   );
 

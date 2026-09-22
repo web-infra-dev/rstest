@@ -542,6 +542,7 @@ describe('programmatic createRstest', () => {
       rerunTestPaths: ['added.test.ts'],
       errors: [],
     });
+    expect(result.listenerRegistrations).toEqual([]);
     expect(cli.stdout).toContain('Waiting for file changes...');
     expect(cli.stdout).not.toContain('press h');
   });

@@ -5,6 +5,32 @@ import { createRstest } from '@rstest/core/api';
 
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
 const root = join(fixtureDir, `.browser-${process.pid}`);
+const listenerRegistrations = [];
+const restoreRegistrations = [];
+for (const [target, methods, events] of [
+  [
+    process,
+    ['on', 'once', 'addListener', 'prependListener'],
+    ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGTSTP'],
+  ],
+  [process.stdin, ['on', 'once'], ['end']],
+]) {
+  for (const method of methods) {
+    const original = target[method];
+    target[method] = function (event, listener, ...args) {
+      if (events.includes(event)) {
+        listenerRegistrations.push({
+          event,
+          listener: String(listener).slice(0, 120),
+        });
+      }
+      return original.call(this, event, listener, ...args);
+    };
+    restoreRegistrations.push(() => {
+      target[method] = original;
+    });
+  }
+}
 const cycles = [];
 let watcher;
 let resolveNextCycle;
@@ -60,7 +86,22 @@ try {
         : undefined,
     },
   };
-  const rstest = await createRstest({ cwd: root, config });
+  const rstest = await createRstest({
+    cwd: root,
+    config: {
+      ...config,
+      plugins: [
+        {
+          name: 'disable-middleware-mode',
+          setup(api) {
+            api.modifyRsbuildConfig((config) => {
+              config.server = { ...config.server, middlewareMode: false };
+            });
+          },
+        },
+      ],
+    },
+  });
   const result = await rstest.run();
   process.stdin.isTTY = true;
   watcher = await rstest.watch({ onResult });
@@ -219,9 +260,11 @@ it('runs after an empty start', () => expect(document.createElement('main').tagN
       buildFailureRejection,
       emptyProjectCycles,
       startupCompiledAtResult,
+      listenerRegistrations,
     })}__END__`,
   );
 } finally {
   await watcher?.close();
+  for (const restore of restoreRegistrations) restore();
   await rm(root, { recursive: true, force: true });
 }

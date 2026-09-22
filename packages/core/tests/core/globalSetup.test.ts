@@ -75,6 +75,7 @@ describe('GlobalSetupWorker', () => {
   it('should reject when IPC send reports an error', async () => {
     const child = new MockChildProcess();
     const worker = createWorker(child);
+    worker.start();
     const promise = worker.call({ type: 'teardown' });
 
     expect(child.sendCallback).toBeTypeOf('function');
@@ -86,11 +87,24 @@ describe('GlobalSetupWorker', () => {
   it('should reject pending calls when worker emits an error', async () => {
     const child = new MockChildProcess();
     const worker = createWorker(child);
+    worker.start();
     const promise = worker.call({ type: 'teardown' });
 
     child.emit('error', new Error('worker error'));
 
     await expect(promise).rejects.toThrow('worker error');
+  });
+
+  it('rejects teardown after the setup worker exits without forking again', async () => {
+    const child = new MockChildProcess();
+    const fork = rs.fn(() => child as unknown as ChildProcess);
+    const worker = new GlobalSetupWorker({}, fork);
+    worker.start();
+    child.emit('exit', 1);
+    await expect(worker.call({ type: 'teardown' })).rejects.toThrow(
+      'global setup worker is not running',
+    );
+    expect(fork).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -49,10 +49,9 @@ export async function createBrowserExecutor(
   } = options;
   const isWatchMode = context.command === 'watch';
   let deferredClose: (() => Promise<void>) | undefined;
-  // The host has no mid-launch abort, so `close()` must wait for an in-flight
-  // cycle to settle before it can tear down — otherwise a close racing the
-  // cycle (e.g. the signal-driven cleanup path) sees no `deferredClose` yet
-  // and leaks the launching browser + servers.
+  const abortController = new AbortController();
+  // A close racing a launching cycle sees no deferredClose yet and would leak
+  // the launching browser and servers, so close waits for the cycle to settle.
   let inFlightCycle: Promise<unknown> | undefined;
   // Registered before the first cycle: booting the runtime installs the watch
   // triggers, and the first rebuild can signal as soon as it does.
@@ -148,6 +147,7 @@ export async function createBrowserExecutor(
         allowEmptyRun,
         appliedModifyRstestConfigEnvironments,
         onTraceEvents: opts.onTraceEvents,
+        signal: abortController.signal,
         env: opts.env,
         updateSnapshot: opts.updateSnapshot,
         onInvalidate: isWatchMode
@@ -190,6 +190,9 @@ export async function createBrowserExecutor(
       } finally {
         inFlightCycle = undefined;
       }
+    },
+    async interrupt(): Promise<void> {
+      abortController.abort();
     },
     async close(): Promise<void> {
       if (inFlightCycle) {

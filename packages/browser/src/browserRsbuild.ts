@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -57,7 +61,6 @@ import { resolveBrowserViewportPreset } from './viewportPresets';
 import { collectWatchTestFiles } from './watchRerunPlanner';
 
 const { createRsbuild, rspack } = rsbuild;
-type RsbuildDevServer = rsbuild.RsbuildDevServer;
 type RsbuildInstance = rsbuild.RsbuildInstance;
 type RsbuildEnvironmentConfig = rsbuild.EnvironmentConfig &
   Pick<rsbuild.RsbuildConfig, 'root'>;
@@ -168,7 +171,7 @@ export type BrowserProjectServer = {
   projectName: string;
   environmentName: string;
   rsbuildInstance: RsbuildInstance;
-  devServer: RsbuildDevServer;
+  close: () => Promise<void>;
   port: number;
   manifestPath: string;
 };
@@ -344,30 +347,6 @@ type BrowserLazyCompilationConfig = {
   imports: true;
   entries: false;
   test?: (module: LazyCompilationModule) => boolean;
-};
-
-/**
- * Resolve the actual port the dev server is listening on.
- *
- * Rsbuild's `devServer.listen()` may return `0` when configured with
- * `server.port: 0` because its internal `getPort` never reads back the
- * OS-assigned ephemeral port.  This helper falls back to
- * `httpServer.address()` to obtain the real bound port.
- */
-const resolveListenPort = (
-  listenPort: number,
-  httpServer: {
-    address: () => ReturnType<import('node:net').Server['address']>;
-  } | null,
-): number => {
-  if (listenPort) {
-    return listenPort;
-  }
-  const addr = httpServer?.address();
-  if (addr && typeof addr === 'object') {
-    return addr.port;
-  }
-  return listenPort;
 };
 
 const createBrowserLazyCompilationConfig = (
@@ -1177,7 +1156,7 @@ const VIRTUAL_MANIFEST_FILENAME = 'virtual-manifest.ts';
 const closeAllProjectServers = (
   servers: Iterable<BrowserProjectServer>,
 ): Promise<unknown> =>
-  Promise.allSettled([...servers].map((server) => server.devServer.close()));
+  Promise.allSettled([...servers].map((server) => server.close()));
 
 const closeWebSocketServer = (server: WebSocketServer): Promise<void> =>
   new Promise((resolve) => {
@@ -1295,9 +1274,7 @@ export const createBrowserRuntime = async ({
         projectName: firstProject.name,
         environmentName: firstProject.environmentName,
         rsbuildInstance: undefined as unknown as RsbuildInstance,
-        devServer: {
-          close: async () => undefined,
-        } as RsbuildDevServer,
+        close: async () => {},
         port: 0,
         manifestPath: '',
       },
@@ -1604,6 +1581,14 @@ export const createBrowserRuntime = async ({
       {
         name: 'rstest:browser-user-config',
         setup(api) {
+          api.modifyRsbuildConfig({
+            order: 'post',
+            handler(config) {
+              // The host owns HTTP and process signals, so Rsbuild must not create its own server.
+              // Pin after user hooks because they can override the base config.
+              config.server = { ...config.server, middlewareMode: true };
+            },
+          });
           if (context.command === 'list') {
             let testEntryPaths: Set<string> | undefined;
             const getTestEntryPaths = () =>
@@ -1917,9 +1902,7 @@ export const createBrowserRuntime = async ({
         projectName: project.name,
         environmentName: project.environmentName,
         rsbuildInstance,
-        devServer: {
-          close: async () => undefined,
-        } as RsbuildDevServer,
+        close: async () => {},
         port: 0,
         manifestPath,
       };
@@ -1935,9 +1918,26 @@ export const createBrowserRuntime = async ({
       rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
     }
 
+    rsbuildInstance.onBeforeCreateCompiler(() => {
+      if (rsbuildInstance.getNormalizedConfig().server.https) {
+        throw new Error('[rstest] Browser mode does not support server.https.');
+      }
+    });
     const devServer = await rsbuildInstance.createDevServer({
       getPortSilently: true,
     });
+    const server = createServer(devServer.middlewares);
+    let closePromise: Promise<void> | undefined;
+    const close = () =>
+      (closePromise ??= (async () => {
+        await Promise.all([
+          devServer.close(),
+          new Promise<void>((resolve) => {
+            server.closeAllConnections();
+            server.close(() => resolve());
+          }),
+        ]);
+      })());
 
     if (isDebug()) {
       await rsbuildInstance.inspectConfig({
@@ -1996,14 +1996,31 @@ export const createBrowserRuntime = async ({
       },
     );
 
-    const { port: listenPort } = await devServer.listen();
-    const port = resolveListenPort(listenPort, devServer.httpServer);
+    const port = devServer.port;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(
+          port,
+          rsbuildInstance.getNormalizedConfig().server.host,
+          () => {
+            server.off('error', reject);
+            resolve();
+          },
+        );
+      });
+      devServer.connectWebSocket({ server });
+      await devServer.afterListen();
+    } catch (error) {
+      await close();
+      throw error;
+    }
 
     return {
       projectName: project.name,
       environmentName: project.environmentName,
       rsbuildInstance,
-      devServer,
+      close,
       port,
       manifestPath,
     };

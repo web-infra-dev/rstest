@@ -174,6 +174,8 @@ export interface TestExecutor {
   collect?(
     options: Pick<ExecutorRunCycleOptions, 'env' | 'fileFilters'>,
   ): Promise<{ list: ListCommandResult[] }>;
+  /** Abort in-flight work without waiting for it; close still owns teardown. */
+  interrupt?(): Promise<void>;
   close(): Promise<void>;
   /**
    * Subscribe to this executor's watch trigger; the callback runs one watch
