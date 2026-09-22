@@ -1,5 +1,13 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { normalize } from 'pathe';
+
+const require = createRequire(import.meta.url);
+export const coreDist = join(
+  dirname(require.resolve('@rstest/core/package.json')),
+  'dist',
+);
 
 export const getCoverageSummaryEntry = <T>(
   summary: Record<string, T>,

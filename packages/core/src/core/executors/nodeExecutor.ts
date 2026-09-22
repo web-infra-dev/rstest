@@ -706,6 +706,9 @@ export function createNodeExecutor(
     init: async () => {},
     runCycle,
     onInvalidate,
+    interrupt: async () => {
+      runResources?.pool.interrupt();
+    },
     close,
     // Watch: start the dev server (and pool) up front so its first compile fires
     // the invalidation that drives the initial run. In non-watch runs `runCycle`

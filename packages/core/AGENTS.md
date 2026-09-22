@@ -43,7 +43,7 @@ Contracts between modules or processes — not readable from any single file.
 
 - Once reporters have been notified of run start, `finalizeRunCycle` runs; a rejected cycle becomes a `'setup'` outcome, except a rejection while interrupted is the interrupt, not a run failure. On the first watch cycle, a `'setup'` outcome ends the session after finalize: a single error is rethrown as-is, several as `AggregateError`. Later-cycle setup failures finalize without ending the session.
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
-- The single fatal-signal registrar must release in this order: executors → `globalTeardown` → `finishCycle` → reporter `onExit`.
+- The single fatal-signal registrar must interrupt before release so executor `interrupt` raises the node pool's `closing` in the tick the host observes the signal, then release in this order: executors → `globalTeardown` → `finishCycle` → reporter `onExit`.
 - File filters are plain strings everywhere: a filter wrapped in matching quotes is an exact path, and `--related`/`--changed` express their resolved paths that way.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchCycleState` ahead of every watch cycle, a session's first included) — executors never reset it, so bail reads stay cycle-scoped even where two executors' first cycles bracket one startup. The snapshot summary is the one half a first cycle keeps, because the update-snapshot shortcut reads whatever the last cycle produced and the browser's first cycle would otherwise clear what the node's just left.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.

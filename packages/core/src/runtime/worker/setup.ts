@@ -1,4 +1,14 @@
 /**
+ * SIGINT belongs to the session's host: process-group Ctrl+C must not kill a
+ * task before the host cancels it. The host stops fork workers with SIGTERM;
+ * IPC disconnect exits prevent orphans when the host dies without stopping them.
+ */
+export function installForkTerminationPolicy(): void {
+  process.on('SIGINT', () => {});
+  process.on('disconnect', () => process.exit());
+}
+
+/**
  * Install a graceful SIGTERM handler for profiling runs.
  *
  * Must be called as an explicit, used binding from the worker entries rather
