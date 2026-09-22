@@ -477,12 +477,13 @@ export async function runTests(context: Rstest): Promise<void> {
   // One teardown for the `q` shortcut, the fatal-signal handler, and the
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
+  const executors: TestExecutor[] = [
+    ...(browserExecutor ? [browserExecutor] : []),
+    ...(nodeExecutor ? [nodeExecutor] : []),
+  ];
   const watchTeardown = createWatchTeardown({
     context,
-    executors: [
-      ...(browserExecutor ? [browserExecutor] : []),
-      ...(nodeExecutor ? [nodeExecutor] : []),
-    ],
+    executors,
     traceController,
     getTraceRun: () => activeTraceRun,
   });
@@ -496,6 +497,9 @@ export async function runTests(context: Rstest): Promise<void> {
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(
     registerFatalSignalExit(context, {
+      interrupt: async () => {
+        await Promise.all(executors.map((executor) => executor.interrupt?.()));
+      },
       release: closeActiveWatchSession,
     }),
   );

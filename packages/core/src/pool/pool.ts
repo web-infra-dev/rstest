@@ -333,15 +333,21 @@ export class Pool {
     this.stoppingPromises.add(stopPromise);
   }
 
-  async close(): Promise<void> {
-    if (this.isClosed) return;
+  /**
+   * Terminal, one-way latch: closing never resets. Wake parked acquireRunner
+   * callers so they re-check isClosing and throw instead of waiting through teardown.
+   */
+  interrupt(): void {
     this.isClosing = true;
-    this.options.memoryGate?.dispose();
-    // Wake waiters so any caller blocked on capacity throws on `isClosing`
-    // before we await the stop promises below.
     while (this.slotWaiters.length > 0) {
       this.slotWaiters.shift()?.();
     }
+  }
+
+  async close(): Promise<void> {
+    if (this.isClosed) return;
+    this.interrupt();
+    this.options.memoryGate?.dispose();
     const runners = [...this.activeRunners, ...this.idleRunners];
     await Promise.all(
       runners.map((runner) =>

@@ -395,6 +395,7 @@ export const createPool = async ({
   cleanupWorkerFixtures: () => Promise<Error[]>;
   /** Drain errors from reusable workers retired during a watch cycle. */
   drainWorkerStopErrors: () => Promise<Error[]>;
+  interrupt: () => void;
   close: () => Promise<void>;
 }> => {
   // Propagate parent execArgv to workers, except flags known to cause issues
@@ -710,6 +711,7 @@ export const createPool = async ({
     },
     cleanupWorkerFixtures: () => pool.cleanupWorkerFixtures(),
     drainWorkerStopErrors: () => pool.drainWorkerStopErrors(),
+    interrupt: () => pool.interrupt(),
     close: () => pool.close(),
   };
 };

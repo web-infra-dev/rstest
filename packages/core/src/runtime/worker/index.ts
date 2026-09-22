@@ -11,7 +11,7 @@ import { isVmPoolType } from '../../utils/workers';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
-import { installGracefulExit } from './setup';
+import { installForkTerminationPolicy, installGracefulExit } from './setup';
 
 installGracefulExit();
 
@@ -168,6 +168,9 @@ const cleanupWorker = async (): Promise<void> => {
 // exit) is what gets us out. Any handler that didn't unconditionally exit
 // would defeat that contract (rstest#1275). `setup.ts` may install a
 // profiling-specific handler that calls `process.exit()`, which is compatible.
+if (isMainThread) {
+  installForkTerminationPolicy();
+}
 
 channel.on((message: unknown) => {
   if (!isWorkerRequestEnvelope(message)) {

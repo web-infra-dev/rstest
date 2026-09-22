@@ -1,13 +1,7 @@
-import { createRequire } from 'node:module';
 import fs from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
-
-const require = createRequire(import.meta.url);
-const coreDist = join(
-  dirname(require.resolve('@rstest/core/package.json')),
-  'dist',
-);
+import { coreDist } from '../scripts/utils';
 
 /**
  * Concatenate the source of every emitted chunk transitively reachable from an
