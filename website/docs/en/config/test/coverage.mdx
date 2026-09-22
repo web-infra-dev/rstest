@@ -380,11 +380,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   coverage: {
     enabled: true,
-    reporters: [
-      'html',
-      ['text', { skipFull: true }],
-      ['json', { file: 'coverage-final.json' }],
-    ],
+    reporters: ['html', 'text', ['json', { file: 'coverage-final.json' }]],
   },
 });
 ```
