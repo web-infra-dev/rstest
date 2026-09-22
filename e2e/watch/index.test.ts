@@ -275,4 +275,92 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
 
     cli.exec.kill();
   });
+
+  it('reports nothing when a change reaches no test file', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-unrelated${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath,
+    });
+    // Under the project root, so rspack watches it through the root context
+    // dependency, but imported by nothing, so no test entry depends on it.
+    const unrelatedPath = path.join(fixturesTargetPath, 'src/unrelated.ts');
+    fs.create(unrelatedPath, 'export const orphan = 1;\n');
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--disableConsoleIntercept'],
+      options: {
+        nodeOptions: {
+          env: { DEBUG: 'rstest' },
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await cli.waitForStdout('Waiting for file changes...');
+    expect(cli.stdout).toMatch('Tests 2 passed');
+
+    cli.resetStd();
+    fs.update(unrelatedPath, (content) => `${content}\nexport const more = 2;`);
+    // The debug line is the only trace such a cycle leaves, so it proves the
+    // rebuild happened without being output the user sees.
+    await cli.waitForStdout('No test files need re-run in project(');
+
+    // A change that does reach a test, both as the non-regression check and as
+    // the sync point that makes the assertions below race-free: everything the
+    // unrelated edit could have printed is already flushed by the time this
+    // rerun's banner lands.
+    fs.update(path.join(fixturesTargetPath, 'src/index.ts'), (content) =>
+      content.replace("greet('index')", "greet('INDEX')"),
+    );
+    await cli.waitForStdout('Waiting for file changes...');
+
+    // The unrelated edit contributed nothing: no notice, and no banner or
+    // summary repaint of its own — the single banner is this rerun's. Anchored
+    // to end of line, so the surviving debug line (which continues with
+    // ` in project(...)`) cannot satisfy it.
+    expect(cli.stdout).not.toMatch(/No test files need re-run\.$/m);
+    expect(cli.stdout.match(/Waiting for file changes/g)).toHaveLength(1);
+    expect(cli.stdout.match(/Test Files/g)).toHaveLength(1);
+    expectRerun(cli.stdout, ['index.test.ts']);
+
+    cli.exec.kill();
+  });
+
+  it('repaints the summary when a test file is deleted', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-deleted${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath,
+    });
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--disableConsoleIntercept'],
+      options: {
+        nodeOptions: {
+          env: { DEBUG: 'rstest' },
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await cli.waitForStdout('Waiting for file changes...');
+    expect(cli.stdout).toMatch('Test Files 2 passed');
+
+    cli.resetStd();
+    fs.delete(path.join(fixturesTargetPath, 'other.test.ts'));
+    // Nothing runs, but the cycle is not silent: the deleted file's result is
+    // retired and the summary on screen stops counting it.
+    await cli.waitForStdout('Waiting for file changes...');
+
+    expect(cli.stdout).toMatch('Test Files 1 passed');
+    expect(cli.stdout).not.toMatch(/No test files need re-run\.$/m);
+    expect(cli.stdout).not.toMatch('Test files to re-run');
+
+    cli.exec.kill();
+  });
 });

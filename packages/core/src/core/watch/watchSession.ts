@@ -270,8 +270,20 @@ export function createWatchCycleDriver({
     // `prepareWatchCycleState` for why the two halves part ways there.
     const isFirstCycle = !settled.has(executor);
     prepareWatchCycleState(context, { isFirstCycle });
+    // The run opens lazily — see `InternalContext.openReporterRun`. A rebuild
+    // that reaches no test then opens nothing and leaves the screen as it was.
+    let runOpened: Promise<void> | undefined;
+    const openRun = () =>
+      (runOpened ??= (async () => {
+        // The first cycle and every shortcut clear on their own terms; only a
+        // rebuild-driven rerun clears here, once it is known to be one.
+        if (mode === 'on-demand') clearScreen();
+        await notifyReportersOnTestRunStart(context);
+      })());
+    context.openReporterRun = openRun;
     try {
-      await notifyReportersOnTestRunStart(context);
+      // A scope the user chose reports even when empty ("No test files found.").
+      if (mode === 'all') await openRun();
       let outcome: ExecutorCycleOutcome;
       try {
         outcome =
@@ -291,6 +303,15 @@ export function createWatchCycleDriver({
       if (isSessionClosing()) {
         return;
       }
+      // A cycle that ran nothing may still have something to report: an
+      // error, or a retired file the summary must stop counting.
+      if (
+        outcome.results.length ||
+        outcome.errors.length ||
+        outcome.deletedTestPaths?.length
+      ) {
+        await openRun();
+      }
       let sessionEndingError: Error | undefined;
       if (outcome.failure === 'fatal') {
         sessionEndingError = outcome.errors[0];
@@ -304,6 +325,7 @@ export function createWatchCycleDriver({
         outcomes: [outcome],
         mode,
         isWatchMode: true,
+        reportersStarted: runOpened !== undefined,
         coverageProvider,
         reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
         traceRun: getTraceRun(),
@@ -321,6 +343,10 @@ export function createWatchCycleDriver({
         if (isFirstCycle) throw sessionEndingError;
         return;
       }
+      // A cycle that opened no run leaves the screen as it was, banner included.
+      if (runOpened) {
+        logWatchReadyMessage(context, enableCliShortcuts);
+      }
     } finally {
       // In `finally`, so a startup that failed still counts as past startup —
       // see {@link WatchCycleDriver.hasSettledCycle}. The caller keeps the
@@ -328,7 +354,6 @@ export function createWatchCycleDriver({
       // will never come back.
       settled.add(executor);
     }
-    logWatchReadyMessage(context, enableCliShortcuts);
   };
 
   return {

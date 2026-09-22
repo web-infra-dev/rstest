@@ -142,14 +142,14 @@ export const planWatchRerun = ({
 
 export const commitWatchFileSetUpdate = (
   update: WatchFileSetUpdate | undefined,
-  watchState: { lastTestFiles: TestFileInfo[] },
-  pruneDeletedTestPaths: (testPaths: string[]) => void,
+  watchState: {
+    lastTestFiles: TestFileInfo[];
+    pendingDeletedTestPaths: string[];
+  },
 ): void => {
   if (!update) {
     return;
   }
-  if (update.deletedTestPaths.length > 0) {
-    pruneDeletedTestPaths(update.deletedTestPaths);
-  }
+  watchState.pendingDeletedTestPaths.push(...update.deletedTestPaths);
   watchState.lastTestFiles = update.currentTestFiles;
 };

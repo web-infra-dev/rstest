@@ -19,19 +19,9 @@ import {
 import type { InternalContext } from '../../types';
 import { toSerializedError } from '../../utils/error';
 
-export const reportNoTestFiles = ({
-  context,
-  mode = 'all',
-}: {
-  context: InternalContext;
-  mode?: 'all' | 'on-demand';
-}): void => {
+const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
   if (context.command === 'watch') {
-    if (mode === 'on-demand') {
-      logger.log(color.yellow('No test files need re-run.'));
-    } else {
-      logger.log(color.yellow('No test files found.'));
-    }
+    logger.log(color.yellow('No test files found.'));
   } else {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     const message = getNoTestFilesMessage({
@@ -49,36 +39,34 @@ export const reportNoTestFiles = ({
     context.exitCode.raise(code);
   }
 
-  if (mode === 'all') {
-    if (context.relatedFilters?.length) {
-      logger.log(
-        color.gray('related: '),
-        context.relatedFilters.join(color.gray(', ')),
-      );
-    } else if (context.fileFilters?.length) {
-      logger.log(
-        color.gray('filter: '),
-        context.fileFilters.join(color.gray(', ')),
-      );
-    }
-
-    context.projects.forEach((p) => {
-      if (context.projects.length > 1) {
-        logger.log('');
-        logger.log(color.gray('project:'), p.name);
-      }
-      logger.log(color.gray('root:'), p.rootPath);
-
-      logger.log(
-        color.gray('include:'),
-        p.normalizedConfig.include.join(color.gray(', ')),
-      );
-      logger.log(
-        color.gray('exclude:'),
-        p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
-      );
-    });
+  if (context.relatedFilters?.length) {
+    logger.log(
+      color.gray('related: '),
+      context.relatedFilters.join(color.gray(', ')),
+    );
+  } else if (context.fileFilters?.length) {
+    logger.log(
+      color.gray('filter: '),
+      context.fileFilters.join(color.gray(', ')),
+    );
   }
+
+  context.projects.forEach((p) => {
+    if (context.projects.length > 1) {
+      logger.log('');
+      logger.log(color.gray('project:'), p.name);
+    }
+    logger.log(color.gray('root:'), p.rootPath);
+
+    logger.log(
+      color.gray('include:'),
+      p.normalizedConfig.include.join(color.gray(', ')),
+    );
+    logger.log(
+      color.gray('exclude:'),
+      p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
+    );
+  });
 };
 
 export const notifyReportersOnTestRunStart = async (
@@ -182,7 +170,11 @@ export async function finalizeRunCycle(
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
     isInterrupted?: () => boolean;
-    /** Cancellation before run-start still finalizes state, without reporter callbacks. */
+    /**
+     * Whether `onTestRunStart` fired for this cycle. False finalizes state
+     * without `onTestRunEnd` or a coverage report: a run cancelled before it
+     * started, or a watch cycle that ran nothing and has nothing to report.
+     */
     reportersStarted?: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
@@ -270,15 +262,14 @@ export async function finalizeRunCycle(
     results.some((r) => r.status === 'fail') || errors.length > 0;
   const noTestsDiscovered = results.length === 0 && errors.length === 0;
   const testPaths = outcomes.flatMap((o) => o.testPaths);
+  const deletedTestPaths = outcomes.flatMap((o) => o.deletedTestPaths ?? []);
 
-  context.updateReporterResultState(
-    results,
-    testResults,
-    outcomes.flatMap((o) => o.deletedTestPaths ?? []),
-  );
+  context.updateReporterResultState(results, testResults, deletedTestPaths);
 
-  if (!isInterrupted() && noTestsDiscovered) {
-    reportNoTestFiles({ context, mode });
+  // Only a scope the user chose says so; a rebuild's empty scope is not a run
+  // (see `InternalContext.openReporterRun`).
+  if (!isInterrupted() && noTestsDiscovered && mode === 'all') {
+    reportNoTestFiles({ context });
   }
 
   if (isFailure) {
@@ -314,6 +305,7 @@ export async function finalizeRunCycle(
   // complete coverage map rather than to every partial shard.
   if (
     !isInterrupted() &&
+    reportersStarted &&
     coverageProvider &&
     !defersCoverageReport &&
     (!isFailure || reportOnFailure)

@@ -41,6 +41,7 @@ Contracts between modules or processes — not readable from any single file.
 
 ### Run cycle (`src/core`)
 
+- Reporter `onTestRunStart` and `onTestRunEnd` fire as a pair or not at all. In watch mode the run opens lazily through `InternalContext.openReporterRun`: the runner event sink awaits it ahead of its first reporter fanout, and the driver awaits it after the cycle when the outcome still has something to report (an error, a deleted file) or the scope was the user's (`mode: 'all'`). A rebuild that reaches no test opens nothing and prints nothing.
 - Once reporters have been notified of run start, `finalizeRunCycle` runs; a rejected cycle becomes a `'setup'` outcome, except a rejection while interrupted is the interrupt, not a run failure. On the first watch cycle, a `'setup'` outcome ends the session after finalize: a single error is rethrown as-is, several as `AggregateError`. Later-cycle setup failures finalize without ending the session.
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
 - The single fatal-signal registrar must interrupt before release so executor `interrupt` raises the node pool's `closing` in the tick the host observes the signal, then release in this order: executors → `globalTeardown` → `finishCycle` → reporter `onExit`.

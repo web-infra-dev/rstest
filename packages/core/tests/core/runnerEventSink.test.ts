@@ -87,6 +87,31 @@ describe('createRunnerEventSink', () => {
     expect(calls.snapshotAdd).toEqual([result.snapshotResult]);
   });
 
+  it('opens the reporter run ahead of the first file start and of a console log', async () => {
+    const { context, projectConfig, calls } = makeContext();
+    const order: string[] = [];
+    context.openReporterRun = async () => {
+      order.push('open');
+    };
+    context.reporters.push({
+      onTestFileStart: () => {
+        order.push('file');
+      },
+    });
+    const sink = createRunnerEventSink(context, projectConfig);
+
+    await sink.onTestFileStart({
+      testId: '/a.test.ts',
+      testPath: '/a.test.ts',
+      project: 'test',
+      tests: [],
+    });
+    await sink.onConsoleLog(log('hello'));
+
+    expect(order).toEqual(['open', 'file', 'open']);
+    expect(calls.reporterConsole).toEqual([log('hello')]);
+  });
+
   it('onConsoleLog honors the per-project onConsoleLog filter', async () => {
     const { context, projectConfig, calls } = makeContext({
       onConsoleLog: (content) => !content.includes('drop'),

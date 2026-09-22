@@ -58,11 +58,7 @@ import type { WatchSignals } from './watchSignals';
 
 type HeadlessSchedulerContext = Pick<
   InternalContext,
-  | 'command'
-  | 'rootPath'
-  | 'snapshotManager'
-  | 'stateManager'
-  | 'updateReporterResultState'
+  'command' | 'rootPath' | 'snapshotManager' | 'stateManager'
 > & {
   normalizedConfig: Pick<InternalContext['normalizedConfig'], 'bail' | 'pool'>;
 };
@@ -794,12 +790,7 @@ export const createHeadlessScheduler = async ({
         affectedTestFiles: drainPendingAffectedTestFiles(watchState),
       });
 
-      commitWatchFileSetUpdate(
-        rerunPlan.fileSetUpdate,
-        watchState,
-        (deletedTestPaths) =>
-          context.updateReporterResultState([], [], deletedTestPaths),
-      );
+      commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
 
       logger.log(color.cyan(rerunPlan.decision.message));
       if (rerunPlan.decision.kind === 'idle') {

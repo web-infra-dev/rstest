@@ -136,6 +136,14 @@ export type InternalContext = {
   closeWatchSession?: () => Promise<void>;
   /** CLI-owned exit handler for a fatal cycle after watch startup. */
   onFatalWatchFailure?: (error: Error) => void;
+  /**
+   * Watch only: opens the current cycle's reporter run (`onTestRunStart`),
+   * idempotently. Set per cycle by the watch driver and awaited by the runner
+   * event sink ahead of its first reporter fanout, so the run opens exactly
+   * when the cycle is known to run a file — a rebuild that reaches no test
+   * never opens one, and no executor has to say whether it will.
+   */
+  openReporterRun?: () => Promise<void>;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;

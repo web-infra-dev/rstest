@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, rs } from '@rstest/core';
 import { createResultReporter } from '../../src/api/result';
 import { isCliShortcutsEnabled } from '../../src/core/watch/cliShortcuts';
+import { createRunnerEventSink } from '../../src/core/execution/runnerEventSink';
 import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
@@ -297,6 +298,77 @@ describe('createWatchCycleDriver', () => {
     expect(context.snapshotManager.summary.unmatched).toBe(2);
   });
 
+  it('opens a reporter run only for a cycle with something to report, and always as a pair', async () => {
+    const context = createContext();
+    const hooks: string[] = [];
+    context.reporters = [
+      {
+        onTestRunStart: () => {
+          hooks.push('start');
+        },
+        onTestFileStart: () => {
+          hooks.push('file');
+        },
+        onTestRunEnd: () => {
+          hooks.push('end');
+        },
+      },
+    ];
+    const driver = createDriver(context);
+    // The route every per-file event takes on both transports; it is what
+    // opens the run ahead of the first one.
+    const sink = createRunnerEventSink(
+      context,
+      context.projects[0]!.normalizedConfig,
+    );
+    const executor = createFakeExecutor('node', async (options) => {
+      const [file] = options.fileFilters ?? [];
+      if (file === '/run.test.ts') {
+        await sink.onTestFileStart({
+          testId: file,
+          testPath: file,
+          project: 'node-a',
+          tests: [],
+        });
+      }
+      return file === '/gone.test.ts'
+        ? { ...emptyOutcome(), deletedTestPaths: [file] }
+        : undefined;
+    });
+
+    const cycles: Array<{
+      why: string;
+      options: Parameters<typeof driver.runCycle>[1];
+      expected: string[];
+    }> = [
+      {
+        why: 'a chosen scope reports even when empty',
+        options: { mode: 'all' },
+        expected: ['start', 'end'],
+      },
+      {
+        why: 'a rebuild that reached no test is not a run',
+        options: { mode: 'on-demand' },
+        expected: [],
+      },
+      {
+        why: 'a rebuild that runs a file opens the run before its events',
+        options: { mode: 'on-demand', fileFilters: ['/run.test.ts'] },
+        expected: ['start', 'file', 'end'],
+      },
+      {
+        why: 'a rebuild that only retired a file still repaints the summary',
+        options: { mode: 'on-demand', fileFilters: ['/gone.test.ts'] },
+        expected: ['start', 'end'],
+      },
+    ];
+    for (const { why, options, expected } of cycles) {
+      hooks.length = 0;
+      await driver.runCycle(executor, options);
+      expect(hooks, why).toEqual(expected);
+    }
+  });
+
   it('folds a burst of invalidations into the queued cycle instead of appending', async () => {
     const context = createContext();
     const driver = createDriver(context);
@@ -531,14 +603,6 @@ describe('createWatchCycleDriver', () => {
 
   it('drops a queued cycle when teardown finishes before it starts', async () => {
     const context = createContext();
-    let runStarts = 0;
-    context.reporters = [
-      {
-        onTestRunStart: () => {
-          runStarts += 1;
-        },
-      },
-    ];
     const { executor, release, started } = createGatedExecutor('node');
     const teardown = createWatchTeardown({
       context,
@@ -559,7 +623,6 @@ describe('createWatchCycleDriver', () => {
     await Promise.all([inFlight, queued]);
 
     expect(executor.cycles).toHaveLength(1);
-    expect(runStarts).toBe(1);
   });
 
   it('delivers a rejected rerun as an error result and keeps the queue live', async () => {

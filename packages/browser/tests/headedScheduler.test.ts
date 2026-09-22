@@ -166,7 +166,6 @@ describe('createHeadedScheduler', () => {
         rootPath: '/project',
         normalizedConfig: { name: 'browser' },
         snapshotManager,
-        updateReporterResultState: () => {},
       },
       runtime,
       allTestFiles: [testFile],

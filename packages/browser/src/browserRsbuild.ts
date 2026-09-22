@@ -221,6 +221,9 @@ type BrowserWatchState = {
   // compile finishing while another project's rerun is being planned cannot
   // drop pending work.
   pendingAffectedTestFiles: Map<string, Set<string>>;
+  // Test files a file-set update retired, held until the next cycle's outcome
+  // carries them: core prunes reporter state from the outcome, not from here.
+  pendingDeletedTestPaths: string[];
   // Per-project compile start times and the accumulated compile duration of
   // the pending rerun, so the rerun's finalize reports the real buildTime.
   compileStartTimes: Map<string, number>;
@@ -233,9 +236,14 @@ const createBrowserWatchState = (): BrowserWatchState => ({
   headedFileSetVersion: 1,
   invalidation: new Map(),
   pendingAffectedTestFiles: new Map(),
+  pendingDeletedTestPaths: [],
   compileStartTimes: new Map(),
   pendingBuildTimeMs: 0,
 });
+
+export const drainPendingDeletedTestPaths = (
+  watchState: BrowserWatchState,
+): string[] => watchState.pendingDeletedTestPaths.splice(0);
 
 export const drainPendingBuildTime = (
   watchState: BrowserWatchState,

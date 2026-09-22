@@ -287,8 +287,11 @@ test('added watch test', () => {
   cli.resetStd();
   fixtureFs.delete(join(fixtureRoot, 'tests/index.test.ts'));
   fixtureFs.delete(join(fixtureRoot, 'tests/another.test.ts'));
+  // The host reports the empty file set; the cycle it then schedules runs no
+  // test but retires the deleted files, so it repaints the summary without
+  // them and the banner follows.
   await cli.waitForStdout('No browser test files remain after update.');
-  await cli.waitForStdout('No test files need re-run.');
+  await cli.waitForStdout('Waiting for file changes...');
 };
 
 /**
