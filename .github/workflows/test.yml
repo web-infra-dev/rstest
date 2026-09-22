@@ -102,7 +102,7 @@ jobs:
   ut:
     # Gate behind lint so a lint failure skips ut — and transitively e2e —
     # before they start; e2e already needs lint. Trade-off: any lint nit
-    # (prettier/spell/dedupe/knip) now blocks ut+e2e too, instead of running
+    # (format/spell/dedupe/knip) now blocks ut+e2e too, instead of running
     # them in parallel with lint.
     #
     # ut is OS-agnostic by convention: it runs only on ubuntu (the cheapest,

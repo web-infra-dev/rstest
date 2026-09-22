@@ -49,6 +49,8 @@ minimumReleaseAgeExclude:
   - '@rsdoctor/*'
   - '@rslint/*'
   - '@rstackjs/doc-ui'
+  - rstack@0.8.0
+  - '@rstackjs/cli-*'
   - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7

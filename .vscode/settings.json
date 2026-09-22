@@ -17,28 +17,28 @@
     "source.organizeImports": "never"
   },
   "[json5]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[json]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[jsonc]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[mdx]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[md]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[css]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[sass]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "[less]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "rstack.rstack"
   },
   "typescript.tsdk": "node_modules/typescript/lib",
   "rstest.configFileGlobPattern": [
@@ -46,5 +46,5 @@
     "examples/**/*/rstest.config.ts",
     "e2e/rstest.config.ts"
   ],
-  "editor.defaultFormatter": "esbenp.prettier-vscode"
+  "editor.defaultFormatter": "rstack.rstack"
 }

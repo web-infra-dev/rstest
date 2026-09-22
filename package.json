@@ -13,8 +13,8 @@
     "check-unused": "knip",
     "check-version-consistency": "node scripts/checkVersionConsistency.mjs",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
-    "format": "prettier --write . && heading-case --write",
-    "lint": "prettier --check . && pnpm run check-spell && pnpm run check-doc-types && pnpm run check-harness-docs && pnpm run lint:type",
+    "format": "rs fmt && heading-case --write",
+    "lint": "rs fmt --check && pnpm run check-spell && pnpm run check-doc-types && pnpm run check-harness-docs && pnpm run lint:type",
     "lint:type": "rslint --type-check",
     "prepare": "lefthook install",
     "test": "rstest",
@@ -39,11 +39,12 @@
     "playwright": "^1.63.0",
     "prettier": "^3.9.7",
     "prettier-plugin-packagejson": "^3.0.2",
+    "rstack": "0.8.0",
     "typescript": "^6.0.3"
   },
   "packageManager": "pnpm@11.27.0",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0",
+    "node": "^22.18.0 || >=24.3.0",
     "pnpm": ">=11.27.0"
   }
 }
