@@ -98,9 +98,13 @@ export type ExecutorInvalidationCallback = (hint: {
 export interface ExecutorCycleOutcome {
   results: TestFileResult[];
   testResults: TestResult[];
-  /** Launch/setup failures surfaced outside any test (e.g. browser launch). */
+  /** Errors outside individual tests, including launch, globalSetup, and executor rejections. */
   errors: Error[];
-  /** Setup failures end the first watch cycle; fatal compile failures end any cycle. */
+  /**
+   * 'setup': the cycle failed before producing results (launch, globalSetup, or
+   * any executor rejection); ends the first watch cycle.
+   * 'fatal': fatal compile failures end any cycle.
+   */
   failure?: 'setup' | 'fatal';
   /**
    * Test paths this executor ran this cycle. `finalizeRunCycle` builds the

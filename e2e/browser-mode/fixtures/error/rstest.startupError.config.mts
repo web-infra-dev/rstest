@@ -1,8 +1,7 @@
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 
-// A config-phase throw with no user plugin in the config: nothing runs, so the
-// run must fail startup instead of reporting a cycle.
+// With no user plugin, the browser config phase runs inside the first cycle.
 export default defineConfig({
   browser: {
     enabled: true,

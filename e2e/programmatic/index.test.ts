@@ -507,6 +507,15 @@ describe('programmatic createRstest', () => {
       tests: 1,
       file: 'browser.test.ts',
       errors: [],
+      launchFailure: {
+        status: 'error',
+        results: [],
+        testResults: [],
+        summary: { files: { total: 0 } },
+        unhandledErrors: [
+          { message: expect.stringContaining('nonexistent-browser-binary') },
+        ],
+      },
       buildFailure: {
         status: 'error',
         errors: [
@@ -528,8 +537,7 @@ describe('programmatic createRstest', () => {
       },
     ]);
     expect(result.setupRejection).toEqual({
-      message: 'Global setup failed',
-      errors: [expect.stringContaining('Browser setup failed intentionally')],
+      message: expect.stringContaining('Browser setup failed intentionally'),
     });
     expect(result.emptyProjectCycles[0]).toEqual({
       status: 'pass',

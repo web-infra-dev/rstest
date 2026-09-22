@@ -117,6 +117,20 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
   await watcher.close();
   watcher = undefined;
 
+  const failedLaunchRstest = await createRstest({
+    cwd: root,
+    config: {
+      ...config,
+      browser: {
+        ...config.browser,
+        providerOptions: {
+          launch: { executablePath: join(root, 'nonexistent-browser-binary') },
+        },
+      },
+    },
+  });
+  const launchFailure = await failedLaunchRstest.run();
+
   await writeFile(
     join(root, 'globalSetup.ts'),
     `export default () => { throw new Error('Browser setup failed intentionally'); };`,
@@ -139,7 +153,6 @@ it('reruns in a browser', () => expect(document.title).toBe(document.title));
   } catch (error) {
     setupRejection = {
       message: error.message,
-      errors: error.errors.map((error) => error.message),
     };
   }
 
@@ -253,6 +266,7 @@ it('runs after an empty start', () => expect(document.createElement('main').tagN
       tests: result.summary.tests.total,
       file: result.results[0]?.testPath.split('/').pop(),
       errors: result.unhandledErrors.map((error) => error.message),
+      launchFailure,
       cycles,
       setupCycles,
       setupRejection,
