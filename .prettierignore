@@ -9,8 +9,5 @@ doc_build
 # runs format-spell and typecheck in parallel.
 LICENSE.md
 
-# Symlinks (prettier does not handle symlinks)
-CLAUDE.md
-
 # ignore pnpm-lock
 pnpm-lock.yaml

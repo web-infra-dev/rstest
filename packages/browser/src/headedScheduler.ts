@@ -61,7 +61,10 @@ type HeadedSchedulerDeps = {
     handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
   };
   fatalErrorRef: { current: Error | null };
-  watchSignals: Pick<WatchSignals, 'setDispatchRerun' | 'signalInvalidation'>;
+  watchSignals: Pick<
+    WatchSignals,
+    'setDispatchRerun' | 'signalInvalidation' | 'setAbort'
+  >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
     execute: (testPaths: string[]) => Promise<unknown[]>,
@@ -321,6 +324,17 @@ export const createHeadedScheduler = async ({
   // so a re-entering scheduler cannot orphan the previous entry's runs.
   const runs = (watchState.headedRuns ??= createHeadedRunRegistry());
 
+  let aborted = false;
+  // Dropping every retained path and marking the current frame set ready
+  // settles everything the cycle is waiting on, so it unwinds instead of
+  // hanging on a container that is about to go away. `aborted` keeps the
+  // teardown errors that follow from being reported as a fatal run failure.
+  watchSignals.setAbort(async () => {
+    aborted = true;
+    runs.retainPaths([]);
+    markFrameSetReady(watchState.headedFileSetVersion);
+  });
+
   // A wedged cleanup does not stay its own problem: every runner iframe and
   // the container are same-site, so they share one renderer process, and a
   // synchronous busy-loop in one document freezes the whole tab — no sibling
@@ -574,7 +588,7 @@ export const createHeadedScheduler = async ({
     testNamePattern?: string,
   ): Promise<void> => {
     return headedReloadQueue.enqueue(async () => {
-      if (fatalErrorRef.current) {
+      if (aborted || fatalErrorRef.current) {
         return;
       }
       // `claimHeadedCycleScope` checks membership once per cycle, but the queue
@@ -616,7 +630,11 @@ export const createHeadedScheduler = async ({
     } catch (error) {
       // The fatal error rides the returned result into the cycle outcome, and
       // core's `finalizeRunCycle` raises the exit code from it.
-      fatalErrorRef.current = fatalErrorRef.current ?? toError(error);
+      // The abort guard protects the reported outcome, not the max-only exit
+      // code: the signal registrar has already raised that to 128 + signal.
+      if (!aborted) {
+        fatalErrorRef.current = fatalErrorRef.current ?? toError(error);
+      }
     }
 
     testTime = Date.now() - testStart;

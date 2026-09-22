@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { dirname, resolve } from 'pathe';
 import { displayPath, isTTY } from './helper';
 import { color, logger } from './logger';
+import { onFatalSignal } from './signals';
 import { formatTraceSummary, summarizeTrace } from './traceSummary';
 
 // ---------------------------------------------------------------------------
@@ -167,12 +168,10 @@ type TraceServerHandle = {
   /** Stop listening so the Node event loop can exit. */
   close: () => Promise<void>;
   /**
-   * Block until SIGINT/SIGTERM/SIGTSTP arrives, then close the server and
-   * exit with the process's current status. Use this after tests have
-   * finished so Ctrl+C is treated as a clean shutdown — without it, the
-   * default 128+SIGINT exit code makes pnpm/npm surface ELIFECYCLE.
+   * Wait for a signal after tests finish, preserving the run's exit status.
+   * The caller owns reporter release and server cleanup.
    */
-  waitForExit: () => Promise<never>;
+  waitForExit: () => Promise<void>;
 };
 
 /**
@@ -232,18 +231,11 @@ const startTraceServer = (initialPath: string): Promise<TraceServerHandle> => {
         },
         close: () => new Promise<void>((res) => stopListening(() => res())),
         waitForExit: () =>
-          new Promise<never>(() => {
-            // Synchronous exit — terminates before any other SIGINT listener
-            // (e.g. the runner's "exit 128+SIG" handler) gets an async tick to
-            // override the exit code. The OS reaps the listening socket on
-            // process termination, so close() is best-effort.
-            const onSignal = () => {
-              stopListening();
-              process.exit();
-            };
-            process.once('SIGINT', onSignal);
-            process.once('SIGTERM', onSignal);
-            process.once('SIGTSTP', onSignal);
+          new Promise<void>((resolve) => {
+            const dispose = onFatalSignal(() => {
+              dispose();
+              resolve();
+            });
           }),
       });
     });
@@ -279,13 +271,6 @@ export interface TraceController {
    * until the user signals; then preserve the process's current status.
    */
   waitForExit: () => Promise<void>;
-  /**
-   * Convenience for early-return paths: `finalize` the supplied run, then
-   * `waitForExit` (blocks for SIGINT only when a helper server is up — i.e.
-   * tracing produced output in an interactive TTY), then `close` defensively.
-   * No-op for each step when tracing is disabled.
-   */
-  shutdown: (run: TraceRun) => Promise<void>;
 }
 
 /**
@@ -438,11 +423,6 @@ export const createTraceController = (options: {
         ),
       );
       await server.waitForExit();
-    },
-    shutdown: async (run) => {
-      await run.finalize();
-      await controller.waitForExit();
-      await controller.close();
     },
   };
   return controller;

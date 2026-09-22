@@ -91,13 +91,13 @@ export class GlobalSetupWorker {
     this.pending.clear();
   }
 
-  start(): ChildProcess {
-    if (this.child) return this.child;
-
+  start(): void {
     const child = this.forkWorker(
       resolve(__dirname, './globalSetupWorker.js'),
       [],
       {
+        // Keep terminal Ctrl+C out of teardown; globalSetupWorker exits on disconnect to avoid orphaning this detached worker.
+        detached: true,
         execArgv: [
           ...process.execArgv,
           '--experimental-vm-modules',
@@ -138,13 +138,17 @@ export class GlobalSetupWorker {
     });
 
     this.child = child;
-    return child;
   }
 
   call<T>(
     payload: { type: 'setup'; payload: any } | { type: 'teardown' },
   ): Promise<T> {
-    const child = this.start();
+    const child = this.child;
+    if (!child) {
+      return Promise.reject(
+        new Error('[rstest] global setup worker is not running'),
+      );
+    }
     const id = ++this.nextId;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
@@ -215,6 +219,7 @@ export async function runGlobalSetup(
   envChanges?: Record<string, string | undefined>;
 }> {
   const worker = new GlobalSetupWorker(composeWorkerEnv(context.workerEnv));
+  worker.start();
 
   const result = await worker.call<{
     success: boolean;

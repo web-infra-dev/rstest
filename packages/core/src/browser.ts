@@ -110,9 +110,6 @@ export type {
 } from './types';
 // Utils needed by browser package
 export { color, isDebug, isTTY, logger, serializableConfig } from './utils';
-// Shared fatal-signal list, so the host's best-effort runtime cleanup nets hook
-// the same signals core's watch teardown exits on.
-export { FATAL_SIGNALS } from './utils/signals';
 // Worker concurrency primitives shared with @rstest/browser
 export { getNumCpus, parseWorkers, resolveWorkerCount } from './utils/workers';
 export type { ResolveWorkerCountOptions } from './utils/workers';

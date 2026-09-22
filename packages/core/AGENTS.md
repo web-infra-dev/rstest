@@ -31,7 +31,7 @@ The CLI carries process-level behavior (`embedded`, `trace`, installer confirmat
 
 Core owns the run-cycle contract shared by the node pool and `@rstest/browser`:
 
-- `finalizeRunCycle` is the single finalize implementation for node-only, browser-only, and mixed runs, on both commands: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). A non-watch run exits through it exactly once; a watch run passes through it once per cycle. A cycle is the only thing that may write the exit code.
+- `finalizeRunCycle` is the single finalize implementation for node-only, browser-only, and mixed runs, on both commands: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). A non-watch run exits through it exactly once; a watch run passes through it once per cycle. Only a cycle or the fatal-signal registrar may write the exit code.
 - `RunnerEventSink` is the single event pump for runner lifecycle events on both transports (node pool RPC and browser dispatch). One sink per project, bound to that project's `normalizedConfig`, feeding `stateManager` and reporters. No direct reporter/`stateManager` fanout anywhere else.
 - `executorCapabilities` declares the per-executor disposition (`supported` / `ignored-warn` / `error` / `stripped`) of every `RuntimeConfig` field. Adding a field without a row is a compile error; the browser wire projection (`projectRuntimeConfig`) keeps its own hand-written field list, held in lockstep by `tests/core/executorCapabilities.test.ts`.
 
@@ -42,6 +42,7 @@ Contracts between modules or processes — not readable from any single file.
 ### Run cycle (`src/core`)
 
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
+- The single fatal-signal registrar must release in this order: executors → `globalTeardown` → `finishCycle` → reporter `onExit`.
 - File filters are plain strings everywhere: a filter wrapped in matching quotes is an exact path, and `--related`/`--changed` express their resolved paths that way.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchCycleState` ahead of every watch cycle, a session's first included) — executors never reset it, so bail reads stay cycle-scoped even where two executors' first cycles bracket one startup. The snapshot summary is the one half a first cycle keeps, because the update-snapshot shortcut reads whatever the last cycle produced and the browser's first cycle would otherwise clear what the node's just left.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.

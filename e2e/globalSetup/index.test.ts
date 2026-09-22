@@ -11,19 +11,41 @@ describe('globalSetup', async () => {
   describe.skipIf(process.platform === 'win32')('SIGINT cancellation', () => {
     it.for(
       ['forks', 'threads', 'vmForks', 'vmThreads'].flatMap((pool) => [
-        { pool, phase: 'test', exitDuringCleanup: false },
-        { pool, phase: 'test', exitDuringCleanup: true },
-        { pool, phase: 'run-start', exitDuringCleanup: false },
-        { pool, phase: 'run-end', exitDuringCleanup: false },
-        { pool, phase: 'global-setup', exitDuringCleanup: false },
-        { pool, phase: 'blob-conflict', exitDuringCleanup: false },
+        { command: 'run', pool, phase: 'test', exitDuringCleanup: false },
+        // The watch signal path is pool-independent, so it runs under `forks`
+        // only — the pool whose children sit in the killed process group.
+        ...(pool === 'forks'
+          ? [
+              {
+                command: 'watch',
+                pool,
+                phase: 'test',
+                exitDuringCleanup: false,
+              },
+            ]
+          : []),
+        { command: 'run', pool, phase: 'test', exitDuringCleanup: true },
+        { command: 'run', pool, phase: 'run-start', exitDuringCleanup: false },
+        { command: 'run', pool, phase: 'run-end', exitDuringCleanup: false },
+        {
+          command: 'run',
+          pool,
+          phase: 'global-setup',
+          exitDuringCleanup: false,
+        },
+        {
+          command: 'run',
+          pool,
+          phase: 'blob-conflict',
+          exitDuringCleanup: false,
+        },
       ]),
     )(
-      'cancels $phase under $pool (cleanup calls exit: $exitDuringCleanup)',
-      async ({ pool, phase, exitDuringCleanup }) => {
+      'cancels $command during $phase under $pool (cleanup calls exit: $exitDuringCleanup)',
+      async ({ command, pool, phase, exitDuringCleanup }) => {
         const fixturesTargetPath = join(
           __dirname,
-          `fixtures-test-sigint-${pool}-${phase}-${exitDuringCleanup}`,
+          `fixtures-test-sigint-${command}-${pool}-${phase}-${exitDuringCleanup}`,
         );
         const { fs } = await prepareFixtures({
           fixturesPath: join(__dirname, 'fixtures/basic'),
@@ -32,7 +54,7 @@ describe('globalSetup', async () => {
         fs.update(join(fixturesTargetPath, 'rstest.config.ts'), (content) =>
           content.replace(
             'globalSetup:',
-            `reporters: ['blob', 'default', {
+            `reporters: [${command === 'run' ? "'blob'," : ''} 'default', {
             onTestFileResult() { console.log('[unexpected-file-result]'); },
             async onTestRunStart() {
               if ('${phase}' === 'run-start') {
@@ -52,6 +74,7 @@ describe('globalSetup', async () => {
               await new Promise(resolve => setTimeout(resolve, 100));
               console.log('[run-end]');
             },
+            onExit() { console.log('[reporter-exit]'); },
           }], globalSetup:`,
           ),
         );
@@ -101,7 +124,7 @@ describe('globalSetup', async () => {
         const { cli, expectExecFailed } = await runRstestCli({
           command: 'rstest',
           args: [
-            'run',
+            command,
             '--pool',
             pool,
             '--pool.maxWorkers',
@@ -122,6 +145,7 @@ describe('globalSetup', async () => {
             nodeOptions: {
               cwd: fixturesTargetPath,
               env: { ISOLATE: undefined },
+              detached: true,
             },
           },
         });
@@ -135,7 +159,7 @@ describe('globalSetup', async () => {
                   ? '[setup-pending]'
                   : '[test-running]',
           );
-          cli.exec.process!.kill('SIGINT');
+          process.kill(-cli.exec.process!.pid!, 'SIGINT');
           if (phase === 'global-setup') {
             await cli.waitForStdout('Received SIGINT');
             fs.create(join(fixturesTargetPath, 'release-setup'), '');
@@ -153,7 +177,10 @@ describe('globalSetup', async () => {
             expect(cli.log).not.toContain('Failed to run Rstest');
           }
           if (exitDuringCleanup) return;
-          expect(cli.stdout.match(/\[run-end\]/g)).toHaveLength(1);
+          expect(cli.stdout.match(/\[reporter-exit\]/g)).toHaveLength(1);
+          expect(cli.stdout.match(/\[run-end\]/g) ?? []).toHaveLength(
+            command === 'run' ? 1 : 0,
+          );
           expect(cli.log).not.toContain('No test files found');
           if (phase === 'run-start' || phase === 'global-setup')
             expect(cli.log).not.toContain('[test-running]');
@@ -186,6 +213,9 @@ describe('globalSetup', async () => {
             ).toBeLessThan(
               cli.stdout.indexOf('[global-teardown-default] executed'),
             );
+            expect(
+              cli.stdout.indexOf('[global-teardown-default] executed'),
+            ).toBeLessThan(cli.stdout.indexOf('[reporter-exit]'));
           }
         } finally {
           await cli.killProcessTree();

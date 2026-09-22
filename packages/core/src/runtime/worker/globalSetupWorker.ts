@@ -7,6 +7,8 @@ import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
+// globalSetup detaches this worker from the CLI's process group; exit if its parent dies to avoid an orphan.
+process.on('disconnect', () => process.exit(0));
 
 let teardownCallbacks: TeardownCallback[] = [];
 // Track environment variable changes
