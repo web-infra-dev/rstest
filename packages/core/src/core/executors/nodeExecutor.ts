@@ -17,7 +17,7 @@ import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import {
-  globalSetupFailureOutcome,
+  cycleFailureOutcome,
   shouldRunGlobalSetup,
   runGlobalSetup,
 } from '../globalSetup';
@@ -451,7 +451,7 @@ export function createNodeExecutor(
             );
             if (!success) {
               return {
-                ...globalSetupFailureOutcome(errors ?? []),
+                ...cycleFailureOutcome(errors ?? []),
                 bundleCoverage: [],
                 assetNames,
                 getAssetFiles,

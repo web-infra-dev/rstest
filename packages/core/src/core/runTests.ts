@@ -11,6 +11,7 @@ import {
   createTraceController,
   getForceRerunTriggerMessage,
   logger,
+  toError,
   type TraceEvent,
 } from '../utils';
 import {
@@ -30,7 +31,7 @@ import {
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import { createNodeExecutor } from './executors/nodeExecutor';
-import { globalSetupFailureOutcome, runGlobalTeardown } from './globalSetup';
+import { cycleFailureOutcome, runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import { createTestPlanner } from './planner';
 import type { Rstest } from './rstest';
@@ -49,7 +50,7 @@ export async function runTests(context: Rstest): Promise<void> {
   //    whichever executors it says this run needs. 0 and N node projects take
   //    the same route: a zero-node run gets no node build from the planner and
   //    therefore no node executor (the cold-start gate, see below).
-  // 3. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
+  // 3. Non-watch: settle all executor cycles → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
   // 4. Watch: both executors signal through `onInvalidate` and every signal is
   //    one queued cycle + finalize, so node rebuilds, browser rebuilds, and CLI
@@ -341,15 +342,13 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const reportersStarted = !isInterrupted;
       if (reportersStarted) await notifyReportersOnTestRunStart(context);
-      // Settle every cycle before propagating a failure: a fail-fast
-      // `Promise.all` would reach the `finally` teardown while a sibling
-      // executor is still mid-cycle, truncating its tests and firing global
-      // teardown early. The re-await unwraps the already-settled promises,
-      // rejecting with the first failure in executor order.
+      // Settle every cycle before finalizing so a failed executor cannot
+      // truncate its siblings or trigger global teardown early. Rejections
+      // become failure outcomes so every started run reports its end.
       const cyclePromises = !isInterrupted
         ? executorsToRun.map((executor) =>
             executor === browserExecutor && browserStage.errors.length
-              ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+              ? Promise.resolve(cycleFailureOutcome(browserStage.errors))
               : executor.runCycle({
                   buildId: 1,
                   mode: 'all',
@@ -360,11 +359,13 @@ export async function runTests(context: Rstest): Promise<void> {
           )
         : [];
       const settledCycles = await Promise.allSettled(cyclePromises);
-      const outcomes = !isInterrupted
-        ? await Promise.all(cyclePromises)
-        : settledCycles.flatMap((cycle) =>
-            cycle.status === 'fulfilled' ? [cycle.value] : [],
-          );
+      const outcomes = settledCycles.flatMap((cycle) => {
+        if (cycle.status === 'fulfilled') return [cycle.value];
+        // An interrupted cycle's rejection is the interrupt, not a run failure.
+        return isInterrupted
+          ? []
+          : [cycleFailureOutcome([toError(cycle.reason)])];
+      });
 
       await finalizeRunCycle(context, {
         outcomes,
@@ -552,7 +553,7 @@ export async function runTests(context: Rstest): Promise<void> {
       );
       if (stage.errors.length) {
         await watchDriver.runCycle(browserExecutor, {
-          outcome: globalSetupFailureOutcome(stage.errors),
+          outcome: cycleFailureOutcome(stage.errors),
         });
       }
       if (watchTeardown.isClosing()) {

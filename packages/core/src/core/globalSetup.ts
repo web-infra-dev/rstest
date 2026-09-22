@@ -178,10 +178,8 @@ export class GlobalSetupWorker {
   }
 }
 
-/** Errors-only outcome for node in-cycle and browser pre-cycle setup failures. */
-export const globalSetupFailureOutcome = (
-  errors: Error[],
-): ExecutorCycleOutcome => ({
+/** Produces a 'setup' outcome, which ends the first watch cycle after finalize. */
+export const cycleFailureOutcome = (errors: Error[]): ExecutorCycleOutcome => ({
   results: [],
   testResults: [],
   errors,

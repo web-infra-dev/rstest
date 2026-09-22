@@ -450,7 +450,6 @@ export default defineConfig({
     try {
       await expectExecFailed();
       expect(cli.stderr).toContain('Global setup failed intentionally');
-      expect(cli.stderr).toContain('Global setup failed');
       expect(cli.stderr).toContain('Failed to run Rstest.');
       expect(cli.exec.process!.exitCode).toBe(1);
       expect(cli.stdout).not.toContain('Waiting for file changes...');

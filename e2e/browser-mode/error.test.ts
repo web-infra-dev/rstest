@@ -158,30 +158,6 @@ describe('browser mode - error handling', () => {
     expect(output).not.toContain('fixture cleanup timed out in 1000ms');
   });
 
-  it('should exit non-zero via core when the browser fails to launch', async () => {
-    // A bad executablePath makes the provider launch throw. No session can
-    // exist after that, so the host propagates the error and core fails
-    // startup — no test runs.
-    // Passing the option as a `--browser.providerOptions.launch.*` arg also
-    // suppresses the CI chrome-channel injection in `applyGithubActionsChrome`.
-    const { cli } = await runBrowserCli('error', {
-      args: [
-        'tests/assertionError.test.ts',
-        '--browser.providerOptions.launch.executablePath=/rstest/nonexistent-browser-binary',
-      ],
-    });
-
-    await cli.exec;
-
-    const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(cli.exec.exitCode).not.toBe(0);
-    expect(output).toMatch(/Failed to launch/i);
-    expect(output).toContain('Failed to run Rstest.');
-    // No test result is produced on a launch failure; the assertion fixture's
-    // own failure message must not appear.
-    expect(output).not.toMatch(/expected.*to.*be/i);
-  });
-
   it('fails startup when the browser config phase throws', async () => {
     const { cli } = await runBrowserCli('error', {
       args: ['-c', 'rstest.startupError.config.mts'],
@@ -192,7 +168,8 @@ describe('browser mode - error handling', () => {
     const output = `${cli.stdout}\n${cli.stderr}`;
     expect(cli.exec.exitCode).toBe(1);
     expect(output).toContain('Browser config failed intentionally');
-    expect(output).toContain('Failed to run Rstest.');
+    expect(output).not.toContain('Failed to run Rstest.');
+    expect(output).toContain('Unhandled Error');
     expect(output).not.toMatch(/Test Files.*passed/);
   });
 

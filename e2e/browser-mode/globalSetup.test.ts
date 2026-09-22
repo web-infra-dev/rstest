@@ -976,6 +976,7 @@ it('interrupted browser test', async () => {
       await result.expectExecFailed();
       expectStderrLog(/Global setup A failed intentionally/);
       expectStderrLog(/Global setup B failed intentionally/);
+      expectStderrLog(/AggregateError: Run setup failed/);
       expectStderrLog(/Failed to run Rstest\./);
       expect(cli.log).not.toContain('Project A test should not be printed');
       expect(cli.log).not.toContain('Project B test should not be printed');

@@ -149,7 +149,7 @@ Rstest 实例规范化后的配置。
 
 ## rstest.run
 
-`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。当无效选项、配置或 compiler 错误导致运行无法启动时，Promise 会被拒绝；测试失败仍通过 `status` 报告，不会导致 Promise 被拒绝，具体规则见 [TestRunResult](#testrunresult)。
+`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。只有在运行完全无法开始时（无效的选项或配置，或 node 项目的 dev server 无法启动）Promise 才会被拒绝。此后的一切失败——浏览器项目的 dev server 或浏览器无法启动、`globalSetup` 抛错、编译错误、测试失败——都通过 `status` 报告，不会导致 Promise 被拒绝，具体规则见 [TestRunResult](#testrunresult)。
 
 ### 示例
 
@@ -241,8 +241,8 @@ await watcher.close();
 
 失败分为三类：
 
-- **启动失败**——配置阶段抛错，或运行依赖的资源无法启动（dev server、浏览器）。`run()` 和 `watch()` 都会被拒绝。如果 `globalSetup` 在 watch 首轮抛错或编译失败，该轮会先通过 `onResult` 上报 `status: 'error'`，随后 `watch()` 被拒绝。在非 watch 模式下，`globalSetup` 失败仍由 `run()` 返回 `status: 'error'` 的结果。
-- **启动之后的致命失败**——bundler 以不会重新挂载文件监听器的方式结束了一次编译。`run()` 返回 `status: 'error'`；在 watch 中，失败的那一轮仍会送达 `onResult`，随后会话关闭；若 `watch()` 尚未 resolve，则会被拒绝。
+- **启动失败**——配置阶段抛错，或 node 项目的 dev server 无法启动。`run()` 和 `watch()` 都会被拒绝。
+- **启动之后的致命失败**——浏览器项目的 dev server 或浏览器无法启动、首轮 `globalSetup` 抛错或编译失败，或 bundler 以不会重新挂载文件监听器的方式结束了一次编译。`run()` 返回 `status: 'error'`；在 watch 中，失败的那一轮仍会送达 `onResult`，随后会话关闭；若 `watch()` 尚未 resolve，则以该错误被拒绝——多个错误时合并为 `AggregateError`。
 - **可恢复的周期失败**——测试失败、测试文件编译失败，或后续轮次的 `globalSetup` 失败。该轮会上报失败，watch 会话保持打开，等待下一次触发。
 
 `onResult` 抛出的错误会被隔离，不会停止监听会话。调用 `watcher.close()` 会释放编译器、worker、文件监听器，并运行待处理的 `globalSetup` 清理函数。该方法是幂等的，重复调用会得到相同结果；清理失败时，它返回的 Promise 会被拒绝。
