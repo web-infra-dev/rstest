@@ -604,7 +604,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    {
+    l {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -1341,7 +1341,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    {
+    l {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -2023,7 +2023,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    {
+    l {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -2704,7 +2704,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    {
+    l {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -3762,7 +3762,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    {
+    l {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -4456,7 +4456,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    {
+    l {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
