@@ -12,7 +12,7 @@ process.env.DEBUG = 'false';
 const rootPath = join(__dirname, '../..');
 
 describe('rstest context', () => {
-  it.each([-1, '500', Infinity])(
+  it.each([-1, '500', NaN, 2_147_483_648])(
     'rejects invalid teardownTimeout: %s',
     (teardownTimeout) => {
       expect(
@@ -22,7 +22,20 @@ describe('rstest context', () => {
             // Deliberately exercise invalid user configuration from JavaScript.
             { teardownTimeout } as RstestConfig,
           ),
-      ).toThrow('`teardownTimeout` must be a non-negative finite number.');
+      ).toThrow(
+        '`teardownTimeout` must be a non-negative number no larger than 2147483647, or Infinity to never force the exit.',
+      );
+    },
+  );
+
+  it.each([0, 2_147_483_647, Infinity])(
+    'accepts teardownTimeout: %s',
+    (teardownTimeout) => {
+      const context = new Rstest(
+        { cwd: __dirname, command: 'run', projects: [] },
+        { teardownTimeout },
+      );
+      expect(context.normalizedConfig.teardownTimeout).toBe(teardownTimeout);
     },
   );
 

@@ -19,6 +19,8 @@ import { Tab, Tabs } from '@theme';
 
 设为 `0` 后，Rstest 会在运行结束后立即退出，不再等待，也不打印警告。这等同于 Jest 的 `forceExit: true`。
 
+设为 `Infinity` 后，Rstest 不会强制退出，而是一直等待进程自然退出，不限制等待时间。
+
 **这个选项不会限制 teardown 代码的执行时间。** `globalSetup` teardown 和 `afterAll` 等 hook 完成后才开始计时。要限制 hook 的执行时间，请使用 [`hookTimeout`](/config/test/hook-timeout)。
 
 如果出现这条警告，请检查 reporter、plugin 或配置中是否有未关闭的 handle。[`detectAsyncLeaks`](/config/test/detect-async-leaks) 用于另一类问题：它检查测试文件内部的泄漏，这些泄漏不会阻止进程退出。

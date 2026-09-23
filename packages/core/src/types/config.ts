@@ -519,7 +519,7 @@ export interface RstestConfig {
 
   /**
    * How long to wait for the process to exit after a run finishes, in milliseconds.
-   * 0 exits immediately. Applies to `rstest run` only.
+   * 0 exits immediately. Infinity never forces the exit. Applies to `rstest run` only.
    * @default 10000
    */
   teardownTimeout?: number;

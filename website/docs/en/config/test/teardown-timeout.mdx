@@ -19,6 +19,8 @@ A hook returning does not mean everything it started has finished. A server, soc
 
 Set it to `0` to exit immediately after the run finishes, without waiting or printing a warning. This is equivalent to Jest's `forceExit: true`.
 
+Set it to `Infinity` to never force the exit; Rstest then waits for the process to exit on its own, however long that takes.
+
 **This option does not limit your teardown code.** The timer starts only after `globalSetup` teardown and hooks such as `afterAll` have finished. Use [`hookTimeout`](/config/test/hook-timeout) to limit hooks.
 
 If the warning shows up, look for an unclosed handle in your reporters, plugins, or config. [`detectAsyncLeaks`](/config/test/detect-async-leaks) is a different tool: it finds leaks inside test files, which do not block the exit.

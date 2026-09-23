@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, it, onTestFinished } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -57,6 +58,39 @@ it('exits naturally with the default timeout and no leak', async () => {
   await expectExecSuccess();
   expect(cli.stderr).not.toContain('The process did not exit');
 });
+
+it('exits naturally with Infinity and no leak', async () => {
+  const { cli, expectExecSuccess } = await run({ EXIT_TIMEOUT: 'Infinity' });
+  await expectExecSuccess();
+  expect(cli.stderr).not.toContain('The process did not exit');
+  expect(cli.stderr).not.toContain('TimeoutOverflowWarning');
+});
+
+it.each([false, true])(
+  'keeps a leaking reporter alive with Infinity from CLI=%s',
+  async (fromCli) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', ...(fromCli ? ['--teardownTimeout', 'Infinity'] : [])],
+      options: {
+        nodeOptions: {
+          cwd,
+          env: {
+            LEAK_SOCKET: 'true',
+            EXIT_TIMEOUT: fromCli ? '300' : 'Infinity',
+          },
+        },
+      },
+    });
+    await cli.waitForStdout('REPORTER_EXIT_DONE');
+    await setTimeout(1500);
+    expect(cli.exec.process?.exitCode).toBeNull();
+    expect(cli.exec.process?.signalCode).toBeNull();
+    expect(cli.stderr).not.toContain('The process did not exit');
+    expect(cli.stderr).not.toContain('TimeoutOverflowWarning');
+    await cli.killProcessTree();
+  },
+);
 
 it('awaits global teardown and flushes large piped output before immediate exit', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'rstest-teardown-'));

@@ -138,7 +138,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--hookTimeout <value>', 'Timeout of hook in milliseconds'],
   [
     '--teardownTimeout <value>',
-    'Time in milliseconds to wait for the process to exit after the run finishes; 0 exits immediately',
+    'Time in milliseconds to wait for the process to exit after the run finishes; 0 exits immediately, Infinity never forces the exit',
   ],
   ['--hideSkippedTests', 'Hide skipped tests from the output'],
   ['--hideSkippedTestFiles', 'Hide skipped test files from the output'],
@@ -598,7 +598,7 @@ const createCliRstest = async (options: CommonOptions) => {
   // Instance-level flags are written to the base config before creation.
   // Every other flag replays per project through run().
   if (options.teardownTimeout !== undefined) {
-    loaded.content.teardownTimeout = options.teardownTimeout;
+    loaded.content.teardownTimeout = Number(options.teardownTimeout);
   }
   if (options.root !== undefined) {
     loaded.content.root = options.root;
@@ -640,6 +640,9 @@ const runOnce = async ({
       ...toRunOptions(options),
     });
     const { teardownTimeout } = rstest.context.config;
+    if (teardownTimeout === Infinity) {
+      return;
+    }
     if (teardownTimeout > 0) {
       // Unref'd: if the process drains on its own this promise never resolves.
       await new Promise<void>((resolve) => {
