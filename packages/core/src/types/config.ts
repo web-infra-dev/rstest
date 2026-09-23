@@ -164,6 +164,7 @@ export type ProjectConfig = Omit<
   | 'reporters'
   | 'pool'
   | 'isolate'
+  | 'teardownTimeout'
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
@@ -515,6 +516,13 @@ export interface RstestConfig {
    * @default 10000
    */
   hookTimeout?: number;
+
+  /**
+   * How long to wait for the process to exit after a run finishes, in milliseconds.
+   * 0 exits immediately. Applies to `rstest run` only.
+   * @default 10000
+   */
+  teardownTimeout?: number;
 
   /**
    * Automatically clear mock calls, instances, contexts and results before every test.

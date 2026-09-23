@@ -7,6 +7,7 @@ import {
   withDefaultConfig,
 } from '../src/config';
 import { Rstest } from '../src/core/rstest';
+import { projectRuntimeConfig } from '../src/core/execution/runtimeConfigProjection';
 import type { RstestConfig } from '../src/types';
 import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
 
@@ -16,6 +17,42 @@ rs.mock('std-env', () => ({
 }));
 
 describe('mergeRstestConfig', () => {
+  it('defaults teardownTimeout to 10000 and accepts immediate exit', () => {
+    expect(withDefaultConfig({}).teardownTimeout).toBe(10_000);
+    expect(withDefaultConfig({ teardownTimeout: 0 }).teardownTimeout).toBe(0);
+  });
+
+  it('keeps teardownTimeout root-only and out of both runtime projections', () => {
+    const context = new Rstest(
+      {
+        cwd: __dirname,
+        command: 'run',
+        projects: [
+          { config: { name: 'project', root: '.', teardownTimeout: 0 } },
+        ],
+      },
+      { teardownTimeout: 700 },
+    );
+    const project = context.projects[0]!;
+    expect(project.normalizedConfig.teardownTimeout).toBe(700);
+    expect(
+      projectRuntimeConfig(project, { envMode: 'inherit' }),
+    ).not.toHaveProperty('teardownTimeout');
+    expect(
+      projectRuntimeConfig(project, { envMode: 'static' }),
+    ).not.toHaveProperty('teardownTimeout');
+  });
+
+  it.each([-1, NaN, Infinity, '500', null])(
+    'rejects invalid teardownTimeout: %s',
+    (teardownTimeout) => {
+      expect(() =>
+        // Deliberately exercise invalid user configuration from JavaScript.
+        withDefaultConfig({ teardownTimeout } as RstestConfig),
+      ).toThrow('`teardownTimeout` must be a non-negative finite number.');
+    },
+  );
+
   it('should merge config correctly with default config', () => {
     const merged = withDefaultConfig({
       include: ['tests/**/*.test.ts'],

@@ -246,6 +246,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
+  teardownTimeout: 10_000,
   testEnvironment: {
     name: 'node',
   },
@@ -320,6 +321,14 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     createDefaultConfig(),
     config,
   ) as NormalizedConfig;
+
+  if (
+    typeof merged.teardownTimeout !== 'number' ||
+    !Number.isFinite(merged.teardownTimeout) ||
+    merged.teardownTimeout < 0
+  ) {
+    throw new Error('`teardownTimeout` must be a non-negative finite number.');
+  }
 
   merged.setupFiles = castArray(merged.setupFiles);
   merged.globalSetup = castArray(merged.globalSetup);

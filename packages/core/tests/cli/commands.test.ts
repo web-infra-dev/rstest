@@ -55,6 +55,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--coverage.reportsDirectory',
         '--exclude',
         '--hookTimeout',
+        '--teardownTimeout',
         '--include',
         '--json',
         '--maxConcurrency',
@@ -119,6 +120,15 @@ describe('requiredDotOptions (derived from option definitions)', () => {
 });
 
 describe('CLI help output', () => {
+  it('parses --teardownTimeout as a number', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--teardownTimeout', '500'],
+      { run: false },
+    );
+
+    expect(parsed.options.teardownTimeout).toBe(500);
+  });
+
   it('shows list-specific options for list help', () => {
     const help = renderHelp(['node', 'rstest', 'list', '--help']);
 

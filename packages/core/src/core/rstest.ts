@@ -212,6 +212,7 @@ export class Rstest implements InternalContext {
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;
           config.bail = rstestConfig.bail;
+          config.teardownTimeout = rstestConfig.teardownTimeout;
           // `resolveSnapshotPath` and `onConsoleLog` are omitted from
           // ProjectConfig (root-only), so they must be copied down; otherwise the
           // per-project event pump reads `undefined` and silently drops the root

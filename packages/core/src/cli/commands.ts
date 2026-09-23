@@ -16,6 +16,7 @@ import { setHostExitCode } from './exitCode';
 import type { CommonOptions } from './init';
 import { renderListTests, type ListCommandOptions } from './listRenderer';
 import { showRstest } from './prepare';
+import { scheduleHostExit } from './teardownTimeout';
 
 export type { CommonOptions } from './init';
 
@@ -136,6 +137,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--testEnvironment <name>', 'The environment that will be used for testing'],
   ['--testTimeout <value>', 'Timeout of a test in milliseconds'],
   ['--hookTimeout <value>', 'Timeout of hook in milliseconds'],
+  [
+    '--teardownTimeout <value>',
+    'Time in milliseconds to wait for the process to exit after the run finishes; 0 exits immediately',
+  ],
   ['--hideSkippedTests', 'Hide skipped tests from the output'],
   ['--hideSkippedTestFiles', 'Hide skipped test files from the output'],
   ['--retry <retry>', 'Number of times to retry a test if it fails'],
@@ -591,7 +596,11 @@ const createCliRstest = async (options: CommonOptions) => {
   ] = await Promise.all([import('./init'), import('../api/createRstest')]);
   const cwd = process.cwd();
   const loaded = await loadCliConfig(options, cwd);
-  // Every other flag replays per project through run().
+  // Host-only options must be available on the instance's normalized config.
+  if (options.teardownTimeout !== undefined) {
+    loaded.content.teardownTimeout = options.teardownTimeout;
+  }
+  // Other flags replay per project through run().
   if (options.root !== undefined) {
     loaded.content.root = options.root;
   }
@@ -609,6 +618,7 @@ const toRunOptions = (options: CommonOptions): RunOptions => {
     configLoader: _configLoader,
     root: _root,
     trace: _trace,
+    teardownTimeout: _teardownTimeout,
     ...runOptions
   } = options;
   return runOptions;
@@ -630,6 +640,7 @@ const runOnce = async ({
       filters: filters.length ? filters : undefined,
       ...toRunOptions(options),
     });
+    await scheduleHostExit(rstest.context.config.teardownTimeout);
   } catch (err) {
     handleUnexpectedExit(err);
   }
