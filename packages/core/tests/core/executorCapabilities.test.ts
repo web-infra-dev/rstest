@@ -3,8 +3,8 @@ import {
   browserStrippedRuntimeConfigKeys,
   type CapabilityStatus,
   executorCapabilities,
-} from '../../src/core/executorCapabilities';
-import { projectRuntimeConfig } from '../../src/core/runtimeConfigProjection';
+} from '../../src/core/execution/executorCapabilities';
+import { projectRuntimeConfig } from '../../src/core/execution/runtimeConfigProjection';
 import type { InternalProjectContext, RuntimeConfig } from '../../src/types';
 
 const makeProject = (): InternalProjectContext =>

@@ -2,7 +2,7 @@ import {
   createRunnerEventSink,
   RUNNER_EVENT_SINK_MATCHES_RPC,
   sinkToRuntimeRpc,
-} from '../../src/core/runnerEventSink';
+} from '../../src/core/execution/runnerEventSink';
 import type {
   InternalContext,
   InternalProjectContext,

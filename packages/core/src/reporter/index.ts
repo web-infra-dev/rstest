@@ -11,7 +11,7 @@ import type {
   TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
-import { runLifecycleStep } from '../core/finalizeRun';
+import { runLifecycleStep } from '../core/execution/finalizeRun';
 import { color, flushOutputStreams, isTTY, logger } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';

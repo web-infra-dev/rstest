@@ -5,8 +5,8 @@ import {
   GlobalSetupWorker,
   runGlobalSetup,
   runGlobalTeardown,
-} from '../../src/core/globalSetup';
-import { createExitCode } from '../../src/core/exitCode';
+} from '../../src/core/execution/globalSetup';
+import { createExitCode } from '../../src/core/execution/exitCode';
 import type { InternalContext } from '../../src/types';
 
 // Self-contained fake of the globalSetup IPC child: replies to every `setup`

@@ -8,8 +8,8 @@ import {
   type TraceEvent,
 } from '../../utils';
 import { type BrowserExecutorLoadOptions, runBrowserDiscovery } from './loader';
-import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
-import type { ProjectPlan } from '../projectPlan';
+import { getUserRstestConfigPluginProjects } from '../config/modifyRstestConfig';
+import type { ProjectPlan } from '../execution/projectPlan';
 import type { Rstest } from '../rstest';
 
 /**

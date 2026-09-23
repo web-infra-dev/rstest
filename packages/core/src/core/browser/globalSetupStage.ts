@@ -6,19 +6,19 @@ import type {
   ProjectEntries,
 } from '../../types';
 import { isDebug, resolveShardedEntries } from '../../utils';
-import { shouldRunGlobalSetup, runGlobalSetup } from '../globalSetup';
+import { shouldRunGlobalSetup, runGlobalSetup } from '../execution/globalSetup';
 import {
   getRsbuildEnvironmentConfig,
   initModifyRstestConfigHooks,
-} from '../modifyRstestConfig';
-import { getProjectEntries } from '../projectPlan';
+} from '../config/modifyRstestConfig';
+import { getProjectEntries } from '../execution/projectPlan';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
 import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
 import { pluginMockRuntime } from '../plugins/mockRuntime';
-import { createRsbuildServer, hostServerConfig } from '../rsbuild';
-import { createSetupFileState } from '../setupFileState';
+import { createRsbuildServer, hostServerConfig } from '../build/rsbuild';
+import { createSetupFileState } from '../config/setupFileState';
 
 export type BrowserGlobalSetupStageResult = {
   /**

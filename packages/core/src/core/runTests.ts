@@ -18,29 +18,35 @@ import {
   finalizeRunCycle,
   notifyReportersOnTestRunStart,
   runLifecycleStep,
-} from './finalizeRun';
+} from './execution/finalizeRun';
 import {
   type BrowserTestExecutor,
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
-import { registerFatalSignalExit } from './signalExit';
-import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { registerFatalSignalExit } from './execution/signalExit';
+import { isCliShortcutsEnabled, setupCliShortcuts } from './watch/cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
-import { createNodeExecutor } from './executors/nodeExecutor';
-import { cycleFailureOutcome, runGlobalTeardown } from './globalSetup';
-import { isBrowserProject, isNodeProject } from './isBrowserProject';
-import { createTestPlanner } from './planner';
+import { createNodeExecutor } from './execution/nodeExecutor';
+import {
+  cycleFailureOutcome,
+  runGlobalTeardown,
+} from './execution/globalSetup';
+import {
+  isBrowserProject,
+  isNodeProject,
+} from './environment/isBrowserProject';
+import { createTestPlanner } from './execution/planner';
 import type { Rstest } from './rstest';
 import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
   createWatchTeardown,
   type WatchSessionTargets,
-} from './watchSession';
+} from './watch/watchSession';
 
 export async function runTests(context: Rstest): Promise<void> {
   // High-level flow (post-executor-seam):
@@ -50,7 +56,7 @@ export async function runTests(context: Rstest): Promise<void> {
   //    whichever executors it says this run needs. 0 and N node projects take
   //    the same route: a zero-node run gets no node build from the planner and
   //    therefore no node executor (the cold-start gate, see below).
-  // 3. Non-watch: settle all executor cycles → one
+  // 3. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
   // 4. Watch: both executors signal through `onInvalidate` and every signal is
   //    one queued cycle + finalize, so node rebuilds, browser rebuilds, and CLI
@@ -342,9 +348,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const reportersStarted = !isInterrupted;
       if (reportersStarted) await notifyReportersOnTestRunStart(context);
-      // Settle every cycle before finalizing so a failed executor cannot
-      // truncate its siblings or trigger global teardown early. Rejections
-      // become failure outcomes so every started run reports its end.
+      // Settle every cycle before propagating a failure: a fail-fast
+      // `Promise.all` would reach the `finally` teardown while a sibling
+      // executor is still mid-cycle, truncating its tests and firing global
+      // teardown early. The re-await unwraps the already-settled promises,
+      // rejecting with the first failure in executor order.
       const cyclePromises = !isInterrupted
         ? executorsToRun.map((executor) =>
             executor === browserExecutor && browserStage.errors.length

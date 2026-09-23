@@ -11,7 +11,7 @@ import {
   normalizeRunnerFilters,
   resolveChangedFiles,
   validateRelatedOptions,
-} from '../../src/core/buildRunner';
+} from '../../src/core/execution/buildRunner';
 import {
   createCli,
   requiredDotOptions,

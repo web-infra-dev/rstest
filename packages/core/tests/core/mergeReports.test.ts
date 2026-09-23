@@ -6,9 +6,9 @@ import {
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../../src/coverage';
-import { createExitCode } from '../../src/core/exitCode';
+import { createExitCode } from '../../src/core/execution/exitCode';
 import { mergeReports } from '../../src/core/mergeReports';
-import { prepareRsbuild } from '../../src/core/rsbuild';
+import { prepareRsbuild } from '../../src/core/build/rsbuild';
 import type { Rstest } from '../../src/core/rstest';
 
 rs.mock('../../src/coverage', () => ({
@@ -17,7 +17,7 @@ rs.mock('../../src/coverage', () => ({
   ensureCoverageProviderInstalled: rs.fn(async () => {}),
 }));
 
-rs.mock('../../src/core/rsbuild', () => ({
+rs.mock('../../src/core/build/rsbuild', () => ({
   prepareRsbuild: rs.fn(async () => ({
     initConfigs: rs.fn(async () => []),
   })),

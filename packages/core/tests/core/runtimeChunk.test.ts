@@ -3,7 +3,7 @@ import {
   isRuntimeChunk,
   RUNTIME_CHUNK_BASE_NAME,
   runtimeChunkNameForEnvironment,
-} from '../../src/core/runtimeChunk';
+} from '../../src/core/build/runtimeChunk';
 
 describe('runtime chunk grammar', () => {
   it('derives the per-environment runtime chunk name', () => {

@@ -31,9 +31,12 @@ import type {
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
 import { color, logger, prettyTime } from '../utils';
-import { notifyReportersOnTestRunEnd } from './finalizeRun';
+import { notifyReportersOnTestRunEnd } from './execution/finalizeRun';
 import type { Rstest } from './rstest';
-import { createRunnerEventSink, type RunnerEventSink } from './runnerEventSink';
+import {
+  createRunnerEventSink,
+  type RunnerEventSink,
+} from './execution/runnerEventSink';
 
 const DEFAULT_BLOB_DIR = '.rstest-reports';
 
@@ -242,7 +245,7 @@ export async function mergeReports(
     });
   }
   if (coverageOptions.enabled && coverageOptions.include?.length) {
-    const { prepareRsbuild } = await import('./rsbuild');
+    const { prepareRsbuild } = await import('./build/rsbuild');
     const rsbuildInstance = await prepareRsbuild({
       context,
       targetProjects: context.projects,

@@ -6,12 +6,12 @@ import {
   buildResolvedRunner,
   type CreateRstestContextFn,
   isRelatedRun,
-} from '../core/buildRunner';
+} from '../core/execution/buildRunner';
 import { createRstest as createRstestContext } from '../core';
 import {
   resolveRunnerInputs,
   resolveRunnerOperationInputs,
-} from '../core/resolveConfig';
+} from '../core/config/resolveConfig';
 import { exitReporters } from '../reporter';
 import type {
   InternalContext,

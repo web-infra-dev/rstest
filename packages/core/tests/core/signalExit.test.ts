@@ -1,6 +1,6 @@
 import { afterEach, expect, it, rs } from '@rstest/core';
-import { createExitCode } from '../../src/core/exitCode';
-import { registerFatalSignalExit } from '../../src/core/signalExit';
+import { createExitCode } from '../../src/core/execution/exitCode';
+import { registerFatalSignalExit } from '../../src/core/execution/signalExit';
 import { FATAL_SIGNALS } from '../../src/utils/signals';
 
 afterEach(() => {

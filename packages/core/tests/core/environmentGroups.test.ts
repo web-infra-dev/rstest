@@ -1,4 +1,4 @@
-import { getEnvironmentKey } from '../../src/core/environmentGroups';
+import { getEnvironmentKey } from '../../src/core/environment/environmentGroups';
 
 describe('getEnvironmentKey', () => {
   it('should ignore property order', () => {

@@ -3,7 +3,7 @@ import {
   filterFailedEntries,
   type SequenceHints,
   sortTestEntries,
-} from '../../src/core/testSequencer';
+} from '../../src/core/execution/testSequencer';
 
 type Entry = { testPath: string; size?: number };
 

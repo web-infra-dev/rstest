@@ -65,7 +65,7 @@ export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
 
 /**
- * Directory for the per-file test-results cache (see `core/resultsCache.ts`),
+ * Directory for the per-file test-results cache (see `core/execution/resultsCache.ts`),
  * consumed by the perf-first sequencer and `onlyFailures`.
  * The leading dot is load-bearing: it must NOT reuse `rstest` or `rstest-*`.
  * The Rspack build cache occupies `node_modules/.cache/rstest` (no environment)
