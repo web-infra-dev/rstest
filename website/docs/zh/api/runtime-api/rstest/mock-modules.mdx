@@ -498,41 +498,76 @@ test('loads the original CommonJS module', () => {
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-异步加载 ESM 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当测试需要直接获得自动 mock 的模块时，可以使用 `rs.importMock`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireMock`](#rsrequiremock)。
+异步获取模块的 mock 导出。如果需要同步加载 CommonJS 模块的 mock，请使用 [`rs.requireMock`](#rsrequiremock)。
 
-如果请求已经通过 `rs.mock` 或 `rs.doMock` 注册，`rs.importMock` 会优先使用已注册的 factory。没有注册 factory 时，匹配的 `__mocks__` 手动 mock 仍然会生效，之后才回退到普通的自动 mock。请求也可以来自变量，但调用方需要位于 Rstest 打包的测试模块中。
+返回结果取决于模块的 mock 设置：
 
-如果运行时请求无法解析到 bundle 中的模块或已注册的 mock，`rs.importMock` 会 reject，并报告模块不存在。
+- 已通过 `rs.mock` 或 `rs.doMock` 注册 mock 时，返回已注册的 mock，包括 factory 返回的导出、手动 mock 或自动 mock 的模块。
+- 未注册 mock，且参数是字符串字面量时，加载匹配的 `__mocks__` 文件（如果存在）。这种用法不需要先调用 `rs.mock`。
+- 两者都不存在时，返回的 Promise 会被拒绝，错误信息会指出找不到的模块。
 
-```ts title="src/api.test.ts"
-test('loads an ESM module as mocks', async () => {
-  const api = await rs.importMock<typeof import('./api')>('./api');
-  const mockedApi = rs.mocked(api, true);
+已注册的 factory 优先于匹配的 `__mocks__` 文件。factory 中的函数会按原样返回，不会自动转换成 `rs.fn()`。如果需要自动 mock，请先通过 `rs.mock('./sum', { mock: true })` 注册，再加载模块。
 
-  mockedApi.fetchUser.mockResolvedValue({ id: '1', name: 'Alice' });
-  await mockedApi.fetchUser('1');
-  expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
+```ts title="src/sum.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+rs.mock('./sum', () => ({
+  sum: () => 100,
+}));
+
+test('loads the registered mock', async () => {
+  const mocked = await rs.importMock<typeof import('./sum')>('./sum');
+
+  expect(mocked.sum(1, 2)).toBe(100);
 });
 ```
+
+### 变量路径
+
+在 Node 和 Browser 模式下，传入变量路径时，`rs.importMock` 会尝试查找已注册的 mock。可以先通过 `rs.mock` 或 `rs.doMock` 以字面量路径注册目标模块的 mock，再通过变量路径获取它。相对路径以调用 `rs.importMock` 的文件为基准解析。
+
+```ts title="src/sum.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('loads an auto-mocked module through a variable', async () => {
+  rs.doMock('./sum', { mock: true });
+
+  const path = './sum';
+  const mocked = await rs.importMock<typeof import('./sum')>(path);
+
+  expect(rs.isMockFunction(mocked.sum)).toBe(true);
+  expect(mocked.sum(1, 2)).toBeUndefined();
+});
+```
+
+`rs.mock` 会被提升；`rs.doMock` 则在执行时生效，因此需要在 `rs.importMock` 之前调用。变量路径只用于查找已注册的 mock，不会在运行时查找新的模块或 `__mocks__` 文件，即使这些文件已经存在于磁盘上。
 
 ## rs.requireMock
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => T`
 
-同步加载 CommonJS 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当目标通过 `require()` 使用，并且测试需要立即获得 mock 模块时，可以使用 `rs.requireMock`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importMock`](#rsimportmock)。
+同步获取 CommonJS 模块的 mock 导出。通过 `rs.mockRequire` 或 `rs.doMockRequire` 注册 mock，可以按 CommonJS 的规则解析目标模块。如果需要异步加载，请使用 [`rs.importMock`](#rsimportmock)。
 
-请求保存在变量中时，只要调用方位于 Rstest 打包的测试模块中，Rstest 也会将调用改写为同步 runtime helper。目标模块仍需要存在于 bundle 或 mock 注册表中。
+与 `rs.importMock` 一样，已注册的 mock 优先于匹配的 `__mocks__` 文件。字符串字面量可以直接加载手动 mock，无须提前注册。
+
+传入变量路径时，`rs.requireMock` 会尝试查找已注册的 mock，不会在运行时加载新的模块或查找 `__mocks__` 文件。相对路径以调用所在的文件为基准解析。找不到对应的 mock 时，`rs.requireMock` 会同步抛出模块不存在的错误。
 
 ```js title="src/math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');
 
-test('loads a CommonJS module as mocks', () => {
-  const mockedMath = rs.requireMock('./math.cjs');
+rs.mockRequire('./math.cjs', () => ({
+  sum: () => 100,
+}));
 
-  mockedMath.sum.mockReturnValue(100);
+test('loads the registered CommonJS mock', () => {
+  const path = './math.cjs';
+  const mockedMath = rs.requireMock(path);
+
   expect(mockedMath.sum(1, 2)).toBe(100);
 });
 ```
+
+如果需要自动 mock，可以使用 `rs.mockRequire('./math.cjs', { mock: true })`。`rs.doMockRequire` 不会被提升，使用时需要在 `rs.requireMock` 之前调用。
 
 ## rs.unmock
 

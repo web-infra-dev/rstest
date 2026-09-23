@@ -496,41 +496,76 @@ test('loads the original CommonJS module', () => {
 
 - **Type:** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Loads an ESM module asynchronously and replaces its function exports, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.importMock` when a test needs an auto-mocked module directly. For a CommonJS module loaded through `require()`, use [`rs.requireMock`](#rsrequiremock).
+Loads the mocked exports of a module asynchronously. To load a CommonJS mock synchronously, use [`rs.requireMock`](#rsrequiremock).
 
-If the request has already been registered with `rs.mock` or `rs.doMock`, `rs.importMock` uses that registered factory first. Without a registered factory, a matching manual mock in `__mocks__` is still used, followed by the normal auto-mock fallback. The request may be a variable when it is resolved from a bundled test module.
+The result depends on how the module is mocked:
 
-If a runtime request cannot be resolved to a bundled module or a registered mock, `rs.importMock` rejects with a module-not-found error.
+- If a mock has been registered with `rs.mock` or `rs.doMock`, Rstest returns that mock, including a factory result, a manual mock, or an auto-mocked module.
+- If no mock is registered and the argument is a string literal, Rstest loads the matching `__mocks__` file when one exists. This does not require a preceding `rs.mock` call.
+- If neither is available, the returned Promise rejects with a module-not-found error.
 
-```ts title="src/api.test.ts"
-test('loads an ESM module as mocks', async () => {
-  const api = await rs.importMock<typeof import('./api')>('./api');
-  const mockedApi = rs.mocked(api, true);
+A registered factory takes precedence over a matching `__mocks__` file. Its exports are returned without automatically replacing its functions with `rs.fn()`. To create an auto-mocked module, register it with `rs.mock('./sum', { mock: true })` before loading it.
 
-  mockedApi.fetchUser.mockResolvedValue({ id: '1', name: 'Alice' });
-  await mockedApi.fetchUser('1');
-  expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
+```ts title="src/sum.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+rs.mock('./sum', () => ({
+  sum: () => 100,
+}));
+
+test('loads the registered mock', async () => {
+  const mocked = await rs.importMock<typeof import('./sum')>('./sum');
+
+  expect(mocked.sum(1, 2)).toBe(100);
 });
 ```
+
+### Variable paths
+
+In Node and Browser mode, `rs.importMock` attempts to find a registered mock when given a variable path. You can register the target mock using a literal path in `rs.mock` or `rs.doMock`, then retrieve it through a variable path. Relative paths are resolved from the file containing the `rs.importMock` call.
+
+```ts title="src/sum.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('loads an auto-mocked module through a variable', async () => {
+  rs.doMock('./sum', { mock: true });
+
+  const path = './sum';
+  const mocked = await rs.importMock<typeof import('./sum')>(path);
+
+  expect(rs.isMockFunction(mocked.sum)).toBe(true);
+  expect(mocked.sum(1, 2)).toBeUndefined();
+});
+```
+
+`rs.mock` is hoisted; `rs.doMock` takes effect when it executes, so call it before `rs.importMock`. Variable paths look up registered mocks. They do not discover additional modules or `__mocks__` files at runtime, even if those files exist on disk.
 
 ## rs.requireMock
 
 - **Type:** `<T = Record<string, unknown>>(path: string) => T`
 
-Loads a CommonJS module synchronously and replaces its exported functions, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.requireMock` when the target is consumed through `require()` and the test needs the mocked module immediately. For an ESM module loaded through `import`, use [`rs.importMock`](#rsimportmock).
+Loads the mocked exports of a CommonJS module synchronously. Use `rs.mockRequire` or `rs.doMockRequire` to register the mock with CommonJS resolution. For asynchronous loading, use [`rs.importMock`](#rsimportmock).
 
-When the request is held in a variable, Rstest rewrites the call to its synchronous runtime helper as long as the caller is in a bundled test module. The module still needs to be represented in the bundle or mock registry.
+As with `rs.importMock`, a registered mock takes precedence over a matching `__mocks__` file. A string literal can load a manual mock without prior registration.
+
+When given a variable path, `rs.requireMock` attempts to find a registered mock. It does not load additional modules or discover `__mocks__` files at runtime. Relative paths are resolved from the file containing the call. If no matching mock is available, `rs.requireMock` throws a module-not-found error synchronously.
 
 ```js title="src/math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');
 
-test('loads a CommonJS module as mocks', () => {
-  const mockedMath = rs.requireMock('./math.cjs');
+rs.mockRequire('./math.cjs', () => ({
+  sum: () => 100,
+}));
 
-  mockedMath.sum.mockReturnValue(100);
+test('loads the registered CommonJS mock', () => {
+  const path = './math.cjs';
+  const mockedMath = rs.requireMock(path);
+
   expect(mockedMath.sum(1, 2)).toBe(100);
 });
 ```
+
+To auto-mock the module, use `rs.mockRequire('./math.cjs', { mock: true })`. If using `rs.doMockRequire`, call it before `rs.requireMock` because it is not hoisted.
 
 ## rs.unmock
 
