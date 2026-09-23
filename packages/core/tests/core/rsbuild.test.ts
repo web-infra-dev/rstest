@@ -758,6 +758,7 @@ describe('prepareRsbuild', () => {
         performance: unknown;
         shard: { count: number; index: number } | undefined;
         silent: boolean | 'passed-only' | undefined;
+        teardownTimeout: number | undefined;
         update: boolean | undefined;
       }
     >();
@@ -790,6 +791,7 @@ describe('prepareRsbuild', () => {
           performance: configSnapshot?.performance,
           shard: configSnapshot?.shard,
           silent: configSnapshot?.silent,
+          teardownTimeout: configSnapshot?.teardownTimeout,
           update: configSnapshot?.update,
         });
         configSnapshot?.include?.push('mutated-snapshot');
@@ -815,6 +817,7 @@ describe('prepareRsbuild', () => {
         source: {},
         output: { module: false },
         silent: false,
+        teardownTimeout: 10_000,
         tools: {},
         update: false,
         testEnvironment: {
@@ -837,6 +840,7 @@ describe('prepareRsbuild', () => {
         source: {},
         output: { module: true },
         silent: true,
+        teardownTimeout: 10_000,
         tools: {},
         update: false,
         testEnvironment: {
@@ -860,6 +864,7 @@ describe('prepareRsbuild', () => {
         performance: { buildCache: false },
         shard: { count: 2, index: 1 },
         silent: 'passed-only',
+        teardownTimeout: 500,
         update: true,
         output: {
           distPath: {
@@ -890,6 +895,7 @@ describe('prepareRsbuild', () => {
       performance: undefined,
       shard: { count: 2, index: 1 },
       silent: false,
+      teardownTimeout: 500,
       update: true,
     });
     expect(getterGlobalConfig.get('from-project-b')).toEqual({
@@ -899,6 +905,7 @@ describe('prepareRsbuild', () => {
       performance: undefined,
       shard: { count: 2, index: 1 },
       silent: true,
+      teardownTimeout: 500,
       update: true,
     });
     expect(getterOutput.get('from-project-a')).toEqual({

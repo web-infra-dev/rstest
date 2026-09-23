@@ -25,7 +25,7 @@ When a CLI command migrates to the public `createRstest`, config discovery, the 
 
 The CLI carries process-level behavior (`embedded`, `trace`, installer confirmation, and exit-code mirroring) through `createRstestInstance` in `src/api/createRstest.ts`; these never enter the public `CreateRstestOptions`. Engine error paths throw instead of printing and exiting, whatever `embedded` is. The CLI config-restart watcher (`src/cli/restart.ts`) is armed before `watch()` resolves — otherwise an edit during the first cycle is dropped — at the accepted cost that such an edit restarts only after that cycle; it watches only the projects `--project` selected, and tears down through the returned watcher, never the engine.
 
-`CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`) and `trace`; a new `rstest run` flag is added to `RunOptions` and becomes a CLI flag through that derivation.
+`CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`, `teardownTimeout`) and `trace`; add new run-cycle flags to `RunOptions` so the CLI inherits them through that derivation. Keep `teardownTimeout` out of `RunOptions` because it only controls the CLI process exit, which the public driver never performs.
 
 ## Executor contract (node + browser isomorphism)
 

@@ -577,6 +577,7 @@ const createRstestExposeAPI = (
       pool: context.normalizedConfig.pool,
       reporters: context.normalizedConfig.reporters,
       isolate: context.normalizedConfig.isolate,
+      teardownTimeout: context.normalizedConfig.teardownTimeout,
       coverage: context.normalizedConfig.coverage,
       resolveSnapshotPath: context.normalizedConfig.resolveSnapshotPath,
       onConsoleLog: context.normalizedConfig.onConsoleLog,
