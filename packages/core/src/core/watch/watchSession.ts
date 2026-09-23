@@ -19,7 +19,7 @@ import {
 } from '../execution/finalizeRun';
 import {
   GLOBAL_TEARDOWN_ERROR,
-  globalSetupFailureOutcome,
+  cycleFailureOutcome,
   runGlobalTeardown,
 } from '../execution/globalSetup';
 import type { Rstest } from '../rstest';
@@ -286,20 +286,20 @@ export function createWatchCycleDriver({
             onTraceEvents,
           }));
       } catch (error) {
-        if (isFirstCycle) {
-          throw error;
-        }
-        outcome = globalSetupFailureOutcome([toError(error)]);
+        outcome = cycleFailureOutcome([toError(error)]);
       }
       if (isSessionClosing()) {
         return;
       }
-      const sessionEndingError =
-        outcome.failure === 'fatal'
-          ? outcome.errors[0]
-          : isFirstCycle && outcome.failure === 'setup'
-            ? new AggregateError(outcome.errors, 'Global setup failed')
-            : undefined;
+      let sessionEndingError: Error | undefined;
+      if (outcome.failure === 'fatal') {
+        sessionEndingError = outcome.errors[0];
+      } else if (isFirstCycle && outcome.failure === 'setup') {
+        sessionEndingError =
+          outcome.errors.length === 1
+            ? outcome.errors[0]
+            : new AggregateError(outcome.errors, 'Run setup failed');
+      }
       await finalizeRunCycle(context, {
         outcomes: [outcome],
         mode,

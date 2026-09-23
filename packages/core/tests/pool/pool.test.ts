@@ -508,6 +508,28 @@ describe('Pool - failure recovery', () => {
   });
 });
 
+describe('Pool - interrupt()', () => {
+  it('rejects queued and new tasks before close', async () => {
+    const pool = new Pool(createPoolOptions({ maxWorkers: 1 }));
+    const running = expectRejection(
+      pool.runTest(
+        createTask('run', { __testMode: 'slow', __delayMs: 60_000 }),
+      ),
+    );
+    const queued = expectRejection(pool.runTest(createTask()));
+    try {
+      pool.interrupt();
+      expect((await queued).message).toContain('pool is closed');
+      await expect(pool.runTest(createTask())).rejects.toThrow(
+        'pool is closed',
+      );
+    } finally {
+      await pool.close();
+      await running;
+    }
+  });
+});
+
 // ── close() behavior ──────────────────────────────────────────────────────
 
 describe('Pool - close()', () => {

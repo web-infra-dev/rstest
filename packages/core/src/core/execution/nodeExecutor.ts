@@ -17,7 +17,7 @@ import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
-  globalSetupFailureOutcome,
+  cycleFailureOutcome,
   shouldRunGlobalSetup,
   runGlobalSetup,
 } from './globalSetup';
@@ -451,7 +451,7 @@ export function createNodeExecutor(
             );
             if (!success) {
               return {
-                ...globalSetupFailureOutcome(errors ?? []),
+                ...cycleFailureOutcome(errors ?? []),
                 bundleCoverage: [],
                 assetNames,
                 getAssetFiles,
@@ -706,6 +706,9 @@ export function createNodeExecutor(
     init: async () => {},
     runCycle,
     onInvalidate,
+    interrupt: async () => {
+      runResources?.pool.interrupt();
+    },
     close,
     // Watch: start the dev server (and pool) up front so its first compile fires
     // the invalidation that drives the initial run. In non-watch runs `runCycle`

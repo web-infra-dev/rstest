@@ -149,7 +149,7 @@ The resolved project contexts. Without an explicit `projects` config, the array 
 
 ## rstest.run
 
-`rstest.run()` runs one test cycle and returns a `TestRunResult`. It rejects when the run cannot start due to invalid options, configuration or compiler errors; test failures are reported through `status` without rejecting the promise; see [TestRunResult](#testrunresult).
+`rstest.run()` runs one test cycle and returns a `TestRunResult`. It rejects only when the run cannot start at all (invalid options or configuration, or a node project's dev server that could not start). Everything after that — a browser project's dev server or browser that could not start, a `globalSetup` that threw, a compile error, or failing tests — is reported through `status` without rejecting the promise; see [TestRunResult](#testrunresult).
 
 ### Example
 
@@ -241,8 +241,8 @@ await watcher.close();
 
 Failures come in three kinds:
 
-- **Startup failure** — the config phase threw, or a resource the run depends on could not start (a dev server, a browser). `run()` and `watch()` both reject. A `globalSetup` that throws or fails to compile in the first watch cycle also rejects `watch()`, after delivering that cycle through `onResult` with `status: 'error'`. In non-watch mode, a `globalSetup` failure remains a `status: 'error'` result from `run()`.
-- **Fatal failure after startup** — the bundler ended a compile in a way that reattaches no file watcher. `run()` resolves with `status: 'error'`. In watch, the failed cycle still reaches `onResult`, then the session closes; if `watch()` has not resolved yet, it rejects.
+- **Startup failure** — the config phase threw, or a node project's dev server could not start. `run()` and `watch()` both reject.
+- **Fatal failure after startup** — a browser project's dev server or browser could not start, a first-cycle `globalSetup` threw or failed to compile, or the bundler ended a compile in a way that reattaches no file watcher. `run()` resolves with `status: 'error'`. In watch, the failed cycle still reaches `onResult`, then the session closes; if `watch()` has not resolved yet, it rejects with that error — several errors as an `AggregateError`.
 - **Recoverable cycle failure** — a test failure, a test file that failed to compile, or a later-cycle `globalSetup` failure. The cycle reports the failure and the watch session stays open for the next trigger.
 
 Errors thrown by `onResult` are isolated and do not stop the watch session. Calling `watcher.close()` releases the compiler, workers, file watchers, and pending `globalSetup` teardown. It is idempotent, repeated calls observe the same result, and it rejects if teardown fails.

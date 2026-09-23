@@ -670,13 +670,14 @@ describe('createWatchCycleDriver', () => {
     const context = createContext();
     const driver = createDriver(context);
     const node = createFakeExecutor('node');
+    const launchError = new Error('browser launch failed');
     const browser = createFakeExecutor('browser', () => {
-      throw new Error('browser launch failed');
+      throw launchError;
     });
 
     await driver.runCycle(node, { mode: 'all' });
-    await expect(driver.runCycle(browser, { mode: 'all' })).rejects.toThrow(
-      'browser launch failed',
+    await expect(driver.runCycle(browser, { mode: 'all' })).rejects.toBe(
+      launchError,
     );
 
     expect(driver.hasSettledCycle([node, browser])).toBe(true);

@@ -11,6 +11,7 @@ import {
   createTraceController,
   getForceRerunTriggerMessage,
   logger,
+  toError,
   type TraceEvent,
 } from '../utils';
 import {
@@ -31,7 +32,7 @@ import {
 } from './browser/globalSetupStage';
 import { createNodeExecutor } from './execution/nodeExecutor';
 import {
-  globalSetupFailureOutcome,
+  cycleFailureOutcome,
   runGlobalTeardown,
 } from './execution/globalSetup';
 import {
@@ -355,7 +356,7 @@ export async function runTests(context: Rstest): Promise<void> {
       const cyclePromises = !isInterrupted
         ? executorsToRun.map((executor) =>
             executor === browserExecutor && browserStage.errors.length
-              ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+              ? Promise.resolve(cycleFailureOutcome(browserStage.errors))
               : executor.runCycle({
                   buildId: 1,
                   mode: 'all',
@@ -366,11 +367,13 @@ export async function runTests(context: Rstest): Promise<void> {
           )
         : [];
       const settledCycles = await Promise.allSettled(cyclePromises);
-      const outcomes = !isInterrupted
-        ? await Promise.all(cyclePromises)
-        : settledCycles.flatMap((cycle) =>
-            cycle.status === 'fulfilled' ? [cycle.value] : [],
-          );
+      const outcomes = settledCycles.flatMap((cycle) => {
+        if (cycle.status === 'fulfilled') return [cycle.value];
+        // An interrupted cycle's rejection is the interrupt, not a run failure.
+        return isInterrupted
+          ? []
+          : [cycleFailureOutcome([toError(cycle.reason)])];
+      });
 
       await finalizeRunCycle(context, {
         outcomes,
@@ -482,12 +485,13 @@ export async function runTests(context: Rstest): Promise<void> {
   // One teardown for the `q` shortcut, the fatal-signal handler, and the
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
+  const executors: TestExecutor[] = [
+    ...(browserExecutor ? [browserExecutor] : []),
+    ...(nodeExecutor ? [nodeExecutor] : []),
+  ];
   const watchTeardown = createWatchTeardown({
     context,
-    executors: [
-      ...(browserExecutor ? [browserExecutor] : []),
-      ...(nodeExecutor ? [nodeExecutor] : []),
-    ],
+    executors,
     traceController,
     getTraceRun: () => activeTraceRun,
   });
@@ -501,6 +505,9 @@ export async function runTests(context: Rstest): Promise<void> {
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(
     registerFatalSignalExit(context, {
+      interrupt: async () => {
+        await Promise.all(executors.map((executor) => executor.interrupt?.()));
+      },
       release: closeActiveWatchSession,
     }),
   );
@@ -558,7 +565,7 @@ export async function runTests(context: Rstest): Promise<void> {
       );
       if (stage.errors.length) {
         await watchDriver.runCycle(browserExecutor, {
-          outcome: globalSetupFailureOutcome(stage.errors),
+          outcome: cycleFailureOutcome(stage.errors),
         });
       }
       if (watchTeardown.isClosing()) {

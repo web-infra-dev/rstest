@@ -430,7 +430,7 @@ export const runBrowserController = async (
           failure: 'fatal',
         };
       }
-      // That is a startup failure: it propagates so core rejects the run.
+      // Propagate startup failures so core converts them into a failure outcome.
       await cleanup();
       throw error;
     }
