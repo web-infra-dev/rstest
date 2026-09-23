@@ -13,7 +13,7 @@ import type {
   CoverageProvider,
   RawCoverageResolveOptions,
 } from '../../types/coverage';
-import { clearScreen, color, logger, type TraceRun } from '../../utils';
+import { color, logger, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
@@ -606,9 +606,9 @@ export function createNodeExecutor(
 
   /**
    * The node transport's watch signal is the dev server's compile cycle, so the
-   * hooks are wired here rather than in the orchestrator: the rebuild-start
-   * screen clear and the compile's own start have to land when the compile
-   * begins, a moment only this side observes (the callback fires after it).
+   * hooks are wired here rather than in the orchestrator: the compile's start
+   * time can only be read when the compile begins, a moment only this side
+   * observes (the callback fires after it).
    *
    * `onAfterDevCompile` returns the cycle rather than signalling and moving on,
    * and unlike the browser transport it has to. The affected-entry set does not
@@ -619,12 +619,12 @@ export function createNodeExecutor(
    * keeps a second compile from starting before this one's changes have been
    * consumed, since the bundler starts none while it is pending. Signal and
    * return, and two compiles land against one baseline: a single pull takes both
-   * their changes and the other cycle diffs a baseline already past them,
-   * reporting "No test files need re-run" for an edit that was real. Which cycle
-   * consumes the changes is a separate question the hook does not answer — one
-   * queued ahead of the rebuild's can, and `canFold` in `watchSession.ts` records
-   * that as an accepted cost. So the await is not back-pressure and cannot go for
-   * the reason the browser side's went — see
+   * their changes and the other cycle diffs a baseline already past them, so a
+   * real edit is silently never re-run — and nothing is printed to say so.
+   * Which cycle consumes the changes is a separate question the hook does not
+   * answer — one queued ahead of the rebuild's can, and `canFold` in
+   * `watchSession.ts` records that as an accepted cost. So the await is not
+   * back-pressure and cannot go for the reason the browser side's went — see
    * {@link ExecutorInvalidationCallback} for what holding it costs and the
    * shape that would close it.
    */
@@ -642,11 +642,8 @@ export function createNodeExecutor(
         if (!isFirstCompile) throw error;
       }
     };
-    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+    rsbuildInstance.onBeforeDevCompile(() => {
       compileStart = Date.now();
-      if (!isFirstCompile) {
-        clearScreen();
-      }
     });
     rsbuildInstance.onAfterDevCompile(({ isFirstCompile }) =>
       onCompileEnd(isFirstCompile),

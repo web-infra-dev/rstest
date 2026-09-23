@@ -40,6 +40,7 @@ import {
   createBrowserRuntime,
   destroyBrowserRuntime,
   drainPendingBuildTime,
+  drainPendingDeletedTestPaths,
   getBrowserProjects,
   type BrowserProjectServer,
   type BrowserProviderProject,
@@ -538,6 +539,7 @@ export const runBrowserController = async (
       ),
       errors: unhandledErrors ?? [],
       testPaths: rerunTestPaths,
+      deletedTestPaths: drainPendingDeletedTestPaths(watchState),
       duration: {
         buildTime: drainPendingBuildTime(watchState),
         testTime,

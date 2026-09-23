@@ -108,13 +108,13 @@ describe('watch rerun planner', () => {
       },
     });
 
-    const watchState = { lastTestFiles: previousTestFiles };
-    const pruned: string[][] = [];
-    commitWatchFileSetUpdate(plan.fileSetUpdate, watchState, (testPaths) => {
-      pruned.push(testPaths);
-    });
+    const watchState = {
+      lastTestFiles: previousTestFiles,
+      pendingDeletedTestPaths: [] as string[],
+    };
+    commitWatchFileSetUpdate(plan.fileSetUpdate, watchState);
 
     expect(watchState.lastTestFiles).toEqual([]);
-    expect(pruned).toEqual([['/a.test.ts']]);
+    expect(watchState.pendingDeletedTestPaths).toEqual(['/a.test.ts']);
   });
 });

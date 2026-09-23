@@ -1,6 +1,8 @@
 import type {
   InternalContext,
   InternalProjectContext,
+  MaybePromise,
+  Reporter,
   RuntimeRPC,
   TestCaseInfo,
   TestFileInfo,
@@ -67,11 +69,8 @@ export function createRunnerEventSink(
 ): RunnerEventSink {
   const { reporters } = context;
 
-  const fanoutConsoleLog = async (log: UserConsoleLog): Promise<void> => {
-    await Promise.all(
-      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-    );
-  };
+  const fanoutConsoleLog = (log: UserConsoleLog): Promise<void> =>
+    fanout((reporter) => reporter.onUserConsoleLog?.(log));
 
   // The worker forwards console output fire-and-forget: a delivery failure is
   // dropped in the worker, and an error thrown here cannot travel back to fail
@@ -86,47 +85,45 @@ export function createRunnerEventSink(
     }
   };
 
+  // State is recorded the moment an event arrives; reporters hear it only once
+  // the cycle's run is open (`InternalContext.openReporterRun`). Neither
+  // transport awaits its file-start send, so a later event can reach here
+  // while the file-start handler is still opening the run — gating every
+  // fanout, not just the first, is what keeps `onTestRunStart` ahead of all.
+  const fanout = async (
+    notify: (reporter: Reporter) => MaybePromise<void>,
+  ): Promise<void> => {
+    await context.openReporterRun?.();
+    await Promise.all(reporters.map(notify));
+  };
+
   return {
     onTestCaseStart(test) {
       context.stateManager.onTestCaseStart(test);
       // Fire-and-forget: reporter case-start hooks are not awaited (parity with
       // the node pool), so they never gate the runner's next step.
-      void Promise.all(
-        reporters.map((reporter) => reporter.onTestCaseStart?.(test)),
-      );
+      void fanout((reporter) => reporter.onTestCaseStart?.(test));
     },
     async onTestCaseResult(result) {
       context.stateManager.onTestCaseResult(result);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
-      );
+      await fanout((reporter) => reporter.onTestCaseResult?.(result));
     },
     async onTestFileStart(test) {
       context.stateManager.onTestFileStart(test.testPath);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileStart?.(test)),
-      );
+      await fanout((reporter) => reporter.onTestFileStart?.(test));
     },
     async onTestFileReady(test) {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
-      );
+      await fanout((reporter) => reporter.onTestFileReady?.(test));
     },
     async onTestSuiteStart(test) {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestSuiteStart?.(test)),
-      );
+      await fanout((reporter) => reporter.onTestSuiteStart?.(test));
     },
     async onTestSuiteResult(result) {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestSuiteResult?.(result)),
-      );
+      await fanout((reporter) => reporter.onTestSuiteResult?.(result));
     },
     async onTestFileResult(result) {
       context.stateManager.onTestFileResult(result);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileResult?.(result)),
-      );
+      await fanout((reporter) => reporter.onTestFileResult?.(result));
       if (result.snapshotResult) {
         context.snapshotManager.add(result.snapshotResult);
       }

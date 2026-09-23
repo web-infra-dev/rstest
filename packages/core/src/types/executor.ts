@@ -115,8 +115,7 @@ export interface ExecutorCycleOutcome {
   /**
    * Test paths deleted during this cycle (watch only). `finalizeRunCycle`
    * prunes reporter state with these. The node executor fills them from the
-   * dev-compile stats diff; the browser host's watch file-set diff prunes
-   * reporter state directly today, so its outcomes omit them.
+   * dev-compile stats diff, the browser host from its watch file-set diff.
    */
   deletedTestPaths?: string[];
   duration: { buildTime: number; testTime: number };
@@ -193,9 +192,10 @@ export interface TestExecutor {
    * and should when it signals from a hook its own file watcher waits on (see
    * {@link ExecutorInvalidationCallback}).
    *
-   * A trigger that resolves to no work must not fire the callback — a cycle that
-   * runs nothing still reports "no test files need re-run", which is not what a
-   * scope that simply misses this executor's files should print.
+   * A trigger that resolves to no work should not fire the callback. Such a
+   * cycle opens no reporter run and prints nothing (see
+   * `InternalContext.openReporterRun`), but it still rotates the trace run and
+   * takes a queue slot ahead of a trigger that has work.
    */
   onInvalidate?(cb: ExecutorInvalidationCallback): void;
   /**

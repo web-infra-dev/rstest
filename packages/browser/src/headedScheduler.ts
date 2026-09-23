@@ -40,7 +40,7 @@ import type { WatchSignals } from './watchSignals';
 
 type HeadedSchedulerContext = Pick<
   InternalContext,
-  'rootPath' | 'snapshotManager' | 'updateReporterResultState'
+  'rootPath' | 'snapshotManager'
 > & {
   normalizedConfig: Pick<InternalContext['normalizedConfig'], 'name'>;
 };
@@ -652,15 +652,16 @@ export const createHeadedScheduler = async ({
     // synchronous step, so the cycle that takes it is the one that signal
     // started — or, when the file was already in a queued scope, the one it
     // folded into, which is the cycle that runs the file. That holds as long as
-    // nothing yields between the two: core closes the fold window and then
-    // awaits `notifyReportersOnTestRunStart` before this cycle claims, so a user
-    // reporter with an async `onTestRunStart` hook is the one thing that can
-    // stretch the gap wide enough for another signal to land in it. A tracked
-    // gap, not a choice: a second click on the same file inside that window
-    // overwrites the entry, so the earlier cycle claims the newer pattern and
-    // the later one finds it gone and reloads the file unfiltered. Closing it
-    // means the pattern crossing the seam inside the queued cycle's own
-    // options instead of traveling beside the scope.
+    // nothing yields between the two. Today nothing does: core closes the
+    // fold window and dispatches the cycle in the same turn (the reporters'
+    // run-start hook is awaited later, at the first file event). That is a
+    // property of the driver's ordering, not a contract, so the gap stays
+    // tracked: were a yield to land between the two, a second click on the
+    // same file inside it would overwrite the entry, the earlier cycle would
+    // claim the newer pattern, and the later one would find it gone and reload
+    // the file unfiltered. Closing it for good means the pattern crossing the
+    // seam inside the queued cycle's own options instead of traveling beside
+    // the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
     const runScope = async (testPaths: string[]): Promise<unknown[]> => {
@@ -713,12 +714,7 @@ export const createHeadedScheduler = async ({
           affectedTestFiles: drainPendingAffectedTestFiles(watchState),
         });
 
-        commitWatchFileSetUpdate(
-          rerunPlan.fileSetUpdate,
-          watchState,
-          (deletedTestPaths) =>
-            context.updateReporterResultState([], [], deletedTestPaths),
-        );
+        commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
 
         if (rerunPlan.fileSetUpdate) {
           currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
