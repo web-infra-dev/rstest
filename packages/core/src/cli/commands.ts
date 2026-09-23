@@ -8,15 +8,14 @@ import {
   filterProjects,
   formatError,
   isTTY,
-  logger,
 } from '../utils';
+import { flushOutputStreams, logger } from '../utils/logger';
 import { isRelatedRun } from '../core/execution/buildRunner';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { setHostExitCode } from './exitCode';
 import type { CommonOptions } from './init';
 import { renderListTests, type ListCommandOptions } from './listRenderer';
 import { showRstest } from './prepare';
-import { scheduleHostExit } from './teardownTimeout';
 
 export type { CommonOptions } from './init';
 
@@ -596,11 +595,11 @@ const createCliRstest = async (options: CommonOptions) => {
   ] = await Promise.all([import('./init'), import('../api/createRstest')]);
   const cwd = process.cwd();
   const loaded = await loadCliConfig(options, cwd);
-  // Host-only options must be available on the instance's normalized config.
+  // Instance-level flags are written to the base config before creation.
+  // Every other flag replays per project through run().
   if (options.teardownTimeout !== undefined) {
     loaded.content.teardownTimeout = options.teardownTimeout;
   }
-  // Other flags replay per project through run().
   if (options.root !== undefined) {
     loaded.content.root = options.root;
   }
@@ -640,7 +639,18 @@ const runOnce = async ({
       filters: filters.length ? filters : undefined,
       ...toRunOptions(options),
     });
-    await scheduleHostExit(rstest.context.config.teardownTimeout);
+    const { teardownTimeout } = rstest.context.config;
+    if (teardownTimeout > 0) {
+      // Unref'd: if the process drains on its own this promise never resolves.
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, teardownTimeout).unref();
+      });
+      logger.warn(
+        `The process did not exit ${teardownTimeout}ms after the run finished, force exiting. Something is still running in the Rstest process, for example an open server, socket or timer created by a reporter, a plugin or the config file. Set \`teardownTimeout: 0\` to exit immediately after a run.`,
+      );
+    }
+    await flushOutputStreams();
+    process.exit();
   } catch (err) {
     handleUnexpectedExit(err);
   }

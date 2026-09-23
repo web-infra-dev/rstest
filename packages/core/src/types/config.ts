@@ -749,6 +749,7 @@ export type NormalizedProjectConfig = Required<
     | 'reporters'
     | 'pool'
     | 'shard'
+    | 'teardownTimeout'
     | 'setupFiles'
     | 'globalSetup'
     | 'output'

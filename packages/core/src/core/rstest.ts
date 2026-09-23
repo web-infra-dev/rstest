@@ -186,6 +186,15 @@ export class Rstest implements InternalContext {
       throw new Error('Test sharding is not supported in watch mode.');
     }
 
+    if (
+      !Number.isFinite(rstestConfig.teardownTimeout) ||
+      rstestConfig.teardownTimeout < 0
+    ) {
+      throw new Error(
+        '`teardownTimeout` must be a non-negative finite number.',
+      );
+    }
+
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
@@ -212,7 +221,6 @@ export class Rstest implements InternalContext {
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;
           config.bail = rstestConfig.bail;
-          config.teardownTimeout = rstestConfig.teardownTimeout;
           // `resolveSnapshotPath` and `onConsoleLog` are omitted from
           // ProjectConfig (root-only), so they must be copied down; otherwise the
           // per-project event pump reads `undefined` and silently drops the root

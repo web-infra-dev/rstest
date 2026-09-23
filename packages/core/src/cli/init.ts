@@ -78,7 +78,6 @@ export function mergeWithCLIOptions(
     'testNamePattern',
     'testTimeout',
     'hookTimeout',
-    'teardownTimeout',
     'clearMocks',
     'resetMocks',
     'restoreMocks',

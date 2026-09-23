@@ -1,5 +1,6 @@
 import { join } from 'pathe';
 import { Rstest } from '../../src/core/rstest';
+import type { RstestConfig } from '../../src/types';
 
 // Mock std-env to ensure consistent snapshot across environments
 rs.mock('std-env', () => ({
@@ -11,6 +12,20 @@ process.env.DEBUG = 'false';
 const rootPath = join(__dirname, '../..');
 
 describe('rstest context', () => {
+  it.each([-1, '500', Infinity])(
+    'rejects invalid teardownTimeout: %s',
+    (teardownTimeout) => {
+      expect(
+        () =>
+          new Rstest(
+            { cwd: __dirname, command: 'run', projects: [] },
+            // Deliberately exercise invalid user configuration from JavaScript.
+            { teardownTimeout } as RstestConfig,
+          ),
+      ).toThrow('`teardownTimeout` must be a non-negative finite number.');
+    },
+  );
+
   it('uses a longer default test timeout for browser projects', () => {
     const browserContext = new Rstest(
       {
