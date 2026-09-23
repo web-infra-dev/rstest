@@ -40,6 +40,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'retry',
       'testTimeout',
       'hookTimeout',
+      'teardownTimeout',
       'maxConcurrency',
       'expect',
     ],
