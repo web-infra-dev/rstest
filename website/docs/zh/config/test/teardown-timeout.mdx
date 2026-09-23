@@ -13,9 +13,9 @@ import { Tab, Tabs } from '@theme';
 - **默认值：** `10_000`
 - **CLI：** `--teardownTimeout=10000`
 
-所有测试文件运行结束、`globalSetup` teardown 执行完毕、reporter 输出完成后，Rstest 会等待进程自行退出。正常情况下，进程会立即退出。
+运行结束后，Rstest 会等待 `globalSetup` 的 teardown 和 reporter 的各个 hook 返回。之后它不再主动做任何事，只等进程自然退出，正常情况下会立即退出。
 
-如果 Rstest 进程中还有任务在运行，例如 reporter、plugin 或配置文件创建的 server、socket、timer 或未完成的请求，进程就无法退出。测试文件和 `setupFiles` 运行在 worker 中，Rstest 会主动停止这些 worker，因此其中的泄漏不会阻止进程退出。`teardownTimeout` 用于设置此时的等待时间，单位为毫秒。时间到了，Rstest 会打印警告并退出进程，exit code 仍反映测试结果。
+但 hook 返回不代表里面的事情都结束了。如果 reporter、plugin 或配置文件里开了没关的 server、socket、timer，或者发起了没有 `await` 的请求，这些会留在 Rstest 进程里，进程就无法退出。测试文件和 `setupFiles` 运行在 worker 中，Rstest 会主动停止这些 worker，因此其中的泄漏不会阻止进程退出。`teardownTimeout` 用于设置这种情况下最多等待多久，单位为毫秒。时间到了，Rstest 会打印警告并退出进程，exit code 仍反映测试结果。
 
 设为 `0` 后，Rstest 会在运行结束后立即退出，不再等待，也不打印警告。这等同于 Jest 的 `forceExit: true`。
 

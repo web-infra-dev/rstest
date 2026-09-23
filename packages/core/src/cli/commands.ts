@@ -646,7 +646,7 @@ const runOnce = async ({
         setTimeout(resolve, teardownTimeout).unref();
       });
       logger.warn(
-        `The process did not exit ${teardownTimeout}ms after the run finished, force exiting. Something is still running in the Rstest process, for example an open server, socket or timer created by a reporter, a plugin or the config file. Set \`teardownTimeout: 0\` to exit immediately after a run.`,
+        `The process did not exit ${teardownTimeout}ms after the run finished, force exiting. A server, socket or timer left open, or a request started without await, in a reporter, a plugin or the config file is keeping the process alive. Set \`teardownTimeout: 0\` to exit immediately after a run.`,
       );
     }
     await flushOutputStreams();

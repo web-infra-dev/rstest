@@ -13,9 +13,9 @@ import { Tab, Tabs } from '@theme';
 - **Default:** `10_000`
 - **CLI:** `--teardownTimeout=10000`
 
-After a run finishes — all test files have run, `globalSetup` teardown has completed, and reporters have written their output — Rstest lets the process exit on its own. Normally it exits right away.
+After a run finishes, Rstest waits for the `globalSetup` teardown and the reporter hooks to return. From then on it does nothing more and lets the process exit on its own, which normally happens right away.
 
-If something is still running in the Rstest process itself (an open server or socket, a timer, or an unfinished request created by a reporter, a plugin, or your config file), the process cannot exit. Test files and `setupFiles` run in workers that Rstest stops on its own, so leaks there do not keep the process alive. `teardownTimeout` is how long Rstest waits in that situation, in milliseconds. When the time is up, Rstest prints a warning and exits the process. The exit code still reflects the test results.
+A hook returning does not mean everything it started has finished. A server, socket or timer left open, or a request started without `await`, in a reporter, a plugin or your config file stays in the Rstest process and keeps it from exiting. Test files and `setupFiles` run in workers that Rstest stops on its own, so leaks there do not keep the process alive. `teardownTimeout` is how long Rstest waits in that situation, in milliseconds. When the time is up, Rstest prints a warning and exits the process. The exit code still reflects the test results.
 
 Set it to `0` to exit immediately after the run finishes, without waiting or printing a warning. This is equivalent to Jest's `forceExit: true`.
 
