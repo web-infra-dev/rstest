@@ -8,8 +8,8 @@ import {
   filterProjects,
   formatError,
   isTTY,
-  logger,
 } from '../utils';
+import { flushOutputStreams, logger } from '../utils/logger';
 import { isRelatedRun } from '../core/execution/buildRunner';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { setHostExitCode } from './exitCode';
@@ -136,6 +136,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--testEnvironment <name>', 'The environment that will be used for testing'],
   ['--testTimeout <value>', 'Timeout of a test in milliseconds'],
   ['--hookTimeout <value>', 'Timeout of hook in milliseconds'],
+  [
+    '--teardownTimeout <value>',
+    'Time in milliseconds to wait for the process to exit after the run finishes; 0 exits immediately, Infinity never forces the exit',
+  ],
   ['--hideSkippedTests', 'Hide skipped tests from the output'],
   ['--hideSkippedTestFiles', 'Hide skipped test files from the output'],
   ['--retry <retry>', 'Number of times to retry a test if it fails'],
@@ -591,7 +595,11 @@ const createCliRstest = async (options: CommonOptions) => {
   ] = await Promise.all([import('./init'), import('../api/createRstest')]);
   const cwd = process.cwd();
   const loaded = await loadCliConfig(options, cwd);
+  // Instance-level flags are written to the base config before creation.
   // Every other flag replays per project through run().
+  if (options.teardownTimeout !== undefined) {
+    loaded.content.teardownTimeout = Number(options.teardownTimeout);
+  }
   if (options.root !== undefined) {
     loaded.content.root = options.root;
   }
@@ -609,6 +617,7 @@ const toRunOptions = (options: CommonOptions): RunOptions => {
     configLoader: _configLoader,
     root: _root,
     trace: _trace,
+    teardownTimeout: _teardownTimeout,
     ...runOptions
   } = options;
   return runOptions;
@@ -630,6 +639,21 @@ const runOnce = async ({
       filters: filters.length ? filters : undefined,
       ...toRunOptions(options),
     });
+    const { teardownTimeout } = rstest.context.config;
+    if (teardownTimeout === Infinity) {
+      return;
+    }
+    if (teardownTimeout > 0) {
+      // Unref'd: if the process drains on its own this promise never resolves.
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, teardownTimeout).unref();
+      });
+      logger.warn(
+        `The process did not exit ${teardownTimeout}ms after the run finished, force exiting. A server, socket or timer left open, or a request started without await, in a reporter, a plugin or the config file is keeping the process alive. Set \`teardownTimeout: 0\` to exit immediately after a run.`,
+      );
+    }
+    await flushOutputStreams();
+    process.exit();
   } catch (err) {
     handleUnexpectedExit(err);
   }

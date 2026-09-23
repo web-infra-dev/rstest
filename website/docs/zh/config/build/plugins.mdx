@@ -163,7 +163,7 @@ Rstest 会在 Rsbuild 初始化测试 environments 前解析文件级环境注�
 | `name`、`browser.enabled`                                                                                                  | 不支持   | 会改变 project 身份或运行模式，必须在 `rstest.config.*` 中声明。            |
 | `browser.provider`、`browser.browser`、`browser.headless`、`browser.port`、`browser.strictPort`、`browser.providerOptions` | 不支持   | 会影响 Browser Mode 启动或 dev server 选择，必须在 Rsbuild 插件运行前声明。 |
 | `projects`、`plugins`、`extends`                                                                                           | 不支持   | 会改变 project 拓扑或插件初始化顺序，必须在 Rstest 配置或 adapter 中声明。  |
-| `coverage`、`reporters`、`pool`、`isolate`、`update`、`shard`、`forceRerunTriggers`                                        | 不支持   | 属于全局执行策略，或在 Rsbuild 插件运行前已经参与调度。                     |
+| `coverage`、`reporters`、`pool`、`isolate`、`teardownTimeout`、`update`、`shard`、`forceRerunTriggers`                     | 不支持   | 属于全局执行策略，或在 Rsbuild 插件运行前已经参与调度。                     |
 | `output.distPath`                                                                                                          | 不支持   | 会改变 Rstest/Rsbuild 输出目录拓扑，必须在 Rstest 配置中声明。              |
 
 如果你需要动态添加 Rsbuild 插件，请通过 Rstest 的 `extends` Adapter 方案集成。Adapter 可以在 Rsbuild 插件初始化开始之前准备好 Rstest 配置。

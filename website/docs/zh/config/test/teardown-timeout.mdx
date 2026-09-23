@@ -1,0 +1,45 @@
+---
+description: 测试运行结束后，Rstest 等待进程退出的时间。设为 0 可立即退出。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+import { Tab, Tabs } from '@theme';
+
+# teardownTimeout
+
+<ApiMeta addedVersion="0.12.2" />
+
+- **类型：** `number`
+- **默认值：** `10_000`
+- **CLI：** `--teardownTimeout=10000`
+
+运行结束后，Rstest 会等待 `globalSetup` 的 teardown 和 reporter 的各个 hook 返回。之后它不再主动做任何事，只等进程自然退出，正常情况下会立即退出。
+
+但 hook 返回不代表里面的事情都结束了。如果 reporter、plugin 或配置文件里开了没关的 server、socket、timer，或者发起了没有 `await` 的请求，这些会留在 Rstest 进程里，进程就无法退出。测试文件和 `setupFiles` 运行在 worker 中，Rstest 会主动停止这些 worker，因此其中的泄漏不会阻止进程退出。`teardownTimeout` 用于设置这种情况下最多等待多久，单位为毫秒。时间到了，Rstest 会打印警告并退出进程，exit code 仍反映测试结果。
+
+设为 `0` 后，Rstest 会在运行结束后立即退出，不再等待，也不打印警告。这等同于 Jest 的 `forceExit: true`。
+
+设为 `Infinity` 后，Rstest 不会强制退出，而是一直等待进程自然退出，不限制等待时间。
+
+**这个选项不会限制 teardown 代码的执行时间。** `globalSetup` teardown 和 `afterAll` 等 hook 完成后才开始计时。要限制 hook 的执行时间，请使用 [`hookTimeout`](/config/test/hook-timeout)。
+
+如果出现这条警告，请检查 reporter、plugin 或配置中是否有未关闭的 handle。[`detectAsyncLeaks`](/config/test/detect-async-leaks) 用于另一类问题：它检查测试文件内部的泄漏，这些泄漏不会阻止进程退出。
+
+此选项仅适用于 `rstest run`，不适用于 programmatic API。watch mode 需要持续运行，因此不会受它影响。请在根配置中设置，各 project 不能单独覆盖。
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --teardownTimeout=5000
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  teardownTimeout: 5000,
+});
+```
+  </Tab>
+</Tabs>

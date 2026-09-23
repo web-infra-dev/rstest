@@ -20,6 +20,7 @@
   "retry",
   "test-timeout",
   "hook-timeout",
+  "teardown-timeout",
   "max-concurrency",
   "expect",
 

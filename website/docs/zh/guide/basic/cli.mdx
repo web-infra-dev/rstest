@@ -338,6 +338,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--hideSkippedTestFiles`            | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                                              |
 | `--hideSkippedTests`                | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                                                           |
 | `--hookTimeout <value>`             | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hook-timeout)                                                                                      |
+| `--teardownTimeout <value>`         | 设置运行结束后等待进程退出的时间（毫秒）。设为 0 可立即退出。详见 [teardownTimeout](/config/test/teardown-timeout)。                                                     |
 | `--include <include>`               | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                                               |
 | `--includeTaskLocation`             | 收集测试和 suite 的位置信息，详见 [includeTaskLocation](/config/test/include-task-location)                                                                              |
 | `--isolate`                         | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                                               |
