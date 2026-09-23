@@ -7,7 +7,7 @@ packages:
   - 'e2e/**'
 
 catalog:
-  '@rsbuild/core': ~2.2.7
+  '@rsbuild/core': ~2.2.9
   '@rsbuild/plugin-babel': ^2.1.0
   '@rsbuild/plugin-less': ^2.0.1
   '@rsbuild/plugin-node-polyfill': ^1.4.6
@@ -18,8 +18,8 @@ catalog:
   '@rsbuild/plugin-vue': ^2.0.1
   '@rsbuild/plugin-vue-jsx': ^2.0.1
   '@rslib/core': ~1.0.1
-  '@rspack/cli': ~2.2.5
-  '@rspack/core': ~2.2.5
+  '@rspack/cli': ~2.2.7
+  '@rspack/core': ~2.2.7
   '@rspack/dev-server': ~2.2.1
   '@rspack/plugin-react-refresh': ~2.0.2
 
