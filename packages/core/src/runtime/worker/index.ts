@@ -6,6 +6,7 @@ import {
   type WorkerResponse,
   wrapWorkerResponse,
 } from '../../pool/protocol';
+import { LOST_IPC_MESSAGE_HINT } from '../../utils/constants';
 import { ENV } from '../../utils/env';
 import { isVmPoolType } from '../../utils/workers';
 import { channel } from './channels';
@@ -82,6 +83,19 @@ const fatalExit = (err: unknown): void => {
 };
 process.on('uncaughtException', fatalExit);
 process.on('unhandledRejection', fatalExit);
+
+// No `fatal_error` here: IPC is exactly what failed. Node's default handler
+// prints the error with its cause to stderr, which the host attaches.
+channel.onLostWrite = (err) => {
+  if (dyingFromFatal) return;
+  dyingFromFatal = true;
+  handOffToNodeDefault(
+    new Error(
+      `Failed to send a message to the main process (${err.message}). ${LOST_IPC_MESSAGE_HINT}`,
+      { cause: err },
+    ),
+  );
+};
 
 const handleStart = (request: Extract<WorkerRequest, { type: 'start' }>) => {
   process.env[ENV.WORKER_ID] = String(request.workerId);

@@ -1,7 +1,9 @@
 import type { Envelope } from '../../../pool/protocol';
+import { toError } from '../../../utils/helper';
 import { BaseChannel } from './baseChannel';
 
-type ForkProcess = NodeJS.EventEmitter & Pick<NodeJS.Process, 'send'>;
+type ForkProcess = NodeJS.EventEmitter &
+  Pick<NodeJS.Process, 'send' | 'connected'>;
 
 type PendingWrite = {
   promise: Promise<void>;
@@ -12,6 +14,7 @@ export class ForksChannel extends BaseChannel {
   protected readonly source: ForkProcess;
   private readonly processSend: typeof process.send;
   private readonly pendingWrites = new Set<PendingWrite>();
+  onLostWrite?: (error: Error) => void;
 
   constructor(source: ForkProcess = process) {
     super();
@@ -48,11 +51,14 @@ export class ForksChannel extends BaseChannel {
       this.source.once('disconnect', this.settlePendingWrites);
     }
 
-    try {
-      this.processSend(envelope, pendingWrite.settle);
-    } catch (error) {
+    const onWriteDone = (error?: Error | null): void => {
       pendingWrite.settle();
-      throw error;
+      if (error && this.source.connected) this.onLostWrite?.(toError(error));
+    };
+    try {
+      this.processSend(envelope, onWriteDone);
+    } catch (error) {
+      onWriteDone(toError(error));
     }
   }
 

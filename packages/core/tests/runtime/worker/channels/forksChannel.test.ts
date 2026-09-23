@@ -12,10 +12,18 @@ const createProcessSend = (
     return true;
   }) as NonNullable<typeof process.send>;
 
+const createSource = ({
+  connected = true,
+  send,
+}: {
+  connected?: boolean;
+  send: NonNullable<typeof process.send>;
+}) => Object.assign(new EventEmitter(), { connected, send });
+
 describe('ForksChannel', () => {
   it('waits for pending process.send callbacks', async () => {
     const callbacks: SendCallback[] = [];
-    const source = Object.assign(new EventEmitter(), {
+    const source = createSource({
       send: createProcessSend((callback) => callbacks.push(callback)),
     });
     const channel = new ForksChannel(source);
@@ -41,9 +49,7 @@ describe('ForksChannel', () => {
   });
 
   it('stops waiting when the IPC channel disconnects', async () => {
-    const source = Object.assign(new EventEmitter(), {
-      send: createProcessSend(() => {}),
-    });
+    const source = createSource({ send: createProcessSend(() => {}) });
     const channel = new ForksChannel(source);
 
     channel.send(wrapRpc('message'));
@@ -53,5 +59,55 @@ describe('ForksChannel', () => {
 
     await expect(drain).resolves.toBeUndefined();
     expect(source.listenerCount('disconnect')).toBe(0);
+  });
+
+  it('reports a failed write while connected to onLostWrite', async () => {
+    const lostWriteError = new Error('write UNKNOWN');
+    const channel = new ForksChannel(
+      createSource({
+        send: createProcessSend((callback) => callback(lostWriteError)),
+      }),
+    );
+    const onLostWrite = rs.fn();
+    channel.onLostWrite = onLostWrite;
+
+    channel.send(wrapRpc('message'));
+
+    expect(onLostWrite).toHaveBeenCalledTimes(1);
+    expect(onLostWrite).toHaveBeenCalledWith(lostWriteError);
+    await expect(channel.waitForPendingWrites()).resolves.toBeUndefined();
+  });
+
+  it('reports a synchronous send throw while connected to onLostWrite', () => {
+    const channel = new ForksChannel(
+      createSource({
+        send: createProcessSend(() => {
+          throw new Error('could not be cloned');
+        }),
+      }),
+    );
+    const onLostWrite = rs.fn();
+    channel.onLostWrite = onLostWrite;
+
+    channel.send(wrapRpc('message'));
+
+    expect(onLostWrite).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a failed write once disconnected', () => {
+    const channel = new ForksChannel(
+      createSource({
+        connected: false,
+        send: createProcessSend((callback) =>
+          callback(new Error('write UNKNOWN')),
+        ),
+      }),
+    );
+    const onLostWrite = rs.fn();
+    channel.onLostWrite = onLostWrite;
+
+    channel.send(wrapRpc('message'));
+
+    expect(onLostWrite).not.toHaveBeenCalled();
   });
 });

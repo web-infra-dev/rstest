@@ -1,6 +1,13 @@
+import type { ChildProcess } from 'node:child_process';
 import { resolve } from 'pathe';
 import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
+import { PoolRunner } from '../../src/pool/poolRunner';
+import {
+  type Envelope,
+  isWorkerRequestEnvelope,
+} from '../../src/pool/protocol';
+import { ForksPoolWorker } from '../../src/pool/workers/forksPoolWorker';
 import { composeSpawnEnv } from '../../src/pool/workers';
 import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
@@ -506,6 +513,89 @@ describe('Pool - failure recovery', () => {
       await pool.close();
     }
   });
+});
+
+// ── lost IPC envelope (rstest#1142) ────────────────────────────────────────
+
+describe('ForksPoolWorker - failed write to the worker', () => {
+  type SendCallback = (error: Error | null) => void;
+
+  const startRunner = async () => {
+    const worker = new ForksPoolWorker({
+      name: 'lost-envelope',
+      filename: WORKER_ENTRY,
+      forwardStdio: false,
+    });
+    const runner = new PoolRunner(worker, {
+      workerId: 1,
+      environmentKey: 'node',
+    });
+    await runner.start();
+    const child: ChildProcess = Reflect.get(worker, 'childProcess');
+    return { worker, runner, child, realSend: child.send.bind(child) };
+  };
+
+  const createWriteUnknownError = (): Error =>
+    Object.assign(new Error('write UNKNOWN'), { code: 'UNKNOWN' });
+
+  it('rejects the task instead of hanging when a host->worker write fails on a live channel', async () => {
+    const { runner, child, realSend } = await startRunner();
+    try {
+      // Windows reports a lost write on a live channel as `write UNKNOWN`;
+      // the envelope never reaches the worker.
+      child.send = ((message: Envelope, callback?: SendCallback) => {
+        if (
+          isWorkerRequestEnvelope(message) &&
+          message.request.type === 'run'
+        ) {
+          child.send = realSend;
+          queueMicrotask(() => callback?.(createWriteUnknownError()));
+          return true;
+        }
+        return realSend(message, callback);
+      }) as ChildProcess['send'];
+
+      const error = await expectRejection(runner.runTest(createTask()));
+
+      expect(error.message).toContain('write UNKNOWN');
+      expect(error.message).toContain(
+        'Failed to send a message to the test worker',
+      );
+      // The injected error's own stack survives behind `Caused by:`.
+      expect(error.stack).toContain('Caused by:');
+      const causeStack = error.stack!.split('Caused by:')[1]!;
+      expect(causeStack).toContain('Error: write UNKNOWN');
+      expect(runner.isUsable()).toBe(false);
+    } finally {
+      await runner.stop({ force: true });
+    }
+  }, 10_000);
+
+  it('stays silent when the write fails after the worker exited', async () => {
+    const { worker, runner, child, realSend } = await startRunner();
+    try {
+      const errors: Error[] = [];
+      worker.on('error', (error) => errors.push(error));
+      let failWrite: SendCallback | undefined;
+      child.send = ((_message: Envelope, callback?: SendCallback) => {
+        failWrite = callback;
+        return true;
+      }) as ChildProcess['send'];
+
+      const task = expectRejection(runner.runTest(createTask()));
+      const exited = new Promise((resolve) => worker.on('exit', resolve));
+      child.kill('SIGKILL');
+      await exited;
+
+      failWrite?.(createWriteUnknownError());
+      await task;
+
+      expect(errors).toEqual([]);
+    } finally {
+      child.send = realSend;
+      await runner.stop({ force: true });
+    }
+  }, 10_000);
 });
 
 describe('Pool - interrupt()', () => {

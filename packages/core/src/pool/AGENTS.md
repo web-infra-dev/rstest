@@ -7,7 +7,7 @@
 - Keep the layering strict: `Pool` schedules (slots, worker ids, idle LIFO reuse); `PoolRunner` owns one worker's lifecycle state machine, its birpc transport, and task attribution; `PoolWorker` (forks/threads implementations under `workers/`) stays transport-only; `MemoryGate` defers new spawns under memory pressure.
 - Entries arrive perf-sorted from the node executor; assignment is pull-based — there is no per-worker file partitioning, each entry claims the next free slot.
 - All IPC must go through the tagged envelopes in `protocol.ts` (lifecycle requests/responses plus an opaque birpc passthrough) — the host silently drops untagged messages. Runner lifecycle events flow worker → birpc → `sinkToRuntimeRpc(RunnerEventSink)` → stateManager + reporters.
-- Crash path: a rejected `pool.runTest` becomes a fail-status file result (`workerErrorToResult`); test cases running at crash time are synthesized as failed and replayed to reporters only — deliberately not to the state manager, to avoid double-counting.
+- Crash path: a rejected `pool.runTest` becomes a fail-status file result (`workerErrorToResult`); test cases running at crash time are synthesized as failed and replayed to reporters only — deliberately not to the state manager, to avoid double-counting. A write failure on a live IPC channel is never benign and lands here with no retry (rstest#1142): the host emits `error` at once, and the worker hands the error to Node's default uncaught path and exits.
 
 ## Key invariants
 
