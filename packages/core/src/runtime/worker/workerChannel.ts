@@ -12,4 +12,6 @@ export interface WorkerChannel {
   waitForPendingWrites(): Promise<void>;
   on(handler: MessageHandler): void;
   off(handler: MessageHandler): void;
+  /** Called when a write fails while the channel is still connected. */
+  onLostWrite?: (error: Error) => void;
 }

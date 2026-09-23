@@ -1,9 +1,14 @@
 import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
-import { getWorkerSerialization, killAndWait, toError } from '../../utils';
+import {
+  getWorkerSerialization,
+  killAndWait,
+  LOST_IPC_MESSAGE_HINT,
+  toError,
+} from '../../utils';
 import type { Envelope } from '../protocol';
 import { BasePoolWorker } from './basePoolWorker';
 
-const BENIGN_IPC_ERROR_CODES = new Set([
+const BENIGN_IPC_ERROR_CODES = new Set<string | undefined>([
   'ERR_IPC_CHANNEL_CLOSED',
   'EPIPE',
   'ECONNRESET',
@@ -16,18 +21,9 @@ const BENIGN_IPC_ERROR_CODES = new Set([
  */
 const SIGKILL_FALLBACK_MS = 500;
 
-/**
- * IPC errors that surface during shutdown but reflect the channel already
- * going away, not a genuine failure. Windows additionally surfaces
- * `write UNKNOWN` when `child.send` races teardown — see rstest#1142.
- */
-const isBenignIpcError = (err: unknown): boolean => {
-  if (!(err instanceof Error)) return false;
-  const code = (err as NodeJS.ErrnoException).code;
-  if (code && BENIGN_IPC_ERROR_CODES.has(code)) return true;
-  if (code === 'UNKNOWN') return true;
-  return /write UNKNOWN|channel closed/i.test(err.message);
-};
+/** Child `error` events that only mean the channel is already going away. */
+const isBenignIpcError = (err: NodeJS.ErrnoException): boolean =>
+  BENIGN_IPC_ERROR_CODES.has(err.code);
 
 type ForksPoolWorkerOptions = {
   name: string;
@@ -47,6 +43,7 @@ export class ForksPoolWorker extends BasePoolWorker {
   private readonly env?: NodeJS.ProcessEnv;
   private readonly execArgv?: string[];
   private childProcess: ChildProcess | undefined;
+  private transportFailed = false;
 
   constructor(options: ForksPoolWorkerOptions) {
     super({ name: options.name, forwardStdio: options.forwardStdio });
@@ -90,7 +87,7 @@ export class ForksPoolWorker extends BasePoolWorker {
         this.emitter.emit('message', message);
       });
 
-      child.on('error', (err: Error) => {
+      child.on('error', (err: NodeJS.ErrnoException) => {
         if (isBenignIpcError(err)) return;
         this.emitter.emit('error', err);
         reject(err);
@@ -129,13 +126,25 @@ export class ForksPoolWorker extends BasePoolWorker {
     const child = this.childProcess;
     if (!child || this.exited || !child.connected) return;
     try {
-      child.send(envelope, (err) => {
-        if (err && !isBenignIpcError(err)) {
-          this.emitter.emit('error', err);
-        }
-      });
+      child.send(envelope, this.onSendError);
     } catch (err) {
-      if (!isBenignIpcError(err)) throw err;
+      this.onSendError(toError(err));
     }
   }
+
+  /**
+   * A failed write on a live channel is never benign, whatever its `code`
+   * (Windows: `write UNKNOWN`, rstest#1142); once it is gone, `exit` owns it.
+   */
+  private readonly onSendError = (err: Error | null): void => {
+    if (!err || this.transportFailed || !this.childProcess?.connected) return;
+    this.transportFailed = true;
+    const error = new Error(
+      `Failed to send a message to the test worker (${err.message}). ${LOST_IPC_MESSAGE_HINT}`,
+    );
+    // Reporters receive a serialized error that drops `cause`, so carry the
+    // original stack (Node's own send frames) in the wrapper's stack.
+    error.stack = `${error.stack ?? error.message}\nCaused by: ${err.stack ?? err.message}`;
+    this.emitter.emit('error', error);
+  };
 }

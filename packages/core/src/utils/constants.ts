@@ -367,3 +367,8 @@ export const FIXTURE_CLEANUP_TIMEOUT_MS = 10_000;
 export const WORKER_CLEANUP_TIMEOUT_MS = 35_000;
 
 export const TS_CONFIG_FILE = 'tsconfig.json';
+
+/** Shared tail of the lost IPC message report on both sides of a forks worker
+ * (rstest#1142). */
+export const LOST_IPC_MESSAGE_HINT =
+  'The worker was stopped and this test file is reported as failed. This can happen under system resource pressure, especially on Windows with many workers. Try lowering `pool.maxWorkers` or re-running the tests. See https://github.com/web-infra-dev/rstest/issues/1142';
