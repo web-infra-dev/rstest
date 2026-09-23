@@ -498,6 +498,10 @@ test('loads the original CommonJS module', () => {
 
 Loads an ESM module asynchronously and replaces its function exports, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.importMock` when a test needs an auto-mocked module directly. For a CommonJS module loaded through `require()`, use [`rs.requireMock`](#rsrequiremock).
 
+If the request has already been registered with `rs.mock` or `rs.doMock`, `rs.importMock` uses that registered factory first. Without a registered factory, a matching manual mock in `__mocks__` is still used, followed by the normal auto-mock fallback. The request may be a variable when it is resolved from a bundled test module.
+
+If a runtime request cannot be resolved to a bundled module or a registered mock, `rs.importMock` rejects with a module-not-found error.
+
 ```ts title="src/api.test.ts"
 test('loads an ESM module as mocks', async () => {
   const api = await rs.importMock<typeof import('./api')>('./api');
@@ -514,6 +518,8 @@ test('loads an ESM module as mocks', async () => {
 - **Type:** `<T = Record<string, unknown>>(path: string) => T`
 
 Loads a CommonJS module synchronously and replaces its exported functions, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.requireMock` when the target is consumed through `require()` and the test needs the mocked module immediately. For an ESM module loaded through `import`, use [`rs.importMock`](#rsimportmock).
+
+When the request is held in a variable, Rstest rewrites the call to its synchronous runtime helper as long as the caller is in a bundled test module. The module still needs to be represented in the bundle or mock registry.
 
 ```js title="src/math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');

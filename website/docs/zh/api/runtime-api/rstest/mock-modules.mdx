@@ -500,6 +500,10 @@ test('loads the original CommonJS module', () => {
 
 异步加载 ESM 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当测试需要直接获得自动 mock 的模块时，可以使用 `rs.importMock`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireMock`](#rsrequiremock)。
 
+如果请求已经通过 `rs.mock` 或 `rs.doMock` 注册，`rs.importMock` 会优先使用已注册的 factory。没有注册 factory 时，匹配的 `__mocks__` 手动 mock 仍然会生效，之后才回退到普通的自动 mock。请求也可以来自变量，但调用方需要位于 Rstest 打包的测试模块中。
+
+如果运行时请求无法解析到 bundle 中的模块或已注册的 mock，`rs.importMock` 会 reject，并报告模块不存在。
+
 ```ts title="src/api.test.ts"
 test('loads an ESM module as mocks', async () => {
   const api = await rs.importMock<typeof import('./api')>('./api');
@@ -516,6 +520,8 @@ test('loads an ESM module as mocks', async () => {
 - **类型：** `<T = Record<string, unknown>>(path: string) => T`
 
 同步加载 CommonJS 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当目标通过 `require()` 使用，并且测试需要立即获得 mock 模块时，可以使用 `rs.requireMock`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importMock`](#rsimportmock)。
+
+请求保存在变量中时，只要调用方位于 Rstest 打包的测试模块中，Rstest 也会将调用改写为同步 runtime helper。目标模块仍需要存在于 bundle 或 mock 注册表中。
 
 ```js title="src/math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');
