@@ -116,6 +116,10 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     get: (config) => config.reporters,
   },
   {
+    path: 'teardownTimeout',
+    get: (config) => config.teardownTimeout,
+  },
+  {
     path: 'update',
     get: (config) => config.update,
   },

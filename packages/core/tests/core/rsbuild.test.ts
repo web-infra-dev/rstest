@@ -3147,6 +3147,12 @@ describe('prepareRsbuild', () => {
         },
       },
       {
+        name: 'teardownTimeout',
+        modify: (config: Record<string, unknown>) => {
+          config.teardownTimeout = 500;
+        },
+      },
+      {
         name: 'update',
         modify: (config: Record<string, unknown>) => {
           config.update = true;
