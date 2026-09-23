@@ -11,7 +11,6 @@ import {
   type TraceEvent,
   type TraceRun,
 } from '../../utils';
-import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
 import { logWatchReadyMessage, type setupCliShortcuts } from './cliShortcuts';
 import {
   finalizeRunCycle,
@@ -685,33 +684,5 @@ export function createWatchTeardown({
         cleanups.push(cleanup);
       }
     },
-  };
-}
-
-/**
- * Own the fatal-signal → exit path for a watch session: tear down through the
- * shared teardown, then exit with the POSIX 128+signal code. Embedded hosts own
- * the process lifecycle, so nothing is registered there. The returned cleanup
- * removes this session's handlers after teardown completes.
- */
-export function registerWatchSignalExit(
-  context: Rstest,
-  close: () => Promise<void>,
-): () => void {
-  if (context.embedded) {
-    return () => {};
-  }
-  const handleSignal = async (signal: NodeJS.Signals) => {
-    logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-    await close();
-    process.exit(getSignalExitCode(signal));
-  };
-  for (const signal of FATAL_SIGNALS) {
-    process.on(signal, handleSignal);
-  }
-  return () => {
-    for (const signal of FATAL_SIGNALS) {
-      process.off(signal, handleSignal);
-    }
   };
 }

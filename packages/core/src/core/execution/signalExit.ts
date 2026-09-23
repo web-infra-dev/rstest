@@ -1,6 +1,6 @@
-import type { InternalContext } from '../types';
-import { color, logger } from '../utils/logger';
-import { onFatalSignal, getSignalExitCode } from '../utils/signals';
+import type { InternalContext } from '../../types';
+import { color, logger } from '../../utils/logger';
+import { onFatalSignal, getSignalExitCode } from '../../utils/signals';
 
 const logCleanupError = (error: unknown) => {
   logger.log(color.red(`Error during cleanup: ${error}`));

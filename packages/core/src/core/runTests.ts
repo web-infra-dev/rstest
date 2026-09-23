@@ -23,7 +23,7 @@ import {
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
-import { registerFatalSignalExit } from './signalExit';
+import { registerFatalSignalExit } from './execution/signalExit';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './watch/cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
