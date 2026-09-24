@@ -11,9 +11,9 @@ import type {
 import {
   bgColor,
   color,
-  getForceColorEnv,
   getWorkerSerialization,
   killAndWait,
+  resolveColorEnabled,
 } from '../../utils';
 import { prepareAssetFilesForIPC } from '../../utils/assetFiles';
 import { composeWorkerEnv } from '../environment/workerEnv';
@@ -106,8 +106,6 @@ export class GlobalSetupWorker {
         ],
         env: {
           NODE_ENV: 'test',
-          // Config env is test-worker scoped; globalSetup uses host color env.
-          ...getForceColorEnv(),
           ...this.env,
         } as NodeJS.ProcessEnv,
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -216,7 +214,8 @@ export async function runGlobalSetup(
    */
   envChanges?: Record<string, string | undefined>;
 }> {
-  const worker = new GlobalSetupWorker(composeWorkerEnv(context.workerEnv));
+  const env = composeWorkerEnv(context.workerEnv);
+  const worker = new GlobalSetupWorker(env);
   worker.start();
 
   const result = await worker.call<{
@@ -227,6 +226,7 @@ export async function runGlobalSetup(
   }>({
     type: 'setup',
     payload: {
+      color: resolveColorEnabled(env),
       entries: globalSetupEntries,
       assetFiles: prepareAssetFilesForIPC(assetFiles, 'forks'),
       interopDefault,

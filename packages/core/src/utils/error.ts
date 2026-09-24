@@ -151,7 +151,7 @@ async function printCodeFrame(frame: StackFrame) {
       },
     },
     {
-      highlightCode: true,
+      forceColor: color.isColorSupported,
       linesBelow: 2,
     },
   );

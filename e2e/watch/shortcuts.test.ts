@@ -25,7 +25,6 @@ describe('CLI shortcuts', () => {
         nodeOptions: {
           env: {
             DEBUG: 'rstest',
-            FORCE_TTY: 'true',
             CI: undefined,
           },
           cwd: fixturesTargetPath,
@@ -85,7 +84,6 @@ describe('CLI shortcuts', () => {
       options: {
         nodeOptions: {
           env: {
-            FORCE_TTY: 'true',
             CI: undefined,
           },
           cwd: fixturesTargetPath,

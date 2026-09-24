@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack, type Rsbuild } from '@rslib/core';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
@@ -9,6 +10,8 @@ import {
 } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
+
+const require = createRequire(import.meta.url);
 
 // `RSTEST_VERSION` is build-injected into both @rstest/core and @rstest/browser
 // from each package's own package.json, and the browser-mode runtime gate
@@ -240,6 +243,14 @@ export default defineConfig({
   tools: {
     rspack: {
       ...rslibRspackConfig,
+      resolve: {
+        alias: {
+          // Share @vitest/utils' instance so applyRuntimeColors governs diff and expect colors.
+          tinyrainbow: createRequire(
+            require.resolve('@vitest/utils/diff'),
+          ).resolve('tinyrainbow'),
+        },
+      },
       module: {
         ...rslibRspackConfig.module,
         rules: [
