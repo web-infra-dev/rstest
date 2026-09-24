@@ -16,7 +16,7 @@ import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 import type { RootSuiteListeners } from '../runner/runtime';
 
-type RuntimeRstest = Rstest & {
+export type RuntimeRstest = Rstest & {
   registerFileCleanup: typeof registerFileCleanup;
   registerWorkerCleanup: typeof registerWorkerCleanup;
 };

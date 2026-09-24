@@ -26,6 +26,7 @@ import { color } from '../../utils/logger';
 import { isVmPoolType } from '../../utils/workers';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { clearFileContext } from '../fileContext';
+import { withPackageExports } from '../api/packageExports';
 import { disposeRstestUtilities } from '../api/utilities';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
@@ -880,7 +881,7 @@ const preparePool = async (
     };
 
     Object.assign(rstestContext.global, {
-      [RSTEST_API_GLOBAL_KEY]: api,
+      [RSTEST_API_GLOBAL_KEY]: withPackageExports(api),
       [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
     });
 
