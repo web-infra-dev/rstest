@@ -1,8 +1,32 @@
-import { describe, expect, it } from '@rstest/core';
+import {
+  defineConfig,
+  defineInlineProject,
+  defineProject,
+  describe,
+  expect,
+  it,
+  loadConfig,
+  mergeProjectConfig,
+  mergeRstestConfig,
+} from '@rstest/core';
 import pathe from 'pathe';
 import { sayHi } from '../src/index';
 
 describe('Index', () => {
+  it('should expose config helpers inside tests', async () => {
+    const config = mergeRstestConfig({ retry: 1 }, { retry: 2 });
+    expect(defineConfig(config).retry).toBe(2);
+    expect(
+      mergeProjectConfig(
+        defineProject({ name: 'base', retry: 1 }),
+        defineInlineProject({ name: 'project', retry: 2 }),
+      ),
+    ).toMatchObject({ name: 'project', retry: 2 });
+    const loaded = await loadConfig({ cwd: __dirname });
+    expect(loaded.filePath).toBeNull();
+    expect(loaded.content).toEqual({});
+  });
+
   it('should add two numbers correctly', () => {
     expect(1 + 1).toBe(2);
   });

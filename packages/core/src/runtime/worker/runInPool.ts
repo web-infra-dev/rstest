@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { setFlagsFromString } from 'node:v8';
 import { createContext, runInContext, Script, type Context } from 'node:vm';
@@ -56,6 +57,9 @@ import {
   disposeVmExternalModules,
 } from './vm/externalModules';
 import { workerCache } from './vm/cache';
+
+const require = createRequire(import.meta.url);
+const loadCore = (): typeof import('../../index') => require('@rstest/core');
 
 let sourceMaps: Record<string, string> = {};
 let currentEnvironmentBundle: { path: string; url: string } | undefined;
@@ -877,7 +881,29 @@ const preparePool = async (
     };
 
     Object.assign(rstestContext.global, {
-      [RSTEST_API_GLOBAL_KEY]: api,
+      [RSTEST_API_GLOBAL_KEY]: {
+        ...api,
+        // Config helpers load the Node build toolchain only when accessed.
+        // Keep them out of the shared browser runtime and test globals.
+        get defineConfig() {
+          return loadCore().defineConfig;
+        },
+        get defineProject() {
+          return loadCore().defineProject;
+        },
+        get defineInlineProject() {
+          return loadCore().defineInlineProject;
+        },
+        get loadConfig() {
+          return loadCore().loadConfig;
+        },
+        get mergeRstestConfig() {
+          return loadCore().mergeRstestConfig;
+        },
+        get mergeProjectConfig() {
+          return loadCore().mergeProjectConfig;
+        },
+      },
       [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
     });
 
