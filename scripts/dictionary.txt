@@ -165,6 +165,7 @@ rstest
 Samply
 selfsign
 selfsigned
+shiki
 SIGNREQUEST
 sirv
 sokra
