@@ -40,3 +40,49 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+## 模块 mock \{#module-mocks}
+
+由于模块在同一个 worker 的多个文件之间共享，当 `isolate` 为 `false` 时，[模块 mock](/api/runtime-api/rstest/mock-modules) 的行为会有所不同：
+
+- mock 可能不生效：如果之前的文件已经加载了某个引入被 mock 模块的模块，这个已缓存的模块会继续使用真实实现。
+- mock 可能泄漏：mock 生效期间加载的模块，会在后续文件中继续使用 mock 实现。
+
+具体哪个文件失败，取决于文件的执行顺序。
+
+例如，下面两个测试文件都引入了 `./user-service`，而它会调用 `./api` 中的 `fetchUser()`。真实的 `fetchUser()` 返回 `{ name: 'Bob' }`，只有 `user-service.test.ts` 对它进行了 mock。为了让两个文件在任意执行顺序下都正确，mock 文件在引入被测代码之前重置模块缓存，并在文件结束后撤销 mock（高亮行）：
+
+```ts title="user-service.test.ts" {4-6,10-13}
+import { afterAll, expect, rs, test } from '@rstest/core';
+import { loadUserName } from './user-service';
+
+rs.hoisted(() => {
+  rs.resetModules();
+});
+
+rs.mock('./api', () => ({ fetchUser: () => ({ name: 'Alice' }) }));
+
+afterAll(() => {
+  rs.doUnmock('./api');
+  rs.resetModules();
+});
+
+test('loads the mocked user name', () => {
+  expect(loadUserName()).toBe('Alice');
+});
+```
+
+```ts title="profile.test.ts"
+import { expect, test } from '@rstest/core';
+import { loadUserName } from './user-service';
+
+test('loads the real user name', () => {
+  expect(loadUserName()).toBe('Bob');
+});
+```
+
+`profile.test.ts` 无需任何修改：无论它在 `user-service.test.ts` 之前还是之后执行，拿到的都是真实的 `./api`。
+
+- 在 [`rs.hoisted()`](/api/runtime-api/rstest/mock-modules#rshoisted) 中调用 [`rs.resetModules()`](/api/runtime-api/rstest/mock-modules#rsresetmodules)，让模块缓存在静态 import 执行之前被清空。
+- 在 `afterAll` 中对该文件 mock 的每个模块调用 [`rs.doUnmock()`](/api/runtime-api/rstest/mock-modules#rsdounmock)。
+- 两次 `rs.resetModules()` 都会清空共享的模块缓存，因此当前文件和同一 worker 中的下一个文件都会重新求值模块。没有使用这种写法的文件仍然共享模块。
