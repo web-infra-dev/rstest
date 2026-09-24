@@ -52,13 +52,14 @@ Which file fails depends on the order in which files run.
 
 For example, both test files below import `./user-service`, which calls `fetchUser()` from `./api`. The real `fetchUser()` returns `{ name: 'Bob' }`, and only `user-service.test.ts` mocks it. To keep both files correct in any order, the mocking file resets the module cache before importing the code under test, then undoes the mock after it finishes (highlighted lines):
 
-```ts title="user-service.test.ts" {4-6,9-12}
+```ts title="user-service.test.ts" {4-6,10-13}
 import { afterAll, expect, rs, test } from '@rstest/core';
 import { loadUserName } from './user-service';
 
 rs.hoisted(() => {
   rs.resetModules();
 });
+
 rs.mock('./api', () => ({ fetchUser: () => ({ name: 'Alice' }) }));
 
 afterAll(() => {
