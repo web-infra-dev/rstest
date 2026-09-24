@@ -8,36 +8,7 @@ import {
   type IstanbulFileCoverageData,
   transformCoverage,
 } from '../src/utils';
-
-const createFileCoverage = (file: string): IstanbulFileCoverageData => ({
-  path: file,
-  statementMap: {
-    0: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
-  },
-  fnMap: {
-    0: {
-      name: 'fn',
-      decl: { start: { line: 1, column: 0 }, end: { line: 1, column: 2 } },
-      loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
-      line: 1,
-    },
-  },
-  branchMap: {
-    0: {
-      type: 'if',
-      loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
-      locations: [
-        { start: { line: 1, column: 0 }, end: { line: 1, column: 5 } },
-        { start: { line: 1, column: 5 }, end: { line: 1, column: 10 } },
-      ],
-      line: 1,
-    },
-  },
-  s: { 0: 1 },
-  f: { 0: 2 },
-  b: { 0: [3, 4] },
-  hash: 'same',
-});
+import { createFileCoverage } from './fixtures';
 
 const createUnhashedFileCoverage = (file: string) => {
   const coverage = createFileCoverage(file);
@@ -134,6 +105,21 @@ describe('coverage istanbul utils', () => {
       },
       s: { 0: 1, 1: 5 },
     });
+  });
+
+  it('drops the hash after a structural union', () => {
+    const file = '/project/src/index.ts';
+    const coverageMap = createFastCoverageMap();
+    coverageMap.merge({ [file]: createFileCoverage(file) });
+    const incoming = createFileCoverage(file);
+    incoming.hash = 'different';
+    incoming.statementMap[0] = {
+      start: { line: 2, column: 0 },
+      end: { line: 2, column: 10 },
+    };
+    coverageMap.merge({ [file]: incoming });
+
+    expect(coverageMap.fileCoverageFor(file).data).not.toHaveProperty('hash');
   });
 
   it('falls back to istanbul merge when branch truthiness shape differs', () => {

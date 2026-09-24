@@ -477,8 +477,16 @@ export function createNodeExecutor(
             buildId,
             updateSnapshot,
             onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
-            onRawCoverageResult: (coverage) =>
-              rawCoverageResults.push(coverage),
+            onRawCoverageResult: (coverage) => {
+              if (coverageProvider?.mergeRawCoverage && mergedCoverageMap) {
+                coverageProvider.mergeRawCoverage(mergedCoverageMap, coverage);
+              } else {
+                rawCoverageResults.push(coverage);
+              }
+            },
+            queryCoverage: (query) =>
+              mergedCoverageMap &&
+              coverageProvider?.queryCoverage?.(mergedCoverageMap, query),
             onTraceEvents: traceRun.onEvents,
             traceSpan: span,
           });

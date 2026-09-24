@@ -157,6 +157,8 @@ export type CoverageCollectOptions = {
   assetFiles?: Record<string, string>;
   sourceMaps?: Record<string, string>;
   outputModule?: boolean;
+  /** @internal Provider-owned query against the current host coverage map. */
+  queryCoverage?: (query: unknown) => Promise<unknown>;
 };
 
 /**
@@ -212,16 +214,20 @@ export declare class CoverageProvider {
   /**
    * Collect lightweight, serializable raw coverage payloads in workers.
    *
-   * Providers may implement this with `resolveRawCoverage` to defer expensive
-   * conversion work to the main process. Return `null` to indicate that no raw
-   * coverage was collected and the runner should not call `resolveRawCoverage`
-   * for that worker result.
+   * Pair with `mergeRawCoverage` for immediate folding or `resolveRawCoverage`
+   * for deferred host conversion. Returning `null` falls back to `collect`.
    *
    * @internal
    */
   collectRaw?(
     options?: CoverageCollectOptions,
   ): unknown | null | Promise<unknown | null>;
+
+  /** @internal Fold a raw worker result immediately, without buffering. */
+  mergeRawCoverage?(map: CoverageMap, payload: unknown): void;
+
+  /** @internal Answer a stateless provider-owned query against this cycle's map. */
+  queryCoverage?(map: CoverageMap, query: unknown): unknown;
 
   /**
    * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.
