@@ -6,6 +6,8 @@ packages:
   - 'examples/**'
   - 'e2e/**'
 
+autoDedupe: true
+
 catalog:
   '@rsbuild/core': ~2.2.9
   '@rsbuild/plugin-babel': ^2.1.0
