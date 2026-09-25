@@ -4,7 +4,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 ## Data flow
 
-- **Node**: each worker builds its own provider instance and prefers `collectRaw` when the provider also implements `resolveRawCoverage` (deferring conversion to the host); a null `collectRaw` return falls back to full in-worker `collect`. The pool strips `result.coverage`/`result.coverageRaw` off results before they reach reporters and forwards them to executor callbacks instead.
+- **Node**: each worker builds its own provider instance and prefers `collectRaw` when the provider also implements `mergeRawCoverage` (immediate folding into the cycle map) or `resolveRawCoverage` (deferred conversion). A null raw result falls back to full in-worker `collect`. The pool strips coverage from results before reporters and forwards it to executor callbacks. Bind stateless coverage queries to the same cycle map as immediate folds; never reserve structures or retain pending worker state. Immediate providers must omit `resolveRawCoverage` to preserve older cores' fallback to `collect`. The first Istanbul wave can send duplicate full structures; later queries depend on immediate folding, not buffered results.
 - **Browser**: Istanbul copies `globalThis.__coverage__` onto each file result and `buildBrowserCoverageMap` folds them into one map at outcome assembly. With Chromium + Playwright, the host collects V8 ranges for each page, attaches the generated bundles and source maps as raw payload resources, and lets the shared finalizer remap them host-side. Browser config validation rejects V8 only for non-Chromium browser projects; it deliberately skips the `list` command, which never collects coverage.
 - **Finalize**: `finalizeRunCycle` merges outcome maps and resolves raw v8 batches host-side (`resolveAndMergeRawCoverage`). Normal runs then report through `generateCoverage`: filter → untested-file backfill → `generateReports` → thresholds (negative threshold values mean max-uncovered-count). Blob runs defer that stage only when the provider advertises `supportsDeferredCoverageFinalization`; older providers serialize collected coverage first, then retain their shard-local finalization.
 - **Providers**: istanbul instruments at compile time by pushing `swc-plugin-coverage-instrument` into the SWC rule; v8 does not instrument — it profiles via the inspector and converts payloads host-side with acorn AST + source maps.
@@ -24,7 +24,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 - A new `CoverageProvider` member → both provider packages plus the worker call sites in `../runtime/worker/runInPool.ts`.
 - Each provider package entry must export `{ CoverageProvider, pluginCoverage }` — both are destructured by `loadCoverageProvider` under exactly those names.
-- `createFastCoverageMap` / `mapWithConcurrency` are duplicated verbatim in both provider packages' `utils.ts` — change one, mirror the other.
+- Keep shared counter addition and shape comparisons in both providers' `createFastCoverageMap` aligned; Istanbul additionally invalidates hashes after native unions because its raw transport uses hash equality as structural identity. Keep both providers' `mapWithConcurrency` behavior aligned.
 - Bumping `swc-plugin-coverage-instrument` ↔ `COVERAGE_MAGIC_VALUE` used by istanbul's `readInitialCoverage`.
 - `ExecutorCycleOutcome.coverage` shape: producers (node executor, browser executor) ↔ consumer (`finalizeRunCycle`).
 

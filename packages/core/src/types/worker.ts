@@ -41,6 +41,7 @@ export type ServerRPC = object;
 
 /** Runtime to Server */
 export type RuntimeRPC = {
+  queryCoverage: (query: unknown) => unknown;
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
   onTestFileReady: (test: TestFileInfo) => Promise<void>;
   getAssetsByEntry: (
@@ -58,6 +59,8 @@ export type RuntimeRPC = {
   onConsoleLog: (log: UserConsoleLog) => void;
   resolveSnapshotPath: (filepath: string) => string;
 };
+
+export type PoolOwnedRpcMethod = 'getAssetsByEntry' | 'queryCoverage';
 
 export type RuntimeConfig = Pick<
   InternalContext['normalizedConfig'],

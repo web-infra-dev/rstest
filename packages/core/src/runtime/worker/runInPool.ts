@@ -1377,6 +1377,7 @@ export const runInPool = async (
         ),
         sourceMaps,
         outputModule: options.context.outputModule,
+        queryCoverage: rpc.queryCoverage,
       };
 
       const collect = async () => {
@@ -1391,7 +1392,10 @@ export const runInPool = async (
         }
       };
 
-      if (provider.collectRaw && provider.resolveRawCoverage) {
+      if (
+        provider.collectRaw &&
+        (provider.mergeRawCoverage || provider.resolveRawCoverage)
+      ) {
         const rawCoverage = await provider.collectRaw(collectOptions);
         if (rawCoverage != null) {
           result.coverageRaw = rawCoverage;

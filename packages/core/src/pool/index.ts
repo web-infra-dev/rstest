@@ -7,6 +7,7 @@ import type {
   SerializedError,
   InternalContext,
   InternalProjectContext,
+  PoolOwnedRpcMethod,
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
@@ -164,7 +165,8 @@ const buildTask = async ({
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
-  rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+  rpcMethods: Omit<RuntimeRPC, PoolOwnedRpcMethod> &
+    Pick<RuntimeRPC, 'queryCoverage'>;
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
@@ -381,6 +383,7 @@ export const createPool = async ({
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
     onRawCoverageResult?: (coverage: unknown) => void;
+    queryCoverage?: (query: unknown) => unknown;
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
     /** Records host-side pool slices in the caller-owned Perfetto trace. */
@@ -500,6 +503,7 @@ export const createPool = async ({
       buildId,
       onCoverageResult,
       onRawCoverageResult,
+      queryCoverage,
       onTraceEvents,
       traceSpan,
     }) => {
@@ -513,7 +517,10 @@ export const createPool = async ({
         workerKind,
       );
       const sink = createProjectSink(project);
-      const rpcMethods = sinkToRuntimeRpc(sink);
+      const rpcMethods = {
+        ...sinkToRuntimeRpc(sink),
+        queryCoverage: (query: unknown) => queryCoverage?.(query),
+      };
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       // Sequential dispatch gate: `entries` is already perf-sorted, but the
@@ -678,7 +685,10 @@ export const createPool = async ({
         workerKind,
       );
       const projectName = project.normalizedConfig.name;
-      const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
+      const rpcMethods = {
+        ...sinkToRuntimeRpc(createProjectSink(project)),
+        queryCoverage: () => undefined,
+      };
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(

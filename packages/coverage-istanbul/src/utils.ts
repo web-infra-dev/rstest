@@ -329,18 +329,20 @@ export function createFastCoverageMap(): CoverageMap {
     }
 
     const existingCoverage = coverageMap.data[getFileCoveragePath(coverage)];
+    const existing = existingCoverage && getFileCoverageData(existingCoverage);
 
     if (
-      existingCoverage &&
-      fastMergeFileCoverage(
-        getFileCoverageData(existingCoverage),
-        getFileCoverageData(coverage),
-      )
+      existing &&
+      fastMergeFileCoverage(existing, getFileCoverageData(coverage))
     ) {
       return;
     }
 
     addFileCoverage(coverage);
+    if (existing && existing.all !== true) {
+      // Native unions renumber counter keys, invalidating either input's hash.
+      delete existing.hash;
+    }
   };
 
   coverageMap.merge = (coverage: CoverageMap | CoverageMapData) => {

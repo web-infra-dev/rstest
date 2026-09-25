@@ -10,6 +10,7 @@ import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {
   createFastCoverageMap,
+  type IstanbulFileCoverageData,
   mapWithConcurrency,
   readInitialCoverage,
   registerSourceMapURL,
@@ -17,6 +18,15 @@ import {
 } from './utils';
 
 const UNTESTED_FILES_CONCURRENCY = 4;
+
+/** @internal */
+type RawCoverage = {
+  full: IstanbulFileCoverageData[];
+  packed: Omit<
+    IstanbulFileCoverageData,
+    'statementMap' | 'fnMap' | 'branchMap'
+  >[];
+};
 
 type CoverageReporterConstructor = new (
   options: Record<string, unknown>,
@@ -83,6 +93,81 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   createCoverageMap(): CoverageMap {
     return createFastCoverageMap();
+  }
+
+  async collectRaw(
+    options?: Parameters<RstestCoverageProvider['collect']>[0],
+  ): Promise<RawCoverage | null> {
+    if (!options?.queryCoverage) return null;
+    const files: IstanbulFileCoverageData[] = Object.values(
+      this.coverageGlobal.__coverage__ ?? {},
+    );
+    let known = new Set<string>();
+    try {
+      const response = await options.queryCoverage(
+        Object.fromEntries(files.map((file) => [file.path, file.hash])),
+      );
+      if (Array.isArray(response)) {
+        known = new Set(response);
+      }
+    } catch {
+      // The query is optional; a failed query keeps every file full.
+    }
+
+    const payload: RawCoverage = { full: [], packed: [] };
+    for (const file of files) {
+      if (!file.hash || !known.has(file.path)) {
+        payload.full.push(file);
+        continue;
+      }
+      const {
+        statementMap: _statementMap,
+        fnMap: _fnMap,
+        branchMap: _branchMap,
+        ...packed
+      } = file;
+      payload.packed.push(packed);
+    }
+    return payload;
+  }
+
+  queryCoverage(map: CoverageMap, query: unknown): string[] {
+    // Core transports opaque data between instances of this same provider.
+    const request = query as Record<string, string | undefined>;
+    return Object.entries(request).flatMap(([path, hash]) => {
+      const file: IstanbulFileCoverageData | undefined = map.data[path]
+        ? map.fileCoverageFor(path).data
+        : undefined;
+      return file?.hash === hash ? [path] : [];
+    });
+  }
+
+  mergeRawCoverage(map: CoverageMap, raw: unknown): void {
+    // Core transports opaque data between instances of this same provider.
+    const payload = raw as RawCoverage;
+    // Queries reserve nothing: up to maxWorkers first-wave results can be full.
+    const incoming = Object.fromEntries(
+      payload.full.map((file) => [file.path, file]),
+    );
+    for (const packed of payload.packed) {
+      const existing: IstanbulFileCoverageData | undefined = map.data[
+        packed.path
+      ]
+        ? map.fileCoverageFor(packed.path).data
+        : undefined;
+      if (!existing || existing.hash !== packed.hash) {
+        throw new Error(
+          `Istanbul coverage invariant violated for ${packed.path}: no host entry with matching hash`,
+        );
+      }
+      incoming[packed.path] = {
+        ...packed,
+        statementMap: existing.statementMap,
+        fnMap: existing.fnMap,
+        branchMap: existing.branchMap,
+      };
+    }
+    map.merge(incoming);
   }
 
   collect(_options?: {
