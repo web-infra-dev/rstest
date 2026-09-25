@@ -204,6 +204,8 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
                     ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
                     : RSTEST_REQUIRE_RESOLVE_HOOK,
                 },
+                updateImportMockAPI: true,
+                updateRequireMockAPI: true,
               };
 
               config.plugins.push(

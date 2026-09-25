@@ -506,6 +506,74 @@ __webpack_require__.rstest_dynamic_require = (id, request) => {
   const mockedId = __webpack_require__.rstest_mocked_ids_by_request[request];
   return __webpack_require__(mockedId !== undefined ? mockedId : id);
 };
+
+const resolveRstestMockRequest = (request, origin) => {
+  if (
+    !origin ||
+    request[0] !== '.' ||
+    (request[1] !== '/' && request[1] !== '\\')
+  ) {
+    return request;
+  }
+
+  const originParts = origin.replaceAll('\\', '/').split('/');
+  originParts.pop();
+  for (const part of request.replaceAll('\\', '/').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') originParts.pop();
+    else originParts.push(part);
+  }
+  return originParts.join('/') || '/';
+};
+
+const findRstestMockedId = (request, origin) => {
+  const resolvedRequest = resolveRstestMockRequest(request, origin);
+  return (
+    __webpack_require__.rstest_mocked_ids_by_request[request] ??
+    __webpack_require__.rstest_mocked_ids_by_request[resolvedRequest] ??
+    __webpack_require__.rstest_mocked_ids_by_request[
+      `${origin ?? ''}\0${request}`
+    ]
+  );
+};
+
+const getRstestMockTargetId = (id, request, origin) => {
+  const mockedId = findRstestMockedId(request, origin);
+  const targetId = mockedId !== undefined ? mockedId : id;
+  if (targetId === undefined || targetId === null) {
+    const originSuffix = origin ? ` from ${JSON.stringify(origin)}` : '';
+    throw new Error(
+      `[Rstest] Cannot find module ${JSON.stringify(request)}${originSuffix}`,
+    );
+  }
+  return targetId;
+};
+
+// `rs.importMock(request)` uses the same request alias as `rs.mock`. The
+// generated dynamic import may have a different module id (or no bundled
+// target at all), so prefer the registered mock whenever one exists.
+__webpack_require__.rstest_import_mock = (id, request, origin) => {
+  if (origin === undefined) {
+    origin = request;
+    request = id;
+    id = undefined;
+  }
+  return Promise.resolve().then(() => {
+    const targetId = getRstestMockTargetId(id, request, origin);
+    return __webpack_require__(targetId);
+  });
+};
+
+// `rs.requireMock(request)` is the synchronous counterpart of importMock.
+__webpack_require__.rstest_require_mock = (id, request, origin) => {
+  if (origin === undefined) {
+    origin = request;
+    request = id;
+    id = undefined;
+  }
+  const targetId = getRstestMockTargetId(id, request, origin);
+  return __webpack_require__(targetId);
+};
 //#endregion
 
 //#region rs.reset_modules
