@@ -182,10 +182,17 @@ const formatTemplate = (template: string, values: any[]): string => {
       case '%c':
         return String(value);
       case '%d':
+        if (typeof value === 'bigint') {
+          return `${value}n`;
+        }
+        return Number(value).toString();
       case '%i':
+        if (typeof value === 'bigint') {
+          return `${value}n`;
+        }
         return Number.parseInt(String(value), 10).toString();
       case '%f':
-        return Number(value).toString();
+        return Number.parseFloat(String(value)).toString();
       case '%j':
         try {
           return JSON.stringify(value);
