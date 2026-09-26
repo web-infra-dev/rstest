@@ -44,6 +44,8 @@ it('test formatName', () => {
     'test 1 + 2 -> 3',
   );
 
+  expect(formatName('%d and %i', [1.5, 1.5], 0)).toBe('1.5 and 1');
+
   expect(formatName('test $a', { a: 1 }, 0)).toBe('test 1');
 
   expect(formatName('test $a.b', { a: { b: 1 } }, 0)).toBe('test 1');
