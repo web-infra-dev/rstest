@@ -2654,6 +2654,121 @@ describe('prepareRsbuild', () => {
     ]);
   });
 
+  it.each(['jsdom', 'happy-dom', 'node'] as const)(
+    'should omit development for ESM and CommonJS without changing other resolve options (%s)',
+    async (testEnvironment) => {
+      const browserConditions = testEnvironment === 'node' ? [] : ['browser'];
+      const normalizedConfig = withDefaultConfig({
+        root: rootPath,
+        testEnvironment,
+      });
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath,
+          normalizedConfig,
+          projects: [
+            {
+              name: 'default',
+              rootPath,
+              environmentName: 'default',
+              normalizedConfig,
+            },
+            {
+              name: 'without-development',
+              rootPath,
+              environmentName: 'without-development',
+              normalizedConfig: {
+                ...normalizedConfig,
+                tools: {
+                  rspack: {
+                    resolve: {
+                      byDependency: {
+                        esm: {
+                          conditionNames: [
+                            ...browserConditions,
+                            'import',
+                            'module',
+                            'webpack',
+                            'node',
+                          ],
+                        },
+                        commonjs: {
+                          conditionNames: [
+                            ...browserConditions,
+                            'require',
+                            'module',
+                            'webpack',
+                            'node',
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        } as unknown as InternalContext,
+        globTestSourceEntries: async () => ({}),
+        setupFileState: createSetupFileState(),
+      });
+
+      // inspectConfig() does not include Rspack's defaults or byDependency merging.
+      const compiler = await rsbuildInstance.createCompiler();
+      try {
+        const compilers =
+          'compilers' in compiler ? compiler.compilers : [compiler];
+        expect(compilers).toHaveLength(2);
+        const defaultResolve = compilers[0]!.options.resolve;
+        const configuredResolve = compilers[1]!.options.resolve;
+
+        expect(defaultResolve.conditionNames).toContain('development');
+        expect(defaultResolve.byDependency?.esm?.conditionNames).toEqual([
+          ...browserConditions,
+          'import',
+          'module',
+          '...',
+        ]);
+        expect(defaultResolve.byDependency?.commonjs?.conditionNames).toEqual([
+          ...browserConditions,
+          'require',
+          'module',
+          '...',
+        ]);
+        expect(configuredResolve).toEqual({
+          ...defaultResolve,
+          byDependency: {
+            ...defaultResolve.byDependency,
+            esm: {
+              ...defaultResolve.byDependency?.esm,
+              conditionNames: [
+                ...browserConditions,
+                'import',
+                'module',
+                'webpack',
+                'node',
+              ],
+            },
+            commonjs: {
+              ...defaultResolve.byDependency?.commonjs,
+              conditionNames: [
+                ...browserConditions,
+                'require',
+                'module',
+                'webpack',
+                'node',
+              ],
+            },
+          },
+        });
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          compiler.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+    },
+  );
+
   it('should append user resolve.conditionNames in jsdom environment', async () => {
     const rsbuildInstance = await prepareRsbuild({
       context: {
