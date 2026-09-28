@@ -362,7 +362,7 @@ describe('prepareRsbuild', () => {
 
       const shardedConfig: ResolvedRstestConfig = {
         root: tempRoot,
-        shard: { index: 1, count: 2 },
+        shard: { index: 2, count: 2 },
       };
       const context = new Rstest(
         {
@@ -427,7 +427,7 @@ describe('prepareRsbuild', () => {
 
       const shardedConfig: ResolvedRstestConfig = {
         root: tempRoot,
-        shard: { index: 1, count: 2 },
+        shard: { index: 2, count: 2 },
       };
       const context = new Rstest(
         {

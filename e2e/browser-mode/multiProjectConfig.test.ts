@@ -349,7 +349,7 @@ describe.sequential('browser mode - multi project config isolation', () => {
       'modify-rstest-mixed',
       {
         args: [
-          '--shard=1/2',
+          '--shard=2/2',
           '--project',
           'project-hooked-a',
           '--project',
@@ -364,12 +364,39 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*1 passed/);
   });
 
+  it('balances mixed-mode shards after browser project hooks run', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--shard=2/4',
+          '--project',
+          'node-smoke',
+          '--project',
+          'project-hooked-a',
+          '--project',
+          'project-hooked-b',
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'project-plain-browser',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('Running shard 2 of 4 (1 of 5 test files)');
+    expect(cli.stdout).toContain('hooked-b.test.ts');
+    expect(cli.stdout).not.toContain('hooked-browser.test.ts');
+    expect(cli.stdout).toMatch(/Test Files\s+1 passed/);
+  });
+
   it('keeps mixed node and browser shard planning in sync after browser hooks run', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'modify-rstest-mixed',
       {
         args: [
-          '--shard=2/2',
+          '--shard=1/2',
           '--project',
           'project-hooked-browser',
           '--project',
@@ -432,7 +459,7 @@ describe.sequential('browser mode - multi project config isolation', () => {
       {
         command: 'list',
         args: [
-          '--shard=2/2',
+          '--shard=1/2',
           '--project',
           'project-hooked-browser',
           '--project',
