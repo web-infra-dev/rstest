@@ -4,7 +4,9 @@ import nodeModule from 'node:module';
 // enable on-disk code caching and share its directory with child workers
 // requires Nodejs >= 22.8.0
 const { enableCompileCache, constants } = nodeModule;
-if (enableCompileCache) {
+const isCI = Boolean(process.env.CI) && process.env.CI !== 'false';
+// Skip CI, where the cache is unlikely to be reused.
+if (enableCompileCache && !isCI) {
   try {
     const { directory, status } = enableCompileCache();
     // ALREADY_ENABLED returns the active version-specific cache directory.
