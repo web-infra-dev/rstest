@@ -133,7 +133,9 @@ npx rstest run --shard 1/3
 
 This is especially useful in CI/CD, where you split the suite across jobs to reduce overall test time, then merge the per-shard reports with [`rstest merge-reports`](#rstest-merge-reports).
 
-Test files are sorted by their path so sharding stays consistent across runs, and sharding happens during the test-file scanning phase, before the build, to optimize performance. Make sure the `count` and `index` values are valid (`1 <= index <= count`).
+Test files are sorted by the SHA-1 hash of their path relative to the root of the Rstest run, with path separators normalized to `/`. This spreads files from the same directory across shards while keeping the result consistent across runs and checkout locations. Sharding happens during the test-file scanning phase, before the build, to optimize performance. Make sure the `count` and `index` values are valid (`1 <= index <= count`).
+
+Files are distributed evenly across shards, with any remainder assigned one file at a time to the first shards. For example, 10 files split into 3 shards produce 4, 3, and 3 files, respectively.
 
 ## rstest watch
 

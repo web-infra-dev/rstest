@@ -14,94 +14,96 @@ const shardFiles = [
   'packages/node/test/index.test.ts',
   'packages/node/test/mockFs.test.ts',
 ];
+const shardCases = [
+  {
+    index: 1,
+    count: 2,
+    files: [
+      'packages/node/test/index.test.ts',
+      'packages/client/test/App.test.tsx',
+      'packages/client/test/node.test.ts',
+    ],
+  },
+  {
+    index: 2,
+    count: 2,
+    files: [
+      'packages/client-vue/test/index.test.ts',
+      'packages/node/test/mockFs.test.ts',
+      'packages/client/test/index.test.ts',
+    ],
+  },
+  { index: 3, count: 4, files: ['packages/node/test/mockFs.test.ts'] },
+  { index: 4, count: 4, files: ['packages/client/test/index.test.ts'] },
+];
 
 describe('test projects sharding', () => {
-  it('should run the first shard of 2', async () => {
-    const { cli, expectExecSuccess, expectLog } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '--shard', '1/2', '--globals', ...shardFiles],
-      options: {
-        nodeOptions: {
-          cwd: fixturesPath,
-        },
-      },
-    });
+  it.each(shardCases)(
+    'runs hash-sorted shard $index of $count',
+    async ({ index, count, files }) => {
+      const { cli, expectExecSuccess, expectLog } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--shard',
+          `${index}/${count}`,
+          '--globals',
+          ...shardFiles,
+        ],
+        options: { nodeOptions: { cwd: fixturesPath } },
+      });
 
-    await expectExecSuccess();
-    const logs = cli.stdout.split('\n').filter(Boolean);
+      await expectExecSuccess();
+      expectLog(
+        `Running shard ${index} of ${count} (${files.length} of 6 test files)`,
+      );
+      for (const testPath of shardFiles) {
+        expect(cli.stdout.includes(testPath)).toBe(files.includes(testPath));
+      }
+      expect(cli.stdout).toMatch(
+        new RegExp(`Test Files\\s+${files.length} passed`),
+      );
+    },
+  );
 
-    // Check log message
-    expectLog('Running shard 1 of 2 (3 of 6 test files)', logs);
+  it.each(shardCases)(
+    'lists hash-sorted shard $index of $count',
+    async ({ index, count, files }) => {
+      const { cli, expectExecSuccess, expectLog } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'list',
+          '--filesOnly',
+          '--shard',
+          `${index}/${count}`,
+          ...shardFiles,
+        ],
+        options: { nodeOptions: { cwd: fixturesPath } },
+      });
 
-    // Check that only files from the first shard are run
-    expectLog('packages/client/test/App.test.tsx', logs);
-    expectLog('packages/client/test/index.test.ts', logs);
-    expectLog('packages/client-vue/test/index.test.ts', logs);
-
-    // Check that files from the second shard are NOT run
-    expect(
-      logs.some((log) => log.includes('packages/client/test/node.test.ts')),
-    ).toBeFalsy();
-    expect(
-      logs.some((log) => log.includes('packages/node/test/index.test.ts')),
-    ).toBeFalsy();
-    expect(
-      logs.some((log) => log.includes('packages/node/test/mockFs.test.ts')),
-    ).toBeFalsy();
-  });
-
-  it('should run the second shard of 2', async () => {
-    const { cli, expectExecSuccess, expectLog } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '--shard', '2/2', '--globals', ...shardFiles],
-      options: {
-        nodeOptions: {
-          cwd: fixturesPath,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    // Check log message
-    expectLog('Running shard 2 of 2 (3 of 6 test files)', logs);
-
-    // Check that files from the first shard are NOT run
-    expect(
-      logs.some((log) => log.includes('packages/client/test/App.test.tsx')),
-    ).toBeFalsy();
-    expect(
-      logs.some((log) => log.includes('packages/client/test/index.test.ts')),
-    ).toBeFalsy();
-    expect(
-      logs.some((log) =>
-        log.includes('packages/client-vue/test/index.test.ts'),
-      ),
-    ).toBeFalsy();
-
-    // Check that only files from the second shard are run
-    expectLog('packages/client/test/node.test.ts', logs);
-    expectLog('packages/node/test/index.test.ts', logs);
-    expectLog('packages/node/test/mockFs.test.ts', logs);
-  });
+      await expectExecSuccess();
+      expectLog(
+        `Running shard ${index} of ${count} (${files.length} of 6 test files)`,
+      );
+      expect(
+        cli.stdout
+          .split('\n')
+          .filter((line) => /\.test\.tsx?$/.test(line))
+          .sort(),
+      ).toEqual([...files].sort());
+    },
+  );
 
   it('should run failed on an empty shard', async () => {
     const { expectExecFailed, expectLog, expectStderrLog } = await runRstestCli(
       {
         command: 'rstest',
-        args: ['run', '--shard', '7/7', '--globals', ...shardFiles], // Total 6 test files, so 7th shard is empty
-        options: {
-          nodeOptions: {
-            cwd: fixturesPath,
-          },
-        },
+        args: ['run', '--shard', '7/7', '--globals', ...shardFiles],
+        options: { nodeOptions: { cwd: fixturesPath } },
       },
     );
 
     await expectExecFailed();
-
-    // Check log message
     expectLog('Running shard 7 of 7 (0 of 6 test files)');
     expectStderrLog('No test files found, exiting with code 1.');
   });

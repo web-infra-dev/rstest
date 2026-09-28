@@ -358,7 +358,11 @@ export const refreshEnvironmentPartitionEntries = async ({
   }
 
   const entriesToRun = context.normalizedConfig.shard
-    ? getShardedFiles(refreshedEntries, context.normalizedConfig.shard)
+    ? getShardedFiles(
+        refreshedEntries,
+        context.normalizedConfig.shard,
+        context.rootPath,
+      )
     : refreshedEntries;
 
   const refreshedEntriesCache = createEmptyEntriesCache(
