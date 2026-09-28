@@ -145,6 +145,42 @@ export default defineConfig({
 
 你可以保留这些注释，也可以改名为 `@rstest-environment` / `@rstest-environment-options`。选项值必须是单行 JSON 对象。支持的环境包括 `node`、`jsdom` 和 `happy-dom`。
 
+### 依赖导出条件 \{#dependency-export-conditions}
+
+默认情况下，Rstest 在打包依赖时会启用 `development` 导出条件，而 Jest 不会。因此，迁移后依赖可能会根据 `package.json` 的 `exports` 加载不同的入口，即使两个测试框架的 `NODE_ENV` 都默认为 `'test'`。
+
+例如，[Emotion](https://github.com/emotion-js/emotion) 的开发构建会关闭 speedy 样式插入，以支持样式调试和 source map。这会创建更多 `<style>` 元素，可能使样式密集的 jsdom 测试变慢。
+
+如果这一差异导致 jsdom 测试出现回归，可以通过 [tools.rspack](/config/build/tools#toolsrspack) 设置 [resolve.byDependency](https://rspack.rs/zh/config/resolve#resolvebydependency)，为 ESM 和 CommonJS 依赖排除 `development`：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  tools: {
+    rspack: {
+      resolve: {
+        byDependency: {
+          esm: {
+            conditionNames: ['browser', 'import', 'module', 'webpack', 'node'],
+          },
+          commonjs: {
+            conditionNames: ['browser', 'require', 'module', 'webpack', 'node'],
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+`browser` 条件用于 `jsdom`、`happy-dom` 等 DOM 环境。如果 `node` 环境遇到同类问题，可以使用 `testEnvironment: 'node'`，并从两个列表中移除 `browser`。
+
+这两个列表保留了 `import` 和 `require` 的区别，其他依赖类型（如 CSS import）的配置保持不变。不要添加 `'...'`，否则会重新引入包含 `development` 的默认条件。如果项目使用了自定义导出条件，请将其加入对应列表。
+
+这段配置用于解决 `development` 导出的差异，并不完全复现 Jest 的模块解析行为。它保留了 Rspack 的 `module` 和 `webpack` 条件，不会启用 `production` 条件，也不会改变 `NODE_ENV`。依赖可能因此失去仅在开发导出中提供的检查或警告，请按需使用，无需为每个迁移项目都添加此配置。
+
 ### 代码转换
 
 Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。

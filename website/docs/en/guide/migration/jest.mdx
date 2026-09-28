@@ -145,6 +145,42 @@ If your Jest tests use file-level environment comments, Rstest recognizes Jest e
 
 You can keep these comments as-is or rename them to `@rstest-environment` / `@rstest-environment-options`. The options value must be a single-line JSON object. Supported environments are `node`, `jsdom`, and `happy-dom`.
 
+### Dependency export conditions
+
+By default, Rstest enables the `development` export condition when bundling dependencies, while Jest does not. After migrating, a dependency may therefore load a different entry from its `package.json` `exports`, even though both runners default `NODE_ENV` to `'test'`.
+
+For example, [Emotion](https://github.com/emotion-js/emotion) disables its speedy style insertion in development builds to support style debugging and source maps. This creates more `<style>` elements and can slow down style-heavy jsdom tests.
+
+If this difference causes a regression in your jsdom tests, use [resolve.byDependency](https://rspack.rs/config/resolve#resolvebydependency) through [tools.rspack](/config/build/tools#toolsrspack) to omit `development` for ESM and CommonJS dependencies:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  tools: {
+    rspack: {
+      resolve: {
+        byDependency: {
+          esm: {
+            conditionNames: ['browser', 'import', 'module', 'webpack', 'node'],
+          },
+          commonjs: {
+            conditionNames: ['browser', 'require', 'module', 'webpack', 'node'],
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+The `browser` condition is needed for DOM environments such as `jsdom` and `happy-dom`. For the same issue in the `node` environment, use `testEnvironment: 'node'` and remove `browser` from both lists.
+
+These lists preserve the distinction between `import` and `require` and leave other dependency types, such as CSS imports, unchanged. Do not add `'...'`: it would restore the default conditions, including `development`. If your project uses custom export conditions, add them to the corresponding lists.
+
+This configuration addresses the `development` export difference; it does not reproduce all of Jest's resolution behavior. It keeps Rspack's `module` and `webpack` conditions, does not enable the `production` condition, and leaves `NODE_ENV` unchanged. Dependencies may lose checks or warnings provided only by their development exports, so apply it when needed rather than to every migrated project.
+
 ### Code transformation
 
 Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
