@@ -1,11 +1,14 @@
 import type { TestFileResult } from '../types';
-import { PoolRunner } from './poolRunner';
+import { PoolRunner, WorkerOomKillError } from './poolRunner';
 import type {
   CollectTaskResult,
   TestEnvironmentModuleFallback,
 } from './protocol';
 import type { PoolOptions, PoolTask } from './types';
 import { createPoolWorker } from './workers';
+
+/** Attempts per file when fork workers are killed by SIGKILL; the last runs alone. */
+export const MAX_OOM_ATTEMPTS = 3;
 
 /**
  * Deliberately minimal scheduler — matches the prior tinypool behavior:
@@ -27,7 +30,16 @@ export class Pool {
   private readonly stoppingRunners = new Set<PoolRunner>();
   private readonly stoppingPromises = new Set<Promise<void>>();
   private readonly workerStopErrors: Error[] = [];
-  private readonly slotWaiters: Array<() => void> = [];
+  private readonly slotWaiters: Array<{
+    task: PoolTask;
+    exclusive: boolean;
+    resolve: (runner: PoolRunner) => void;
+    reject: (error: Error) => void;
+  }> = [];
+  private ceiling: number;
+  private epoch = 0;
+  private successes = 0;
+  private exclusiveRunner: PoolRunner | undefined;
   /**
    * Set of currently-assigned worker ids. Mirrors Jest's `JEST_WORKER_ID`
    * and rstest 0.9.x's tinypool-backed semantics: ids are bounded by
@@ -47,6 +59,7 @@ export class Pool {
 
   constructor(options: PoolOptions) {
     this.options = options;
+    this.ceiling = options.maxWorkers;
   }
 
   private readonly handleTestEnvironmentFallback = (
@@ -107,31 +120,91 @@ export class Pool {
       throw new Error('[rstest-pool]: pool is closed');
     }
 
-    const runner = await this.acquireRunner(task);
-    const heapBaseline = this.options.memoryGate?.recordDispatch();
-    try {
-      if (op === 'run') {
-        return await runner.runTest(task);
+    let pendingRunner = this.acquireRunner(task, 1);
+    for (let attempt = 1; ; attempt++) {
+      let runner: PoolRunner | undefined;
+      let started = false;
+      let heapBaseline: number | undefined;
+      try {
+        runner = await pendingRunner;
+        await runner.start();
+        started = true;
+        heapBaseline = this.options.memoryGate?.recordDispatch();
+        let assets = await task.loadAssets?.();
+        const pendingResult = runner[op === 'run' ? 'runTest' : 'collectTests'](
+          {
+            ...task,
+            options: { ...task.options, assets: assets ?? task.options.assets },
+          },
+        );
+        // IPC has taken ownership; the pending attempt must not retain bytes.
+        assets = undefined;
+        const result = await pendingResult;
+        if (++this.successes >= this.ceiling) {
+          this.ceiling = Math.min(this.options.maxWorkers, this.ceiling + 1);
+          this.successes = 0;
+        }
+        return result;
+      } catch (error) {
+        if (!(error instanceof WorkerOomKillError) || this.isClosing)
+          throw error;
+        if (attempt === MAX_OOM_ATTEMPTS) {
+          throw new Error(
+            `Worker killed by SIGKILL even when running alone after ${MAX_OOM_ATTEMPTS} attempts (likely out of memory)`,
+          );
+        }
+        task.onRetry?.(attempt, this.ceiling);
+        // Reserve the retry's place before releasing the killed runner's slot.
+        pendingRunner = this.acquireRunner(task, attempt + 1);
+      } finally {
+        this.options.memoryGate?.recordResolve(heapBaseline);
+        if (runner) this.releaseRunner(runner, !started);
       }
-      return await runner.collectTests(task);
-    } finally {
-      this.options.memoryGate?.recordResolve(heapBaseline);
-      this.releaseRunner(runner);
     }
   }
 
   /**
-   * Ordering invariant: a caller's slot is claimed synchronously before the
-   * first `await` in this method — either by reusing an idle runner, or by
-   * pushing onto `slotWaiters` inside the Promise executor below. The
+   * Ordering invariant: a caller's slot is claimed synchronously — the waiter
+   * is queued and `wakeWaiters` runs inside the Promise executor below. The
    * sequential dispatch gate in `pool/index.ts` relies on this to preserve
-   * perf-sorted enqueue order; do not introduce an `await` before the slot is
-   * claimed (idle-runner reuse or `slotWaiters` push) without revisiting it.
+   * perf-sorted enqueue order; do not introduce an `await` before the waiter
+   * is queued without revisiting it.
    */
-  private async acquireRunner(task: PoolTask): Promise<PoolRunner> {
-    const { environmentKey } = task.options;
+  private acquireRunner(task: PoolTask, attempt: number): Promise<PoolRunner> {
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        task,
+        exclusive: attempt === MAX_OOM_ATTEMPTS,
+        resolve,
+        reject,
+      };
+      if (attempt > 1) this.slotWaiters.unshift(waiter);
+      else this.slotWaiters.push(waiter);
+      this.wakeWaiters();
+    });
+  }
 
-    while (true) {
+  private readonly wakeWaiters = (): boolean => {
+    while (this.slotWaiters.length > 0 && !this.isClosing && !this.isClosed) {
+      const waiter = this.slotWaiters[0]!;
+      const { task, exclusive } = waiter;
+      const { environmentKey } = task.options;
+      const fork = task.worker === 'forks' || task.worker === 'vmForks';
+      // Idle workers keep their heaps; the exclusive attempt waits for them to
+      // exit like any stopping worker.
+      if (exclusive) {
+        for (const idle of this.idleRunners.splice(0)) {
+          this.disposeRunnerInBackground(idle);
+        }
+      }
+      if (
+        this.exclusiveRunner ||
+        (exclusive &&
+          this.activeRunners.size + this.stoppingRunners.size > 0) ||
+        this.activeRunners.size >= this.ceiling
+      )
+        return true;
+
       // Prefer reuse of an idle runner (only meaningful when isolate=false,
       // since isolate=true never returns runners to the idle pool). Most
       // recently returned first (LIFO) — hottest kept module cache — and
@@ -144,7 +217,10 @@ export class Pool {
         const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
         if (reuse.isUsable()) {
           this.activeRunners.add(reuse);
-          return reuse;
+          if (exclusive) this.exclusiveRunner = reuse;
+          this.slotWaiters.shift();
+          waiter.resolve(reuse);
+          continue;
         }
         // Stale — dispose in the background so its slot is reclaimed only
         // after the child has actually exited.
@@ -161,52 +237,50 @@ export class Pool {
         if (this.idleRunners.length > 0) {
           this.disposeRunnerInBackground(this.idleRunners.shift()!);
         }
-        await new Promise<void>((resolve) => {
-          this.slotWaiters.push(resolve);
-        });
-        if (this.isClosing || this.isClosed) {
-          throw new Error('[rstest-pool]: pool is closed');
-        }
-        continue;
+        return true;
       }
 
       const gate = this.options.memoryGate;
       if (gate && !gate.canSpawnNewWorker(inFlight)) {
-        gate.attachPoll(this.tryWakeGateWaiter);
-        await new Promise<void>((resolve) => {
-          this.slotWaiters.push(resolve);
-        });
-        if (this.isClosing || this.isClosed) {
-          throw new Error('[rstest-pool]: pool is closed');
-        }
-        continue;
+        gate.attachPoll(this.wakeWaiters);
+        return true;
       }
 
-      // Spawn a fresh runner. We claim the slot by inserting the runner into
-      // activeRunners up-front; on start failure we drop it and wake a waiter.
+      // Reserve capacity before startup; dispatch owns release even when the
+      // child dies before its start acknowledgement.
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
+      const spawnEpoch = this.epoch;
       const runner = new PoolRunner(worker, {
         workerId,
         environmentKey,
         memoryLimit: this.options.memoryLimit,
         memoryMetric: task.worker === 'forks' ? 'rss' : 'heapUsed',
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
+        onOomKill: fork
+          ? () => {
+              if (!this.isClosing && spawnEpoch === this.epoch) {
+                const liveCount = [...this.activeRunners].filter(
+                  (active) => active === runner || active.worker.hasLiveChild(),
+                ).length;
+                this.ceiling = Math.max(1, Math.floor(liveCount / 2));
+                this.successes = 0;
+                this.epoch++;
+              }
+            }
+          : undefined,
       });
       this.activeRunners.add(runner);
-      try {
-        await runner.start();
-      } catch (err) {
-        this.activeRunners.delete(runner);
-        // Force-dispose the failed runner; the slot is freed only when the
-        // child is actually gone, so capacity accounting stays honest.
-        this.disposeRunnerInBackground(runner, { force: true });
-        throw err;
-      }
-      return runner;
+      if (exclusive) this.exclusiveRunner = runner;
+      this.slotWaiters.shift();
+      // Queue start before close can queue stop. Dispatch observes the same
+      // promise and retains the runner on startup failure for ordered retry.
+      void runner.start().catch(() => undefined);
+      waiter.resolve(runner);
     }
-  }
+    return false;
+  };
 
   private get inFlightCount(): number {
     return (
@@ -215,21 +289,6 @@ export class Pool {
       this.stoppingRunners.size
     );
   }
-
-  /**
-   * Returned to MemoryGate's wake-loop. Returning `false` tells the gate
-   * to stop polling. Only shifts a waiter when the gate would actually let
-   * one through — preserves FIFO and avoids park/re-park churn.
-   */
-  private readonly tryWakeGateWaiter = (): boolean => {
-    if (this.slotWaiters.length === 0 || this.isClosing || this.isClosed) {
-      return false;
-    }
-    if (this.options.memoryGate?.canSpawnNewWorker(this.inFlightCount)) {
-      this.slotWaiters.shift()?.();
-    }
-    return true;
-  };
 
   /**
    * Allocates the lowest free id in `[1, maxWorkers]`. Capacity is
@@ -251,21 +310,23 @@ export class Pool {
     this.slotInUse.delete(id);
   }
 
-  private releaseRunner(runner: PoolRunner): void {
+  private releaseRunner(runner: PoolRunner, force = false): void {
     this.activeRunners.delete(runner);
+    if (this.exclusiveRunner === runner) this.exclusiveRunner = undefined;
 
     // `isolate: true`, closing, or unusable — never reuse.
     if (
       this.options.isolate !== false ||
       this.isClosing ||
       this.isClosed ||
+      force ||
       !runner.isUsable() ||
       runner.shouldRecycle()
     ) {
       // Background dispose. The slot stays accounted for in `stoppingRunners`
       // until the child actually exits, so `isolate: true` cannot transiently
       // exceed `maxWorkers` and `close()` can drain in-flight stops.
-      this.disposeRunnerInBackground(runner);
+      this.disposeRunnerInBackground(runner, { force });
       return;
     }
 
@@ -295,7 +356,7 @@ export class Pool {
       this.idleRunners.push(runner);
       if (hasWaiter) {
         // Idle slot is immediately consumable — wake one waiter now.
-        this.slotWaiters.shift()?.();
+        this.wakeWaiters();
       }
       return;
     }
@@ -327,20 +388,22 @@ export class Pool {
         // Slot is now truly free — wake one waiter (unless we're closing,
         // in which case waiters were already drained).
         if (!this.isClosed) {
-          this.slotWaiters.shift()?.();
+          this.wakeWaiters();
         }
       });
     this.stoppingPromises.add(stopPromise);
   }
 
   /**
-   * Terminal, one-way latch: closing never resets. Wake parked acquireRunner
-   * callers so they re-check isClosing and throw instead of waiting through teardown.
+   * Terminal, one-way latch: closing never resets. Parked acquireRunner
+   * callers are rejected instead of waiting through teardown.
    */
   interrupt(): void {
     this.isClosing = true;
     while (this.slotWaiters.length > 0) {
-      this.slotWaiters.shift()?.();
+      this.slotWaiters
+        .shift()!
+        .reject(new Error('[rstest-pool]: pool is closed'));
     }
   }
 

@@ -16,6 +16,10 @@ export type PoolTask = {
   rpcMethods: RuntimeRPC;
   /** Host-only callback evaluated after slot acquisition, just before sending. */
   getKnownCoverageStructures?: () => KnownCoverageStructure[] | undefined;
+  onRetry?: (attempt: number, ceiling: number) => void;
+  loadAssets?: () => Promise<
+    NonNullable<RunWorkerOptions['options']['assets']>
+  >;
 };
 
 export type PoolOptions = {

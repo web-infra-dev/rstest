@@ -144,6 +144,10 @@ export class BlobReporter implements Reporter {
     });
   }
 
+  discardAttempt(project: string, testPath: string): void {
+    this.files.delete(blobFileKey(project, testPath));
+  }
+
   onUserConsoleLog(log: UserConsoleLog): void {
     this.fileData(log.project, log.testPath).events.push({ h: 'log', log });
   }

@@ -3,6 +3,7 @@ import {
   RUNNER_EVENT_SINK_MATCHES_RPC,
   sinkToRuntimeRpc,
 } from '../../src/core/execution/runnerEventSink';
+import { TestStateManager } from '../../src/core/execution/stateManager';
 import type {
   InternalContext,
   InternalProjectContext,
@@ -68,6 +69,44 @@ const log = (content: string): UserConsoleLog => ({
 });
 
 describe('createRunnerEventSink', () => {
+  it('clears discarded failures and drops reporter events still waiting for run start', async () => {
+    const { context, projectConfig } = makeContext();
+    context.stateManager = new TestStateManager();
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    context.openReporterRun = () => opened;
+    const onTestCaseResult = rs.fn();
+    context.reporters.push({ onTestCaseResult });
+    const sink = createRunnerEventSink(context, projectConfig);
+    const first = sinkToRuntimeRpc(sink);
+    const second = sinkToRuntimeRpc(sink);
+    const failure = {
+      testId: 'case',
+      testPath: '/a.test.ts',
+      project: 'test',
+      name: 'case',
+      status: 'fail' as const,
+      errors: [],
+    };
+    const delivered = first.onTestCaseResult(failure);
+    const success = {
+      ...failure,
+      testPath: '/b.test.ts',
+      status: 'pass' as const,
+    };
+    const otherDelivered = second.onTestCaseResult(success);
+    expect(await first.getCountOfFailedTests()).toBe(1);
+    expect(await second.getCountOfFailedTests()).toBe(1);
+    sink.discardAttempt('/a.test.ts');
+    expect(await first.getCountOfFailedTests()).toBe(0);
+    expect(await second.getCountOfFailedTests()).toBe(0);
+    open();
+    await Promise.all([delivered, otherDelivered]);
+    expect(onTestCaseResult).toHaveBeenCalledExactlyOnceWith(success);
+  });
+
   it('exposes the compile-time drift guard against RuntimeRPC', () => {
     expect(RUNNER_EVENT_SINK_MATCHES_RPC).toBe(true);
   });
