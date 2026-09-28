@@ -19,13 +19,13 @@ import {
 
 const UNTESTED_FILES_CONCURRENCY = 4;
 
+type StructureKey = 'statementMap' | 'fnMap' | 'branchMap';
+type Structure = Pick<IstanbulFileCoverageData, StructureKey>;
+
 /** @internal */
 type RawCoverage = {
   full: IstanbulFileCoverageData[];
-  packed: Omit<
-    IstanbulFileCoverageData,
-    'statementMap' | 'fnMap' | 'branchMap'
-  >[];
+  packed: (Omit<IstanbulFileCoverageData, StructureKey> & { hash: string })[];
 };
 
 type CoverageReporterConstructor = new (
@@ -42,6 +42,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private coverageMap: CoverageMap | null = null;
   private coverageGlobal: typeof globalThis = globalThis;
+  private structures = new WeakMap<CoverageMap, Map<string, Structure>>();
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
@@ -116,7 +117,8 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const payload: RawCoverage = { full: [], packed: [] };
     for (const file of files) {
-      if (!file.hash || !known.has(file.path)) {
+      const { hash } = file;
+      if (!hash || !known.has(file.path)) {
         payload.full.push(file);
         continue;
       }
@@ -126,7 +128,7 @@ export class CoverageProvider implements RstestCoverageProvider {
         branchMap: _branchMap,
         ...packed
       } = file;
-      payload.packed.push(packed);
+      payload.packed.push({ ...packed, hash });
     }
     return payload;
   }
@@ -134,37 +136,49 @@ export class CoverageProvider implements RstestCoverageProvider {
   queryCoverage(map: CoverageMap, query: unknown): string[] {
     // Core transports opaque data between instances of this same provider.
     const request = query as Record<string, string | undefined>;
+    const structures = this.structures.get(map);
     return Object.entries(request).flatMap(([path, hash]) => {
-      const file: IstanbulFileCoverageData | undefined = map.data[path]
-        ? map.fileCoverageFor(path).data
-        : undefined;
-      return file?.hash === hash ? [path] : [];
+      return hash && structures?.has(JSON.stringify([path, hash]))
+        ? [path]
+        : [];
     });
   }
 
   mergeRawCoverage(map: CoverageMap, raw: unknown): void {
     // Core transports opaque data between instances of this same provider.
     const payload = raw as RawCoverage;
-    // Queries reserve nothing: up to maxWorkers first-wave results can be full.
-    const incoming = Object.fromEntries(
-      payload.full.map((file) => [file.path, file]),
-    );
+    let structures = this.structures.get(map);
+    if (!structures) {
+      structures = new Map();
+      this.structures.set(map, structures);
+    }
+    const incoming: Record<string, IstanbulFileCoverageData> = {};
+    for (const file of payload.full) {
+      incoming[file.path] = file;
+      if (!file.hash) continue;
+      const key = JSON.stringify([file.path, file.hash]);
+      if (!structures.has(key)) {
+        // Native unions replace map containers; keep the original references.
+        structures.set(key, {
+          statementMap: file.statementMap,
+          fnMap: file.fnMap,
+          branchMap: file.branchMap,
+        });
+      }
+    }
     for (const packed of payload.packed) {
-      const existing: IstanbulFileCoverageData | undefined = map.data[
-        packed.path
-      ]
-        ? map.fileCoverageFor(packed.path).data
-        : undefined;
-      if (!existing || existing.hash !== packed.hash) {
+      // Workers only pack versions already acknowledged by this cycle's registry.
+      const structure = structures.get(
+        JSON.stringify([packed.path, packed.hash]),
+      );
+      if (!structure) {
         throw new Error(
-          `Istanbul coverage invariant violated for ${packed.path}: no host entry with matching hash`,
+          `Istanbul coverage invariant violated for ${packed.path}: structure not registered`,
         );
       }
       incoming[packed.path] = {
         ...packed,
-        statementMap: existing.statementMap,
-        fnMap: existing.fnMap,
-        branchMap: existing.branchMap,
+        ...structure,
       };
     }
     map.merge(incoming);

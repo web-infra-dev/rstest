@@ -76,24 +76,46 @@ describe('coverage-istanbul provider', () => {
     expect(raw).toEqual({ full: [file], packed: [] });
   });
 
-  it.each(['hash', 'missing'])(
-    'rejects a packed %s mismatch',
-    async (field) => {
-      const provider = new CoverageProvider(createOptions());
-      const file = createFileCoverage('/project/shared.js');
-      globalWithCoverage.__coverage__ = { [file.path]: file };
-      const map = provider.createCoverageMap();
-      map.merge({ [file.path]: structuredClone(file) });
-      const raw = (await provider.collectRaw({
-        queryCoverage: async () => [file.path],
-      }))!;
-      if (field === 'hash') raw.packed[0]!.hash = 'changed';
-      else map.filter(() => false);
-      expect(() => provider.mergeRawCoverage(map, raw)).toThrow(
-        'Istanbul coverage invariant violated',
-      );
-    },
-  );
+  it('folds packed coverage after another project unions the live entry', async () => {
+    const provider = new CoverageProvider(createOptions());
+    const map = provider.createCoverageMap();
+    const oracle = istanbulCoverage.createCoverageMap();
+    const path = '/project/shared.js';
+    const first = createFileCoverage(path);
+    const other = createFileCoverage(path);
+    other.hash = 'other';
+    other.statementMap[0] = {
+      start: { line: 2, column: 0 },
+      end: { line: 2, column: 10 },
+    };
+    other.s[0] = 7;
+    const later = createFileCoverage(path);
+    later.s[0] = 11;
+    later.f[0] = 13;
+    later.b[0] = [17, 19];
+    for (const file of [first, other, later]) {
+      oracle.merge({ [path]: structuredClone(file) });
+    }
+
+    provider.mergeRawCoverage(map, { full: [first], packed: [] });
+    globalWithCoverage.__coverage__ = { [path]: later };
+    const raw = await provider.collectRaw({
+      queryCoverage: async (query) => provider.queryCoverage(map, query),
+    });
+    expect(raw?.full).toEqual([]);
+    expect(raw?.packed).toHaveLength(1);
+    provider.mergeRawCoverage(map, { full: [other], packed: [] });
+    provider.mergeRawCoverage(map, raw);
+
+    // Native Istanbul retains a stale hash after union; our accumulator drops it.
+    Reflect.deleteProperty(oracle.fileCoverageFor(path).data, 'hash');
+    expect(map.toJSON()).toEqual(oracle.toJSON());
+    expect(provider.queryCoverage(map, { [path]: 'same' })).toEqual([path]);
+    expect(provider.queryCoverage(map, { [path]: 'other' })).toEqual([path]);
+    expect(
+      provider.queryCoverage(provider.createCoverageMap(), { [path]: 'same' }),
+    ).toEqual([]);
+  });
 
   it('sends all files full when the coverage query throws', async () => {
     const provider = new CoverageProvider(createOptions());
