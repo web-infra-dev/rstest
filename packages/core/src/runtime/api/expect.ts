@@ -460,16 +460,16 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
       return originalToContain.call(this, item);
     }
 
-    if (
-      typeof (actual as { [Symbol.iterator]?: unknown })[Symbol.iterator] !==
-      'function'
-    ) {
+    const iteratorMethod = (actual as Iterable<unknown>)[Symbol.iterator];
+    if (typeof iteratorMethod !== 'function') {
       throw new TypeError(
         `toContain() expects an array, string, or iterable, but got ${typeof actual}`,
       );
     }
 
-    const actualValues = Array.from(actual as Iterable<unknown>);
+    const actualValues = Array.from({
+      [Symbol.iterator]: () => iteratorMethod.call(actual),
+    });
     return this.assert(
       actualValues.includes(item),
       'expected #{this} to include #{exp}',

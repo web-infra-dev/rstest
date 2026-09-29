@@ -197,6 +197,26 @@ it('rejects non-iterable toContain receivers, including negated assertions', () 
   );
 });
 
+it('reads a stateful Symbol.iterator getter only once in toContain', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  let iteratorLookups = 0;
+  const values = {
+    get [Symbol.iterator]() {
+      iteratorLookups += 1;
+      if (iteratorLookups > 1) {
+        throw new Error('Symbol.iterator was read more than once');
+      }
+      return function* () {
+        yield 1;
+      };
+    },
+  };
+
+  fileExpect(values).toContain(1);
+  expect(iteratorLookups).toBe(1);
+});
+
 it('preserves the toContain assertion target for chained matchers', () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});
