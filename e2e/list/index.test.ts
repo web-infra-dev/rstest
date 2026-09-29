@@ -70,8 +70,10 @@ describe('test list command', () => {
         "Running shard 1 of 2 (2 of 3 test files)",
         "a.test.ts > test a > test a-1",
         "a.test.ts > test a-2",
-        "b.test.ts > test b > test b-1",
-        "b.test.ts > test b-2",
+        "c.test.ts > test c it each 0",
+        "c.test.ts > test c it for 0",
+        "c.test.ts > test c it runIf",
+        "c.test.ts > test c it skipIf",
       ]
     `);
   });

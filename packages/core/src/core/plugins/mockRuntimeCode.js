@@ -250,21 +250,32 @@ const evaluateOriginalModule = (id) => {
  * auto-create a `default` export for CJS-style modules that lack one.
  * This preserves `import foo from 'mod'` behavior for mocked CJS modules.
  */
-const defineExportsWithCjsInterop = (
-  moduleObj,
-  __webpack_exports__,
-  __webpack_require__,
-) => {
-  __webpack_require__.r(__webpack_exports__);
-  for (const key of Object.getOwnPropertyNames(moduleObj)) {
-    __webpack_require__.d(__webpack_exports__, {
-      [key]: () => moduleObj[key],
+const defineExportsWithCjsInterop = (moduleObj, __webpack_exports__) => {
+  // These helpers are only emitted when the current build graph needs them.
+  // A mocked CJS module can be required even when no ESM module caused Rspack
+  // to include them in the shared runtime.
+  if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+    Object.defineProperty(__webpack_exports__, Symbol.toStringTag, {
+      value: 'Module',
     });
   }
+  Object.defineProperty(__webpack_exports__, '__esModule', { value: true });
+
+  for (const key of Object.getOwnPropertyNames(moduleObj)) {
+    if (!hasOwn(__webpack_exports__, key)) {
+      Object.defineProperty(__webpack_exports__, key, {
+        enumerable: true,
+        get: () => moduleObj[key],
+      });
+    }
+  }
   if (!moduleObj.__esModule && !('default' in moduleObj)) {
-    __webpack_require__.d(__webpack_exports__, {
-      default: () => moduleObj,
-    });
+    if (!hasOwn(__webpack_exports__, 'default')) {
+      Object.defineProperty(__webpack_exports__, 'default', {
+        enumerable: true,
+        get: () => moduleObj,
+      });
+    }
   }
 };
 
@@ -392,11 +403,7 @@ const getMockImplementation = (mockType = 'mock') => {
             return;
           }
 
-          defineExportsWithCjsInterop(
-            mockedModule,
-            __webpack_exports__,
-            __webpack_require__,
-          );
+          defineExportsWithCjsInterop(mockedModule, __webpack_exports__);
         };
       };
 
@@ -464,11 +471,7 @@ const getMockImplementation = (mockType = 'mock') => {
           return;
         }
 
-        defineExportsWithCjsInterop(
-          res,
-          __webpack_exports__,
-          __webpack_require__,
-        );
+        defineExportsWithCjsInterop(res, __webpack_exports__);
       };
 
       installFactory(finalModFactory);

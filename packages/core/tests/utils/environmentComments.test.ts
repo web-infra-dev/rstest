@@ -60,7 +60,7 @@ describe('environment comments', () => {
         rootPath: root,
         projects: [project],
         normalizedConfig: { shard: { index: 1, count: 2 } },
-        fileFilters: ['c.test.ts', 'd.test.ts'],
+        fileFilters: ['b.test.ts', 'd.test.ts'],
       } as unknown as InternalContext;
       const planState = createProjectPlanState({
         context,
@@ -71,13 +71,13 @@ describe('environment comments', () => {
 
       expect(await planState.globTestSourceEntries('default')).toEqual({
         'a~test~ts': normalize(path.join(root, 'a.test.ts')),
-        'b~test~ts': normalize(path.join(root, 'b.test.ts')),
+        'c~test~ts': normalize(path.join(root, 'c.test.ts')),
       });
 
       context.fileFilters = undefined;
       expect(await planState.globTestSourceEntries('default')).toEqual({
         'a~test~ts': normalize(path.join(root, 'a.test.ts')),
-        'b~test~ts': normalize(path.join(root, 'b.test.ts')),
+        'c~test~ts': normalize(path.join(root, 'c.test.ts')),
       });
     });
   });
@@ -1296,10 +1296,10 @@ const jsdom = '// @rstest-environment jsdom';
   it('refreshes sharded browser entries after an environment partition refresh', async () => {
     await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'a.test.ts');
-      const jsdomFile = path.join(root, 'b.test.ts');
-      const browserFile = path.join(root, 'c.test.ts');
+      const jsdomFile = path.join(root, 'c.test.ts');
+      const browserFile = path.join(root, 'b.test.ts');
       const otherBrowserFile = path.join(root, 'd.test.ts');
-      const newBrowserFile = path.join(root, '0.test.ts');
+      const newBrowserFile = path.join(root, 'e.test.ts');
       writeFileSync(nodeFile, '// node test\n');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
       writeFileSync(browserFile, '// browser test\n');
@@ -1312,7 +1312,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {
           ...createProject().normalizedConfig,
           root,
-          include: ['a.test.ts', 'b.test.ts'],
+          include: ['a.test.ts', 'c.test.ts'],
           exclude: {
             patterns: [],
             override: false,
@@ -1329,7 +1329,7 @@ const jsdom = '// @rstest-environment jsdom';
           ...createProject().normalizedConfig,
           name: 'browser',
           root,
-          include: ['c.test.ts', 'd.test.ts'],
+          include: ['b.test.ts', 'd.test.ts'],
           exclude: {
             patterns: [],
             override: false,
@@ -1360,8 +1360,8 @@ const jsdom = '// @rstest-environment jsdom';
       for (const item of context.projects) {
         if (item.normalizedConfig.browser.enabled) {
           item.normalizedConfig.include = [
-            '0.test.ts',
-            'c.test.ts',
+            'e.test.ts',
+            'b.test.ts',
             'd.test.ts',
           ];
         }
@@ -1372,7 +1372,7 @@ const jsdom = '// @rstest-environment jsdom';
       });
 
       expect(refreshedPlan.entriesCache.get('browser')?.entries).toEqual({
-        '0~test~ts': normalize(newBrowserFile),
+        'e~test~ts': normalize(newBrowserFile),
       });
     });
   });

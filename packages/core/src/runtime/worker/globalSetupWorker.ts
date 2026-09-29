@@ -3,6 +3,7 @@ import type { AssetFiles, SerializedError } from '../../types';
 import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
+import { applyRuntimeColors } from './color';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { installForkTerminationPolicy, installGracefulExit } from './setup';
 
@@ -69,6 +70,7 @@ function captureEnvChanges(): Record<string, string | undefined> {
 }
 
 const runGlobalSetup = async (data: {
+  color: boolean;
   entries: {
     distPath: string;
     runtimeDistPath?: string;
@@ -87,6 +89,7 @@ const runGlobalSetup = async (data: {
   errors?: SerializedError[];
 }> => {
   try {
+    applyRuntimeColors(data.color);
     if (data.entries.length === 0) {
       return { success: true, hasTeardown: false };
     }

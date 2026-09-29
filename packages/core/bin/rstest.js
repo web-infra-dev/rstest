@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 import nodeModule from 'node:module';
 
-// enable on-disk code caching and share its directory with child workers
+// enable on-disk code caching for the CLI process
 // requires Nodejs >= 22.8.0
-const { enableCompileCache, constants } = nodeModule;
-if (enableCompileCache) {
+const { enableCompileCache } = nodeModule;
+const isCI = Boolean(process.env.CI) && process.env.CI !== 'false';
+// Skip CI, where the cache is unlikely to be reused.
+if (enableCompileCache && !isCI) {
   try {
-    const { directory, status } = enableCompileCache();
-    // ALREADY_ENABLED returns the active version-specific cache directory.
-    // Passing it to workers would append another version directory.
-    if (directory && status === constants.compileCacheStatus.ENABLED) {
-      process.env.NODE_COMPILE_CACHE = directory;
-    }
+    // Do not propagate the cache directory to workers: concurrent cold-cache
+    // writes can delay their shutdown. Explicit NODE_COMPILE_CACHE is still inherited.
+    enableCompileCache();
   } catch {
     // ignore errors
   }

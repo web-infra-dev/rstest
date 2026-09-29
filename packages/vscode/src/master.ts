@@ -17,6 +17,7 @@ import type { RstestDiagnostics } from './diagnostics';
 import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
+import { rpcErrorCodec } from './shared/rpc';
 import { runInTerminal as sendToTerminal, shellQuote } from './terminal';
 import { TestRunReporter } from './testRunReporter';
 import type { WorkerInitOptions } from './types';
@@ -126,8 +127,7 @@ export class RstestApi {
   }
 
   // Regex source that selects a single reported case by its name path. Shared by
-  // the worker run (wrapped in RegExp) and the terminal `-t` argument so both
-  // select the same case.
+  // the worker run and the terminal `-t` argument so both select the same case.
   private buildTestNamePattern(
     testCaseNamePath: string[],
     isSuite?: boolean,
@@ -414,7 +414,7 @@ export class RstestApi {
         command: continuous ? 'watch' : 'run',
         fileFilters: fileFilter ? [fileFilter] : undefined,
         testNamePattern: testCaseNamePath
-          ? new RegExp(this.buildTestNamePattern(testCaseNamePath, isSuite))
+          ? this.buildTestNamePattern(testCaseNamePath, isSuite)
           : undefined,
         update: updateSnapshot,
         configFilePath: this.configFilePath,
@@ -563,7 +563,9 @@ export class RstestApi {
       {
         cwd: this.cwd,
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-        serialization: 'advanced',
+        // Default JSON serialization: `advanced` uses the V8 serializer, whose
+        // format follows the V8 version, and Electron's V8 can be newer than
+        // the user's Node can read.
         env: {
           // same as packages/core/src/cli/prepare.ts
           // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
@@ -596,6 +598,7 @@ export class RstestApi {
       },
       on: (fn) => rstestProcess.on('message', fn),
       bind: 'functions',
+      ...rpcErrorCodec,
       timeout: 600_000,
       off: () => {
         rstestProcess.kill(

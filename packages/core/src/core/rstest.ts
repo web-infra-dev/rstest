@@ -186,6 +186,19 @@ export class Rstest implements InternalContext {
       throw new Error('Test sharding is not supported in watch mode.');
     }
 
+    // Node's setTimeout limit in milliseconds.
+    const MAX_TIMEOUT_MS = 2_147_483_647;
+    if (
+      rstestConfig.teardownTimeout !== Infinity &&
+      (!Number.isFinite(rstestConfig.teardownTimeout) ||
+        rstestConfig.teardownTimeout < 0 ||
+        rstestConfig.teardownTimeout > MAX_TIMEOUT_MS)
+    ) {
+      throw new Error(
+        '`teardownTimeout` must be a non-negative number no larger than 2147483647, or Infinity to never force the exit.',
+      );
+    }
+
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });

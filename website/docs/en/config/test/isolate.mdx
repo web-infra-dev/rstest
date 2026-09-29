@@ -40,3 +40,49 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+## Module mocks
+
+Because modules are shared across the files in a worker, a [module mock](/api/runtime-api/rstest/mock-modules) behaves differently when `isolate` is `false`:
+
+- The mock may not apply. If an earlier file already loaded a module that imports the mocked one, that cached module keeps the real implementation.
+- The mock may leak. Modules loaded while the mock is active keep the mocked implementation in later files.
+
+Which file fails depends on the order in which files run.
+
+For example, both test files below import `./user-service`, which calls `fetchUser()` from `./api`. The real `fetchUser()` returns `{ name: 'Bob' }`, and only `user-service.test.ts` mocks it. To keep both files correct in any order, the mocking file resets the module cache before importing the code under test, then undoes the mock after it finishes (highlighted lines):
+
+```ts title="user-service.test.ts" {4-6,10-13}
+import { afterAll, expect, rs, test } from '@rstest/core';
+import { loadUserName } from './user-service';
+
+rs.hoisted(() => {
+  rs.resetModules();
+});
+
+rs.mock('./api', () => ({ fetchUser: () => ({ name: 'Alice' }) }));
+
+afterAll(() => {
+  rs.doUnmock('./api');
+  rs.resetModules();
+});
+
+test('loads the mocked user name', () => {
+  expect(loadUserName()).toBe('Alice');
+});
+```
+
+```ts title="profile.test.ts"
+import { expect, test } from '@rstest/core';
+import { loadUserName } from './user-service';
+
+test('loads the real user name', () => {
+  expect(loadUserName()).toBe('Bob');
+});
+```
+
+`profile.test.ts` needs no changes: whether it runs before or after `user-service.test.ts`, it gets the real `./api`.
+
+- Call [`rs.resetModules()`](/api/runtime-api/rstest/mock-modules#rsresetmodules) inside [`rs.hoisted()`](/api/runtime-api/rstest/mock-modules#rshoisted) so the module cache is cleared before the static imports run.
+- Call [`rs.doUnmock()`](/api/runtime-api/rstest/mock-modules#rsdounmock) in `afterAll` for every module the file mocks.
+- Both `rs.resetModules()` calls clear the shared module cache, so modules are re-evaluated for this file and for the next file in the worker. Files without this pattern keep sharing modules.

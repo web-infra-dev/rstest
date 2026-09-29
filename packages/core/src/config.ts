@@ -246,6 +246,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
+  teardownTimeout: 10_000,
   testEnvironment: {
     name: 'node',
   },

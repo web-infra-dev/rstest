@@ -30,6 +30,23 @@ Automatically resolve file extensions when importing modules. This means you can
 
 Control the condition names used when resolving the `exports` field of a package.
 
+**Default:** Depends on the test environment and dependency type.
+
+For `node`, `jsdom`, and `happy-dom` tests, Rstest inherits Rspack's default conditions. With the default `NODE_ENV=test`, bundled JavaScript dependencies use:
+
+| Test environment      | ESM `import`                                                    | CommonJS `require`                                               |
+| --------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `node`                | `import`, `module`, `webpack`, `development`, `node`            | `require`, `module`, `webpack`, `development`, `node`            |
+| `jsdom` / `happy-dom` | `browser`, `import`, `module`, `webpack`, `development`, `node` | `browser`, `require`, `module`, `webpack`, `development`, `node` |
+
+Rstest treats `NODE_ENV=test` as development mode for bundling, so `development` is active even though `NODE_ENV` is `'test'`. The package's `exports` key order determines which matching entry wins, rather than the order of `conditionNames`.
+
+When customizing this option, use `'...'` to preserve Rspack's default conditions. For example, use `conditionNames: ['custom', '...']` in `node` tests, or `conditionNames: ['browser', 'custom', '...']` in `jsdom` / `happy-dom` tests. When this option is set explicitly, Rstest no longer adds `browser` automatically.
+
+Providing a list without `'...'` replaces the defaults across dependency types, including the distinction between `import` and `require`.
+
+To remove a default condition while keeping separate ESM and CommonJS resolution, configure `tools.rspack.resolve.byDependency`. See the [Jest migration example](/guide/migration/jest#dependency-export-conditions), which excludes `development` and explains when to include `browser`.
+
 ## resolve.mainFields <RsbuildDocBadge path="/config/resolve/main-fields" text="resolve.mainFields" />
 
 Control the priority order of package entry fields such as `main`, `module`, and `browser`.

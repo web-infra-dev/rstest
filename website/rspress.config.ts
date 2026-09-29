@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
+import { transformerCompatibleMetaHighlight } from '@rspress/core/shiki-transformers';
 import { pluginAlgolia } from '@rspress/plugin-algolia';
 import { pluginClientRedirects } from '@rspress/plugin-client-redirects';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
@@ -23,6 +24,10 @@ export default defineConfig({
     link: {
       checkAnchors: true,
       checkDeadLinks: true,
+    },
+    shiki: {
+      // Enable line highlighting via code block meta, e.g. ```ts {1,3-5}
+      transformers: [transformerCompatibleMetaHighlight()],
     },
   },
   llms: true,

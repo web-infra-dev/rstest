@@ -26,11 +26,13 @@ import { color } from '../../utils/logger';
 import { isVmPoolType } from '../../utils/workers';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { clearFileContext } from '../fileContext';
+import { withPackageExports } from '../api/packageExports';
 import { disposeRstestUtilities } from '../api/utilities';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { takeFileCleanups } from '../runner/fileCleanup';
 import { createAsyncLeakDetector } from './asyncLeaks';
+import { applyRuntimeColors } from './color';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import {
@@ -544,6 +546,7 @@ const preparePool = async (
     updateSnapshot,
     context,
     deletedEnvKeys,
+    color: colorEnabled,
     environmentKey,
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
@@ -663,6 +666,7 @@ const preparePool = async (
     } = context;
 
     setupEnv(env, deletedEnvKeys);
+    applyRuntimeColors(colorEnabled);
 
     if (isVmPool) {
       const vmRealm = await prepareVmRuntimeRealm(
@@ -877,7 +881,7 @@ const preparePool = async (
     };
 
     Object.assign(rstestContext.global, {
-      [RSTEST_API_GLOBAL_KEY]: api,
+      [RSTEST_API_GLOBAL_KEY]: withPackageExports(api),
       [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
     });
 

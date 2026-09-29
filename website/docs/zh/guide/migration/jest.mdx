@@ -46,6 +46,8 @@ Jest 的一部分 CLI 参数可以直接映射到 Rstest，另一部分则需要
 | `jest --maxWorkers=50%` 或 `jest -w 50%` | `rstest --pool.maxWorkers 50%`                           | Rstest 的 `-w` 表示 `--watch`，不是 `--maxWorkers`。                                       |
 | `jest --selectProjects app`              | `rstest --project app`                                   |                                                                                            |
 | `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                         |                                                                                            |
+| `jest --forceExit`                       | `rstest --teardownTimeout 0`                             | Rstest 会在 teardown 函数和 reporter 执行完毕后立即退出。                                  |
+| `jest --openHandlesTimeout=5000`         | `rstest --teardownTimeout 5000`                          | Rstest 会在超时后强制退出；Jest 只会打印警告。                                             |
 | `jest --coverage`                        | `rstest --coverage`                                      | 还需安装与你配置对应的 provider 包：`@rstest/coverage-istanbul` 或 `@rstest/coverage-v8`。 |
 | `jest --coverageDirectory=coverage`      | 在 `rstest.config.ts` 中配置 `coverage.reportsDirectory` |                                                                                            |
 | `jest --coverageProvider=v8`             | `coverage.provider: 'v8'`                                | 安装 `@rstest/coverage-v8`，并在 `rstest.config.ts` 中配置 provider。                      |
@@ -88,7 +90,9 @@ export default defineConfig({
 | `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                            |                                                                                                                                                                                                                                                                                                                                                                          |
 | `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                        | 需要在单个测试内改 timeout 时，把 `jest.setTimeout(n)` 替换为 `rs.setConfig({ testTimeout: n })`。                                                                                                                                                                                                                                                                       |
 | `slowTestThreshold`          | [`slowTestThreshold`](/config/test/slow-test-threshold)                                           | Jest 按秒计（默认 5）；Rstest 按毫秒计（默认 300）。Jest 的值需要乘以 1000。                                                                                                                                                                                                                                                                                             |
-| `detectOpenHandles`          | 无完全等价项；可考虑用 [`detectAsyncLeaks`](/config/test/detect-async-leaks) 排查测试文件异步泄漏 | 不是 1:1 映射。Jest 的 `detectOpenHandles` 主要用于诊断导致 Jest 进程无法退出的 handles；Rstest 的 `detectAsyncLeaks` 会在测试文件结束后检查仍然存活的 Node.js 异步资源，并让该测试文件失败。                                                                                                                                                                            |
+| `openHandlesTimeout`         | [`teardownTimeout`](/config/test/teardown-timeout)                                                | Rstest 会在超时后强制退出；Jest 只会打印警告。                                                                                                                                                                                                                                                                                                                           |
+| `forceExit`                  | [`teardownTimeout: 0`](/config/test/teardown-timeout)                                             | 测试、global teardown 和 reporter 完成后立即退出。                                                                                                                                                                                                                                                                                                                       |
+| `detectOpenHandles`          | 无完全等价项；可考虑用 [`detectAsyncLeaks`](/config/test/detect-async-leaks) 排查测试文件异步泄漏 | 不是 1:1 映射。`detectAsyncLeaks` 会让存在活跃异步资源的测试文件失败，但这些泄漏不会阻止进程退出。若 reporter、plugin 或配置留下的 handle 导致运行一直无法退出，可用 [`teardownTimeout`](/config/test/teardown-timeout) 限制等待时间。                                                                                                                                   |
 | `fakeTimers`                 | [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers)                         | 没有配置字段。在 `setupFiles` 或单个测试中调用 `rs.useFakeTimers(opts)`；用 `rs.useRealTimers()` 还原。                                                                                                                                                                                                                                                                  |
 | `bail`                       | [`bail`](/config/test/bail)                                                                       |                                                                                                                                                                                                                                                                                                                                                                          |
 | `clearMocks`                 | [`clearMocks`](/config/test/clear-mocks)                                                          |                                                                                                                                                                                                                                                                                                                                                                          |
@@ -144,6 +148,42 @@ export default defineConfig({
 ```
 
 你可以保留这些注释，也可以改名为 `@rstest-environment` / `@rstest-environment-options`。选项值必须是单行 JSON 对象。支持的环境包括 `node`、`jsdom` 和 `happy-dom`。
+
+### 依赖导出条件 \{#dependency-export-conditions}
+
+默认情况下，Rstest 在打包依赖时会启用 `development` 导出条件，而 Jest 不会。因此，迁移后依赖可能会根据 `package.json` 的 `exports` 加载不同的入口，即使两个测试框架的 `NODE_ENV` 都默认为 `'test'`。
+
+例如，[Emotion](https://github.com/emotion-js/emotion) 的开发构建会关闭 speedy 样式插入，以支持样式调试和 source map。这会创建更多 `<style>` 元素，可能使样式密集的 jsdom 测试变慢。
+
+如果这一差异导致 jsdom 测试出现回归，可以通过 [tools.rspack](/config/build/tools#toolsrspack) 设置 [resolve.byDependency](https://rspack.rs/zh/config/resolve#resolvebydependency)，为 ESM 和 CommonJS 依赖排除 `development`：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  tools: {
+    rspack: {
+      resolve: {
+        byDependency: {
+          esm: {
+            conditionNames: ['browser', 'import', 'module', 'webpack', 'node'],
+          },
+          commonjs: {
+            conditionNames: ['browser', 'require', 'module', 'webpack', 'node'],
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+`browser` 条件用于 `jsdom`、`happy-dom` 等 DOM 环境。如果 `node` 环境遇到同类问题，可以使用 `testEnvironment: 'node'`，并从两个列表中移除 `browser`。
+
+这两个列表保留了 `import` 和 `require` 的区别，其他依赖类型（如 CSS import）的配置保持不变。不要添加 `'...'`，否则会重新引入包含 `development` 的默认条件。如果项目使用了自定义导出条件，请将其加入对应列表。
+
+这段配置用于解决 `development` 导出的差异，并不完全复现 Jest 的模块解析行为。它保留了 Rspack 的 `module` 和 `webpack` 条件，不会启用 `production` 条件，也不会改变 `NODE_ENV`。依赖可能因此失去仅在开发导出中提供的检查或警告，请按需使用，无需为每个迁移项目都添加此配置。
 
 ### 代码转换
 
@@ -314,7 +354,7 @@ Rstest 默认支持 ESM。如果你的项目使用 ESM，你不需要进行任�
 
 ### ESM vs CJS mocking
 
-在 Rstest 中，`rs.mock()` 针对 `import` 使用的 ESM 入口，而 `rs.mockRequire()` 针对 `require()` 使用的 CJS 入口。
+在 Rstest 中，`rs.mock()` 针对 `import` 解析到的入口，而 `rs.mockRequire()` 针对 `require()` 解析到的入口。如果两者解析到同一个打包模块，`rs.mock()` 也会影响 `require()`；如果包提供了单独的 CJS 入口，请使用 `rs.mockRequire()`。
 
 代码中使用 `require()` 时，`rs.mockRequire()` 对应 CJS 入口的 mock：
 

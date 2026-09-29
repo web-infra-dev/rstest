@@ -3,7 +3,6 @@ import type {
   InternalProjectContext,
   RuntimeConfig,
 } from '../../types';
-import { resolveTaskColorEnv } from '../../utils/logger';
 
 type EnvSource = Record<string, string | undefined>;
 
@@ -133,9 +132,6 @@ export function projectRuntimeConfig(
     coverage: { ...coverage, reporters: [] },
     logHeapUsage,
     detectAsyncLeaks,
-    env: {
-      ...resolveTaskColorEnv(resolvedEnv),
-      ...resolvedEnv,
-    },
+    env: resolvedEnv,
   } satisfies RuntimeConfig;
 }

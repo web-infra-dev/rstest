@@ -21,7 +21,7 @@ import {
   isDeno,
   logger,
   needFlagExperimentalDetectModule,
-  pickColorEnv,
+  resolveColorEnabled,
   toError,
 } from '../utils';
 import { toSerializedError } from '../utils/error';
@@ -58,15 +58,19 @@ const __dirname = dirname(__filename);
 const getWorkerConfig = (
   context: InternalContext,
   project: InternalProjectContext,
-) => ({
-  runtimeConfig: projectRuntimeConfig(project, {
+) => {
+  const runtimeConfig = projectRuntimeConfig(project, {
     envMode: 'inherit',
     env: composeWorkerEnv(context.workerEnv),
-  }),
-  deletedEnvKeys: Object.keys(context.workerEnv).filter(
-    (key) => context.workerEnv[key] === undefined,
-  ),
-});
+  });
+  return {
+    runtimeConfig,
+    color: resolveColorEnabled(runtimeConfig.env),
+    deletedEnvKeys: Object.keys(context.workerEnv).filter(
+      (key) => context.workerEnv[key] === undefined,
+    ),
+  };
+};
 
 const VM_WORKER_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
@@ -131,6 +135,7 @@ const buildTask = async ({
   project,
   runtimeConfig,
   deletedEnvKeys,
+  color,
   setupEntries,
   setupAssets,
   assetNames,
@@ -152,6 +157,7 @@ const buildTask = async ({
   project: InternalProjectContext;
   runtimeConfig: RuntimeConfig;
   deletedEnvKeys: string[];
+  color: boolean;
   setupEntries: EntryInfo[];
   setupAssets: string[];
   assetNames: string[];
@@ -223,7 +229,10 @@ const buildTask = async ({
             runtimeConfig.testEnvironment,
             testEnvironmentModule,
           ),
-          JSON.stringify(pickColorEnv(runtimeConfig.env)),
+          JSON.stringify({
+            FORCE_COLOR: runtimeConfig.env.FORCE_COLOR,
+            NO_COLOR: runtimeConfig.env.NO_COLOR,
+          }),
         ].join('\0'),
         context: {
           outputModule: project.outputModule,
@@ -241,6 +250,7 @@ const buildTask = async ({
           trace: context.trace,
         },
         deletedEnvKeys,
+        color,
         type,
         setupEntries,
         updateSnapshot,
@@ -494,7 +504,7 @@ export const createPool = async ({
       traceSpan,
     }) => {
       const projectName = project.name;
-      const { runtimeConfig, deletedEnvKeys } = getWorkerConfig(
+      const { runtimeConfig, deletedEnvKeys, color } = getWorkerConfig(
         context,
         project,
       );
@@ -541,6 +551,7 @@ export const createPool = async ({
                   project,
                   runtimeConfig,
                   deletedEnvKeys,
+                  color,
                   setupEntries,
                   setupAssets,
                   assetNames,
@@ -658,7 +669,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const { runtimeConfig, deletedEnvKeys } = getWorkerConfig(
+      const { runtimeConfig, deletedEnvKeys, color } = getWorkerConfig(
         context,
         project,
       );
@@ -681,6 +692,7 @@ export const createPool = async ({
             project,
             runtimeConfig,
             deletedEnvKeys,
+            color,
             setupEntries,
             setupAssets,
             assetNames,

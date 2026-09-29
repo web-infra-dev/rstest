@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Two-process design: the extension (`src/extension.ts`, TestController + test tree) spawns a worker (`src/worker/`, spawn owned by `src/master.ts`) that runs tests and reports back over Node `child_process` IPC with `serialization: 'advanced'` (WebSocket was replaced by IPC in #691 — values must survive structured clone). The worker protocol types in `src/types.ts` are shared by both sides — a protocol change must land on both ends in the same commit.
+Two-process design: the extension (`src/extension.ts`, TestController + test tree) spawns a worker (`src/worker/`, spawn owned by `src/master.ts`) that runs tests and reports back over Node `child_process` IPC with the default JSON serialization (WebSocket was replaced by IPC in #691 — values must survive a JSON round-trip, so no `RegExp`, `Map`, `undefined` fields, etc.; thrown errors cross only because both `createBirpc` calls spread `rpcErrorCodec`). Do not switch to `serialization: 'advanced'`: the V8 serializer's wire format follows the V8 version, and the Extension Host (VS Code's Electron) and the worker (the user's Node) do not share one. The worker protocol types in `src/types.ts` are shared by both sides — a protocol change must land on both ends in the same commit.
 
 This extension is superseded by the Rstack extension (`rstack.rstack`), which ships the same Rstest integration. `activate` must stay gated on `rstackEditorTakesOver()` so the two never register a second Test Explorer controller in one window; new user-facing features belong in rstack-editor, not here.
 

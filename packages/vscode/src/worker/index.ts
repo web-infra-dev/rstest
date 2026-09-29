@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { createBirpc } from 'birpc';
+import { rpcErrorCodec } from '../shared/rpc';
 import type { TestRunReporter } from '../testRunReporter';
 import type { WorkerInitOptions } from '../types';
 import { formatUnsupportedCoreVersionMessage } from '../versionCheck';
@@ -216,6 +217,7 @@ export const masterApi = createBirpc<TestRunReporter, Worker>(worker, {
   post: (data) => process.send?.(data),
   on: (fn) => process.on('message', fn),
   bind: 'functions',
+  ...rpcErrorCodec,
 });
 
 if (process.argv[1] === __filename) {

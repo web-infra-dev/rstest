@@ -25,7 +25,7 @@ When a CLI command migrates to the public `createRstest`, config discovery, the 
 
 The CLI carries process-level behavior (`embedded`, `trace`, installer confirmation, and exit-code mirroring) through `createRstestInstance` in `src/api/createRstest.ts`; these never enter the public `CreateRstestOptions`. Engine error paths throw instead of printing and exiting, whatever `embedded` is. The CLI config-restart watcher (`src/cli/restart.ts`) is armed before `watch()` resolves — otherwise an edit during the first cycle is dropped — at the accepted cost that such an edit restarts only after that cycle; it watches only the projects `--project` selected, and tears down through the returned watcher, never the engine.
 
-`CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`) and `trace`; a new `rstest run` flag is added to `RunOptions` and becomes a CLI flag through that derivation.
+`CommonOptions` derives from `RunOptions` plus the creation-time flags (`config`, `configLoader`, `root`, `teardownTimeout`) and `trace`; add new run-cycle flags to `RunOptions` so the CLI inherits them through that derivation. Keep `teardownTimeout` out of `RunOptions` because it only controls the CLI process exit, which the public driver never performs.
 
 ## Executor contract (node + browser isomorphism)
 
@@ -87,7 +87,7 @@ Contracts between modules or processes — not readable from any single file.
 - `rs.mock` hoisting/rewriting happens at build time inside rspack's native `RstestPlugin`; registration happens at runtime inside the injected `mockRuntimeCode.js` registry. The `rstest_*` member names are the wire contract between the two — renaming either side alone breaks mocking.
 - Setup files and test files must share one webpack runtime chunk — mock state lives on that runtime's `__webpack_require__`.
 - Base64 JavaScript `data:` URL setup entries are materialized as absolute virtual modules before entry assembly; setup state, cache control, `VirtualModulesPlugin`, and coverage excludes must use that same materialized path. Virtual setup code executes but is intentionally not collected as coverage. Derive these automatic coverage exclusions only from registered virtual modules; adding real setup paths here leaves stale exclusions when config hooks replace setup entries.
-- `@rstest/core` must stay external to the runtime-published global: hoisted callbacks run above bundled imports, so a bundled provider module would load too late.
+- `@rstest/core` must stay external to the runtime-published global: hoisted callbacks run above bundled imports, so a bundled provider module would load too late. On Node, every value export of `src/index.ts` must be readable through that global — runtime members come from the API object and the rest from lazy getters kept in lockstep by a compile-checked list, so accessing the global at worker startup never loads the package.
 - Under `isolate: false`, cache control invalidates only the test entry currently being dispatched. Clearing every discovered entry before every file breaks once-per-worker dependency state.
 - Raw runtime/loader files resolved via `__dirname` at build time ↔ the dist copy list in `rslib.config.ts` — adding/renaming one requires updating both.
 

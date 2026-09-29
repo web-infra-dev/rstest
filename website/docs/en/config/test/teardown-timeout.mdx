@@ -1,0 +1,45 @@
+---
+description: How long Rstest waits for the process to exit after a run finishes. 0 exits immediately.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+import { Tab, Tabs } from '@theme';
+
+# teardownTimeout
+
+<ApiMeta addedVersion="0.12.2" />
+
+- **Type:** `number`
+- **Default:** `10_000`
+- **CLI:** `--teardownTimeout=10000`
+
+After a run finishes, Rstest waits for the `globalSetup` teardown and the reporter hooks to return. From then on it does nothing more and lets the process exit on its own, which normally happens right away.
+
+A hook returning does not mean everything it started has finished. A server, socket or timer left open, or a request started without `await`, in a reporter, a plugin or your config file stays in the Rstest process and keeps it from exiting. Test files and `setupFiles` run in workers that Rstest stops on its own, so leaks there do not keep the process alive. `teardownTimeout` is how long Rstest waits in that situation, in milliseconds. When the time is up, Rstest prints a warning and exits the process. The exit code still reflects the test results.
+
+Set it to `0` to exit immediately after the run finishes, without waiting or printing a warning. This is equivalent to Jest's `forceExit: true`.
+
+Set it to `Infinity` to never force the exit; Rstest then waits for the process to exit on its own, however long that takes.
+
+**This option does not limit your teardown code.** The timer starts only after `globalSetup` teardown and hooks such as `afterAll` have finished. Use [`hookTimeout`](/config/test/hook-timeout) to limit hooks.
+
+If the warning shows up, look for an unclosed handle in your reporters, plugins, or config. [`detectAsyncLeaks`](/config/test/detect-async-leaks) is a different tool: it finds leaks inside test files, which do not block the exit.
+
+Applies to `rstest run` only, not the programmatic API. Watch mode keeps the process alive on purpose. Set this option in the root config; individual projects cannot override it.
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --teardownTimeout=5000
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  teardownTimeout: 5000,
+});
+```
+  </Tab>
+</Tabs>

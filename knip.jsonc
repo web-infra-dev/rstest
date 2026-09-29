@@ -99,6 +99,10 @@
       "entry": ["rstest*.ts", "src/index.js", "test/**/*.{js,jsx,ts,tsx}"],
     },
     "packages/core": {
+      "ignoreDependencies": [
+        // rslib.config.ts aliases this import to @vitest/utils' bundled instance.
+        "tinyrainbow",
+      ],
       "entry": [
         // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
         "src/core/plugins/mockRuntimeCode.js",

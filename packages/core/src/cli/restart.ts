@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { color, isColorSupported, isTTY, logger } from '../utils';
+import { color, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
 
 export async function watchFilesForRestart({
@@ -27,7 +27,7 @@ export async function watchFilesForRestart({
 
   const onChange = async (filePath: string) => {
     await watcher.close();
-    if (isTTY() && !process.env.DEBUG && isColorSupported) {
+    if (isTTY() && !process.env.DEBUG) {
       process.stdout.write('\x1B[H\x1B[2J');
     }
     const filename = path.relative(rootPath, filePath);

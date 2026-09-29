@@ -94,7 +94,7 @@ test('uses the virtual module', () => {
 
 Rstest 不使用 Jest 的第三个 `{ virtual: true }` 参数。请在模块声明、alias、mock 调用和 import 中保持相同的 specifier。被测源码也可以间接导入这个虚拟模块。
 
-`rs.mock` 会被提升，因此支持静态 `import`。对于稍后执行的动态 `import()`，请先调用 `rs.doMock` 再导入。对于 `require()`，请使用 `rs.mockRequire` 或 `rs.doMockRequire`。
+`rs.mock` 会被提升，因此支持静态 `import`。对于稍后执行的动态 `import()`，请先调用 `rs.doMock` 再导入。如果 `require()` 和 mock 解析到同一个打包模块，`require()` 也可以使用这个 mock。如果 `require()` 解析到单独的 CommonJS 入口，请使用 `rs.mockRequire` 或 `rs.doMockRequire`。
 
 也可以通过 `__mocks__` 中匹配的手写 mock 提供实现，而不使用 factory。由于映射到 `false` 的 alias 没有真实实现，请使用 factory 或手写 mock，而不是 `{ mock: true }`、`{ spy: true }` 或 `rs.importActual`。
 

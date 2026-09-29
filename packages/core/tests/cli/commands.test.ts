@@ -55,6 +55,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--coverage.reportsDirectory',
         '--exclude',
         '--hookTimeout',
+        '--teardownTimeout',
         '--include',
         '--json',
         '--maxConcurrency',

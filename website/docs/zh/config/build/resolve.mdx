@@ -30,6 +30,23 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 控制解析包 `exports` 字段时使用的条件名称列表。
 
+**默认值：** 取决于测试环境和依赖类型。
+
+对于 `node`、`jsdom` 和 `happy-dom` 测试，Rstest 继承 Rspack 的默认条件。在默认的 `NODE_ENV=test` 下，打包 JavaScript 依赖时使用以下条件：
+
+| 测试环境              | ESM `import`                                                    | CommonJS `require`                                               |
+| --------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `node`                | `import`、`module`、`webpack`、`development`、`node`            | `require`、`module`、`webpack`、`development`、`node`            |
+| `jsdom` / `happy-dom` | `browser`、`import`、`module`、`webpack`、`development`、`node` | `browser`、`require`、`module`、`webpack`、`development`、`node` |
+
+Rstest 在打包时将 `NODE_ENV=test` 视为开发模式，因此即使 `NODE_ENV` 为 `'test'`，也会启用 `development` 条件。匹配入口的优先级由包的 `exports` 键顺序决定，而非 `conditionNames` 的排列顺序。
+
+自定义此选项时，可以通过 `'...'` 保留 Rspack 的默认条件。例如，`node` 测试可以使用 `conditionNames: ['custom', '...']`，`jsdom` / `happy-dom` 测试则使用 `conditionNames: ['browser', 'custom', '...']`。显式设置此选项后，Rstest 不再自动添加 `browser`。
+
+不包含 `'...'` 的列表会覆盖各依赖类型的默认条件，包括 `import` 和 `require` 的区别。
+
+如果需要移除某个默认条件，同时保留 ESM 和 CommonJS 各自的解析条件，请配置 `tools.rspack.resolve.byDependency`。可参考 [Jest 迁移示例](/guide/migration/jest#dependency-export-conditions)，其中演示了如何排除 `development`，并说明了何时需要包含 `browser`。
+
 ## resolve.mainFields <RsbuildDocBadge path="/config/resolve/main-fields" text="resolve.mainFields" />
 
 控制包入口字段的优先级顺序，例如 `main`、`module` 和 `browser`。

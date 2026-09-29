@@ -9,7 +9,6 @@ const __dirname = dirname(__filename);
 
 const colorTestSpawnEnv = {
   CI: 'true',
-  RSTEST_NO_AGENT: '1',
 };
 
 describe('test environment variables', () => {
@@ -20,29 +19,6 @@ describe('test environment variables', () => {
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await expectExecSuccess();
-  });
-
-  it('should pass FORCE_COLOR to worker process when user sets it', async ({
-    onTestFinished,
-  }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'forceColor.test.ts'],
-      onTestFinished,
-      // Explicitly unset NO_COLOR to avoid conflicts
-      unsetEnv: ['NO_COLOR'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-          env: {
-            // User explicitly sets FORCE_COLOR=1
-            FORCE_COLOR: '1',
-          },
         },
       },
     });
@@ -74,18 +50,6 @@ describe('test environment variables', () => {
   });
 
   it.each([
-    [
-      'forks',
-      'config-no-color',
-      ['run', 'configNoColor.test.ts', '--pool', 'forks'],
-    ],
-    [
-      'threads',
-      'config-no-color',
-      ['run', 'configNoColor.test.ts', '--pool', 'threads'],
-    ],
-    ['forks', 'config-color-projects', ['run', '--pool', 'forks']],
-    ['threads', 'config-color-projects', ['run', '--pool', 'threads']],
     [
       'forks',
       'config-color-projects',
@@ -132,23 +96,4 @@ describe('test environment variables', () => {
       await expectExecSuccess();
     },
   );
-
-  it('should propagate color env correctly without user overrides', async ({
-    onTestFinished,
-  }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'defaultColor.test.ts'],
-      onTestFinished,
-      // Unset both color envs to test default behavior
-      unsetEnv: ['FORCE_COLOR', 'NO_COLOR'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await expectExecSuccess();
-  });
 });

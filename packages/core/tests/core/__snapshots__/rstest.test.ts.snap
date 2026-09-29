@@ -100,6 +100,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "snapshotFormat": {
     "printShadowRoot": false,
   },
+  "teardownTimeout": 10000,
   "testEnvironment": {
     "name": "node",
   },
@@ -215,6 +216,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "printShadowRoot": false,
   },
   "source": {},
+  "teardownTimeout": 10000,
   "testEnvironment": {
     "name": "node",
   },
@@ -330,6 +332,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "printShadowRoot": false,
   },
   "source": {},
+  "teardownTimeout": 10000,
   "testEnvironment": {
     "name": "node",
   },

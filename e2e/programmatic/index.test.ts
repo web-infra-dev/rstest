@@ -291,7 +291,7 @@ describe('programmatic createRstest', () => {
       ],
     });
     expect(result.files).toEqual([
-      { testPath: 'beta.test.ts', project: 'beta', type: 'file' },
+      { testPath: 'alpha.test.ts', project: 'alpha', type: 'file' },
     ]);
     expect(result.filtered).toEqual(['alpha.test.ts']);
     expect(result.teardownError).toEqual({
@@ -339,20 +339,20 @@ describe('programmatic createRstest', () => {
     // Pin the depth-first declaration order consumed by structured clients.
     expect(result.listed).toEqual([
       {
-        testPath: 'alpha.test.ts',
+        testPath: 'beta.test.ts',
         name: 'shared suite',
         fullName: 'shared suite',
         parentNames: [],
-        project: 'alpha',
+        project: 'beta',
         location: { line: 4, column: 9 },
         type: 'suite',
       },
       {
-        testPath: 'alpha.test.ts',
+        testPath: 'beta.test.ts',
         name: 'shared case',
         fullName: 'shared suite > shared case',
         parentNames: ['shared suite'],
-        project: 'alpha',
+        project: 'beta',
         location: { line: 5, column: 5 },
         type: 'case',
       },

@@ -105,6 +105,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "snapshotFormat": {
     "printShadowRoot": false,
   },
+  "teardownTimeout": 10000,
   "testEnvironment": {
     "name": "node",
   },

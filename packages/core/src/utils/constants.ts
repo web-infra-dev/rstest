@@ -28,9 +28,9 @@ export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
 
 /**
- * Key under which the per-file runtime API object is published on the
- * executor's global; `import.meta.rstest` defines compile to a read of it, and
- * the mock hoister keeps `@rstest/core` external against the same key.
+ * Key under which Node publishes the runtime API plus lazy package exports,
+ * while browser publishes the raw runtime API on its executor global.
+ * The mock hoister keeps `@rstest/core` external against this key.
  * node: `rstestContext.global[KEY]` (runInPool); web: `globalThis[KEY]`
  * (browser client entry). Other `'@rstest/core'` string literals in the
  * codebase (the module-cache id in `core/plugins/moduleCacheControl.ts`, the

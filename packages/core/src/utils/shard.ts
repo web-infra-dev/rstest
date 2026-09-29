@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { relative } from 'pathe';
 import type { InternalContext, ProjectEntries, ShardConfig } from '../types';
 import { color, logger } from './logger';
 import { getTestEntries } from './testFiles';
@@ -8,19 +10,27 @@ import { getTestEntries } from './testFiles';
 export function getShardedFiles<T extends { testPath: string }>(
   files: T[],
   shard: ShardConfig,
+  rootPath: string,
 ): T[] {
   const { count, index } = shard;
   if (count <= 1) {
     return files;
   }
-  const size = Math.ceil(files.length / count);
-  const start = (index - 1) * size;
-  const end = start + size;
+  const size = Math.floor(files.length / count);
+  const remainder = files.length % count;
+  const start = (index - 1) * size + Math.min(index - 1, remainder);
+  const end = start + size + (index <= remainder ? 1 : 0);
 
-  // Sort files to ensure consistent sharding across runs
   return files
-    .sort((a, b) => a.testPath.localeCompare(b.testPath))
-    .slice(start, end);
+    .map((file) => ({
+      file,
+      hash: createHash('sha1')
+        .update(relative(rootPath, file.testPath))
+        .digest('hex'),
+    }))
+    .sort((a, b) => (a.hash < b.hash ? -1 : a.hash > b.hash ? 1 : 0))
+    .slice(start, end)
+    .map(({ file }) => file);
 }
 
 export type ShardCounts = {
@@ -88,7 +98,11 @@ export async function resolveShardedEntries(
     )
   ).flat();
 
-  const shardedEntries = getShardedFiles(allTestEntriesBeforeSharding, shard);
+  const shardedEntries = getShardedFiles(
+    allTestEntriesBeforeSharding,
+    shard,
+    rootPath,
+  );
 
   const totalTestFileCount = allTestEntriesBeforeSharding.length;
   const testFilesInShardCount = shardedEntries.length;

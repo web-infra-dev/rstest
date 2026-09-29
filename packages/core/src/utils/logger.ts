@@ -17,8 +17,6 @@ import { type Logger, logger as rslog } from 'rslog';
 import { determineAgent } from './agent/detectAgent';
 import { isTTY } from './helper';
 
-export { isColorSupported };
-
 export const isDebug = (): boolean => {
   if (!process.env.DEBUG) {
     return false;
@@ -30,113 +28,24 @@ export const isDebug = (): boolean => {
   );
 };
 
-type ColorEnvSource = Readonly<Record<string, string | undefined>>;
-type ColorEnv = Partial<Record<'FORCE_COLOR' | 'NO_COLOR', string>>;
+const hostColorDefault = isColorSupported && !determineAgent().isAgent;
 
-interface ForceColorEnvOptions {
-  userSetColorEnv?: boolean;
-  isAgent?: boolean;
-  isColorSupported?: boolean;
-}
-
-export const hasUserColorEnv = (env: ColorEnvSource): boolean =>
-  env.FORCE_COLOR !== undefined || env.NO_COLOR !== undefined;
-
-export const pickColorEnv = (env: ColorEnvSource): ColorEnv => {
-  const colorEnv: ColorEnv = {};
+export function resolveColorEnabled(
+  env: Readonly<Record<string, string | undefined>>,
+  fallback: boolean = hostColorDefault,
+): boolean {
+  if (env.NO_COLOR) {
+    return false;
+  }
   if (env.FORCE_COLOR !== undefined) {
-    colorEnv.FORCE_COLOR = env.FORCE_COLOR;
+    return env.FORCE_COLOR !== '0' && env.FORCE_COLOR !== 'false';
   }
-  if (env.NO_COLOR !== undefined) {
-    colorEnv.NO_COLOR = env.NO_COLOR;
-  }
-  return colorEnv;
-};
-
-export const omitColorEnv = (
-  env: ColorEnvSource,
-): Record<string, string | undefined> => {
-  const remainingEnv = { ...env };
-  delete remainingEnv.FORCE_COLOR;
-  delete remainingEnv.NO_COLOR;
-  return remainingEnv;
-};
-
-/**
- * Determine color env vars (`FORCE_COLOR` / `NO_COLOR`) to inject into
- * worker and child processes (e.g. globalSetup, pool workers).
- *
- * Why this is needed:
- * Workers are spawned with piped stdio (no TTY), so color-detection
- * libraries (picocolors, chalk, jest-diff) always conclude "no color".
- * Without explicit env vars, diff output and reporter output in workers
- * lose all ANSI styling even when the user's terminal supports it.
- *
- * The returned object is spread into the child's `env`; an empty object
- * means "inherit whatever the user already set in process.env".
- *
- * @param options - Override runtime values for unit-testing without mocks.
- */
-export function getForceColorEnv(options?: ForceColorEnvOptions): {
-  FORCE_COLOR?: '0' | '1';
-  NO_COLOR?: '1';
-} {
-  const userSetColorEnv =
-    options?.userSetColorEnv ?? hasUserColorEnv(process.env);
-
-  // User explicitly set FORCE_COLOR or NO_COLOR — respect their intent.
-  // These vars are already in process.env and will be inherited by workers.
-  if (userSetColorEnv) {
-    return {};
-  }
-
-  const agent = options?.isAgent ?? determineAgent().isAgent;
-
-  // Agent environments (AI coding assistants) consume stdout as plain text.
-  // ANSI escapes become noise in their output, so disable colors entirely.
-  // Set both standards — some tools only check NO_COLOR, others FORCE_COLOR.
-  if (agent) {
-    return { NO_COLOR: '1', FORCE_COLOR: '0' };
-  }
-
-  const colorSupported = options?.isColorSupported ?? isColorSupported;
-
-  // Normal terminal session with color support — propagate to workers
-  // so their piped stdio doesn't suppress colors.
-  if (colorSupported) {
-    return { FORCE_COLOR: '1' };
-  }
-
-  return {};
+  return fallback;
 }
 
-/**
- * Task-time color env for a project. A worker is spawned from the creating
- * task's env and reusable workers are color-env-affine, so import-time color
- * detection matches the project. Both keys are still stated so `setupEnv` can
- * retract stale values within a matched worker as a safeguard. Bun forks may
- * drop `undefined` through JSON IPC, but reuse affinity makes those omitted
- * markers irrelevant to import-time detection.
- */
-export const resolveTaskColorEnv = (
-  resolvedEnv: ColorEnvSource,
-  options?: Omit<ForceColorEnvOptions, 'userSetColorEnv'>,
-): {
-  FORCE_COLOR: '0' | '1' | undefined;
-  NO_COLOR: '1' | undefined;
-} => ({
-  FORCE_COLOR: undefined,
-  NO_COLOR: undefined,
-  ...getForceColorEnv({
-    ...options,
-    userSetColorEnv: hasUserColorEnv(resolvedEnv),
-  }),
-});
-
-/**
- * Create a picocolors instance using default runtime detection.
- */
-export const color: ReturnType<typeof createColors> = createColors();
+export const color: ReturnType<typeof createColors> = createColors(
+  resolveColorEnabled(process.env),
+);
 
 if (isDebug()) {
   rslog.level = 'verbose';

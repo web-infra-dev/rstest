@@ -1,7 +1,6 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  env: {
-    NO_COLOR: '1',
-  },
+  globals: true,
+  include: ['./mock.test.js', './esm-neighbor.test.js'],
 });
