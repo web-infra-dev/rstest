@@ -32,7 +32,6 @@ import {
   parseMemoryLimit,
   parseWorkers,
 } from '../utils/workers';
-import { selectMemoryGate } from './memoryGate';
 import { assertWorkerEnvironmentOptions } from './workerOptions';
 import { getEnvironmentKey } from '../core/environment/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/environment/envDependencies';
@@ -485,7 +484,6 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    memoryGate: selectMemoryGate(workerKind),
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(
         formatTestEnvironmentPrebundleFallbackWarning(packageName, reason),

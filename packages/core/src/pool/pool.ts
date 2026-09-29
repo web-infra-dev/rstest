@@ -124,12 +124,10 @@ export class Pool {
     for (let attempt = 1; ; attempt++) {
       let runner: PoolRunner | undefined;
       let started = false;
-      let heapBaseline: number | undefined;
       try {
         runner = await pendingRunner;
         await runner.start();
         started = true;
-        heapBaseline = this.options.memoryGate?.recordDispatch();
         let assets = await task.loadAssets?.();
         const pendingResult = runner[op === 'run' ? 'runTest' : 'collectTests'](
           {
@@ -157,7 +155,6 @@ export class Pool {
         // Reserve the retry's place before releasing the killed runner's slot.
         pendingRunner = this.acquireRunner(task, attempt + 1);
       } finally {
-        this.options.memoryGate?.recordResolve(heapBaseline);
         if (runner) this.releaseRunner(runner, !started);
       }
     }
@@ -184,7 +181,7 @@ export class Pool {
     });
   }
 
-  private readonly wakeWaiters = (): boolean => {
+  private wakeWaiters(): void {
     while (this.slotWaiters.length > 0 && !this.isClosing && !this.isClosed) {
       const waiter = this.slotWaiters[0]!;
       const { task, exclusive } = waiter;
@@ -203,7 +200,7 @@ export class Pool {
           this.activeRunners.size + this.stoppingRunners.size > 0) ||
         this.activeRunners.size >= this.ceiling
       )
-        return true;
+        return;
 
       // Prefer reuse of an idle runner (only meaningful when isolate=false,
       // since isolate=true never returns runners to the idle pool). Most
@@ -228,8 +225,7 @@ export class Pool {
         continue;
       }
 
-      const inFlight = this.inFlightCount;
-      if (inFlight >= this.options.maxWorkers) {
+      if (this.inFlightCount >= this.options.maxWorkers) {
         // No idle runner holds this environment. Idle runners still occupy
         // slots, so shed the coldest one rather than parking behind workers
         // that can never serve this task; its slot — and this waiter — is
@@ -237,20 +233,13 @@ export class Pool {
         if (this.idleRunners.length > 0) {
           this.disposeRunnerInBackground(this.idleRunners.shift()!);
         }
-        return true;
-      }
-
-      const gate = this.options.memoryGate;
-      if (gate && !gate.canSpawnNewWorker(inFlight)) {
-        gate.attachPoll(this.wakeWaiters);
-        return true;
+        return;
       }
 
       // Reserve capacity before startup; dispatch owns release even when the
       // child dies before its start acknowledgement.
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
-      gate?.attachWorker(worker);
       const spawnEpoch = this.epoch;
       const runner = new PoolRunner(worker, {
         workerId,
@@ -279,8 +268,7 @@ export class Pool {
       void runner.start().catch(() => undefined);
       waiter.resolve(runner);
     }
-    return false;
-  };
+  }
 
   private get inFlightCount(): number {
     return (
@@ -410,7 +398,6 @@ export class Pool {
   async close(): Promise<void> {
     if (this.isClosed) return;
     this.interrupt();
-    this.options.memoryGate?.dispose();
     const runners = [...this.activeRunners, ...this.idleRunners];
     await Promise.all(
       runners.map((runner) =>
