@@ -133,7 +133,7 @@ describe('parseTestFile', () => {
     expect(tests.map((t) => t.type)).toEqual(['test', 'suite']);
   });
 
-  it('should mark non-literal or missing names as "unnamed test"', () => {
+  it('should label anonymous function names and mark other dynamic names as "unnamed test"', () => {
     const code = `
       const title = getTitle();
       function getTitle() { return 'x'; }
@@ -155,11 +155,16 @@ describe('parseTestFile', () => {
       },
     });
 
-    expect(tests.length).toBe(5);
-    expect(tests.every((t) => t.name === 'unnamed test')).toBe(true);
+    expect(tests.map((test) => test.name).sort()).toEqual([
+      '<anonymous>',
+      '<anonymous>',
+      'unnamed test',
+      'unnamed test',
+      'unnamed test',
+    ]);
   });
 
-  it('should use function and class identifiers as test names', () => {
+  it('should use function and class names from expressions and identifiers', () => {
     const code = `
       function Component() {}
       const ArrowComponent = () => {};
@@ -169,6 +174,8 @@ describe('parseTestFile', () => {
       it(ArrowComponent, () => {});
       describe(Widget, () => {});
       suite(NamedWidget, () => {});
+      test(function DirectFunction() {}, () => {});
+      describe(class DirectClass {}, () => {});
     `;
 
     const tests: { name: string; type: string }[] = [];
@@ -187,9 +194,32 @@ describe('parseTestFile', () => {
     expect(tests.map((test) => test.name)).toEqual([
       'ArrowComponent',
       'Component',
+      'DirectClass',
+      'DirectFunction',
       'InternalWidget',
       'Widget',
     ]);
+  });
+
+  it('should resolve function names in the nearest lexical scope', () => {
+    const code = `
+      function Component() {}
+      test(Component, () => {});
+      {
+        const Component = function InnerComponent() {};
+        test(Component, () => {});
+      }
+      test(Component, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names.sort()).toEqual(['Component', 'Component', 'InnerComponent']);
   });
 
   it('should handle complex template literals with multiple expressions', () => {

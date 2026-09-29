@@ -65,48 +65,201 @@ export const parseTestFile = (
       .join('');
   };
 
-  const functionNames = new Map<string, string>();
-  const collectFunctionNames = (node: Node): void => {
+  type NameScope = {
+    parent: NameScope | null;
+    isFunctionScope: boolean;
+    bindings: Map<string, string | null>;
+  };
+
+  const scopesByNode = new WeakMap<Node, NameScope>();
+  const createScope = (
+    parent: NameScope | null,
+    isFunctionScope = false,
+  ): NameScope => ({ parent, isFunctionScope, bindings: new Map() });
+
+  const addPatternBindings = (
+    pattern: Node,
+    scope: NameScope,
+    name: string | null,
+  ): void => {
+    if (pattern.type === 'Identifier') {
+      scope.bindings.set(pattern.name, name);
+    } else if (pattern.type === 'RestElement') {
+      if (isNode(pattern.argument)) {
+        addPatternBindings(pattern.argument, scope, null);
+      }
+    } else if (pattern.type === 'AssignmentPattern') {
+      if (isNode(pattern.left)) {
+        addPatternBindings(pattern.left, scope, null);
+      }
+    } else if (pattern.type === 'ArrayPattern') {
+      for (const element of pattern.elements) {
+        if (isNode(element)) {
+          addPatternBindings(element, scope, null);
+        }
+      }
+    } else if (pattern.type === 'ObjectPattern') {
+      for (const property of pattern.properties) {
+        if (!isNode(property)) {
+          continue;
+        }
+        const binding =
+          property.type === 'RestElement' ? property.argument : property.value;
+        if (isNode(binding)) {
+          addPatternBindings(binding, scope, null);
+        }
+      }
+    }
+  };
+
+  const functionNameFromInitializer = (
+    initializer: Node | undefined,
+    inferredName: string,
+  ): string | null => {
+    if (!initializer) {
+      return null;
+    }
+    if (initializer.type === 'ArrowFunctionExpression') {
+      return inferredName;
+    }
+    if (
+      initializer.type === 'FunctionExpression' ||
+      initializer.type === 'ClassExpression'
+    ) {
+      return isNode(initializer.id) && initializer.id.type === 'Identifier'
+        ? initializer.id.name
+        : inferredName;
+    }
+    return null;
+  };
+
+  const collectNameScopes = (node: Node, parentScope: NameScope): void => {
+    const createsFunctionScope =
+      node.type === 'FunctionDeclaration' ||
+      node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression';
+    const createsBlockScope =
+      node.type === 'BlockStatement' ||
+      node.type === 'ClassDeclaration' ||
+      node.type === 'ClassExpression' ||
+      node.type === 'ForStatement' ||
+      node.type === 'ForInStatement' ||
+      node.type === 'ForOfStatement' ||
+      node.type === 'SwitchStatement' ||
+      node.type === 'CatchClause';
+    const scope =
+      createsFunctionScope || createsBlockScope
+        ? createScope(parentScope, createsFunctionScope)
+        : parentScope;
+
     if (
       (node.type === 'FunctionDeclaration' ||
         node.type === 'ClassDeclaration') &&
       isNode(node.id) &&
       node.id.type === 'Identifier'
     ) {
-      functionNames.set(node.id.name, node.id.name);
+      parentScope.bindings.set(node.id.name, node.id.name);
+      scope.bindings.set(node.id.name, node.id.name);
     } else if (
-      node.type === 'VariableDeclarator' &&
+      (node.type === 'FunctionExpression' || node.type === 'ClassExpression') &&
       isNode(node.id) &&
-      node.id.type === 'Identifier' &&
-      isNode(node.init) &&
-      (node.init.type === 'ArrowFunctionExpression' ||
-        node.init.type === 'FunctionExpression' ||
-        node.init.type === 'ClassExpression')
+      node.id.type === 'Identifier'
     ) {
-      const name =
-        isNode(node.init.id) && node.init.id.type === 'Identifier'
-          ? node.init.id.name
-          : node.id.name;
-      functionNames.set(node.id.name, name);
+      scope.bindings.set(node.id.name, node.id.name);
     }
+
+    if (node.type === 'VariableDeclaration') {
+      const declarationScope =
+        node.kind === 'var' ? findFunctionScope(scope) : scope;
+      for (const declaration of node.declarations) {
+        if (isNode(declaration) && isNode(declaration.id)) {
+          const name =
+            declaration.id.type === 'Identifier'
+              ? functionNameFromInitializer(
+                  isNode(declaration.init) ? declaration.init : undefined,
+                  declaration.id.name,
+                )
+              : null;
+          addPatternBindings(declaration.id, declarationScope, name ?? null);
+        }
+      }
+    } else if (
+      (node.type === 'FunctionDeclaration' ||
+        node.type === 'FunctionExpression' ||
+        node.type === 'ArrowFunctionExpression') &&
+      Array.isArray(node.params)
+    ) {
+      for (const param of node.params) {
+        if (isNode(param)) {
+          addPatternBindings(param, scope, null);
+        }
+      }
+    } else if (node.type === 'CatchClause' && isNode(node.param)) {
+      addPatternBindings(node.param, scope, null);
+    } else if (
+      node.type === 'ImportDeclaration' &&
+      Array.isArray(node.specifiers)
+    ) {
+      for (const specifier of node.specifiers) {
+        if (isNode(specifier) && isNode(specifier.local)) {
+          addPatternBindings(specifier.local, scope, null);
+        }
+      }
+    }
+
+    scopesByNode.set(node, scope);
 
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) {
         for (const child of value) {
           if (isNode(child)) {
-            collectFunctionNames(child);
+            collectNameScopes(child, scope);
           }
         }
       } else if (isNode(value)) {
-        collectFunctionNames(value);
+        collectNameScopes(value, scope);
       }
     }
   };
 
-  collectFunctionNames(result.program);
+  const findFunctionScope = (scope: NameScope): NameScope => {
+    let current = scope;
+    while (!current.isFunctionScope && current.parent) {
+      current = current.parent;
+    }
+    return current;
+  };
 
-  const getFunctionName = (node: Node | undefined): string | null =>
-    node?.type === 'Identifier' ? (functionNames.get(node.name) ?? null) : null;
+  collectNameScopes(result.program, createScope(null, true));
+
+  const getFunctionName = (
+    node: Node | undefined,
+    scope: NameScope | undefined,
+  ): string | null => {
+    if (
+      node?.type === 'FunctionExpression' ||
+      node?.type === 'ClassExpression'
+    ) {
+      return isNode(node.id) && node.id.type === 'Identifier'
+        ? node.id.name
+        : '<anonymous>';
+    }
+    if (node?.type === 'ArrowFunctionExpression') {
+      return '<anonymous>';
+    }
+    if (node?.type !== 'Identifier') {
+      return null;
+    }
+
+    let current = scope;
+    while (current) {
+      if (current.bindings.has(node.name)) {
+        return current.bindings.get(node.name) ?? null;
+      }
+      current = current.parent ?? undefined;
+    }
+    return null;
+  };
 
   const walkNode = (node: Node): void => {
     let exit: (() => void) | void | undefined;
@@ -132,7 +285,7 @@ export const parseTestFile = (
         exit = events.onTest(
           offsetToRange(node.start, node.end),
           getStringLiteralValue(node.arguments[0]) ||
-            getFunctionName(node.arguments[0]) ||
+            getFunctionName(node.arguments[0], scopesByNode.get(node)) ||
             'unnamed test',
           functionName,
         );
