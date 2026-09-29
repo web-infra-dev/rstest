@@ -35,3 +35,8 @@ it.each([1])(tableCaseName, () => {
 it.for([2])(tableCaseName, () => {
   expect(tableNameFunctionCalled).toBe(false);
 });
+
+function $case() {}
+
+it.each([{ case: 'row' }])($case, () => {});
+it.for([{ case: 'row' }])($case, () => {});

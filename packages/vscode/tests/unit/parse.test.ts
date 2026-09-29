@@ -159,6 +159,39 @@ describe('parseTestFile', () => {
     expect(tests.every((t) => t.name === 'unnamed test')).toBe(true);
   });
 
+  it('should use function and class identifiers as test names', () => {
+    const code = `
+      function Component() {}
+      const ArrowComponent = () => {};
+      class Widget {}
+      const NamedWidget = class InternalWidget {};
+      test(Component, () => {});
+      it(ArrowComponent, () => {});
+      describe(Widget, () => {});
+      suite(NamedWidget, () => {});
+    `;
+
+    const tests: { name: string; type: string }[] = [];
+    parseTestFile(code, {
+      onTest: (
+        _range: Range,
+        name: string,
+        testType: 'test' | 'it' | 'describe' | 'suite',
+      ) => {
+        tests.push({ name, type: testType });
+      },
+    });
+
+    tests.sort((a, b) => a.name.localeCompare(b.name));
+
+    expect(tests.map((test) => test.name)).toEqual([
+      'ArrowComponent',
+      'Component',
+      'InternalWidget',
+      'Widget',
+    ]);
+  });
+
   it('should handle complex template literals with multiple expressions', () => {
     const code = `
       const a = 1, b = 2;

@@ -31,6 +31,7 @@ describe('function names', () => {
       expect(cli.stdout).toContain('Component');
       expect(cli.stdout).toContain('testName');
       expect(cli.stdout).toContain('tableCaseName');
+      expect(cli.stdout).toContain('$case');
     },
   );
 });

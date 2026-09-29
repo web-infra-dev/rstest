@@ -65,6 +65,49 @@ export const parseTestFile = (
       .join('');
   };
 
+  const functionNames = new Map<string, string>();
+  const collectFunctionNames = (node: Node): void => {
+    if (
+      (node.type === 'FunctionDeclaration' ||
+        node.type === 'ClassDeclaration') &&
+      isNode(node.id) &&
+      node.id.type === 'Identifier'
+    ) {
+      functionNames.set(node.id.name, node.id.name);
+    } else if (
+      node.type === 'VariableDeclarator' &&
+      isNode(node.id) &&
+      node.id.type === 'Identifier' &&
+      isNode(node.init) &&
+      (node.init.type === 'ArrowFunctionExpression' ||
+        node.init.type === 'FunctionExpression' ||
+        node.init.type === 'ClassExpression')
+    ) {
+      const name =
+        isNode(node.init.id) && node.init.id.type === 'Identifier'
+          ? node.init.id.name
+          : node.id.name;
+      functionNames.set(node.id.name, name);
+    }
+
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        for (const child of value) {
+          if (isNode(child)) {
+            collectFunctionNames(child);
+          }
+        }
+      } else if (isNode(value)) {
+        collectFunctionNames(value);
+      }
+    }
+  };
+
+  collectFunctionNames(result.program);
+
+  const getFunctionName = (node: Node | undefined): string | null =>
+    node?.type === 'Identifier' ? (functionNames.get(node.name) ?? null) : null;
+
   const walkNode = (node: Node): void => {
     let exit: (() => void) | void | undefined;
 
@@ -88,7 +131,9 @@ export const parseTestFile = (
       ) {
         exit = events.onTest(
           offsetToRange(node.start, node.end),
-          getStringLiteralValue(node.arguments[0]) || 'unnamed test',
+          getStringLiteralValue(node.arguments[0]) ||
+            getFunctionName(node.arguments[0]) ||
+            'unnamed test',
           functionName,
         );
       }

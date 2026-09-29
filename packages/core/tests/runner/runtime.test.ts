@@ -153,6 +153,27 @@ describe('RunnerRuntime', () => {
     expect(tests.map((test) => test.name)).toEqual(['testName', 'testName']);
   });
 
+  it('preserves dollar-prefixed function names in parameterized APIs', async () => {
+    const instance = createApi();
+    let nameFunctionCalled = false;
+    function $case() {
+      nameFunctionCalled = true;
+    }
+
+    runtimeAPI.describe.each([{ case: 'suite row' }])($case, () => {});
+    runtimeAPI.describe.for([{ case: 'suite row' }])($case, () => {});
+    runtimeAPI.it.each([{ case: 'test row' }])($case, () => {});
+    runtimeAPI.it.for([{ case: 'test row' }])($case, () => {});
+
+    const [firstSuite, secondSuite, firstTest, secondTest] =
+      await instance.getTests();
+    expect(firstSuite?.name).toBe('$case');
+    expect(secondSuite?.name).toBe('$case');
+    expect(firstTest?.name).toBe('$case');
+    expect(secondTest?.name).toBe('$case');
+    expect(nameFunctionCalled).toBe(false);
+  });
+
   it('uses an anonymous label for unnamed test functions', async () => {
     const instance = createApi();
     runtimeAPI.it(

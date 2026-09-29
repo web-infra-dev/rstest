@@ -222,7 +222,11 @@ export const formatName = (
   param: any[] | Record<string, any>,
   index: number,
 ): string => {
-  let templateStr = normalizeName(template);
+  if (typeof template !== 'string') {
+    return normalizeName(template);
+  }
+
+  let templateStr = template;
 
   if (['%%', '%#', '%$'].some((flag) => templateStr.includes(flag))) {
     // '%%' single percent sign ('%')
