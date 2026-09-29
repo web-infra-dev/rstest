@@ -13,11 +13,15 @@ Alias: `it`.
 
 ## test
 
+<ApiMeta addedVersion="0.12.3" />
+
+The test name can be a string or a named function. Rstest uses the function's `name` as the test name without calling it. Anonymous functions are displayed as `<anonymous>`. This also applies to `test.each` and `test.for`.
+
 - **Type:**
 
 ```ts
-(name: string, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
-(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
+(name: string | Function, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+(name: string | Function, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
 ```
 
 Defines a test case.
@@ -136,11 +140,11 @@ test.todo('should implement this test');
 
 ```ts
 // Every row is an array: the row is spread into the arguments
-test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
-test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+test.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
 // Otherwise: the row is passed as a single argument
-test.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-test.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+test.each<T>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each<T>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 Runs the same test logic for each item in the provided array.
@@ -236,8 +240,8 @@ test.each([
 - **Type:**
 
 ```ts
-test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
-test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
+test.for(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+test.for(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
 ```
 
 Alternative to `test.each` to provide `TestContext`.

@@ -14,12 +14,28 @@ import { ApiMeta } from '@components/ApiMeta';
 - **类型：**
 
 ```ts
-(name: string, fn?: () => void | Promise<void>, timeout?: number): void;
-(name: string, options: TestOptions, fn?: () => void | Promise<void>): void;
+(name: string | Function, fn?: () => void | Promise<void>, timeout?: number): void;
+(name: string | Function, options: TestOptions, fn?: () => void | Promise<void>): void;
 ```
 
 定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
 回调可以是异步函数；Rstest 会在收集阶段等待它完成，然后再运行其中声明的测试。
+
+<ApiMeta addedVersion="0.12.3" />
+
+也可以将函数作为 suite 名称传入。Rstest 会使用它的 `name` 属性，不会调用该函数；匿名函数会显示为 `<anonymous>`。`describe.each` 和 `describe.for` 也支持这种写法。
+
+```ts
+function add(a: number, b: number) {
+  return a + b;
+}
+
+describe(add, () => {
+  test('adds numbers', () => {
+    expect(add(1, 2)).toBe(3);
+  });
+});
+```
 
 ```ts
 import { describe, expect, test } from '@rstest/core';
@@ -159,11 +175,11 @@ describe.todo('should implement this suite');
 
 ```ts
 // Every row is an array: the row is spread into the arguments
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
 // Otherwise: the row is passed as a single argument
-describe.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 为数组中的每一项生成一个 describe 块。与 `describe` 一样，它的第二个参数可选地接受一个 [`TestOptions`](#testoptions) 对象，并作用于生成的每个套件。
@@ -214,8 +230,8 @@ describe.each<{ a: number; b: number; expected: number }>`
 - **类型：**
 
 ```ts
-describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+describe.for(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.for(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 类似 each，但参数类型更灵活。它同样接受可选的 [`TestOptions`](#testoptions) 第二个参数。

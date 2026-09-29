@@ -210,12 +210,19 @@ export const resolveEachArgs = (cases: readonly unknown[]): unknown[][] => {
   return rows.every(Array.isArray) ? rows : rows.map((row) => [row]);
 };
 
+// This mirrors runtime function detection and includes constructors.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+type RuntimeNameFunction = Function;
+
+export const normalizeName = (name: string | RuntimeNameFunction): string =>
+  typeof name === 'string' ? name : name.name || '<anonymous>';
+
 export const formatName = (
-  template: string,
+  template: string | RuntimeNameFunction,
   param: any[] | Record<string, any>,
   index: number,
 ): string => {
-  let templateStr = template;
+  let templateStr = normalizeName(template);
 
   if (['%%', '%#', '%$'].some((flag) => templateStr.includes(flag))) {
     // '%%' single percent sign ('%')

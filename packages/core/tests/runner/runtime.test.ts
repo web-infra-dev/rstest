@@ -86,6 +86,84 @@ describe('RunnerRuntime', () => {
     ).toEqual(['test - 1 - 1']);
   });
 
+  it('uses a function name as the suite name without invoking it', async () => {
+    const instance = createApi();
+    let nameFunctionCalled = false;
+    function suiteName() {
+      nameFunctionCalled = true;
+    }
+
+    runtimeAPI.describe(suiteName, () => {
+      runtimeAPI.it('child', () => {});
+    });
+
+    const [suite] = await instance.getTests();
+    expect(suite?.name).toBe('suiteName');
+    expect((suite as TestSuite).tests[0]?.name).toBe('child');
+    expect(nameFunctionCalled).toBe(false);
+  });
+
+  it('formats function names for describe.each and describe.for', async () => {
+    const instance = createApi();
+    function suiteName() {}
+
+    runtimeAPI.describe.each([1])(suiteName, () => {});
+    runtimeAPI.describe.for([2])(suiteName, () => {});
+
+    const suites = await instance.getTests();
+    expect(suites.map((suite) => suite.name)).toEqual([
+      'suiteName',
+      'suiteName',
+    ]);
+  });
+
+  it('uses an anonymous label for unnamed suite functions', async () => {
+    const instance = createApi();
+    runtimeAPI.describe(
+      function () {},
+      () => {},
+    );
+
+    const [suite] = await instance.getTests();
+    expect(suite?.name).toBe('<anonymous>');
+  });
+
+  it('uses a function name as the test name without invoking it', async () => {
+    const instance = createApi();
+    let nameFunctionCalled = false;
+    function testName() {
+      nameFunctionCalled = true;
+    }
+
+    runtimeAPI.it(testName, () => {});
+
+    const [test] = await instance.getTests();
+    expect(test?.name).toBe('testName');
+    expect(nameFunctionCalled).toBe(false);
+  });
+
+  it('formats function names for test.each and test.for', async () => {
+    const instance = createApi();
+    function testName() {}
+
+    runtimeAPI.it.each([1])(testName, () => {});
+    runtimeAPI.it.for([2])(testName, () => {});
+
+    const tests = await instance.getTests();
+    expect(tests.map((test) => test.name)).toEqual(['testName', 'testName']);
+  });
+
+  it('uses an anonymous label for unnamed test functions', async () => {
+    const instance = createApi();
+    runtimeAPI.it(
+      function () {},
+      () => {},
+    );
+
+    const [test] = await instance.getTests();
+    expect(test?.name).toBe('<anonymous>');
+  });
+
   it('tracks concurrent suite scope for sequential children', async () => {
     const instance = createApi();
 

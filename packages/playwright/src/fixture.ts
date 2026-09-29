@@ -1193,6 +1193,7 @@ const playwrightFixtures = {
 };
 
 type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
+type TestName = Parameters<RstestTest>[0];
 
 type TestCallback<ExtraContext> = (
   context: TestContext & ExtraContext,
@@ -1230,7 +1231,7 @@ const TEST_PROPERTY_POLICIES: Partial<Record<string, TestPropertyPolicy>> = {
 } satisfies Record<keyof TestAPIs, TestPropertyPolicy>;
 
 type CallableTest = (
-  description: string,
+  description: TestName,
   arg2?: unknown,
   arg3?: unknown,
 ) => void;
@@ -1447,12 +1448,12 @@ type PlaywrightTestBase<ExtraContext> = Omit<
   'each' | 'extend' | 'fail' | 'fails' | 'for'
 > & {
   (
-    description: string,
+    description: TestName,
     fn?: (context: TestContext & ExtraContext) => void | Promise<void>,
     timeout?: number,
   ): void;
   (
-    description: string,
+    description: TestName,
     options: TestOptions,
     fn?: (context: TestContext & ExtraContext) => void | Promise<void>,
   ): void;
@@ -1753,14 +1754,14 @@ const createPlaywrightTest = <ExtraContext>(
 
       if (typeof arg2 === 'function') {
         return target(
-          description as string,
+          description as TestName,
           wrapTestCallback(arg2 as TestCallback<ExtraContext>),
           arg3 as number | undefined,
         );
       }
 
       return target(
-        description as string,
+        description as TestName,
         arg2 as TestOptions,
         typeof arg3 === 'function'
           ? wrapTestCallback(arg3 as TestCallback<ExtraContext>)
