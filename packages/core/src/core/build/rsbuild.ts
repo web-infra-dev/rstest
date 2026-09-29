@@ -16,7 +16,6 @@ import type {
   NormalizedProjectConfig,
 } from '../../types';
 import { isDebug } from '../../utils';
-import { isMemorySufficient } from '../../utils/memory';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
@@ -350,19 +349,6 @@ const calcEntriesToRerun = (
   return { affectedEntries, deletedEntries: deletedPaths };
 };
 
-class AssetsMemorySafeMap<T = string> extends Map<string, T> {
-  override set(key: string, value: T): this {
-    if (this.has(key)) {
-      return this;
-    }
-    if (!isMemorySufficient()) {
-      this.clear();
-    }
-
-    return super.set(key, value);
-  }
-}
-
 // Work around Rsbuild compileState.wait having no settle path on failed.
 export class CompileFailedError extends Error {
   constructor(readonly error: Error) {
@@ -531,8 +517,6 @@ export const createRsbuildServer = async ({
         round.failure,
       ]);
 
-      const enableAssetsCache = isMemorySufficient();
-
       const manifest = devServer.environments[environmentName]!.context
         .manifest as ManifestData;
 
@@ -649,43 +633,13 @@ export const createRsbuildServer = async ({
           )
         : { affectedEntries: [], deletedEntries: [] };
 
-      const cachedAssetFiles = new AssetsMemorySafeMap<Buffer>();
-      const cachedSourceMaps = new AssetsMemorySafeMap();
-
-      const readFileWithCache = async (name: string) => {
-        if (enableAssetsCache && cachedAssetFiles.has(name)) {
-          return cachedAssetFiles.get(name)!;
-        }
-        const content = await readFile(name);
-
-        if (enableAssetsCache) cachedAssetFiles.set(name, content);
-
-        return content;
-      };
-
       const getSourceMap = async (name: string): Promise<null | string> => {
         const sourceMapPath = sourceMapPaths[name];
         if (!sourceMapPath) {
           return null;
         }
-
-        if (enableAssetsCache && cachedSourceMaps.has(name)) {
-          return cachedSourceMaps.get(name)!;
-        }
-
-        let content: string | null;
-
-        if (inlineSourceMap) {
-          const file = (await readFile(sourceMapPath)).toString('utf8');
-          content = parseInlineSourceMapStr(file);
-        } else {
-          const sourceMap = (await readFile(sourceMapPath)).toString('utf8');
-          content = sourceMap;
-        }
-
-        if (enableAssetsCache && content) cachedSourceMaps.set(name, content);
-
-        return content;
+        const file = (await readFile(sourceMapPath)).toString('utf8');
+        return inlineSourceMap ? parseInlineSourceMapStr(file) : file;
       };
 
       const assetNames = assets!.map((asset) =>
@@ -704,7 +658,7 @@ export const createRsbuildServer = async ({
           return Object.fromEntries(
             await Promise.all(
               names.map(async (name) => {
-                const content = await readFileWithCache(name);
+                const content = await readFile(name);
                 return [name, content];
               }),
             ),
