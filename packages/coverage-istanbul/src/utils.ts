@@ -339,7 +339,7 @@ export function createFastCoverageMap(): CoverageMap {
     }
 
     addFileCoverage(coverage);
-    if (existing && existing.all !== true) {
+    if (existing) {
       // Native unions renumber counter keys, invalidating either input's hash.
       delete existing.hash;
     }

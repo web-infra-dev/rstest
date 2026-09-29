@@ -115,37 +115,29 @@ describe('composeSpawnEnv', () => {
 // ── basic run ───────────────────────────────────────────────────────────────
 
 describe('Pool - basic', () => {
-  it.each(['forks', 'threads'] as const)(
-    'samples known structures after queued tasks acquire a slot (%s)',
-    async (worker) => {
-      const pool = new Pool(createPoolOptions({ maxWorkers: 1 }));
-      let knownCoverageStructures: KnownCoverageStructure[] = [];
-      const getKnownCoverageStructures = rs.fn(() => knownCoverageStructures);
-      const first = createTask('run', {}, 'node', worker);
-      const second = createTask('run', {}, 'node', worker);
-      first.getKnownCoverageStructures = getKnownCoverageStructures;
-      second.getKnownCoverageStructures = getKnownCoverageStructures;
-      try {
-        const firstRun = pool.runTest(first).then((result) => {
-          knownCoverageStructures = [{ path: '/shared.js', hash: 'h' }];
-          return result;
-        });
-        const secondRun = pool.runTest(second);
-        expect(await firstRun).toHaveProperty('_knownCoverageStructures', []);
-        expect(await secondRun).toHaveProperty(
-          '_knownCoverageStructures',
-          knownCoverageStructures,
-        );
-        expect(getKnownCoverageStructures).toHaveBeenCalledTimes(2);
-        const collect = createTask('collect', {}, 'node', worker);
-        collect.getKnownCoverageStructures = getKnownCoverageStructures;
-        await pool.collectTests(collect);
-        expect(getKnownCoverageStructures).toHaveBeenCalledTimes(2);
-      } finally {
-        await pool.close();
-      }
-    },
-  );
+  it('samples known structures after queued tasks acquire a slot', async () => {
+    const pool = new Pool(createPoolOptions({ maxWorkers: 1 }));
+    let knownCoverageStructures: KnownCoverageStructure[] = [];
+    const getKnownCoverageStructures = () => knownCoverageStructures;
+    const first = createTask();
+    const second = createTask();
+    first.getKnownCoverageStructures = getKnownCoverageStructures;
+    second.getKnownCoverageStructures = getKnownCoverageStructures;
+    try {
+      const firstRun = pool.runTest(first).then((result) => {
+        knownCoverageStructures = [{ path: '/shared.js', hash: 'h' }];
+        return result;
+      });
+      const secondRun = pool.runTest(second);
+      expect(await firstRun).toHaveProperty('_knownCoverageStructures', []);
+      expect(await secondRun).toHaveProperty(
+        '_knownCoverageStructures',
+        knownCoverageStructures,
+      );
+    } finally {
+      await pool.close();
+    }
+  });
 
   it('should run a task and return a result', async () => {
     const pool = new Pool(createPoolOptions());

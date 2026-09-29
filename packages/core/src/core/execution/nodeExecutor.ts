@@ -357,6 +357,15 @@ export function createNodeExecutor(
         context.exitCode.raise(1);
       }
     };
+    const mergeRawCoverage =
+      coverageProvider?.mergeRawCoverage?.bind(coverageProvider);
+    const onRawCoverageResult =
+      mergeRawCoverage && mergedCoverageMap
+        ? (raw: unknown) =>
+            foldCoverage(() => mergeRawCoverage(mergedCoverageMap, raw))
+        : (raw: unknown) => {
+            rawCoverageResults.push(raw);
+          };
 
     const traceRun = getTraceRun();
     const { span } = traceRun;
@@ -486,18 +495,7 @@ export function createNodeExecutor(
             updateSnapshot,
             onCoverageResult: (coverage) =>
               foldCoverage(() => mergedCoverageMap?.merge(coverage)),
-            onRawCoverageResult: (coverage) => {
-              foldCoverage(() => {
-                if (coverageProvider?.mergeRawCoverage && mergedCoverageMap) {
-                  coverageProvider.mergeRawCoverage(
-                    mergedCoverageMap,
-                    coverage,
-                  );
-                } else {
-                  rawCoverageResults.push(coverage);
-                }
-              });
-            },
+            onRawCoverageResult,
             getKnownCoverageStructures: () =>
               mergedCoverageMap
                 ? coverageProvider?.getKnownCoverageStructures?.(

@@ -26,7 +26,6 @@ type Structure = Pick<IstanbulFileCoverageData, StructureKey>;
 const structureKey = (path: string, hash: string): string =>
   JSON.stringify([path, hash]);
 
-/** @internal */
 type RawCoverage = {
   full: IstanbulFileCoverageData[];
   packed: (Omit<IstanbulFileCoverageData, StructureKey> & { hash: string })[];
@@ -48,7 +47,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   private coverageGlobal: typeof globalThis = globalThis;
   private registries = new WeakMap<
     CoverageMap,
-    { structures: Map<string, Structure>; known: KnownCoverageStructure[] }
+    Map<string, KnownCoverageStructure & Structure>
   >();
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
@@ -135,7 +134,10 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   getKnownCoverageStructures(map: CoverageMap): KnownCoverageStructure[] {
-    return this.registries.get(map)?.known.slice() ?? [];
+    return Array.from(
+      this.registries.get(map)?.values() ?? [],
+      ({ path, hash }) => ({ path, hash }),
+    );
   }
 
   mergeRawCoverage(map: CoverageMap, raw: unknown): void {
@@ -143,28 +145,28 @@ export class CoverageProvider implements RstestCoverageProvider {
     const payload = raw as RawCoverage;
     let registry = this.registries.get(map);
     if (!registry) {
-      registry = { structures: new Map(), known: [] };
+      registry = new Map();
       this.registries.set(map, registry);
     }
-    const { structures, known } = registry;
     const incoming: Record<string, IstanbulFileCoverageData> = {};
     for (const file of payload.full) {
       incoming[file.path] = file;
       if (!file.hash) continue;
       const key = structureKey(file.path, file.hash);
-      if (!structures.has(key)) {
+      if (!registry.has(key)) {
         // Native unions replace map containers; keep the original references.
-        structures.set(key, {
+        registry.set(key, {
+          path: file.path,
+          hash: file.hash,
           statementMap: file.statementMap,
           fnMap: file.fnMap,
           branchMap: file.branchMap,
         });
-        known.push({ path: file.path, hash: file.hash });
       }
     }
     for (const packed of payload.packed) {
       // Known structures only list versions already present in this cycle's registry.
-      const structure = structures.get(structureKey(packed.path, packed.hash));
+      const structure = registry.get(structureKey(packed.path, packed.hash));
       if (!structure) {
         throw new Error(
           `Istanbul coverage invariant violated for ${packed.path}: structure not registered`,

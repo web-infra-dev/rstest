@@ -29,3 +29,14 @@ export const createFileCoverage = (file: string): IstanbulFileCoverageData => ({
   b: { 0: [3, 4] },
   hash: 'same',
 });
+
+export const createRestructuredFileCoverage = (
+  file: string,
+  hash: string,
+): IstanbulFileCoverageData => ({
+  ...createFileCoverage(file),
+  hash,
+  statementMap: {
+    0: { start: { line: 2, column: 0 }, end: { line: 2, column: 10 } },
+  },
+});

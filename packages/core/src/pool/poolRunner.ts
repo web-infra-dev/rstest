@@ -388,10 +388,8 @@ export class PoolRunner {
 
         try {
           // Tasks are built eagerly; sample coverage only when a worker is ready.
-          if (kind === 'run') {
-            task.options.knownCoverageStructures =
-              task.getKnownCoverageStructures?.();
-          }
+          task.options.knownCoverageStructures =
+            task.getKnownCoverageStructures?.();
           this.worker.send({ type: kind, taskId, options: task.options });
         } catch (err) {
           this.currentTask = undefined;
