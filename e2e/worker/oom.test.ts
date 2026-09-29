@@ -48,6 +48,8 @@ describe.skipIf(process.platform === 'win32')('worker SIGKILL recovery', () => {
           'SIGKILL even when running alone after 3 attempts',
         );
         expect(cli.log).toMatch(/Tests\s+1 failed.*1 passed/);
+        // The final error is a worker crash, not an rstest code frame.
+        expect(cli.log).not.toContain('dist/');
       } else {
         expect(cli.log).toMatch(/Tests\s+2 passed/);
       }

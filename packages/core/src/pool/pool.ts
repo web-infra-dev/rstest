@@ -150,7 +150,7 @@ export class Pool {
         if (!(error instanceof WorkerOomKillError) || this.isClosing)
           throw error;
         if (attempt === MAX_OOM_ATTEMPTS) {
-          throw new Error(
+          throw new WorkerOomKillError(
             `Worker killed by SIGKILL even when running alone after ${MAX_OOM_ATTEMPTS} attempts (likely out of memory)`,
           );
         }

@@ -48,6 +48,7 @@ import {
   sinkToRuntimeRpc,
 } from '../core/execution/runnerEventSink';
 import { MAX_OOM_ATTEMPTS, Pool } from './pool';
+import { WorkerOomKillError } from './poolRunner';
 import type { PoolTask, PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -312,7 +313,11 @@ const workerErrorToResult = (
   const error = toSerializedError(toError(err));
 
   error.fullStack = true;
-  if (error.message.includes('Worker exited unexpectedly')) {
+  // A host-side stack would only point at rstest internals.
+  if (
+    err instanceof WorkerOomKillError ||
+    error.message.includes('Worker exited unexpectedly')
+  ) {
     delete error.stack;
   }
 
