@@ -155,25 +155,27 @@ test('keeps the real implementation while tracking calls', () => {
 - 使用 [rs.importActual()](/api/runtime-api/rstest/mock-modules#rsimportactual) 在测试中异步加载原始 ESM 模块。
 - 使用 [rs.requireActual()](/api/runtime-api/rstest/mock-modules#rsrequireactual) 同步加载原始 CommonJS 模块，也可以在同步 mock factory 中使用。
 
-静态 ESM 形式适合只替换一个导出，同时保留其余导出的场景：
+对于不含 top-level `await` 的模块依赖图，静态 ESM 形式适合只替换一个导出，同时保留其余导出。下面的示例在测试中通过 `await import()` 加载 mock 模块，因此也适用于真实模块依赖图含有 top-level `await` 的情况：
 
 ```ts title="date-utils.test.ts"
 import { expect, rs, test } from '@rstest/core';
 import * as actualDateUtils from './date-utils' with { rstest: 'importActual' };
-import { formatDate, parseDate } from './date-utils';
 
 rs.mock('./date-utils', () => ({
   ...actualDateUtils,
   formatDate: rs.fn().mockReturnValue('2026-03-19'),
 }));
 
-test('keeps parseDate real', () => {
+test('keeps parseDate real', async () => {
+  const { formatDate, parseDate } = await import('./date-utils');
   expect(formatDate(new Date())).toBe('2026-03-19');
   expect(parseDate('2026-03-19')).toBeInstanceOf(Date);
 });
 ```
 
 需要注意的是，由于 factory 会被提升，与 factory 共享的值必须来自静态 `importActual` import 或 [`rs.hoisted()`](#与提升的-mock-factory-共享值)。
+
+如果真实模块依赖图使用了 top-level `await`，不要在同一个测试文件中静态导入被 mock 的模块，否则 factory 可能会在真实导出就绪前执行。真实模块加载完成后，在异步测试中通过 `await import()` 动态导入 mock 模块。示例参见 [使用 `importActual` 做部分 mock](/api/runtime-api/rstest/mock-modules#使用-importactual-部分-mock)。
 
 ### 复用 `__mocks__` 里的手写 mock
 
