@@ -8,36 +8,7 @@ import {
   type IstanbulFileCoverageData,
   transformCoverage,
 } from '../src/utils';
-
-const createFileCoverage = (file: string): IstanbulFileCoverageData => ({
-  path: file,
-  statementMap: {
-    0: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
-  },
-  fnMap: {
-    0: {
-      name: 'fn',
-      decl: { start: { line: 1, column: 0 }, end: { line: 1, column: 2 } },
-      loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
-      line: 1,
-    },
-  },
-  branchMap: {
-    0: {
-      type: 'if',
-      loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
-      locations: [
-        { start: { line: 1, column: 0 }, end: { line: 1, column: 5 } },
-        { start: { line: 1, column: 5 }, end: { line: 1, column: 10 } },
-      ],
-      line: 1,
-    },
-  },
-  s: { 0: 1 },
-  f: { 0: 2 },
-  b: { 0: [3, 4] },
-  hash: 'same',
-});
+import { createFileCoverage, createRestructuredFileCoverage } from './fixtures';
 
 const createUnhashedFileCoverage = (file: string) => {
   const coverage = createFileCoverage(file);
@@ -113,19 +84,14 @@ describe('coverage istanbul utils', () => {
   it('falls back to istanbul merge when coverage shapes differ', () => {
     const file = '/project/src/index.ts';
     const coverageMap = createFastCoverageMap();
-
-    coverageMap.merge({
-      [file]: createFileCoverage(file),
-    });
-    const rehashed: IstanbulFileCoverageData = {
-      ...createFileCoverage(file),
-      statementMap: {
-        0: { start: { line: 2, column: 0 }, end: { line: 2, column: 10 } },
-      },
-      s: { 0: 5 },
-      hash: 'different',
-    };
-    coverageMap.merge({ [file]: rehashed });
+    const oracle = istanbulCoverage.createCoverageMap();
+    const first = createFileCoverage(file);
+    const rehashed = createRestructuredFileCoverage(file, 'different');
+    rehashed.s[0] = 5;
+    for (const entry of [first, rehashed]) {
+      oracle.merge({ [file]: structuredClone(entry) });
+      coverageMap.merge({ [file]: entry });
+    }
 
     expect(coverageMap.fileCoverageFor(file).toJSON()).toMatchObject({
       statementMap: {
@@ -134,6 +100,13 @@ describe('coverage istanbul utils', () => {
       },
       s: { 0: 1, 1: 5 },
     });
+    const third = createFileCoverage(file);
+    third.s[0] = 11;
+    oracle.merge({ [file]: structuredClone(third) });
+    coverageMap.merge({ [file]: third });
+    // Native Istanbul retains a stale hash after union; our accumulator drops it.
+    Reflect.deleteProperty(oracle.fileCoverageFor(file).data, 'hash');
+    expect(coverageMap.toJSON()).toEqual(oracle.toJSON());
   });
 
   it('falls back to istanbul merge when branch truthiness shape differs', () => {

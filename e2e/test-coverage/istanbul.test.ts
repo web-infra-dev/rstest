@@ -7,6 +7,40 @@ import { runRstestCli } from '../scripts';
 const fixturePath = join(__dirname, 'fixtures');
 
 describe('coverage istanbul-specific behavior', () => {
+  it('preserves shared-module counts across isolated fork waves', async ({
+    onTestFinished,
+  }) => {
+    const reports: Record<string, { f: Record<string, number> }>[] = [];
+    for (const workers of [1, 2]) {
+      const reportsDirectory = `test-temp-istanbul-shared-${workers}`;
+      onTestFinished(() => fs.removeSync(join(fixturePath, reportsDirectory)));
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'rstest.shared.config.ts',
+          '--isolate',
+          'true',
+          '--pool.maxWorkers',
+          String(workers),
+          '--coverage.reportsDirectory',
+          reportsDirectory,
+        ],
+        options: { nodeOptions: { cwd: fixturePath } },
+      });
+      await expectExecSuccess();
+      reports.push(
+        fs.readJsonSync(
+          join(fixturePath, reportsDirectory, 'coverage-final.json'),
+        ),
+      );
+    }
+    expect(reports[1]).toEqual(reports[0]);
+    // Four setup calls plus the index test's call, independent of worker count.
+    expect(Object.values(reports[0]!)[0]!.f).toEqual({ 0: 5 });
+  });
+
   it('collects instrumented VM globals under vmThreads', async ({
     onTestFinished,
   }) => {
