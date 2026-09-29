@@ -2,6 +2,7 @@
 acked
 acks
 ACMRTUXB
+AIMD
 antd
 apng
 apos
@@ -166,6 +167,7 @@ Samply
 selfsign
 selfsigned
 shiki
+SIGABRT
 SIGNREQUEST
 sirv
 sokra
