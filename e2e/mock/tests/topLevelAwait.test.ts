@@ -30,7 +30,7 @@ it('waits for the actual module before importing its mock', async () => {
   const mocked = await import('../src/topLevelAwait');
 
   expect(mocked.answer()).toBe(42);
-  expect(mocked.extra).toBe(true);
+  expect(mocked).toHaveProperty('extra', true);
 });
 
 it('returns a promise exported by a synchronous module from requireActual', () => {
