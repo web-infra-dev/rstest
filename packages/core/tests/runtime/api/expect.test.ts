@@ -185,6 +185,28 @@ it('does not inspect passing toContain arguments', () => {
   fileExpect([value]).toContain(value);
 });
 
+it('rejects non-iterable toContain receivers, including negated assertions', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+
+  expect(() => fileExpect(42).not.toContain(1)).toThrow(
+    'toContain() expects an array, string, or iterable',
+  );
+  expect(() => fileExpect({ 0: 1, length: 1 }).not.toContain(1)).toThrow(
+    'toContain() expects an array, string, or iterable',
+  );
+});
+
+it('preserves the toContain assertion target for chained matchers', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const values = new Set([1]);
+  const assertion = fileExpect(values);
+
+  assertion.toContain(1);
+  assertion.and.toBe(values);
+});
+
 it('treats cross-realm built-ins as the same type in toStrictEqual', () => {
   publishFile('/f1', 't1');
   const fileExpect = createFileExpect(() => {});
