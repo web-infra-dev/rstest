@@ -1,4 +1,10 @@
-import { installGracefulExit } from '../../../src/runtime/worker/setup';
+import { readFileSync, writeFileSync } from 'node:fs';
+import {
+  installGracefulExit,
+  preferAsOomVictim,
+} from '../../../src/runtime/worker/setup';
+
+rs.mock('node:fs', () => ({ readFileSync: rs.fn(), writeFileSync: rs.fn() }));
 
 /**
  * `installGracefulExit` replaced a bare `import './setup'` side effect so the
@@ -47,5 +53,39 @@ describe('installGracefulExit', () => {
     expect(collectSignalListeners(installGracefulExit)).not.toContain(
       'SIGTERM',
     );
+  });
+});
+
+describe('preferAsOomVictim', () => {
+  beforeEach(() => {
+    rs.stubGlobal(
+      'process',
+      Object.create(process, { platform: { value: 'linux' } }),
+    );
+    rs.mocked(writeFileSync).mockClear();
+  });
+
+  afterEach(() => {
+    rs.unstubAllGlobals();
+  });
+
+  it.each([
+    ['0\n', '1000'],
+    ['-500\n', '500'],
+    ['-997\n', '3'],
+    ['300\n', '1000'],
+  ])('raises an inherited %j to %s', (inherited, target) => {
+    rs.mocked(readFileSync).mockReturnValue(inherited);
+    preferAsOomVictim();
+    expect(writeFileSync).toHaveBeenCalledExactlyOnceWith(
+      '/proc/self/oom_score_adj',
+      target,
+    );
+  });
+
+  it('keeps a score already at 1000', () => {
+    rs.mocked(readFileSync).mockReturnValue('1000\n');
+    preferAsOomVictim();
+    expect(writeFileSync).not.toHaveBeenCalled();
   });
 });

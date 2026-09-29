@@ -54,3 +54,16 @@ describe.skipIf(process.platform === 'win32')('worker SIGKILL recovery', () => {
     },
   );
 });
+
+it.runIf(process.platform === 'linux')(
+  'prefers fork workers as OOM victims',
+  async ({ onTestFinished }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'worker.oomScore.test.ts', '--pool.type', 'forks'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixtureDir } },
+    });
+    await expectExecSuccess();
+  },
+);
