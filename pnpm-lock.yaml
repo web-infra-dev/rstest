@@ -736,9 +736,15 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
+      '@rsbuild/core':
+        specifier: 'catalog:'
+        version: 2.2.11(@module-federation/runtime-tools@2.9.0)
       '@rsbuild/plugin-react':
         specifier: 'catalog:'
-        version: 2.1.1(@rsbuild/core@2.2.9(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.7(@module-federation/runtime-tools@2.9.0))
+        version: 2.1.1(@rsbuild/core@2.2.11(@module-federation/runtime-tools@2.9.0))(@rspack/core@2.2.8(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23))
+      '@rspack/core':
+        specifier: 'catalog:'
+        version: 2.2.8(@module-federation/runtime-tools@2.9.0)(@swc/helpers@0.5.23)
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
