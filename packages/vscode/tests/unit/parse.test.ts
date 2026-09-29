@@ -222,6 +222,23 @@ describe('parseTestFile', () => {
     expect(names.sort()).toEqual(['Component', 'Component', 'InnerComponent']);
   });
 
+  it('should use imported names for named function bindings', () => {
+    const code = `
+      import { Component, Original as Local } from './component';
+      test(Component, () => {});
+      it(Local, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names.sort()).toEqual(['Component', 'Original']);
+  });
+
   it('should handle complex template literals with multiple expressions', () => {
     const code = `
       const a = 1, b = 2;

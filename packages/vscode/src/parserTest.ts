@@ -202,7 +202,13 @@ export const parseTestFile = (
     ) {
       for (const specifier of node.specifiers) {
         if (isNode(specifier) && isNode(specifier.local)) {
-          addPatternBindings(specifier.local, scope, null);
+          const name =
+            specifier.type === 'ImportSpecifier' &&
+            isNode(specifier.imported) &&
+            specifier.imported.type === 'Identifier'
+              ? specifier.imported.name
+              : null;
+          addPatternBindings(specifier.local, scope, name);
         }
       }
     }
