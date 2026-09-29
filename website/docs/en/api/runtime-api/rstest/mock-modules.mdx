@@ -23,6 +23,19 @@ If a factory function is provided as the second parameter, the module will be re
 
 Factory functions must be synchronous. To keep part of the original implementation, import the actual module with `with { rstest: 'importActual' }` before the mock factory and spread it into the returned object.
 
+If the actual module or one of its dependencies uses top-level `await`, do not statically import the mocked module in the test file. The mock factory may run before the actual module finishes evaluating. Keep the `importActual` attribute import, then dynamically import the mocked module from an async test after the actual module has loaded:
+
+```ts title="src/api.test.ts"
+import * as apiActual from './api' with { rstest: 'importActual' };
+
+rs.mock('./api', () => ({ ...apiActual, extra: true }));
+
+it('uses the real exports', async () => {
+  const api = await import('./api');
+  expect(api.answer()).toBe(42);
+});
+```
+
 #### Basic example
 
 <div style={{ display: 'flex', gap: '1rem' }}>
@@ -470,6 +483,8 @@ rs.mock('./api', () => ({
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
 }));
 ```
+
+This pattern assumes the module graph has no top-level `await`. For a graph that uses top-level `await`, the factory can run before its actual exports are ready if the mocked module is also statically imported. Keep the actual import, but use `await import('./api')` inside an async test to load the mocked module after the actual graph has finished evaluating. `rs.requireActual` is synchronous and cannot load a module graph that uses top-level `await`; use `rs.importActual` when loading it from async code.
 
 ## rs.requireActual
 

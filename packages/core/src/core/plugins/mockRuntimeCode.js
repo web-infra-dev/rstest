@@ -316,14 +316,26 @@ __webpack_require__.rstest_do_unmock_require =
 //#endregion
 
 //#region rs.requireActual
-__webpack_require__.rstest_require_actual =
-  __webpack_require__.rstest_import_actual = (id) => {
-    if (hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
-      return evaluateOriginalModule(id);
-    }
-    // Use fallback module if the module is not mocked.
-    return __webpack_require__(id);
-  };
+const getActualModule = (id) => {
+  if (hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
+    return evaluateOriginalModule(id);
+  }
+  // Use fallback module if the module is not mocked.
+  return __webpack_require__(id);
+};
+
+__webpack_require__.rstest_require_actual = (id) => {
+  const actualModule = getActualModule(id);
+  if (isPromise(actualModule) && hasOwn(actualModule, __webpack_require__.aE)) {
+    throw new Error(
+      `[Rstest] rs.requireActual() cannot synchronously load "${id}" because its dependency graph uses top-level await. Use the asynchronous rs.importActual() API instead.`,
+    );
+  }
+  return actualModule;
+};
+
+__webpack_require__.rstest_import_actual = (id) =>
+  Promise.resolve(getActualModule(id));
 //#endregion
 
 const getMockImplementation = (mockType = 'mock') => {

@@ -25,6 +25,19 @@ Rstest 提供了 `rs`（别名 `rstest`）工具函数来进行模块的 mock �
 
 工厂函数必须是同步函数。如果需要保留部分原始实现，请在 mock factory 前通过 `with { rstest: 'importActual' }` 导入真实模块，并在返回对象中展开它。
 
+如果真实模块或它的依赖使用了 top-level `await`，不要在测试文件中静态导入被 mock 的模块。真实模块完成求值前，mock factory 可能已经执行。保留 `importActual` 属性导入，然后在真实模块加载完成后的异步测试中动态导入 mock 模块：
+
+```ts title="src/api.test.ts"
+import * as apiActual from './api' with { rstest: 'importActual' };
+
+rs.mock('./api', () => ({ ...apiActual, extra: true }));
+
+it('uses the real exports', async () => {
+  const api = await import('./api');
+  expect(api.answer()).toBe(42);
+});
+```
+
 #### 基础示例
 
 <div style={{ display: 'flex', gap: '1rem' }}>
@@ -472,6 +485,8 @@ rs.mock('./api', () => ({
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
 }));
 ```
+
+这种写法要求模块依赖图不含 top-level `await`。如果依赖图含有 top-level `await`，同时又静态导入了被 mock 的模块，factory 可能会在真实导出就绪前执行。保留真实模块的属性导入，并在异步测试中使用 `await import('./api')`，等真实模块加载完成后再导入 mock 模块。`rs.requireActual` 是同步 API，不能加载含 top-level `await` 的模块依赖图；异步代码中请使用 `rs.importActual`。
 
 ## rs.requireActual
 
