@@ -38,6 +38,9 @@ export class Pool {
   }> = [];
   private ceiling: number;
   private epoch = 0;
+  // A kill halves the ceiling only if its runner was claimed in the current
+  // epoch; reused runners carry the epoch of their latest claim.
+  private readonly claimEpochs = new WeakMap<PoolRunner, number>();
   private successes = 0;
   private exclusiveRunner: PoolRunner | undefined;
   /**
@@ -213,6 +216,7 @@ export class Pool {
       if (reuseIndex !== -1) {
         const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
         if (reuse.isUsable()) {
+          this.claimEpochs.set(reuse, this.epoch);
           this.activeRunners.add(reuse);
           if (exclusive) this.exclusiveRunner = reuse;
           this.slotWaiters.shift();
@@ -240,7 +244,6 @@ export class Pool {
       // child dies before its start acknowledgement.
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
-      const spawnEpoch = this.epoch;
       const runner = new PoolRunner(worker, {
         workerId,
         environmentKey,
@@ -249,7 +252,10 @@ export class Pool {
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
         onOomKill: fork
           ? () => {
-              if (!this.isClosing && spawnEpoch === this.epoch) {
+              if (
+                !this.isClosing &&
+                this.claimEpochs.get(runner) === this.epoch
+              ) {
                 const liveCount = [...this.activeRunners].filter(
                   (active) => active === runner || active.worker.hasLiveChild(),
                 ).length;
@@ -260,6 +266,7 @@ export class Pool {
             }
           : undefined,
       });
+      this.claimEpochs.set(runner, this.epoch);
       this.activeRunners.add(runner);
       if (exclusive) this.exclusiveRunner = runner;
       this.slotWaiters.shift();

@@ -41,7 +41,7 @@ afterEach(async () => {
   rs.unstubAllGlobals();
 });
 
-it('halves once per spawn epoch and recovers after ceiling completions', async () => {
+it('halves once per epoch and recovers after ceiling completions', async () => {
   const retry = rs.fn();
   const results = Array.from({ length: 9 }, () =>
     pool.runTest({ ...task(), onRetry: retry }),
@@ -61,6 +61,33 @@ it('halves once per spawn epoch and recovers after ceiling completions', async (
   }
   for (const worker of active()) worker.finish();
   await Promise.all(results);
+});
+
+it('halves again when a runner reused after a decrease is killed', async () => {
+  const retry = rs.fn();
+  const results = Array.from({ length: 8 }, () =>
+    pool.runTest({ ...task(), onRetry: retry }),
+  );
+  await waitActive(4);
+  workers[0]!.kill();
+  await expect.poll(() => retry, { interval: 1 }).toHaveBeenCalledTimes(1);
+  workers[1]!.finish();
+  workers[2]!.finish();
+  // Both idle runners from the first epoch are claimed again.
+  await waitActive(3);
+  expect(workers).toHaveLength(4);
+  workers[1]!.kill();
+  await expect.poll(() => retry, { interval: 1 }).toHaveBeenCalledTimes(2);
+  expect(retry.mock.calls[1]![1]).toBe(1);
+  let settled = false;
+  const all = Promise.all(results).finally(() => {
+    settled = true;
+  });
+  while (!settled) {
+    for (const worker of active()) worker.finish();
+    await tick();
+  }
+  await all;
 });
 
 it('retries at the queue head, runs attempt three exclusively, then fails', async () => {
