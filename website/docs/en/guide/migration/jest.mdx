@@ -354,7 +354,7 @@ If your project is using CommonJS, Rstest still works, but it is recommended to 
 
 ### ESM vs CJS mocking
 
-In Rstest, `rs.mock()` targets ESM entries used by `import`, while `rs.mockRequire()` targets CJS entries used by `require()`.
+In Rstest, `rs.mock()` targets the entry resolved for `import`, while `rs.mockRequire()` targets the entry resolved for `require()`. If both resolve to the same bundled module, `rs.mock()` also affects `require()`; use `rs.mockRequire()` when a package has a separate CJS entry.
 
 For code that uses `require()`, `rs.mockRequire()` targets the CJS entry:
 
