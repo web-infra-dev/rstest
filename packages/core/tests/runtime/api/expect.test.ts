@@ -118,6 +118,61 @@ it('does not compare failed spy arguments a second time', () => {
   expect(() => fileExpect(mock).toHaveBeenCalledWith(expected)).toThrow();
 });
 
+it('applies custom equality testers to complete spy call arguments', () => {
+  publishFile('/expect', 'toHaveBeenCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const acceptedArguments = {};
+  const rejectedArguments = {};
+  fileExpect.addEqualityTesters([
+    (actual, expected) => {
+      if (!Array.isArray(actual) || !Array.isArray(expected)) {
+        return undefined;
+      }
+      if (
+        actual[0] === acceptedArguments &&
+        expected[0] === acceptedArguments
+      ) {
+        return true;
+      }
+      if (
+        actual[0] === rejectedArguments &&
+        expected[0] === rejectedArguments
+      ) {
+        return false;
+      }
+      return undefined;
+    },
+  ]);
+
+  const acceptedMock = rs.fn();
+  acceptedMock(acceptedArguments, 'actual');
+  fileExpect(acceptedMock).toHaveBeenCalledWith(
+    acceptedArguments,
+    'different expected argument',
+  );
+
+  const rejectedMock = rs.fn();
+  rejectedMock(rejectedArguments, 'same argument');
+  expect(() =>
+    fileExpect(rejectedMock).toHaveBeenCalledWith(
+      rejectedArguments,
+      'same argument',
+    ),
+  ).toThrow();
+});
+
+it('rejects invalid toHaveBeenNthCalledWith indices even when negated', () => {
+  publishFile('/expect', 'toHaveBeenNthCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const mock = rs.fn();
+
+  for (const times of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(() =>
+      fileExpect(mock).not.toHaveBeenNthCalledWith(times, 'argument'),
+    ).toThrow('n must be a positive integer');
+  }
+});
+
 it('does not inspect passing toContain arguments', () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});

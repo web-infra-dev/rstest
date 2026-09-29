@@ -329,11 +329,29 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
         ...registry.customEqualityTesters,
         iterableEquality,
       ];
-      const equalsArguments = (callArgs: unknown[], expectedArgs: unknown[]) =>
-        callArgs.length === expectedArgs.length &&
-        callArgs.every((callArg, index) =>
-          equals(callArg, expectedArgs[index], customTesters),
+      const equalsArguments = (
+        callArgs: unknown[],
+        expectedArgs: unknown[],
+      ) => {
+        for (const tester of registry.customEqualityTesters) {
+          const result = tester.call(
+            { equals },
+            callArgs,
+            expectedArgs,
+            customTesters,
+          );
+          if (result !== undefined) {
+            return result;
+          }
+        }
+
+        return (
+          callArgs.length === expectedArgs.length &&
+          callArgs.every((callArg, index) =>
+            equals(callArg, expectedArgs[index], customTesters),
+          )
         );
+      };
 
       let pass: boolean;
       let expectedArgs = args;
@@ -367,6 +385,9 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
         }
         case 'toHaveBeenNthCalledWith': {
           const [times, ...nthArgs] = args;
+          if (!Number.isSafeInteger(times) || (times as number) < 1) {
+            throw new Error('n must be a positive integer');
+          }
           const nthCall = calls[(times as number) - 1];
           const isCalled = (times as number) <= calls.length;
           pass = Boolean(nthCall && equalsArguments(nthCall, nthArgs));
