@@ -14,12 +14,28 @@ import { ApiMeta } from '@components/ApiMeta';
 - **Type:**
 
 ```ts
-(name: string, fn?: () => void | Promise<void>, timeout?: number): void;
-(name: string, options: TestOptions, fn?: () => void | Promise<void>): void;
+(name: string | Function, fn?: () => void | Promise<void>, timeout?: number): void;
+(name: string | Function, options: TestOptions, fn?: () => void | Promise<void>): void;
 ```
 
 Defines a test suite that can contain multiple test cases or nested describe blocks.
 The callback can be asynchronous; Rstest waits for it during collection before running the tests declared inside it.
+
+<ApiMeta addedVersion="0.12.3" />
+
+You can pass a function as the suite name. Rstest uses its `name` property and does not call it; an anonymous function is displayed as `<anonymous>`. This also applies to `describe.each` and `describe.for`.
+
+```ts
+function add(a: number, b: number) {
+  return a + b;
+}
+
+describe(add, () => {
+  test('adds numbers', () => {
+    expect(add(1, 2)).toBe(3);
+  });
+});
+```
 
 ```ts
 import { describe, expect, test } from '@rstest/core';
@@ -159,11 +175,11 @@ describe.todo('should implement this suite');
 
 ```ts
 // Every row is an array: the row is spread into the arguments
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
+describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
 // Otherwise: the row is passed as a single argument
-describe.each<T>(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.each<T>(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 Creates a describe block for each item in the provided array. Like `describe`, it accepts an optional [`TestOptions`](#testoptions) object as its second argument and applies it to every generated suite.
@@ -214,8 +230,8 @@ describe.each<{ a: number; b: number; expected: number }>`
 - **Type:**
 
 ```ts
-describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+describe.for(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.for(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
 ```
 
 Alternative to `describe.each` for more flexible parameter types. It accepts the same optional [`TestOptions`](#testoptions) second argument.

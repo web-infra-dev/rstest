@@ -36,6 +36,7 @@ import { fileContext } from '../fileContext';
 import {
   formatName,
   isTemplateStringsArray,
+  normalizeName,
   parseTemplateTable,
   resolveEachArgs,
   resolveTestArgs,
@@ -46,6 +47,8 @@ import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
+type DescribeName = Parameters<DescribeAPI>[0];
+type TestName = Parameters<TestAPI>[0];
 
 const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   value !== null &&
@@ -504,7 +507,7 @@ export class RunnerRuntime {
     sequential?: boolean;
     location?: Location;
   }): (
-    name: string,
+    name: DescribeName,
     arg2?: ((...args: any[]) => any) | TestOptions,
     arg3?: ((...args: any[]) => any) | number,
   ) => void {
@@ -540,7 +543,7 @@ export class RunnerRuntime {
     sequential?: boolean;
     location?: Location;
   }): (
-    name: string,
+    name: DescribeName,
     arg2?: ((...args: any[]) => any) | TestOptions,
     arg3?: ((...args: any[]) => any) | number,
   ) => void {
@@ -575,7 +578,7 @@ export class RunnerRuntime {
     sequential?: boolean;
     location?: Location;
   }): (
-    name: string,
+    name: TestName,
     arg2?: ((...args: any[]) => any) | TestOptions,
     arg3?: ((...args: any[]) => any) | number,
   ) => void {
@@ -617,7 +620,7 @@ export class RunnerRuntime {
     sequential?: boolean;
     location?: Location;
   }): (
-    name: string,
+    name: TestName,
     arg2?: ((...args: any[]) => any) | TestOptions,
     arg3?: ((...args: any[]) => any) | number,
   ) => void {
@@ -690,7 +693,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
       const { timeout, retry, repeats, meta } = testOptions;
       const rt = currentRuntime();
       rt.it({
-        name,
+        name: normalizeName(name),
         fn,
         timeout,
         retry,
@@ -822,7 +825,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
       const { timeout, retry, repeats, meta } = suiteOptions;
       const rt = currentRuntime();
       rt.describe({
-        name,
+        name: normalizeName(name),
         fn,
         timeout,
         retry,

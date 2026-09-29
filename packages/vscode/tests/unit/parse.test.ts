@@ -133,7 +133,7 @@ describe('parseTestFile', () => {
     expect(tests.map((t) => t.type)).toEqual(['test', 'suite']);
   });
 
-  it('should mark non-literal or missing names as "unnamed test"', () => {
+  it('should label anonymous function names and mark other dynamic names as "unnamed test"', () => {
     const code = `
       const title = getTitle();
       function getTitle() { return 'x'; }
@@ -155,8 +155,126 @@ describe('parseTestFile', () => {
       },
     });
 
-    expect(tests.length).toBe(5);
-    expect(tests.every((t) => t.name === 'unnamed test')).toBe(true);
+    expect(tests.map((test) => test.name).sort()).toEqual([
+      '<anonymous>',
+      '<anonymous>',
+      'unnamed test',
+      'unnamed test',
+      'unnamed test',
+    ]);
+  });
+
+  it('should use function and class names from expressions and identifiers', () => {
+    const code = `
+      function Component() {}
+      const ArrowComponent = () => {};
+      class Widget {}
+      const NamedWidget = class InternalWidget {};
+      test(Component, () => {});
+      it(ArrowComponent, () => {});
+      describe(Widget, () => {});
+      suite(NamedWidget, () => {});
+      test(function DirectFunction() {}, () => {});
+      describe(class DirectClass {}, () => {});
+    `;
+
+    const tests: { name: string; type: string }[] = [];
+    parseTestFile(code, {
+      onTest: (
+        _range: Range,
+        name: string,
+        testType: 'test' | 'it' | 'describe' | 'suite',
+      ) => {
+        tests.push({ name, type: testType });
+      },
+    });
+
+    tests.sort((a, b) => a.name.localeCompare(b.name));
+
+    expect(tests.map((test) => test.name)).toEqual([
+      'ArrowComponent',
+      'Component',
+      'DirectClass',
+      'DirectFunction',
+      'InternalWidget',
+      'Widget',
+    ]);
+  });
+
+  it('should resolve function names in the nearest lexical scope', () => {
+    const code = `
+      function Component() {}
+      test(Component, () => {});
+      {
+        const Component = function InnerComponent() {};
+        test(Component, () => {});
+      }
+      test(Component, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names.sort()).toEqual(['Component', 'Component', 'InnerComponent']);
+  });
+
+  it('should use imported names for named function bindings', () => {
+    const code = `
+      import { Component, Original as Local } from './component';
+      test(Component, () => {});
+      it(Local, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names.sort()).toEqual(['Component', 'Original']);
+  });
+
+  it('should resolve identifier aliases at each call site', () => {
+    const code = `
+      function Component() {}
+      const Alias = Component;
+      var Name = function First() {};
+      test(Alias, () => {});
+      test(Name, () => {});
+      var Name = function Second() {};
+      test(Name, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names).toEqual(['Component', 'First', 'Second']);
+  });
+
+  it('should not collect tests inside a function-valued title', () => {
+    const code = `
+      test(function Title() {
+        test('phantom', () => {});
+      }, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names).toEqual(['Title']);
   });
 
   it('should handle complex template literals with multiple expressions', () => {
