@@ -68,7 +68,17 @@ export const parseTestFile = (
   type NameScope = {
     parent: NameScope | null;
     isFunctionScope: boolean;
-    bindings: Map<string, string | null>;
+    bindings: Map<string, NameBinding[]>;
+  };
+  type NameValue =
+    | { type: 'name'; value: string }
+    | { type: 'alias'; name: string; scope: NameScope; position: number }
+    | null;
+  type NameBinding = {
+    kind: 'function' | 'import' | 'lexical' | 'parameter' | 'variable';
+    position: number;
+    initialized: boolean;
+    value: NameValue;
   };
 
   const scopesByNode = new WeakMap<Node, NameScope>();
@@ -77,25 +87,38 @@ export const parseTestFile = (
     isFunctionScope = false,
   ): NameScope => ({ parent, isFunctionScope, bindings: new Map() });
 
+  const addBinding = (
+    name: string,
+    scope: NameScope,
+    binding: NameBinding,
+  ): void => {
+    const bindings = scope.bindings.get(name) ?? [];
+    bindings.push(binding);
+    scope.bindings.set(name, bindings);
+  };
+
   const addPatternBindings = (
     pattern: Node,
     scope: NameScope,
-    name: string | null,
+    binding: NameBinding,
   ): void => {
     if (pattern.type === 'Identifier') {
-      scope.bindings.set(pattern.name, name);
+      addBinding(pattern.name, scope, binding);
     } else if (pattern.type === 'RestElement') {
       if (isNode(pattern.argument)) {
-        addPatternBindings(pattern.argument, scope, null);
+        addPatternBindings(pattern.argument, scope, {
+          ...binding,
+          value: null,
+        });
       }
     } else if (pattern.type === 'AssignmentPattern') {
       if (isNode(pattern.left)) {
-        addPatternBindings(pattern.left, scope, null);
+        addPatternBindings(pattern.left, scope, { ...binding, value: null });
       }
     } else if (pattern.type === 'ArrayPattern') {
       for (const element of pattern.elements) {
         if (isNode(element)) {
-          addPatternBindings(element, scope, null);
+          addPatternBindings(element, scope, { ...binding, value: null });
         }
       }
     } else if (pattern.type === 'ObjectPattern') {
@@ -103,34 +126,24 @@ export const parseTestFile = (
         if (!isNode(property)) {
           continue;
         }
-        const binding =
+        const nestedPattern =
           property.type === 'RestElement' ? property.argument : property.value;
-        if (isNode(binding)) {
-          addPatternBindings(binding, scope, null);
+        if (isNode(nestedPattern)) {
+          addPatternBindings(nestedPattern, scope, {
+            ...binding,
+            value: null,
+          });
         }
       }
     }
   };
 
-  const functionNameFromInitializer = (
-    initializer: Node | undefined,
-    inferredName: string,
-  ): string | null => {
-    if (!initializer) {
-      return null;
+  const findFunctionScope = (scope: NameScope): NameScope => {
+    let current = scope;
+    while (!current.isFunctionScope && current.parent) {
+      current = current.parent;
     }
-    if (initializer.type === 'ArrowFunctionExpression') {
-      return inferredName;
-    }
-    if (
-      initializer.type === 'FunctionExpression' ||
-      initializer.type === 'ClassExpression'
-    ) {
-      return isNode(initializer.id) && initializer.id.type === 'Identifier'
-        ? initializer.id.name
-        : inferredName;
-    }
-    return null;
+    return current;
   };
 
   const collectNameScopes = (node: Node, parentScope: NameScope): void => {
@@ -158,30 +171,68 @@ export const parseTestFile = (
       isNode(node.id) &&
       node.id.type === 'Identifier'
     ) {
-      parentScope.bindings.set(node.id.name, node.id.name);
-      scope.bindings.set(node.id.name, node.id.name);
+      const kind = node.type === 'FunctionDeclaration' ? 'function' : 'lexical';
+      const binding: NameBinding = {
+        kind,
+        position: node.type === 'FunctionDeclaration' ? node.start : node.end,
+        initialized: true,
+        value: { type: 'name', value: node.id.name },
+      };
+      addBinding(node.id.name, parentScope, binding);
+      addBinding(node.id.name, scope, binding);
     } else if (
       (node.type === 'FunctionExpression' || node.type === 'ClassExpression') &&
       isNode(node.id) &&
       node.id.type === 'Identifier'
     ) {
-      scope.bindings.set(node.id.name, node.id.name);
+      addBinding(node.id.name, scope, {
+        kind: 'lexical',
+        position: node.start,
+        initialized: true,
+        value: { type: 'name', value: node.id.name },
+      });
     }
 
     if (node.type === 'VariableDeclaration') {
       const declarationScope =
         node.kind === 'var' ? findFunctionScope(scope) : scope;
       for (const declaration of node.declarations) {
-        if (isNode(declaration) && isNode(declaration.id)) {
-          const name =
-            declaration.id.type === 'Identifier'
-              ? functionNameFromInitializer(
-                  isNode(declaration.init) ? declaration.init : undefined,
-                  declaration.id.name,
-                )
-              : null;
-          addPatternBindings(declaration.id, declarationScope, name ?? null);
+        if (!isNode(declaration) || !isNode(declaration.id)) {
+          continue;
         }
+
+        const initializer = isNode(declaration.init)
+          ? declaration.init
+          : undefined;
+        let value: NameValue = null;
+        if (initializer?.type === 'Identifier') {
+          value = {
+            type: 'alias',
+            name: initializer.name,
+            scope: declarationScope,
+            position: initializer.start,
+          };
+        } else if (
+          declaration.id.type === 'Identifier' &&
+          (initializer?.type === 'ArrowFunctionExpression' ||
+            initializer?.type === 'FunctionExpression' ||
+            initializer?.type === 'ClassExpression')
+        ) {
+          const name =
+            (initializer.type !== 'ArrowFunctionExpression' &&
+            isNode(initializer.id) &&
+            initializer.id.type === 'Identifier'
+              ? initializer.id.name
+              : undefined) ?? declaration.id.name;
+          value = { type: 'name', value: name };
+        }
+
+        addPatternBindings(declaration.id, declarationScope, {
+          kind: node.kind === 'var' ? 'variable' : 'lexical',
+          position: initializer?.end ?? declaration.start,
+          initialized: Boolean(initializer),
+          value,
+        });
       }
     } else if (
       (node.type === 'FunctionDeclaration' ||
@@ -191,25 +242,44 @@ export const parseTestFile = (
     ) {
       for (const param of node.params) {
         if (isNode(param)) {
-          addPatternBindings(param, scope, null);
+          addPatternBindings(param, scope, {
+            kind: 'parameter',
+            position: node.start,
+            initialized: true,
+            value: null,
+          });
         }
       }
     } else if (node.type === 'CatchClause' && isNode(node.param)) {
-      addPatternBindings(node.param, scope, null);
+      addPatternBindings(node.param, scope, {
+        kind: 'parameter',
+        position: node.start,
+        initialized: true,
+        value: null,
+      });
     } else if (
       node.type === 'ImportDeclaration' &&
       Array.isArray(node.specifiers)
     ) {
       for (const specifier of node.specifiers) {
-        if (isNode(specifier) && isNode(specifier.local)) {
-          const name =
-            specifier.type === 'ImportSpecifier' &&
-            isNode(specifier.imported) &&
-            specifier.imported.type === 'Identifier'
-              ? specifier.imported.name
-              : null;
-          addPatternBindings(specifier.local, scope, name);
+        if (!isNode(specifier) || !isNode(specifier.local)) {
+          continue;
         }
+
+        const name =
+          node.importKind !== 'type' &&
+          specifier.type === 'ImportSpecifier' &&
+          specifier.importKind !== 'type' &&
+          isNode(specifier.imported) &&
+          specifier.imported.type === 'Identifier'
+            ? specifier.imported.name
+            : null;
+        addPatternBindings(specifier.local, scope, {
+          kind: 'import',
+          position: node.start,
+          initialized: true,
+          value: name === null ? null : { type: 'name', value: name },
+        });
       }
     }
 
@@ -228,19 +298,59 @@ export const parseTestFile = (
     }
   };
 
-  const findFunctionScope = (scope: NameScope): NameScope => {
-    let current = scope;
-    while (!current.isFunctionScope && current.parent) {
-      current = current.parent;
-    }
-    return current;
-  };
-
   collectNameScopes(result.program, createScope(null, true));
+
+  const resolveName = (
+    name: string,
+    scope: NameScope | undefined,
+    position: number,
+    seen: Set<NameBinding>,
+  ): string | null => {
+    let current = scope;
+    while (current) {
+      const bindings = current.bindings.get(name);
+      if (bindings?.length) {
+        const initialized = bindings.filter(
+          (binding) => binding.initialized && binding.position <= position,
+        );
+        const variable = initialized
+          .filter((binding) => binding.kind === 'variable')
+          .sort((a, b) => b.position - a.position)[0];
+        const lexical = initialized
+          .filter((binding) => binding.kind === 'lexical')
+          .sort((a, b) => b.position - a.position)[0];
+        const imported = initialized.find(
+          (binding) => binding.kind === 'import',
+        );
+        const functionDeclaration = bindings
+          .filter((binding) => binding.kind === 'function')
+          .sort((a, b) => b.position - a.position)[0];
+        const binding = variable ?? lexical ?? imported ?? functionDeclaration;
+
+        if (!binding || !binding.value || seen.has(binding)) {
+          return null;
+        }
+        if (binding.value.type === 'name') {
+          return binding.value.value;
+        }
+
+        seen.add(binding);
+        return resolveName(
+          binding.value.name,
+          binding.value.scope,
+          binding.value.position,
+          seen,
+        );
+      }
+      current = current.parent ?? undefined;
+    }
+    return null;
+  };
 
   const getFunctionName = (
     node: Node | undefined,
     scope: NameScope | undefined,
+    position: number,
   ): string | null => {
     if (
       node?.type === 'FunctionExpression' ||
@@ -256,19 +366,12 @@ export const parseTestFile = (
     if (node?.type !== 'Identifier') {
       return null;
     }
-
-    let current = scope;
-    while (current) {
-      if (current.bindings.has(node.name)) {
-        return current.bindings.get(node.name) ?? null;
-      }
-      current = current.parent ?? undefined;
-    }
-    return null;
+    return resolveName(node.name, scope, position, new Set());
   };
 
   const walkNode = (node: Node): void => {
     let exit: (() => void) | void | undefined;
+    let functionTitleNode: Node | undefined;
 
     if (node.type === 'CallExpression') {
       let functionName: string | undefined;
@@ -288,10 +391,23 @@ export const parseTestFile = (
         functionName === 'describe' ||
         functionName === 'suite'
       ) {
+        const title = node.arguments[0];
+        if (
+          isNode(title) &&
+          (title.type === 'FunctionExpression' ||
+            title.type === 'ClassExpression' ||
+            title.type === 'ArrowFunctionExpression')
+        ) {
+          functionTitleNode = title;
+        }
         exit = events.onTest(
           offsetToRange(node.start, node.end),
           getStringLiteralValue(node.arguments[0]) ||
-            getFunctionName(node.arguments[0], scopesByNode.get(node)) ||
+            getFunctionName(
+              node.arguments[0],
+              scopesByNode.get(node),
+              node.start,
+            ) ||
             'unnamed test',
           functionName,
         );
@@ -301,7 +417,7 @@ export const parseTestFile = (
     for (const value of Object.values(node)) {
       if (Array.isArray(value)) {
         for (const child of value) {
-          if (isNode(child)) {
+          if (isNode(child) && child !== functionTitleNode) {
             walkNode(child);
           }
         }

@@ -239,6 +239,44 @@ describe('parseTestFile', () => {
     expect(names.sort()).toEqual(['Component', 'Original']);
   });
 
+  it('should resolve identifier aliases at each call site', () => {
+    const code = `
+      function Component() {}
+      const Alias = Component;
+      var Name = function First() {};
+      test(Alias, () => {});
+      test(Name, () => {});
+      var Name = function Second() {};
+      test(Name, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names).toEqual(['Component', 'First', 'Second']);
+  });
+
+  it('should not collect tests inside a function-valued title', () => {
+    const code = `
+      test(function Title() {
+        test('phantom', () => {});
+      }, () => {});
+    `;
+
+    const names: string[] = [];
+    parseTestFile(code, {
+      onTest: (_range, name) => {
+        names.push(name);
+      },
+    });
+
+    expect(names).toEqual(['Title']);
+  });
+
   it('should handle complex template literals with multiple expressions', () => {
     const code = `
       const a = 1, b = 2;
