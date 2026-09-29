@@ -149,13 +149,10 @@ __webpack_require__.rstest_original_modules = {};
 __webpack_require__.rstest_original_module_values = {};
 __webpack_require__.rstest_original_module_factories = {};
 
-// Clean request (e.g. `node:child_process`) -> the module id the mock was
-// installed on. A dynamic `import(request)` of an external carries a different
-// module id than the one the hoisted `rs.mock` patched, so
-// `rstest_dynamic_require` redirects it to the mocked id by request.
-// Null-prototype because keys are user-controlled request strings that must
-// not collide with `Object.prototype` members.
+// ESM and CommonJS conditions can resolve one package request to different
+// module ids, so keep their aliases separate. Dynamic imports use the ESM map.
 __webpack_require__.rstest_mocked_ids_by_request = Object.create(null);
+__webpack_require__.rstest_mocked_ids_by_request_cjs = Object.create(null);
 
 //#region federation chunk handler placeholders
 // When `__webpack_require__.f` was populated before this runtime module ran,
@@ -287,16 +284,20 @@ const createMockedModule = (originalModule, isSpy) => {
   );
 };
 
-//#region rs.unmock
-__webpack_require__.rstest_unmock = (id, request) => {
+const createUnmockImplementation = (mockedIdsByRequest) => (id, request) => {
   restoreOriginalFactory(id);
 
   // `request` is `undefined` under an older @rspack/core that omits the request
   // literal; the guard can be dropped once the minimum @rspack/core always emits it.
   if (request !== undefined) {
-    delete __webpack_require__.rstest_mocked_ids_by_request[request];
+    delete mockedIdsByRequest[request];
   }
 };
+
+//#region rs.unmock
+__webpack_require__.rstest_unmock = createUnmockImplementation(
+  __webpack_require__.rstest_mocked_ids_by_request,
+);
 //#endregion
 
 //#region rs.doUnmock
@@ -304,12 +305,14 @@ __webpack_require__.rstest_do_unmock = __webpack_require__.rstest_unmock;
 //#endregion
 
 //#region rs.unmockRequire
-__webpack_require__.rstest_unmock_require = __webpack_require__.rstest_unmock;
+__webpack_require__.rstest_unmock_require = createUnmockImplementation(
+  __webpack_require__.rstest_mocked_ids_by_request_cjs,
+);
 //#endregion
 
 //#region rs.doUnmockRequire
 __webpack_require__.rstest_do_unmock_require =
-  __webpack_require__.rstest_do_unmock;
+  __webpack_require__.rstest_unmock_require;
 //#endregion
 
 //#region rs.requireActual
@@ -326,6 +329,9 @@ __webpack_require__.rstest_require_actual =
 const getMockImplementation = (mockType = 'mock') => {
   const isMockRequire =
     mockType === 'mockRequire' || mockType === 'doMockRequire';
+  const mockedIdsByRequest = isMockRequire
+    ? __webpack_require__.rstest_mocked_ids_by_request_cjs
+    : __webpack_require__.rstest_mocked_ids_by_request;
 
   // The mock and mockRequire will resolve to different module ids when the module is a dual package.
   return (id, modFactory, request) => {
@@ -334,7 +340,7 @@ const getMockImplementation = (mockType = 'mock') => {
     // here. No-ops under an older @rspack/core that omits the request literal.
     const registerRequestAlias = () => {
       if (request !== undefined) {
-        __webpack_require__.rstest_mocked_ids_by_request[request] = id;
+        mockedIdsByRequest[request] = id;
       }
     };
 
@@ -506,8 +512,107 @@ __webpack_require__.rstest_do_mock_require =
  * request isn't mocked, behave exactly like `__webpack_require__(id)`.
  */
 __webpack_require__.rstest_dynamic_require = (id, request) => {
-  const mockedId = __webpack_require__.rstest_mocked_ids_by_request[request];
+  const mockedId =
+    __webpack_require__.rstest_mocked_ids_by_request[request] ??
+    __webpack_require__.rstest_mocked_ids_by_request_cjs[request];
   return __webpack_require__(mockedId !== undefined ? mockedId : id);
+};
+
+const resolveRstestMockRequest = (request, origin) => {
+  if (
+    !origin ||
+    request[0] !== '.' ||
+    (request[1] !== '/' && request[1] !== '\\')
+  ) {
+    return request;
+  }
+
+  const originParts = origin.replaceAll('\\', '/').split('/');
+  originParts.pop();
+  for (const part of request.replaceAll('\\', '/').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') originParts.pop();
+    else originParts.push(part);
+  }
+  return originParts.join('/') || '/';
+};
+
+const findRstestMockedId = (
+  request,
+  origin,
+  mockedIdsByRequest,
+  fallbackMockedIdsByRequest,
+) => {
+  const resolvedRequest = resolveRstestMockRequest(request, origin);
+  return (
+    mockedIdsByRequest[request] ??
+    mockedIdsByRequest[resolvedRequest] ??
+    mockedIdsByRequest[`${origin ?? ''}\0${request}`] ??
+    fallbackMockedIdsByRequest[request] ??
+    fallbackMockedIdsByRequest[resolvedRequest] ??
+    fallbackMockedIdsByRequest[`${origin ?? ''}\0${request}`]
+  );
+};
+
+const getRstestMockTargetId = (
+  id,
+  request,
+  origin,
+  mockedIdsByRequest,
+  fallbackMockedIdsByRequest,
+) => {
+  const mockedId = findRstestMockedId(
+    request,
+    origin,
+    mockedIdsByRequest,
+    fallbackMockedIdsByRequest,
+  );
+  const targetId = mockedId !== undefined ? mockedId : id;
+  if (targetId === undefined || targetId === null) {
+    const originSuffix = origin ? ` from ${JSON.stringify(origin)}` : '';
+    throw new Error(
+      `[Rstest] Cannot find module ${JSON.stringify(request)}${originSuffix}`,
+    );
+  }
+  return targetId;
+};
+
+// `rs.importMock(request)` uses the ESM request alias registered by `rs.mock`. The
+// generated dynamic import may have a different module id (or no bundled
+// target at all), so prefer the registered mock whenever one exists.
+__webpack_require__.rstest_import_mock = (id, request, origin) => {
+  if (origin === undefined) {
+    origin = request;
+    request = id;
+    id = undefined;
+  }
+  return Promise.resolve().then(() => {
+    const targetId = getRstestMockTargetId(
+      id,
+      request,
+      origin,
+      __webpack_require__.rstest_mocked_ids_by_request,
+      __webpack_require__.rstest_mocked_ids_by_request_cjs,
+    );
+    return __webpack_require__(targetId);
+  });
+};
+
+// `rs.requireMock(request)` uses the CommonJS alias registered by rs.mockRequire.
+__webpack_require__.rstest_require_mock = (id, request, origin) => {
+  if (origin === undefined) {
+    origin = request;
+    request = id;
+    id = undefined;
+  }
+  const targetId = getRstestMockTargetId(
+    id,
+    request,
+    origin,
+    __webpack_require__.rstest_mocked_ids_by_request_cjs,
+    __webpack_require__.rstest_mocked_ids_by_request,
+  );
+  return __webpack_require__(targetId);
 };
 //#endregion
 
