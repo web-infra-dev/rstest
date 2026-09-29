@@ -70,6 +70,163 @@ it('keeps toThrow promise-aware for regular and cross-realm regexps', async () =
   );
 });
 
+it('does not inspect passing toHaveBeenCalledWith arguments', () => {
+  publishFile('/expect', 'toHaveBeenCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const value = {
+    get secret() {
+      throw new Error('A passing assertion read this getter');
+    },
+  };
+  const mock = rs.fn();
+  mock(value);
+
+  fileExpect(mock).toHaveBeenCalledWith(value);
+  fileExpect(mock).toHaveBeenLastCalledWith(value);
+  fileExpect(mock).toHaveBeenNthCalledWith(1, value);
+  fileExpect(mock).toHaveBeenCalledExactlyOnceWith(value);
+});
+
+it('does not compare arguments when exactly-once call count already decides a negated assertion', () => {
+  publishFile('/expect', 'toHaveBeenCalledExactlyOnceWith');
+  const fileExpect = createFileExpect(() => {});
+  const value = {
+    get secret() {
+      throw new Error('A passing assertion read this getter');
+    },
+  };
+  const mock = rs.fn();
+
+  fileExpect(mock).not.toHaveBeenCalledExactlyOnceWith(value);
+  mock();
+  mock();
+  fileExpect(mock).not.toHaveBeenCalledExactlyOnceWith(value);
+});
+
+it('does not compare failed spy arguments a second time', () => {
+  publishFile('/expect', 'toHaveBeenCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const mock = rs.fn();
+  const actual = (function* () {
+    yield 'actual';
+  })();
+  const expected = (function* () {
+    yield 'expected';
+  })();
+  mock(actual);
+
+  expect(() => fileExpect(mock).toHaveBeenCalledWith(expected)).toThrow();
+});
+
+it('applies custom equality testers to complete spy call arguments', () => {
+  publishFile('/expect', 'toHaveBeenCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const acceptedArguments = {};
+  const rejectedArguments = {};
+  fileExpect.addEqualityTesters([
+    (actual, expected) => {
+      if (!Array.isArray(actual) || !Array.isArray(expected)) {
+        return undefined;
+      }
+      if (
+        actual[0] === acceptedArguments &&
+        expected[0] === acceptedArguments
+      ) {
+        return true;
+      }
+      if (
+        actual[0] === rejectedArguments &&
+        expected[0] === rejectedArguments
+      ) {
+        return false;
+      }
+      return undefined;
+    },
+  ]);
+
+  const acceptedMock = rs.fn();
+  acceptedMock(acceptedArguments, 'actual');
+  fileExpect(acceptedMock).toHaveBeenCalledWith(
+    acceptedArguments,
+    'different expected argument',
+  );
+
+  const rejectedMock = rs.fn();
+  rejectedMock(rejectedArguments, 'same argument');
+  expect(() =>
+    fileExpect(rejectedMock).toHaveBeenCalledWith(
+      rejectedArguments,
+      'same argument',
+    ),
+  ).toThrow();
+});
+
+it('rejects invalid toHaveBeenNthCalledWith indices even when negated', () => {
+  publishFile('/expect', 'toHaveBeenNthCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const mock = rs.fn();
+
+  for (const times of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(() =>
+      fileExpect(mock).not.toHaveBeenNthCalledWith(times, 'argument'),
+    ).toThrow('n must be a positive integer');
+  }
+});
+
+it('does not inspect passing toContain arguments', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const value = {
+    get secret() {
+      throw new Error('A passing assertion read this getter');
+    },
+  };
+
+  fileExpect([value]).toContain(value);
+});
+
+it('rejects non-iterable toContain receivers, including negated assertions', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+
+  expect(() => fileExpect(42).not.toContain(1)).toThrow(
+    'toContain() expects an array, string, or iterable',
+  );
+  expect(() => fileExpect({ 0: 1, length: 1 }).not.toContain(1)).toThrow(
+    'toContain() expects an array, string, or iterable',
+  );
+});
+
+it('reads a stateful Symbol.iterator getter only once in toContain', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  let iteratorLookups = 0;
+  const values = {
+    get [Symbol.iterator]() {
+      iteratorLookups += 1;
+      if (iteratorLookups > 1) {
+        throw new Error('Symbol.iterator was read more than once');
+      }
+      return function* () {
+        yield 1;
+      };
+    },
+  };
+
+  fileExpect(values).toContain(1);
+  expect(iteratorLookups).toBe(1);
+});
+
+it('preserves the toContain assertion target for chained matchers', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const values = new Set([1]);
+  const assertion = fileExpect(values);
+
+  assertion.toContain(1);
+  assertion.and.toBe(values);
+});
+
 it('treats cross-realm built-ins as the same type in toStrictEqual', () => {
   publishFile('/f1', 't1');
   const fileExpect = createFileExpect(() => {});

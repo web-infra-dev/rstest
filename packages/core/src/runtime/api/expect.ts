@@ -35,6 +35,7 @@ import {
   setState,
   sparseArrayEquality,
   typeEquality,
+  type Tester,
   wrapAssertion,
 } from '@vitest/expect';
 import {
@@ -48,6 +49,7 @@ import type {
   Assertion,
   ChaiConfig,
   MatcherState,
+  MockInstance,
   RstestExpect,
   TestCase,
   TestSuite,
@@ -279,6 +281,208 @@ const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
   utils.addMethod(matchers, 'toStrictEqual', toStrictEqual);
 };
 
+type VitestChaiMatcher = (
+  this: Chai.Assertion,
+  ...args: unknown[]
+) => void | PromiseLike<void>;
+
+type JestMatcherRegistry = {
+  customEqualityTesters: Tester[];
+  matchers: {
+    toHaveBeenCalledWith: VitestChaiMatcher;
+    toBeCalledWith: VitestChaiMatcher;
+    toHaveBeenCalledExactlyOnceWith: VitestChaiMatcher;
+    toHaveBeenLastCalledWith: VitestChaiMatcher;
+    toHaveBeenNthCalledWith: VitestChaiMatcher;
+    toContain: VitestChaiMatcher;
+  };
+};
+
+const isMockInstance = (value: unknown): value is MockInstance =>
+  (typeof value === 'function' || typeof value === 'object') &&
+  value !== null &&
+  '_isMockFunction' in value &&
+  value._isMockFunction === true;
+
+const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
+  const registry = (globalThis as Record<symbol, unknown>)[
+    JEST_MATCHERS_OBJECT
+  ] as JestMatcherRegistry;
+
+  for (const matcherName of [
+    'toHaveBeenCalledWith',
+    'toBeCalledWith',
+    'toHaveBeenCalledExactlyOnceWith',
+    'toHaveBeenLastCalledWith',
+    'toHaveBeenNthCalledWith',
+  ] as const) {
+    const originalMatcher = registry.matchers[matcherName];
+    const matcher = wrapAssertion(utils, matcherName, function (...args) {
+      const mock = utils.flag(this, 'object');
+      if (!isMockInstance(mock)) {
+        return originalMatcher.apply(this, args);
+      }
+
+      const calls = mock.mock.calls;
+      const spyName = mock.getMockName();
+      const customTesters = [
+        ...registry.customEqualityTesters,
+        iterableEquality,
+      ];
+      const equalsArguments = (
+        callArgs: unknown[],
+        expectedArgs: unknown[],
+      ) => {
+        for (const tester of registry.customEqualityTesters) {
+          const result = tester.call(
+            { equals },
+            callArgs,
+            expectedArgs,
+            customTesters,
+          );
+          if (result !== undefined) {
+            return result;
+          }
+        }
+
+        return (
+          callArgs.length === expectedArgs.length &&
+          callArgs.every((callArg, index) =>
+            equals(callArg, expectedArgs[index], customTesters),
+          )
+        );
+      };
+
+      let pass: boolean;
+      let expectedArgs = args;
+      let actual: unknown = calls;
+      let showDiff = false;
+      let positiveMessage: string;
+      let negativeMessage: string;
+
+      switch (matcherName) {
+        case 'toHaveBeenCalledWith':
+        case 'toBeCalledWith':
+          pass = calls.some((callArgs) => equalsArguments(callArgs, args));
+          positiveMessage = `expected "${spyName}" to be called with arguments: #{exp}, but got #{act}`;
+          negativeMessage = `expected "${spyName}" to not be called with arguments: #{exp}`;
+          break;
+        case 'toHaveBeenCalledExactlyOnceWith':
+          {
+            const onlyCall = calls.length === 1 ? calls[0] : undefined;
+            pass = onlyCall !== undefined && equalsArguments(onlyCall, args);
+          }
+          positiveMessage = `expected "${spyName}" to be called once with arguments: #{exp}, but got #{act}`;
+          negativeMessage = `expected "${spyName}" to not be called once with arguments: #{exp}`;
+          break;
+        case 'toHaveBeenLastCalledWith': {
+          const lastCall = calls.at(-1);
+          pass = Boolean(lastCall && equalsArguments(lastCall, args));
+          actual = lastCall;
+          positiveMessage = `expected last "${spyName}" call to have been called with #{exp}, but got #{act}`;
+          negativeMessage = `expected last "${spyName}" call to not have been called with #{exp}`;
+          break;
+        }
+        case 'toHaveBeenNthCalledWith': {
+          const [times, ...nthArgs] = args;
+          if (!Number.isSafeInteger(times) || (times as number) < 1) {
+            throw new Error('n must be a positive integer');
+          }
+          const nthCall = calls[(times as number) - 1];
+          const isCalled = (times as number) <= calls.length;
+          pass = Boolean(nthCall && equalsArguments(nthCall, nthArgs));
+          expectedArgs = nthArgs;
+          actual = nthCall;
+          showDiff = isCalled;
+          positiveMessage = `expected ${String(times)} call of "${spyName}" to have been called with #{exp}${isCalled ? ', but got #{act}' : `, but called only ${calls.length} times`}`;
+          negativeMessage = `expected ${String(times)} call of "${spyName}" to not have been called with #{exp}`;
+          break;
+        }
+      }
+
+      return this.assert(
+        pass,
+        positiveMessage,
+        negativeMessage,
+        expectedArgs,
+        actual,
+        showDiff,
+      );
+    });
+
+    utils.addMethod(chai.Assertion.prototype, matcherName, matcher);
+    utils.addMethod(registry.matchers, matcherName, matcher);
+  }
+
+  const originalToContain = registry.matchers.toContain;
+  const toContain = wrapAssertion(utils, 'toContain', function (item) {
+    const actual = utils.flag(this, 'object');
+
+    if (typeof Node !== 'undefined' && actual instanceof Node) {
+      if (!(item instanceof Node)) {
+        return originalToContain.call(this, item);
+      }
+
+      return this.assert(
+        actual.contains(item),
+        'expected #{this} to contain element #{exp}',
+        'expected #{this} not to contain element #{exp}',
+        item,
+        actual,
+      );
+    }
+
+    if (typeof DOMTokenList !== 'undefined' && actual instanceof DOMTokenList) {
+      if (typeof item !== 'string') {
+        return originalToContain.call(this, item);
+      }
+
+      return this.assert(
+        actual.contains(item),
+        `expected "${actual.value}" to contain "${item}"`,
+        `expected "${actual.value}" not to contain "${item}"`,
+        item,
+        actual.value,
+      );
+    }
+
+    if (typeof actual === 'string') {
+      return this.assert(
+        actual.includes(item as string),
+        'expected #{this} to contain #{exp}',
+        'expected #{this} not to contain #{exp}',
+        item,
+        actual,
+      );
+    }
+
+    if (actual == null) {
+      return originalToContain.call(this, item);
+    }
+
+    const iteratorMethod = (actual as Iterable<unknown>)[Symbol.iterator];
+    if (typeof iteratorMethod !== 'function') {
+      throw new TypeError(
+        `toContain() expects an array, string, or iterable, but got ${typeof actual}`,
+      );
+    }
+
+    const actualValues = Array.from({
+      [Symbol.iterator]: () => iteratorMethod.call(actual),
+    });
+    return this.assert(
+      actualValues.includes(item),
+      'expected #{this} to include #{exp}',
+      'expected #{this} to not include #{exp}',
+      item,
+      actualValues,
+    );
+  });
+
+  utils.addMethod(chai.Assertion.prototype, 'toContain', toContain);
+  utils.addMethod(registry.matchers, 'toContain', toContain);
+};
+
 // These plugins mutate Chai's process-level prototype, not an expect instance.
 use(JestExtend);
 use(JestChaiExpect);
@@ -287,6 +491,7 @@ use(ReturnedAlias);
 use(CrossRealmToThrow);
 use(CrossRealmToStrictEqual);
 use(JestAsymmetricMatchers);
+use(LazyMatcherMessages);
 
 export function createExpect({
   getCurrentTest,
