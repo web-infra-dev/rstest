@@ -92,7 +92,7 @@ test('uses the virtual module', () => {
 
 Rstest does not use Jest's third `{ virtual: true }` argument. Keep the same specifier in the declaration, alias, mock call, and import. The virtual module can also be imported indirectly by the source code under test.
 
-`rs.mock` supports static `import` because the call is hoisted. For a later dynamic `import()`, call `rs.doMock` before importing. For `require()`, use `rs.mockRequire` or `rs.doMockRequire`.
+`rs.mock` supports static `import` because the call is hoisted. For a later dynamic `import()`, call `rs.doMock` before importing. If `require()` resolves to the same bundled module as the mock, it can consume that mock too. When `require()` resolves to a separate CommonJS entry, use `rs.mockRequire` or `rs.doMockRequire`.
 
 A matching manual mock in `__mocks__` can provide the implementation instead of a factory. Because an alias mapped to `false` has no real implementation, use a factory or manual mock rather than `{ mock: true }`, `{ spy: true }`, or `rs.importActual`.
 

@@ -314,7 +314,7 @@ Rstest 默认支持 ESM。如果你的项目使用 ESM，你不需要进行任�
 
 ### ESM vs CJS mocking
 
-在 Rstest 中，`rs.mock()` 针对 `import` 使用的 ESM 入口，而 `rs.mockRequire()` 针对 `require()` 使用的 CJS 入口。
+在 Rstest 中，`rs.mock()` 针对 `import` 解析到的入口，而 `rs.mockRequire()` 针对 `require()` 解析到的入口。如果两者解析到同一个打包模块，`rs.mock()` 也会影响 `require()`；如果包提供了单独的 CJS 入口，请使用 `rs.mockRequire()`。
 
 代码中使用 `require()` 时，`rs.mockRequire()` 对应 CJS 入口的 mock：
 
