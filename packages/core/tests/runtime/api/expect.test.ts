@@ -82,7 +82,40 @@ it('does not inspect passing toHaveBeenCalledWith arguments', () => {
   mock(value);
 
   fileExpect(mock).toHaveBeenCalledWith(value);
+  fileExpect(mock).toHaveBeenLastCalledWith(value);
+  fileExpect(mock).toHaveBeenNthCalledWith(1, value);
   fileExpect(mock).toHaveBeenCalledExactlyOnceWith(value);
+});
+
+it('does not compare arguments when exactly-once call count already decides a negated assertion', () => {
+  publishFile('/expect', 'toHaveBeenCalledExactlyOnceWith');
+  const fileExpect = createFileExpect(() => {});
+  const value = {
+    get secret() {
+      throw new Error('A passing assertion read this getter');
+    },
+  };
+  const mock = rs.fn();
+
+  fileExpect(mock).not.toHaveBeenCalledExactlyOnceWith(value);
+  mock();
+  mock();
+  fileExpect(mock).not.toHaveBeenCalledExactlyOnceWith(value);
+});
+
+it('does not compare failed spy arguments a second time', () => {
+  publishFile('/expect', 'toHaveBeenCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const mock = rs.fn();
+  const actual = (function* () {
+    yield 'actual';
+  })();
+  const expected = (function* () {
+    yield 'expected';
+  })();
+  mock(actual);
+
+  expect(() => fileExpect(mock).toHaveBeenCalledWith(expected)).toThrow();
 });
 
 it('does not inspect passing toContain arguments', () => {

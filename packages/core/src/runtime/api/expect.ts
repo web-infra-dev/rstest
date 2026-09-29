@@ -292,6 +292,8 @@ type JestMatcherRegistry = {
     toHaveBeenCalledWith: VitestChaiMatcher;
     toBeCalledWith: VitestChaiMatcher;
     toHaveBeenCalledExactlyOnceWith: VitestChaiMatcher;
+    toHaveBeenLastCalledWith: VitestChaiMatcher;
+    toHaveBeenNthCalledWith: VitestChaiMatcher;
     toContain: VitestChaiMatcher;
   };
 };
@@ -311,6 +313,8 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
     'toHaveBeenCalledWith',
     'toBeCalledWith',
     'toHaveBeenCalledExactlyOnceWith',
+    'toHaveBeenLastCalledWith',
+    'toHaveBeenNthCalledWith',
   ] as const) {
     const originalMatcher = registry.matchers[matcherName];
     const matcher = wrapAssertion(utils, matcherName, function (...args) {
@@ -319,26 +323,70 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
         return originalMatcher.apply(this, args);
       }
 
+      const calls = mock.mock.calls;
+      const spyName = mock.getMockName();
       const customTesters = [
         ...registry.customEqualityTesters,
         iterableEquality,
       ];
-      const hasMatchingCall = mock.mock.calls.some(
-        (callArgs) =>
-          callArgs.length === args.length &&
-          callArgs.every((callArg, index) =>
-            equals(callArg, args[index], customTesters),
-          ),
-      );
-      const pass =
-        matcherName === 'toHaveBeenCalledExactlyOnceWith'
-          ? hasMatchingCall && mock.mock.calls.length === 1
-          : hasMatchingCall;
-      const isNot = utils.flag(this, 'negate') as boolean;
+      const equalsArguments = (callArgs: unknown[], expectedArgs: unknown[]) =>
+        callArgs.length === expectedArgs.length &&
+        callArgs.every((callArg, index) =>
+          equals(callArg, expectedArgs[index], customTesters),
+        );
 
-      if ((pass && isNot) || (!pass && !isNot)) {
-        return originalMatcher.apply(this, args);
+      let pass: boolean;
+      let expectedArgs = args;
+      let actual: unknown = calls;
+      let showDiff = false;
+      let positiveMessage: string;
+      let negativeMessage: string;
+
+      switch (matcherName) {
+        case 'toHaveBeenCalledWith':
+        case 'toBeCalledWith':
+          pass = calls.some((callArgs) => equalsArguments(callArgs, args));
+          positiveMessage = `expected "${spyName}" to be called with arguments: #{exp}, but got #{act}`;
+          negativeMessage = `expected "${spyName}" to not be called with arguments: #{exp}`;
+          break;
+        case 'toHaveBeenCalledExactlyOnceWith':
+          {
+            const onlyCall = calls.length === 1 ? calls[0] : undefined;
+            pass = onlyCall !== undefined && equalsArguments(onlyCall, args);
+          }
+          positiveMessage = `expected "${spyName}" to be called once with arguments: #{exp}, but got #{act}`;
+          negativeMessage = `expected "${spyName}" to not be called once with arguments: #{exp}`;
+          break;
+        case 'toHaveBeenLastCalledWith': {
+          const lastCall = calls.at(-1);
+          pass = Boolean(lastCall && equalsArguments(lastCall, args));
+          actual = lastCall;
+          positiveMessage = `expected last "${spyName}" call to have been called with #{exp}, but got #{act}`;
+          negativeMessage = `expected last "${spyName}" call to not have been called with #{exp}`;
+          break;
+        }
+        case 'toHaveBeenNthCalledWith': {
+          const [times, ...nthArgs] = args;
+          const nthCall = calls[(times as number) - 1];
+          const isCalled = (times as number) <= calls.length;
+          pass = Boolean(nthCall && equalsArguments(nthCall, nthArgs));
+          expectedArgs = nthArgs;
+          actual = nthCall;
+          showDiff = isCalled;
+          positiveMessage = `expected ${String(times)} call of "${spyName}" to have been called with #{exp}${isCalled ? ', but got #{act}' : `, but called only ${calls.length} times`}`;
+          negativeMessage = `expected ${String(times)} call of "${spyName}" to not have been called with #{exp}`;
+          break;
+        }
       }
+
+      return this.assert(
+        pass,
+        positiveMessage,
+        negativeMessage,
+        expectedArgs,
+        actual,
+        showDiff,
+      );
     });
 
     utils.addMethod(chai.Assertion.prototype, matcherName, matcher);
