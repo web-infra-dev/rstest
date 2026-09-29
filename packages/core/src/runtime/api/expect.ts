@@ -35,6 +35,7 @@ import {
   setState,
   sparseArrayEquality,
   typeEquality,
+  type Tester,
   wrapAssertion,
 } from '@vitest/expect';
 import {
@@ -48,6 +49,7 @@ import type {
   Assertion,
   ChaiConfig,
   MatcherState,
+  MockInstance,
   RstestExpect,
   TestCase,
   TestSuite,
@@ -279,6 +281,131 @@ const CrossRealmToStrictEqual: ChaiPlugin = (chai, utils) => {
   utils.addMethod(matchers, 'toStrictEqual', toStrictEqual);
 };
 
+type VitestChaiMatcher = (
+  this: Chai.Assertion,
+  ...args: unknown[]
+) => void | PromiseLike<void>;
+
+type JestMatcherRegistry = {
+  customEqualityTesters: Tester[];
+  matchers: {
+    toHaveBeenCalledWith: VitestChaiMatcher;
+    toBeCalledWith: VitestChaiMatcher;
+    toHaveBeenCalledExactlyOnceWith: VitestChaiMatcher;
+    toContain: VitestChaiMatcher;
+  };
+};
+
+const isMockInstance = (value: unknown): value is MockInstance =>
+  (typeof value === 'function' || typeof value === 'object') &&
+  value !== null &&
+  '_isMockFunction' in value &&
+  value._isMockFunction === true;
+
+const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
+  const registry = (globalThis as Record<symbol, unknown>)[
+    JEST_MATCHERS_OBJECT
+  ] as JestMatcherRegistry;
+
+  for (const matcherName of [
+    'toHaveBeenCalledWith',
+    'toBeCalledWith',
+    'toHaveBeenCalledExactlyOnceWith',
+  ] as const) {
+    const originalMatcher = registry.matchers[matcherName];
+    const matcher = wrapAssertion(utils, matcherName, function (...args) {
+      const mock = utils.flag(this, 'object');
+      if (!isMockInstance(mock)) {
+        return originalMatcher.apply(this, args);
+      }
+
+      const customTesters = [
+        ...registry.customEqualityTesters,
+        iterableEquality,
+      ];
+      const hasMatchingCall = mock.mock.calls.some(
+        (callArgs) =>
+          callArgs.length === args.length &&
+          callArgs.every((callArg, index) =>
+            equals(callArg, args[index], customTesters),
+          ),
+      );
+      const pass =
+        matcherName === 'toHaveBeenCalledExactlyOnceWith'
+          ? hasMatchingCall && mock.mock.calls.length === 1
+          : hasMatchingCall;
+      const isNot = utils.flag(this, 'negate') as boolean;
+
+      if ((pass && isNot) || (!pass && !isNot)) {
+        return originalMatcher.apply(this, args);
+      }
+    });
+
+    utils.addMethod(chai.Assertion.prototype, matcherName, matcher);
+    utils.addMethod(registry.matchers, matcherName, matcher);
+  }
+
+  const originalToContain = registry.matchers.toContain;
+  const toContain = wrapAssertion(utils, 'toContain', function (item) {
+    const actual = utils.flag(this, 'object');
+
+    if (typeof Node !== 'undefined' && actual instanceof Node) {
+      if (!(item instanceof Node)) {
+        return originalToContain.call(this, item);
+      }
+
+      return this.assert(
+        actual.contains(item),
+        'expected #{this} to contain element #{exp}',
+        'expected #{this} not to contain element #{exp}',
+        item,
+        actual,
+      );
+    }
+
+    if (typeof DOMTokenList !== 'undefined' && actual instanceof DOMTokenList) {
+      if (typeof item !== 'string') {
+        return originalToContain.call(this, item);
+      }
+
+      return this.assert(
+        actual.contains(item),
+        `expected "${actual.value}" to contain "${item}"`,
+        `expected "${actual.value}" not to contain "${item}"`,
+        item,
+        actual.value,
+      );
+    }
+
+    if (typeof actual === 'string') {
+      return this.assert(
+        actual.includes(item as string),
+        'expected #{this} to contain #{exp}',
+        'expected #{this} not to contain #{exp}',
+        item,
+        actual,
+      );
+    }
+
+    if (actual == null) {
+      return originalToContain.call(this, item);
+    }
+
+    const actualValues = Array.from(actual as Iterable<unknown>);
+    utils.flag(this, 'object', actualValues);
+    return this.assert(
+      actualValues.includes(item),
+      'expected #{this} to include #{exp}',
+      'expected #{this} to not include #{exp}',
+      item,
+      actualValues,
+    );
+  });
+
+  utils.addMethod(chai.Assertion.prototype, 'toContain', toContain);
+  utils.addMethod(registry.matchers, 'toContain', toContain);
+};
+
 // These plugins mutate Chai's process-level prototype, not an expect instance.
 use(JestExtend);
 use(JestChaiExpect);
@@ -287,6 +414,7 @@ use(ReturnedAlias);
 use(CrossRealmToThrow);
 use(CrossRealmToStrictEqual);
 use(JestAsymmetricMatchers);
+use(LazyMatcherMessages);
 
 export function createExpect({
   getCurrentTest,

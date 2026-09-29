@@ -70,6 +70,33 @@ it('keeps toThrow promise-aware for regular and cross-realm regexps', async () =
   );
 });
 
+it('does not inspect passing toHaveBeenCalledWith arguments', () => {
+  publishFile('/expect', 'toHaveBeenCalledWith');
+  const fileExpect = createFileExpect(() => {});
+  const value = {
+    get secret() {
+      throw new Error('A passing assertion read this getter');
+    },
+  };
+  const mock = rs.fn();
+  mock(value);
+
+  fileExpect(mock).toHaveBeenCalledWith(value);
+  fileExpect(mock).toHaveBeenCalledExactlyOnceWith(value);
+});
+
+it('does not inspect passing toContain arguments', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const value = {
+    get secret() {
+      throw new Error('A passing assertion read this getter');
+    },
+  };
+
+  fileExpect([value]).toContain(value);
+});
+
 it('treats cross-realm built-ins as the same type in toStrictEqual', () => {
   publishFile('/f1', 't1');
   const fileExpect = createFileExpect(() => {});
