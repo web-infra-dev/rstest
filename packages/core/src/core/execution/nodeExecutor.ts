@@ -498,9 +498,12 @@ export function createNodeExecutor(
                 }
               });
             },
-            queryCoverage: (query) =>
-              mergedCoverageMap &&
-              coverageProvider?.queryCoverage?.(mergedCoverageMap, query),
+            getKnownCoverageStructures: () =>
+              mergedCoverageMap
+                ? coverageProvider?.getKnownCoverageStructures?.(
+                    mergedCoverageMap,
+                  )
+                : undefined,
             onTraceEvents: traceRun.onEvents,
             traceSpan: span,
           });

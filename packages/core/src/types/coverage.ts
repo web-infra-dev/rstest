@@ -153,12 +153,15 @@ export type NormalizedCoverageOptions = Required<
   changed?: boolean | string;
 };
 
+/** @internal A file structure the host has already folded this cycle (istanbul FileCoverage identity). */
+export type KnownCoverageStructure = { path: string; hash: string };
+
 export type CoverageCollectOptions = {
   assetFiles?: Record<string, string>;
   sourceMaps?: Record<string, string>;
   outputModule?: boolean;
-  /** @internal Provider-owned query against the current host coverage map. */
-  queryCoverage?: (query: unknown) => Promise<unknown>;
+  /** @internal Structures the host already holds for this cycle; the worker may send only counters for them. */
+  knownCoverageStructures?: KnownCoverageStructure[];
 };
 
 /**
@@ -226,8 +229,8 @@ export declare class CoverageProvider {
   /** @internal Fold a raw worker result immediately, without buffering. */
   mergeRawCoverage?(map: CoverageMap, payload: unknown): void;
 
-  /** @internal Answer a stateless provider-owned query against this cycle's map. */
-  queryCoverage?(map: CoverageMap, query: unknown): unknown;
+  /** @internal Called by the pool when dispatching a run task; passed to the worker's collectRaw. */
+  getKnownCoverageStructures?(map: CoverageMap): KnownCoverageStructure[];
 
   /**
    * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.

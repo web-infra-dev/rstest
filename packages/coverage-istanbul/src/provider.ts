@@ -1,6 +1,7 @@
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type {
+  KnownCoverageStructure,
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
@@ -22,6 +23,9 @@ const UNTESTED_FILES_CONCURRENCY = 4;
 type StructureKey = 'statementMap' | 'fnMap' | 'branchMap';
 type Structure = Pick<IstanbulFileCoverageData, StructureKey>;
 
+const structureKey = (path: string, hash: string): string =>
+  JSON.stringify([path, hash]);
+
 /** @internal */
 type RawCoverage = {
   full: IstanbulFileCoverageData[];
@@ -42,7 +46,10 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private coverageMap: CoverageMap | null = null;
   private coverageGlobal: typeof globalThis = globalThis;
-  private structures = new WeakMap<CoverageMap, Map<string, Structure>>();
+  private registries = new WeakMap<
+    CoverageMap,
+    { structures: Map<string, Structure>; known: KnownCoverageStructure[] }
+  >();
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
@@ -96,29 +103,23 @@ export class CoverageProvider implements RstestCoverageProvider {
     return createFastCoverageMap();
   }
 
-  async collectRaw(
+  collectRaw(
     options?: Parameters<RstestCoverageProvider['collect']>[0],
-  ): Promise<RawCoverage | null> {
-    if (!options?.queryCoverage) return null;
+  ): RawCoverage | null {
+    if (!this.coverageGlobal.__coverage__) return null;
     const files: IstanbulFileCoverageData[] = Object.values(
-      this.coverageGlobal.__coverage__ ?? {},
+      this.coverageGlobal.__coverage__,
     );
-    let known = new Set<string>();
-    try {
-      const response = await options.queryCoverage(
-        Object.fromEntries(files.map((file) => [file.path, file.hash])),
-      );
-      if (Array.isArray(response)) {
-        known = new Set(response);
-      }
-    } catch {
-      // The query is optional; a failed query keeps every file full.
-    }
+    const known = new Set(
+      options?.knownCoverageStructures?.map(({ path, hash }) =>
+        structureKey(path, hash),
+      ),
+    );
 
     const payload: RawCoverage = { full: [], packed: [] };
     for (const file of files) {
       const { hash } = file;
-      if (!hash || !known.has(file.path)) {
+      if (!hash || !known.has(structureKey(file.path, hash))) {
         payload.full.push(file);
         continue;
       }
@@ -133,30 +134,24 @@ export class CoverageProvider implements RstestCoverageProvider {
     return payload;
   }
 
-  queryCoverage(map: CoverageMap, query: unknown): string[] {
-    // Core transports opaque data between instances of this same provider.
-    const request = query as Record<string, string | undefined>;
-    const structures = this.structures.get(map);
-    return Object.entries(request).flatMap(([path, hash]) => {
-      return hash && structures?.has(JSON.stringify([path, hash]))
-        ? [path]
-        : [];
-    });
+  getKnownCoverageStructures(map: CoverageMap): KnownCoverageStructure[] {
+    return this.registries.get(map)?.known.slice() ?? [];
   }
 
   mergeRawCoverage(map: CoverageMap, raw: unknown): void {
     // Core transports opaque data between instances of this same provider.
     const payload = raw as RawCoverage;
-    let structures = this.structures.get(map);
-    if (!structures) {
-      structures = new Map();
-      this.structures.set(map, structures);
+    let registry = this.registries.get(map);
+    if (!registry) {
+      registry = { structures: new Map(), known: [] };
+      this.registries.set(map, registry);
     }
+    const { structures, known } = registry;
     const incoming: Record<string, IstanbulFileCoverageData> = {};
     for (const file of payload.full) {
       incoming[file.path] = file;
       if (!file.hash) continue;
-      const key = JSON.stringify([file.path, file.hash]);
+      const key = structureKey(file.path, file.hash);
       if (!structures.has(key)) {
         // Native unions replace map containers; keep the original references.
         structures.set(key, {
@@ -164,13 +159,12 @@ export class CoverageProvider implements RstestCoverageProvider {
           fnMap: file.fnMap,
           branchMap: file.branchMap,
         });
+        known.push({ path: file.path, hash: file.hash });
       }
     }
     for (const packed of payload.packed) {
-      // Workers only pack versions already acknowledged by this cycle's registry.
-      const structure = structures.get(
-        JSON.stringify([packed.path, packed.hash]),
-      );
+      // Known structures only list versions already present in this cycle's registry.
+      const structure = structures.get(structureKey(packed.path, packed.hash));
       if (!structure) {
         throw new Error(
           `Istanbul coverage invariant violated for ${packed.path}: structure not registered`,

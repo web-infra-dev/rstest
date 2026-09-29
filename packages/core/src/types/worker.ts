@@ -3,6 +3,7 @@ import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { EnvironmentName } from './config';
 import type { RstestPoolType } from './config';
 import type { InternalContext, InternalProjectContext } from './core';
+import type { KnownCoverageStructure } from './coverage';
 import type {
   TestCaseInfo,
   TestFileInfo,
@@ -41,7 +42,6 @@ export type ServerRPC = object;
 
 /** Runtime to Server */
 export type RuntimeRPC = {
-  queryCoverage: (query: unknown) => unknown;
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
   onTestFileReady: (test: TestFileInfo) => Promise<void>;
   getAssetsByEntry: (
@@ -59,8 +59,6 @@ export type RuntimeRPC = {
   onConsoleLog: (log: UserConsoleLog) => void;
   resolveSnapshotPath: (filepath: string) => string;
 };
-
-export type PoolOwnedRpcMethod = 'getAssetsByEntry' | 'queryCoverage';
 
 export type RuntimeConfig = Pick<
   InternalContext['normalizedConfig'],
@@ -173,6 +171,8 @@ export type RunWorkerOptions = {
       assetFiles: AssetFiles;
       sourceMaps: Record<string, string>;
     };
+    /** Per-task dispatch metadata like assets, not persistent worker state. */
+    knownCoverageStructures?: KnownCoverageStructure[];
   };
   rpcMethods: RuntimeRPC;
 };

@@ -7,7 +7,6 @@ import type {
   SerializedError,
   InternalContext,
   InternalProjectContext,
-  PoolOwnedRpcMethod,
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
@@ -139,6 +138,7 @@ const buildTask = async ({
   getAssetFiles,
   getSourceMaps,
   rpcMethods,
+  getKnownCoverageStructures,
   traceSpan,
   testEnvironmentModule,
   buildId = 0,
@@ -159,8 +159,8 @@ const buildTask = async ({
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
-  rpcMethods: Omit<RuntimeRPC, PoolOwnedRpcMethod> &
-    Pick<RuntimeRPC, 'queryCoverage'>;
+  rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+  getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
@@ -210,6 +210,7 @@ const buildTask = async ({
     task: {
       worker: workerKind,
       type,
+      getKnownCoverageStructures,
       options: {
         entryInfo,
         assetNames: taskAssetNames,
@@ -373,7 +374,7 @@ export const createPool = async ({
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
     onRawCoverageResult?: (coverage: unknown) => void;
-    queryCoverage?: (query: unknown) => unknown;
+    getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
     /** Records host-side pool slices in the caller-owned Perfetto trace. */
@@ -493,7 +494,7 @@ export const createPool = async ({
       buildId,
       onCoverageResult,
       onRawCoverageResult,
-      queryCoverage,
+      getKnownCoverageStructures,
       onTraceEvents,
       traceSpan,
     }) => {
@@ -507,10 +508,7 @@ export const createPool = async ({
         workerKind,
       );
       const sink = createProjectSink(project);
-      const rpcMethods = {
-        ...sinkToRuntimeRpc(sink),
-        queryCoverage: (query: unknown) => queryCoverage?.(query),
-      };
+      const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       // Sequential dispatch gate: `entries` is already perf-sorted, but the
@@ -555,6 +553,7 @@ export const createPool = async ({
                   getAssetFiles,
                   getSourceMaps,
                   rpcMethods,
+                  getKnownCoverageStructures,
                   traceSpan,
                   testEnvironmentModule: testEnvironmentModules?.get(
                     project.environmentName,
@@ -674,10 +673,7 @@ export const createPool = async ({
         workerKind,
       );
       const projectName = project.normalizedConfig.name;
-      const rpcMethods = {
-        ...sinkToRuntimeRpc(createProjectSink(project)),
-        queryCoverage: () => undefined,
-      };
+      const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(

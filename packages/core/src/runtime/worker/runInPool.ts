@@ -1373,7 +1373,7 @@ export const runInPool = async (
         ),
         sourceMaps,
         outputModule: options.context.outputModule,
-        queryCoverage: rpc.queryCoverage,
+        knownCoverageStructures: options.knownCoverageStructures,
       };
 
       const collect = async () => {

@@ -1,4 +1,8 @@
-import type { RuntimeRPC, RunWorkerOptions } from '../types';
+import type {
+  KnownCoverageStructure,
+  RuntimeRPC,
+  RunWorkerOptions,
+} from '../types';
 import type { RstestPoolType } from '../types/config';
 import type { MemoryGate } from './memoryGate';
 import type { TestEnvironmentModuleFallback } from './protocol';
@@ -10,6 +14,8 @@ export type PoolTask = {
   type: 'run' | 'collect';
   options: RunWorkerOptions['options'];
   rpcMethods: RuntimeRPC;
+  /** Host-only callback evaluated after slot acquisition, just before sending. */
+  getKnownCoverageStructures?: () => KnownCoverageStructure[] | undefined;
 };
 
 export type PoolOptions = {

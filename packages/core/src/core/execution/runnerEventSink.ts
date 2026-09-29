@@ -2,7 +2,6 @@ import type {
   InternalContext,
   InternalProjectContext,
   MaybePromise,
-  PoolOwnedRpcMethod,
   Reporter,
   RuntimeRPC,
   TestCaseInfo,
@@ -163,13 +162,13 @@ export function createRunnerEventSink(
 
 /**
  * Adapt a {@link RunnerEventSink} to the wire {@link RuntimeRPC} shape (minus
- * the pool-owned asset and coverage queries). The
+ * the task-scoped `getAssetsByEntry`, which stays where it is built). The
  * runner-facing method SET is compile-checked below, so the wire type and the
  * sink cannot drift — the #1389 class.
  */
 export function sinkToRuntimeRpc(
   sink: RunnerEventSink,
-): Omit<RuntimeRPC, PoolOwnedRpcMethod> {
+): Omit<RuntimeRPC, 'getAssetsByEntry'> {
   return {
     onTestFileStart: (test) => sink.onTestFileStart(test),
     onTestFileReady: (test) => sink.onTestFileReady(test),
@@ -184,12 +183,12 @@ export function sinkToRuntimeRpc(
 }
 
 // Compile-time drift guard: the sink covers exactly the runner-facing RuntimeRPC
-// methods — everything except the pool's asset/coverage queries and whatever
+// methods — everything except the task-scoped `getAssetsByEntry` and whatever
 // {@link HostDrivenEvents} declares. Adding a runner event on one side without
 // the other collapses one of these to `never` and fails the assignment. The
 // exclusions derive from that interface, so silencing this guard means moving a
 // method into the host-driven category on purpose, not editing a name list.
-type RunnerRpcMethod = keyof Omit<RuntimeRPC, PoolOwnedRpcMethod>;
+type RunnerRpcMethod = keyof Omit<RuntimeRPC, 'getAssetsByEntry'>;
 type SinkRpcMethod = keyof Omit<RunnerEventSink, keyof HostDrivenEvents>;
 /**
  * The runner lifecycle events reporters observe — the wire methods minus the

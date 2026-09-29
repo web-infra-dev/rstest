@@ -40,15 +40,14 @@ describe('coverage-istanbul provider', () => {
     const provider = new CoverageProvider(createOptions());
 
     expect(provider.collect()).toBeNull();
+    expect(provider.collectRaw()).toBeNull();
     expect(process.exitCode).toBe(originalExitCode);
   });
 
-  it('folds full then packed JSON payloads like native CoverageMap.merge', async () => {
+  it('folds full then packed JSON payloads like native CoverageMap.merge', () => {
     const provider = new CoverageProvider(createOptions());
     const map = provider.createCoverageMap();
     const oracle = istanbulCoverage.createCoverageMap();
-    const queryCoverage = async (query: unknown) =>
-      provider.queryCoverage(map, query);
     for (let index = 0; index < 3; index++) {
       const file = createFileCoverage('/project/shared.js');
       file.s[0] = index + 1;
@@ -57,7 +56,9 @@ describe('coverage-istanbul provider', () => {
       file.bT = { 0: [index + 17, index * 7] };
       globalWithCoverage.__coverage__ = { [file.path]: file };
       oracle.merge({ [file.path]: structuredClone(file) });
-      const raw = await provider.collectRaw({ queryCoverage });
+      const raw = provider.collectRaw({
+        knownCoverageStructures: provider.getKnownCoverageStructures(map),
+      });
       expect(raw?.full.length).toBe(index === 0 ? 1 : 0);
       expect(raw?.packed.length).toBe(index === 0 ? 0 : 1);
       provider.mergeRawCoverage(map, JSON.parse(JSON.stringify(raw)));
@@ -65,18 +66,18 @@ describe('coverage-istanbul provider', () => {
     expect(JSON.stringify(map)).toBe(JSON.stringify(oracle));
   });
 
-  it('keeps files without a hash full even when the host claims to know them', async () => {
+  it('keeps files without a hash full even when known structures list their path', () => {
     const provider = new CoverageProvider(createOptions());
     const file = createFileCoverage('/project/shared.js');
     delete file.hash;
     globalWithCoverage.__coverage__ = { [file.path]: file };
-    const raw = await provider.collectRaw({
-      queryCoverage: async () => [file.path],
+    const raw = provider.collectRaw({
+      knownCoverageStructures: [{ path: file.path, hash: 'same' }],
     });
     expect(raw).toEqual({ full: [file], packed: [] });
   });
 
-  it('folds packed coverage after another project unions the live entry', async () => {
+  it('folds packed coverage after another project unions the live entry', () => {
     const provider = new CoverageProvider(createOptions());
     const map = provider.createCoverageMap();
     const oracle = istanbulCoverage.createCoverageMap();
@@ -98,34 +99,46 @@ describe('coverage-istanbul provider', () => {
     }
 
     provider.mergeRawCoverage(map, { full: [first], packed: [] });
+    const knownCoverageStructures = provider.getKnownCoverageStructures(map);
+    provider.mergeRawCoverage(map, { full: [other], packed: [] });
+    expect(provider.getKnownCoverageStructures(map)).toEqual([
+      { path, hash: 'same' },
+      { path, hash: 'other' },
+    ]);
     globalWithCoverage.__coverage__ = { [path]: later };
-    const raw = await provider.collectRaw({
-      queryCoverage: async (query) => provider.queryCoverage(map, query),
-    });
+    const raw = provider.collectRaw({ knownCoverageStructures });
     expect(raw?.full).toEqual([]);
     expect(raw?.packed).toHaveLength(1);
-    provider.mergeRawCoverage(map, { full: [other], packed: [] });
     provider.mergeRawCoverage(map, raw);
 
     // Native Istanbul retains a stale hash after union; our accumulator drops it.
     Reflect.deleteProperty(oracle.fileCoverageFor(path).data, 'hash');
     expect(map.toJSON()).toEqual(oracle.toJSON());
-    expect(provider.queryCoverage(map, { [path]: 'same' })).toEqual([path]);
-    expect(provider.queryCoverage(map, { [path]: 'other' })).toEqual([path]);
-    expect(
-      provider.queryCoverage(provider.createCoverageMap(), { [path]: 'same' }),
-    ).toEqual([]);
+    const unionStructures = provider.getKnownCoverageStructures(map);
+    for (const file of [later, other]) {
+      globalWithCoverage.__coverage__ = { [path]: file };
+      expect(
+        provider.collectRaw({ knownCoverageStructures: unionStructures })
+          ?.packed,
+      ).toHaveLength(1);
+    }
+    expect(provider.collectRaw({ knownCoverageStructures })).toEqual({
+      full: [other],
+      packed: [],
+    });
   });
 
-  it('sends all files full when the coverage query throws', async () => {
+  it('sends all files full with missing known structures or an empty map', () => {
     const provider = new CoverageProvider(createOptions());
     const file = createFileCoverage('/project/shared.js');
     globalWithCoverage.__coverage__ = { [file.path]: file };
+    expect(provider.collectRaw()).toEqual({ full: [file], packed: [] });
+    expect(provider.collectRaw({})).toEqual({ full: [file], packed: [] });
     expect(
-      await provider.collectRaw({
-        queryCoverage: async () => {
-          throw new Error('offline');
-        },
+      provider.collectRaw({
+        knownCoverageStructures: provider.getKnownCoverageStructures(
+          provider.createCoverageMap(),
+        ),
       }),
     ).toEqual({ full: [file], packed: [] });
   });
