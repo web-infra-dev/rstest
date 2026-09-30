@@ -52,20 +52,22 @@ const shownUnsupportedCoreMessages = new Set<string>();
 
 let installPromptContext: vscode.ExtensionContext | undefined;
 let unsupportedCoreSeen = false;
-let installPromptScheduled = false;
+let installPromptDone = false;
 
 export function armInstallPrompt(context: vscode.ExtensionContext): void {
   installPromptContext = context;
 }
 
-export function scheduleInstallPrompt(): void {
-  const context = installPromptContext;
-  if (installPromptScheduled || !context) return;
-  installPromptScheduled = true;
-  // Sibling projects resolve synchronously; defer so an unsupported core can veto.
-  setTimeout(() => {
-    if (!unsupportedCoreSeen) void showMigrationPrompt(context, false);
-  }, 0);
+/**
+ * Called once a workspace's discovery round has constructed every project.
+ * Each project's core check runs synchronously in its constructor, so an
+ * unsupported core has already vetoed the warning by now.
+ */
+export function offerInstallPromptAfterDiscovery(): void {
+  if (installPromptDone || !installPromptContext) return;
+  installPromptDone = true;
+  if (!unsupportedCoreSeen)
+    void showMigrationPrompt(installPromptContext, false);
 }
 
 export async function showUnsupportedCoreMessage(

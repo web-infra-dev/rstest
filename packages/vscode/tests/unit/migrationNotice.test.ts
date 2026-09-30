@@ -81,26 +81,18 @@ describe('rstackEditorTakesOver', () => {
   });
 });
 
-describe('install prompt scheduling', () => {
+describe('install prompt after discovery', () => {
   beforeEach(() => {
     rs.resetModules();
-    rs.useFakeTimers();
   });
 
-  afterEach(() => {
-    rs.useRealTimers();
-  });
-
-  it('shows the warning once, after the timer', async () => {
-    const { armInstallPrompt, scheduleInstallPrompt } =
+  it('shows the warning once when discovery completes', async () => {
+    const { armInstallPrompt, offerInstallPromptAfterDiscovery } =
       await import('../../src/migrationNotice');
     armInstallPrompt(context);
-    scheduleInstallPrompt();
-    scheduleInstallPrompt();
     expect(showWarningMessage).not.toHaveBeenCalled();
-    await rs.runAllTimersAsync();
-    scheduleInstallPrompt();
-    await rs.runAllTimersAsync();
+    offerInstallPromptAfterDiscovery();
+    offerInstallPromptAfterDiscovery();
     expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
       expect.any(String),
       'Install Rstack',
@@ -108,16 +100,15 @@ describe('install prompt scheduling', () => {
     );
   });
 
-  it('lets an unsupported sibling suppress the pending warning', async () => {
+  it('lets an unsupported sibling suppress the warning', async () => {
     const {
       armInstallPrompt,
-      scheduleInstallPrompt,
+      offerInstallPromptAfterDiscovery,
       showUnsupportedCoreMessage,
     } = await import('../../src/migrationNotice');
     armInstallPrompt(context);
-    scheduleInstallPrompt();
     await showUnsupportedCoreMessage('Unsupported sibling');
-    await rs.runAllTimersAsync();
+    offerInstallPromptAfterDiscovery();
     expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
       'Unsupported sibling',
       'Install Rstack',
@@ -126,9 +117,9 @@ describe('install prompt scheduling', () => {
   });
 
   it('does nothing without an armed context', async () => {
-    const { scheduleInstallPrompt } = await import('../../src/migrationNotice');
-    scheduleInstallPrompt();
-    await rs.runAllTimersAsync();
+    const { offerInstallPromptAfterDiscovery } =
+      await import('../../src/migrationNotice');
+    offerInstallPromptAfterDiscovery();
     expect(showWarningMessage).not.toHaveBeenCalled();
   });
 });

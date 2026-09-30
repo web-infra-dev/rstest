@@ -7,6 +7,7 @@ import vscode from 'vscode';
 import { watchConfigValue } from './config';
 import { logger } from './logger';
 import { RstestApi } from './master';
+import { offerInstallPromptAfterDiscovery } from './migrationNotice';
 import { type ChildProjectRef, computeCoveredConfigs } from './projectCoverage';
 import {
   groupListedTestsByFile,
@@ -98,6 +99,7 @@ export class WorkspaceManager implements vscode.Disposable {
           }
         }
         this.refreshAllProject();
+        offerInstallPromptAfterDiscovery();
 
         // start watching config file create and delete event
         for (const pattern of patterns) {

@@ -8,7 +8,7 @@ This is the final standalone release, superseded by Rstack (`rstack.rstack`). `a
 
 Migration prompts must not block activation. The uninstall and install warnings have independent dismissal flags in `globalState`, never settings. Unsupported-core errors cannot be permanently dismissed. Every unsupported-core notification must use `showUnsupportedCoreMessage` so it offers Install Rstack.
 
-Defer the install warning until a project's core resolves; an unsupported core in the same workspace discovery round suppresses it.
+Offer the install warning when a workspace's first discovery round completes; an unsupported core found in that round suppresses it.
 
 The final release supports only `@rstest/core` `^0.12.0`. Keep the version guard in `resolveRstestPaths` before API resolution and worker creation, including configured package paths. Keep `versionCheck` free of VS Code imports: the worker also uses its error formatter.
 
