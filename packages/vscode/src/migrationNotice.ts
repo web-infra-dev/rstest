@@ -4,6 +4,7 @@ import { toErrorMessage } from './utils';
 
 const RSTACK_EXTENSION_ID = 'rstack.rstack';
 const OPEN_EXTENSION_COMMAND = 'rstest.openRstackExtension';
+const RSTACK_REPO_URL = 'https://github.com/rstackjs/rstack-editor';
 
 const MIGRATION_NOTES_URL =
   'https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions';
@@ -98,8 +99,8 @@ export async function showMigrationPrompt(
     async () => {
       const action = await vscode.window.showWarningMessage(
         standingDown
-          ? 'Rstack has taken over Rstest. Uninstall the standalone Rstest extension.'
-          : 'Rstest has moved into the Rstack extension. This extension is deprecated and will not be updated. Please install Rstack.',
+          ? `[Rstack](${RSTACK_REPO_URL}) has taken over Rstest. Uninstall the Rstest extension.`
+          : `Rstest has moved into the [Rstack](${RSTACK_REPO_URL}) extension. The Rstest extension is deprecated and will not be updated. Please install Rstack.`,
         standingDown ? 'Uninstall Rstest' : 'Install Rstack',
         "Don't show again",
       );
