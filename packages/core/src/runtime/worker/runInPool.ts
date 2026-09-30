@@ -1369,11 +1369,15 @@ export const runInPool = async (
       }
       const provider = coverageProvider;
       tracker.transition('coverage');
+      // Under `isolate: false` this file can run module instances that earlier
+      // files in this worker loaded, so coverage sees their assets too.
+      const { getLoadedAssetFiles } = await importLoader();
+      const loadedAssetFiles = getLoadedAssetFiles();
       const collectOptions = {
         assetFiles: Object.fromEntries(
-          Object.keys(assetFiles)
+          Object.keys(loadedAssetFiles)
             .filter((name) => /\.[cm]?js$/.test(name))
-            .map((name) => [name, getAssetText(assetFiles, name)]),
+            .map((name) => [name, getAssetText(loadedAssetFiles, name)]),
         ),
         sourceMaps,
         outputModule: options.context.outputModule,
