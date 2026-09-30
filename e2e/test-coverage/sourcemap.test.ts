@@ -5,19 +5,14 @@ import { x } from 'tinyexec';
 import { runRstestCli } from '../scripts';
 import { coverageProviders } from './providers';
 
-const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
 const expectedSummary = {
   istanbul: {
     source: /^sourcemap\.ts\|87\.5\|75\|100\|87\.5\|16$/,
     allFiles: /^Allfiles\|87\.5\|75\|100\|87\.5\|$/,
   },
   v8: {
-    source: isCommonJs
-      ? /^sourcemap\.ts\|100\|75\|100\|100\|13$/
-      : /^sourcemap\.ts\|87\.5\|75\|100\|87\.5\|16$/,
-    allFiles: isCommonJs
-      ? /^Allfiles\|100\|75\|100\|100\|$/
-      : /^Allfiles\|87\.5\|75\|100\|87\.5\|$/,
+    source: /^sourcemap\.ts\|87\.5\|75\|100\|87\.5\|16$/,
+    allFiles: /^Allfiles\|87\.5\|75\|100\|87\.5\|$/,
   },
 } as const;
 

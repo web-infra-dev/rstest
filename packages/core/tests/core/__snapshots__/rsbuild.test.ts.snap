@@ -771,6 +771,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
+        "overrideStrict": "strict",
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -1467,6 +1468,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
+        "overrideStrict": "strict",
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -2150,6 +2152,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
+        "overrideStrict": "strict",
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -3198,6 +3201,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
+        "overrideStrict": "strict",
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -3894,6 +3898,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
+        "overrideStrict": "strict",
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
