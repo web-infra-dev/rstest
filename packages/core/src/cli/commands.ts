@@ -163,7 +163,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--resetMocks', 'Automatically reset mock state before every test'],
   [
     '--restoreMocks',
-    'Automatically restore mock state and implementation before every test',
+    'Automatically restore spied object methods before every test',
   ],
   ['--browser', 'Run tests in browser mode'],
   ['--browser.enabled', 'Run tests in browser mode'],

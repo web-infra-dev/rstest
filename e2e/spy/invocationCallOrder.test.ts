@@ -14,5 +14,5 @@ it('rstest.fn -> mock.invocationCallOrder', () => {
   rstest.restoreAllMocks();
 
   sayHi();
-  expect(sayHi.mock.invocationCallOrder).toEqual([4]);
+  expect(sayHi.mock.invocationCallOrder).toEqual([1, 3, 4]);
 });

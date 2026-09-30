@@ -443,7 +443,8 @@ export interface RstestUtilities {
    */
   resetAllMocks: () => RstestUtilities;
   /**
-   * Calls `.mockRestore()` on all spies.
+   * Restores the original descriptors of objects spied on with `rs.spyOn()`.
+   * This does not clear mock call history or reset mock implementations. Standalone mocks created with `rs.fn()` are not affected.
    */
   restoreAllMocks: () => RstestUtilities;
 
