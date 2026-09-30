@@ -193,7 +193,7 @@ describe('rstest utilities wait APIs', () => {
     let secondAttempts = 0;
     const firstWait = taskContext.run(
       {
-        taskId: 1,
+        taskId: 'first',
         taskName: 'first',
         taskParentNames: [],
         taskType: 'case',
@@ -212,7 +212,7 @@ describe('rstest utilities wait APIs', () => {
     );
     const secondWait = taskContext.run(
       {
-        taskId: 2,
+        taskId: 'second',
         taskName: 'second',
         taskParentNames: [],
         taskType: 'case',
