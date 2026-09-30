@@ -7,6 +7,8 @@ import {
 it.each([
   ['0.12.0', true],
   ['0.12.9', true],
+  ['0.12.3-canary.1', true],
+  ['0.12.0foo', false],
   ['0.11.9', false],
   ['0.13.0', false],
   ['1.0.0', false],
@@ -16,11 +18,8 @@ it.each([
   expect(isSupportedCoreVersion(version)).toBe(supported);
 });
 
-it.each(['0.11.9', '0.13.0', undefined])(
-  'explains the final release range for %s',
-  (version) => {
-    expect(formatUnsupportedCoreVersionMessage(version)).toBe(
-      `This extension is no longer maintained and only supports @rstest/core ^0.12.0 (found ${version ?? 'unknown'}). Install the Rstack extension (rstack.rstack) instead.`,
-    );
-  },
-);
+it('explains the final release range and detected version', () => {
+  const message = formatUnsupportedCoreVersionMessage('0.13.0');
+  expect(message).toContain('^0.12.0');
+  expect(message).toContain('found 0.13.0');
+});

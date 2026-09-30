@@ -34,10 +34,27 @@ async function offerReload(message: string): Promise<void> {
   }
 }
 
+async function runMigrationAction(
+  label: string,
+  action: () => Promise<void>,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    logger.error(label, error);
+    void vscode.window.showErrorMessage(toErrorMessage(error));
+  }
+}
+
+// Deduplicate project errors for this session; reloading the Extension Host resets the set.
+const shownUnsupportedCoreMessages = new Set<string>();
+
 export async function showUnsupportedCoreMessage(
   message: string,
 ): Promise<void> {
-  try {
+  if (shownUnsupportedCoreMessages.has(message)) return;
+  shownUnsupportedCoreMessages.add(message);
+  await runMigrationAction('Failed to install Rstack', async () => {
     const action = await vscode.window.showErrorMessage(
       message,
       'Install Rstack',
@@ -45,10 +62,7 @@ export async function showUnsupportedCoreMessage(
     if (action === 'Install Rstack') {
       await installRstack();
     }
-  } catch (error) {
-    logger.error('Failed to install Rstack', error);
-    void vscode.window.showErrorMessage(toErrorMessage(error));
-  }
+  });
 }
 
 export async function showMigrationPrompt(
@@ -60,31 +74,31 @@ export async function showMigrationPrompt(
     : 'rstest.deprecation.installPromptDismissed';
   if (context.globalState.get<boolean>(flag)) return;
 
-  try {
-    const action = await vscode.window.showWarningMessage(
-      standingDown
-        ? 'Rstack has taken over Rstest. Uninstall the standalone Rstest extension.'
-        : 'The standalone Rstest extension is no longer maintained. Install the Rstack extension (rstack.rstack) to keep receiving updates.',
-      standingDown ? 'Uninstall Rstest' : 'Install Rstack',
-      "Don't show again",
-    );
-    if (action === "Don't show again") {
-      await context.globalState.update(flag, true);
-    } else if (action === 'Uninstall Rstest') {
-      await vscode.commands.executeCommand(
-        'workbench.extensions.uninstallExtension',
-        context.extension.id,
+  await runMigrationAction(
+    'Failed to migrate the standalone Rstest extension',
+    async () => {
+      const action = await vscode.window.showWarningMessage(
+        standingDown
+          ? 'Rstack has taken over Rstest. Uninstall the standalone Rstest extension.'
+          : 'The standalone Rstest extension is no longer maintained. Install the Rstack extension (rstack.rstack) to keep receiving updates.',
+        standingDown ? 'Uninstall Rstest' : 'Install Rstack',
+        "Don't show again",
       );
-      await offerReload(
-        'The standalone Rstest extension was uninstalled. Reload the window to finish.',
-      );
-    } else if (action === 'Install Rstack') {
-      await installRstack();
-    }
-  } catch (error) {
-    logger.error('Failed to migrate the standalone Rstest extension', error);
-    void vscode.window.showErrorMessage(toErrorMessage(error));
-  }
+      if (action === "Don't show again") {
+        await context.globalState.update(flag, true);
+      } else if (action === 'Uninstall Rstest') {
+        await vscode.commands.executeCommand(
+          'workbench.extensions.uninstallExtension',
+          context.extension.id,
+        );
+        await offerReload(
+          'The standalone Rstest extension was uninstalled. Reload the window to finish.',
+        );
+      } else if (action === 'Install Rstack') {
+        await installRstack();
+      }
+    },
+  );
 }
 
 type NoticeState = 'migrate' | 'off' | 'reload';

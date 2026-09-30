@@ -6,7 +6,7 @@ Two-process design: the extension (`src/extension.ts`, TestController + test tre
 
 This is the final standalone release, superseded by Rstack (`rstack.rstack`). `activate` must stay gated only on `extensions.getExtension('rstack.rstack')`: enabled Rstack takes over regardless of workspace trust or `rstack.rstest.enable`. Keep the status bar's extension-change listener and reload state; controller ownership cannot change in a running window.
 
-Migration prompts must not block activation. The uninstall and install warnings have independent dismissal flags in `globalState`, never settings. Wait for initial project discovery before offering the install warning: unsupported-core errors take precedence and cannot be permanently dismissed. Every unsupported-core notification must use `showUnsupportedCoreMessage` so it offers Install Rstack.
+Migration prompts must not block activation. The uninstall and install warnings have independent dismissal flags in `globalState`, never settings. Unsupported-core errors cannot be permanently dismissed. Every unsupported-core notification must use `showUnsupportedCoreMessage` so it offers Install Rstack.
 
 The final release supports only `@rstest/core` `^0.12.0`. Keep the version guard in `resolveRstestPaths` before API resolution and worker creation, including configured package paths. Keep `versionCheck` free of VS Code imports: the worker also uses its error formatter.
 

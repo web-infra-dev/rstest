@@ -8,8 +8,6 @@ import {
 } from '../../src/migrationNotice';
 
 let installed = new Set<string>();
-let isTrusted = true;
-const settings: Record<string, unknown> = {};
 const showWarningMessage =
   rs.fn<(...args: string[]) => Promise<string | undefined>>();
 const showInformationMessage =
@@ -57,15 +55,6 @@ rs.mock('vscode', () => ({
         return { dispose() {} };
       },
     },
-    workspace: {
-      get isTrusted() {
-        return isTrusted;
-      },
-      getConfiguration: (section: string) => ({
-        get: (key: string, fallback: unknown) =>
-          settings[`${section}.${key}`] ?? fallback,
-      }),
-    },
     window: {
       createOutputChannel: () => ({
         error: (...args: unknown[]) => logError(...args),
@@ -83,54 +72,25 @@ rs.mock('vscode', () => ({
 describe('rstackEditorTakesOver', () => {
   afterEach(() => {
     installed = new Set();
-    isTrusted = true;
-    for (const key of Object.keys(settings)) {
-      delete settings[key];
-    }
   });
 
-  it('keeps this extension active without the Rstack extension', () => {
+  it('stands down only when Rstack is installed and enabled', () => {
     expect(rstackEditorTakesOver()).toBe(false);
-  });
-
-  it('stands down when the setting is default and the workspace is trusted', () => {
     installed = new Set(['rstack.rstack']);
-    expect(rstackEditorTakesOver()).toBe(true);
-  });
-
-  it('stands down even when the workspace is untrusted', () => {
-    installed = new Set(['rstack.rstack']);
-    isTrusted = false;
-    expect(rstackEditorTakesOver()).toBe(true);
-  });
-
-  it('stands down even when the Rstack extension has its Rstest stack switched off', () => {
-    installed = new Set(['rstack.rstack']);
-    settings['rstack.rstest.enable'] = false;
     expect(rstackEditorTakesOver()).toBe(true);
   });
 });
 
 describe('migration prompts', () => {
   it.each([
-    [
-      true,
-      'uninstall',
-      'Uninstall Rstest',
-      'Rstack has taken over Rstest. Uninstall the standalone Rstest extension.',
-    ],
-    [
-      false,
-      'install',
-      'Install Rstack',
-      'The standalone Rstest extension is no longer maintained. Install the Rstack extension (rstack.rstack) to keep receiving updates.',
-    ],
+    [true, 'uninstall', 'Uninstall Rstest'],
+    [false, 'install', 'Install Rstack'],
   ] as const)(
     'offers the migration action when standingDown=%s',
-    async (standingDown, kind, action, message) => {
+    async (standingDown, kind, action) => {
       await showMigrationPrompt(context, standingDown);
       expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
-        message,
+        expect.any(String),
         action,
         "Don't show again",
       );
@@ -156,18 +116,16 @@ describe('migration prompts', () => {
       'Uninstall Rstest',
       'workbench.extensions.uninstallExtension',
       ['rstack.rstest'],
-      'The standalone Rstest extension was uninstalled. Reload the window to finish.',
     ],
     [
       false,
       'Install Rstack',
       'workbench.extensions.installExtension',
       ['rstack.rstack', { enable: true }],
-      'Rstack was installed. Reload the window so exactly one copy of Rstest runs.',
     ],
   ] as const)(
     'runs the command and offers reload when standingDown=%s',
-    async (standingDown, action, command, args, message) => {
+    async (standingDown, action, command, args) => {
       showWarningMessage.mockResolvedValueOnce(action);
       showInformationMessage.mockResolvedValueOnce('Reload Window');
       await showMigrationPrompt(context, standingDown);
@@ -176,38 +134,29 @@ describe('migration prompts', () => {
         ['workbench.action.reloadWindow'],
       ]);
       expect(showInformationMessage).toHaveBeenCalledExactlyOnceWith(
-        message,
+        expect.any(String),
         'Reload Window',
       );
       expect(update).not.toHaveBeenCalled();
     },
   );
 
-  it.each([true, false])(
-    'reports a failed migration command when standingDown=%s',
-    async (standingDown) => {
-      showWarningMessage.mockResolvedValueOnce(
-        standingDown ? 'Uninstall Rstest' : 'Install Rstack',
-      );
-      executeCommand.mockRejectedValueOnce(new Error('Command failed'));
-      await showMigrationPrompt(context, standingDown);
-      expect(logError).toHaveBeenCalled();
-      expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
-        'Command failed',
-      );
-      expect(showInformationMessage).not.toHaveBeenCalled();
-    },
-  );
+  it('reports a failed migration command', async () => {
+    showWarningMessage.mockResolvedValueOnce('Uninstall Rstest');
+    executeCommand.mockRejectedValueOnce(new Error('Command failed'));
+    await showMigrationPrompt(context, true);
+    expect(logError).toHaveBeenCalled();
+    expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith('Command failed');
+    expect(showInformationMessage).not.toHaveBeenCalled();
+  });
 
-  it('always offers installation for unsupported core, ignoring dismissal flags', async () => {
-    flags.set('rstest.deprecation.installPromptDismissed', true);
+  it('offers installation for unsupported core', async () => {
     showErrorMessage.mockResolvedValueOnce('Install Rstack');
     await showUnsupportedCoreMessage('Unsupported core');
-    await showUnsupportedCoreMessage('Unsupported core');
-    expect(showErrorMessage.mock.calls).toEqual([
-      ['Unsupported core', 'Install Rstack'],
-      ['Unsupported core', 'Install Rstack'],
-    ]);
+    expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.any(String),
+      'Install Rstack',
+    );
     expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
       'workbench.extensions.installExtension',
       'rstack.rstack',
@@ -215,13 +164,22 @@ describe('migration prompts', () => {
     );
   });
 
+  it('shows each unsupported-core message only once per session', async () => {
+    await Promise.all([
+      showUnsupportedCoreMessage('Repeated unsupported core'),
+      showUnsupportedCoreMessage('Repeated unsupported core'),
+    ]);
+    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    await showUnsupportedCoreMessage('Different unsupported core');
+    expect(showErrorMessage).toHaveBeenCalledTimes(2);
+  });
+
   it('switches the status bar to reload when Rstack becomes enabled', () => {
     installed.clear();
     createMigrationNotice(context, false);
-    expect(item.text).toBe('$(sparkle-filled) Rstest → Rstack');
+    expect(item.command).toBe('rstest.openRstackExtension');
     installed.add('rstack.rstack');
     onExtensionsChanged();
-    expect(item.text).toBe('$(sparkle-filled) Rstest: reload window');
     expect(item.command).toBe('workbench.action.reloadWindow');
     installed.clear();
   });

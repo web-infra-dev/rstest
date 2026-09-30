@@ -109,7 +109,6 @@ const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
   });
 
 export class RstestApi {
-  public unsupportedCore = false;
   private workers = new Set<WorkerRpc>();
   private disposed = false;
   private disposePromise?: Promise<void>;
@@ -293,7 +292,6 @@ export class RstestApi {
     if (message !== formatUnsupportedCoreVersionMessage(coreVersion)) {
       return false;
     }
-    this.unsupportedCore = true;
     void showUnsupportedCoreMessage(message);
     return true;
   }

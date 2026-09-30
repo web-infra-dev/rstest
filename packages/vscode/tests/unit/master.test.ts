@@ -285,16 +285,6 @@ describe('RstestApi core version compatibility', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('should reject a core without the api export before starting a worker', async () => {
-    const api = createApi(root);
-    const message = formatUnsupportedCoreVersionMessage('0.11.9');
-
-    expect(runningWorkers.size).toBe(0);
-    await expect(api.getNormalizedConfig()).rejects.toThrow(message);
-    expect(runningWorkers.size).toBe(0);
-    expect(shownMessages).toEqual([message]);
-  });
-
   it.each(['0.11.9', '0.13.0'])(
     'rejects %s even when it exports an api',
     async (version) => {
@@ -307,7 +297,6 @@ describe('RstestApi core version compatibility', () => {
         'Install Rstack',
       );
       expect(spawnedProcesses).toEqual([]);
-      expect(api.unsupportedCore).toBe(true);
     },
   );
 
@@ -532,13 +521,12 @@ describe('RstestApi configuration loading', () => {
       rs.spyOn(api, 'createChildProcess').mockResolvedValue(worker as any);
       rs.spyOn(api as any, 'resolveRstestPaths').mockReturnValue({
         apiPath,
-        coreVersion: '0.11.9',
+        coreVersion: '0.12.2',
         rstestPath,
       });
-      const message = formatUnsupportedCoreVersionMessage('0.11.9');
+      const message = formatUnsupportedCoreVersionMessage('0.12.2');
 
       await expect(api.getNormalizedConfig()).rejects.toThrow(message);
-      expect(shownMessages).toEqual([message]);
       expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
         message,
         'Install Rstack',

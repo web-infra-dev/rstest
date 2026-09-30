@@ -1,7 +1,9 @@
-export const SUPPORTED_CORE_RANGE = '^0.12.0';
+const SUPPORTED_CORE_RANGE = '^0.12.0';
 
+// Reject minor lines whose API this extension cannot drive.
+// 0.12.x prereleases share the 0.12 API and are accepted deliberately.
 export function isSupportedCoreVersion(version?: string): boolean {
-  return version !== undefined && /^0\.12\.\d+/.test(version);
+  return version !== undefined && /^0\.12\.\d+(?:[-+]|$)/.test(version);
 }
 
 export function formatUnsupportedCoreVersionMessage(
