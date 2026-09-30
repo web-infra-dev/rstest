@@ -56,11 +56,11 @@ const defaultPool = {
 
 性能不符合预期时，先确认耗时集中在哪个阶段。可以使用 `rstest-debugging` skill 辅助排查，安装方式和分析方法见[性能分析](/guide/debug/profiling)。如果瓶颈确实在 worker 启动或模块加载，再考虑下面的选择：
 
-| 场景                                                   | 可以尝试    | 切换前需要确认                                            |
-| ------------------------------------------------------ | ----------- | --------------------------------------------------------- |
-| 单文件测试较短，worker 启动占用较多时间                | `threads`   | 测试及依赖兼容 worker thread 的 API 和 native addon 限制  |
-| 文件较多，重复启动 worker、加载和编译依赖的成本较高    | `vmThreads` | 测试兼容 worker thread 和跨 realm 限制                    |
-| 希望复用 worker，同时需要进程 API 或更容易控制内存压力 | `vmForks`   | 测试能接受同一 worker 内的进程状态残留，以及跨 realm 限制 |
+| 场景                                                | 可以尝试    | 切换前需要确认                                            |
+| --------------------------------------------------- | ----------- | --------------------------------------------------------- |
+| 单文件测试较短，worker 启动占用较多时间             | `threads`   | 测试及依赖兼容 worker thread 的 API 和 native addon 限制  |
+| 文件较多，重复启动 worker、加载和编译依赖的成本较高 | `vmThreads` | 测试兼容 worker thread 和跨 realm 限制                    |
+| 希望复用 worker，同时需要进程 API                   | `vmForks`   | 测试能接受同一 worker 内的进程状态残留，以及跨 realm 限制 |
 
 VM pool 会复用 worker 和编译资源，因此测试文件多、setup 依赖较大时可能受益。不过，setup 文件、测试环境创建和模块求值仍会逐文件执行。如果主要耗时来自 setup 中的数据库初始化或网络请求，切换 VM pool 并不会省去这些工作。最终应以项目自身的耗时和内存测量结果为准。
 
@@ -245,8 +245,6 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 `memoryLimit` 只在文件之间触发回收，不是进程 RSS 的硬上限，也不能保证避免 OOM。
 
 它还会影响每个 VM worker 的缓存大小：不可变资源、external source、解析结果和编译数据共用一份缓存，上限取 64 MiB 与 `memoryLimit` 四分之一中的较小值。调低阈值可能缩小缓存，增加重复加载和编译的开销。
-
-此外，`vmForks` 能根据各子进程的 RSS，在内存紧张时延后创建 worker，因此比共享进程 RSS 的 `vmThreads` 更容易控制内存压力。这项调度机制与 `memoryLimit` 分开工作；子进程本身仍有额外开销，实际内存占用不一定更低。
 
 ## 向 worker 传递 Node.js flags
 

@@ -155,7 +155,7 @@ let isTeardown = false;
  * environment's lifetime moves instead.
  *
  * A worker only ever holds one environment: the scheduler restricts reuse to
- * tasks whose `environmentKey` matches (`Pool.acquireRunner`). No
+ * tasks whose `environmentKey` matches (`Pool.wakeWaiters`). No
  * teardown runs at worker exit — the host owns termination (see
  * `pool/AGENTS.md`) and process death reclaims the environment, same as the
  * kept module cache.
@@ -824,7 +824,7 @@ const preparePool = async (
       !isVmPool && activeEnvironmentKey !== undefined;
     if (hasPinnedEnvironment && activeEnvironmentKey !== environmentKey) {
       // Unreachable: the scheduler only reuses a worker for tasks matching its
-      // pinned environment (`Pool.acquireRunner`). The throw guards against a
+      // pinned environment (`Pool.wakeWaiters`). The throw guards against a
       // future regression in that affinity — swapping environments here would
       // leave persisted modules holding captures of the previous one.
       throw new Error(

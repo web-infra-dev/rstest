@@ -1,6 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
 import { resolve } from 'pathe';
-import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
 import { PoolRunner } from '../../src/pool/poolRunner';
 import {
@@ -24,9 +23,6 @@ const createPoolOptions = (overrides?: Partial<PoolOptions>): PoolOptions => ({
   // truncation. Suppress host forwarding so this simulated noise doesn't
   // leak into the parent rstest log on CI.
   forwardStdio: false,
-  // Leave `memoryGate` unset so existing assertions around spawn
-  // timing/order stay deterministic — the integration case below opts in
-  // with its own fake.
   ...overrides,
 });
 
@@ -371,43 +367,6 @@ describe('Pool - isolate', () => {
           message: 'intentional worker cleanup failure',
         }),
       ]);
-    } finally {
-      await pool.close();
-    }
-  });
-});
-
-// ── memory gate integration ────────────────────────────────────────────────
-
-describe('Pool - memory gate', () => {
-  it('should park spawns when the gate blocks and resume when it unblocks', async () => {
-    let allowSpawn = false;
-    const gate = new MemoryGate();
-    // Fake: first worker always allowed (deadlock guard); subsequent
-    // fresh spawns only when `allowSpawn` flips true.
-    const spy = rs
-      .spyOn(gate, 'canSpawnNewWorker')
-      .mockImplementation((active: number) =>
-        active === 0 ? true : allowSpawn,
-      );
-
-    const pool = new Pool(
-      createPoolOptions({ maxWorkers: 4, isolate: true, memoryGate: gate }),
-    );
-
-    try {
-      const r1 = pool.runTest(createTask());
-      const r2 = pool.runTest(createTask());
-
-      // Wait until the gate has rejected at least once (proves r2 parked).
-      while (!spy.mock.calls.some(([n]) => (n as number) > 0)) {
-        await new Promise((r) => setImmediate(r));
-      }
-      allowSpawn = true;
-
-      const [res1, res2] = await Promise.all([r1, r2]);
-      expect(res1.status).toBe('pass');
-      expect(res2.status).toBe('pass');
     } finally {
       await pool.close();
     }

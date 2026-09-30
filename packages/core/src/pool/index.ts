@@ -26,14 +26,12 @@ import {
 } from '../utils';
 import { toSerializedError } from '../utils/error';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
-import { isMemorySufficient } from '../utils/memory';
 import {
   getNumCpus,
   isVmPoolType,
   parseMemoryLimit,
   parseWorkers,
 } from '../utils/workers';
-import { selectMemoryGate } from './memoryGate';
 import { assertWorkerEnvironmentOptions } from './workerOptions';
 import { getEnvironmentKey } from '../core/environment/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/environment/envDependencies';
@@ -49,11 +47,20 @@ import {
   type RunnerEventSink,
   sinkToRuntimeRpc,
 } from '../core/execution/runnerEventSink';
-import { Pool } from './pool';
+import { MAX_OOM_ATTEMPTS, Pool } from './pool';
+import { WorkerOomKillError } from './poolRunner';
 import type { PoolTask, PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Loader failures abort the run; the `runTests` and `collectTests` catch
+// handlers unwrap them instead of building worker crash results.
+class AssetLoadError extends Error {
+  constructor(cause: unknown) {
+    super('Failed to load test assets', { cause });
+  }
+}
 
 const getWorkerConfig = (
   context: InternalContext,
@@ -217,6 +224,18 @@ const buildTask = async ({
       worker: workerKind,
       type,
       getKnownCoverageStructures,
+      // Bundle coverage bypasses the VM cache to capture every task's assets.
+      loadAssets:
+        (!isVmPoolType(workerKind) || captureBundleCoverage) &&
+        !project.normalizedConfig.federation
+          ? () =>
+              traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+                ...traceArgs,
+                mode: 'eager',
+              }).catch((error: unknown) => {
+                throw new AssetLoadError(error);
+              })
+          : undefined,
       options: {
         entryInfo,
         assetNames: taskAssetNames,
@@ -257,23 +276,11 @@ const buildTask = async ({
         type,
         setupEntries,
         updateSnapshot,
-        // Bundle coverage needs the complete per-task asset map, so its debug
-        // mode deliberately bypasses the VM pool cache. In normal runs, VM
-        // pools use the lazy path below and cache shared assets by name.
-        assets:
-          (!isVmPoolType(workerKind) || captureBundleCoverage) &&
-          isMemorySufficient() &&
-          !project.normalizedConfig.federation
-            ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-                ...traceArgs,
-                mode: 'eager',
-              })
-            : undefined,
       },
       rpcMethods: {
         ...rpcMethods,
-        // VM pools use this path for their per-worker asset cache; other pools
-        // use it when eager host-side asset delivery is not safe.
+        // VM pools use this path for their per-worker asset cache; federation
+        // also requires lazy delivery.
         getAssetsByEntry: (requestedAssetNames, requestedSourceMapNames) =>
           traceSpan(
             'host:get-assets-by-entry',
@@ -306,7 +313,11 @@ const workerErrorToResult = (
   const error = toSerializedError(toError(err));
 
   error.fullStack = true;
-  if (error.message.includes('Worker exited unexpectedly')) {
+  // A host-side stack would only point at rstest internals.
+  if (
+    err instanceof WorkerOomKillError ||
+    error.message.includes('Worker exited unexpectedly')
+  ) {
     delete error.stack;
   }
 
@@ -478,7 +489,6 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    memoryGate: selectMemoryGate(workerKind),
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(
         formatTestEnvironmentPrebundleFallbackWarning(packageName, reason),
@@ -521,12 +531,8 @@ export const createPool = async ({
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
-      // Sequential dispatch gate: `entries` is already perf-sorted, but the
-      // per-entry `buildTask` (eager asset reads) finishes out of order, so
-      // enqueueing right after it would scramble the pool's slot order. Each
-      // entry waits for the previous one to claim its pool slot before calling
-      // `pool.runTest`, then releases the next — the asset reads stay fully
-      // pipelined, only the enqueue is serialized.
+      // Preserve perf-sorted slot claims even if task preparation finishes out
+      // of order. Asset reads begin only after dispatch acquires a runner.
       let dispatchGate: Promise<void> = Promise.resolve();
 
       const dispatchedResults = await Promise.all(
@@ -576,6 +582,12 @@ export const createPool = async ({
               traceArgs,
             );
 
+            task.onRetry = (attempt, ceiling) => {
+              sink.discardAttempt(entryInfo.testPath);
+              logger.warn(
+                `${entryInfo.testPath}: worker killed by SIGKILL (likely OOM), attempt ${attempt}/${MAX_OOM_ATTEMPTS}; re-running with concurrency ceiling ${ceiling}`,
+              );
+            };
             await gate;
             if (pool.closing) return;
             // `pool.runTest` claims a slot (or parks in `slotWaiters`)
@@ -591,6 +603,7 @@ export const createPool = async ({
             releaseGate();
 
             const result = await resultPromise.catch(async (err: unknown) => {
+              if (err instanceof AssetLoadError) throw err.cause;
               // Closing deliberately rejects queued and running tasks. They
               // must not become worker-crash results during cancellation.
               if (pool.closing) return;
@@ -715,6 +728,7 @@ export const createPool = async ({
           });
 
           return pool.collectTests(task).catch((err: unknown) => {
+            if (err instanceof AssetLoadError) throw err.cause;
             const error = toSerializedError(err);
             error.fullStack = true;
             return {

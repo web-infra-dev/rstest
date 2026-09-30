@@ -12,7 +12,11 @@ import { isVmPoolType } from '../../utils/workers';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
-import { installForkTerminationPolicy, installGracefulExit } from './setup';
+import {
+  installForkTerminationPolicy,
+  installGracefulExit,
+  preferAsOomVictim,
+} from './setup';
 
 installGracefulExit();
 
@@ -184,6 +188,7 @@ const cleanupWorker = async (): Promise<void> => {
 // profiling-specific handler that calls `process.exit()`, which is compatible.
 if (isMainThread) {
   installForkTerminationPolicy();
+  preferAsOomVictim();
 }
 
 channel.on((message: unknown) => {
