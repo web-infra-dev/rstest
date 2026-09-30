@@ -1,11 +1,25 @@
 import { expect, it } from '@rstest/core';
-import { formatUnsupportedCoreVersionMessage } from '../../src/versionCheck';
+import {
+  formatUnsupportedCoreVersionMessage,
+  isSupportedCoreVersion,
+} from '../../src/versionCheck';
 
-it('should explain both supported migration paths', () => {
-  const message = formatUnsupportedCoreVersionMessage('0.11.9');
-  expect(message).toContain('@rstest/core >= 0.12.0');
-  expect(message).toContain('Upgrade @rstest/core to >= 0.12.0');
-  expect(message).toContain(
-    'install an older version of the Rstest extension in VS Code',
-  );
+it.each([
+  ['0.12.0', true],
+  ['0.12.9', true],
+  ['0.12.3-canary.1', true],
+  ['0.12.0foo', false],
+  ['0.11.9', false],
+  ['0.13.0', false],
+  ['1.0.0', false],
+  [undefined, false],
+  ['garbage', false],
+] as const)('checks core version %s', (version, supported) => {
+  expect(isSupportedCoreVersion(version)).toBe(supported);
+});
+
+it('explains the final release range and detected version', () => {
+  const message = formatUnsupportedCoreVersionMessage('0.13.0');
+  expect(message).toContain('^0.12.0');
+  expect(message).toContain('found 0.13.0');
 });

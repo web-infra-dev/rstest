@@ -5,8 +5,10 @@ import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
 import { closeWorkerGracefully, runningWorkers } from './master';
 import {
+  armInstallPrompt,
   createMigrationNotice,
   rstackEditorTakesOver,
+  showMigrationPrompt,
 } from './migrationNotice';
 import { Project, WorkspaceManager } from './project';
 import { disposeTerminal } from './terminal';
@@ -25,9 +27,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const standingDown = rstackEditorTakesOver();
   createMigrationNotice(context, standingDown);
   if (standingDown) {
+    void showMigrationPrompt(context, true);
     return;
   }
-  return new Rstest(context);
+  const rstest = new Rstest(context);
+  armInstallPrompt(context);
+  return rstest;
 }
 
 export async function deactivate() {

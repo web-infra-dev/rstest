@@ -20,6 +20,10 @@ const loggedErrors: string[] = [];
 const loggedWarnings: string[] = [];
 const createdTerminals: string[] = [];
 const settings: Record<string, unknown> = {};
+const showErrorMessage = rs.fn((message: string, ..._actions: string[]) => {
+  shownMessages.push(message);
+  return Promise.resolve(undefined);
+});
 let startDebugging = async (): Promise<boolean> => true;
 
 class MockRstestProcess extends EventEmitter {
@@ -66,6 +70,7 @@ rs.mock('vscode', () => {
     dispose: () => {},
   };
   const vscode = {
+    MarkdownString: class {},
     TestRunProfileKind: { Run: 1, Debug: 2, Coverage: 3 },
     debug: {
       startDebugging: () => startDebugging(),
@@ -87,7 +92,8 @@ rs.mock('vscode', () => {
         return { show: () => {}, sendText: () => {}, dispose: () => {} };
       },
       onDidCloseTerminal: () => ({ dispose: () => {} }),
-      showErrorMessage: (message: string) => shownMessages.push(message),
+      showErrorMessage: (message: string, ...actions: string[]) =>
+        showErrorMessage(message, ...actions),
       showWarningMessage: (message: string) => shownMessages.push(message),
       showInformationMessage: (message: string) => shownMessages.push(message),
     },
@@ -163,6 +169,7 @@ const createInFlightOneShotWorker = (shouldReject = false) => {
 
 beforeEach(() => {
   spawnedProcesses.length = 0;
+  showErrorMessage.mockClear();
   startDebugging = async () => true;
 });
 
@@ -278,14 +285,30 @@ describe('RstestApi core version compatibility', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('should reject a core without the api export before starting a worker', async () => {
-    const api = createApi(root);
-    const message = formatUnsupportedCoreVersionMessage('0.11.9');
+  it.each(['0.11.9', '0.13.0'])(
+    'rejects %s even when it exports an api',
+    async (version) => {
+      writeCorePackage(version, true);
+      const api = createApi(root);
+      const message = formatUnsupportedCoreVersionMessage(version);
+      await expect(api.getNormalizedConfig()).rejects.toThrow(message);
+      expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+        message,
+        'Install Rstack',
+      );
+      expect(spawnedProcesses).toEqual([]);
+    },
+  );
 
-    expect(runningWorkers.size).toBe(0);
-    await expect(api.getNormalizedConfig()).rejects.toThrow(message);
-    expect(runningWorkers.size).toBe(0);
-    expect(shownMessages).toEqual([message]);
+  it('offers migration when a supported version lacks the api export', async () => {
+    writeCorePackage('0.12.0');
+    const message = formatUnsupportedCoreVersionMessage('0.12.0');
+    await expect(createApi(root).createChildProcess()).rejects.toThrow(message);
+    expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+      message,
+      'Install Rstack',
+    );
+    expect(spawnedProcesses).toEqual([]);
   });
 
   it('should resolve both entries from a core that exports the api', () => {
@@ -307,7 +330,7 @@ describe('RstestApi core version compatibility', () => {
   });
 
   it('should resolve an api exported by an explicit package path', () => {
-    writeCorePackage('0.11.9', true);
+    writeCorePackage('0.12.9', true);
     settings.rstestPackagePath = packageJsonPath;
     const api = createApi(noCoreDir);
 
@@ -498,13 +521,16 @@ describe('RstestApi configuration loading', () => {
       rs.spyOn(api, 'createChildProcess').mockResolvedValue(worker as any);
       rs.spyOn(api as any, 'resolveRstestPaths').mockReturnValue({
         apiPath,
-        coreVersion: '0.11.9',
+        coreVersion: '0.12.2',
         rstestPath,
       });
-      const message = formatUnsupportedCoreVersionMessage('0.11.9');
+      const message = formatUnsupportedCoreVersionMessage('0.12.2');
 
       await expect(api.getNormalizedConfig()).rejects.toThrow(message);
-      expect(shownMessages).toEqual([message]);
+      expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+        message,
+        'Install Rstack',
+      );
       expect(worker.$close).toHaveBeenCalledTimes(1);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 {
   "name": "rstest",
-  "displayName": "Rstest",
+  "displayName": "Rstest (Deprecated)",
   "version": "0.12.2",
   "private": true,
   "description": "VS Code extension for Rstest",

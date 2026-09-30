@@ -1,26 +1,125 @@
 import vscode from 'vscode';
 import { logger } from './logger';
+import { toErrorMessage } from './utils';
 
 const RSTACK_EXTENSION_ID = 'rstack.rstack';
 const OPEN_EXTENSION_COMMAND = 'rstest.openRstackExtension';
+const RSTACK_REPO_URL = 'https://github.com/rstackjs/rstack-editor';
 
 const MIGRATION_NOTES_URL =
   'https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions';
 
-/**
- * The Rstack extension bundles the same Rstest integration as this extension.
- * This predicate mirrors its VS Code-level gates (workspace trust and
- * `rstack.rstest.enable`), not project detection.
- * `extensions.getExtension` only sees enabled extensions, so a disabled
- * Rstack extension does not count. Trust needs no change listener: VS Code
- * does not activate this extension in Restricted Mode, and granted trust
- * cannot be revoked without a reload.
- */
+// getExtension only sees enabled extensions; disabled Rstack does not take over.
 export function rstackEditorTakesOver(): boolean {
-  return (
-    vscode.extensions.getExtension(RSTACK_EXTENSION_ID) !== undefined &&
-    vscode.workspace.isTrusted &&
-    vscode.workspace.getConfiguration('rstack.rstest').get('enable', true)
+  return vscode.extensions.getExtension(RSTACK_EXTENSION_ID) !== undefined;
+}
+
+async function installRstack(): Promise<void> {
+  await vscode.commands.executeCommand(
+    'workbench.extensions.installExtension',
+    RSTACK_EXTENSION_ID,
+    { enable: true },
+  );
+  await offerReload(
+    `[Rstack](${RSTACK_REPO_URL}) was installed. Reload the window so exactly one copy of Rstest runs.`,
+  );
+}
+
+async function offerReload(message: string): Promise<void> {
+  const action = await vscode.window.showInformationMessage(
+    message,
+    'Reload Window',
+  );
+  if (action === 'Reload Window') {
+    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+  }
+}
+
+async function runMigrationAction(
+  label: string,
+  action: () => Promise<void>,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    logger.error(label, error);
+    void vscode.window.showErrorMessage(toErrorMessage(error));
+  }
+}
+
+// Deduplicate project errors for this session; reloading the Extension Host resets the set.
+const shownUnsupportedCoreMessages = new Set<string>();
+
+let installPromptContext: vscode.ExtensionContext | undefined;
+let unsupportedCoreSeen = false;
+let installPromptDone = false;
+
+export function armInstallPrompt(context: vscode.ExtensionContext): void {
+  installPromptContext = context;
+}
+
+/**
+ * Called once a workspace's discovery round has constructed every project.
+ * Each project's core check runs synchronously in its constructor, so an
+ * unsupported core has already vetoed the warning by now.
+ */
+export function offerInstallPromptAfterDiscovery(): void {
+  if (installPromptDone || !installPromptContext) return;
+  installPromptDone = true;
+  if (!unsupportedCoreSeen)
+    void showMigrationPrompt(installPromptContext, false);
+}
+
+export async function showUnsupportedCoreMessage(
+  message: string,
+): Promise<void> {
+  unsupportedCoreSeen = true;
+  if (shownUnsupportedCoreMessages.has(message)) return;
+  shownUnsupportedCoreMessages.add(message);
+  await runMigrationAction('Failed to install Rstack', async () => {
+    const action = await vscode.window.showErrorMessage(
+      message,
+      'Install Rstack',
+    );
+    if (action === 'Install Rstack') {
+      await installRstack();
+    }
+  });
+}
+
+export async function showMigrationPrompt(
+  context: vscode.ExtensionContext,
+  standingDown: boolean,
+): Promise<void> {
+  const flag = standingDown
+    ? 'rstest.deprecation.uninstallPromptDismissed'
+    : 'rstest.deprecation.installPromptDismissed';
+  if (context.globalState.get<boolean>(flag)) return;
+
+  await runMigrationAction(
+    'Failed to migrate the standalone Rstest extension',
+    async () => {
+      const action = await vscode.window.showWarningMessage(
+        standingDown
+          ? `[Rstack](${RSTACK_REPO_URL}) has taken over Rstest. Uninstall the Rstest extension.`
+          : `Rstest has moved into the [Rstack](${RSTACK_REPO_URL}) extension. The Rstest extension is deprecated and will not be updated. Please install Rstack.`,
+        standingDown ? 'Uninstall Rstest' : 'Install Rstack',
+        "Don't show again",
+      );
+      if (action === "Don't show again") {
+        await context.globalState.update(flag, true);
+      } else if (action === 'Uninstall Rstest') {
+        await vscode.commands.executeCommand(
+          'workbench.extensions.uninstallExtension',
+          context.extension.id,
+        );
+        await offerReload(
+          'The standalone Rstest extension was uninstalled. Reload the window to finish.',
+        );
+      } else if (action === 'Install Rstack') {
+        await installRstack();
+      }
+    },
   );
 }
 
@@ -128,10 +227,5 @@ export function createMigrationNotice(
   apply(standingDown);
   context.subscriptions.push(
     vscode.extensions.onDidChange(() => apply(rstackEditorTakesOver())),
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('rstack.rstest.enable')) {
-        apply(rstackEditorTakesOver());
-      }
-    }),
   );
 }
