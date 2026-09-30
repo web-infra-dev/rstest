@@ -675,6 +675,39 @@ describe('expect.element timeout', () => {
     await expect(result).rejects.toBe(timeoutError);
     expect(attempts).toBe(1);
   });
+
+  it('captures the attempt signal when a poll matcher is created', async () => {
+    setRealTimers();
+    const firstController = new AbortController();
+    const retryController = new AbortController();
+    const currentTest = fakeTest('poll retry', false, firstController.signal);
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: {
+            expect: { poll: { interval: 1000, timeout: 5000 } },
+          },
+        }) as WorkerState,
+      getCurrentTest: () => currentTest,
+    });
+    let attempts = 0;
+    const pending = localExpect
+      .poll(() => {
+        attempts += 1;
+        throw new Error('not ready');
+      })
+      .toBe(true);
+    const timeoutError = new Error('first attempt timed out');
+
+    Object.defineProperty(currentTest.context, 'signal', {
+      configurable: true,
+      value: retryController.signal,
+    });
+    firstController.abort(timeoutError);
+
+    await expect(pending).rejects.toBe(timeoutError);
+    expect(attempts).toBe(0);
+  });
 });
 
 it('compares cross-realm binary values by their bytes', () => {

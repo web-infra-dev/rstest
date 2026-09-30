@@ -62,6 +62,7 @@ export function createExpectPoll(
     if (!test) {
       throw new Error('expect.poll() must be called inside a test');
     }
+    const signal = test.context.signal;
     const getTimeout = (): number => {
       if (options.timeout !== undefined) {
         return options.timeout;
@@ -101,7 +102,6 @@ export function createExpectPoll(
             new Promise<void>((resolve, reject) => {
               const timeout = getTimeout();
               const interval = options.interval ?? getPollConfig().interval;
-              const signal = test.context.signal;
               let intervalId: ReturnType<typeof setTimeout> | undefined;
               let timeoutId: ReturnType<typeof setTimeout> | undefined;
               let settled = false;
