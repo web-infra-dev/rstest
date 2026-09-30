@@ -72,6 +72,14 @@ type CoverageEntryGroup = {
   root?: string;
 };
 
+/**
+ * The inspector session of this worker. Disconnecting a session that enabled
+ * the profiler stops precise coverage for the whole isolate, and restarting it
+ * reports functions compiled before the restart without block counts, so the
+ * session lives as long as the worker.
+ */
+let workerSession: inspector.Session | undefined;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object';
 
@@ -722,13 +730,23 @@ export class CoverageProvider implements RstestCoverageProvider {
   async init(
     _options?: Parameters<RstestCoverageProvider['init']>[0],
   ): Promise<void> {
-    this.session = new inspector.Session();
-    this.session.connect();
-    await this.session.post('Profiler.enable');
-    await this.session.post('Profiler.startPreciseCoverage', {
+    if (!workerSession) {
+      workerSession = new inspector.Session();
+      workerSession.connect();
+      await workerSession.post('Profiler.enable');
+    } else {
+      // V8 keeps its counters while the coverage mode is unchanged, so dropping
+      // the previous file's counts costs one extra full take per file in a
+      // reused worker.
+      await workerSession.post('Profiler.takePreciseCoverage');
+    }
+    // Also selects precise coverage again after code under test disabled the
+    // profiler through its own session.
+    await workerSession.post('Profiler.startPreciseCoverage', {
       callCount: true,
       detailed: true,
     });
+    this.session = workerSession;
   }
 
   collect(options?: CollectOptions): Promise<CoverageMap | null> {
@@ -766,15 +784,8 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): Promise<RawCoveragePayload | null> {
     if (!this.session) return null;
 
-    let entries: CoverageEntry[];
-    try {
-      entries = await this.takeRawCoverage();
-    } finally {
-      await this.stopCoverage();
-    }
-
     const filteredEntries = await this.filterRawCoverageEntries(
-      entries,
+      await this.takeRawCoverage(),
       options,
     );
 
@@ -852,15 +863,8 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): Promise<CoverageMap | null> {
     if (!this.session) return null;
 
-    let entries: CoverageEntry[];
-    try {
-      entries = await this.takeRawCoverage();
-    } finally {
-      await this.stopCoverage();
-    }
-
     const filteredEntries = await this.filterRawCoverageEntries(
-      entries,
+      await this.takeRawCoverage(),
       options,
     );
     const coverageMap = this.createCoverageMap();
@@ -1121,17 +1125,6 @@ export class CoverageProvider implements RstestCoverageProvider {
     return String(id);
   }
 
-  private async stopCoverage(): Promise<void> {
-    if (!this.session) return;
-
-    try {
-      await this.session.post('Profiler.stopPreciseCoverage');
-      await this.session.post('Profiler.disable');
-    } catch {
-      // Ignore teardown errors to prevent masking original errors
-    }
-  }
-
   private mergeIntoCoverageEntries(
     groups: Map<string, CoverageEntryGroup>,
     key: string,
@@ -1357,7 +1350,6 @@ export class CoverageProvider implements RstestCoverageProvider {
     return reporterName;
   }
   cleanup(): void {
-    this.session?.disconnect();
     this.session = null;
   }
 }
