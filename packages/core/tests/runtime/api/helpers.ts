@@ -3,7 +3,7 @@ import {
   type FileContext,
   setFileContext,
 } from '../../../src/runtime/fileContext';
-import type { WorkerState } from '../../../src/types';
+import type { TestCase, WorkerState } from '../../../src/types';
 
 export function createWorkerState(): WorkerState {
   return {
@@ -25,7 +25,13 @@ export function createWorkerState(): WorkerState {
  * file context at call time; publish a fresh one per construction, as
  * `createRunner` does in production.
  */
-export const createUtilities = async () => {
-  setFileContext({ workerState: createWorkerState() } as FileContext);
+export const createUtilities = async (signal?: AbortSignal) => {
+  setFileContext({
+    workerState: createWorkerState(),
+    testRunner: {
+      getCurrentTest: () =>
+        signal ? ({ context: { signal } } as TestCase) : undefined,
+    },
+  } as FileContext);
   return createRstestUtilities();
 };

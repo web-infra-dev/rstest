@@ -135,6 +135,54 @@ describe('rstest utilities wait APIs', () => {
     ).rejects.toThrow('waitUntil timed out in 10ms');
   });
 
+  it('stops waitFor polling when the current test signal aborts', async () => {
+    const controller = new AbortController();
+    const rs = await createUtilities(controller.signal);
+    let attempts = 0;
+    const pending = rs.waitFor(
+      () => {
+        attempts += 1;
+        throw new Error('still pending');
+      },
+      { timeout: 1_000, interval: 1_000 },
+    );
+    const reactions: string[] = [];
+    void pending.then(
+      () => reactions.push('fulfilled'),
+      () => reactions.push('rejected'),
+    );
+
+    controller.abort(new Error('test timed out'));
+    await sleep(0);
+
+    expect(attempts).toBe(1);
+    expect(reactions).toEqual([]);
+  });
+
+  it('stops waitUntil polling when the current test signal aborts', async () => {
+    const controller = new AbortController();
+    const rs = await createUtilities(controller.signal);
+    let attempts = 0;
+    const pending = rs.waitUntil(
+      () => {
+        attempts += 1;
+        return false;
+      },
+      { timeout: 1_000, interval: 1_000 },
+    );
+    const reactions: string[] = [];
+    void pending.then(
+      () => reactions.push('fulfilled'),
+      () => reactions.push('rejected'),
+    );
+
+    controller.abort(new Error('test timed out'));
+    await sleep(0);
+
+    expect(attempts).toBe(1);
+    expect(reactions).toEqual([]);
+  });
+
   it('wait APIs still work when fake timers are enabled', async () => {
     const rs = await createUtilities();
 

@@ -15,8 +15,11 @@ import { setRealTimers } from '../../../src/runtime/util';
 import type { TestCase, WorkerState } from '../../../src/types';
 import { toNativePath } from '../../../src/utils/helper';
 
-const fakeTest = (name: string, concurrent = false) =>
-  ({ name, concurrent }) as unknown as TestCase;
+const fakeTest = (
+  name: string,
+  concurrent = false,
+  signal = new AbortController().signal,
+) => ({ name, concurrent, context: { signal } }) as unknown as TestCase;
 type ElementExpect = {
   element: (locator: unknown) => unknown;
 };
@@ -594,6 +597,7 @@ describe('expect.element timeout', () => {
         ({
           timeout: 1000,
           startTime: Date.now() - 1000,
+          context: { signal: new AbortController().signal },
         }) as unknown as TestCase,
     });
 
@@ -616,6 +620,7 @@ describe('expect.element timeout', () => {
     const currentTest = {
       timeout: 1000,
       startTime: Date.now(),
+      context: { signal: new AbortController().signal },
     } as unknown as TestCase;
     const localExpect = createExpect({
       getWorkerState: () =>
@@ -637,6 +642,38 @@ describe('expect.element timeout', () => {
     }
 
     expect(error).toHaveProperty('message', 'Matcher did not succeed in 1ms');
+  });
+
+  it('stops polling when the current test signal aborts', async () => {
+    setRealTimers();
+    const controller = new AbortController();
+    const currentTest = fakeTest('poll', false, controller.signal);
+    const localExpect = createExpect({
+      getWorkerState: () =>
+        ({
+          runtimeConfig: {
+            expect: { poll: { interval: 1000, timeout: 5000 } },
+          },
+        }) as WorkerState,
+      getCurrentTest: () => currentTest,
+    });
+    let attempts = 0;
+    const pending = localExpect
+      .poll(() => {
+        attempts += 1;
+        throw new Error('not ready');
+      })
+      .toBe(true);
+    const result = pending.then(
+      (value) => value,
+      (error) => Promise.reject(error),
+    );
+    const timeoutError = new Error('test timed out');
+
+    controller.abort(timeoutError);
+
+    await expect(result).rejects.toBe(timeoutError);
+    expect(attempts).toBe(1);
   });
 });
 
