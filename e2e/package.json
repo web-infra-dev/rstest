@@ -9,7 +9,7 @@
     "test:threads": "cross-env RSTEST_POOL_TYPE=threads rstest run --pool.type threads"
   },
   "devDependencies": {
-    "@module-federation/rstest": "2.9.0",
+    "@module-federation/rstest": "2.9.2",
     "@rsbuild/core": "catalog:",
     "@rsbuild/plugin-react": "catalog:",
     "@rslib/core": "catalog:",
@@ -29,10 +29,10 @@
     "@types/react-dom": "^19.3.0",
     "axios": "^1.20.0",
     "cross-env": "^10.1.0",
-    "fs-extra": "^11.4.0",
+    "fs-extra": "^11.4.1",
     "is-url": "^1.2.4",
     "jest-image-snapshot": "^6.5.2",
-    "memfs": "^4.78.0",
+    "memfs": "^4.79.0",
     "path-serializer": "0.7.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",

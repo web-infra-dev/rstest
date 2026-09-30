@@ -50,7 +50,7 @@
     "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
     "sirv": "^3.0.2",
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@rslib/core": "catalog:",
@@ -59,7 +59,7 @@
     "@rstest/tsconfig": "workspace:*",
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
-    "@types/ws": "^8.18.1",
+    "@types/ws": "^8.18.2",
     "@vitest/snapshot": "^4.1.11",
     "birpc": "^4.2.0",
     "picomatch": "^4.0.7",
