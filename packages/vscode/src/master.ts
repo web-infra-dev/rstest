@@ -16,7 +16,10 @@ import {
 import type { RstestDiagnostics } from './diagnostics';
 import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
-import { showUnsupportedCoreMessage } from './migrationNotice';
+import {
+  scheduleInstallPrompt,
+  showUnsupportedCoreMessage,
+} from './migrationNotice';
 import type { Project } from './project';
 import { rpcErrorCodec } from './shared/rpc';
 import { runInTerminal as sendToTerminal, shellQuote } from './terminal';
@@ -267,6 +270,7 @@ export class RstestApi {
       }
       if (!apiPath) return undefined;
 
+      scheduleInstallPrompt();
       return { apiPath, coreVersion, rstestPath: nodeExport };
     } catch (e) {
       if (!this.showUnsupportedCoreError(e, coreVersion)) {

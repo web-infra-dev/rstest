@@ -13,6 +13,13 @@ import type { WorkerInitOptions } from '../../src/types';
 import { formatUnsupportedCoreVersionMessage } from '../../src/versionCheck';
 import { Worker } from '../../src/worker';
 
+const scheduleInstallPrompt = rs.fn();
+rs.mock('../../src/migrationNotice', () => ({
+  showUnsupportedCoreMessage: (message: string) =>
+    showErrorMessage(message, 'Install Rstack'),
+  scheduleInstallPrompt: () => scheduleInstallPrompt(),
+}));
+
 // Everything the extension surfaces: notifications the user cannot miss, the
 // output channel, and the terminal a "Run in Terminal" would open.
 const shownMessages: string[] = [];
@@ -170,6 +177,7 @@ const createInFlightOneShotWorker = (shouldReject = false) => {
 beforeEach(() => {
   spawnedProcesses.length = 0;
   showErrorMessage.mockClear();
+  scheduleInstallPrompt.mockClear();
   startDebugging = async () => true;
 });
 
@@ -191,6 +199,7 @@ describe('RstestApi with a missing @rstest/core', () => {
     expect(logged).toContain(`Cannot find "@rstest/core" from ${noCoreDir}`);
     expect(logged).toContain('Install the project dependencies');
     expect(logged).not.toContain('Require stack');
+    expect(scheduleInstallPrompt).not.toHaveBeenCalled();
   });
 
   it('should stay silent while listing tests', async () => {
@@ -297,6 +306,7 @@ describe('RstestApi core version compatibility', () => {
         'Install Rstack',
       );
       expect(spawnedProcesses).toEqual([]);
+      expect(scheduleInstallPrompt).not.toHaveBeenCalled();
     },
   );
 
@@ -316,6 +326,7 @@ describe('RstestApi core version compatibility', () => {
 
     const paths = (createApi(root) as any).resolveRstestPaths();
 
+    expect(scheduleInstallPrompt).toHaveBeenCalledTimes(1);
     expect(fs.realpathSync(paths.rstestPath)).toBe(
       fs.realpathSync(
         path.join(root, 'node_modules', '@rstest', 'core', 'index.js'),

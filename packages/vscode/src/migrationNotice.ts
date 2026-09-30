@@ -49,9 +49,28 @@ async function runMigrationAction(
 // Deduplicate project errors for this session; reloading the Extension Host resets the set.
 const shownUnsupportedCoreMessages = new Set<string>();
 
+let installPromptContext: vscode.ExtensionContext | undefined;
+let unsupportedCoreSeen = false;
+let installPromptScheduled = false;
+
+export function armInstallPrompt(context: vscode.ExtensionContext): void {
+  installPromptContext = context;
+}
+
+export function scheduleInstallPrompt(): void {
+  const context = installPromptContext;
+  if (installPromptScheduled || !context) return;
+  installPromptScheduled = true;
+  // Sibling projects resolve synchronously; defer so an unsupported core can veto.
+  setTimeout(() => {
+    if (!unsupportedCoreSeen) void showMigrationPrompt(context, false);
+  }, 0);
+}
+
 export async function showUnsupportedCoreMessage(
   message: string,
 ): Promise<void> {
+  unsupportedCoreSeen = true;
   if (shownUnsupportedCoreMessages.has(message)) return;
   shownUnsupportedCoreMessages.add(message);
   await runMigrationAction('Failed to install Rstack', async () => {
@@ -80,7 +99,7 @@ export async function showMigrationPrompt(
       const action = await vscode.window.showWarningMessage(
         standingDown
           ? 'Rstack has taken over Rstest. Uninstall the standalone Rstest extension.'
-          : 'The standalone Rstest extension is no longer maintained. Install the Rstack extension (rstack.rstack) to keep receiving updates.',
+          : 'Rstest has moved into the Rstack extension. This extension is deprecated and will not be updated. Please install Rstack.',
         standingDown ? 'Uninstall Rstest' : 'Install Rstack',
         "Don't show again",
       );

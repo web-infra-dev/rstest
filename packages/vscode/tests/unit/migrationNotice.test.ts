@@ -81,6 +81,58 @@ describe('rstackEditorTakesOver', () => {
   });
 });
 
+describe('install prompt scheduling', () => {
+  beforeEach(() => {
+    rs.resetModules();
+    rs.useFakeTimers();
+  });
+
+  afterEach(() => {
+    rs.useRealTimers();
+  });
+
+  it('shows the warning once, after the timer', async () => {
+    const { armInstallPrompt, scheduleInstallPrompt } =
+      await import('../../src/migrationNotice');
+    armInstallPrompt(context);
+    scheduleInstallPrompt();
+    scheduleInstallPrompt();
+    expect(showWarningMessage).not.toHaveBeenCalled();
+    await rs.runAllTimersAsync();
+    scheduleInstallPrompt();
+    await rs.runAllTimersAsync();
+    expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.any(String),
+      'Install Rstack',
+      "Don't show again",
+    );
+  });
+
+  it('lets an unsupported sibling suppress the pending warning', async () => {
+    const {
+      armInstallPrompt,
+      scheduleInstallPrompt,
+      showUnsupportedCoreMessage,
+    } = await import('../../src/migrationNotice');
+    armInstallPrompt(context);
+    scheduleInstallPrompt();
+    await showUnsupportedCoreMessage('Unsupported sibling');
+    await rs.runAllTimersAsync();
+    expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+      'Unsupported sibling',
+      'Install Rstack',
+    );
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  it('does nothing without an armed context', async () => {
+    const { scheduleInstallPrompt } = await import('../../src/migrationNotice');
+    scheduleInstallPrompt();
+    await rs.runAllTimersAsync();
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe('migration prompts', () => {
   it.each([
     [true, 'uninstall', 'Uninstall Rstest'],

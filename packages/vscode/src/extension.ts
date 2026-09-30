@@ -5,6 +5,7 @@ import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
 import { closeWorkerGracefully, runningWorkers } from './master';
 import {
+  armInstallPrompt,
   createMigrationNotice,
   rstackEditorTakesOver,
   showMigrationPrompt,
@@ -30,7 +31,7 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
   const rstest = new Rstest(context);
-  void showMigrationPrompt(context, false);
+  armInstallPrompt(context);
   return rstest;
 }
 
