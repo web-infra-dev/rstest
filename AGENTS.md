@@ -36,7 +36,7 @@ If a package does not have its own `AGENTS.md`, follow this root file and copy t
 - `packages/adapter-rslib/` — @rstest/adapter-rslib: Rslib configuration adapter
 - `packages/adapter-rsbuild/` — @rstest/adapter-rsbuild: Rsbuild configuration adapter
 - `packages/adapter-rspack/` — @rstest/adapter-rspack: Rspack configuration adapter
-- `packages/vscode/` — rstest: VS Code extension
+- `packages/vscode/` — rstest: VS Code extension (frozen; superseded by rstackjs/rstack-editor)
 - `benchmarks/` — benchmark projects and runners
 - `e2e/` — end-to-end integration tests
 - `examples/` — example projects (node, react, browser)
@@ -86,6 +86,7 @@ _Note_: `rslint --type-check` is the repo's type check and exists at the root on
 ## Development workflow
 
 - Before changing behavior, identify the affected package(s), public API/config impact, browser-mode impact, adapter impact, docs impact, and test scope.
+- The editor integration is maintained in a separate repository, rstackjs/rstack-editor, which drives `@rstest/core/api` (`createRstest`, `listTests`, `run`, `ListedTest`, reporter events) from its own worker and maps Test Explorer actions to CLI flags. There is no ecosystem CI between the two repositories yet, so when a change touches that API surface, the CLI flags, or reporter output, open the matching change (or at least an issue) in rstack-editor in the same PR cycle and link both. `packages/vscode/` in this repository is frozen and is never the place for that change.
 - Public API or config changes usually require docs updates.
 - Behavioral changes require corresponding e2e coverage unless there is a clear reason existing coverage is sufficient.
 - If a config option is shared with Rsbuild/Rslib/Rspack, check whether the adapters need to transform or pass it through consistently.
