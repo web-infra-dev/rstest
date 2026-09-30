@@ -115,12 +115,17 @@ const supportsCjsModuleExportsMarker = nodeMajor >= 23;
 initializeCommonJsLexer();
 
 let executors = new WeakMap<vm.Context, VmExternalModules>();
-let scriptExecutors = new WeakMap<vm.Script, VmExternalModules>();
+let scriptExecutors = new WeakMap<
+  ReturnType<typeof vm.compileFunction>,
+  VmExternalModules
+>();
 
-type CommonJsScript = vm.Script & { identifier: string };
+type CommonJsFunction = ReturnType<typeof vm.compileFunction> & {
+  identifier: string;
+};
 
 const staticCommonJsImportModuleDynamically: vm.DynamicModuleLoader<
-  vm.Script
+  ReturnType<typeof vm.compileFunction>
 > = (specifier, referencer, importAttributes) => {
   const executor = scriptExecutors.get(referencer);
   if (!executor) {
@@ -185,8 +190,14 @@ const staticInitializeImportMeta = (
     );
 };
 
-const stripCommonJsPrefix = (source: string): string =>
-  source.replace(/^\uFEFF/, '').replace(/^#!.*(?:\r?\n|$)/, '');
+// A function body cannot start with a hashbang. Blank it instead of removing
+// it, so positions in the compiled text stay those of the file. A BOM is
+// whitespace to the parser and stays.
+const blankHashbang = (source: string): string =>
+  source.replace(
+    /^(\uFEFF?)(#!.*)/,
+    (_, bom: string, line: string) => `${bom}${' '.repeat(line.length)}`,
+  );
 
 const getNodeModulePaths = (filePath: string): string[] =>
   createNativeRequire(filePath).resolve.paths('__rstest_module_lookup__') ?? [];
@@ -316,7 +327,7 @@ class VmExternalModules {
   >;
   private readonly parseJson: (source: string) => unknown;
   private readonly requireCache: NodeJS.Require['cache'];
-  private readonly scripts = new Set<vm.Script>();
+  private readonly scripts = new Set<CommonJsFunction>();
   private readonly webAssemblyCache = new Map<string, WebAssemblyCacheEntry>();
   private readonly commonJsExportNames = new Map<
     string,
@@ -1107,30 +1118,32 @@ class VmExternalModules {
 
     let completed = false;
     try {
-      const code = stripCommonJsPrefix(readSource(filePath));
-      const wrappedCode = Module.wrap(code);
+      const code = blankHashbang(readSource(filePath));
       const cached = getCommonJsCompilationCache(filePath);
       const cachedData = cached?.code === code ? cached.cachedData : undefined;
-      const compile = (data?: Buffer): CommonJsScript => {
-        const script = new vm.Script(wrappedCode, {
-          filename: filePath,
-          ...(data ? { cachedData: data } : {}),
-          importModuleDynamically: staticCommonJsImportModuleDynamically,
-        }) as CommonJsScript;
-        script.identifier = filePath;
-        return script;
+      const compile = (data?: Buffer): CommonJsFunction => {
+        const fn = vm.compileFunction(
+          code,
+          ['exports', 'require', 'module', '__filename', '__dirname'],
+          {
+            filename: filePath,
+            parsingContext: this.context,
+            ...(data ? { cachedData: data } : { produceCachedData: true }),
+            importModuleDynamically: staticCommonJsImportModuleDynamically,
+          },
+        ) as CommonJsFunction;
+        fn.identifier = filePath;
+        return fn;
       };
 
-      let script: CommonJsScript;
-      let shouldCacheCompilation = cachedData === undefined;
+      let fn: CommonJsFunction;
       try {
-        script = compile(cachedData);
-        if (cachedData && script.cachedDataRejected) {
-          script = compile();
-          shouldCacheCompilation = true;
+        fn = compile(cachedData);
+        if (cachedData && fn.cachedDataRejected) {
+          fn = compile();
         }
-        scriptExecutors.set(script, this);
-        this.scripts.add(script);
+        scriptExecutors.set(fn, this);
+        this.scripts.add(fn);
       } catch (error) {
         this.commonJsCache.delete(filePath);
         Reflect.deleteProperty(this.requireCache, filePath);
@@ -1157,13 +1170,6 @@ class VmExternalModules {
         throw this.wrapBuiltinError(error);
       }
 
-      const fn = script.runInContext(this.context) as (
-        exports: unknown,
-        require: NodeJS.Require,
-        module: CommonJsModule,
-        filename: string,
-        dirname: string,
-      ) => void;
       fn.call(
         module.exports,
         module.exports,
@@ -1173,10 +1179,10 @@ class VmExternalModules {
         nativeDirname(filePath),
       );
       module.loaded = true;
-      if (shouldCacheCompilation) {
+      if (fn.cachedDataProduced && fn.cachedData) {
         setCommonJsCompilationCache(filePath, {
           code,
-          cachedData: script.createCachedData(),
+          cachedData: fn.cachedData,
         });
       }
       completed = true;

@@ -7,6 +7,14 @@ import { runRstestCli } from '../scripts';
 const fixturePath = join(__dirname, 'fixtures');
 const enableConfig = 'rstest.enable.v8.config.ts';
 
+type FileCoverage = {
+  path: string;
+  s: Record<string, number>;
+  f: Record<string, number>;
+  b: Record<string, number[]>;
+  statementMap: unknown;
+};
+
 describe('coverage v8-specific behavior', () => {
   it.for(['forks', 'vmThreads'] as const)(
     'writes bundle assets alongside raw V8 coverage under %s',
@@ -303,5 +311,48 @@ describe('coverage v8-specific behavior', () => {
     expect(fs.existsSync(join(reportPath, 'coverage-final.json'))).toBeTruthy();
     expect(fs.existsSync(join(reportPath, 'index.html'))).toBeFalsy();
     expect(fs.existsSync(join(reportPath, 'clover.xml'))).toBeFalsy();
+  });
+
+  it('reports externalized CommonJS files the same in VM pools', async ({
+    onTestFinished,
+  }) => {
+    const externalsFixturePath = join(__dirname, 'fixtures-v8/externals-cjs');
+    const readCoverage = async (pool: 'forks' | 'vmThreads') => {
+      const reportsDirectory = `test-temp-${pool}`;
+      const reportPath = join(externalsFixturePath, reportsDirectory);
+      onTestFinished(() => fs.removeSync(reportPath));
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--pool',
+          pool,
+          '--coverage.reportsDirectory',
+          reportsDirectory,
+        ],
+        options: {
+          nodeOptions: {
+            cwd: externalsFixturePath,
+          },
+        },
+      });
+      await expectExecSuccess();
+      const coverage = fs.readJsonSync(
+        join(reportPath, 'coverage-final.json'),
+      ) as Record<string, FileCoverage>;
+      return Object.fromEntries(
+        Object.values(coverage).map(({ path, s, f, b, statementMap }) => [
+          normalize(path).split('/').pop(),
+          { s, f, b, statementMap },
+        ]),
+      );
+    };
+
+    const forks = await readCoverage('forks');
+    // The VM pools compile externalized CommonJS themselves; hashbang.cjs
+    // starts with a hashbang and bom.cjs with a byte order mark.
+    expect(await readCoverage('vmThreads')).toEqual(forks);
+    expect(Object.values(forks['hashbang.cjs']!.f)).toEqual([3]);
+    expect(Object.values(forks['bom.cjs']!.f)).toEqual([2]);
   });
 });

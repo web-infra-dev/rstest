@@ -24,6 +24,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 ## Coupling points (change both sides)
 
 - A new `CoverageProvider` member → both provider packages plus the worker call sites in `../runtime/worker/runInPool.ts`.
+- Worker CommonJS loaders (`loadModule` and the VM pools' external loader) ↔ the v8 provider: the provider reads V8 offsets as positions in the file text, so a loader must compile that text unchanged — no wrapper text, a hashbang blanked in place rather than removed. Strict mode for CommonJS output comes from the build's `overrideStrict`, not from a wrapper.
 - Each provider package entry must export `{ CoverageProvider, pluginCoverage }` — both are destructured by `loadCoverageProvider` under exactly those names.
 - Keep shared counter addition and shape comparisons in both providers' `createFastCoverageMap` aligned; Istanbul additionally invalidates hashes after native unions because its raw transport uses hash equality as structural identity. Keep both providers' `mapWithConcurrency` behavior aligned.
 - Bumping `swc-plugin-coverage-instrument` ↔ `COVERAGE_MAGIC_VALUE` used by istanbul's `readInitialCoverage`.
