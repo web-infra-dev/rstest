@@ -14,9 +14,11 @@ export const createNodeTaskContext = (): TaskContext => {
     getCurrentSignal: () => (storage.getStore() ?? fallback)?.signal,
     run: (task, fn) => storage.run({ task }, fn),
     setCurrentSignal: (signal) => {
-      const current = storage.getStore() ?? fallback;
+      const current = storage.getStore();
       if (current) {
-        current.signal = signal;
+        storage.enterWith({ task: current.task, signal });
+      } else if (fallback) {
+        fallback = { task: fallback.task, signal };
       }
     },
     setFallback: (task) => {

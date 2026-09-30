@@ -241,6 +241,47 @@ describe('rstest utilities wait APIs', () => {
     void secondWait;
   });
 
+  it('keeps retry signals separate from stale attempt continuations', async () => {
+    const taskContext = createNodeTaskContext();
+    const rs = await createUtilities(() => taskContext.getCurrentSignal());
+    const firstAttempt = new AbortController();
+    const retryAttempt = new AbortController();
+    let staleAttempts = 0;
+
+    await taskContext.run(
+      {
+        taskId: 'retry',
+        taskName: 'retry',
+        taskParentNames: [],
+        taskType: 'case',
+        testPath: '/test.ts',
+      },
+      async () => {
+        taskContext.setCurrentSignal(firstAttempt.signal);
+        const staleWait = new Promise<void>((resolve) =>
+          setTimeout(resolve, 0),
+        ).then(() =>
+          rs.waitFor(
+            () => {
+              staleAttempts += 1;
+              throw new Error('stale attempt');
+            },
+            { timeout: 1_000 },
+          ),
+        );
+
+        taskContext.setCurrentSignal(retryAttempt.signal);
+        firstAttempt.abort(new Error('first attempt timed out'));
+        await sleep(10);
+
+        expect(taskContext.getCurrentSignal()).toBe(retryAttempt.signal);
+        expect(staleAttempts).toBe(0);
+        retryAttempt.abort(new Error('retry timed out'));
+        void staleWait;
+      },
+    );
+  });
+
   it('does not schedule a timeout when the current test signal is already aborted', async () => {
     setRealTimers();
     const controller = new AbortController();
