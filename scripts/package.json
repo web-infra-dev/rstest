@@ -6,10 +6,10 @@
   "dependencies": {
     "@rsdoctor/rspack-plugin": "^1.6.4",
     "@rstest/core": "workspace:*",
-    "marked": "^18.0.13",
+    "marked": "^18.0.14",
     "path-serializer": "0.7.0",
     "rsbuild-plugin-arethetypeswrong": "^0.4.0",
     "rsbuild-plugin-publint": "^1.0.0",
-    "shell-quote": "^1.10.0"
+    "shell-quote": "^1.11.0"
   }
 }
