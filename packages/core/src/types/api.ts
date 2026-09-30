@@ -91,8 +91,8 @@ export interface TestOptions {
  * the all-optional `TestOptions`, which would swallow contextual typing.
  */
 type TestCall<Fn> = {
-  (description: string, fn?: Fn, timeout?: number): void;
-  (description: string, options: TestOptions, fn?: Fn): void;
+  (description: string | RuntimeFunction, fn?: Fn, timeout?: number): void;
+  (description: string | RuntimeFunction, options: TestOptions, fn?: Fn): void;
 };
 
 type TestFn<ExtraContext = object> = TestCall<TestCallbackFn<ExtraContext>>;
@@ -137,8 +137,8 @@ export interface TestForFn<ExtraContext = object> {
  * Suite-level options propagate to descendant cases as inheritable defaults.
  */
 type DescribeCall<Fn> = {
-  (description: string, fn?: Fn, timeout?: number): void;
-  (description: string, options: TestOptions, fn?: Fn): void;
+  (description: string | RuntimeFunction, fn?: Fn, timeout?: number): void;
+  (description: string | RuntimeFunction, options: TestOptions, fn?: Fn): void;
 };
 
 export interface DescribeEachFn {

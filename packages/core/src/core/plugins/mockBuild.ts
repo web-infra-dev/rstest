@@ -77,6 +77,8 @@ export interface MockRstestPluginOptions {
   importMetaPathName: true;
   hoistMockModule: true;
   manualMockRoot: string;
+  updateImportMockAPI: true;
+  updateRequireMockAPI: true;
 }
 
 /**
@@ -93,6 +95,8 @@ export const getMockRstestPluginOptions = (options: {
   importMetaPathName: true,
   hoistMockModule: true,
   manualMockRoot: pathe.resolve(options.rootPath, '__mocks__'),
+  updateImportMockAPI: true,
+  updateRequireMockAPI: true,
 });
 
 /**

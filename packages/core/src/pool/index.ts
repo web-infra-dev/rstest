@@ -143,6 +143,7 @@ const buildTask = async ({
   getAssetFiles,
   getSourceMaps,
   rpcMethods,
+  getKnownCoverageStructures,
   traceSpan,
   testEnvironmentModule,
   buildId = 0,
@@ -165,6 +166,7 @@ const buildTask = async ({
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+  getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
@@ -214,6 +216,7 @@ const buildTask = async ({
     task: {
       worker: workerKind,
       type,
+      getKnownCoverageStructures,
       options: {
         entryInfo,
         assetNames: taskAssetNames,
@@ -381,6 +384,7 @@ export const createPool = async ({
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
     onRawCoverageResult?: (coverage: unknown) => void;
+    getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
     /** Records host-side pool slices in the caller-owned Perfetto trace. */
@@ -500,6 +504,7 @@ export const createPool = async ({
       buildId,
       onCoverageResult,
       onRawCoverageResult,
+      getKnownCoverageStructures,
       onTraceEvents,
       traceSpan,
     }) => {
@@ -559,6 +564,7 @@ export const createPool = async ({
                   getAssetFiles,
                   getSourceMaps,
                   rpcMethods,
+                  getKnownCoverageStructures,
                   traceSpan,
                   testEnvironmentModule: testEnvironmentModules?.get(
                     project.environmentName,

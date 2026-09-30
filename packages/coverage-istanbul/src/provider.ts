@@ -1,6 +1,7 @@
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type {
+  KnownCoverageStructure,
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
@@ -10,6 +11,7 @@ import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {
   createFastCoverageMap,
+  type IstanbulFileCoverageData,
   mapWithConcurrency,
   readInitialCoverage,
   registerSourceMapURL,
@@ -17,6 +19,17 @@ import {
 } from './utils';
 
 const UNTESTED_FILES_CONCURRENCY = 4;
+
+type StructureKey = 'statementMap' | 'fnMap' | 'branchMap';
+type Structure = Pick<IstanbulFileCoverageData, StructureKey>;
+
+const structureKey = (path: string, hash: string): string =>
+  JSON.stringify([path, hash]);
+
+type RawCoverage = {
+  full: IstanbulFileCoverageData[];
+  packed: (Omit<IstanbulFileCoverageData, StructureKey> & { hash: string })[];
+};
 
 type CoverageReporterConstructor = new (
   options: Record<string, unknown>,
@@ -32,6 +45,10 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private coverageMap: CoverageMap | null = null;
   private coverageGlobal: typeof globalThis = globalThis;
+  private registries = new WeakMap<
+    CoverageMap,
+    Map<string, KnownCoverageStructure & Structure>
+  >();
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
@@ -83,6 +100,84 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   createCoverageMap(): CoverageMap {
     return createFastCoverageMap();
+  }
+
+  collectRaw(
+    options?: Parameters<RstestCoverageProvider['collect']>[0],
+  ): RawCoverage | null {
+    if (!this.coverageGlobal.__coverage__) return null;
+    const files: IstanbulFileCoverageData[] = Object.values(
+      this.coverageGlobal.__coverage__,
+    );
+    const known = new Set(
+      options?.knownCoverageStructures?.map(({ path, hash }) =>
+        structureKey(path, hash),
+      ),
+    );
+
+    const payload: RawCoverage = { full: [], packed: [] };
+    for (const file of files) {
+      const { hash } = file;
+      if (!hash || !known.has(structureKey(file.path, hash))) {
+        payload.full.push(file);
+        continue;
+      }
+      const {
+        statementMap: _statementMap,
+        fnMap: _fnMap,
+        branchMap: _branchMap,
+        ...packed
+      } = file;
+      payload.packed.push({ ...packed, hash });
+    }
+    return payload;
+  }
+
+  getKnownCoverageStructures(map: CoverageMap): KnownCoverageStructure[] {
+    return Array.from(
+      this.registries.get(map)?.values() ?? [],
+      ({ path, hash }) => ({ path, hash }),
+    );
+  }
+
+  mergeRawCoverage(map: CoverageMap, raw: unknown): void {
+    // Core transports opaque data between instances of this same provider.
+    const payload = raw as RawCoverage;
+    let registry = this.registries.get(map);
+    if (!registry) {
+      registry = new Map();
+      this.registries.set(map, registry);
+    }
+    const incoming: Record<string, IstanbulFileCoverageData> = {};
+    for (const file of payload.full) {
+      incoming[file.path] = file;
+      if (!file.hash) continue;
+      const key = structureKey(file.path, file.hash);
+      if (!registry.has(key)) {
+        // Native unions replace map containers; keep the original references.
+        registry.set(key, {
+          path: file.path,
+          hash: file.hash,
+          statementMap: file.statementMap,
+          fnMap: file.fnMap,
+          branchMap: file.branchMap,
+        });
+      }
+    }
+    for (const packed of payload.packed) {
+      // Known structures only list versions already present in this cycle's registry.
+      const structure = registry.get(structureKey(packed.path, packed.hash));
+      if (!structure) {
+        throw new Error(
+          `Istanbul coverage invariant violated for ${packed.path}: structure not registered`,
+        );
+      }
+      incoming[packed.path] = {
+        ...packed,
+        ...structure,
+      };
+    }
+    map.merge(incoming);
   }
 
   collect(_options?: {

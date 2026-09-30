@@ -12,6 +12,8 @@ describe('mock build parameterization', () => {
       importMetaPathName: true,
       hoistMockModule: true,
       manualMockRoot: '/repo/project/__mocks__',
+      updateImportMockAPI: true,
+      updateRequireMockAPI: true,
     });
   });
 });

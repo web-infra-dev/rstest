@@ -77,7 +77,7 @@ test('shares the mock with the factory', async () => {
 
 ### Mock CommonJS modules
 
-If a dependency is loaded through `require()`, you can use [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) or [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire).
+Use [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) or [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire) when you need to target the CommonJS entry loaded through `require()`. If both `import` and `require()` resolve to the same bundled module, `rs.mock()` also applies to `require()`.
 
 These APIs exist for CommonJS interop. They also work in browser tests, but prefer the ESM APIs (`rs.mock` / `rs.doMock`) when writing browser tests.
 
@@ -155,25 +155,27 @@ Use the matching API when a mocked module still needs some or all of its real ex
 - Use [rs.importActual()](/api/runtime-api/rstest/mock-modules#rsimportactual) to load the original ESM module asynchronously inside a test.
 - Use [rs.requireActual()](/api/runtime-api/rstest/mock-modules#rsrequireactual) to load the original CommonJS module synchronously, including from a synchronous mock factory.
 
-The static ESM form is useful for replacing one export while keeping the others:
+For a module graph without top-level `await`, the static ESM form is useful for replacing one export while keeping the others. The example loads the mocked module with `await import()` inside the test, which also works when the actual module graph uses top-level `await`:
 
 ```ts title="date-utils.test.ts"
 import { expect, rs, test } from '@rstest/core';
 import * as actualDateUtils from './date-utils' with { rstest: 'importActual' };
-import { formatDate, parseDate } from './date-utils';
 
 rs.mock('./date-utils', () => ({
   ...actualDateUtils,
   formatDate: rs.fn().mockReturnValue('2026-03-19'),
 }));
 
-test('keeps parseDate real', () => {
+test('keeps parseDate real', async () => {
+  const { formatDate, parseDate } = await import('./date-utils');
   expect(formatDate(new Date())).toBe('2026-03-19');
   expect(parseDate('2026-03-19')).toBeInstanceOf(Date);
 });
 ```
 
 Note that factory functions are hoisted, so values shared with the factory must come from a static `importActual` import or [`rs.hoisted()`](#share-values-with-a-hoisted-mock-factory).
+
+If the actual module graph uses top-level `await`, do not statically import the mocked module in the same test file. The factory may run before the actual exports are ready. Dynamically import the mocked module with `await import()` inside an async test after the actual import has loaded. See [partial mocks with `importActual`](/api/runtime-api/rstest/mock-modules#partial-mock-with-importactual) for an example.
 
 ### Reuse manual mocks from `__mocks__`
 

@@ -84,6 +84,7 @@ const makeRunResult = (request, extra) => ({
   // Test-only fields so the test can verify pool behavior. Under threads
   // mode this is `threadId`; under forks it is `process.pid`.
   _workerIdentity: workerIdentity,
+  _knownCoverageStructures: request.options?.knownCoverageStructures,
   _workerId: assignedWorkerId,
   _runCount: ++runCount,
   ...extra,

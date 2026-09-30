@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { NormalizedCoverageOptions } from '@rstest/core';
 import type { CoverageMap } from 'istanbul-lib-coverage';
+import istanbulCoverage from 'istanbul-lib-coverage';
 import { CoverageProvider } from '../src/provider';
+import { createFileCoverage, createRestructuredFileCoverage } from './fixtures';
 
 const createOptions = (
   overrides: Partial<NormalizedCoverageOptions> = {},
@@ -38,7 +40,81 @@ describe('coverage-istanbul provider', () => {
     const provider = new CoverageProvider(createOptions());
 
     expect(provider.collect()).toBeNull();
+    expect(provider.collectRaw()).toBeNull();
     expect(process.exitCode).toBe(originalExitCode);
+  });
+
+  it('folds full then packed JSON payloads like native CoverageMap.merge', () => {
+    const provider = new CoverageProvider(createOptions());
+    const map = provider.createCoverageMap();
+    const oracle = istanbulCoverage.createCoverageMap();
+    for (let index = 0; index < 3; index++) {
+      const file = createFileCoverage('/project/shared.js');
+      file.s[0] = index + 1;
+      file.f[0] = index + 2;
+      file.b[0]![1] = index * 13;
+      file.bT = { 0: [index + 17, index * 7] };
+      globalWithCoverage.__coverage__ = { [file.path]: file };
+      oracle.merge({ [file.path]: structuredClone(file) });
+      const raw = provider.collectRaw({
+        knownCoverageStructures: provider.getKnownCoverageStructures(map),
+      });
+      expect(raw?.full.length).toBe(index === 0 ? 1 : 0);
+      expect(raw?.packed.length).toBe(index === 0 ? 0 : 1);
+      provider.mergeRawCoverage(map, JSON.parse(JSON.stringify(raw)));
+    }
+    expect(JSON.stringify(map)).toBe(JSON.stringify(oracle));
+  });
+
+  it('folds packed coverage after another project unions the live entry', () => {
+    const provider = new CoverageProvider(createOptions());
+    const map = provider.createCoverageMap();
+    const oracle = istanbulCoverage.createCoverageMap();
+    const path = '/project/shared.js';
+    const first = createFileCoverage(path);
+    const other = createRestructuredFileCoverage(path, 'other');
+    other.s[0] = 7;
+    const later = createFileCoverage(path);
+    later.s[0] = 11;
+    later.f[0] = 13;
+    later.b[0] = [17, 19];
+    for (const file of [first, other, later]) {
+      oracle.merge({ [path]: structuredClone(file) });
+    }
+
+    provider.mergeRawCoverage(map, { full: [first], packed: [] });
+    const knownCoverageStructures = provider.getKnownCoverageStructures(map);
+    provider.mergeRawCoverage(map, { full: [other], packed: [] });
+    globalWithCoverage.__coverage__ = { [path]: later };
+    const raw = provider.collectRaw({ knownCoverageStructures });
+    expect(raw?.full).toEqual([]);
+    expect(raw?.packed).toHaveLength(1);
+    provider.mergeRawCoverage(map, raw);
+
+    // Native Istanbul retains a stale hash after union; our accumulator drops it.
+    Reflect.deleteProperty(oracle.fileCoverageFor(path).data, 'hash');
+    expect(map.toJSON()).toEqual(oracle.toJSON());
+    globalWithCoverage.__coverage__ = { [path]: other };
+    const otherRaw = provider.collectRaw({
+      knownCoverageStructures: provider.getKnownCoverageStructures(map),
+    });
+    expect(otherRaw?.full).toEqual([]);
+    expect(otherRaw?.packed).toHaveLength(1);
+    oracle.merge({ [path]: structuredClone(other) });
+    provider.mergeRawCoverage(map, otherRaw);
+    expect(map.toJSON()).toEqual(oracle.toJSON());
+  });
+
+  it('sends all files full with missing known structures', () => {
+    const provider = new CoverageProvider(createOptions());
+    const file = createFileCoverage('/project/shared.js');
+    globalWithCoverage.__coverage__ = { [file.path]: file };
+    expect(provider.collectRaw()).toEqual({ full: [file], packed: [] });
+  });
+
+  it('lets older cores fall back to collect by omitting resolveRawCoverage', () => {
+    const provider = new CoverageProvider(createOptions());
+    expect('resolveRawCoverage' in provider).toBe(false);
   });
 
   it('marks the run as failed when collection throws (parity with the v8 provider)', () => {

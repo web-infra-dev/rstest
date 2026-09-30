@@ -7,7 +7,9 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@rsbuild/core": "catalog:",
     "@rsbuild/plugin-react": "catalog:",
+    "@rspack/core": "catalog:",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "typescript": "^6.0.3"

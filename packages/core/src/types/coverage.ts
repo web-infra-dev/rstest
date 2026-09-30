@@ -153,10 +153,15 @@ export type NormalizedCoverageOptions = Required<
   changed?: boolean | string;
 };
 
+/** @internal A file structure the host has already folded this cycle (istanbul FileCoverage identity). */
+export type KnownCoverageStructure = { path: string; hash: string };
+
 export type CoverageCollectOptions = {
   assetFiles?: Record<string, string>;
   sourceMaps?: Record<string, string>;
   outputModule?: boolean;
+  /** @internal Structures the host already holds for this cycle; the worker may send only counters for them. */
+  knownCoverageStructures?: KnownCoverageStructure[];
 };
 
 /**
@@ -212,16 +217,20 @@ export declare class CoverageProvider {
   /**
    * Collect lightweight, serializable raw coverage payloads in workers.
    *
-   * Providers may implement this with `resolveRawCoverage` to defer expensive
-   * conversion work to the main process. Return `null` to indicate that no raw
-   * coverage was collected and the runner should not call `resolveRawCoverage`
-   * for that worker result.
+   * Pair with `mergeRawCoverage` for immediate folding or `resolveRawCoverage`
+   * for deferred host conversion. Returning `null` falls back to `collect`.
    *
    * @internal
    */
   collectRaw?(
     options?: CoverageCollectOptions,
   ): unknown | null | Promise<unknown | null>;
+
+  /** @internal Fold a raw worker result immediately, without buffering. */
+  mergeRawCoverage?(map: CoverageMap, payload: unknown): void;
+
+  /** @internal Called by the pool when dispatching a run task; passed to the worker's collectRaw. */
+  getKnownCoverageStructures?(map: CoverageMap): KnownCoverageStructure[];
 
   /**
    * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.

@@ -349,6 +349,23 @@ export function createNodeExecutor(
       ? coverageProvider.createCoverageMap()
       : undefined;
     const rawCoverageResults: unknown[] = [];
+    const foldCoverage = (fold: () => void) => {
+      try {
+        fold();
+      } catch (error) {
+        logger.stderr('Failed to merge coverage data:', error);
+        context.exitCode.raise(1);
+      }
+    };
+    const mergeRawCoverage =
+      coverageProvider?.mergeRawCoverage?.bind(coverageProvider);
+    const onRawCoverageResult =
+      mergeRawCoverage && mergedCoverageMap
+        ? (raw: unknown) =>
+            foldCoverage(() => mergeRawCoverage(mergedCoverageMap, raw))
+        : (raw: unknown) => {
+            rawCoverageResults.push(raw);
+          };
 
     const traceRun = getTraceRun();
     const { span } = traceRun;
@@ -476,9 +493,15 @@ export function createNodeExecutor(
             project: p,
             buildId,
             updateSnapshot,
-            onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
-            onRawCoverageResult: (coverage) =>
-              rawCoverageResults.push(coverage),
+            onCoverageResult: (coverage) =>
+              foldCoverage(() => mergedCoverageMap?.merge(coverage)),
+            onRawCoverageResult,
+            getKnownCoverageStructures: () =>
+              mergedCoverageMap
+                ? coverageProvider?.getKnownCoverageStructures?.(
+                    mergedCoverageMap,
+                  )
+                : undefined,
             onTraceEvents: traceRun.onEvents,
             traceSpan: span,
           });

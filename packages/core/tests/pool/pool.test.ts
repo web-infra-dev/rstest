@@ -10,6 +10,7 @@ import {
 import { ForksPoolWorker } from '../../src/pool/workers/forksPoolWorker';
 import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
+import type { KnownCoverageStructure } from '../../src/types';
 
 const WORKER_ENTRY = resolve(__dirname, './fixtures/testWorker.mjs');
 
@@ -63,6 +64,30 @@ const createTask = (
 // ── basic run ───────────────────────────────────────────────────────────────
 
 describe('Pool - basic', () => {
+  it('samples known structures after queued tasks acquire a slot', async () => {
+    const pool = new Pool(createPoolOptions({ maxWorkers: 1 }));
+    let knownCoverageStructures: KnownCoverageStructure[] = [];
+    const getKnownCoverageStructures = () => knownCoverageStructures;
+    const first = createTask();
+    const second = createTask();
+    first.getKnownCoverageStructures = getKnownCoverageStructures;
+    second.getKnownCoverageStructures = getKnownCoverageStructures;
+    try {
+      const firstRun = pool.runTest(first).then((result) => {
+        knownCoverageStructures = [{ path: '/shared.js', hash: 'h' }];
+        return result;
+      });
+      const secondRun = pool.runTest(second);
+      expect(await firstRun).toHaveProperty('_knownCoverageStructures', []);
+      expect(await secondRun).toHaveProperty(
+        '_knownCoverageStructures',
+        knownCoverageStructures,
+      );
+    } finally {
+      await pool.close();
+    }
+  });
+
   it('should run a task and return a result', async () => {
     const pool = new Pool(createPoolOptions());
     try {
