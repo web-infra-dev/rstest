@@ -15,7 +15,9 @@ const packagesDir = join(rootDir, 'packages');
 // Packages intentionally excluded from the unified release version. Keep in sync
 // with the `!packages/*` negations in bump.config.mts. browser-ui is a private,
 // prebuilt UI container that is not part of the versioned release train.
-const EXCLUDED = new Set(['browser-ui']);
+// The standalone VS Code extension shipped its final release and its version is
+// frozen (see rstackjs/rstack-editor#75).
+const EXCLUDED = new Set(['browser-ui', 'vscode']);
 
 const packages = [];
 for (const name of readdirSync(packagesDir)) {
