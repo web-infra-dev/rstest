@@ -204,6 +204,9 @@ const defineRstestDynamicImport =
 // `loadEsModule.ts` for the full rationale.
 const accumulatedAssetFiles: AssetFiles = {};
 
+/** The assets of every file this worker loaded since the last full cache clear. */
+export const getLoadedAssetFiles = (): AssetFiles => accumulatedAssetFiles;
+
 // Every shared runtime chunk this (possibly reused) worker has loaded under
 // `isolate: false`. Mirrors the ESM loader — a reused worker can serve multiple
 // projects (the pool has no environment affinity), so keeping a single id would
