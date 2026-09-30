@@ -244,12 +244,9 @@ jobs:
         run: cd e2e && pnpm test:threads
 
       - name: VS Code Extension Test
-        # OS-sensitive (Extension Host) but node-insensitive: run once per OS
-        # on full runs (the node 24 combos) and on the single PR combo
-        # (Windows + node 24). Gated on the `test` script succeeding, matching
-        # the pre-collapse behavior where it ran after the `test` row's e2e
-        # step.
-        if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' && (needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'windows-latest') }}
+        # The extension is frozen: run on main pushes and manual full runs,
+        # not PRs. The Release workflow runs it again before publishing.
+        if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' }}
         run: cd packages/vscode && pnpm test:e2e
 
   # ======== codspeed ========

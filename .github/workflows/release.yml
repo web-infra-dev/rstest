@@ -63,10 +63,41 @@ jobs:
         run: |
           pnpm --filter './packages/*' -r stage publish --tag ${{ github.event.inputs.npm_tag }} --no-git-checks
 
+  vscode_e2e:
+    name: VS Code Extension E2E
+    needs: release
+    if: github.repository == 'web-infra-dev/rstest' && github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Packages
+        run: pnpm run build
+
+      - name: VS Code Extension Test
+        run: pnpm --filter ./packages/vscode test:e2e
+
   release_vscode_extension:
     name: Release VS Code Extension (${{ matrix.vsce-target }})
     if: github.repository == 'web-infra-dev/rstest' && github.event_name == 'workflow_dispatch'
-    needs: release
+    needs: [release, vscode_e2e]
     runs-on: ${{ matrix.runner }}
     environment: vscode-marketplace
     strategy:
