@@ -361,7 +361,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--related`                         | 将位置参数视为源码文件路径，只运行相关测试                                                                                                                               |
 | `--reporters, --reporter <name>`    | 指定一个或多个测试报告器，详见 [reporters](/config/test/reporters)                                                                                                       |
 | `--resetMocks`                      | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                                                |
-| `--restoreMocks`                    | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                                                      |
+| `--restoreMocks`                    | 每个测试前恢复被 spy 替换的对象方法，详见 [restoreMocks](/config/test/restore-mocks)                                                                                     |
 | `--retry <retry>`                   | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                                                     |
 | `-r, --root <root>`                 | 指定项目根目录，详见 [root](/config/test/root)                                                                                                                           |
 | `--shard <index/count>`             | 将测试拆分为多个分片运行，详见 [测试分片](#sharding-tests)                                                                                                               |

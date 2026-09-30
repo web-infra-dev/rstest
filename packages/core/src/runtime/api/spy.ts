@@ -29,6 +29,7 @@ export const initSpy = (
    * registry comment below for why entries are weak and scoped per project.
    */
   forEachMock: (callback: (mock: MockInstance) => void) => void;
+  restoreAllSpies: () => void;
   createMockInstance: CreateMockInstanceFn;
   /**
    * Restart `invocationCallOrder` numbering. The spy state lives for the whole
@@ -49,6 +50,7 @@ export const initSpy = (
   // and https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
   const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
   const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
+  const restoreSpies = new WeakMap<MockInstance, () => void>();
 
   const getRealmPromise = (): PromiseConstructor => {
     const promise = getRuntimeGlobal().Promise;
@@ -173,6 +175,7 @@ export const initSpy = (
     obj: Record<string, any>,
     methodName: string | { getter: string } | { setter: string },
     mockFn?: NormalizedProcedure<T>,
+    registerRestore = false,
   ): Mock<T> => {
     const propertyName =
       typeof methodName === 'string'
@@ -220,6 +223,7 @@ export const initSpy = (
     let mockState = initMockState();
 
     const spyState = getInternalState(spyImpl);
+    let unregisterRestore = () => {};
 
     spyFn.getMockName = () => mockName || propertyName;
 
@@ -443,6 +447,7 @@ export const initSpy = (
     spyFn.mockRestore = () => {
       spyFn.mockReset();
       spyState.restore();
+      unregisterRestore();
       mockName = mockFn?.name;
     };
 
@@ -459,6 +464,18 @@ export const initSpy = (
     realmSpies.set(spyFn, realmSpy);
     realmSpies.set(realmSpy, realmSpy);
     projectMocks().add(new WeakRef(realmSpy));
+    if (registerRestore) {
+      unregisterRestore = () => {
+        restoreSpies.delete(spyFn);
+        restoreSpies.delete(realmSpy);
+      };
+      const restore = () => {
+        spyState.restore();
+        unregisterRestore();
+      };
+      restoreSpies.set(spyFn, restore);
+      restoreSpies.set(realmSpy, restore);
+    }
     if (realmSpy !== spyFn) {
       descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
       if (descriptor) {
@@ -495,6 +512,10 @@ export const initSpy = (
         mocks.delete(ref);
       }
     }
+  };
+
+  const restoreAllSpies = (): void => {
+    forEachMock((mock) => restoreSpies.get(mock)?.());
   };
 
   const fn: MockFn = <T extends FunctionLike>(mockFn?: T) => {
@@ -562,6 +583,8 @@ export const initSpy = (
     return wrapSpy(
       obj,
       method as string | { getter: string } | { setter: string },
+      undefined,
+      true,
     );
   };
 
@@ -676,6 +699,7 @@ export const initSpy = (
     spyOn,
     fn,
     forEachMock,
+    restoreAllSpies,
     createMockInstance,
     resetCallOrder: () => {
       callOrder = 0;

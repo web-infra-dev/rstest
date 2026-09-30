@@ -266,7 +266,7 @@ mockedModule.method.mockReturnValue('mocked');
 - **别名：** `rstest.restoreAllMocks`
 - **类型：** `() => RstestUtilities`
 
-重置所有 mock，并恢复被 mock 的对象的原始描述符。
+恢复通过 `rs.spyOn()` 替换的对象描述符。此操作不会清除调用记录或重置 mock 实现，也不会影响通过 `rs.fn()` 创建的独立 mock。
 
 ## 更多
 

@@ -1,5 +1,5 @@
 ---
-description: 重置所有 mock，并恢复被 mock 的对象的原始描述符。
+description: 在每个测试前恢复被 spy 替换的对象方法。
 ---
 
 # restoreMocks
@@ -8,7 +8,7 @@ description: 重置所有 mock，并恢复被 mock 的对象的原始描述符�
 - **默认值：** `false`
 - **CLI：** `--restoreMocks`
 
-重置所有 mock，并恢复被 mock 的对象的原始描述符。
+在每个测试前恢复通过 `rs.spyOn()` 替换的对象方法。调用记录和 mock 实现会保留，通过 `rs.fn()` 创建的独立 mock 不受影响。
 
 当启用 `restoreMocks` 时，rstest 将在每个测试用例执行之前调用 [.restoreAllMocks()](/api/runtime-api/rstest/mock-functions#rsrestoreallmocks)。
 

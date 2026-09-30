@@ -381,6 +381,7 @@ const buildRstestUtilities = async (): Promise<{
     spyOn,
     isMockFunction,
     forEachMock,
+    restoreAllSpies,
     createMockInstance,
     resetCallOrder,
   } = initSpy(() => fileContext().workerState.project, getRuntimeGlobal);
@@ -422,7 +423,7 @@ const buildRstestUtilities = async (): Promise<{
       return rstest;
     },
     restoreAllMocks: () => {
-      forEachMock((mock) => mock.mockRestore());
+      restoreAllSpies();
       return rstest;
     },
     mock: createPluginManagedApi('mock'),

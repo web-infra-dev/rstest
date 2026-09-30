@@ -193,6 +193,22 @@ describe('test spy', () => {
     expect(sayHi()).toBeUndefined();
   });
 
+  it('restoreAllMocks restores spies without resetting mock functions', () => {
+    const mock = rstest.fn().mockReturnValue('mocked');
+    const object = { method: () => 'original' };
+    const spy = rstest.spyOn(object, 'method').mockReturnValue('spied');
+
+    expect(mock()).toBe('mocked');
+    expect(object.method()).toBe('spied');
+
+    rstest.restoreAllMocks();
+
+    expect(mock()).toBe('mocked');
+    expect(mock.mock.calls).toEqual([[], []]);
+    expect(object.method()).toBe('original');
+    expect(spy.mock.calls).toEqual([[]]);
+  });
+
   it('rstest.fn -> mock throws', () => {
     const sayHi = rstest
       .fn(() => 'hi')

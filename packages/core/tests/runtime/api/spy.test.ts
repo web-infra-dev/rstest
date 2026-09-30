@@ -361,6 +361,27 @@ describe('initSpy withImplementation', () => {
 });
 
 describe('initSpy spyOn', () => {
+  it('restores spies without resetting mock implementations or call history', () => {
+    const { fn, spyOn, restoreAllSpies } = initSpy();
+    const mock = fn().mockReturnValue('mocked');
+    const object = { method: () => 'original' };
+    const spy = spyOn(object, 'method').mockReturnValue('spied');
+
+    expect(mock()).toBe('mocked');
+    expect(object.method()).toBe('spied');
+
+    restoreAllSpies();
+
+    expect(mock()).toBe('mocked');
+    expect(mock.mock.calls).toEqual([[], []]);
+    expect(object.method()).toBe('original');
+    expect(spy.mock.calls).toEqual([[]]);
+
+    object.method = () => 'changed';
+    restoreAllSpies();
+    expect(object.method()).toBe('changed');
+  });
+
   it('replaces a method while preserving original behavior and restores it', () => {
     const { spyOn } = initSpy();
     const obj = { greet: () => 'hi' };
