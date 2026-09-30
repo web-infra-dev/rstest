@@ -4,6 +4,7 @@ import {
   restoreScopedEntry,
 } from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
+import { createBrowserTaskContext } from '../../../src/runtime/worker/taskContext.browser';
 import { createNodeTaskContext } from '../../../src/runtime/worker/taskContext.node';
 import { createUtilities } from './helpers';
 
@@ -280,6 +281,100 @@ describe('rstest utilities wait APIs', () => {
         void staleWait;
       },
     );
+  });
+
+  it('uses explicit signals for concurrent browser waits', async () => {
+    const taskContext = createBrowserTaskContext();
+    const rs = await createUtilities(() => taskContext.getCurrentSignal());
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    let firstAttempts = 0;
+    let secondAttempts = 0;
+    const firstWait = taskContext.run(
+      {
+        taskId: 'first',
+        taskName: 'first',
+        taskParentNames: [],
+        taskType: 'case',
+        testPath: '/test.ts',
+      },
+      () => {
+        taskContext.setCurrentSignal(firstController.signal);
+        expect(taskContext.getCurrentSignal()).toBeUndefined();
+        return rs.waitFor(
+          () => {
+            firstAttempts += 1;
+            throw new Error('still pending');
+          },
+          { timeout: 1_000, interval: 5, signal: firstController.signal },
+        );
+      },
+      { concurrent: true },
+    );
+    const secondWait = taskContext.run(
+      {
+        taskId: 'second',
+        taskName: 'second',
+        taskParentNames: [],
+        taskType: 'case',
+        testPath: '/test.ts',
+      },
+      () => {
+        taskContext.setCurrentSignal(secondController.signal);
+        expect(taskContext.getCurrentSignal()).toBeUndefined();
+        return rs.waitFor(
+          () => {
+            secondAttempts += 1;
+            throw new Error('still pending');
+          },
+          { timeout: 1_000, interval: 5, signal: secondController.signal },
+        );
+      },
+      { concurrent: true },
+    );
+    const reactions: string[] = [];
+    void firstWait.then(
+      () => reactions.push('first fulfilled'),
+      () => reactions.push('first rejected'),
+    );
+    void secondWait.then(
+      () => reactions.push('second fulfilled'),
+      () => reactions.push('second rejected'),
+    );
+
+    firstController.abort(new Error('first test timed out'));
+    await sleep(20);
+
+    expect(firstAttempts).toBe(1);
+    expect(secondAttempts).toBeGreaterThan(1);
+
+    secondController.abort(new Error('second test timed out'));
+    await sleep(0);
+    expect(reactions).toEqual([]);
+  });
+
+  it('uses the explicit signal for waitUntil', async () => {
+    const controller = new AbortController();
+    const rs = await createUtilities();
+    let attempts = 0;
+    const pending = rs.waitUntil(
+      () => {
+        attempts += 1;
+        return false;
+      },
+      { timeout: 1_000, interval: 1_000, signal: controller.signal },
+    );
+    const reactions: string[] = [];
+    void pending.then(
+      () => reactions.push('fulfilled'),
+      () => reactions.push('rejected'),
+    );
+
+    controller.abort(new Error('test timed out'));
+    await sleep(0);
+
+    expect(attempts).toBe(1);
+    expect(reactions).toEqual([]);
   });
 
   it('does not schedule a timeout when the current test signal is already aborted', async () => {

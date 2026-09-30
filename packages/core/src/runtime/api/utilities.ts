@@ -678,7 +678,10 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitFor: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const signal = fileContext().testRunner.getCurrentTestSignal();
+      const signal =
+        typeof options === 'object' && options.signal
+          ? options.signal
+          : fileContext().testRunner.getCurrentTestSignal();
       const controller = createWaitController(signal, (cancel) =>
         pendingWaits.delete(cancel),
       );
@@ -731,7 +734,10 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitUntil: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const signal = fileContext().testRunner.getCurrentTestSignal();
+      const signal =
+        typeof options === 'object' && options.signal
+          ? options.signal
+          : fileContext().testRunner.getCurrentTestSignal();
       const controller = createWaitController(signal, (cancel) =>
         pendingWaits.delete(cancel),
       );

@@ -225,6 +225,7 @@ console.log(config);
 type WaitForOptions = {
   timeout?: number; // default: 1000
   interval?: number; // default: 50
+  signal?: AbortSignal;
 };
 
 type WaitFor = <T>(
@@ -233,7 +234,10 @@ type WaitFor = <T>(
 ) => Promise<T>;
 ```
 
+<ApiMeta addedVersion="0.12.3" />
+
 Retries `callback` until it succeeds (does not throw) or timeout is reached.
+The current test's signal cancels the wait automatically. In a concurrent browser test, pass `context.signal` explicitly because the browser runtime cannot associate the calling test with its signal.
 
 - If `options` is a number, it is treated as `timeout`.
 - If timeout is reached, it throws the last error from the callback.
@@ -260,6 +264,7 @@ await rs.waitFor(
 type WaitUntilOptions = {
   timeout?: number; // default: 1000
   interval?: number; // default: 50
+  signal?: AbortSignal;
 };
 
 type WaitUntil = <T>(
@@ -268,8 +273,11 @@ type WaitUntil = <T>(
 ) => Promise<T>;
 ```
 
+<ApiMeta addedVersion="0.12.3" />
+
 Calls `callback` repeatedly only while it returns `undefined` (no value) or any falsy value.
 It resolves when the callback returns a truthy value.
+The current test's signal cancels the wait automatically. In a concurrent browser test, pass `context.signal` explicitly because the browser runtime cannot associate the calling test with its signal.
 
 - If `options` is a number, it is treated as `timeout`.
 - If the callback throws, execution is interrupted immediately and the error is thrown.

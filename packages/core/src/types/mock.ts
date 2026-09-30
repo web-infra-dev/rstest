@@ -202,11 +202,13 @@ export type WaitForCallback<T> = () => MaybePromise<T>;
 export interface WaitForOptions {
   timeout?: number;
   interval?: number;
+  signal?: AbortSignal;
 }
 
 export interface WaitUntilOptions {
   timeout?: number;
   interval?: number;
+  signal?: AbortSignal;
 }
 
 /**

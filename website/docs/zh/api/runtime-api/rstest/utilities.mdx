@@ -225,6 +225,7 @@ console.log(config);
 type WaitForOptions = {
   timeout?: number; // 默认: 1000
   interval?: number; // 默认: 50
+  signal?: AbortSignal;
 };
 
 type WaitFor = <T>(
@@ -233,7 +234,10 @@ type WaitFor = <T>(
 ) => Promise<T>;
 ```
 
+<ApiMeta addedVersion="0.12.3" />
+
 不断重试 `callback`，直到其执行成功（不抛错）或超时。
+当前测试的 signal 会自动取消等待。在并发浏览器测试中，浏览器运行时无法自动识别调用方对应的 signal，因此请显式传入 `context.signal`。
 
 - 当 `options` 为数字时，会被视为 `timeout`。
 - 超时时会抛出 callback 最后一次抛出的错误。
@@ -260,6 +264,7 @@ await rs.waitFor(
 type WaitUntilOptions = {
   timeout?: number; // 默认: 1000
   interval?: number; // 默认: 50
+  signal?: AbortSignal;
 };
 
 type WaitUntil = <T>(
@@ -268,7 +273,10 @@ type WaitUntil = <T>(
 ) => Promise<T>;
 ```
 
+<ApiMeta addedVersion="0.12.3" />
+
 仅当 `callback` 没有返回值（`undefined` 或 `null`）或返回 falsy 值时才会继续重试；当其返回 truthy 值时会立刻 resolve。
+当前测试的 signal 会自动取消等待。在并发浏览器测试中，浏览器运行时无法自动识别调用方对应的 signal，因此请显式传入 `context.signal`。
 
 - 当 `options` 为数字时，会被视为 `timeout`。
 - 如果 callback 抛错，会立即中断并抛出该错误。

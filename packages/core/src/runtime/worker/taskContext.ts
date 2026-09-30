@@ -4,7 +4,11 @@ import type { CurrentTaskInfo } from '../../types';
 export interface TaskContext {
   getCurrent(): CurrentTaskInfo | undefined;
   getCurrentSignal(): AbortSignal | undefined;
-  run<T>(task: CurrentTaskInfo, fn: () => T | Promise<T>): T | Promise<T>;
+  run<T>(
+    task: CurrentTaskInfo,
+    fn: () => T | Promise<T>,
+    options?: { concurrent?: boolean },
+  ): T | Promise<T>;
   setCurrentSignal(signal: AbortSignal): void;
   setFallback(task: CurrentTaskInfo | undefined): void;
 }

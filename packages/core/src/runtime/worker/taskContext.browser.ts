@@ -5,17 +5,25 @@ import type { TaskContext } from './taskContext';
 // tasks may mis-attribute — callers must not use it for task-specific behavior.
 export const createBrowserTaskContext = (): TaskContext => {
   let fallback: { task: CurrentTaskInfo; signal?: AbortSignal } | undefined;
+  let concurrentTaskCount = 0;
 
   return {
     getCurrent: () => fallback?.task,
-    getCurrentSignal: () => fallback?.signal,
-    run: async (task, fn) => {
+    getCurrentSignal: () =>
+      concurrentTaskCount === 0 ? fallback?.signal : undefined,
+    run: async (task, fn, { concurrent = false } = {}) => {
       const previous = fallback;
+      if (concurrent) {
+        concurrentTaskCount++;
+      }
       fallback = { task };
       try {
         return await fn();
       } finally {
         fallback = previous;
+        if (concurrent) {
+          concurrentTaskCount--;
+        }
       }
     },
     setCurrentSignal: (signal) => {

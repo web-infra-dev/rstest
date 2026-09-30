@@ -657,111 +657,117 @@ export class TestRunner {
           testPath,
         };
         const runSuite = () =>
-          this.taskContext.run(suiteTask, async () => {
-            const start = RealDate.now();
+          this.taskContext.run(
+            suiteTask,
+            async () => {
+              const start = RealDate.now();
 
-            hooks.onTestSuiteStart?.({
-              parentNames: test.parentNames,
-              name: test.name,
-              testPath,
-              project: test.project,
-              testId: test.testId,
-              type: 'suite',
-              location: test.location,
-              runMode: test.runMode,
-              meta: test.meta,
-            });
+              hooks.onTestSuiteStart?.({
+                parentNames: test.parentNames,
+                name: test.name,
+                testPath,
+                project: test.project,
+                testId: test.testId,
+                type: 'suite',
+                location: test.location,
+                runMode: test.runMode,
+                meta: test.meta,
+              });
 
-            if (test.tests.length === 0) {
-              if (['todo', 'skip'].includes(test.runMode)) {
-                defaultStatus = 'skip';
-              } else if (passWithNoTests) {
-                result.status = 'pass';
-              } else {
-                result.status = 'fail';
-                result.errors?.push({
-                  message: `No test found in suite: ${test.name}`,
-                  name: 'No tests',
-                });
+              if (test.tests.length === 0) {
+                if (['todo', 'skip'].includes(test.runMode)) {
+                  defaultStatus = 'skip';
+                } else if (passWithNoTests) {
+                  result.status = 'pass';
+                } else {
+                  result.status = 'fail';
+                  result.errors?.push({
+                    message: `No test found in suite: ${test.name}`,
+                    name: 'No tests',
+                  });
+                }
+
+                hooks.onTestSuiteResult?.(result);
+                return result;
               }
 
-              hooks.onTestSuiteResult?.(result);
-              return result;
-            }
+              const shouldRunSuiteHooks =
+                test.hasRunnableTests === true &&
+                ['run', 'only'].includes(test.runMode);
+              const cleanups: ((ctx: SuiteContext) => void)[] = [];
+              let hasBeforeAllError = false;
+              const suiteContext: SuiteContext = {
+                // `ctx.filepath` is user-facing; expose the OS-native path
+                // so it matches `__filename`/`import.meta.filename` (#1465).
+                filepath: toNativePath(testPath),
+                get meta() {
+                  return (test.meta ??= {});
+                },
+                set meta(value) {
+                  test.meta = cloneTaskMeta(value);
+                  result.meta = test.meta;
+                },
+              };
 
-            const shouldRunSuiteHooks =
-              test.hasRunnableTests === true &&
-              ['run', 'only'].includes(test.runMode);
-            const cleanups: ((ctx: SuiteContext) => void)[] = [];
-            let hasBeforeAllError = false;
-            const suiteContext: SuiteContext = {
-              // `ctx.filepath` is user-facing; expose the OS-native path
-              // so it matches `__filename`/`import.meta.filename` (#1465).
-              filepath: toNativePath(testPath),
-              get meta() {
-                return (test.meta ??= {});
-              },
-              set meta(value) {
-                test.meta = cloneTaskMeta(value);
-                result.meta = test.meta;
-              },
-            };
-
-            if (shouldRunSuiteHooks && test.beforeAllListeners) {
-              try {
-                for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await this.runWithActiveTimeout(
-                    test,
-                    fn,
-                    () => fn(suiteContext),
-                  );
-                  if (cleanupFn) {
-                    cleanups.push(inheritTimeout(fn, cleanupFn));
+              if (shouldRunSuiteHooks && test.beforeAllListeners) {
+                try {
+                  for (const fn of test.beforeAllListeners) {
+                    const cleanupFn = await this.runWithActiveTimeout(
+                      test,
+                      fn,
+                      () => fn(suiteContext),
+                    );
+                    if (cleanupFn) {
+                      cleanups.push(inheritTimeout(fn, cleanupFn));
+                    }
                   }
+                } catch (error) {
+                  hasBeforeAllError = true;
+                  result.errors?.push(...(await formatTestError(error)));
                 }
-              } catch (error) {
-                hasBeforeAllError = true;
-                result.errors?.push(...(await formatTestError(error)));
               }
-            }
 
-            if (hasBeforeAllError) {
-              markAllTestAsSkipped(test.tests);
-            }
+              if (hasBeforeAllError) {
+                markAllTestAsSkipped(test.tests);
+              }
 
-            const results = await runTests(test.tests, {
-              beforeEachListeners: parentHooks.beforeEachListeners.concat(
-                test.beforeEachListeners || [],
-              ),
-              afterEachListeners: parentHooks.afterEachListeners.concat(
-                test.afterEachListeners || [],
-              ),
-            });
+              const results = await runTests(test.tests, {
+                beforeEachListeners: parentHooks.beforeEachListeners.concat(
+                  test.beforeEachListeners || [],
+                ),
+                afterEachListeners: parentHooks.afterEachListeners.concat(
+                  test.afterEachListeners || [],
+                ),
+              });
 
-            const afterAllFns = [...(test.afterAllListeners || [])]
-              .reverse()
-              .concat(cleanups);
+              const afterAllFns = [...(test.afterAllListeners || [])]
+                .reverse()
+                .concat(cleanups);
 
-            if (shouldRunSuiteHooks && afterAllFns.length) {
-              try {
-                for (const fn of afterAllFns) {
-                  await this.runWithActiveTimeout(test, fn, () =>
-                    fn(suiteContext),
-                  );
+              if (shouldRunSuiteHooks && afterAllFns.length) {
+                try {
+                  for (const fn of afterAllFns) {
+                    await this.runWithActiveTimeout(test, fn, () =>
+                      fn(suiteContext),
+                    );
+                  }
+                } catch (error) {
+                  result.errors?.push(...(await formatTestError(error)));
                 }
-              } catch (error) {
-                result.errors?.push(...(await formatTestError(error)));
               }
-            }
 
-            result.duration = RealDate.now() - start;
-            result.status = result.errors?.length
-              ? 'fail'
-              : getTestStatus(results, defaultStatus);
-            hooks.onTestSuiteResult?.(result);
+              result.duration = RealDate.now() - start;
+              result.status = result.errors?.length
+                ? 'fail'
+                : getTestStatus(results, defaultStatus);
+              hooks.onTestSuiteResult?.(result);
 
-            return result;
-          });
+              return result;
+            },
+            {
+              concurrent: test.concurrent === true || test.inConcurrentScope,
+            },
+          );
         result = await runSuite();
 
         errors.push(...(result.errors || []));
@@ -855,6 +861,9 @@ export class TestRunner {
             hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
+          },
+          {
+            concurrent: test.concurrent === true || test.inConcurrentScope,
           },
         );
       }
