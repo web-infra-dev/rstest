@@ -42,11 +42,15 @@ type WaitController = {
   sleep: (ms: number) => Promise<void>;
 };
 
-const createWaitController = (): WaitController => {
+const createWaitController = (
+  signal?: AbortSignal,
+  onCancel?: (cancel: () => void) => void,
+): WaitController => {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const realSetTimeout = getRealSetTimeout();
   const realClearTimeout = getRealClearTimeout();
   let cancelled = false;
+  let wakeSleep: (() => void) | undefined;
 
   const schedule = (callback: () => void, ms: number) => {
     let timerId: ReturnType<typeof setTimeout>;
@@ -67,7 +71,17 @@ const createWaitController = (): WaitController => {
       realClearTimeout(timerId);
     }
     timers.clear();
+    wakeSleep?.();
+    wakeSleep = undefined;
+    signal?.removeEventListener('abort', cancel);
+    onCancel?.(cancel);
   };
+
+  if (signal?.aborted) {
+    cancel();
+  } else {
+    signal?.addEventListener('abort', cancel, { once: true });
+  }
 
   return {
     get cancelled() {
@@ -77,9 +91,15 @@ const createWaitController = (): WaitController => {
     schedule,
     sleep: (ms) =>
       new Promise<void>((resolve) => {
-        if (!cancelled) {
-          schedule(resolve, ms);
+        if (cancelled) {
+          resolve();
+          return;
         }
+        wakeSleep = resolve;
+        schedule(() => {
+          wakeSleep = undefined;
+          resolve();
+        }, ms);
       }),
   };
 };
@@ -652,8 +672,13 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitFor: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const controller = createWaitController();
-      pendingWaits.add(controller.cancel);
+      const signal = fileContext().testRunner.getCurrentTest()?.context.signal;
+      const controller = createWaitController(signal, (cancel) =>
+        pendingWaits.delete(cancel),
+      );
+      if (!controller.cancelled) {
+        pendingWaits.add(controller.cancel);
+      }
 
       let timedOut = false;
       let lastError: unknown;
@@ -700,8 +725,13 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitUntil: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const controller = createWaitController();
-      pendingWaits.add(controller.cancel);
+      const signal = fileContext().testRunner.getCurrentTest()?.context.signal;
+      const controller = createWaitController(signal, (cancel) =>
+        pendingWaits.delete(cancel),
+      );
+      if (!controller.cancelled) {
+        pendingWaits.add(controller.cancel);
+      }
 
       let timedOut = false;
       controller.schedule(() => {

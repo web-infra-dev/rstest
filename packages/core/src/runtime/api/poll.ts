@@ -101,29 +101,70 @@ export function createExpectPoll(
             new Promise<void>((resolve, reject) => {
               const timeout = getTimeout();
               const interval = options.interval ?? getPollConfig().interval;
-              let intervalId: any;
+              const signal = test.context.signal;
+              let intervalId: ReturnType<typeof setTimeout> | undefined;
+              let timeoutId: ReturnType<typeof setTimeout> | undefined;
+              let settled = false;
               let lastError: any;
+              const cleanup = () => {
+                if (intervalId !== undefined) {
+                  getRealTimers().clearTimeout!(intervalId);
+                }
+                if (timeoutId !== undefined) {
+                  getRealTimers().clearTimeout!(timeoutId);
+                }
+                signal.removeEventListener('abort', onAbort);
+              };
+              const resolvePoll = (value: void) => {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                cleanup();
+                resolve(value);
+              };
+              const rejectPoll = (error: unknown) => {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                cleanup();
+                reject(error);
+              };
+              const onAbort = () => rejectPoll(signal.reason);
               // TODO: use timeout manager
               const check = async () => {
+                if (settled) {
+                  return;
+                }
                 try {
                   util.flag(assertion, '_name', key);
                   const obj = await fn();
+                  if (settled) {
+                    return;
+                  }
                   util.flag(assertion, 'object', obj);
-                  resolve(await assertionFunction.call(assertion, ...args));
-                  getRealTimers().clearTimeout!(intervalId);
-                  getRealTimers().clearTimeout!(timeoutId);
+                  resolvePoll(await assertionFunction.call(assertion, ...args));
                 } catch (err) {
+                  if (settled) {
+                    return;
+                  }
                   lastError = err;
                   if (!util.flag(assertion, '_isLastPollAttempt')) {
                     intervalId = getRealTimers().setTimeout!(check, interval);
                   }
                 }
               };
-              const timeoutId = getRealTimers().setTimeout!(() => {
+              signal.addEventListener('abort', onAbort, { once: true });
+              if (signal.aborted) {
+                onAbort();
+                return;
+              }
+              timeoutId = getRealTimers().setTimeout!(() => {
                 getRealTimers().clearTimeout!(intervalId);
                 util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {
-                  reject(
+                  rejectPoll(
                     copyStackTrace(
                       new Error(`Matcher did not succeed in ${timeout}ms`, {
                         cause,

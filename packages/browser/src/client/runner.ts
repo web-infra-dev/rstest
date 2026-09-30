@@ -352,6 +352,7 @@ const waitForConfig = (): Promise<void> => {
   }
 
   return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const handleMessage = (event: MessageEvent) => {
       const payload = event.data?.payload;
       if (
@@ -364,13 +365,16 @@ const waitForConfig = (): Promise<void> => {
           event.data.payload,
         );
         window.removeEventListener('message', handleMessage);
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
         resolve();
       }
     };
 
     window.addEventListener('message', handleMessage);
 
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       window.removeEventListener('message', handleMessage);
       reject(
         new Error(
