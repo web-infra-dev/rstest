@@ -35,7 +35,9 @@ describe('snapshot lifecycle hooks', () => {
     } as WorkerState;
     const taskContext: TaskContext = {
       getCurrent: () => undefined,
+      getCurrentSignal: () => undefined,
       run: (_task, fn) => fn(),
+      setCurrentSignal: () => {},
       setFallback: () => {},
     };
     const { runner } = createRunner({ workerState, taskContext });
