@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import net from 'node:net';
 import path, { dirname } from 'node:path';
@@ -238,9 +239,10 @@ export class RstestApi {
         logger.error('Failed to resolve @rstest/core/package.json', e);
         return undefined;
       }
-      const corePackageJson = require(corePackageJsonPath) as {
-        version?: string;
-      };
+      // The require cache would pin the version across in-place upgrades.
+      const corePackageJson = JSON.parse(
+        readFileSync(corePackageJsonPath, 'utf8'),
+      ) as { version?: string };
       const extension = vscode.extensions.getExtension('rstack.rstest');
       const extensionVersion = extension?.packageJSON?.version as
         string | undefined;
@@ -306,7 +308,7 @@ export class RstestApi {
       configured,
     );
     if (!pkgJsonPath) return undefined;
-    const pkg = require(pkgJsonPath) as {
+    const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as {
       bin?: string | Record<string, string>;
     };
     const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.rstest;
