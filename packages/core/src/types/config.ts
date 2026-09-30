@@ -535,7 +535,8 @@ export interface RstestConfig {
    */
   resetMocks?: boolean;
   /**
-   * Automatically restore mock state and implementation before every test.
+   * Automatically restore object methods replaced by `rs.spyOn()` before every test.
+   * Mock call history and implementations remain unchanged, and standalone mocks created by `rs.fn()` are not affected.
    * @default false
    */
   restoreMocks?: boolean;

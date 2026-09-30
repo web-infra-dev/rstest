@@ -967,7 +967,9 @@ export class TestRunner {
 
     if (restoreMocks) {
       api.rstest.restoreAllMocks();
-    } else if (resetMocks) {
+    }
+
+    if (resetMocks) {
       api.rstest.resetAllMocks();
     } else if (clearMocks) {
       api.rstest.clearAllMocks();

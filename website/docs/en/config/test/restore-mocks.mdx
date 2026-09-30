@@ -1,5 +1,5 @@
 ---
-description: Automatically reset mock state before every test. Includes practical guidance, options, and examples for real projects.
+description: Restore spied-on object methods before every test. Includes practical guidance, options, and examples for real projects.
 ---
 
 # restoreMocks
@@ -8,7 +8,7 @@ description: Automatically reset mock state before every test. Includes practica
 - **Default:** `false`
 - **CLI:** `--restoreMocks`
 
-Automatically reset mock state before every test.
+Restore object methods replaced by `rs.spyOn()` before every test. Mock call history and implementations remain unchanged, and standalone mocks created with `rs.fn()` are not affected.
 
 When `restoreMocks` enabled, rstest will call [.restoreAllMocks()](/api/runtime-api/rstest/mock-functions#rsrestoreallmocks) before each test.
 

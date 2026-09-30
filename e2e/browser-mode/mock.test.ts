@@ -14,6 +14,6 @@ describe('browser mode - module mocking', () => {
     await expectExecSuccess();
 
     expect(cli.stdout).toMatch(/Test Files.*12 passed/);
-    expect(cli.stdout).toMatch(/Tests.*18 passed/);
+    expect(cli.stdout).toMatch(/Tests.*19 passed/);
   });
 });

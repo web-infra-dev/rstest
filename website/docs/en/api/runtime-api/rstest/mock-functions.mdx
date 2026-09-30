@@ -265,7 +265,7 @@ Clears all mocks properties and reset each mock's implementation to its original
 - **Alias:** `rstest.restoreAllMocks`
 - **Type:** `() => RstestUtilities`
 
-Reset all mocks and restore original descriptors of spied-on objects.
+Restore original descriptors of objects spied on with `rs.spyOn()`. This does not clear mock call history or reset mock implementations; standalone mocks created with `rs.fn()` are not affected.
 
 ## More
 

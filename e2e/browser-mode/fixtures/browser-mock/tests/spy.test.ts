@@ -17,3 +17,19 @@ it('spy mode allows overriding and resetting the implementation', () => {
   rs.mocked(increment).mockReset();
   expect(increment(1)).toBe(2);
 });
+
+it('restoreAllMocks preserves mock implementations and restores object spies', () => {
+  const mock = rs.fn().mockReturnValue('mocked');
+  const object = { method: () => 'original' };
+  const spy = rs.spyOn(object, 'method').mockReturnValue('spied');
+
+  expect(mock()).toBe('mocked');
+  expect(object.method()).toBe('spied');
+
+  rs.restoreAllMocks();
+
+  expect(mock()).toBe('mocked');
+  expect(mock.mock.calls).toEqual([[], []]);
+  expect(object.method()).toBe('original');
+  expect(spy.mock.calls).toEqual([[]]);
+});

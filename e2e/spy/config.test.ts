@@ -20,6 +20,34 @@ it('test clearMocks config', async () => {
   await expectExecSuccess();
 });
 
+it('test clearMocks with restoreMocks config', async () => {
+  const { expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'fixtures/clearMocks.test', '--restoreMocks', '--clearMocks'],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecSuccess();
+});
+
+it('test resetMocks with restoreMocks config', async () => {
+  const { expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'fixtures/clearMocks.test', '--restoreMocks', '--resetMocks'],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecSuccess();
+});
+
 it('test restoreMocks config', async () => {
   const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
