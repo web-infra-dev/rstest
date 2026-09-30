@@ -232,8 +232,8 @@ export class RstestApi {
           paths: [this.cwd],
         });
       } catch (e) {
-        vscode.window.showErrorMessage(
-          'Failed to resolve @rstest/core/package.json. Please upgrade @rstest/core to the latest version.',
+        void showUnsupportedCoreMessage(
+          formatUnsupportedCoreVersionMessage(undefined),
         );
         logger.error('Failed to resolve @rstest/core/package.json', e);
         return undefined;
