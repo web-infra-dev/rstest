@@ -21,7 +21,7 @@ async function installRstack(): Promise<void> {
     { enable: true },
   );
   await offerReload(
-    'Rstack was installed. Reload the window so exactly one copy of Rstest runs.',
+    `[Rstack](${RSTACK_REPO_URL}) was installed. Reload the window so exactly one copy of Rstest runs.`,
   );
 }
 
