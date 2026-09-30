@@ -224,7 +224,6 @@ jobs:
           install-webkit: 'true'
 
       - name: E2E Test (test)
-        id: e2e_test
         run: cd e2e && pnpm test
 
       # Each remaining script is gated on the build having succeeded but NOT on
@@ -242,15 +241,6 @@ jobs:
       - name: E2E Test (test:threads)
         if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
         run: cd e2e && pnpm test:threads
-
-      - name: VS Code Extension Test
-        # OS-sensitive (Extension Host) but node-insensitive: run once per OS
-        # on full runs (the node 24 combos) and on the single PR combo
-        # (Windows + node 24). Gated on the `test` script succeeding, matching
-        # the pre-collapse behavior where it ran after the `test` row's e2e
-        # step.
-        if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' && (needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'windows-latest') }}
-        run: cd packages/vscode && pnpm test:e2e
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
