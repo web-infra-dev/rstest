@@ -10,5 +10,5 @@ export function isSupportedCoreVersion(version?: string): boolean {
 export function formatUnsupportedCoreVersionMessage(
   coreVersion?: string,
 ): string {
-  return `The Rstest extension is no longer maintained and only supports @rstest/core ${SUPPORTED_CORE_RANGE} (found ${coreVersion ?? 'unknown'}). Install the [Rstack](${RSTACK_REPO_URL}) extension instead.`;
+  return `Rstest has moved into the [Rstack](${RSTACK_REPO_URL}) extension. The Rstest extension only supports @rstest/core ${SUPPORTED_CORE_RANGE} (found ${coreVersion ?? 'unknown'}). Please install Rstack.`;
 }
