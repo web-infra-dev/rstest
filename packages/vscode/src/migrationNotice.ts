@@ -1,5 +1,6 @@
 import vscode from 'vscode';
 import { logger } from './logger';
+import { toErrorMessage } from './utils';
 
 const RSTACK_EXTENSION_ID = 'rstack.rstack';
 const OPEN_EXTENSION_COMMAND = 'rstest.openRstackExtension';
@@ -7,21 +8,83 @@ const OPEN_EXTENSION_COMMAND = 'rstest.openRstackExtension';
 const MIGRATION_NOTES_URL =
   'https://github.com/rstackjs/rstack-editor/blob/main/packages/vscode/README.md#coming-from-the-standalone-extensions';
 
-/**
- * The Rstack extension bundles the same Rstest integration as this extension.
- * This predicate mirrors its VS Code-level gates (workspace trust and
- * `rstack.rstest.enable`), not project detection.
- * `extensions.getExtension` only sees enabled extensions, so a disabled
- * Rstack extension does not count. Trust needs no change listener: VS Code
- * does not activate this extension in Restricted Mode, and granted trust
- * cannot be revoked without a reload.
- */
+// getExtension only sees enabled extensions; disabled Rstack does not take over.
 export function rstackEditorTakesOver(): boolean {
-  return (
-    vscode.extensions.getExtension(RSTACK_EXTENSION_ID) !== undefined &&
-    vscode.workspace.isTrusted &&
-    vscode.workspace.getConfiguration('rstack.rstest').get('enable', true)
+  return vscode.extensions.getExtension(RSTACK_EXTENSION_ID) !== undefined;
+}
+
+async function installRstack(): Promise<void> {
+  await vscode.commands.executeCommand(
+    'workbench.extensions.installExtension',
+    RSTACK_EXTENSION_ID,
+    { enable: true },
   );
+  await offerReload(
+    'Rstack was installed. Reload the window so exactly one copy of Rstest runs.',
+  );
+}
+
+async function offerReload(message: string): Promise<void> {
+  const action = await vscode.window.showInformationMessage(
+    message,
+    'Reload Window',
+  );
+  if (action === 'Reload Window') {
+    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+  }
+}
+
+export async function showUnsupportedCoreMessage(
+  message: string,
+): Promise<void> {
+  try {
+    const action = await vscode.window.showErrorMessage(
+      message,
+      'Install Rstack',
+    );
+    if (action === 'Install Rstack') {
+      await installRstack();
+    }
+  } catch (error) {
+    logger.error('Failed to install Rstack', error);
+    void vscode.window.showErrorMessage(toErrorMessage(error));
+  }
+}
+
+export async function showMigrationPrompt(
+  context: vscode.ExtensionContext,
+  standingDown: boolean,
+): Promise<void> {
+  const flag = standingDown
+    ? 'rstest.deprecation.uninstallPromptDismissed'
+    : 'rstest.deprecation.installPromptDismissed';
+  if (context.globalState.get<boolean>(flag)) return;
+
+  try {
+    const action = await vscode.window.showWarningMessage(
+      standingDown
+        ? 'Rstack has taken over Rstest. Uninstall the standalone Rstest extension.'
+        : 'The standalone Rstest extension is no longer maintained. Install the Rstack extension (rstack.rstack) to keep receiving updates.',
+      standingDown ? 'Uninstall Rstest' : 'Install Rstack',
+      "Don't show again",
+    );
+    if (action === "Don't show again") {
+      await context.globalState.update(flag, true);
+    } else if (action === 'Uninstall Rstest') {
+      await vscode.commands.executeCommand(
+        'workbench.extensions.uninstallExtension',
+        context.extension.id,
+      );
+      await offerReload(
+        'The standalone Rstest extension was uninstalled. Reload the window to finish.',
+      );
+    } else if (action === 'Install Rstack') {
+      await installRstack();
+    }
+  } catch (error) {
+    logger.error('Failed to migrate the standalone Rstest extension', error);
+    void vscode.window.showErrorMessage(toErrorMessage(error));
+  }
 }
 
 type NoticeState = 'migrate' | 'off' | 'reload';
@@ -128,10 +191,5 @@ export function createMigrationNotice(
   apply(standingDown);
   context.subscriptions.push(
     vscode.extensions.onDidChange(() => apply(rstackEditorTakesOver())),
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('rstack.rstest.enable')) {
-        apply(rstackEditorTakesOver());
-      }
-    }),
   );
 }

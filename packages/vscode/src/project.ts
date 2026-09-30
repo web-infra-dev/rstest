@@ -21,6 +21,10 @@ import {
 const DEFAULT_ROOT_CONFIG_RE = /^rstest\.config\.[mc]?[tj]s$/;
 
 export class WorkspaceManager implements vscode.Disposable {
+  private finishInitialDiscovery!: () => void;
+  public readonly initialDiscovery = new Promise<void>((resolve) => {
+    this.finishInitialDiscovery = resolve;
+  });
   public projects = new Map<string, Project>();
   // The subset of `projects` currently shown (not suppressed as a duplicate of
   // an aggregating parent). Kept in sync by `refreshAllProject`. Run All uses
@@ -98,6 +102,9 @@ export class WorkspaceManager implements vscode.Disposable {
           }
         }
         this.refreshAllProject();
+        void Promise.all(
+          Array.from(this.projects.values(), (project) => project.initialized),
+        ).then(() => this.finishInitialDiscovery());
 
         // start watching config file create and delete event
         for (const pattern of patterns) {
@@ -293,6 +300,7 @@ export class WorkspaceManager implements vscode.Disposable {
 // There is already a concept of 'project' in rstest, so we might consider changing its name here.
 export class Project implements vscode.Disposable {
   api: RstestApi;
+  readonly initialized: Promise<void>;
   root: vscode.Uri;
   testItem?: vscode.TestItem;
   cancellationSource: vscode.CancellationTokenSource;
@@ -325,7 +333,7 @@ export class Project implements vscode.Disposable {
     );
     this.cancellationSource = new vscode.CancellationTokenSource();
 
-    void this.api
+    this.initialized = this.api
       .getNormalizedConfig()
       .then((config) => {
         if (this.cancellationSource.token.isCancellationRequested) return;

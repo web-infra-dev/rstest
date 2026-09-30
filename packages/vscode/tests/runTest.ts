@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runTests } from '@vscode/test-electron';
@@ -59,6 +59,7 @@ async function main() {
   // Note: __dirname points to tests-dist at runtime, so resolve back to tests/
   const fixturesRoot = path.resolve(__dirname, '../tests/fixtures');
   const scratchDir = runDir(extensionDevelopmentPath);
+  const unsupportedDir = runDir(extensionDevelopmentPath);
 
   try {
     const corePackageJson = path.resolve(
@@ -78,11 +79,25 @@ async function main() {
         `--extensions-dir=${path.join(scratchDir, 'extensions')}`,
       ],
     });
-  } catch {
-    console.error('Failed to run tests');
+
+    const emptyWorkspace = path.join(unsupportedDir, 'workspace');
+    mkdirSync(emptyWorkspace);
+    await runTests({
+      extensionDevelopmentPath,
+      extensionTestsPath: path.resolve(__dirname, './suite/unsupportedCore'),
+      launchArgs: [
+        emptyWorkspace,
+        '--disable-extensions',
+        `--user-data-dir=${unsupportedDir}`,
+        `--extensions-dir=${path.join(unsupportedDir, 'extensions')}`,
+      ],
+    });
+  } catch (error) {
+    console.error('Failed to run tests', error);
     process.exitCode = 1;
   } finally {
     rmSync(scratchDir, { recursive: true, force: true });
+    rmSync(unsupportedDir, { recursive: true, force: true });
   }
 }
 

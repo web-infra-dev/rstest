@@ -7,6 +7,7 @@ import { closeWorkerGracefully, runningWorkers } from './master';
 import {
   createMigrationNotice,
   rstackEditorTakesOver,
+  showMigrationPrompt,
 } from './migrationNotice';
 import { Project, WorkspaceManager } from './project';
 import { disposeTerminal } from './terminal';
@@ -25,9 +26,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const standingDown = rstackEditorTakesOver();
   createMigrationNotice(context, standingDown);
   if (standingDown) {
+    void showMigrationPrompt(context, true);
     return;
   }
-  return new Rstest(context);
+  const rstest = new Rstest(context);
+  void rstest.showMigrationPrompt();
+  return rstest;
 }
 
 export async function deactivate() {
@@ -61,6 +65,23 @@ class Rstest {
 
     this.startScanWorkspaces();
     this.setupTestController();
+  }
+
+  async showMigrationPrompt(): Promise<void> {
+    const workspaces = Array.from(this.workspaces.values());
+    await Promise.all(
+      workspaces.map((workspace) => workspace.initialDiscovery),
+    );
+    // Unsupported projects already show the actionable, non-dismissible error.
+    if (
+      workspaces.some((workspace) =>
+        Array.from(workspace.projects.values()).some(
+          (project) => project.api.unsupportedCore,
+        ),
+      )
+    )
+      return;
+    await showMigrationPrompt(this.context, false);
   }
 
   private setupTestController() {

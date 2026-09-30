@@ -16,13 +16,17 @@ import {
 import type { RstestDiagnostics } from './diagnostics';
 import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
+import { showUnsupportedCoreMessage } from './migrationNotice';
 import type { Project } from './project';
 import { rpcErrorCodec } from './shared/rpc';
 import { runInTerminal as sendToTerminal, shellQuote } from './terminal';
 import { TestRunReporter } from './testRunReporter';
 import type { WorkerInitOptions } from './types';
 import { toErrorMessage } from './utils';
-import { formatUnsupportedCoreVersionMessage } from './versionCheck';
+import {
+  formatUnsupportedCoreVersionMessage,
+  isSupportedCoreVersion,
+} from './versionCheck';
 import type { Worker } from './worker';
 
 type WorkerRpc = BirpcReturn<Worker, TestRunReporter>;
@@ -105,6 +109,7 @@ const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
   });
 
 export class RstestApi {
+  public unsupportedCore = false;
   private workers = new Set<WorkerRpc>();
   private disposed = false;
   private disposePromise?: Promise<void>;
@@ -210,6 +215,7 @@ export class RstestApi {
   // reported itself — silently for a missing core, with a notification
   // otherwise — so callers must fail quietly rather than report again.
   private resolveRstestPaths(): RstestPaths | undefined {
+    let coreVersion: string | undefined;
     try {
       const configured = this.resolveConfiguredPackageJson();
       const packageJson = configured ?? CORE_PACKAGE_JSON;
@@ -239,7 +245,10 @@ export class RstestApi {
       const extension = vscode.extensions.getExtension('rstack.rstest');
       const extensionVersion = extension?.packageJSON?.version as
         string | undefined;
-      const coreVersion = corePackageJson.version;
+      coreVersion = corePackageJson.version;
+      if (!isSupportedCoreVersion(coreVersion)) {
+        throw new Error(formatUnsupportedCoreVersionMessage(coreVersion));
+      }
 
       if (coreVersion && extensionVersion && coreVersion !== extensionVersion) {
         logger.debug('Local @rstest/core version differs from extension', {
@@ -261,7 +270,9 @@ export class RstestApi {
 
       return { apiPath, coreVersion, rstestPath: nodeExport };
     } catch (e) {
-      vscode.window.showErrorMessage(toErrorMessage(e));
+      if (!this.showUnsupportedCoreError(e, coreVersion)) {
+        vscode.window.showErrorMessage(toErrorMessage(e));
+      }
       throw e;
     }
   }
@@ -282,7 +293,8 @@ export class RstestApi {
     if (message !== formatUnsupportedCoreVersionMessage(coreVersion)) {
       return false;
     }
-    vscode.window.showErrorMessage(message);
+    this.unsupportedCore = true;
+    void showUnsupportedCoreMessage(message);
     return true;
   }
 

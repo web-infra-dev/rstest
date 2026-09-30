@@ -1,11 +1,26 @@
 import { expect, it } from '@rstest/core';
-import { formatUnsupportedCoreVersionMessage } from '../../src/versionCheck';
+import {
+  formatUnsupportedCoreVersionMessage,
+  isSupportedCoreVersion,
+} from '../../src/versionCheck';
 
-it('should explain both supported migration paths', () => {
-  const message = formatUnsupportedCoreVersionMessage('0.11.9');
-  expect(message).toContain('@rstest/core >= 0.12.0');
-  expect(message).toContain('Upgrade @rstest/core to >= 0.12.0');
-  expect(message).toContain(
-    'install an older version of the Rstest extension in VS Code',
-  );
+it.each([
+  ['0.12.0', true],
+  ['0.12.9', true],
+  ['0.11.9', false],
+  ['0.13.0', false],
+  ['1.0.0', false],
+  [undefined, false],
+  ['garbage', false],
+] as const)('checks core version %s', (version, supported) => {
+  expect(isSupportedCoreVersion(version)).toBe(supported);
 });
+
+it.each(['0.11.9', '0.13.0', undefined])(
+  'explains the final release range for %s',
+  (version) => {
+    expect(formatUnsupportedCoreVersionMessage(version)).toBe(
+      `This extension is no longer maintained and only supports @rstest/core ^0.12.0 (found ${version ?? 'unknown'}). Install the Rstack extension (rstack.rstack) instead.`,
+    );
+  },
+);
