@@ -244,9 +244,9 @@ jobs:
         run: cd e2e && pnpm test:threads
 
       - name: VS Code Extension Test
-        # The extension is frozen: run on main pushes and manual full runs,
-        # not PRs. The Release workflow runs it again before publishing.
-        if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' }}
+        # The extension is frozen: run only on full runs (main pushes,
+        # release: PRs, and manual full runs), once per OS on Node 24.
+        if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' && needs.prepare.outputs.is_full_run == 'true' }}
         run: cd packages/vscode && pnpm test:e2e
 
   # ======== codspeed ========
