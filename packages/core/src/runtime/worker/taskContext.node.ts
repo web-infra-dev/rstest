@@ -3,14 +3,24 @@ import type { CurrentTaskInfo } from '../../types';
 import type { TaskContext } from './taskContext';
 
 export const createNodeTaskContext = (): TaskContext => {
-  const storage = new AsyncLocalStorage<CurrentTaskInfo>();
-  let fallback: CurrentTaskInfo | undefined;
+  const storage = new AsyncLocalStorage<{
+    task: CurrentTaskInfo;
+    signal?: AbortSignal;
+  }>();
+  let fallback: { task: CurrentTaskInfo; signal?: AbortSignal } | undefined;
 
   return {
-    getCurrent: () => storage.getStore() ?? fallback,
-    run: (task, fn) => storage.run(task, fn),
+    getCurrent: () => (storage.getStore() ?? fallback)?.task,
+    getCurrentSignal: () => (storage.getStore() ?? fallback)?.signal,
+    run: (task, fn) => storage.run({ task }, fn),
+    setCurrentSignal: (signal) => {
+      const current = storage.getStore() ?? fallback;
+      if (current) {
+        current.signal = signal;
+      }
+    },
     setFallback: (task) => {
-      fallback = task;
+      fallback = task ? { task } : undefined;
     },
   };
 };

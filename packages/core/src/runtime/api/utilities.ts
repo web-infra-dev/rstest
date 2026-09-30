@@ -38,7 +38,10 @@ const getRealClearTimeout = () => {
 type WaitController = {
   cancelled: boolean;
   cancel: () => void;
-  schedule: (callback: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  schedule: (
+    callback: () => void,
+    ms: number,
+  ) => ReturnType<typeof setTimeout> | undefined;
   sleep: (ms: number) => Promise<void>;
 };
 
@@ -53,6 +56,9 @@ const createWaitController = (
   let wakeSleep: (() => void) | undefined;
 
   const schedule = (callback: () => void, ms: number) => {
+    if (cancelled) {
+      return undefined;
+    }
     let timerId: ReturnType<typeof setTimeout>;
     timerId = realSetTimeout(() => {
       timers.delete(timerId);
@@ -672,7 +678,7 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitFor: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const signal = fileContext().testRunner.getCurrentTest()?.context.signal;
+      const signal = fileContext().testRunner.getCurrentTestSignal();
       const controller = createWaitController(signal, (cancel) =>
         pendingWaits.delete(cancel),
       );
@@ -725,7 +731,7 @@ const buildRstestUtilities = async (): Promise<{
     },
     waitUntil: async (callback, options) => {
       const { timeout, interval } = normalizeWaitOptions(options);
-      const signal = fileContext().testRunner.getCurrentTest()?.context.signal;
+      const signal = fileContext().testRunner.getCurrentTestSignal();
       const controller = createWaitController(signal, (cancel) =>
         pendingWaits.delete(cancel),
       );

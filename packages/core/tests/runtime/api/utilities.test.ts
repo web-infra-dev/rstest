@@ -4,6 +4,7 @@ import {
   restoreScopedEntry,
 } from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
+import { createNodeTaskContext } from '../../../src/runtime/worker/taskContext.node';
 import { createUtilities } from './helpers';
 
 const sleep = (ms: number) =>
@@ -181,6 +182,86 @@ describe('rstest utilities wait APIs', () => {
 
     expect(attempts).toBe(1);
     expect(reactions).toEqual([]);
+  });
+
+  it('uses the calling concurrent test signal', async () => {
+    const taskContext = createNodeTaskContext();
+    const rs = await createUtilities(() => taskContext.getCurrentSignal());
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    let firstAttempts = 0;
+    let secondAttempts = 0;
+    const firstWait = taskContext.run(
+      {
+        taskId: 1,
+        taskName: 'first',
+        taskParentNames: [],
+        taskType: 'case',
+        testPath: '/test.ts',
+      },
+      () => {
+        taskContext.setCurrentSignal(firstController.signal);
+        return rs.waitFor(
+          () => {
+            firstAttempts += 1;
+            throw new Error('still pending');
+          },
+          { timeout: 1_000, interval: 5 },
+        );
+      },
+    );
+    const secondWait = taskContext.run(
+      {
+        taskId: 2,
+        taskName: 'second',
+        taskParentNames: [],
+        taskType: 'case',
+        testPath: '/test.ts',
+      },
+      () => {
+        taskContext.setCurrentSignal(secondController.signal);
+        return rs.waitFor(
+          () => {
+            secondAttempts += 1;
+            throw new Error('still pending');
+          },
+          { timeout: 1_000, interval: 5 },
+        );
+      },
+    );
+
+    firstController.abort(new Error('first test timed out'));
+    await sleep(20);
+
+    expect(firstAttempts).toBe(1);
+    expect(secondAttempts).toBeGreaterThan(1);
+
+    secondController.abort(new Error('second test timed out'));
+    void firstWait;
+    void secondWait;
+  });
+
+  it('does not schedule a timeout when the current test signal is already aborted', async () => {
+    setRealTimers();
+    const controller = new AbortController();
+    controller.abort(new Error('test timed out'));
+    const rs = await createUtilities(controller.signal);
+    const realTimers = rs.getRealTimers();
+    const setTimeout = realTimers.setTimeout!;
+    const scheduled: ReturnType<typeof setTimeout>[] = [];
+    realTimers.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+      const timer = setTimeout(...args);
+      scheduled.push(timer);
+      return timer;
+    }) as typeof setTimeout;
+
+    try {
+      void rs.waitFor(() => new Promise(() => {}), { timeout: 5_000 });
+      expect(scheduled).toHaveLength(0);
+    } finally {
+      realTimers.setTimeout = setTimeout;
+      disposeRstestUtilities();
+    }
   });
 
   it('wait APIs still work when fake timers are enabled', async () => {

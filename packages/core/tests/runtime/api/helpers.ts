@@ -25,12 +25,18 @@ export function createWorkerState(): WorkerState {
  * file context at call time; publish a fresh one per construction, as
  * `createRunner` does in production.
  */
-export const createUtilities = async (signal?: AbortSignal) => {
+export const createUtilities = async (
+  signal?: AbortSignal | (() => AbortSignal | undefined),
+) => {
   setFileContext({
     workerState: createWorkerState(),
     testRunner: {
       getCurrentTest: () =>
-        signal ? ({ context: { signal } } as TestCase) : undefined,
+        signal instanceof AbortSignal
+          ? ({ context: { signal } } as TestCase)
+          : undefined,
+      getCurrentTestSignal: () =>
+        typeof signal === 'function' ? signal() : signal,
     },
   } as FileContext);
   return createRstestUtilities();

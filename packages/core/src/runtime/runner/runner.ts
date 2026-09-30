@@ -947,6 +947,10 @@ export class TestRunner {
     return this._test;
   }
 
+  getCurrentTestSignal(): AbortSignal | undefined {
+    return this.taskContext.getCurrentSignal();
+  }
+
   getCurrentTimeoutContext(): TestCase | TestSuite | undefined {
     const taskId = this.taskContext.getCurrent()?.taskId;
     return taskId ? this.activeTimeoutContexts.get(taskId)?.task : undefined;
@@ -1110,6 +1114,7 @@ export class TestRunner {
     });
 
     const context = this.createTestContext(test, retryCount);
+    this.taskContext.setCurrentSignal(context.signal);
 
     // create test context
     Object.defineProperty(test, 'context', {
