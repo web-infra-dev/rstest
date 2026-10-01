@@ -181,9 +181,9 @@ const formatTemplate = (template: string, values: any[]): string => {
       case '%o':
       case '%c':
         return String(value);
-      case '%d':
       case '%i':
         return Number.parseInt(String(value), 10).toString();
+      case '%d':
       case '%f':
         return Number(value).toString();
       case '%j':
