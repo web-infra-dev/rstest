@@ -57,11 +57,11 @@ Start with the default `forks` pool. It introduces the fewest execution restrict
 
 If performance does not meet your expectations, first identify where the time is spent. The `rstest-debugging` skill can help; see [Profiling](/guide/debug/profiling) for installation and analysis guidance. If worker startup or module loading is the bottleneck, consider these options:
 
-| Scenario                                                                                    | Pool to try | Check before switching                                                               |
-| ------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
-| Short test files spend a large share of their time starting workers                         | `threads`   | Tests and dependencies support worker-thread API and native-addon restrictions       |
-| Many files repeatedly start workers and load and compile dependencies                       | `vmThreads` | Tests support worker-thread and cross-realm restrictions                             |
-| Worker reuse is desirable, but you also need process APIs or easier memory-pressure control | `vmForks`   | Tests tolerate process state persisting within a worker and cross-realm restrictions |
+| Scenario                                                              | Pool to try | Check before switching                                                               |
+| --------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
+| Short test files spend a large share of their time starting workers   | `threads`   | Tests and dependencies support worker-thread API and native-addon restrictions       |
+| Many files repeatedly start workers and load and compile dependencies | `vmThreads` | Tests support worker-thread and cross-realm restrictions                             |
+| Worker reuse is desirable, but you also need process APIs             | `vmForks`   | Tests tolerate process state persisting within a worker and cross-realm restrictions |
 
 VM pools reuse workers and compilation resources, which can benefit suites with many files or large setup dependencies. Setup files, test environment creation, and module evaluation still run for every file, however. Switching to a VM pool will not eliminate database initialization or network requests performed in setup. Use your project's runtime and memory measurements to make the final choice.
 
@@ -246,8 +246,6 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 `memoryLimit` triggers recycling only between files. It is not a hard process RSS limit and cannot guarantee that a run avoids OOM.
 
 It also bounds each VM worker's shared cache of immutable assets, external source, resolution results, and compilation data to the smaller of 64 MiB and one quarter of `memoryLimit`. Lowering the threshold can shrink this cache and increase loading and compilation work.
-
-Separately, `vmForks` can use each child process's RSS to defer worker creation under memory pressure. This makes memory pressure easier to control than with the shared process RSS of `vmThreads`. This scheduling mechanism operates independently of `memoryLimit`; child processes still have additional overhead, so actual memory usage is not necessarily lower.
 
 ## Pass Node.js flags to workers
 

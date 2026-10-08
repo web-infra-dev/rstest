@@ -4,7 +4,6 @@ import type {
   RunWorkerOptions,
 } from '../types';
 import type { RstestPoolType } from '../types/config';
-import type { MemoryGate } from './memoryGate';
 import type { TestEnvironmentModuleFallback } from './protocol';
 
 export type PoolWorkerKind = RstestPoolType;
@@ -16,6 +15,10 @@ export type PoolTask = {
   rpcMethods: RuntimeRPC;
   /** Host-only callback evaluated after slot acquisition, just before sending. */
   getKnownCoverageStructures?: () => KnownCoverageStructure[] | undefined;
+  onRetry?: (attempt: number, ceiling: number) => void;
+  loadAssets?: () => Promise<
+    NonNullable<RunWorkerOptions['options']['assets']>
+  >;
 };
 
 export type PoolOptions = {
@@ -34,12 +37,6 @@ export type PoolOptions = {
    * stderr so the simulated noise doesn't leak into the host log.
    */
   forwardStdio?: boolean;
-  /**
-   * Memory-aware spawn gate. Omit or pass `undefined` to disable (used by
-   * unit tests that need deterministic spawn timing). `createPool` injects
-   * a fresh `MemoryGate` by default.
-   */
-  memoryGate?: MemoryGate;
   /** Receives each distinct environment prebundle fallback once. */
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };

@@ -17,8 +17,6 @@ export const ENV = {
   OUTPUT_MODULE: 'RSTEST_OUTPUT_MODULE',
   /** Per-worker id exposed so user code can partition finite resources. */
   WORKER_ID: 'RSTEST_WORKER_ID',
-  /** Emergency kill switch for the memory-aware pool gate (`'0'` disables). */
-  MEMORY_AWARE: 'RSTEST_MEMORY_AWARE',
   /** Set to `'1'` to force-disable agent (CI assistant) detection. */
   NO_AGENT: 'RSTEST_NO_AGENT',
 } as const;

@@ -69,8 +69,11 @@ type PoolRunnerOptions = {
   environmentKey: string;
   memoryLimit?: number;
   memoryMetric?: 'rss' | 'heapUsed';
+  onOomKill?: () => void;
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
+
+export class WorkerOomKillError extends Error {}
 
 /**
  * Owns one worker process: state machine, birpc transport, task attribution.
@@ -84,11 +87,12 @@ type PoolRunnerOptions = {
  */
 export class PoolRunner {
   readonly workerId: number;
-  /** Environment identity this worker holds for life — see `Pool.acquireRunner`. */
+  /** Environment identity this worker holds for life — see `Pool.wakeWaiters`. */
   readonly environmentKey: string;
   readonly worker: PoolWorker;
   private state: RunnerState = 'IDLE';
   private operationChain: Promise<unknown> = Promise.resolve();
+  private startPromise: Promise<void> | undefined;
   private currentTask: PendingTask | undefined;
   private currentRpc: BirpcReturn<RuntimeRPC, ServerRPC> | undefined;
   private currentRpcDispatch:
@@ -102,6 +106,7 @@ export class PoolRunner {
   private fixtureCleanupTimer: NodeJS.Timeout | undefined;
   private workerCleanupCompleted = false;
   private lastFatalError: Error | undefined;
+  private firstFailure: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
    * runner is no longer safe to host another task even if `state` still
@@ -110,6 +115,8 @@ export class PoolRunner {
    * never recycles a poisoned runner. See review for rstest#1142.
    */
   private crashed = false;
+  private stopRequested = false;
+  private readonly onOomKill?: () => void;
   private readonly onTestEnvironmentFallback?: (
     fallback: TestEnvironmentModuleFallback,
   ) => void;
@@ -122,6 +129,7 @@ export class PoolRunner {
     this.environmentKey = options.environmentKey;
     this.memoryLimit = options.memoryLimit;
     this.memoryMetric = options.memoryMetric ?? 'heapUsed';
+    this.onOomKill = options.onOomKill;
     this.onTestEnvironmentFallback = options.onTestEnvironmentFallback;
     this.worker = worker;
 
@@ -143,8 +151,7 @@ export class PoolRunner {
   }
 
   start(): Promise<void> {
-    return this.runOperation(async () => {
-      if (this.state === 'STARTED') return;
+    return (this.startPromise ??= this.runOperation(async () => {
       if (this.state !== 'IDLE') {
         throw new Error(
           `PoolRunner.start: cannot start runner in state ${this.state}`,
@@ -158,9 +165,10 @@ export class PoolRunner {
       // error → immediate child death). If `startDeferred` is unset at
       // that point, `handleExit` silently drops the exit and the later
       // `await` would hang for the full 90s timeout.
-      this.startDeferred = createDeferred();
+      const startDeferred = createDeferred();
+      this.startDeferred = startDeferred;
       // Swallow pre-await rejections to avoid unhandled-rejection noise.
-      this.startDeferred.promise.catch(() => undefined);
+      startDeferred.promise.catch(() => undefined);
 
       this.startTimer = setTimeout(
         () =>
@@ -176,7 +184,7 @@ export class PoolRunner {
       try {
         await this.worker.start();
         this.worker.send({ type: 'start', workerId: this.workerId });
-        await this.startDeferred.promise;
+        await startDeferred.promise;
       } catch (err) {
         this.clearStartTimer();
         this.rejectStart(toError(err));
@@ -192,7 +200,7 @@ export class PoolRunner {
       }
 
       this.state = 'STARTED';
-    });
+    }));
   }
 
   runTest(task: PoolTask): Promise<TestFileResult> {
@@ -210,6 +218,7 @@ export class PoolRunner {
    * `process.exit()` was the rstest#1275 hang.
    */
   stop(options?: { force?: boolean }): Promise<void> {
+    this.stopRequested = true;
     return this.runOperation(async () => {
       switch (this.state) {
         case 'STOPPED':
@@ -359,6 +368,10 @@ export class PoolRunner {
     kind: TaskKind,
     task: PoolTask,
   ): Promise<TestFileResult | CollectTaskResult> {
+    // Asset loading can outlive the ready worker, before a task owns its errors.
+    if (this.firstFailure) {
+      return Promise.reject(this.firstFailure);
+    }
     if (this.state !== 'STARTED') {
       return Promise.reject(
         new Error(
@@ -382,22 +395,23 @@ export class PoolRunner {
     this.worker.resetCapturedStderr();
 
     const taskId = ++nextTaskSeq;
-    return new Promise<TestFileResult | CollectTaskResult>(
-      (resolve, reject) => {
-        this.currentTask = { kind, taskId, resolve, reject };
-
-        try {
-          // Tasks are built eagerly; sample coverage only when a worker is ready.
-          task.options.knownCoverageStructures =
-            task.getKnownCoverageStructures?.();
-          this.worker.send({ type: kind, taskId, options: task.options });
-        } catch (err) {
-          this.currentTask = undefined;
-          this.disposeRpc();
-          reject(toError(err));
-        }
-      },
-    ).finally(() => {
+    const { promise, resolve, reject } = createDeferred<
+      TestFileResult | CollectTaskResult
+    >();
+    this.currentTask = { kind, taskId, resolve, reject };
+    // Keep task bytes out of the executor's shared closure context: RPC
+    // cleanup lives until the worker settles, long after this synchronous send.
+    try {
+      // Tasks are built eagerly; sample coverage only when a worker is ready.
+      task.options.knownCoverageStructures =
+        task.getKnownCoverageStructures?.();
+      this.worker.send({ type: kind, taskId, options: task.options });
+    } catch (err) {
+      reject(toError(err));
+      this.currentTask = undefined;
+      this.disposeRpc();
+    }
+    return promise.finally(() => {
       this.disposeRpc();
     });
   }
@@ -475,6 +489,7 @@ export class PoolRunner {
         // flag, `isUsable()` would still report true and the scheduler
         // would recycle a runner with corrupted internal state.
         this.crashed = true;
+        this.firstFailure ??= error;
         this.rejectCurrentTaskWithStderr(error);
         // If fatal_error arrives without an active task, keep it so a
         // subsequent unexpected exit can surface it.
@@ -516,15 +531,25 @@ export class PoolRunner {
     );
 
     const wasStopping = this.state === 'STOPPING';
+    const oomKill =
+      process.platform !== 'win32' &&
+      signal === 'SIGKILL' &&
+      !this.stopRequested &&
+      !this.crashed &&
+      this.onOomKill !== undefined;
+    if (oomKill) this.onOomKill();
+    const exitError = oomKill
+      ? new WorkerOomKillError(
+          'Worker killed by SIGKILL (likely out of memory)',
+        )
+      : new Error(
+          `Worker exited before start ack (code=${code}, signal=${signal})`,
+        );
     this.state = 'STOPPED';
 
     this.disposeRpc();
 
-    this.rejectStart(
-      new Error(
-        `Worker exited before start ack (code=${code}, signal=${signal})`,
-      ),
-    );
+    this.rejectStart(exitError);
 
     if (this.stopDeferred) {
       this.stopDeferred.resolve();
@@ -535,14 +560,17 @@ export class PoolRunner {
     // Watch-mode restarts and signal-cleanup can stop a runner with a task
     // still mid-flight; dropping the rejection here would hang the
     // surrounding `Promise.all`.
-    if (this.currentTask) {
+    if (this.currentTask || !wasStopping) {
       const error =
         this.lastFatalError ??
-        new Error(
-          wasStopping
-            ? `Worker stopped before task completed (code=${code}, signal=${signal})`
-            : `Worker exited unexpectedly (code=${code}, signal=${signal})`,
-        );
+        (oomKill
+          ? exitError
+          : new Error(
+              wasStopping
+                ? `Worker stopped before task completed (code=${code}, signal=${signal})`
+                : `Worker exited unexpectedly (code=${code}, signal=${signal})`,
+            ));
+      this.firstFailure ??= error;
       this.rejectCurrentTaskWithStderr(error);
     }
   }
@@ -556,6 +584,7 @@ export class PoolRunner {
     // responds — hanging the whole run. Mark as crashed so `isUsable()`
     // returns false and `Pool.releaseRunner` disposes instead of recycling.
     this.crashed = true;
+    this.firstFailure ??= err;
     this.clearFixtureCleanupTimer();
     this.rejectCleanup(err);
     this.rejectStart(err);

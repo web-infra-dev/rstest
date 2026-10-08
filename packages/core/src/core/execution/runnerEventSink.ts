@@ -13,6 +13,7 @@ import type {
 } from '../../types';
 import { color, logger, toError } from '../../utils';
 import { resolveSnapshotPathDefault } from '../../utils/snapshotPath';
+import { BlobReporter } from '../../reporter/blob';
 
 /**
  * The single event pump for runner lifecycle events, shared by the node pool
@@ -31,6 +32,7 @@ import { resolveSnapshotPathDefault } from '../../utils/snapshotPath';
  * exclusions from the classification instead of a hand-kept name list.
  */
 interface HostDrivenEvents {
+  discardAttempt(testPath: string): void;
   /**
    * AWAITED by both transports, and ingests `result.snapshotResult`. The pool
    * calls it after `pool.runTest` returns, the browser host after a client
@@ -68,9 +70,10 @@ export function createRunnerEventSink(
   projectConfig: InternalProjectContext['normalizedConfig'],
 ): RunnerEventSink {
   const { reporters } = context;
+  const attempts = new Map<string, number>();
 
   const fanoutConsoleLog = (log: UserConsoleLog): Promise<void> =>
-    fanout((reporter) => reporter.onUserConsoleLog?.(log));
+    fanout(log.testPath, (reporter) => reporter.onUserConsoleLog?.(log));
 
   // The worker forwards console output fire-and-forget: a delivery failure is
   // dropped in the worker, and an error thrown here cannot travel back to fail
@@ -91,39 +94,65 @@ export function createRunnerEventSink(
   // while the file-start handler is still opening the run — gating every
   // fanout, not just the first, is what keeps `onTestRunStart` ahead of all.
   const fanout = async (
+    testPath: string,
     notify: (reporter: Reporter) => MaybePromise<void>,
   ): Promise<void> => {
+    const currentAttempt = attempts.get(testPath);
     await context.openReporterRun?.();
+    if (currentAttempt !== attempts.get(testPath)) return;
     await Promise.all(reporters.map(notify));
   };
 
   return {
+    discardAttempt(testPath) {
+      attempts.set(testPath, (attempts.get(testPath) ?? 0) + 1);
+      context.stateManager.onTestFileStart(testPath);
+      for (const reporter of reporters) {
+        if (reporter instanceof BlobReporter) {
+          reporter.discardAttempt(projectConfig.name, testPath);
+        }
+      }
+    },
     onTestCaseStart(test) {
       context.stateManager.onTestCaseStart(test);
       // Fire-and-forget: reporter case-start hooks are not awaited (parity with
       // the node pool), so they never gate the runner's next step.
-      void fanout((reporter) => reporter.onTestCaseStart?.(test));
+      void fanout(test.testPath, (reporter) =>
+        reporter.onTestCaseStart?.(test),
+      );
     },
     async onTestCaseResult(result) {
       context.stateManager.onTestCaseResult(result);
-      await fanout((reporter) => reporter.onTestCaseResult?.(result));
+      await fanout(result.testPath, (reporter) =>
+        reporter.onTestCaseResult?.(result),
+      );
     },
     async onTestFileStart(test) {
       context.stateManager.onTestFileStart(test.testPath);
-      await fanout((reporter) => reporter.onTestFileStart?.(test));
+      await fanout(test.testPath, (reporter) =>
+        reporter.onTestFileStart?.(test),
+      );
     },
     async onTestFileReady(test) {
-      await fanout((reporter) => reporter.onTestFileReady?.(test));
+      await fanout(test.testPath, (reporter) =>
+        reporter.onTestFileReady?.(test),
+      );
     },
     async onTestSuiteStart(test) {
-      await fanout((reporter) => reporter.onTestSuiteStart?.(test));
+      await fanout(test.testPath, (reporter) =>
+        reporter.onTestSuiteStart?.(test),
+      );
     },
     async onTestSuiteResult(result) {
-      await fanout((reporter) => reporter.onTestSuiteResult?.(result));
+      await fanout(result.testPath, (reporter) =>
+        reporter.onTestSuiteResult?.(result),
+      );
     },
     async onTestFileResult(result) {
       context.stateManager.onTestFileResult(result);
-      await fanout((reporter) => reporter.onTestFileResult?.(result));
+      await fanout(result.testPath, (reporter) =>
+        reporter.onTestFileResult?.(result),
+      );
       if (result.snapshotResult) {
         context.snapshotManager.add(result.snapshotResult);
       }
