@@ -247,8 +247,8 @@ importers:
         specifier: ^1.1.8
         version: 1.1.8
       knip:
-        specifier: ^6.38.0
-        version: 6.38.0
+        specifier: ^6.40.0
+        version: 6.40.0
       lefthook:
         specifier: ^2.1.14
         version: 2.1.14
@@ -5145,67 +5145,79 @@ packages:
     resolution: {integrity: sha512-VnJuSTvRxgzdHyLY/g3v9JHmT2HFtyb8tiuaxsIPfu7aYv1KZQ2xOZHMpDYebRpmBsLT3V1mH13oZp8cT//peA==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-arm64@0.13.0':
     resolution: {integrity: sha512-EBz8YU7OpgZk7V/P9ZAVuoXrAS3HfsVVg4ImQHkh8QFAw/mMDoiasR4dEUWENxRod9qb/TFxZT/ld/CJLimheQ==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-x64@0.13.0':
     resolution: {integrity: sha512-ppDg5nu8FrRcDmr7jNxaUn+lpUQuu7TVm8vrh79k/UBLwGwYUWAh+ZOPRa13WhB4dRsjdHnESX0Q0A6g4wlnkg==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-freebsd-x64@0.13.0':
     resolution: {integrity: sha512-rWqfIT380w/O2lSi8SafMvmmi3LZ8Q/0zCz74jRBYeUyuL82rKwZayydbtEmPIE5oOMGFxf3CZG5RKKjhMpaMg==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-gnu@0.13.0':
     resolution: {integrity: sha512-+b7fvC0h/sHyhLyBjslhodQjQSyUNxLd+8IHZ8nKtZiT5hWxLulZHEgd/O4a0l4dWkV+uxBJTpiGi00aFJKgGQ==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-musl@0.13.0':
     resolution: {integrity: sha512-aIcGDa5MzhJtCd1Ig1bYPu6VTIvHfhd6tewOHopdSLYlD2pnR7KNs9x9wLC0dX7KXvI0IJo3MTGUWY7FuAc52g==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-gnu@0.13.0':
     resolution: {integrity: sha512-DYHBiYGaVRSxPN65dRdi3FOZiVHiPTaFf3LBMAE+JmkrmY8r0Gp0Ep8YBMrvtJLujymNAL/5UwXyj6xuDJaznw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-musl@0.13.0':
     resolution: {integrity: sha512-BV9rfJU9oySbrmYU19umqWY9U5WS0DId6Y+3LDg1uJacqabGHVrMqFwzBk8b2wnUSq0dweyQ0ZVqBYC/9W7gNA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-gnu@0.13.0':
     resolution: {integrity: sha512-EM70rjGco5OOEHD2eKPDFziZ1j8wZG2zg8G1T1Z0H2zOSXetu/x9Bou+lNje0kC2jeDx50aY2ntgUTaCsqAAAQ==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-musl@0.13.0':
     resolution: {integrity: sha512-evmNWY8kQvrhh6xzx4UOCBeT4s7vX5rpJAk03O0arBcEalFNnRERgf1y5tCfg+EMligDGLMjfNHXvdX8ah/sxA==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-arm64@0.13.0':
     resolution: {integrity: sha512-KsibOW0XGvD1rfMVCv9F//Z1c60PwM2CXdLk9ip5YckclkrvXzuCp9aDr1QVYWT7NN/6Sm70PYkVaMfUFkPitw==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-x64@0.13.0':
     resolution: {integrity: sha512-NO7MXk0xNLIAyceV0keu/gXLMpPpgLOZga6B2orkXs1CbUi7YY/FJjI9FYnom+ygWaWHtb0OBofJ9M3zUtTu+Q==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-toolchain/types@0.13.0':
     resolution: {integrity: sha512-7glmpf4vQ2kiSBvSJEz6sX6uPfCrR76Ici8eZHnT+lbEje+32dy74S6/1B0z0p2/W31a+CzhK2zdkjWxVNNR9g==}
@@ -7074,8 +7086,8 @@ packages:
     resolution: {integrity: sha512-e0SVOV5jFo0mx8r7bS29maVWp17qGqLBZ5ricNSajON6//kmb7qqqNnml4twNE8Dtj97UQD+gNFOaipS/q1zzQ==}
     hasBin: true
 
-  knip@6.38.0:
-    resolution: {integrity: sha512-umytiMCaZf02MV9SOO1FEDgbDf6h20VZk3ruJE0kh52kkGjYZFRUAXHJWYoLhvhoHGINO/7GXVJmQ2vxTBvl6A==}
+  knip@6.40.0:
+    resolution: {integrity: sha512-5Lp/ANJu3AkW5f+J+2QG14z7xKZGi/ybb5MU1EWjeGdt6MpuIaLpLFiyBi0ZKryTiuTHiJqo/WKJRaWYimvavw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -15528,7 +15540,7 @@ snapshots:
       get-them-args: 1.3.2
       shell-exec: 1.0.2
 
-  knip@6.38.0:
+  knip@6.40.0:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.7)
       formatly: 0.7.0
