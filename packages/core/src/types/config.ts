@@ -93,6 +93,7 @@ export type RstestPoolOptions = {
    * Appended after the host's inherited flags: single-value flags such as
    * `--max-old-space-size` (with `forks` or `vmForks`) override the host's, while
    * repeatable flags such as `--conditions` or `--require` accumulate with them.
+   * Thread pools inherit only the host's module-loading and diagnostic flags.
    */
   execArgv?: string[];
 };

@@ -1,8 +1,106 @@
 import os from 'node:os';
+import type { PoolWorkerKind } from '../pool/types';
 import type { RstestCommand, RstestPoolType } from '../types';
 
 export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
   pool === 'vmForks' || pool === 'vmThreads';
+
+/** Flags that take their value as the next token when written without `=`. */
+const SEPARATE_VALUE_FLAGS = new Set([
+  '--title',
+  '--inspect-port',
+  '--debug-port',
+  '--import',
+  '--require',
+  '-r',
+  '--loader',
+  '--experimental-loader',
+  '--conditions',
+  '-C',
+  '--env-file',
+  '--disable-warning',
+  '--unhandled-rejections',
+  '--diagnostic-dir',
+  '--cpu-prof-dir',
+  '--cpu-prof-name',
+  '--cpu-prof-interval',
+  '--heap-prof-dir',
+  '--heap-prof-name',
+  '--heap-prof-interval',
+]);
+
+// Each entry is accepted by `new Worker({ execArgv })` on Node 22 and 24.
+const THREAD_FLAGS = new Set([
+  '--import',
+  '--require',
+  '-r',
+  '--loader',
+  '--experimental-loader',
+  '--conditions',
+  '-C',
+  '--preserve-symlinks',
+  '--preserve-symlinks-main',
+  '--env-file',
+  '--experimental-strip-types',
+  '--no-experimental-strip-types',
+  '--experimental-transform-types',
+  '--experimental-detect-module',
+  '--no-experimental-detect-module',
+  '--experimental-require-module',
+  '--no-experimental-require-module',
+  '--experimental-wasm-modules',
+  '--experimental-vm-modules',
+  '--experimental-import-meta-resolve',
+  '--no-warnings',
+  '--trace-warnings',
+  '--disable-warning',
+  '--enable-source-maps',
+  '--unhandled-rejections',
+  '--trace-uncaught',
+  '--trace-deprecation',
+  '--no-deprecation',
+  '--throw-deprecation',
+  '--pending-deprecation',
+  '--diagnostic-dir',
+  '--cpu-prof',
+  '--cpu-prof-dir',
+  '--cpu-prof-name',
+  '--cpu-prof-interval',
+  '--heap-prof',
+  '--heap-prof-dir',
+  '--heap-prof-name',
+  '--heap-prof-interval',
+]);
+
+/**
+ * Host Node flags safe to pass to a pool worker. Child processes inherit all
+ * but per-process profiling and inspector flags. Worker threads already share
+ * the host's V8 flags and `new Worker` rejects them in `execArgv`, so only
+ * module-loading, warning, and diagnostic flags are kept.
+ */
+export const getHostExecArgv = (
+  workerKind: PoolWorkerKind,
+  execArgv: readonly string[],
+): string[] => {
+  const threads = workerKind === 'threads' || workerKind === 'vmThreads';
+  const result: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const arg = execArgv[i]!;
+    // `new Worker` rejects short flags written as `-C=dev`.
+    const name = arg.startsWith('--') ? arg.split('=', 1)[0]! : arg;
+    const tokens =
+      arg === name && SEPARATE_VALUE_FLAGS.has(name) && i + 1 < execArgv.length
+        ? [arg, execArgv[++i]!]
+        : [arg];
+    const keep = threads
+      ? THREAD_FLAGS.has(name)
+      : name !== '--prof' &&
+        name !== '--title' &&
+        !/^--(inspect|debug)/.test(name);
+    if (keep) result.push(...tokens);
+  }
+  return result;
+};
 
 export const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
