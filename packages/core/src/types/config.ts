@@ -88,7 +88,12 @@ export type RstestPoolOptions = {
    * @default undefined (`system memory / maxWorkers` for VM pools)
    */
   memoryLimit?: number | string;
-  /** Pass additional arguments to node process in the child processes. */
+  /**
+   * Pass additional arguments to node process in the child processes.
+   * Appended after the host's inherited flags: single-value flags such as
+   * `--max-old-space-size` (with `forks` or `vmForks`) override the host's, while
+   * repeatable flags such as `--conditions` or `--require` accumulate with them.
+   */
   execArgv?: string[];
 };
 

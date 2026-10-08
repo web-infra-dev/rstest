@@ -484,9 +484,11 @@ export const createPool = async ({
     memoryLimit,
     maxWorkers,
     minWorkers,
+    // Node keeps the last value of a single-value flag, so user flags follow
+    // host flags; rstest's required flags stay last so users cannot disable them.
     execArgv: [
-      ...(poolOptions?.execArgv ?? []),
       ...execArgv,
+      ...(poolOptions?.execArgv ?? []),
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
     onTestEnvironmentFallback: ({ packageName, reason }) => {
