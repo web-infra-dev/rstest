@@ -5,30 +5,6 @@ import type { RstestCommand, RstestPoolType } from '../types';
 export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
   pool === 'vmForks' || pool === 'vmThreads';
 
-/** Flags that take their value as the next token when written without `=`. */
-const SEPARATE_VALUE_FLAGS = new Set([
-  '--title',
-  '--inspect-port',
-  '--debug-port',
-  '--import',
-  '--require',
-  '-r',
-  '--loader',
-  '--experimental-loader',
-  '--conditions',
-  '-C',
-  '--env-file',
-  '--disable-warning',
-  '--unhandled-rejections',
-  '--diagnostic-dir',
-  '--cpu-prof-dir',
-  '--cpu-prof-name',
-  '--cpu-prof-interval',
-  '--heap-prof-dir',
-  '--heap-prof-name',
-  '--heap-prof-interval',
-]);
-
 // Each entry is accepted by `new Worker({ execArgv })` on Node 22 and 24.
 const THREAD_FLAGS = new Set([
   '--import',
@@ -88,8 +64,11 @@ export const getHostExecArgv = (
     const arg = execArgv[i]!;
     // `new Worker` rejects short flags written as `-C=dev`.
     const name = arg.startsWith('--') ? arg.split('=', 1)[0]! : arg;
+    // Node has already parsed execArgv, so a token that is not an option is
+    // the value of the option before it.
+    const next = execArgv[i + 1];
     const tokens =
-      arg === name && SEPARATE_VALUE_FLAGS.has(name) && i + 1 < execArgv.length
+      arg === name && next !== undefined && !next.startsWith('-')
         ? [arg, execArgv[++i]!]
         : [arg];
     const keep = threads

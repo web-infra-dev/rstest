@@ -102,6 +102,7 @@ describe('getHostExecArgv', () => {
     [['--inspect-brk'], false, false],
     [['--inspect-port', '9229'], false, false],
     [['--debug-port=9229'], false, false],
+    [['--inspect-publish-uid', 'stderr'], false, false],
     [['--prof'], false, false],
     [['--title', 'foo'], false, false],
   ];
