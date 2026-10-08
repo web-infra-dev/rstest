@@ -5,64 +5,17 @@ import type { RstestCommand, RstestPoolType } from '../types';
 export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
   pool === 'vmForks' || pool === 'vmThreads';
 
-// Each entry is accepted by `new Worker({ execArgv })` on Node 22 and 24.
-const THREAD_FLAGS = new Set([
-  '--import',
-  '--require',
-  '-r',
-  '--loader',
-  '--experimental-loader',
-  '--conditions',
-  '-C',
-  '--preserve-symlinks',
-  '--preserve-symlinks-main',
-  '--env-file',
-  '--experimental-strip-types',
-  '--no-experimental-strip-types',
-  '--experimental-transform-types',
-  '--experimental-detect-module',
-  '--no-experimental-detect-module',
-  '--experimental-require-module',
-  '--no-experimental-require-module',
-  '--experimental-wasm-modules',
-  '--experimental-vm-modules',
-  '--experimental-import-meta-resolve',
-  '--no-warnings',
-  '--trace-warnings',
-  '--disable-warning',
-  '--enable-source-maps',
-  '--unhandled-rejections',
-  '--trace-uncaught',
-  '--trace-deprecation',
-  '--no-deprecation',
-  '--throw-deprecation',
-  '--pending-deprecation',
-  '--diagnostic-dir',
-  '--cpu-prof',
-  '--cpu-prof-dir',
-  '--cpu-prof-name',
-  '--cpu-prof-interval',
-  '--heap-prof',
-  '--heap-prof-dir',
-  '--heap-prof-name',
-  '--heap-prof-interval',
-  // The permission model only follows a Worker through its execArgv.
-  '--permission',
-  // Node 22 only; Node 24 rejects it on the host as well.
-  '--experimental-permission',
-  '--allow-fs-read',
-  '--allow-fs-write',
-  '--allow-worker',
-  '--allow-child-process',
-  '--allow-addons',
-  '--allow-wasi',
-]);
+// Profiling flags (as in Vitest) and the permission model, which a Worker only
+// keeps when its explicit execArgv repeats it.
+const THREAD_FLAG =
+  /^--((cpu|heap)-prof(-dir|-name|-interval)?|diagnostic-dir|(experimental-)?permission|allow-(fs-read|fs-write|worker|child-process|addons|wasi))$/;
 
 /**
  * Host Node flags safe to pass to a pool worker. Child processes inherit all
- * but per-process profiling and inspector flags. Worker threads already share
- * the host's V8 flags and `new Worker` rejects them in `execArgv`, so only
- * module-loading, warning, diagnostic, and permission flags are kept.
+ * but per-process profiling and inspector flags. `new Worker` validates an
+ * explicit execArgv and rejects V8 and process-level flags, so threads keep
+ * only profiling and permission flags; other flags reach them through
+ * `pool.execArgv` or `NODE_OPTIONS`, which Workers read from their env.
  */
 export const getHostExecArgv = (
   workerKind: PoolWorkerKind,
@@ -72,8 +25,7 @@ export const getHostExecArgv = (
   const result: string[] = [];
   for (let i = 0; i < execArgv.length; i++) {
     const arg = execArgv[i]!;
-    // `new Worker` rejects short flags written as `-C=dev`.
-    const name = arg.startsWith('--') ? arg.split('=', 1)[0]! : arg;
+    const name = arg.split('=', 1)[0]!;
     // Node has already parsed execArgv, so a token that is not an option is
     // the value of the option before it.
     const next = execArgv[i + 1];
@@ -82,7 +34,7 @@ export const getHostExecArgv = (
         ? [arg, execArgv[++i]!]
         : [arg];
     const keep = threads
-      ? THREAD_FLAGS.has(name)
+      ? THREAD_FLAG.test(name)
       : name !== '--prof' &&
         name !== '--title' &&
         !/^--(inspect|debug)/.test(name);
