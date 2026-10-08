@@ -248,7 +248,7 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 
 ## 向 worker 传递 Node.js flags
 
-使用 `pool.execArgv` 向 worker 传递 Node.js 启动参数。这些参数会追加在主进程继承的参数之后。对于单值参数，例如 `forks` 或 `vmForks` 下的 `--max-old-space-size`，以这里传入的值为准；`--conditions`、`--require` 等可重复参数则会与主进程的参数叠加生效。例如，下面的配置启用 `development` condition：
+使用 `pool.execArgv` 向 worker 传递 Node.js 启动参数。这些参数会追加在 worker 从主进程继承的参数之后：对于单值参数，例如 `forks` 或 `vmForks` 下的 `--max-old-space-size`，以配置的值为准；`--conditions`、`--require` 等可重复参数则会叠加生效。例如，下面的配置启用 `development` condition：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -259,6 +259,15 @@ export default defineConfig({
   },
 });
 ```
+
+不同 pool 从主进程继承的 flags 如下：
+
+| Pool                                | 继承                                                                                                             | 不继承                                                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 进程 pool（`forks`、`vmForks`）     | 其他全部参数                                                                                                     | inspector 参数（`--inspect*`、`--debug-port`）、`--prof`、`--title` |
+| 线程 pool（`threads`、`vmThreads`） | profiling 参数（`--cpu-prof*`、`--heap-prof*`、`--diagnostic-dir`）和权限模型参数（`--permission`、`--allow-*`） | 其他全部参数                                                        |
+
+其他参数请通过 `pool.execArgv` 或 `NODE_OPTIONS` 传给线程 worker。
 
 调试时可以配合 `maxWorkers: 1` 使用，让测试文件逐个运行，便于跟踪执行过程：
 

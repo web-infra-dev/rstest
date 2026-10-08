@@ -4,6 +4,48 @@ import type { RstestCommand, RstestPoolType } from '../types';
 export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
   pool === 'vmForks' || pool === 'vmThreads';
 
+const PROFILING_FLAG =
+  /^--(cpu|heap)-prof(-dir|-name|-interval)?$|^--diagnostic-dir$/;
+// Node's own table lists every `--allow-*` grant of the running version and
+// excludes V8's `--allow-*` flags.
+const isPermissionFlag = (name: string): boolean =>
+  name === '--permission' ||
+  name === '--experimental-permission' ||
+  (name.startsWith('--allow-') &&
+    process.allowedNodeEnvironmentFlags.has(name));
+
+/**
+ * Host Node flags to forward to a pool worker. Forks drop inspector, `--prof`
+ * and `--title`; threads keep only profiling and permission flags, which an
+ * explicit Worker execArgv must repeat.
+ */
+export const getHostExecArgv = (
+  workerKind: RstestPoolType,
+  execArgv: readonly string[],
+): string[] => {
+  const threads = workerKind === 'threads' || workerKind === 'vmThreads';
+  let keep = false;
+  return execArgv.filter((arg) => {
+    // Node has already parsed execArgv, so a token that is not an option is
+    // the value of the option before it.
+    if (!arg.startsWith('-')) return keep;
+    // Node accepts `_` for `-` in option names and execArgv keeps the host's
+    // spelling. V8 flags also accept a single dash (`-prof`); one-letter Node
+    // aliases such as `-r` are left alone.
+    const name = arg
+      .split('=', 1)[0]!
+      .replace(/_/g, '-')
+      .replace(/^-(?=[^-]{2})/, '--');
+    keep = threads
+      ? PROFILING_FLAG.test(name) || isPermissionFlag(name)
+      : name !== '--prof' &&
+        name !== '--title' &&
+        name !== '--debug-port' &&
+        !name.startsWith('--inspect');
+    return keep;
+  });
+};
+
 export const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
 };

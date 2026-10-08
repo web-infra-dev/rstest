@@ -16,6 +16,7 @@ import {
   resolveColorEnabled,
 } from '../../utils';
 import { prepareAssetFilesForIPC } from '../../utils/assetFiles';
+import { getHostExecArgv } from '../../utils/workers';
 import { composeWorkerEnv } from '../environment/workerEnv';
 
 /**
@@ -99,7 +100,7 @@ export class GlobalSetupWorker {
         // Keep terminal Ctrl+C out of teardown; globalSetupWorker exits on disconnect to avoid orphaning this detached worker.
         detached: true,
         execArgv: [
-          ...process.execArgv,
+          ...getHostExecArgv('forks', process.execArgv),
           '--experimental-vm-modules',
           '--experimental-import-meta-resolve',
           '--no-warnings',

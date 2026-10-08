@@ -176,6 +176,54 @@ describe('test worker behavior', () => {
     expect(cli.stdout).toMatch(/Tests\s+1 passed/);
   });
 
+  it('does not forward host V8 flags to threads workers', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'node',
+      args: [
+        '--max-old-space-size=512',
+        join(coreDist, '../bin/rstest.js'),
+        'run',
+        'node.warning.test.ts',
+        '--pool',
+        'threads',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: fixtureDir,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('does not forward the host inspector flag to fork workers', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess, cli } = await runRstestCli({
+      command: 'node',
+      args: [
+        '--inspect=127.0.0.1:0',
+        join(coreDist, '../bin/rstest.js'),
+        'run',
+        'node.warning.test.ts',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: fixtureDir,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    // Only the host opens an inspector; a forwarded flag would add one per worker.
+    expect(cli.log.match(/Debugger listening on/g)).toHaveLength(1);
+  });
+
   it('should handle unhandledRejection error correctly', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',

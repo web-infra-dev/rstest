@@ -27,6 +27,7 @@ import {
 import { toSerializedError } from '../utils/error';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import {
+  getHostExecArgv,
   getNumCpus,
   isVmPoolType,
   parseMemoryLimit,
@@ -423,23 +424,6 @@ export const createPool = async ({
   interrupt: () => void;
   close: () => Promise<void>;
 }> => {
-  // Propagate parent execArgv to workers, except flags known to cause issues
-  // in child processes (--prof writes per-worker profiling logs, --title is
-  // meaningless for workers). Safe for child_process.fork; the referenced
-  // Node.js issue (#41103) only affects worker_threads.
-  // https://github.com/nodejs/node/issues/41103
-  const blockedFlags = ['--prof', '--title'];
-  const execArgv = process.execArgv.filter((arg, i, arr) => {
-    if (blockedFlags.some((f) => arg === f || arg.startsWith(`${f}=`))) {
-      return false;
-    }
-    // skip standalone value following --title (handles `--title foo` form)
-    if (i > 0 && arr[i - 1] === '--title') {
-      return false;
-    }
-    return true;
-  });
-
   const numCpus = getNumCpus();
 
   const {
@@ -487,7 +471,7 @@ export const createPool = async ({
     // Node keeps the last value of a single-value flag, so user flags follow
     // host flags; rstest's required flags stay last so users cannot disable them.
     execArgv: [
-      ...execArgv,
+      ...getHostExecArgv(workerKind, process.execArgv),
       ...(poolOptions?.execArgv ?? []),
       ...(isDeno ? [] : getNodeExecArgv()),
     ],

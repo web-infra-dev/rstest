@@ -1,4 +1,8 @@
-import { isVmPoolType, parseMemoryLimit } from '../../src/utils/workers';
+import {
+  getHostExecArgv,
+  isVmPoolType,
+  parseMemoryLimit,
+} from '../../src/utils/workers';
 
 describe('isVmPoolType', () => {
   it('recognizes both VM pools', () => {
@@ -39,5 +43,72 @@ describe('parseMemoryLimit', () => {
     expect(() => parseMemoryLimit('invalid', totalMemory)).toThrow(
       'Invalid pool.memoryLimit: invalid',
     );
+  });
+});
+
+describe('getHostExecArgv', () => {
+  it('drops inspector, --prof and --title flags for forks', () => {
+    expect(
+      getHostExecArgv('forks', [
+        '--title',
+        'foo',
+        '--inspect-port',
+        '9229',
+        '--inspect=127.0.0.1:9229',
+        '--debug-port',
+        '9229',
+        '--prof',
+        '-prof',
+        '--expose-gc',
+        '--debug-arraybuffer-allocations',
+      ]),
+    ).toEqual(['--expose-gc', '--debug-arraybuffer-allocations']);
+  });
+
+  it('keeps only profiling and permission flags for threads', () => {
+    expect(
+      getHostExecArgv('threads', [
+        '--cpu-prof',
+        '--cpu-prof-dir',
+        'd',
+        '--allow-fs-read',
+        '/a',
+        '--permission',
+        '--max-old-space-size=512',
+        '--import',
+        'x',
+        '--allow-natives-syntax',
+        '--allow_worker',
+        '--heap_prof_dir=d',
+      ]),
+    ).toEqual([
+      '--cpu-prof',
+      '--cpu-prof-dir',
+      'd',
+      '--allow-fs-read',
+      '/a',
+      '--permission',
+      '--allow_worker',
+      '--heap_prof_dir=d',
+    ]);
+  });
+
+  it('keeps every permission grant the running Node supports for threads', () => {
+    const grants = [...process.allowedNodeEnvironmentFlags].filter((flag) =>
+      flag.startsWith('--allow-'),
+    );
+    expect(getHostExecArgv('threads', grants)).toEqual(grants);
+  });
+
+  it('keeps a separate value with its option', () => {
+    expect(
+      getHostExecArgv('forks', [
+        '--title',
+        'foo',
+        '-C',
+        'dev',
+        '--conditions=dev',
+      ]),
+    ).toEqual(['-C', 'dev', '--conditions=dev']);
   });
 });
