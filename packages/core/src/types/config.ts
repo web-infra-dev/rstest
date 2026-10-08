@@ -90,9 +90,9 @@ export type RstestPoolOptions = {
   memoryLimit?: number | string;
   /**
    * Pass additional arguments to node process in the child processes.
-   * User flags are appended after the host's inherited flags, so a flag given
-   * here overrides the same flag on the host (e.g. `--max-old-space-size` with
-   * `forks` or `vmForks`).
+   * Appended after the host's inherited flags: single-value flags such as
+   * `--max-old-space-size` (with `forks` or `vmForks`) override the host's, while
+   * repeatable flags such as `--conditions` or `--require` accumulate with them.
    */
   execArgv?: string[];
 };

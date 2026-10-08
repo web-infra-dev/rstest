@@ -484,12 +484,12 @@ export const createPool = async ({
     memoryLimit,
     maxWorkers,
     minWorkers,
-    // Node keeps the last occurrence of a repeated flag, so user flags go last
-    // to override inherited host flags such as `--max-old-space-size`.
+    // Node keeps the last value of a single-value flag, so user flags follow
+    // host flags; rstest's required flags stay last so users cannot disable them.
     execArgv: [
       ...execArgv,
-      ...(isDeno ? [] : getNodeExecArgv()),
       ...(poolOptions?.execArgv ?? []),
+      ...(isDeno ? [] : getNodeExecArgv()),
     ],
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(

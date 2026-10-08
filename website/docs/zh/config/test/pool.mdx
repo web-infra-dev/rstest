@@ -248,7 +248,7 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 
 ## 向 worker 传递 Node.js flags
 
-使用 `pool.execArgv` 向 worker 传递 Node.js 启动参数。这些参数会追加在主进程继承的参数之后，因此这里传入的参数会覆盖主进程上的同名参数（例如 `forks` 或 `vmForks` 下的 `--max-old-space-size`）。例如，下面的配置启用 `development` condition：
+使用 `pool.execArgv` 向 worker 传递 Node.js 启动参数。这些参数会追加在主进程继承的参数之后。对于单值参数，例如 `forks` 或 `vmForks` 下的 `--max-old-space-size`，以这里传入的值为准；`--conditions`、`--require` 等可重复参数则会与主进程的参数叠加生效。例如，下面的配置启用 `development` condition：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

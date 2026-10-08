@@ -249,7 +249,7 @@ It also bounds each VM worker's shared cache of immutable assets, external sourc
 
 ## Pass Node.js flags to workers
 
-Use `pool.execArgv` to pass Node.js startup flags to workers. User flags are appended after the host's inherited flags, so a flag given here overrides the same flag on the host (e.g. `--max-old-space-size` with `forks` or `vmForks`). For example, this configuration enables the `development` condition:
+Use `pool.execArgv` to pass Node.js startup flags to workers. Flags are appended after the host's inherited flags. For a single-value flag such as `--max-old-space-size` (with `forks` or `vmForks`) the value given here wins; repeatable flags such as `--conditions` or `--require` accumulate with the host's. For example, this configuration enables the `development` condition:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
