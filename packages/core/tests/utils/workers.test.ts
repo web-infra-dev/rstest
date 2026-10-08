@@ -55,10 +55,13 @@ describe('getHostExecArgv', () => {
         '--inspect-port',
         '9229',
         '--inspect=127.0.0.1:9229',
+        '--debug-port',
+        '9229',
         '--prof',
         '--expose-gc',
+        '--debug-arraybuffer-allocations',
       ]),
-    ).toEqual(['--expose-gc']);
+    ).toEqual(['--expose-gc', '--debug-arraybuffer-allocations']);
   });
 
   it('keeps only profiling and permission flags for threads', () => {

@@ -36,7 +36,8 @@ export const getHostExecArgv = (
       ? PROFILING_FLAG.test(name) || isPermissionFlag(name)
       : name !== '--prof' &&
         name !== '--title' &&
-        !/^--(inspect|debug)/.test(name);
+        name !== '--debug-port' &&
+        !name.startsWith('--inspect');
     return keep;
   });
 };
