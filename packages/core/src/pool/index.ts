@@ -484,10 +484,12 @@ export const createPool = async ({
     memoryLimit,
     maxWorkers,
     minWorkers,
+    // Node keeps the last occurrence of a repeated flag, so user flags go last
+    // to override inherited host flags such as `--max-old-space-size`.
     execArgv: [
-      ...(poolOptions?.execArgv ?? []),
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
+      ...(poolOptions?.execArgv ?? []),
     ],
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(

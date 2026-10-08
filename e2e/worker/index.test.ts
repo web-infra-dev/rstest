@@ -151,6 +151,31 @@ describe('test worker behavior', () => {
     expect(cli.stdout).toMatch(/Tests\s+1 failed/);
   });
 
+  it('lets pool.execArgv override the heap limit inherited from the host', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess, cli } = await runRstestCli({
+      command: 'node',
+      args: [
+        '--max-old-space-size=96',
+        join(coreDist, '../bin/rstest.js'),
+        'run',
+        'worker.heap.test.ts',
+        '-c',
+        'worker.heap.config.ts',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: fixtureDir,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toMatch(/Tests\s+1 passed/);
+  });
+
   it('should handle unhandledRejection error correctly', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
