@@ -1,6 +1,6 @@
 {
   "recommendations": [
-    "rstack.rslint",
+    "rstack.rstack",
     "esbenp.prettier-vscode",
     "unifiedjs.vscode-mdx"
   ]
