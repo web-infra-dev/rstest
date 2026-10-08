@@ -30,8 +30,12 @@ export const getHostExecArgv = (
     // the value of the option before it.
     if (!arg.startsWith('-')) return keep;
     // Node accepts `_` for `-` in option names and execArgv keeps the host's
-    // spelling.
-    const name = arg.split('=', 1)[0]!.replace(/_/g, '-');
+    // spelling. V8 flags also accept a single dash (`-prof`); one-letter Node
+    // aliases such as `-r` are left alone.
+    const name = arg
+      .split('=', 1)[0]!
+      .replace(/_/g, '-')
+      .replace(/^-(?=[^-]{2})/, '--');
     keep = threads
       ? PROFILING_FLAG.test(name) || isPermissionFlag(name)
       : name !== '--prof' &&

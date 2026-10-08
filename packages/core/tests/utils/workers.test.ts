@@ -58,6 +58,7 @@ describe('getHostExecArgv', () => {
         '--debug-port',
         '9229',
         '--prof',
+        '-prof',
         '--expose-gc',
         '--debug-arraybuffer-allocations',
       ]),
