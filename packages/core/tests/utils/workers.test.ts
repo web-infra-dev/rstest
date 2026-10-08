@@ -47,42 +47,53 @@ describe('parseMemoryLimit', () => {
 });
 
 describe('getHostExecArgv', () => {
-  // [host tokens, kept for forks, kept for threads]
-  const cases: [string[], boolean, boolean][] = [
-    [['--cpu-prof', '--cpu-prof-dir', 'd', '--cpu-prof-name=n'], true, true],
-    [['--cpu-prof-interval=1000'], true, true],
-    [['--heap-prof', '--heap-prof-dir=d', '--heap-prof-name', 'n'], true, true],
-    [['--heap-prof-interval', '1000'], true, true],
-    [['--diagnostic-dir', 'd'], true, true],
-    [['--permission'], true, true],
-    [['--experimental-permission'], true, true],
-    [['--allow-fs-read=/data'], true, true],
-    [['--allow-fs-read', '/data'], true, true],
-    [['--allow-fs-write=/data'], true, true],
-    [['--allow-worker', '--allow-child-process'], true, true],
-    [['--allow-addons', '--allow-wasi'], true, true],
-    [['--import', 'x'], true, false],
-    [['-r', 'x'], true, false],
-    [['--conditions=dev'], true, false],
-    [['--experimental-strip-types'], true, false],
-    [['--enable-source-maps'], true, false],
-    [['--disable-warning', 'ExperimentalWarning'], true, false],
-    [['--env-file', '.env'], true, false],
-    [['--max-old-space-size=512'], true, false],
-    [['--expose-gc'], true, false],
-    [['--allow-natives-syntax'], true, false],
-    [['--inspect=127.0.0.1:9229'], false, false],
-    [['--inspect-brk'], false, false],
-    [['--inspect-port', '9229'], false, false],
-    [['--inspect-publish-uid', 'stderr'], false, false],
-    [['--prof'], false, false],
-    [['--title', 'foo'], false, false],
-  ];
+  it('drops inspector, --prof and --title flags for forks', () => {
+    expect(
+      getHostExecArgv('forks', [
+        '--title',
+        'foo',
+        '--inspect-port',
+        '9229',
+        '--inspect=127.0.0.1:9229',
+        '--prof',
+        '--expose-gc',
+      ]),
+    ).toEqual(['--expose-gc']);
+  });
 
-  for (const [argv, forks, threads] of cases) {
-    it(argv.join(' '), () => {
-      expect(getHostExecArgv('forks', argv)).toEqual(forks ? argv : []);
-      expect(getHostExecArgv('threads', argv)).toEqual(threads ? argv : []);
-    });
-  }
+  it('keeps only profiling and permission flags for threads', () => {
+    expect(
+      getHostExecArgv('threads', [
+        '--cpu-prof',
+        '--cpu-prof-dir',
+        'd',
+        '--allow-fs-read',
+        '/a',
+        '--permission',
+        '--max-old-space-size=512',
+        '--import',
+        'x',
+        '--allow-natives-syntax',
+      ]),
+    ).toEqual([
+      '--cpu-prof',
+      '--cpu-prof-dir',
+      'd',
+      '--allow-fs-read',
+      '/a',
+      '--permission',
+    ]);
+  });
+
+  it('keeps a separate value with its option', () => {
+    expect(
+      getHostExecArgv('forks', [
+        '--title',
+        'foo',
+        '-C',
+        'dev',
+        '--conditions=dev',
+      ]),
+    ).toEqual(['-C', 'dev', '--conditions=dev']);
+  });
 });

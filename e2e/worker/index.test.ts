@@ -206,7 +206,7 @@ describe('test worker behavior', () => {
     const { expectExecSuccess, cli } = await runRstestCli({
       command: 'node',
       args: [
-        '--inspect=127.0.0.1:39229',
+        '--inspect=127.0.0.1:0',
         join(coreDist, '../bin/rstest.js'),
         'run',
         'node.warning.test.ts',
@@ -220,7 +220,8 @@ describe('test worker behavior', () => {
     });
 
     await expectExecSuccess();
-    expect(cli.log).not.toContain('address already in use');
+    // Only the host opens an inspector; a forwarded flag would add one per worker.
+    expect(cli.log.match(/Debugger listening on/g)).toHaveLength(1);
   });
 
   it('should handle unhandledRejection error correctly', async () => {

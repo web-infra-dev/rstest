@@ -1,46 +1,37 @@
 import os from 'node:os';
-import type { PoolWorkerKind } from '../pool/types';
 import type { RstestCommand, RstestPoolType } from '../types';
 
 export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
   pool === 'vmForks' || pool === 'vmThreads';
 
-// Profiling flags (as in Vitest) and the permission model, which a Worker only
-// keeps when its explicit execArgv repeats it.
-const THREAD_FLAG =
-  /^--((cpu|heap)-prof(-dir|-name|-interval)?|diagnostic-dir|(experimental-)?permission|allow-(fs-read|fs-write|worker|child-process|addons|wasi))$/;
+const PROFILING_FLAG =
+  /^--(cpu|heap)-prof(-dir|-name|-interval)?$|^--diagnostic-dir$/;
+const PERMISSION_FLAG =
+  /^--((experimental-)?permission|allow-(fs-read|fs-write|worker|child-process|addons|wasi))$/;
 
 /**
- * Host Node flags safe to pass to a pool worker. Child processes inherit all
- * but per-process profiling and inspector flags. `new Worker` validates an
- * explicit execArgv and rejects V8 and process-level flags, so threads keep
- * only profiling and permission flags; other flags reach them through
- * `pool.execArgv` or `NODE_OPTIONS`, which Workers read from their env.
+ * Host Node flags to forward to a pool worker. Forks drop inspector, `--prof`
+ * and `--title`; threads keep only profiling and permission flags, which an
+ * explicit Worker execArgv must repeat.
  */
 export const getHostExecArgv = (
-  workerKind: PoolWorkerKind,
+  workerKind: RstestPoolType,
   execArgv: readonly string[],
 ): string[] => {
   const threads = workerKind === 'threads' || workerKind === 'vmThreads';
-  const result: string[] = [];
-  for (let i = 0; i < execArgv.length; i++) {
-    const arg = execArgv[i]!;
-    const name = arg.split('=', 1)[0]!;
+  let keep = false;
+  return execArgv.filter((arg) => {
     // Node has already parsed execArgv, so a token that is not an option is
     // the value of the option before it.
-    const next = execArgv[i + 1];
-    const tokens =
-      arg === name && next !== undefined && !next.startsWith('-')
-        ? [arg, execArgv[++i]!]
-        : [arg];
-    const keep = threads
-      ? THREAD_FLAG.test(name)
+    if (!arg.startsWith('-')) return keep;
+    const name = arg.split('=', 1)[0]!;
+    keep = threads
+      ? PROFILING_FLAG.test(name) || PERMISSION_FLAG.test(name)
       : name !== '--prof' &&
         name !== '--title' &&
         !/^--(inspect|debug)/.test(name);
-    if (keep) result.push(...tokens);
-  }
-  return result;
+    return keep;
+  });
 };
 
 export const getNumCpus = (): number => {

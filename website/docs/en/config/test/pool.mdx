@@ -249,7 +249,9 @@ It also bounds each VM worker's shared cache of immutable assets, external sourc
 
 ## Pass Node.js flags to workers
 
-Use `pool.execArgv` to pass Node.js startup flags to workers. Fork pools (`forks`, `vmForks`) inherit the host's Node.js flags except inspector and profiling-output flags. Thread pools (`threads`, `vmThreads`) inherit only profiling flags (`--cpu-prof*`, `--heap-prof*`, `--diagnostic-dir`) and permission-model flags (`--permission`, `--allow-*`) from the host; pass other Node.js flags to thread workers through `pool.execArgv` or `NODE_OPTIONS`. Flags given here are appended after the host's inherited flags. For a single-value flag such as `--max-old-space-size` (with `forks` or `vmForks`) the value given here wins; repeatable flags such as `--conditions` or `--require` accumulate with the host's. For example, this configuration enables the `development` condition:
+Workers inherit Node.js flags from the host process. Fork pools (`forks`, `vmForks`) inherit all of them except inspector flags, `--prof` and `--title`. Thread pools (`threads`, `vmThreads`) inherit only profiling flags (`--cpu-prof*`, `--heap-prof*`, `--diagnostic-dir`) and permission-model flags (`--permission`, `--allow-*`); pass other flags to thread workers through `NODE_OPTIONS` or the option below.
+
+Use `pool.execArgv` to pass Node.js startup flags to workers. Flags given here are appended after the inherited flags. For a single-value flag such as `--max-old-space-size` (with `forks` or `vmForks`) the value given here wins; repeatable flags such as `--conditions` or `--require` accumulate with the host's. For example, this configuration enables the `development` condition:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

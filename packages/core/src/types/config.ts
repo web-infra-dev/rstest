@@ -93,10 +93,7 @@ export type RstestPoolOptions = {
    * Appended after the host's inherited flags: single-value flags such as
    * `--max-old-space-size` (with `forks` or `vmForks`) override the host's, while
    * repeatable flags such as `--conditions` or `--require` accumulate with them.
-   * Thread pools (`threads`, `vmThreads`) inherit only profiling flags
-   * (`--cpu-prof*`, `--heap-prof*`, `--diagnostic-dir`) and permission-model
-   * flags (`--permission`, `--allow-*`) from the host; pass other Node.js flags
-   * to thread workers through `pool.execArgv` or `NODE_OPTIONS`.
+   * Thread pools inherit only profiling and permission flags from the host.
    */
   execArgv?: string[];
 };
