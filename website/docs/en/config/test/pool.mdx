@@ -249,9 +249,7 @@ It also bounds each VM worker's shared cache of immutable assets, external sourc
 
 ## Pass Node.js flags to workers
 
-Workers inherit Node.js flags from the host process. Fork pools (`forks`, `vmForks`) inherit all of them except inspector flags, `--prof` and `--title`. Thread pools (`threads`, `vmThreads`) inherit only profiling flags (`--cpu-prof*`, `--heap-prof*`, `--diagnostic-dir`) and permission-model flags (`--permission`, `--allow-*`); pass other flags to thread workers through `NODE_OPTIONS` or the option below.
-
-Use `pool.execArgv` to pass Node.js startup flags to workers. Flags given here are appended after the inherited flags. For a single-value flag such as `--max-old-space-size` (with `forks` or `vmForks`) the value given here wins; repeatable flags such as `--conditions` or `--require` accumulate with the host's. For example, this configuration enables the `development` condition:
+Use `pool.execArgv` to pass Node.js startup flags to workers. They are appended after the flags workers inherit from the host: for a single-value flag such as `--max-old-space-size` (with `forks` or `vmForks`) the configured value wins, while repeatable flags such as `--conditions` or `--require` accumulate. For example, this configuration enables the `development` condition:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -262,6 +260,15 @@ export default defineConfig({
   },
 });
 ```
+
+Which host flags a worker inherits depends on the pool:
+
+| Pool                                  | Inherited                                                                                                                    | Not inherited                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Fork pools (`forks`, `vmForks`)       | Everything else                                                                                                              | Inspector flags (`--inspect*`, `--debug-port`), `--prof`, `--title` |
+| Thread pools (`threads`, `vmThreads`) | Profiling flags (`--cpu-prof*`, `--heap-prof*`, `--diagnostic-dir`) and permission-model flags (`--permission`, `--allow-*`) | Every other flag                                                    |
+
+Pass other flags to thread workers through `pool.execArgv` or `NODE_OPTIONS`.
 
 When debugging, combine it with `maxWorkers: 1` to run files one at a time and make execution easier to follow:
 
