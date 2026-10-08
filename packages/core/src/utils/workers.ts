@@ -46,13 +46,23 @@ const THREAD_FLAGS = new Set([
   '--heap-prof-dir',
   '--heap-prof-name',
   '--heap-prof-interval',
+  // The permission model only follows a Worker through its execArgv.
+  '--permission',
+  // Node 22 only; Node 24 rejects it on the host as well.
+  '--experimental-permission',
+  '--allow-fs-read',
+  '--allow-fs-write',
+  '--allow-worker',
+  '--allow-child-process',
+  '--allow-addons',
+  '--allow-wasi',
 ]);
 
 /**
  * Host Node flags safe to pass to a pool worker. Child processes inherit all
  * but per-process profiling and inspector flags. Worker threads already share
  * the host's V8 flags and `new Worker` rejects them in `execArgv`, so only
- * module-loading, warning, and diagnostic flags are kept.
+ * module-loading, warning, diagnostic, and permission flags are kept.
  */
 export const getHostExecArgv = (
   workerKind: PoolWorkerKind,
