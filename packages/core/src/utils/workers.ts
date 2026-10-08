@@ -24,7 +24,9 @@ export const getHostExecArgv = (
     // Node has already parsed execArgv, so a token that is not an option is
     // the value of the option before it.
     if (!arg.startsWith('-')) return keep;
-    const name = arg.split('=', 1)[0]!;
+    // Node accepts `_` for `-` in option names and execArgv keeps the host's
+    // spelling.
+    const name = arg.split('=', 1)[0]!.replace(/_/g, '-');
     keep = threads
       ? PROFILING_FLAG.test(name) || PERMISSION_FLAG.test(name)
       : name !== '--prof' &&

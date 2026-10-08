@@ -74,6 +74,8 @@ describe('getHostExecArgv', () => {
         '--import',
         'x',
         '--allow-natives-syntax',
+        '--allow_worker',
+        '--heap_prof_dir=d',
       ]),
     ).toEqual([
       '--cpu-prof',
@@ -82,6 +84,8 @@ describe('getHostExecArgv', () => {
       '--allow-fs-read',
       '/a',
       '--permission',
+      '--allow_worker',
+      '--heap_prof_dir=d',
     ]);
   });
 
