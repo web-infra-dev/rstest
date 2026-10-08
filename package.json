@@ -33,7 +33,7 @@
     "cspell": "10.3.5",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.1.8",
-    "knip": "^6.38.0",
+    "knip": "^6.40.0",
     "lefthook": "^2.1.14",
     "pkg-pr-new": "^0.0.88",
     "playwright": "^1.63.0",

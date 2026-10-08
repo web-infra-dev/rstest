@@ -5,8 +5,6 @@
   // `export type *` re-exports; flagging them as unused on every same-file
   // reference is noise after the knip v5 → v6 bump.
   "ignoreExportsUsedInFile": true,
-  // pnpm 11 stage is a pnpm subcommand, but knip currently reports it as a binary in GitHub workflows.
-  "ignoreBinaries": ["stage"],
   "ignoreDependencies": [
     // Declared in pnpm packageExtensions for @vue/test-utils peer resolution.
     "@vue/compiler-dom",
@@ -14,31 +12,24 @@
     "vue",
   ],
   "ignore": [
-    // Runtime-loaded fixture in a nested type=module package boundary.
-    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm/value.js",
-    // Runtime-loaded fixture for extensionless CommonJS resolution.
-    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm/require-extensionless.cjs",
-    // Runtime-loaded fixtures in a package scope without an explicit type.
-    "packages/core/tests/runner/fixtures/vm-external/module-semantics/ambiguous/**",
-    // Runtime-loaded fixture in a nested type=commonjs package boundary.
-    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-commonjs/value.js",
+    // Runtime-loaded fixtures behind nested package.json boundaries
+    // (type=module, type=commonjs, and no explicit type).
+    "packages/core/tests/runner/fixtures/vm-external/module-semantics/{ambiguous,explicit-*}/**",
   ],
   "workspaces": {
     ".": {
       "entry": [
-        "cspell.config.cjs",
         "rslint.config.mts",
         // Agent skill scripts are invoked by the skill runtime, not imported by source files.
         ".agents/skills/**/scripts/**/*.mjs",
-        ".claude/skills/**/scripts/**/*.mjs",
       ],
     },
     "scripts": {
       "entry": [
-        // Tests for repo-level lint tooling, run by the `lint` rstest project,
-        // its project config, and the minimal rslint config it loads by path.
-        "lint/rstest.config.ts",
+        // The root config lists `scripts/lint` as a project, but knip resolves its
+        // `<rootDir>` against the `scripts` workspace instead of `scripts/lint`.
         "lint/*.test.ts",
+        // Minimal rslint config that `os-agnostic-rule.test.ts` loads by path.
         "lint/os-agnostic-rule.rslint.mjs",
       ],
     },
@@ -58,45 +49,16 @@
       ],
     },
     "examples/federation/component-app": {
-      "entry": [
-        "rstest*.{js,mjs,ts,mts}",
-        "scripts/**/*.{js,mjs,ts,mts}",
-        "test/**/*.{js,jsx,ts,tsx}",
-      ],
       // Module Federation remotes are resolved by its runtime.
       "ignoreDependencies": ["node-local-remote"],
     },
     "examples/federation/main-app": {
-      "entry": [
-        "rstest*.{js,mjs,ts,mts}",
-        "scripts/**/*.{js,mjs,ts,mts}",
-        "test/**/*.{js,jsx,ts,tsx}",
-      ],
-      "ignoreDependencies": [
-        // Loaded dynamically when the config enables Browser Mode.
-        "@rstest/browser",
-        // Module Federation remotes are resolved by its runtime.
-        "component-app",
-        "node-local-remote",
-        // Resolved by @rstest/browser as its configured provider.
-        "playwright",
-      ],
+      // Module Federation remotes are resolved by its runtime.
+      "ignoreDependencies": ["component-app", "node-local-remote"],
     },
     "examples/federation/node-local-remote": {
       // Exposed as a Module Federation remote from the Rsbuild config.
       "entry": ["src/test.js"],
-    },
-    "examples/node": {
-      "ignoreDependencies": [
-        // Loaded dynamically when `rstest --coverage` selects the default provider.
-        "@rstest/coverage-istanbul",
-      ],
-    },
-    "examples/react": {
-      "entry": ["rstest*.config.ts", "src/index.tsx", "test/**/*.{ts,tsx}"],
-    },
-    "examples/vue": {
-      "entry": ["rstest*.ts", "src/index.js", "test/**/*.{js,jsx,ts,tsx}"],
     },
     "packages/core": {
       "ignoreDependencies": [
@@ -115,52 +77,20 @@
         "src/coverage/checkThresholds.ts",
         // Webpack license plugin used by rslib.config.ts
         "licensePlugin.ts",
-        // Test files and fixtures
-        "tests/**/*.ts",
+        // Fixtures loaded by path at runtime, not imported by tests.
         "tests/**/fixtures/**",
       ],
     },
     "packages/browser": {
-      "entry": [
-        // Test files
-        "tests/**/*.ts",
-      ],
       "ignoreUnresolved": [
         // Virtual module injected by each browser project's Rsbuild alias
         "__rstest_virtual_browser_manifest__",
       ],
     },
-    "packages/browser-ui": {
-      "entry": [
-        // Test files
-        "src/**/*.test.ts",
-      ],
-    },
-    "packages/coverage-istanbul": {
-      "entry": [
-        // Test files
-        "tests/**/*.ts",
-      ],
-    },
-    "packages/coverage-v8": {
-      "entry": [
-        // Test files
-        "tests/**/*.ts",
-      ],
-    },
-    "packages/playwright": {
-      "entry": [
-        // Test files
-        "tests/**/*.ts",
-      ],
-    },
-    // No explicit entry needed for the following packages — knip auto-infers from package.json exports:
-    // packages/browser-react, packages/adapter-rslib, packages/adapter-rsbuild,
-    // packages/adapter-rspack
-
     "packages/vscode": {
       "entry": [
-        // Test files
+        // Only `tests/unit` runs on Rstest; the Mocha suite in VS Code and its
+        // fixture workspaces are outside the Rstest config.
         "tests/**/*.ts",
         // Test fixture files (read by parser at runtime, not imported)
         "tests/fixtures/**/test/*.{jsx,tsx}",
