@@ -89,6 +89,13 @@ describe('getHostExecArgv', () => {
     ]);
   });
 
+  it('keeps every permission grant the running Node supports for threads', () => {
+    const grants = [...process.allowedNodeEnvironmentFlags].filter((flag) =>
+      flag.startsWith('--allow-'),
+    );
+    expect(getHostExecArgv('threads', grants)).toEqual(grants);
+  });
+
   it('keeps a separate value with its option', () => {
     expect(
       getHostExecArgv('forks', [

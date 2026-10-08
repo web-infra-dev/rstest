@@ -6,8 +6,13 @@ export const isVmPoolType = (pool: RstestPoolType | undefined): boolean =>
 
 const PROFILING_FLAG =
   /^--(cpu|heap)-prof(-dir|-name|-interval)?$|^--diagnostic-dir$/;
-const PERMISSION_FLAG =
-  /^--((experimental-)?permission|allow-(fs-read|fs-write|worker|child-process|addons|wasi))$/;
+// Node's own table lists every `--allow-*` grant of the running version and
+// excludes V8's `--allow-*` flags.
+const isPermissionFlag = (name: string): boolean =>
+  name === '--permission' ||
+  name === '--experimental-permission' ||
+  (name.startsWith('--allow-') &&
+    process.allowedNodeEnvironmentFlags.has(name));
 
 /**
  * Host Node flags to forward to a pool worker. Forks drop inspector, `--prof`
@@ -28,7 +33,7 @@ export const getHostExecArgv = (
     // spelling.
     const name = arg.split('=', 1)[0]!.replace(/_/g, '-');
     keep = threads
-      ? PROFILING_FLAG.test(name) || PERMISSION_FLAG.test(name)
+      ? PROFILING_FLAG.test(name) || isPermissionFlag(name)
       : name !== '--prof' &&
         name !== '--title' &&
         !/^--(inspect|debug)/.test(name);
