@@ -45,3 +45,46 @@
 .experimental {
   background-color: hsl(262deg 100% 90%);
 }
+
+// Superscript marker: text color only, since a filled background does not
+// read well at this size. Same hues as the tags above, darker in light theme
+// and lighter in dark theme for contrast.
+.sup {
+  margin-left: 2px;
+  font-size: 0.7em;
+  font-weight: 600;
+  vertical-align: super;
+  line-height: 0;
+
+  // Outranks the doc link rule `.rp-doc .rp-link`, which underlines links.
+  :global(a.rp-link) {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+.supAdded {
+  color: hsl(162deg 70% 30%);
+}
+
+.supDeprecated {
+  color: hsl(36deg 100% 35%);
+}
+
+.supRemoved {
+  color: hsl(0deg 75% 45%);
+}
+
+:global(html.dark) {
+  .supAdded {
+    color: hsl(162deg 60% 65%);
+  }
+
+  .supDeprecated {
+    color: hsl(36deg 100% 70%);
+  }
+
+  .supRemoved {
+    color: hsl(0deg 100% 75%);
+  }
+}
