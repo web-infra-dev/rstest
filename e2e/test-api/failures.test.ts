@@ -4,7 +4,7 @@ import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
 describe('failing fixtures', () => {
-  it('reports error formatting, named fixture, hook fixture mismatch and test options failures', async () => {
+  it('reports error formatting, named fixture, file-scoped fixture, hook fixture mismatch and test options failures', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: [

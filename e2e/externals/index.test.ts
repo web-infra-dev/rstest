@@ -1,7 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from '@rstest/core';
-import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 import { copyFixturePackage } from './copyFixturePackage';
 
@@ -10,11 +9,14 @@ const __dirname = dirname(__filename);
 
 describe('test externals', () => {
   beforeAll(() => {
-    fse.copySync(
+    copyFixturePackage(
       join(__dirname, './fixtures/test-bundle'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-bundle'),
     );
-    copyFixturePackage(join(__dirname, 'fixtures'), 'test-module-field');
+    copyFixturePackage(
+      join(__dirname, './fixtures/test-module-field'),
+      join(__dirname, './fixtures/test-pkg/node_modules/test-module-field'),
+    );
   });
 
   it('should external node_modules by default, bundle TypeScript packages and resolve the module field', async () => {

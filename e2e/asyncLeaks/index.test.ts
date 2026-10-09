@@ -29,7 +29,7 @@ describe('detect async leaks', () => {
     expect(cli.stderr).toContain('leak.test.ts');
   });
 
-  it('passes when async resources are cleaned up, zlib streams have closed or fake timers are still active', async ({
+  it('passes when async resources are cleaned up, zlib streams are closed and fake timers remain active', async ({
     onTestFinished,
   }) => {
     const { cli, expectExecSuccess } = await runRstestCli({

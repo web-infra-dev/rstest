@@ -59,7 +59,7 @@ describe('jsdom', () => {
     await expectExecSuccess();
   });
 
-  it('should run test correctly, including css, handled errors, AbortSignal, jest-dom, storage, object URLs and timers', async () => {
+  it('should run test correctly, including css, handled errors, AbortSignal, jest-dom, storage, object URLs, object URLs in the jsdom realm and timers', async () => {
     const { cli, expectExecSuccess } = await runCli(
       [
         appFilters,

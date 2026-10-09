@@ -2,7 +2,6 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from '@rstest/core';
-import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 import { copyFixturePackage } from './copyFixturePackage';
 
@@ -47,12 +46,15 @@ async function readTestOutput(testName = 'index'): Promise<string> {
 
 describe('test bundleDependencies', () => {
   beforeAll(() => {
-    fse.copySync(
+    copyFixturePackage(
       join(__dirname, './fixtures/test-lodash'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
     );
-    copyFixturePackage(join(__dirname, 'fixtures'), 'test-module-field');
-    fse.copySync(
+    copyFixturePackage(
+      join(__dirname, './fixtures/test-module-field'),
+      join(__dirname, './fixtures/test-pkg/node_modules/test-module-field'),
+    );
+    copyFixturePackage(
       join(__dirname, './fixtures/test-interop'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
     );

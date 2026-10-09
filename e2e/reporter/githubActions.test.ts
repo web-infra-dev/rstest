@@ -41,7 +41,7 @@ it.skipIf(!process.env.CI)(
 );
 
 it.skipIf(!process.env.CI)(
-  'github-actions annotations and step summary on pass and on failure, grouped per run',
+  'github-actions annotations and step summary on pass and on failure, grouped in collapsible sections',
   async () => {
     const stepSummaryPath = join(__dirname, '.tmp', 'github-step-summary.md');
     fs.rmSync(stepSummaryPath, { force: true });

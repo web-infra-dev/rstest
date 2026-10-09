@@ -11,20 +11,23 @@ const __dirname = dirname(__filename);
 
 describe('test interop', () => {
   beforeAll(() => {
-    fse.copySync(
+    copyFixturePackage(
       join(__dirname, './fixtures/test-interop'),
       join(__dirname, './node_modules/test-interop'),
     );
-    fse.copySync(
+    copyFixturePackage(
       join(__dirname, './fixtures/test-interop'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
     );
-    fse.copySync(
+    copyFixturePackage(
       join(__dirname, './fixtures/test-lodash'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
     );
-    copyFixturePackage(join(__dirname, 'fixtures'), 'test-module-field');
-    fse.copySync(
+    copyFixturePackage(
+      join(__dirname, './fixtures/test-module-field'),
+      join(__dirname, './fixtures/test-pkg/node_modules/test-module-field'),
+    );
+    copyFixturePackage(
       join(__dirname, './fixtures/test-vm-external'),
       join(__dirname, './node_modules/test-vm-external'),
     );
