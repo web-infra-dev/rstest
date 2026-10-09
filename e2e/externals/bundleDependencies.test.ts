@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from '@rstest/core';
 import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
+import { copyFixturePackage } from './copyFixturePackage';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,10 +51,7 @@ describe('test bundleDependencies', () => {
       join(__dirname, './fixtures/test-lodash'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
     );
-    fse.copySync(
-      join(__dirname, './fixtures/test-module-field'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-module-field'),
-    );
+    copyFixturePackage(join(__dirname, 'fixtures'), 'test-module-field');
     fse.copySync(
       join(__dirname, './fixtures/test-interop'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),

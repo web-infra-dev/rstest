@@ -9,7 +9,7 @@ const jestDomFilters = 'test/jestDom';
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
 describe('jsdom', () => {
-  it('should keep automatic JSX runtime with an environment comment', async () => {
+  it('should run tests with an environment comment and keep automatic JSX runtime', async () => {
     const { cli, expectExecSuccess } = await runCli(
       [
         'test/environmentComment',
@@ -59,7 +59,7 @@ describe('jsdom', () => {
     await expectExecSuccess();
   });
 
-  it('should run test correctly', async () => {
+  it('should run test correctly, including css, handled errors, AbortSignal, jest-dom, storage, object URLs and timers', async () => {
     const { cli, expectExecSuccess } = await runCli(
       [
         appFilters,
@@ -161,7 +161,7 @@ describe('jsdom', () => {
 });
 
 describe('happy-dom', () => {
-  it('should run test correctly', async () => {
+  it('should run test correctly, including css, handled errors, node built-ins, jest-dom, storage, TextEncoder, object URLs and timers', async () => {
     const { cli, expectExecSuccess } = await runCli(
       [
         appFilters,
