@@ -215,7 +215,7 @@ The remaining fields (`results`, `testResults`, `summary`, `duration`, `snapshot
 
 Every entry in `unhandledErrors` is a plain object that can be serialized to JSON, not an `Error` instance.
 
-`trace` holds the absolute paths of the Perfetto trace JSON and its markdown summary. It is absent when the run did not enable `trace`, or when the run collected no trace events. In watch mode, each cycle's paths replace the previous cycle's files.
+`trace` holds the absolute paths of the Perfetto trace JSON and its markdown summary. It is absent when the run did not enable `trace`, or when a single `run()` collected no trace events. In watch mode, each cycle that collects events writes a new pair of files and removes the previous pair; a cycle that collects no events keeps the previous pair and reports it again, matching the CLI, which keeps serving the previous trace in that case.
 
 ## rstest.watch
 
