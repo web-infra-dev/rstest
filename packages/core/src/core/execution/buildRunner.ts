@@ -11,7 +11,7 @@ export type CreateRstestContextFn<
 > = (
   input: Pick<ResolvedRunnerInputs, 'result' | 'projects'> & {
     cwd?: string;
-    trace?: boolean;
+    trace?: CommonOptions['trace'];
     embedded?: boolean;
   },
   command: RstestCommand,

@@ -62,6 +62,12 @@ export interface RunOptions {
   update?: boolean;
   bail?: number | boolean;
   passWithNoTests?: boolean;
+  /**
+   * Collect a Perfetto-compatible performance trace for this run and write it
+   * to disk under `.rstest/`. The Perfetto helper server is never started for
+   * API callers.
+   */
+  trace?: boolean;
 
   // Config overrides: see the config option of the same name.
   // file selection
@@ -180,6 +186,8 @@ export type TestRunStatus = 'pass' | 'fail' | 'error';
 export interface TestRunResult extends Omit<TestRunEndPayload, 'getSourcemap'> {
   /** Overall status of the run. */
   status: TestRunStatus;
+  /** Present only when the run was started with `trace`. */
+  trace?: { tracePath: string; summaryPath: string };
 }
 
 /** @experimental Subject to change until 1.0.0. */

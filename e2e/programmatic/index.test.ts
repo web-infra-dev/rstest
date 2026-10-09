@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
+import { join as joinPosix } from 'pathe';
 import { BROWSER_PORTS } from '../browser-mode/fixtures/ports';
 import { parseMarkerPayload, runRstestCli } from '../scripts';
 
@@ -357,6 +358,52 @@ describe('programmatic createRstest', () => {
         type: 'case',
       },
     ]);
+  });
+
+  it('writes performance traces without printing or blocking', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-trace.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(execution.exitCode).toBe(0);
+    expect(result.statuses).toEqual(['pass', 'pass']);
+    const expectTrace = (trace: Record<string, any>, dir: string) => {
+      expect(trace).toEqual({
+        traceDir: joinPosix(result.root, dir),
+        summaryDir: joinPosix(result.root, dir),
+        traceName: expect.stringMatching(/^trace-.+\.json$/),
+        summaryName: expect.any(String),
+        traceEvents: expect.any(Number),
+        summaryLength: expect.any(Number),
+      });
+      expect(trace.traceEvents).toBeGreaterThan(0);
+      expect(trace.summaryLength).toBeGreaterThan(0);
+      expect(trace.summaryName).toBe(
+        trace.traceName.replace(/\.json$/, '.summary.md'),
+      );
+    };
+    expectTrace(result.defaultTrace, '.rstest');
+    expectTrace(result.initialWatchTrace, '.rstest');
+    expectTrace(result.rerunWatchTrace, '.rstest');
+    expect(result.rerunWatchTrace.traceName).not.toBe(
+      result.initialWatchTrace.traceName,
+    );
+
+    expect(result.untracedHasTraceKey).toBe(false);
+    expect(result.defaultFilesBefore).toHaveLength(2);
+    expect(result.defaultFilesAfter).toEqual(result.defaultFilesBefore);
+
+    expect(cli.stdout).not.toContain('Perfetto');
+    expect(cli.stdout).not.toContain('Trace summary');
+    expect(cli.stdout).not.toContain('Press Ctrl+C');
   });
 
   it('reports watch results per cycle and closes with teardown', async ({

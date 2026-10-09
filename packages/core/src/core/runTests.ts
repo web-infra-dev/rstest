@@ -108,7 +108,9 @@ export async function runTests(context: Rstest): Promise<void> {
   const traceController = createTraceController({
     enabled: context.trace,
     rootPath: context.rootPath,
+    embedded: context.embedded,
   });
+  context.getTraceOutput = () => traceController.lastOutput;
   // Pre-allocated so browser events emitted before a cycle adopts a fresh buffer
   // (or in filtered runs where no cycle runs) are not silently dropped.
   let activeTraceRun = traceController.beginRun();

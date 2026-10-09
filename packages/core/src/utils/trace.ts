@@ -53,9 +53,7 @@ export const noopTraceSpan: TraceSpan = async (_name, _cat, fn) => fn();
  * named from a single source (no fragile extension rewriting), and the stamp
  * keeps repeated runs from overwriting each other.
  */
-const getTraceOutputPaths = (
-  rootPath: string,
-): { tracePath: string; summaryPath: string } => {
+const getTraceOutputPaths = (rootPath: string): TraceOutput => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('Z', '');
   const stem = resolve(rootPath, '.rstest', `trace-${stamp}`);
   return { tracePath: `${stem}.json`, summaryPath: `${stem}.summary.md` };
@@ -246,6 +244,8 @@ const startTraceServer = (initialPath: string): Promise<TraceServerHandle> => {
 // Controller: the single surface consumed by `runTests`
 // ---------------------------------------------------------------------------
 
+export type TraceOutput = { tracePath: string; summaryPath: string };
+
 export interface TraceRun {
   /**
    * Pass to `pool.runTests` as `onTraceEvents`. `undefined` when tracing is
@@ -264,6 +264,8 @@ export interface TraceRun {
 export interface TraceController {
   /** Begin a per-run handle that buffers events until `finalize`. */
   beginRun: () => TraceRun;
+  /** Files written by the most recent `finalize` that collected events. */
+  readonly lastOutput: TraceOutput | undefined;
   /** Stop the helper server. No-op if it never started. */
   close: () => Promise<void>;
   /**
@@ -279,20 +281,22 @@ export interface TraceController {
  * handoff. The orchestrator (e.g. `runTests`) only wires `onEvents` into
  * the pool and calls `finalize`/`close`/`waitForExit` at the right
  * lifecycle points.
+ *
+ * `embedded` (the `@rstest/core/api` driver) still writes both files but
+ * prints nothing and never starts the helper server, so `waitForExit` never
+ * blocks the caller.
  */
 export const createTraceController = (options: {
   enabled: boolean;
   rootPath: string;
+  embedded: boolean;
 }): TraceController => {
-  const { enabled, rootPath } = options;
+  const { enabled, rootPath, embedded } = options;
   let server: TraceServerHandle | undefined;
-  // Path of the trace file produced by the previous run in this session.
-  // In watch mode we replace it on each rerun so .rstest/ does not accumulate
+  // Files produced by the previous run in this session. In watch mode we
+  // replace them on each rerun so .rstest/ does not accumulate
   // multi-MB JSONs; files from earlier sessions are left alone.
-  let lastTracePath: string | undefined;
-  // Sidecar `.summary.md` produced alongside the trace; replaced on rerun in
-  // watch mode for the same reason as `lastTracePath`.
-  let lastSummaryPath: string | undefined;
+  let lastOutput: TraceOutput | undefined;
 
   const beginRun = (): TraceRun => {
     if (!enabled) {
@@ -342,24 +346,24 @@ export const createTraceController = (options: {
           tracePath,
           JSON.stringify(buildTraceFile(events, rootPath)),
         );
-        if (lastTracePath && lastTracePath !== tracePath) {
-          // Best-effort: ignore ENOENT if the user already removed it.
-          unlink(lastTracePath).catch(() => {});
-        }
-        lastTracePath = tracePath;
 
         // Agent/CI-friendly text summary: the Perfetto JSON is a raw event
         // dump meant for the visual UI, so always emit a ranked markdown
-        // digest (printed to stdout and written next to the trace) that
+        // digest (written next to the trace, and printed unless embedded) that
         // answers "where did time go" without opening a flame graph.
         const summaryMarkdown = formatTraceSummary(
           summarizeTrace(events, rootPath),
         );
         await writeFile(summaryPath, `${summaryMarkdown}\n`);
-        if (lastSummaryPath && lastSummaryPath !== summaryPath) {
-          unlink(lastSummaryPath).catch(() => {});
+        // A same-millisecond rerun reuses the stem; never unlink what was
+        // just written. Best-effort: ignore ENOENT if the user removed them.
+        if (lastOutput && lastOutput.tracePath !== tracePath) {
+          unlink(lastOutput.tracePath).catch(() => {});
+          unlink(lastOutput.summaryPath).catch(() => {});
         }
-        lastSummaryPath = summaryPath;
+        lastOutput = { tracePath, summaryPath };
+
+        if (embedded) return;
 
         logger.log(`\n${summaryMarkdown}\n`);
         logger.log(
@@ -409,6 +413,9 @@ export const createTraceController = (options: {
 
   const controller: TraceController = {
     beginRun,
+    get lastOutput() {
+      return lastOutput;
+    },
     close: async () => {
       if (!server) return;
       const s = server;

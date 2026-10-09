@@ -141,7 +141,7 @@ export default defineConfig({
 npx rstest run --trace
 ```
 
-`--trace` 是 CLI-only 的可选开关。开启后每次运行会记录带 status 和 retry count 标注的 suite 与 case slices，在每个 phase 边界采样一次 heap 计数，并为每个测试文件的各个 phase 生成一个 slice：
+`--trace` 是可选开关。开启后每次运行会记录带 status 和 retry count 标注的 suite 与 case slices，在每个 phase 边界采样一次 heap 计数，并为每个测试文件的各个 phase 生成一个 slice：
 
 - `prepare`：初始化 worker 运行时、全局 API，以及启用覆盖率时的 coverage provider。每个测试文件会进入两次，分别位于 `envSetup` 前后。
 - `envSetup`：初始化 test environment。`node` 环境下，以及非 isolate 的 worker 已锁定该环境时，耗时接近 0。

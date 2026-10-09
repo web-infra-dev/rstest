@@ -27,6 +27,7 @@ import type {
   TestResult,
 } from '../types';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
+import type { TraceOutput } from '../utils/trace';
 import {
   castArray,
   DEFAULT_BROWSER_EXPECT_POLL_TIMEOUT,
@@ -115,6 +116,7 @@ export class Rstest implements InternalContext {
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
+  public getTraceOutput?: () => TraceOutput | undefined;
   public version: string;
   public rootPath: string;
   public originalConfig: RstestConfig;

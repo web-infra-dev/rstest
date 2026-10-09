@@ -23,7 +23,6 @@ export function createRstest(
   }: {
     result: LoadConfigResult<RstestConfig>;
     projects: Project[];
-    /** CLI-only `--trace` switch; not exposed via user config. */
     trace?: boolean;
     /** Working directory; defaults to `process.cwd()`. */
     cwd?: string;
