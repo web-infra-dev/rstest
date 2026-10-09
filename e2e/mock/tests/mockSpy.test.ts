@@ -20,7 +20,7 @@ describe('rs.mock with { spy: true }', () => {
   });
 
   test('can use mockImplementationOnce', () => {
-    // Reset to clear previous mockImplementation
+    // Start from a clean mock state
     rs.mocked(increment).mockReset();
 
     // Set up one-time implementations
