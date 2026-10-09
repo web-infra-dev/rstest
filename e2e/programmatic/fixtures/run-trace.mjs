@@ -74,7 +74,6 @@ try {
   });
 
   const defaultRun = await rstest.run({ trace: true });
-  const customRun = await rstest.run({ trace: { dir: 'custom-trace-dir' } });
   const defaultFilesBefore = await listTraceFiles(join(root, '.rstest'));
   const untracedRun = await rstest.run();
   const defaultFilesAfter = await listTraceFiles(join(root, '.rstest'));
@@ -85,7 +84,7 @@ try {
     resolveRerun = resolve;
   });
   watcher = await rstest.watch({
-    trace: { dir: 'watch-trace-dir' },
+    trace: true,
     onResult(result) {
       watchResults.push(result.trace);
       if (watchResults.length === 2) resolveRerun();
@@ -101,9 +100,8 @@ try {
   console.log(
     `__RSTEST_API_RESULT__${JSON.stringify({
       root,
-      statuses: [defaultRun.status, customRun.status, untracedRun.status],
+      statuses: [defaultRun.status, untracedRun.status],
       defaultTrace: await describeTrace(defaultRun.trace),
-      customTrace: await describeTrace(customRun.trace),
       untracedHasTraceKey: 'trace' in untracedRun,
       defaultFilesBefore,
       defaultFilesAfter,

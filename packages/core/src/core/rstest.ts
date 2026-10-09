@@ -25,7 +25,6 @@ import type {
   RstestTestState,
   TestFileResult,
   TestResult,
-  TraceOption,
 } from '../types';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import type { TraceOutput } from '../utils/trace';
@@ -86,7 +85,7 @@ type Options = {
   configFilePath?: string;
   configFileDependencies?: string[];
   projects: Project[];
-  trace?: TraceOption;
+  trace?: boolean;
   /** See the `embedded` option on `createRstest`. */
   embedded?: boolean;
   initializeReporters?: boolean;
@@ -116,7 +115,7 @@ export class Rstest implements InternalContext {
   public openReporterRun?: () => Promise<void>;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
-  public trace: InternalContext['trace'];
+  public trace: boolean;
   public getTraceOutput?: () => TraceOutput | undefined;
   public version: string;
   public rootPath: string;
@@ -162,7 +161,7 @@ export class Rstest implements InternalContext {
   ) {
     this.cwd = cwd;
     this.command = command;
-    this.trace = trace === true ? {} : trace;
+    this.trace = trace;
     this.fileFilters = fileFilters;
     this.configFilePath = configFilePath;
     this.configFileDependencies = configFileDependencies;

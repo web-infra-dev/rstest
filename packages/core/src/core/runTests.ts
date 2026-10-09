@@ -106,7 +106,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const { rootPath, snapshotManager } = context;
 
   const traceController = createTraceController({
-    trace: context.trace,
+    enabled: context.trace,
     rootPath: context.rootPath,
     embedded: context.embedded,
   });

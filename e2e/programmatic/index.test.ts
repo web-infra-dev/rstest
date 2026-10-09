@@ -374,7 +374,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result.statuses).toEqual(['pass', 'pass', 'pass']);
+    expect(result.statuses).toEqual(['pass', 'pass']);
     const expectTrace = (trace: Record<string, any>, dir: string) => {
       expect(trace).toEqual({
         traceDir: joinPosix(result.root, dir),
@@ -391,9 +391,8 @@ describe('programmatic createRstest', () => {
       );
     };
     expectTrace(result.defaultTrace, '.rstest');
-    expectTrace(result.customTrace, 'custom-trace-dir');
-    expectTrace(result.initialWatchTrace, 'watch-trace-dir');
-    expectTrace(result.rerunWatchTrace, 'watch-trace-dir');
+    expectTrace(result.initialWatchTrace, '.rstest');
+    expectTrace(result.rerunWatchTrace, '.rstest');
     expect(result.rerunWatchTrace.traceName).not.toBe(
       result.initialWatchTrace.traceName,
     );

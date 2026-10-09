@@ -1,7 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, resolve } from 'pathe';
-import type { InternalContext } from '../types';
 import { displayPath, isTTY } from './helper';
 import { color, logger } from './logger';
 import { onFatalSignal } from './signals';
@@ -54,9 +53,9 @@ export const noopTraceSpan: TraceSpan = async (_name, _cat, fn) => fn();
  * named from a single source (no fragile extension rewriting), and the stamp
  * keeps repeated runs from overwriting each other.
  */
-const getTraceOutputPaths = (outputDir: string): TraceOutput => {
+const getTraceOutputPaths = (rootPath: string): TraceOutput => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('Z', '');
-  const stem = resolve(outputDir, `trace-${stamp}`);
+  const stem = resolve(rootPath, '.rstest', `trace-${stamp}`);
   return { tracePath: `${stem}.json`, summaryPath: `${stem}.summary.md` };
 };
 
@@ -288,20 +287,14 @@ export interface TraceController {
  * blocks the caller.
  */
 export const createTraceController = (options: {
-  /** `dir` is resolved against `rootPath` and defaults to `.rstest`. */
-  trace: InternalContext['trace'];
+  enabled: boolean;
   rootPath: string;
   embedded: boolean;
 }): TraceController => {
-  const { trace, rootPath, embedded } = options;
-  const enabled = trace !== false;
-  const outputDir = resolve(
-    rootPath,
-    (trace ? trace.dir : undefined) ?? '.rstest',
-  );
+  const { enabled, rootPath, embedded } = options;
   let server: TraceServerHandle | undefined;
   // Files produced by the previous run in this session. In watch mode we
-  // replace them on each rerun so the output directory does not accumulate
+  // replace them on each rerun so .rstest/ does not accumulate
   // multi-MB JSONs; files from earlier sessions are left alone.
   let lastOutput: TraceOutput | undefined;
 
@@ -347,7 +340,7 @@ export const createTraceController = (options: {
       span: pushHostSlice,
       finalize: async () => {
         if (!events.length) return;
-        const { tracePath, summaryPath } = getTraceOutputPaths(outputDir);
+        const { tracePath, summaryPath } = getTraceOutputPaths(rootPath);
         await mkdir(dirname(tracePath), { recursive: true });
         await writeFile(
           tracePath,

@@ -176,16 +176,18 @@ console.log(result.summary.tests);
 
 `filters` 仅用于 API；CLI 通过位置参数传入 filter。它默认使用不区分大小写的子字符串匹配。用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径，例如 `filters: ['"src/foo.test.ts"', 'utils']`；带引号和不带引号的 filter 可以混用。省略 `filters` 时选择所有文件；显式传入空数组时不会选择任何文件。
 
-`trace` 会为本次运行采集[性能 trace](/guide/debug/profiling#using-trace)。传 `true` 时文件写入 `<rootPath>/.rstest/`；传 `{ dir }` 时写入另一个目录，相对路径基于 root 解析。与 CLI flag 不同，它不会打印任何内容，也不会启动 Perfetto helper server，文件路径从 `TestRunResult.trace` 读取。在 `rstest.watch()` 中，它对整个会话生效。
+- **`trace`**
 
 <ApiMeta addedVersion="0.12.4" />
+
+`trace` 会为本次运行采集[性能 trace](/guide/debug/profiling#using-trace)。传 `true` 时文件写入 `<rootPath>/.rstest/`。与 CLI flag 不同，它不会打印任何内容，也不会启动 Perfetto helper server，文件路径从 `TestRunResult.trace` 读取。在 `rstest.watch()` 中，它对整个会话生效。
 
 - **类型：**
 
 ```ts
 interface RunOptions {
   filters?: string[];
-  trace?: boolean | { dir?: string };
+  trace?: boolean;
   // ……以及其余所有 `rstest run` flag，用于覆盖同名配置项，
   // 例如 `testTimeout`、`coverage`、`reporters`。
 }

@@ -71,9 +71,6 @@ export type RstestTestState = {
   getTestFiles: () => string[] | undefined;
 };
 
-/** Shape of `RunOptions.trace`; `dir` is resolved against the root path. */
-export type TraceOption = boolean | { dir?: string };
-
 export type InternalContext = {
   /** The Rstest core version. */
   version: string;
@@ -123,7 +120,7 @@ export type InternalContext = {
    *
    * @internal
    */
-  trace: false | { dir?: string };
+  trace: boolean;
   /**
    * Files of the most recent trace written by this context's run, read by the
    * API result capture.

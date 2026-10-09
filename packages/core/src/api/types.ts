@@ -6,7 +6,6 @@ import type {
   RstestConfig,
   RstestOutputConfig,
   TestRunEndPayload,
-  TraceOption,
 } from '../types';
 import type { LoadedRstestConfig } from '../config';
 
@@ -65,11 +64,10 @@ export interface RunOptions {
   passWithNoTests?: boolean;
   /**
    * Collect a Perfetto-compatible performance trace for this run and write it
-   * to disk. The Perfetto helper server is never started for API callers.
-   * `true` writes under `.rstest/`; `{ dir }` picks another directory,
-   * resolved against the root path.
+   * to disk under `.rstest/`. The Perfetto helper server is never started for
+   * API callers.
    */
-  trace?: TraceOption;
+  trace?: boolean;
 
   // Config overrides: see the config option of the same name.
   // file selection
