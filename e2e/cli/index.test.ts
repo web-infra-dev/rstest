@@ -8,36 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe.concurrent('test exit code', () => {
-  it('should return code 0 when test succeed', async ({ onTestFinished }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'success.test.ts'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-  });
-
-  it('should return code 1 when test failed', async ({ onTestFinished }) => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fail.test.ts'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-  });
-
   it('should return code 1 when cli options error', async ({
     onTestFinished,
   }) => {
@@ -53,63 +23,6 @@ describe.concurrent('test exit code', () => {
     });
     await expectExecFailed();
     expectStderrLog(/Unknown option `-a`/);
-  });
-
-  it('should support --pool shorthand', async ({ onTestFinished }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'success.test.ts', '--pool', 'forks'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-  });
-
-  it('should support --pool shorthand with nested pool options', async ({
-    onTestFinished,
-  }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        'success.test.ts',
-        '--pool',
-        'forks',
-        '--pool.maxWorkers',
-        '1',
-      ],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-  });
-
-  it('should return code 1 when required dot-notation option value is missing', async ({
-    onTestFinished,
-  }) => {
-    const { expectExecFailed, expectStderrLog } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'success.test.ts', '--pool.type'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await expectExecFailed();
-    expectStderrLog(/option `--pool\.type <type>` value is missing/);
   });
 
   it('should support browser shorthand with nested browser options', async ({

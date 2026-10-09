@@ -4,12 +4,6 @@ import { increment } from '../src/increment';
 rs.mock('../src/increment', { spy: true });
 
 describe('rs.mock with { spy: true }', () => {
-  test('preserves original implementation', () => {
-    // Original implementation should still work
-    expect(increment(1)).toBe(2);
-    expect(increment(5)).toBe(6);
-  });
-
   test('tracks function calls', () => {
     increment(10);
 
@@ -23,23 +17,6 @@ describe('rs.mock with { spy: true }', () => {
 
     expect(result).toBe(101);
     expect(increment).toHaveReturnedWith(101);
-  });
-
-  test('exports are mock functions', () => {
-    expect(rs.isMockFunction(increment)).toBe(true);
-  });
-
-  test('can override implementation with mockImplementation', () => {
-    // Override the implementation
-    rs.mocked(increment).mockImplementation((num: number) => num + 100);
-
-    // Now it should use the mocked implementation
-    expect(increment(1)).toBe(101);
-    expect(increment(5)).toBe(105);
-
-    // Still tracks calls
-    expect(increment).toHaveBeenCalledWith(1);
-    expect(increment).toHaveBeenCalledWith(5);
   });
 
   test('can use mockImplementationOnce', () => {

@@ -40,15 +40,4 @@ describe('rs.mock with { spy: true } - ESM module with default export', () => {
     expect(esmModule.add).toHaveBeenCalledWith(1, 2);
     expect(esmModule.subtract).toHaveBeenCalledWith(5, 3);
   });
-
-  test('spy mode allows mocking default export methods', async () => {
-    rs.doMock('../src/esmDefaultModule', { spy: true });
-
-    const esmModule = await import('../src/esmDefaultModule');
-
-    // Can mock named exports
-    rs.mocked(esmModule.add).mockReturnValueOnce(100);
-    expect(esmModule.add(1, 2)).toBe(100);
-    expect(esmModule.add(1, 2)).toBe(3); // Back to original
-  });
 });

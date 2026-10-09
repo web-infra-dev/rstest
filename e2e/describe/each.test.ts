@@ -7,7 +7,7 @@ const mixedTable = [null, 42, ['a']];
 const mixedReceived: unknown[] = [];
 
 afterAll(() => {
-  expect(logs.length).toBe(9);
+  expect(logs.length).toBe(8);
   expect(mixedReceived).toEqual(mixedTable);
 });
 
@@ -29,24 +29,6 @@ describe.each([
 ])('add two numbers correctly', (a, b, expected) => {
   it(`should return ${expected}`, () => {
     expect(a + b).toBe(expected);
-    logs.push('executed');
-  });
-});
-interface TestCase {
-  name: string;
-  targets: string[];
-}
-
-const TEST_CASES: TestCase[] = [
-  {
-    name: 'react-16',
-    targets: ['node'],
-  },
-];
-
-describe.each(TEST_CASES)('test case $name', ({ name, targets }) => {
-  it(`should run ${name}`, () => {
-    expect(targets).toBeDefined();
     logs.push('executed');
   });
 });

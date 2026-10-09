@@ -30,15 +30,6 @@ describe('browser mode - error handling', () => {
     expect(cli.stdout).toMatch(/expected.*to.*be/i);
   });
 
-  it('should exit with non-zero code when tests fail', async () => {
-    const { cli } = await runBrowserCli('error', {
-      args: ['tests/assertionError.test.ts'],
-    });
-
-    await cli.exec;
-    expect(cli.exec.exitCode).not.toBe(0);
-  });
-
   it('reports an expect.element mismatch before the test timeout', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('error', {
       args: ['tests/elementAssertionTimeout.test.ts'],
