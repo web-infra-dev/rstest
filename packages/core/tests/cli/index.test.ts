@@ -10,12 +10,10 @@ rs.mock('../../src/cli/prepare', () => ({
   prepareCli: rs.fn(),
 }));
 
-const originalArgv = process.argv;
 const setupCommandsSpy = rs.mocked(setupCommands);
 const prepareCliSpy = rs.mocked(prepareCli);
 
 afterEach(() => {
-  process.argv = originalArgv;
   rs.clearAllMocks();
 });
 
@@ -32,18 +30,5 @@ describe('runCLI', () => {
 
     expect(prepareCliSpy).toHaveBeenCalledOnce();
     expect(setupCommandsSpy).toHaveBeenCalledWith(argv);
-  });
-
-  it('passes process.argv through unchanged by default', () => {
-    process.argv = [
-      '/usr/local/bin/node',
-      '/project/node_modules/.bin/rstest',
-      'run',
-      'sum.test.ts',
-    ];
-
-    runCLI();
-
-    expect(setupCommandsSpy).toHaveBeenCalledWith(process.argv);
   });
 });

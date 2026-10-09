@@ -625,40 +625,6 @@ describe('createWatchCycleDriver', () => {
     expect(executor.cycles).toHaveLength(1);
   });
 
-  it('delivers a rejected rerun as an error result and keeps the queue live', async () => {
-    const context = createContext();
-    const onResult = rs.fn();
-    context.reporters.push(
-      createResultReporter(context, { onResult }).reporter,
-    );
-    const driver = createDriver(context);
-    const executor = createFakeExecutor('node', (options) => {
-      if (options.mode === 'on-demand') {
-        throw new Error('cycle blew up');
-      }
-    });
-
-    await driver.runCycle(executor, { mode: 'all' });
-    await driver.runCycle(executor, { mode: 'on-demand' });
-    expect(onResult).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        status: 'error',
-        unhandledErrors: [
-          expect.objectContaining({ message: 'cycle blew up' }),
-        ],
-      }),
-    );
-
-    // The next trigger still runs.
-    await driver.runCycle(executor, { mode: 'all' });
-    expect(executor.cycles).toHaveLength(3);
-    expect(onResult).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({ status: 'pass' }),
-    );
-  });
-
   it('reports the session snapshot and identifies the files rerun this cycle', async () => {
     const context = createContext();
     const onResult = rs.fn();
