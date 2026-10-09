@@ -213,7 +213,7 @@ The remaining fields (`results`, `testResults`, `summary`, `duration`, `snapshot
 
 Every entry in `unhandledErrors` is a plain object that can be serialized to JSON, not an `Error` instance.
 
-`trace` <ApiMeta sup addedVersion="0.12.4" /> holds the absolute paths of the Perfetto trace JSON and its markdown summary. It is absent when the run did not enable `trace`. In watch mode, each cycle's files replace the previous cycle's files.
+`trace` <ApiMeta sup addedVersion="0.12.4" /> holds the absolute paths of the Perfetto trace JSON and its markdown summary. It is absent when the run did not enable `trace`. In watch mode, it points at the latest cycle's files.
 
 ## rstest.watch
 

@@ -213,7 +213,7 @@ interface TestRunResult {
 
 `unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
 
-`trace` <ApiMeta sup addedVersion="0.12.4" /> 包含 Perfetto trace JSON 及其 markdown 摘要的绝对路径。运行未开启 `trace` 时该字段不存在。watch 模式下，每轮的文件会替换上一轮的文件。
+`trace` <ApiMeta sup addedVersion="0.12.4" /> 包含 Perfetto trace JSON 及其 markdown 摘要的绝对路径。运行未开启 `trace` 时该字段不存在。watch 模式下，它指向最近一轮的文件。
 
 ## rstest.watch
 
