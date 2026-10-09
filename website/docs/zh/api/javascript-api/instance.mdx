@@ -215,7 +215,7 @@ interface TestRunResult {
 
 `unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
 
-`trace` 包含 Perfetto trace JSON 及其 markdown 摘要的绝对路径。运行未开启 `trace`，或者单次 `run()` 没有采集到任何 trace 事件时，该字段不存在。watch 模式下，采集到事件的轮次会写入一组新文件并删除上一组；没有采集到事件的轮次会保留上一组文件并再次返回它们的路径，这与 CLI 一致：CLI 在这种情况下也会继续提供上一份 trace。
+`trace` 包含 Perfetto trace JSON 及其 markdown 摘要的绝对路径。运行未开启 `trace` 时该字段不存在。watch 模式下，每轮的文件会替换上一轮的文件。
 
 ## rstest.watch
 
