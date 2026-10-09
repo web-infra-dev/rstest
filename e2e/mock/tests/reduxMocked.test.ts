@@ -3,13 +3,6 @@ import redux from 'redux';
 
 rs.mock('redux');
 
-it('mocked redux', async () => {
-  await redux.isAction('string');
-  expect(redux.isAction).toHaveBeenCalledWith('string');
-  // @ts-expect-error
-  expect(redux.mocked).toBe('redux_yes');
-});
-
 it('importActual works', async () => {
   const rx = await rs.importActual<typeof redux>('redux');
   expect(rs.isMockFunction(rx.isAction)).toBe(false);

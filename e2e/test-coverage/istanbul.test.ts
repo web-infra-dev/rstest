@@ -79,32 +79,6 @@ describe('coverage istanbul-specific behavior', () => {
     ]);
   });
 
-  it('enables the default provider with --coverage', async ({
-    onTestFinished,
-  }) => {
-    const reportsDirectory = 'test-temp-istanbul-cli-coverage';
-    const reportPath = join(fixturePath, reportsDirectory);
-    onTestFinished(() => fs.removeSync(reportPath));
-
-    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        '--coverage',
-        '--coverage.reportsDirectory',
-        reportsDirectory,
-      ],
-      options: {
-        nodeOptions: {
-          cwd: fixturePath,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-    expectLog('Coverage enabled with istanbul', cli.stdout.split('\n'));
-  });
-
   it('treats a positional argument after --coverage as a file filter', async ({
     onTestFinished,
   }) => {

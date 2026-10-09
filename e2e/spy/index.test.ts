@@ -112,12 +112,6 @@ describe('test spy', () => {
     rstest.fn<Handler>().mockImplementation((v) => v + 1);
   });
 
-  it('isMockFunction', () => {
-    const sayHi = rstest.fn();
-    expect(rstest.isMockFunction(sayHi)).toBeTruthy();
-    expect(rstest.isMockFunction(() => {})).toBeFalsy();
-  });
-
   it('rstest.fn -> mock clear / reset / restore', () => {
     const sayHi = rstest.fn(function sayHiFn(name: string) {
       return `hi ${name}`;

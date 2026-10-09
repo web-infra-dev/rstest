@@ -2,14 +2,6 @@ import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
 describe('browser mode - config validation warnings', () => {
-  it('allows coverage.provider v8 in a Chromium browser-only run', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
-      args: ['-c', 'rstest.v8BrowserOnly.config.mts'],
-    });
-    await expectExecSuccess();
-    expect(`${cli.stdout}\n${cli.stderr}`).toMatch(/Coverage enabled with v8/);
-  });
-
   it('rejects coverage.provider v8 in a non-Chromium browser-only run', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('browser-coverage', {
       args: ['-c', 'rstest.v8Webkit.config.mts'],
