@@ -606,7 +606,7 @@ const createCliRstest = async (options: CommonOptions) => {
   applyAgentReporterDefault(loaded.content, options);
   const rstest = await createRstestInstance(
     { cwd, config: loaded, configLoader: options.configLoader },
-    { embedded: false, trace: options.trace, ...cliHostRuntime() },
+    { embedded: false, ...cliHostRuntime() },
   );
   return { rstest, loaded };
 };
@@ -616,7 +616,6 @@ const toRunOptions = (options: CommonOptions): RunOptions => {
     config: _config,
     configLoader: _configLoader,
     root: _root,
-    trace: _trace,
     teardownTimeout: _teardownTimeout,
     ...runOptions
   } = options;

@@ -270,7 +270,7 @@ const buildTask = async ({
           workerCacheLimit: captureBundleCoverage
             ? undefined
             : workerCacheLimit,
-          trace: context.trace,
+          trace: Boolean(context.trace),
         },
         deletedEnvKeys,
         color,

@@ -172,15 +172,20 @@ console.log(result.summary.tests);
 
 ### RunOptions
 
-`RunOptions` 接受除 `config`、`configLoader`、`root` 和 `trace` 之外的所有 `rstest run` flag。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
+`RunOptions` 接受除 `config`、`configLoader` 和 `root` 之外的所有 `rstest run` flag。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
 
 `filters` 仅用于 API；CLI 通过位置参数传入 filter。它默认使用不区分大小写的子字符串匹配。用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径，例如 `filters: ['"src/foo.test.ts"', 'utils']`；带引号和不带引号的 filter 可以混用。省略 `filters` 时选择所有文件；显式传入空数组时不会选择任何文件。
+
+`trace` 会为本次运行采集[性能 trace](/guide/debug/profiling#using-trace)。传 `true` 时文件写入 `<rootPath>/.rstest/`；传 `{ dir }` 时写入另一个目录，相对路径基于 root 解析。与 CLI flag 不同，它不会打印任何内容，也不会启动 Perfetto helper server，文件路径从 `TestRunResult.trace` 读取。在 `rstest.watch()` 中，它对整个会话生效。
+
+<ApiMeta addedVersion="0.12.4" />
 
 - **类型：**
 
 ```ts
 interface RunOptions {
   filters?: string[];
+  trace?: boolean | { dir?: string };
   // ……以及其余所有 `rstest run` flag，用于覆盖同名配置项，
   // 例如 `testTimeout`、`coverage`、`reporters`。
 }
@@ -199,6 +204,7 @@ type TestRunStatus = 'pass' | 'fail' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // 本次运行的整体状态。
+  trace?: { tracePath: string; summaryPath: string }; // 仅在运行时传入 `trace` 时存在。
   // 其余字段与 `onTestRunEnd` 的 payload 相同，去掉 `getSourcemap`。
 }
 ```
@@ -208,6 +214,8 @@ interface TestRunResult {
 当 `unhandledErrors` 不为空时，`status` 为 `'error'`。当本次运行已完成但退出状态非零时，`status` 为 `'fail'`，例如测试或测试文件失败、覆盖率未达阈值、未设置 `passWithNoTests` 时没有找到测试，或者 `globalSetup` 清理失败。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'fail'`。其他情况下，`status` 为 `'pass'`。
 
 `unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
+
+`trace` 包含 Perfetto trace JSON 及其 markdown 摘要的绝对路径。运行未开启 `trace`，或者没有采集到任何 trace 事件时，该字段不存在。watch 模式下，每轮的文件会替换上一轮的文件。
 
 ## rstest.watch
 

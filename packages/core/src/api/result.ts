@@ -33,9 +33,11 @@ export function createResultReporter(
     if (!captured) {
       return;
     }
+    const trace = context.getTraceOutput?.();
     const result: TestRunResult = {
       ...captured,
       status: getStatus(context, captured),
+      ...(trace && { trace }),
     };
     captured = undefined;
     resolveResult?.(result);

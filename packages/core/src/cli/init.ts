@@ -18,7 +18,6 @@ export type CommonOptions = Omit<RunOptions, 'filters'> & {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
-  trace?: boolean;
   teardownTimeout?: RstestConfig['teardownTimeout'];
 };
 

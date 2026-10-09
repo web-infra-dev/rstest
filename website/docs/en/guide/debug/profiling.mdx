@@ -141,7 +141,7 @@ Once the slow tests have been identified but the actual runtime cost is still un
 npx rstest run --trace
 ```
 
-The flag is CLI-only and opt-in. Each run records per-suite and per-case slices annotated with status and retry count, a heap counter sampled at each phase boundary, and one slice per phase of every test file:
+The flag is opt-in. Each run records per-suite and per-case slices annotated with status and retry count, a heap counter sampled at each phase boundary, and one slice per phase of every test file:
 
 - `prepare`: set up the worker runtime, the global API, and the coverage provider when coverage is enabled. It is entered twice per test file, before and after `envSetup`.
 - `envSetup`: install the test environment. Close to zero for `node`, and when a non-isolated worker is already pinned to the environment.

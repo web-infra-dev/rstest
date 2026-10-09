@@ -5,6 +5,7 @@ import type {
   RstestCommand,
   RstestConfig,
   RstestInstance,
+  TraceOption,
 } from '../types';
 import { Rstest } from './rstest';
 
@@ -23,8 +24,7 @@ export function createRstest(
   }: {
     result: LoadConfigResult<RstestConfig>;
     projects: Project[];
-    /** CLI-only `--trace` switch; not exposed via user config. */
-    trace?: boolean;
+    trace?: TraceOption;
     /** Working directory; defaults to `process.cwd()`. */
     cwd?: string;
     /**

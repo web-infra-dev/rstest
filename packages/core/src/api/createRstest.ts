@@ -41,7 +41,6 @@ import type {
 
 export type HostRuntime = {
   embedded: boolean;
-  trace?: boolean;
   packageInstallerConfirm?: PackageInstallerConfirm;
   onExitCodeChange?: (code: number) => void;
   onFatalWatchFailure?: (error: Error) => void;
@@ -183,7 +182,7 @@ export async function createRstestInstance(
         inputs: initialInputs,
         options: commonOptions,
       }),
-      options: { ...commonOptions, trace: runtime.trace },
+      options: commonOptions,
       command,
       filters: runOptions.filters,
       createRstestContext: createHostContext,

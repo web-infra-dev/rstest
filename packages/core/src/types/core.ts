@@ -2,6 +2,7 @@ import type { SnapshotManager } from '@vitest/snapshot/manager';
 import type { RstestExitCode } from '../core/execution/exitCode';
 import type { TestStateManager } from '../core/execution/stateManager';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
+import type { TraceOutput } from '../utils/trace';
 import type {
   EnvironmentName,
   NormalizedConfig,
@@ -70,6 +71,9 @@ export type RstestTestState = {
   getTestFiles: () => string[] | undefined;
 };
 
+/** Shape of `RunOptions.trace`; `dir` is resolved against the root path. */
+export type TraceOption = boolean | { dir?: string };
+
 export type InternalContext = {
   /** The Rstest core version. */
   version: string;
@@ -114,12 +118,19 @@ export type InternalContext = {
    */
   command: RstestCommand;
   /**
-   * Dump a Perfetto-compatible performance trace JSON file. CLI-only switch;
-   * not exposed via user config.
+   * Perfetto trace collection for this run, set by `RunOptions.trace` (the CLI
+   * `--trace` flag maps to it); not exposed via user config.
    *
    * @internal
    */
-  trace: boolean;
+  trace: false | { dir?: string };
+  /**
+   * Files of the most recent trace written by this context's run, read by the
+   * API result capture.
+   *
+   * @internal
+   */
+  getTraceOutput?: () => TraceOutput | undefined;
   /** See the `embedded` option on `createRstest`. */
   embedded: boolean;
   /** Run-local exit status. CLI code may mirror it to the host process. */
