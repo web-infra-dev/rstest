@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -8,9 +8,9 @@ const __dirname = dirname(__filename);
 
 describe('vue sfc', () => {
   it('should run vue SFC test correctly', async () => {
-    const { expectExecSuccess } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index'],
+      args: ['run', 'index', 'jsx'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -18,6 +18,17 @@ describe('vue sfc', () => {
       },
     });
 
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'Vue SFC component test passes under jsdom').toMatch(
+      /✓ test\/index\.test\.ts/,
+    );
+    expect(
+      cli.stdout,
+      'Vue JSX (App.tsx) component test passes under jsdom',
+    ).toMatch(/✓ test\/jsx\.test\.ts/);
     await expectExecSuccess();
   });
 

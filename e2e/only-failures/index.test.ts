@@ -66,13 +66,35 @@ describe('--onlyFailures', () => {
     await full.expectExecFailed();
     expect(ranFiles(full.cli.stdout)).toEqual(['first', 'second', 'third']);
 
-    // `--onlyFailures` re-runs only the failed `first` file (still failing).
+    // Add a brand-new test file AFTER the cache was written, so it has no cache
+    // entry (a never-run file).
+    writeFileSync(
+      extraFile,
+      [
+        "import { expect, test } from '@rstest/core';",
+        '',
+        "test('extra', () => {",
+        "  console.log('RUN:extra');",
+        '  expect(true).toBe(true);',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    onTestFinished(() => removeExtra());
+
+    // `--onlyFailures` re-runs only the failed `first` file (still failing); the
+    // never-run `extra` file is not selected (matches Jest / pytest `--lf`).
     const only = await run(onTestFinished, { FAIL_FIRST: '1' }, [
       '--onlyFailures',
     ]);
     await only.expectExecFailed();
-    expect(ranFiles(only.cli.stdout)).toEqual(['first']);
-    only.expectLog('onlyFailures: running 1 of 3 test files (2 deselected).');
+    const ran = ranFiles(only.cli.stdout);
+    expect(
+      ran,
+      'newly added never-run extra.test.ts is not selected by --onlyFailures',
+    ).not.toContain('extra');
+    expect(ran).toEqual(['first']);
+    only.expectLog('onlyFailures: running 1 of 4 test files (3 deselected).');
   }, 90_000);
 
   it('runs all tests with a notice once the failure is fixed', async ({
@@ -94,40 +116,6 @@ describe('--onlyFailures', () => {
       'No failed tests found from the previous run. Running all tests.',
     );
     expect(ranFiles(clean.cli.stdout)).toEqual(['first', 'second', 'third']);
-  }, 90_000);
-
-  it('does not select a newly added test file while another file is failing', async ({
-    onTestFinished,
-  }) => {
-    // Full run with `first` failing, recorded in the cache.
-    await recordFirstFailure(onTestFinished);
-
-    // Add a brand-new test file AFTER the cache was written, so it has no cache
-    // entry (a never-run file).
-    writeFileSync(
-      extraFile,
-      [
-        "import { expect, test } from '@rstest/core';",
-        '',
-        "test('extra', () => {",
-        "  console.log('RUN:extra');",
-        '  expect(true).toBe(true);',
-        '});',
-        '',
-      ].join('\n'),
-    );
-    onTestFinished(() => removeExtra());
-
-    // `--onlyFailures` keeps only the failed `first`; the never-run `extra` file
-    // is not selected (matches Jest / pytest `--lf`).
-    const only = await run(onTestFinished, { FAIL_FIRST: '1' }, [
-      '--onlyFailures',
-    ]);
-    await only.expectExecFailed();
-    const ran = ranFiles(only.cli.stdout);
-    expect(ran).toContain('first');
-    expect(ran).not.toContain('extra');
-    expect(ran).toEqual(['first']);
   }, 90_000);
 
   it('does not narrow an explicit file filter by failure history', async ({
