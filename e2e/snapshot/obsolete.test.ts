@@ -25,8 +25,9 @@ describe('test snapshot', () => {
     expect(cli.stdout, 'obsolete.test.ts passes').toMatch(
       /✓ fixtures\/obsolete\.test\.ts \(1\)/,
     );
+    // Windows prints the obsolete entry with an absolute path.
     expect(cli.stdout, 'unused snapshot is listed as obsolete').toMatch(
-      /➜ fixtures\/obsolete\.test\.ts$/m,
+      /➜ (?:.*\/)?fixtures\/obsolete\.test\.ts\r?$/m,
     );
     expect(cli.stdout, 'skip.test.ts runs with its only case skipped').toMatch(
       /- fixtures\/skip\.test\.ts \(1\)/,
@@ -34,11 +35,11 @@ describe('test snapshot', () => {
     expect(
       cli.stdout,
       'skipped case does not mark its snapshot obsolete',
-    ).not.toMatch(/➜ fixtures\/skip\.test\.ts$/m);
+    ).not.toMatch(/➜ (?:.*\/)?fixtures\/skip\.test\.ts\r?$/m);
     expect(
       cli.stdout,
       'skipped snapshot does not raise the obsolete count above 1',
-    ).toMatch(/Snapshots\s+1 obsolete$/m);
+    ).toMatch(/Snapshots\s+1 obsolete\r?$/m);
     await expectExecSuccess();
   });
 });

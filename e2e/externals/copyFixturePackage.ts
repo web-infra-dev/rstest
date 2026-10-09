@@ -25,15 +25,24 @@ const newestMtime = (dir: string): number => {
  * An overwriting copy unlinks files another worker is still copying or
  * reading, so copy into a temp dir unique to this call and rename it into
  * place. An existing copy is kept unless the source changed after it was made.
+ * Freshness is checked again after copying, so a worker that loses the race
+ * keeps the fresh copy another worker installed instead of replacing it while
+ * that worker's CLI may be reading it.
  */
 export const copyFixturePackage = (source: string, dest: string) => {
-  if (fs.existsSync(dest) && fs.statSync(dest).mtimeMs >= newestMtime(source)) {
+  const isFresh = () =>
+    fs.existsSync(dest) && fs.statSync(dest).mtimeMs >= newestMtime(source);
+  if (isFresh()) {
     return;
   }
   const unique = `${process.pid}-${threadId}-${randomUUID()}`;
   const tmp = `${dest}.${unique}.tmp`;
   fse.copySync(source, tmp);
   fs.mkdirSync(dirname(dest), { recursive: true });
+  if (isFresh()) {
+    fse.removeSync(tmp);
+    return;
+  }
   if (fs.existsSync(dest)) {
     // Stale copy: move it aside first, since rename cannot replace a
     // non-empty directory.
@@ -49,7 +58,7 @@ export const copyFixturePackage = (source: string, dest: string) => {
     fs.renameSync(tmp, dest);
   } catch (error) {
     fse.removeSync(tmp);
-    if (!fs.existsSync(dest)) {
+    if (!isFresh()) {
       throw error;
     }
   }
