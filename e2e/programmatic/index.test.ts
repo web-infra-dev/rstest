@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
+import { join as joinPosix } from 'pathe';
 import { BROWSER_PORTS } from '../browser-mode/fixtures/ports';
 import { parseMarkerPayload, runRstestCli } from '../scripts';
 
@@ -376,8 +377,8 @@ describe('programmatic createRstest', () => {
     expect(result.statuses).toEqual(['pass', 'pass', 'pass']);
     const expectTrace = (trace: Record<string, any>, dir: string) => {
       expect(trace).toEqual({
-        traceDir: join(result.root, dir),
-        summaryDir: join(result.root, dir),
+        traceDir: joinPosix(result.root, dir),
+        summaryDir: joinPosix(result.root, dir),
         traceName: expect.stringMatching(/^trace-.+\.json$/),
         summaryName: expect.any(String),
         traceEvents: expect.any(Number),
