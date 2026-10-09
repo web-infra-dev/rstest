@@ -58,13 +58,29 @@ describe('browser mode - snapshot', () => {
   });
 
   it('should create and match standard snapshots', async () => {
-    // Snapshot directory should not exist initially
-    expect(fs.existsSync(snapshotDir)).toBe(false);
-
-    const { expectExecSuccess, cli } = await runSnapshot([
+    const mergedFiles = [
       'tests/snapshot.test.ts',
-    ]);
+      'tests/error.test.ts',
+      'tests/file.test.ts',
+      'tests/inline.test.ts',
+    ];
 
+    // Snapshot directories should not exist initially
+    expect(fs.existsSync(snapshotDir)).toBe(false);
+    expect(
+      fs.existsSync(fileSnapshotDir),
+      'file snapshot dir absent before first run',
+    ).toBe(false);
+
+    const { expectExecSuccess, cli } = await runSnapshot(mergedFiles);
+
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'inline snapshots match in browser mode').toMatch(
+      /✓ .*inline\.test\.ts/,
+    );
     await expectExecSuccess();
 
     // Verify snapshot file was created
@@ -99,10 +115,44 @@ describe('browser mode - snapshot', () => {
     // Verify stdout reports snapshots written
     expect(cli.stdout).toMatch(/Snapshots.*\d+.*written/);
 
+    // Error snapshot written by toThrowErrorMatchingSnapshot
+    const errorSnapshotFile = path.join(snapshotDir, 'error.test.ts.snap');
+    expect(
+      fs.existsSync(errorSnapshotFile),
+      'error snapshot file is created',
+    ).toBe(true);
+    const errorContent = fs.readFileSync(errorSnapshotFile, 'utf-8');
+    expect(
+      errorContent,
+      'error snapshot written with thrown message',
+    ).toContain('Test error message');
+    expect(errorContent, 'error snapshot keyed by test name').toContain(
+      'should match error snapshot',
+    );
+
+    // File snapshot written by toMatchFileSnapshot
+    expect(
+      JSON.parse(
+        fs.readFileSync(path.join(fileSnapshotDir, 'data.json'), 'utf-8'),
+      ),
+      'toMatchFileSnapshot writes data.json',
+    ).toEqual({ key: 'value', count: 42 });
+
     // Second run: should match existing snapshots
     const { expectExecSuccess: matchExecSuccess, cli: matchCli } =
-      await runSnapshot(['tests/snapshot.test.ts']);
+      await runSnapshot(mergedFiles);
 
+    await matchCli.exec;
+    await matchCli.waitForStreamsEnd();
+    expect(matchCli.stdout, 'standard snapshots match on second run').toMatch(
+      /✓ .*snapshot\.test\.ts/,
+    );
+    expect(matchCli.stdout, 'error snapshot matches on second run').toMatch(
+      /✓ .*error\.test\.ts/,
+    );
+    expect(matchCli.stdout, 'file snapshot matches on second run').toMatch(
+      /✓ .*file\.test\.ts/,
+    );
     await matchExecSuccess();
     expect(matchCli.stdout).toMatch(/Tests.*passed/);
 
@@ -179,66 +229,6 @@ describe('browser snapshot update', () => {
     expect(fs.existsSync(path.join(snapshotDir, 'snapshot.test.ts.snap'))).toBe(
       true,
     );
-  });
-
-  it('should create and match error snapshots', async () => {
-    // First run: create error snapshot
-    const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
-      'tests/error.test.ts',
-    ]);
-    await firstExecSuccess();
-
-    // Verify error snapshot file was created
-    const snapshotFile = path.join(snapshotDir, 'error.test.ts.snap');
-    expect(fs.existsSync(snapshotFile)).toBe(true);
-
-    const content = fs.readFileSync(snapshotFile, 'utf-8');
-    expect(content).toContain('Test error message');
-    expect(content).toContain('should match error snapshot');
-
-    // Second run: should match existing snapshot
-    const { expectExecSuccess, cli } = await runSnapshot([
-      'tests/error.test.ts',
-    ]);
-
-    await expectExecSuccess();
-    expect(cli.stdout).toMatch(/Tests.*passed/);
-  });
-
-  it('should create and match file snapshots', async () => {
-    // Ensure file snapshot directory doesn't exist
-    expect(fs.existsSync(fileSnapshotDir)).toBe(false);
-
-    // First run: create file snapshot
-    const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
-      'tests/file.test.ts',
-    ]);
-    await firstExecSuccess();
-
-    // Verify file snapshot was created
-    const fileSnapshotPath = path.join(fileSnapshotDir, 'data.json');
-    expect(fs.existsSync(fileSnapshotPath)).toBe(true);
-
-    const content = fs.readFileSync(fileSnapshotPath, 'utf-8');
-    const data = JSON.parse(content);
-    expect(data).toEqual({ key: 'value', count: 42 });
-
-    // Second run: should match existing file snapshot
-    const { expectExecSuccess, cli } = await runSnapshot([
-      'tests/file.test.ts',
-    ]);
-
-    await expectExecSuccess();
-    expect(cli.stdout).toMatch(/Tests.*passed/);
-  });
-
-  it('should work with inline snapshots in browser mode', async () => {
-    const { expectExecSuccess, cli } = await runSnapshot([
-      'tests/inline.test.ts',
-    ]);
-
-    await expectExecSuccess();
-    expect(cli.stdout).toMatch(/Tests.*passed/);
   });
 
   it('should update inline snapshot correctly when source line changes', async () => {

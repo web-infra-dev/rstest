@@ -32,9 +32,15 @@ describe('detect async leaks', () => {
   it('passes when async resources are cleaned up', async ({
     onTestFinished,
   }) => {
-    const { expectExecSuccess } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/noLeak.test', '--detectAsyncLeaks'],
+      args: [
+        'run',
+        'fixtures/noLeak.test',
+        'fixtures/zlibClosed.test',
+        'fixtures/fakeTimers.test',
+        '--detectAsyncLeaks',
+      ],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -43,38 +49,20 @@ describe('detect async leaks', () => {
       },
     });
 
-    await expectExecSuccess();
-  });
-
-  it('passes when zlib streams have emitted close', async ({
-    onTestFinished,
-  }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fixtures/zlibClosed.test', '--detectAsyncLeaks'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-  });
-
-  it('passes when fake timers are still active', async ({ onTestFinished }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fixtures/fakeTimers.test', '--detectAsyncLeaks'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'cleaned-up timers are not reported as a leak').toMatch(
+      /✓ fixtures\/noLeak\.test\.ts/,
+    );
+    expect(cli.stdout, 'closed zlib stream is not reported as a leak').toMatch(
+      /✓ fixtures\/zlibClosed\.test\.ts/,
+    );
+    expect(
+      cli.stdout,
+      'leak collection finishes while fake timers are active',
+    ).toMatch(/✓ fixtures\/fakeTimers\.test\.ts/);
     await expectExecSuccess();
   });
 

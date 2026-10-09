@@ -115,7 +115,7 @@ describe('test worker behavior', () => {
     expect(cli.log).not.toContain('ExperimentalWarning');
   });
 
-  it('should include worker stderr in summary when worker exits unexpectedly', async () => {
+  it('reports the crashing case as failed and includes worker stderr when worker exits unexpectedly', async () => {
     const marker = 'RSTEST_WORKER_PANIC_MARKER';
     const { expectExecFailed, cli } = await runRstestCli({
       command: 'rstest',
@@ -131,24 +131,16 @@ describe('test worker behavior', () => {
     expect(cli.log).toContain('Worker exited unexpectedly');
     expect(cli.log).toContain('Maybe related stderr');
     expect(cli.log).toContain(marker);
-  });
-
-  it('should report the running test case as failed when worker exits unexpectedly', async () => {
-    const { expectExecFailed, cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'worker.panic.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: fixtureDir,
-        },
-      },
-    });
-
-    await expectExecFailed();
     // The case that was running at crash time is attributed as a failed test
     // case rather than silently dropped from the counts (#1535).
-    expect(cli.log).toContain('should crash the worker process');
-    expect(cli.stdout).toMatch(/Tests\s+1 failed/);
+    expect(
+      cli.log,
+      'case running at crash time is reported by name (#1535)',
+    ).toContain('should crash the worker process');
+    expect(
+      cli.stdout,
+      'crashed case counted as a failed test, not dropped (#1535)',
+    ).toMatch(/Tests\s+1 failed/);
   });
 
   it('lets pool.execArgv override the heap limit inherited from the host', async ({
