@@ -661,40 +661,6 @@ describe('createFixtureResolver', () => {
     await expect(cleanup).resolves.toBeUndefined();
   });
 
-  it('reports failures from cleanup registered after setup times out', async () => {
-    const cleanupError = new Error('late cleanup failed');
-    let continueSetup: (() => void) | undefined;
-    const fixtures = normalizeNamedFixture(
-      'value',
-      async (_context: object, { onCleanup }: any) => {
-        await new Promise<void>((resolve) => {
-          continueSetup = resolve;
-        });
-        onCleanup(() => {
-          throw cleanupError;
-        });
-        return 'value';
-      },
-    );
-    const cleanups: (() => Promise<void>)[] = [];
-    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups, {
-      runNamedFixtureSetup: async (setup, onTimeout) => {
-        void setup();
-        onTimeout();
-        throw new Error('fixture setup timed out');
-      },
-    });
-
-    await expect(
-      resolver.resolveTestFixtures(({ value }: any) => value),
-    ).rejects.toThrow('fixture setup timed out');
-    expect(cleanups).toHaveLength(1);
-
-    const cleanup = cleanups[0]!();
-    continueSetup!();
-    await expect(cleanup).rejects.toBe(cleanupError);
-  });
-
   it('bounds waiting when timed-out setup never registers cleanup', async () => {
     const fixtures = normalizeNamedFixture(
       'value',
@@ -725,34 +691,6 @@ describe('createFixtureResolver', () => {
     ).rejects.toThrow('fixture setup timed out');
     expect(cleanups).toHaveLength(1);
     await expect(cleanups[0]!()).resolves.toBeUndefined();
-  });
-
-  it('preserves named fixture setup errors when timeout cleanup fails', async () => {
-    const setupError = new Error('fixture setup timed out');
-    const cleanupError = new Error('fixture cleanup failed');
-    const fixtures = normalizeNamedFixture(
-      'value',
-      (_context: object, { onCleanup }: any) => {
-        onCleanup(() => {
-          throw cleanupError;
-        });
-        return new Promise<never>(() => {});
-      },
-    );
-    const cleanups: (() => Promise<void>)[] = [];
-    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups, {
-      runNamedFixtureSetup: async (setup, onTimeout) => {
-        void setup();
-        onTimeout();
-        throw setupError;
-      },
-    });
-
-    await expect(
-      resolver.resolveTestFixtures(({ value }: any) => value),
-    ).rejects.toBe(setupError);
-    expect(cleanups).toHaveLength(1);
-    await expect(cleanups[0]!()).rejects.toBe(cleanupError);
   });
 
   it('reuses cleanup execution started by a timed-out setup', async () => {

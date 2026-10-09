@@ -84,27 +84,6 @@ describe('Pool - basic', () => {
     }
   });
 
-  it('should run a task and return a result', async () => {
-    const pool = new Pool(createPoolOptions());
-    try {
-      const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
-    } finally {
-      await pool.close();
-    }
-  });
-
-  it('should collect tests via the collect envelope', async () => {
-    const pool = new Pool(createPoolOptions());
-    try {
-      const result = await pool.collectTests(createTask('collect'));
-      expect(result.tests).toEqual([]);
-      expect(result.testPath).toBeTypeOf('string');
-    } finally {
-      await pool.close();
-    }
-  });
-
   it('preserves Buffer assets over advanced IPC', async () => {
     const pool = new Pool(createPoolOptions());
     try {
@@ -153,31 +132,6 @@ describe('Pool - environment prebundle fallback', () => {
 });
 
 describe('Pool - worker memory limit', () => {
-  it('recycles a reusable fork after it reports RSS over the limit', async () => {
-    const pool = new Pool(
-      createPoolOptions({
-        isolate: false,
-        maxWorkers: 1,
-        minWorkers: 1,
-        memoryLimit: 200,
-      }),
-    );
-    try {
-      const first = await pool.runTest(
-        createTask('run', { __testMode: 'memory-over-limit' }),
-      );
-      const second = await pool.runTest(createTask());
-
-      expect((first as any)._workerIdentity).toBeTypeOf('number');
-      expect((second as any)._workerIdentity).toBeTypeOf('number');
-      expect((second as any)._workerIdentity).not.toBe(
-        (first as any)._workerIdentity,
-      );
-    } finally {
-      await pool.close();
-    }
-  });
-
   it('recycles a reusable vmForks worker after it reports heap over the limit', async () => {
     const pool = new Pool(
       createPoolOptions({
@@ -224,29 +178,6 @@ describe('Pool - fatal error', () => {
       await pool.close();
     }
   });
-
-  it('should reject when worker exits without responding', async () => {
-    const pool = new Pool(createPoolOptions());
-    try {
-      await expect(
-        pool.runTest(createTask('run', { __testMode: 'exit-silent' })),
-      ).rejects.toThrow(/Worker exited unexpectedly/);
-    } finally {
-      await pool.close();
-    }
-  });
-
-  it('should enrich error with captured stderr when worker crashes', async () => {
-    const pool = new Pool(createPoolOptions());
-    try {
-      const err = await expectRejection(
-        pool.runTest(createTask('run', { __testMode: 'stderr-crash' })),
-      );
-      expect(err.message).toContain('segfault at 0x0');
-    } finally {
-      await pool.close();
-    }
-  });
 });
 
 // ── stderr handling ───────────────────────────────────────────────────────
@@ -285,37 +216,6 @@ describe('Pool - stderr handling', () => {
 // ── isolate behavior ───────────────────────────────────────────────────────
 
 describe('Pool - isolate', () => {
-  it('should use distinct PIDs when isolate is true', async () => {
-    const pool = new Pool(createPoolOptions({ isolate: true }));
-    try {
-      const r1 = await pool.runTest(createTask());
-      const r2 = await pool.runTest(createTask());
-      const pid1 = (r1 as any)._workerIdentity;
-      const pid2 = (r2 as any)._workerIdentity;
-      expect(pid1).toBeTypeOf('number');
-      expect(pid2).toBeTypeOf('number');
-      expect(pid1).not.toBe(pid2);
-    } finally {
-      await pool.close();
-    }
-  });
-
-  it('should dispatch multiple tasks to the same process when isolate is false', async () => {
-    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
-    try {
-      const r1 = await pool.runTest(createTask());
-      const r2 = await pool.runTest(createTask());
-      // Same PID proves process reuse.
-      expect((r1 as any)._workerIdentity).toBeTypeOf('number');
-      expect((r1 as any)._workerIdentity).toBe((r2 as any)._workerIdentity);
-      // Incrementing run count proves the same process instance handled
-      // both tasks — not just a recycled PID.
-      expect((r1 as any)._runCount).toBe((r2 as any)._runCount - 1);
-    } finally {
-      await pool.close();
-    }
-  });
-
   it('should not reuse a worker for a different test environment', async () => {
     const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
     try {

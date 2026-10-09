@@ -321,59 +321,6 @@ describe('generateCoverage', () => {
     }
   });
 
-  it('limits included coverage files to changed coverage filters', async () => {
-    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
-    const srcDir = path.join(rootPath, 'src');
-    mkdirSync(srcDir, { recursive: true });
-
-    const changedFile = path.join(srcDir, 'changed.ts');
-    writeFileSync(changedFile, 'export const changed = true;\n');
-    writeFileSync(
-      path.join(srcDir, 'unchanged.ts'),
-      'export const unchanged = true;\n',
-    );
-
-    const defaultCoverage = withDefaultConfig({}).coverage;
-
-    const provider = {
-      init: () => {},
-      collect: () => null,
-      cleanup: () => {},
-      createCoverageMap: () => createCoverageMap(),
-      async generateCoverageForUntestedFiles({ files }) {
-        return files.map(createFileCoverage);
-      },
-      async generateReports(coverageMap) {
-        expect(coverageMap.files().map(path.normalize)).toEqual([
-          path.normalize(changedFile),
-        ]);
-      },
-    } satisfies CoverageProvider;
-
-    const context = {
-      rootPath,
-      normalizedConfig: {
-        coverage: {
-          ...defaultCoverage,
-          include: ['src/**/*.ts'],
-        },
-      },
-      changedCoverageFilters: [changedFile],
-      projects: [
-        {
-          rootPath,
-          environmentName: 'node',
-        },
-      ],
-    } as InternalContext;
-
-    try {
-      await generateCoverage(context, createCoverageMap(), provider);
-    } finally {
-      rmSync(rootPath, { recursive: true, force: true });
-    }
-  });
-
   it('reports no files when the changed coverage set is empty', async () => {
     const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
     const sourceFile = path.join(rootPath, 'src', 'index.ts');

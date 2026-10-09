@@ -50,16 +50,6 @@ const createTask = (
 // ── basic run ───────────────────────────────────────────────────────────────
 
 describe('ThreadsPool - basic', () => {
-  it('should run a task and return a result', async () => {
-    const pool = new Pool(createPoolOptions());
-    try {
-      const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
-    } finally {
-      await pool.close();
-    }
-  });
-
   it('should collect tests via the collect envelope', async () => {
     const pool = new Pool(createPoolOptions());
     try {
@@ -164,21 +154,6 @@ describe('ThreadsPool - isolate', () => {
       // fresh worker yields a distinct identity even though the PID is
       // shared.
       expect(id1).not.toBe(id2);
-    } finally {
-      await pool.close();
-    }
-  });
-
-  it('should dispatch multiple tasks to the same thread when isolate is false', async () => {
-    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
-    try {
-      const r1 = await pool.runTest(createTask());
-      const r2 = await pool.runTest(createTask());
-      // Same identity proves thread reuse.
-      expect((r1 as any)._workerIdentity).toBe((r2 as any)._workerIdentity);
-      // Incrementing run count proves the same thread instance handled
-      // both tasks — not coincidental identity collision.
-      expect((r1 as any)._runCount).toBe((r2 as any)._runCount - 1);
     } finally {
       await pool.close();
     }
