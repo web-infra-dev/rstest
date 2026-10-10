@@ -195,6 +195,12 @@ describe('failing fixtures', () => {
     expect(cli.stderr, 'per-test 200ms timeout does not trip').not.toContain(
       'test timed out in 200ms',
     );
+    // "No FAIL line" also holds for a skipped case, and the per-file `(n)`
+    // counts skipped tests, so guard the launch summary against skips.
+    expect(
+      cli.stdout,
+      'no case in the failing launch is skipped, so a missing FAIL line for repeat scheduling sanity or the per-test timeout override means the case passed',
+    ).toMatch(/^\s*Tests\s+\d+ failed \| \d+ passed \(\d+\)\r?$/m);
 
     expect(cli.exec.process?.exitCode).toBe(1);
   }, 10000);
