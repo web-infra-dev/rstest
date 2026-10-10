@@ -1,3 +1,4 @@
+import { SourceTextModule } from 'node:vm';
 import { describe, expect, it, rstest } from '@rstest/core';
 
 // Follow-up for https://github.com/web-infra-dev/rstest/issues/1492
@@ -38,6 +39,28 @@ describe('spyOn on a frozen ES module namespace export', () => {
 
     expect(message).toContain('[Rstest]');
     expect(message).toContain("rs.mock('<module>', { spy: true })");
+  });
+
+  it('rejects a native module namespace without changing its export', async () => {
+    const module = new SourceTextModule("export const greet = () => 'real';");
+    await module.link(() => {
+      throw new Error('Unexpected dependency');
+    });
+    await module.evaluate();
+
+    // Node types expose namespace as Object, without the evaluated export shape.
+    const ns = module.namespace as { greet: () => string };
+    const original = ns.greet;
+    const descriptor = Object.getOwnPropertyDescriptor(ns, 'greet');
+    expect(Object.prototype.toString.call(ns)).toBe('[object Module]');
+    expect(descriptor?.configurable).toBe(false);
+
+    const message = messageOf(() => rstest.spyOn(ns, 'greet'));
+    expect(message).toContain('[Rstest]');
+    expect(message).toContain("rs.mock('<module>', { spy: true })");
+    expect(ns.greet).toBe(original);
+    expect(ns.greet()).toBe('real');
+    expect(Object.getOwnPropertyDescriptor(ns, 'greet')).toEqual(descriptor);
   });
 
   it('leaves ordinary non-configurable properties with their original error', () => {

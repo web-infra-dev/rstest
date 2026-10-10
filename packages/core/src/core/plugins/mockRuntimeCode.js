@@ -261,6 +261,7 @@ const defineExportsWithCjsInterop = (moduleObj, __webpack_exports__) => {
   for (const key of Object.getOwnPropertyNames(moduleObj)) {
     if (!hasOwn(__webpack_exports__, key)) {
       Object.defineProperty(__webpack_exports__, key, {
+        configurable: true,
         enumerable: true,
         get: () => moduleObj[key],
       });
@@ -269,6 +270,7 @@ const defineExportsWithCjsInterop = (moduleObj, __webpack_exports__) => {
   if (!moduleObj.__esModule && !('default' in moduleObj)) {
     if (!hasOwn(__webpack_exports__, 'default')) {
       Object.defineProperty(__webpack_exports__, 'default', {
+        configurable: true,
         enumerable: true,
         get: () => moduleObj,
       });
