@@ -1,45 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
-import { copyFixturePackage } from './copyFixturePackage';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test interop', () => {
-  beforeAll(() => {
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-interop'),
-      join(__dirname, './node_modules/test-interop'),
-    );
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-interop'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
-    );
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-lodash'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
-    );
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-module-field'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-module-field'),
-    );
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-vm-external'),
-      join(__dirname, './node_modules/test-vm-external'),
-    );
-    fse.copySync(
-      join(__dirname, './fixtures/test-vm-external/helper.cjs'),
-      join(
-        __dirname,
-        './node_modules/test-vm-external/node_modules/legacy/index.js',
-      ),
-    );
-  });
-
   it('should interopDefault and resolve the module field correctly in jsdom test environment', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

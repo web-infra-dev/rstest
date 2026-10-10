@@ -1,9 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
-import { copyFixturePackage } from './copyFixturePackage';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,21 +44,6 @@ async function readTestOutput(testName = 'index'): Promise<string> {
 }
 
 describe('test bundleDependencies', () => {
-  beforeAll(() => {
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-lodash'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
-    );
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-module-field'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-module-field'),
-    );
-    copyFixturePackage(
-      join(__dirname, './fixtures/test-interop'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
-    );
-  });
-
   it('should externalize dependencies in jsdom when bundleDependencies is false', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
