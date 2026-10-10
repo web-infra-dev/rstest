@@ -30,8 +30,19 @@ const newestMtime = (dir: string): number => {
  * that worker's CLI may be reading it.
  */
 export const copyFixturePackage = (source: string, dest: string) => {
-  const isFresh = () =>
-    fs.existsSync(dest) && fs.statSync(dest).mtimeMs >= newestMtime(source);
+  const isFresh = () => {
+    let destMtime: number;
+    try {
+      destMtime = fs.statSync(dest).mtimeMs;
+    } catch (error) {
+      // Another worker can move `dest` aside between any two calls.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    }
+    return destMtime >= newestMtime(source);
+  };
   if (isFresh()) {
     return;
   }
