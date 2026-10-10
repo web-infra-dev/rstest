@@ -57,7 +57,7 @@ describe('browser mode - snapshot', () => {
     fixturesFs = undefined;
   });
 
-  it('should create and match standard snapshots', async () => {
+  it('should create and match standard, error, file and inline snapshots', async () => {
     const mergedFiles = [
       'tests/snapshot.test.ts',
       'tests/error.test.ts',

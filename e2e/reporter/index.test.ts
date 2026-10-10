@@ -84,10 +84,18 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('1 skipped');
   });
 
-  it('default - silent passed-only', async ({ onTestFinished }) => {
+  it('default - silent passed-only, including concurrent tasks and multiple failures sharing logs', async ({
+    onTestFinished,
+  }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/silent.test.ts', '--silent=passed-only'],
+      args: [
+        'run',
+        'fixtures/silent.test.ts',
+        'fixtures/silentConcurrent.test.ts',
+        'fixtures/silentMultipleFailures.test.ts',
+        '--silent=passed-only',
+      ],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -97,17 +105,61 @@ describe.concurrent('reporters', () => {
     });
 
     await cli.exec;
-    expect(cli.stdout).toContain('file level log');
-    expect(cli.stdout).toContain('failing suite log');
-    expect(cli.stdout).toContain('failing case log');
-    expect(cli.stdout.indexOf('file level log')).toBeLessThan(
-      cli.stdout.indexOf('failing suite log'),
+    await cli.waitForStreamsEnd();
+    // Log blocks from different files interleave, so key each check on the
+    // `log | <file> > <task>` header.
+    const fileLog = 'log | fixtures/silent.test.ts\nfile level log';
+    const suiteLog =
+      'log | fixtures/silent.test.ts > failing suite\nfailing suite log';
+    const caseLog =
+      'log | fixtures/silent.test.ts > failing suite > failing case\nfailing case log';
+    expect(cli.stdout, 'silent fixture reported as failing').toMatch(
+      /✗ fixtures\/silent\.test\.ts/,
     );
-    expect(cli.stdout.indexOf('failing suite log')).toBeLessThan(
-      cli.stdout.indexOf('failing case log'),
+    expect(cli.stdout).toContain(fileLog);
+    expect(cli.stdout).toContain(suiteLog);
+    expect(cli.stdout).toContain(caseLog);
+    expect(cli.stdout.indexOf(fileLog)).toBeLessThan(
+      cli.stdout.indexOf(suiteLog),
+    );
+    expect(cli.stdout.indexOf(suiteLog)).toBeLessThan(
+      cli.stdout.indexOf(caseLog),
     );
     expect(cli.stdout).not.toContain('passing suite log');
     expect(cli.stdout).not.toContain('passing case log');
+
+    expect(cli.stdout, 'silentConcurrent fixture reported as failing').toMatch(
+      /✗ fixtures\/silentConcurrent\.test\.ts/,
+    );
+    expect(
+      cli.stdout,
+      'concurrent failing case log is attributed to the failing case',
+    ).toContain(
+      'log | fixtures/silentConcurrent.test.ts > failing concurrent case\nfailing concurrent case log',
+    );
+    expect(
+      cli.stdout,
+      'concurrent passing case log is suppressed',
+    ).not.toContain('passing concurrent case log');
+
+    expect(
+      cli.stdout,
+      'silentMultipleFailures fixture reported as failing',
+    ).toMatch(/✗ fixtures\/silentMultipleFailures\.test\.ts/);
+    expect(
+      cli.stdout.match(/shared file log/g)?.length,
+      'shared file log printed once across multiple failures',
+    ).toBe(1);
+    expect(
+      cli.stdout.match(/shared suite log/g)?.length,
+      'shared suite log printed once across multiple failures',
+    ).toBe(1);
+    expect(cli.stdout, 'first failing case log printed').toContain(
+      'log | fixtures/silentMultipleFailures.test.ts > shared failing suite > first failing case\nfirst failing case log',
+    );
+    expect(cli.stdout, 'second failing case log printed').toContain(
+      'log | fixtures/silentMultipleFailures.test.ts > shared failing suite > second failing case\nsecond failing case log',
+    );
   });
 
   it('default - each project uses its own silent config', async ({
@@ -208,54 +260,6 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('file level log');
     expect(cli.stdout).toContain('failing suite log');
     expect(cli.stdout).toContain('failing case log');
-  });
-
-  it('default - silent passed-only should keep concurrent task logs associated to the failing case', async ({
-    onTestFinished,
-  }) => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        'fixtures/silentConcurrent.test.ts',
-        '--silent=passed-only',
-      ],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await cli.exec;
-    expect(cli.stdout).toContain('failing concurrent case log');
-    expect(cli.stdout).not.toContain('passing concurrent case log');
-  });
-
-  it('default - silent passed-only should only print shared file and suite logs once across multiple failures', async ({
-    onTestFinished,
-  }) => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        'fixtures/silentMultipleFailures.test.ts',
-        '--silent=passed-only',
-      ],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await cli.exec;
-    expect(cli.stdout.match(/shared file log/g)?.length).toBe(1);
-    expect(cli.stdout.match(/shared suite log/g)?.length).toBe(1);
-    expect(cli.stdout).toContain('first failing case log');
-    expect(cli.stdout).toContain('second failing case log');
   });
 
   it('hideSkippedTests', async ({ onTestFinished }) => {

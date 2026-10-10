@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 
@@ -9,36 +9,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test interop', () => {
-  beforeAll(() => {
-    fse.copySync(
-      join(__dirname, './fixtures/test-interop'),
-      join(__dirname, './node_modules/test-interop'),
-    );
-    fse.copySync(
-      join(__dirname, './fixtures/test-interop'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
-    );
-    fse.copySync(
-      join(__dirname, './fixtures/test-lodash'),
-      join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
-    );
-    fse.copySync(
-      join(__dirname, './fixtures/test-vm-external'),
-      join(__dirname, './node_modules/test-vm-external'),
-    );
-    fse.copySync(
-      join(__dirname, './fixtures/test-vm-external/helper.cjs'),
-      join(
-        __dirname,
-        './node_modules/test-vm-external/node_modules/legacy/index.js',
-      ),
-    );
-  });
-
-  it('should interopDefault correctly in jsdom test environment', async () => {
-    const { expectExecSuccess } = await runRstestCli({
+  it('should interopDefault and resolve the module field correctly in jsdom test environment', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', './fixtures/interopDefault', '--testEnvironment=jsdom'],
+      args: [
+        'run',
+        './fixtures/interopDefault',
+        './fixtures/moduleField',
+        '--testEnvironment=jsdom',
+      ],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -46,6 +25,17 @@ describe('test interop', () => {
       },
     });
 
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'interopDefault works under jsdom').toMatch(
+      /✓ fixtures\/interopDefault\.test\.ts \(1\)/,
+    );
+    expect(
+      cli.stdout,
+      'module-field pkg resolves via import and require under jsdom',
+    ).toMatch(/✓ fixtures\/moduleField\.test\.ts \(2\)/);
     await expectExecSuccess();
   });
 

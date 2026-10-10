@@ -7,7 +7,7 @@ import { killCliProcessTree, runBrowserCli, runBrowserWatchCli } from './utils';
 // defines `import.meta.rstest` in the client build, matching the node
 // behavior.
 describe.sequential('browser mode - in-source testing', () => {
-  it('discovers and runs import.meta.rstest blocks in the browser project', async () => {
+  it('discovers and runs import.meta.rstest blocks in the browser project and hides them from imported modules', async () => {
     // Verbose reporter prints test-case names, so the assertion proves the
     // in-source case actually executed (not just that the file was listed).
     const { cli, expectExecSuccess } = await runBrowserCli(
@@ -15,6 +15,23 @@ describe.sequential('browser mode - in-source testing', () => {
       { args: ['--reporter=verbose'] },
     );
 
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'in-source src/sayHi.ts runs as its own entry').toMatch(
+      /✓ src\/sayHi\.ts \(1\)/,
+    );
+    // Imported modules must not see import.meta.rstest, so the importing
+    // file's result count stays at its own single test.
+    expect(
+      cli.stdout,
+      'statically imported sayHi must not register its in-source test under tests/static.test.ts',
+    ).toMatch(/✓ tests\/static\.test\.ts \(1\)/);
+    expect(
+      cli.stdout,
+      'dynamically imported sayHi must not register its in-source test under tests/dynamic.test.ts',
+    ).toMatch(/✓ tests\/dynamic\.test\.ts \(1\)/);
     await expectExecSuccess();
 
     expect(cli.stdout).toContain('src/sayHi.ts');
@@ -39,25 +56,6 @@ describe.sequential('browser mode - in-source testing', () => {
     expect(cli.stdout).toContain(
       'src/sayHi.ts > runs the in-source test in the browser',
     );
-  });
-
-  it('does not expose import.meta.rstest to imported modules', async () => {
-    for (const testPath of ['tests/static.test.ts', 'tests/dynamic.test.ts']) {
-      const { cli, expectExecSuccess } = await runBrowserCli(
-        'browser-in-source',
-        {
-          args: [testPath, '--reporter=verbose'],
-        },
-      );
-
-      await expectExecSuccess();
-
-      expect(cli.stdout).toMatch(/Test Files.*1 passed/);
-      expect(cli.stdout).toMatch(/Tests.*1 passed/);
-      expect(cli.stdout).not.toContain(
-        'runs the in-source test in the browser',
-      );
-    }
   });
 
   it('runs in-source tests on the initial watch pass', async () => {
