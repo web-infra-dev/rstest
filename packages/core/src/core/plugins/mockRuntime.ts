@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 class MockRuntimeRspackPlugin {
   apply(compiler: Rspack.Compiler) {
-    const { RuntimeModule } = compiler.webpack;
+    const { RuntimeGlobals, RuntimeModule } = compiler.webpack;
 
     class RetestImportRuntimeModule extends RuntimeModule {
       constructor() {
@@ -27,7 +27,12 @@ class MockRuntimeRspackPlugin {
     compiler.hooks.thisCompilation.tap('RstestMockPlugin', (compilation) => {
       compilation.hooks.additionalTreeRuntimeRequirements.tap(
         'RstestAddMockRuntimePlugin',
-        (chunk) => {
+        (chunk, runtimeRequirements) => {
+          // `defineExportsWithCjsInterop` in the mock runtime calls `.r` and
+          // `.d`. Rspack only emits them when an ESM module needs them, so a
+          // CJS-only build graph would otherwise lack them.
+          runtimeRequirements.add(RuntimeGlobals.makeNamespaceObject);
+          runtimeRequirements.add(RuntimeGlobals.definePropertyGetters);
           compilation.addRuntimeModule(chunk, new RetestImportRuntimeModule());
         },
       );

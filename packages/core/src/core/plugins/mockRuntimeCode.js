@@ -248,32 +248,18 @@ const evaluateOriginalModule = (id) => {
  * This preserves `import foo from 'mod'` behavior for mocked CJS modules.
  */
 const defineExportsWithCjsInterop = (moduleObj, __webpack_exports__) => {
-  // These helpers are only emitted when the current build graph needs them.
-  // A mocked CJS module can be required even when no ESM module caused Rspack
-  // to include them in the shared runtime.
-  if (typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-    Object.defineProperty(__webpack_exports__, Symbol.toStringTag, {
-      value: 'Module',
-    });
-  }
-  Object.defineProperty(__webpack_exports__, '__esModule', { value: true });
-
+  // Rspack's `.d` defines configurable getters, which `rs.spyOn` relies on to
+  // redefine exports. Do not replace these with hand-written getters.
+  __webpack_require__.r(__webpack_exports__);
+  // A null prototype keeps a `__proto__` export as an own getter key.
+  const getters = Object.create(null);
   for (const key of Object.getOwnPropertyNames(moduleObj)) {
-    if (!hasOwn(__webpack_exports__, key)) {
-      Object.defineProperty(__webpack_exports__, key, {
-        enumerable: true,
-        get: () => moduleObj[key],
-      });
-    }
+    getters[key] = () => moduleObj[key];
   }
   if (!moduleObj.__esModule && !('default' in moduleObj)) {
-    if (!hasOwn(__webpack_exports__, 'default')) {
-      Object.defineProperty(__webpack_exports__, 'default', {
-        enumerable: true,
-        get: () => moduleObj,
-      });
-    }
+    getters.default = () => moduleObj;
   }
+  __webpack_require__.d(__webpack_exports__, getters);
 };
 
 const createMockedModule = (originalModule, isSpy) => {
