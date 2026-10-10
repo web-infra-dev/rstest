@@ -84,7 +84,7 @@ describe('require.resolve origin runtime helper', () => {
     expect(exports.self.loaded).toBe(true);
   });
 
-  it('keeps the CommonJS wrapper source stable when context parameters change', () => {
+  it('compiles the CommonJS asset text as is when context parameters change', () => {
     const compileFunctionSpy = rs.spyOn(vm, 'compileFunction');
     onTestFinished(() => {
       compileFunctionSpy.mockRestore();
@@ -114,12 +114,12 @@ describe('require.resolve origin runtime helper', () => {
     const [extraParamCode, extraParamNames, extraParamOptions] =
       compileFunctionSpy.mock.lastCall!;
 
-    expect(extraParamCode).toBe(baseCode);
+    // V8 coverage offsets then index the asset text directly.
+    expect(baseCode).toBe(loadOptions.codeContent);
+    expect(extraParamCode).toBe(loadOptions.codeContent);
     expect(extraParamNames).toContain('__rstest_future_context_param__');
-    expect(extraParamOptions?.columnOffset).toBe(baseOptions?.columnOffset);
-    expect(extraParamOptions?.columnOffset).toBe(0);
-    expect(extraParamOptions?.lineOffset).toBe(baseOptions?.lineOffset);
-    expect(extraParamOptions?.lineOffset).toBe(-1);
+    expect(baseOptions).not.toHaveProperty('lineOffset');
+    expect(extraParamOptions).not.toHaveProperty('lineOffset');
   });
 
   it('reuses setup compilation data across VM contexts', () => {

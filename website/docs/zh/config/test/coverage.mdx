@@ -184,6 +184,14 @@ Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这�
 
 由于底层覆盖率数据来自 Node.js / Chromium V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同引擎版本之间可能存在轻微差异。
 
+##### 计数精度 \{#count-accuracy}
+
+V8 按函数范围和块范围报告执行次数，Rstest 再把它们映射到语句、函数和分支上。以下情况下计数可能与 `istanbul` 不同，代码也可能被误报为已覆盖或未覆盖：
+
+- **覆盖率启动前加载的代码**：通过 `--require` / `--import` 预加载的模块、worker 中第一个测试文件加载的自定义测试环境模块，以及测试在自己的 inspector session 中调用 `Profiler.disable` 之前编译的代码，没有块级计数：函数内的每一行和每个分支都显示该函数的调用次数。在调用 `Profiler.disable` 的测试文件中，V8 之后只记录函数是否运行过，因此它调用过的每个函数计为一次；之后的测试文件不受影响。
+
+需要精确命中次数时，请使用 `istanbul` provider。
+
 ##### Ignore hints
 
 `v8` provider 在将 V8 coverage 转换为 Istanbul 格式时会识别 ignore hints。hint 前缀可以使用以下任意一种形式：

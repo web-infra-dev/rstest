@@ -204,6 +204,9 @@ const defineRstestDynamicImport =
 // `loadEsModule.ts` for the full rationale.
 const accumulatedAssetFiles: AssetFiles = {};
 
+/** The assets of every file this worker loaded since the last full cache clear. */
+export const getLoadedAssetFiles = (): AssetFiles => accumulatedAssetFiles;
+
 // Every shared runtime chunk this (possibly reused) worker has loaded under
 // `isolate: false`. Mirrors the ESM loader — a reused worker can serve multiple
 // projects (the pool has no environment affinity), so keeping a single id would
@@ -281,12 +284,10 @@ export const loadModule = ({
     vmParentModule.require = context.require;
   }
 
-  const code = `'use strict';return function(){\n${codeContent}\n}`;
-
   const params = Object.keys(context);
   const cached = cacheCompilation ? compilationCache.get(distPath) : undefined;
   const cachedData =
-    cached?.code === code &&
+    cached?.code === codeContent &&
     cached.params.length === params.length &&
     cached.params.every((param, index) => param === params[index])
       ? cached.cachedData
@@ -303,11 +304,9 @@ export const loadModule = ({
       vmContext,
     })(specifier, importAttributes as ImportCallOptions);
   };
-  let fn = vm.compileFunction(code, params, {
+  let fn = vm.compileFunction(codeContent, params, {
     // Used in stack traces produced by this script.
     filename: distPath,
-    lineOffset: -1,
-    columnOffset: 0,
     ...(vmContext ? { parsingContext: vmContext } : {}),
     ...(cachedData
       ? { cachedData }
@@ -317,19 +316,21 @@ export const loadModule = ({
     importModuleDynamically,
   });
   if (cachedData && fn.cachedDataRejected) {
-    fn = vm.compileFunction(code, params, {
+    fn = vm.compileFunction(codeContent, params, {
       filename: distPath,
-      lineOffset: -1,
-      columnOffset: 0,
       ...(vmContext ? { parsingContext: vmContext } : {}),
       produceCachedData: true,
       importModuleDynamically,
     });
   }
   if (cacheCompilation && fn.cachedDataProduced && fn.cachedData) {
-    compilationCache.set(distPath, { code, params, cachedData: fn.cachedData });
+    compilationCache.set(distPath, {
+      code: codeContent,
+      params,
+      cachedData: fn.cachedData,
+    });
   }
-  fn(...Object.values(context)).call(localModule.exports);
+  fn.call(localModule.exports, ...Object.values(context));
   localModule.loaded = true;
 
   return localModule.exports;

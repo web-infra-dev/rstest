@@ -13,6 +13,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 - Coverage stripping differs by path. Node strips at the pool before reporters or state see results. Browser results carry `result.coverage` through the sink during the run and are stripped retroactively when the cycle map is folded (the browser executor's outcome assembly, or the host's per-rerun outcome assembly in watch) — reporters DO observe browser coverage at `onTestFileResult` time.
 - Worker provider `cleanup()` runs in `finally` per file; istanbul's cleanup deletes `globalThis.__coverage__` — skipping it double-counts hits on non-isolated reruns.
+- The v8 worker provider keeps one inspector session per worker, shared by every per-file provider instance; no per-file step may stop precise coverage, disable the profiler, or disconnect: each switches the whole isolate to best-effort coverage, after which code compiled earlier reports function counts only.
 - Host full and immediate raw folds must contain merge failures: use core's logger and raise the context-local exit status, preserving pool completion and cycle results for reporting. The CLI owns mirroring that status to the process; programmatic runs must not change the host process exit code.
 - Report-stage failures are caught and raise the context-local exit status, but the raw-resolution seam inside `finalizeRunCycle` rethrows — a resource-load rejection propagates out of finalize instead of downgrading.
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
@@ -24,6 +25,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 ## Coupling points (change both sides)
 
 - A new `CoverageProvider` member → both provider packages plus the worker call sites in `../runtime/worker/runInPool.ts`.
+- Worker CommonJS loaders (`loadModule` and the VM pools' external loader) ↔ the v8 provider: the provider reads V8 offsets as positions in the file text, so a loader must compile that text unchanged — no wrapper text, a hashbang blanked in place rather than removed. Strict mode for CommonJS output comes from the build's `overrideStrict`, not from a wrapper.
 - Each provider package entry must export `{ CoverageProvider, pluginCoverage }` — both are destructured by `loadCoverageProvider` under exactly those names.
 - Keep shared counter addition and shape comparisons in both providers' `createFastCoverageMap` aligned; Istanbul additionally invalidates hashes after native unions because its raw transport uses hash equality as structural identity. Keep both providers' `mapWithConcurrency` behavior aligned.
 - Bumping `swc-plugin-coverage-instrument` ↔ `COVERAGE_MAGIC_VALUE` used by istanbul's `readInitialCoverage`.

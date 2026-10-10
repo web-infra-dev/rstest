@@ -263,6 +263,10 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
                 // and the `new URL(...).href` wasm path), not just #1455's
                 // sibling case; re-enabling `url` re-breaks every one of them.
                 url: false,
+                // The worker compiles CommonJS chunks as function bodies, so
+                // strict mode must come from the chunk itself, as it does for
+                // ES module output.
+                ...(outputModule ? {} : { overrideStrict: 'strict' }),
                 ...(config.module.parser.javascript || {}),
               };
               applyMockExportsPresence(config);
