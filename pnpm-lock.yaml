@@ -1683,6 +1683,9 @@ importers:
       '@swc-next/parser':
         specifier: 0.2.4
         version: 0.2.4
+      '@types/estree':
+        specifier: ^1.0.9
+        version: 1.0.9
       '@types/istanbul-lib-report':
         specifier: ^3.0.3
         version: 3.0.3

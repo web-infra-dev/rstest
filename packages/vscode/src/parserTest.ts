@@ -1,17 +1,11 @@
 import { type Lang, parseSync, type SourceType } from '@swc-next/parser';
+import type { Node as ESTreeNode } from 'estree';
 
-type Node = {
-  type: string;
+// SWC Next returns ESTree nodes with UTF-16 offsets but exposes program as any.
+type Node = ESTreeNode & {
   start: number;
   end: number;
-  name?: string;
-  value?: unknown;
-  callee?: Node;
-  object?: Node;
-  arguments?: Node[];
-  quasis?: { value: { cooked?: string; raw: string } }[];
-  expressions?: Node[];
-  [key: string]: unknown;
+  importKind?: 'type' | 'value';
 };
 
 export class Range {
@@ -46,6 +40,13 @@ export const parseTestFile = (
     preserveParens: false,
     sourceType: 'module' as SourceType,
   });
+  const error = result.diagnostics.find(
+    (diagnostic) => diagnostic.severity === 'error',
+  );
+  if (error) {
+    throw new SyntaxError(error.message);
+  }
+
   const offsetToRange = (start: number, end: number): Range => {
     const lines = code.substring(0, start).split('\n');
     const startLine = Math.max(0, lines.length - 1);
@@ -65,14 +66,10 @@ export const parseTestFile = (
     if (node?.type !== 'TemplateLiteral') {
       return null;
     }
-    if (!node.quasis || !node.expressions) {
-      return null;
-    }
-    const expressions = node.expressions;
 
     return node.quasis
       .map((quasi, index) => {
-        const expression = index < expressions.length ? '${...}' : '';
+        const expression = index < node.expressions.length ? '${...}' : '';
         return `${quasi.value.cooked ?? quasi.value.raw}${expression}`;
       })
       .join('');
@@ -389,11 +386,11 @@ export const parseTestFile = (
     if (node.type === 'CallExpression') {
       let functionName: string | undefined;
 
-      if (node.callee?.type === 'Identifier') {
+      if (node.callee.type === 'Identifier') {
         functionName = node.callee.name;
       } else if (
-        node.callee?.type === 'MemberExpression' &&
-        node.callee.object?.type === 'Identifier'
+        node.callee.type === 'MemberExpression' &&
+        node.callee.object.type === 'Identifier'
       ) {
         functionName = node.callee.object.name;
       }
@@ -404,7 +401,7 @@ export const parseTestFile = (
         functionName === 'describe' ||
         functionName === 'suite'
       ) {
-        const title = node.arguments[0];
+        const title = isNode(node.arguments[0]) ? node.arguments[0] : undefined;
         if (
           isNode(title) &&
           (title.type === 'FunctionExpression' ||
@@ -415,12 +412,8 @@ export const parseTestFile = (
         }
         exit = events.onTest(
           offsetToRange(node.start, node.end),
-          getStringLiteralValue(node.arguments[0]) ||
-            getFunctionName(
-              node.arguments[0],
-              scopesByNode.get(node),
-              node.start,
-            ) ||
+          getStringLiteralValue(title) ||
+            getFunctionName(title, scopesByNode.get(node), node.start) ||
             'unnamed test',
           functionName,
         );
