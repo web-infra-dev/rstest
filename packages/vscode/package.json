@@ -272,7 +272,7 @@
     "@rsbuild/core": "catalog:",
     "@rslib/core": "catalog:",
     "@rstest/core": "workspace:*",
-    "@swc-next/parser": "0.2.1",
+    "@swc-next/parser": "0.2.4",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
