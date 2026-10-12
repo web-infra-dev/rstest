@@ -2,6 +2,7 @@ import { useI18n, useLang } from '@rspress/core/runtime';
 import { Link } from '@rspress/core/theme-original';
 import { version } from '../../../packages/core/package.json';
 import { useI18nUrl } from '../components/utils';
+import { AdaptersPatchFigure } from '../ui/AdaptersPatchFigure';
 import { BrowserStackFigure } from '../ui/BrowserStackFigure';
 import { JestMigrateFigure } from '../ui/JestMigrateFigure';
 import { PipelineStackFigure } from '../ui/PipelineStackFigure';
@@ -255,7 +256,7 @@ export function HomeLayout() {
               ))}
             </ul>
           </FeatureText>
-          <FeatureVisual />
+          <AdaptersPatchFigure />
         </Grid>
       </Section>
 
