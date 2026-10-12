@@ -104,6 +104,7 @@ microtask
 microtasks
 misattributed
 mjsx
+modernjs
 modu
 modularly
 mtsx
