@@ -11,3 +11,6 @@ LICENSE.md
 
 # ignore pnpm-lock
 pnpm-lock.yaml
+
+# Vendored hairline engine, kept byte-for-byte
+website/theme/ui/hairline/kernel.js
