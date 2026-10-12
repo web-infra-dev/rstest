@@ -1,4 +1,12 @@
-import { type Node, parse } from 'yuku-parser';
+import { type Lang, parseSync, type SourceType } from '@swc-next/parser';
+import type { Node as ESTreeNode } from 'estree';
+
+// SWC Next returns ESTree nodes with UTF-16 offsets but exposes program as any.
+type Node = ESTreeNode & {
+  start: number;
+  end: number;
+  importKind?: 'type' | 'value';
+};
 
 export class Range {
   constructor(
@@ -25,10 +33,12 @@ export const parseTestFile = (
     ): (() => void) | void;
   },
 ) => {
-  const result = parse(code, {
-    lang: 'tsx',
+  const result = parseSync(code, {
+    // SWC Next declares these runtime strings as ambient const enums, which
+    // cannot be referenced when isolatedModules is enabled.
+    lang: 'tsx' as Lang,
     preserveParens: false,
-    sourceType: 'module',
+    sourceType: 'module' as SourceType,
   });
   const error = result.diagnostics.find(
     (diagnostic) => diagnostic.severity === 'error',
@@ -391,7 +401,7 @@ export const parseTestFile = (
         functionName === 'describe' ||
         functionName === 'suite'
       ) {
-        const title = node.arguments[0];
+        const title = isNode(node.arguments[0]) ? node.arguments[0] : undefined;
         if (
           isNode(title) &&
           (title.type === 'FunctionExpression' ||
@@ -402,12 +412,8 @@ export const parseTestFile = (
         }
         exit = events.onTest(
           offsetToRange(node.start, node.end),
-          getStringLiteralValue(node.arguments[0]) ||
-            getFunctionName(
-              node.arguments[0],
-              scopesByNode.get(node),
-              node.start,
-            ) ||
+          getStringLiteralValue(title) ||
+            getFunctionName(title, scopesByNode.get(node), node.start) ||
             'unnamed test',
           functionName,
         );
