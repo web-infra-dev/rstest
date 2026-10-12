@@ -1,14 +1,17 @@
 import { useI18n, useLang } from '@rspress/core/runtime';
 import { Link } from '@rspress/core/theme-original';
+import { version } from '../../../packages/core/package.json';
 import { useI18nUrl } from '../components/utils';
+import { BrowserStackFigure } from '../ui/BrowserStackFigure';
+import { JestMigrateFigure } from '../ui/JestMigrateFigure';
+import { PipelineStackFigure } from '../ui/PipelineStackFigure';
 import {
-  Badge,
   Button,
   Cell,
-  Chip,
+  FeatureText,
+  InstallCommand,
   Grid,
   Section,
-  Window,
 } from '../ui/primitives';
 
 const RSTACK_TOOLS = [
@@ -67,42 +70,21 @@ const ADAPTER_DESC = {
   zh: '适配器允许你将来自其他工具（如构建工具或 CLI）的配置转换为 Rstest 支持的配置格式',
 };
 
+const ADAPTER_BODY = {
+  en: 'Point Rstest at your Rsbuild, Rslib, or Rspack config and keep one source of truth.',
+  zh: '让 Rstest 直接复用 Rsbuild、Rslib 或 Rspack 的配置，只维护一份。',
+};
+
 const ADAPTER_POINTS = {
   en: [
-    [
-      'Reuse configuration',
-      'Convert existing build tool configurations (e.g., path aliases, global variables) into test configurations to avoid redundant definitions.',
-    ],
-    [
-      'Framework customization',
-      'Let frameworks or templates preset test configurations, such as setup scripts, timeouts, or the default test environment.',
-    ],
-    [
-      'Simplify maintenance',
-      'Centralize configuration management and reduce the hassle of manually synchronizing configurations across tools.',
-    ],
-    [
-      'Quick integration',
-      'Integrate Rstest into an existing project quickly by reusing what the project already configures.',
-    ],
+    'Reuse path aliases and global variables from your build config',
+    'Let frameworks preset setup files and test defaults',
+    'No more syncing settings by hand across tools',
   ],
   zh: [
-    [
-      '复用配置',
-      '将已有的构建工具配置（如路径别名、全局变量等）转换为测试配置，避免重复定义。',
-    ],
-    [
-      '框架定制',
-      '允许框架或模板预设测试配置，例如 setup 脚本、超时时间或默认测试环境。',
-    ],
-    [
-      '简化维护',
-      '集中管理配置，减少手动同步不同工具配置的麻烦，降低出错可能性。',
-    ],
-    [
-      '快速集成',
-      '通过适配器快速将 Rstest 集成到现有项目，复用已有的项目配置。',
-    ],
+    '复用构建配置中的路径别名和全局变量',
+    '由框架预设 setup 脚本、超时时间和测试环境',
+    '无需在不同工具之间手动同步配置',
   ],
 };
 
@@ -152,216 +134,181 @@ function FeatureVisual({ className = '' }: { className?: string }) {
   return <div className={`min-h-72 min-w-0 bg-surface ${className}`} />;
 }
 
-function TestFileWindow() {
-  return (
-    <Window title="index.test.ts">
-      <code>
-        <span className="text-syntax-keyword">import</span> {'{ expect, test }'}{' '}
-        <span className="text-syntax-keyword">from</span>{' '}
-        <span className="text-syntax-string">'@rstest/core'</span>;{'\n'}
-        <span className="text-syntax-keyword">import</span> {'{ sayHi }'}{' '}
-        <span className="text-syntax-keyword">from</span>{' '}
-        <span className="text-syntax-string">'../src/index'</span>;{'\n\n'}
-        <span className="text-syntax-fn">test</span>(
-        <span className="text-syntax-string">'should sayHi correctly'</span>,
-        {' () => {'}
-        {'\n  '}
-        <span className="text-syntax-fn">expect</span>(
-        <span className="text-syntax-fn">sayHi</span>()).
-        <span className="text-syntax-fn">toBe</span>(
-        <span className="text-syntax-string">'hi'</span>);{'\n'}
-        {'});'}
-      </code>
-    </Window>
-  );
-}
+// The `subtitle` i18n entry split over two lines, around the accented "Rspack".
+const HERO_TITLE = {
+  en: ['', '-based', 'Testing Framework'],
+  zh: ['由 ', ' 驱动的', '测试框架'],
+};
 
-function TerminalWindow() {
-  return (
-    <Window title="npx rstest">
-      <code>
-        <span className="text-syntax-pass">{' ✓ '}</span>
-        {'test/index.test.ts (2 tests) 1ms\n\n'}
-        <span className="text-fg-muted">{' Test Files '}</span>
-        <span className="text-syntax-pass">{'1 passed'}</span>
-        {' (1)\n'}
-        <span className="text-fg-muted">{'      Tests '}</span>
-        <span className="text-syntax-pass">{'2 passed'}</span>
-        {' (2)\n'}
-        <span className="text-fg-muted">{'   Duration '}</span>
-        {'189 ms (build 22 ms, tests 167 ms)'}
-      </code>
-    </Window>
-  );
-}
+// A short form of the quick start guide's agent prompt; the linked guide holds the steps.
+const AGENT_PROMPT =
+  'Set up Rstest in this project: https://rstest.rs/guide/start/agent-install.md';
+
+const LATEST_RELEASE = { en: 'Latest release', zh: '最新版本' };
+
+const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
+
+const ADAPTER_TITLE = {
+  en: 'Reuse the config you already have',
+  zh: '复用你已有的配置',
+};
+
+const BODY = 'mt-3 text-[15px]/[1.7] text-fg-muted';
 
 export function HomeLayout() {
   const t = useI18n<typeof import('i18n')>();
   const tUrl = useI18nUrl();
   const lang = useLang() === 'zh' ? 'zh' : 'en';
 
-  // Both locales phrase the subtitle around "Rspack", so accent that token.
-  const [beforeRspack, afterRspack] = t('subtitle').split('Rspack');
-
   return (
-    <main>
-      <section className="mx-auto grid w-full max-w-6xl gap-10 px-6 pt-12 pb-8 lg:grid-cols-2 lg:items-center lg:gap-12">
-        <div>
-          <Badge>
-            <img
-              src="https://assets.rspack.rs/rstest/rstest-logo.svg"
-              alt=""
-              className="size-3.5"
-            />
-            @rstest/core
-          </Badge>
-          <h1 className="mt-5 text-5xl leading-[0.95] font-bold tracking-tighter text-fg sm:text-7xl">
-            {beforeRspack}
+    <main className="pb-6">
+      <section className="mx-auto flex w-full max-w-6xl flex-col items-center px-6 pt-16 pb-12 text-center lg:pt-24 lg:pb-16">
+        <a
+          href={`https://github.com/web-infra-dev/rstest/releases/tag/v${version}`}
+          className="text-sm text-fg-muted transition-colors hover:text-fg"
+        >
+          {LATEST_RELEASE[lang]} v{version}
+        </a>
+        <h1 className="mt-5 text-[40px]/[1.1] font-semibold tracking-[-0.055em] sm:text-[64px]/[1.1]">
+          <span className="block text-fg">
+            {HERO_TITLE[lang][0]}
             <span className="text-brand">Rspack</span>
-            {afterRspack}
-          </h1>
-          <p className="mt-5 max-w-lg text-base text-fg-muted">{t('slogan')}</p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Button href={tUrl('/guide/start/quick-start')} LinkComp={Link}>
-              {t('quickStart')}
-            </Button>
-            <Button
-              href="https://github.com/web-infra-dev/rstest"
-              variant="secondary"
-            >
-              GitHub
-            </Button>
-          </div>
+            {HERO_TITLE[lang][1]}
+          </span>
+          <span className="block text-[#999]">{HERO_TITLE[lang][2]}</span>
+        </h1>
+        <p className="mt-6 max-w-xl text-[19px]/[1.6] text-fg-muted">
+          {t('slogan')}
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <Button href={tUrl('/guide/start/quick-start')} LinkComp={Link}>
+            {t('quickStart')}
+          </Button>
+          <Button
+            href="https://github.com/web-infra-dev/rstest"
+            variant="secondary"
+          >
+            GitHub
+          </Button>
         </div>
-
-        <div className="grid gap-px border border-line bg-line">
-          <TestFileWindow />
-          <TerminalWindow />
+        <div className="mt-6 flex w-full justify-center">
+          <InstallCommand prompt={AGENT_PROMPT} args="add @rstest/core -D" />
         </div>
       </section>
 
       <Section
+        index="01"
         eyebrow="Build pipeline"
         description={t('productionAccurateTestingDesc')}
       >
         <Grid columns="lg:grid-cols-2">
-          <div className="flex flex-col justify-center bg-surface p-6">
-            <h3 className="text-[19px] font-semibold text-fg">
-              {t('productionAccurateTesting')}
-            </h3>
-            <p className="mt-3 text-[14px]/[1.7] text-fg-muted">
-              {PIPELINE_BODY[lang]}
-            </p>
-          </div>
-          <FeatureVisual />
+          <FeatureText
+            title={t('productionAccurateTesting')}
+            href={tUrl('/guide/start/')}
+            linkLabel={LEARN_MORE[lang]}
+            LinkComp={Link}
+          >
+            <p className={BODY}>{PIPELINE_BODY[lang]}</p>
+          </FeatureText>
+          <PipelineStackFigure />
         </Grid>
       </Section>
 
-      <Section eyebrow="Browser mode" description={t('realBrowserTestingDesc')}>
+      <Section
+        index="02"
+        eyebrow="Browser mode"
+        description={t('realBrowserTestingDesc')}
+      >
         {/* Zigzag: this showcase runs animation-left / text-right on desktop.
             DOM keeps text first so mobile still reads copy before the visual. */}
         <Grid columns="lg:grid-cols-2">
-          <div className="flex flex-col justify-center bg-surface p-6 lg:order-2">
-            <h3 className="text-[19px] font-semibold text-fg">
-              {t('realBrowserTesting')}
-            </h3>
-            <p className="mt-3 text-[14px]/[1.7] text-fg-muted">
-              {BROWSER_MODE_BODY[lang]}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-1.5">
-              <Chip>Chromium</Chip>
-              <Chip>Firefox</Chip>
-              <Chip>WebKit</Chip>
-              <Chip>page.getByRole()</Chip>
-              <Chip>expect.element()</Chip>
-            </div>
-          </div>
-          <FeatureVisual className="lg:order-1" />
+          <FeatureText
+            title={t('realBrowserTesting')}
+            href={tUrl('/guide/browser-testing/')}
+            linkLabel={LEARN_MORE[lang]}
+            LinkComp={Link}
+            className="lg:order-2"
+          >
+            <p className={BODY}>{BROWSER_MODE_BODY[lang]}</p>
+          </FeatureText>
+          <BrowserStackFigure className="lg:order-1" />
         </Grid>
       </Section>
 
-      <Section eyebrow="Adapters" description={ADAPTER_DESC[lang]}>
+      <Section index="03" eyebrow="Adapters" description={ADAPTER_DESC[lang]}>
         <Grid columns="lg:grid-cols-2">
-          <dl className="bg-surface p-5">
-            {ADAPTER_POINTS[lang].map(([term, desc]) => (
-              <div key={term} className="mt-4 first:mt-0">
-                <dt className="text-[15px] font-semibold text-fg">{term}</dt>
-                <dd className="mt-1 text-[13px]/[1.6] text-fg-muted">{desc}</dd>
-              </div>
-            ))}
-          </dl>
+          <FeatureText
+            title={ADAPTER_TITLE[lang]}
+            href={tUrl('/guide/advanced/adapters')}
+            linkLabel={LEARN_MORE[lang]}
+            LinkComp={Link}
+          >
+            <p className={BODY}>{ADAPTER_BODY[lang]}</p>
+            <ul className="mt-5 space-y-2.5">
+              {ADAPTER_POINTS[lang].map((point) => (
+                <li
+                  key={point}
+                  className="flex gap-3 text-[15px]/[1.5] text-fg before:mt-[0.6em] before:size-1 before:shrink-0 before:rounded-full before:bg-fg-subtle"
+                >
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </FeatureText>
           <FeatureVisual />
         </Grid>
       </Section>
 
-      <Section eyebrow="Jest compatible" description={JEST_COMPAT[lang].desc}>
+      <Section
+        index="04"
+        eyebrow="Jest compatible"
+        description={JEST_COMPAT[lang].desc}
+      >
         {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
         <Grid columns="lg:grid-cols-2">
-          <div className="flex flex-col justify-center bg-surface p-6 lg:order-2">
-            <h3 className="text-[19px] font-semibold text-fg">
-              {JEST_COMPAT[lang].title}
-            </h3>
-            <p className="mt-3 text-[14px]/[1.7] text-fg-muted">
-              {JEST_COMPAT[lang].body}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-1.5">
-              <Chip>describe</Chip>
-              <Chip>test</Chip>
-              <Chip>expect</Chip>
-              <Chip>toMatchSnapshot()</Chip>
-              <Chip>globals</Chip>
-            </div>
-          </div>
-          <FeatureVisual className="lg:order-1" />
+          <FeatureText
+            title={JEST_COMPAT[lang].title}
+            href={tUrl('/guide/migration/jest')}
+            linkLabel={LEARN_MORE[lang]}
+            LinkComp={Link}
+            className="lg:order-2"
+          >
+            <p className={BODY}>{JEST_COMPAT[lang].body}</p>
+          </FeatureText>
+          <JestMigrateFigure className="lg:order-1" />
         </Grid>
       </Section>
 
-      <Section eyebrow="Playwright E2E" description={PLAYWRIGHT[lang].desc}>
+      <Section
+        index="05"
+        eyebrow="Playwright E2E"
+        description={PLAYWRIGHT[lang].desc}
+      >
         <Grid columns="lg:grid-cols-2">
-          <div className="flex flex-col justify-center bg-surface p-6">
-            <h3 className="text-[19px] font-semibold text-fg">
-              {PLAYWRIGHT[lang].title}
-            </h3>
-            <p className="mt-3 text-[14px]/[1.7] text-fg-muted">
-              {PLAYWRIGHT[lang].body}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-1.5">
-              <Chip>page.goto()</Chip>
-              <Chip>getByRole().click()</Chip>
-              <Chip>expect(page)</Chip>
-              <Chip>Node workers</Chip>
-            </div>
-          </div>
+          <FeatureText
+            title={PLAYWRIGHT[lang].title}
+            href={tUrl('/guide/basic/e2e-testing')}
+            linkLabel={LEARN_MORE[lang]}
+            LinkComp={Link}
+          >
+            <p className={BODY}>{PLAYWRIGHT[lang].body}</p>
+          </FeatureText>
           <FeatureVisual />
         </Grid>
       </Section>
 
-      <Section eyebrow="Features">
+      <Section index="06" eyebrow="Features">
         <Grid columns="sm:grid-cols-3">
           <Cell title={t('blazingFast')} description={t('blazingFastDesc')} />
           <Cell
             title={t('modernByDefault')}
             description={t('modernByDefaultDesc')}
-          >
-            <div className="flex flex-wrap gap-1.5">
-              <Chip>TypeScript</Chip>
-              <Chip>ESM</Chip>
-              <Chip>CJS</Chip>
-              <Chip>CSS Modules</Chip>
-            </div>
-          </Cell>
-          <Cell title={t('testingReady')} description={t('testingReadyDesc')}>
-            <div className="flex flex-wrap gap-1.5">
-              <Chip>expect</Chip>
-              <Chip>snapshots</Chip>
-              <Chip>mocks</Chip>
-              <Chip>coverage</Chip>
-            </div>
-          </Cell>
+          />
+          <Cell title={t('testingReady')} description={t('testingReadyDesc')} />
         </Grid>
       </Section>
 
-      <Section eyebrow="Rstack" description={RSTACK_DESC[lang]}>
+      <Section index="07" eyebrow="Rstack" description={RSTACK_DESC[lang]}>
         <Grid columns="sm:grid-cols-2 lg:grid-cols-3">
           {RSTACK_TOOLS.map((tool) => (
             <a

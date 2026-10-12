@@ -1,3 +1,22 @@
+// Rstest's primary color: the greens of the logo's cape and gauge. The deep
+// green (#008564) carries white text on the light theme; the vivid green
+// (#05b78b) takes over on the dark one.
 :root {
+  --rp-c-brand: #008564;
+  --rp-c-brand-dark: #017356;
+  --rp-c-brand-darker: #017356;
+  --rp-c-brand-light: #05b78b;
+  --rp-c-brand-lighter: #62af9c;
+  --rp-c-brand-tint: #0085641a;
   --rp-c-link: var(--rp-c-brand);
+}
+
+.dark {
+  --rp-c-brand: #05b78b;
+  --rp-c-brand-dark: #008564;
+  --rp-c-brand-darker: #017356;
+  --rp-c-brand-light: #83ead0;
+  --rp-c-brand-lighter: #83ead0;
+  --rp-c-brand-tint: #05b78b1f;
+  --rp-c-link: var(--rp-c-brand-light);
 }
