@@ -68,6 +68,11 @@
       matchDepTypes: ['peerDependencies'],
       enabled: false,
     },
+    // The standalone VS Code extension is frozen.
+    {
+      matchFileNames: ['packages/vscode/package.json'],
+      enabled: false,
+    },
   ],
   ignoreDeps: [
     // align Node.js version minimum requirements

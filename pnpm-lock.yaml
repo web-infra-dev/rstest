@@ -1726,8 +1726,8 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(typescript@6.0.3)
       yuku-parser:
-        specifier: ^0.19.0
-        version: 0.19.0
+        specifier: ^0.13.0
+        version: 0.13.0
 
   scripts:
     dependencies:
@@ -5038,6 +5038,87 @@ packages:
     resolution: {integrity: sha512-o8iY/mXwlRkedp0LNTr4+TEfXTPQwoNZmv6k+1WIAd1ZXEn8xJJTBCtB0osaVvdZo/x/cNmV16UrWrrGpM5Mvw==}
     cpu: [x64]
     os: [win32]
+
+  '@yuku-parser/binding-android-arm64@0.13.0':
+    resolution: {integrity: sha512-VnJuSTvRxgzdHyLY/g3v9JHmT2HFtyb8tiuaxsIPfu7aYv1KZQ2xOZHMpDYebRpmBsLT3V1mH13oZp8cT//peA==}
+    cpu: [arm64]
+    os: [android]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-darwin-arm64@0.13.0':
+    resolution: {integrity: sha512-EBz8YU7OpgZk7V/P9ZAVuoXrAS3HfsVVg4ImQHkh8QFAw/mMDoiasR4dEUWENxRod9qb/TFxZT/ld/CJLimheQ==}
+    cpu: [arm64]
+    os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-darwin-x64@0.13.0':
+    resolution: {integrity: sha512-ppDg5nu8FrRcDmr7jNxaUn+lpUQuu7TVm8vrh79k/UBLwGwYUWAh+ZOPRa13WhB4dRsjdHnESX0Q0A6g4wlnkg==}
+    cpu: [x64]
+    os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-freebsd-x64@0.13.0':
+    resolution: {integrity: sha512-rWqfIT380w/O2lSi8SafMvmmi3LZ8Q/0zCz74jRBYeUyuL82rKwZayydbtEmPIE5oOMGFxf3CZG5RKKjhMpaMg==}
+    cpu: [x64]
+    os: [freebsd]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-linux-arm-gnu@0.13.0':
+    resolution: {integrity: sha512-+b7fvC0h/sHyhLyBjslhodQjQSyUNxLd+8IHZ8nKtZiT5hWxLulZHEgd/O4a0l4dWkV+uxBJTpiGi00aFJKgGQ==}
+    cpu: [arm]
+    os: [linux]
+    libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-linux-arm-musl@0.13.0':
+    resolution: {integrity: sha512-aIcGDa5MzhJtCd1Ig1bYPu6VTIvHfhd6tewOHopdSLYlD2pnR7KNs9x9wLC0dX7KXvI0IJo3MTGUWY7FuAc52g==}
+    cpu: [arm]
+    os: [linux]
+    libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-linux-arm64-gnu@0.13.0':
+    resolution: {integrity: sha512-DYHBiYGaVRSxPN65dRdi3FOZiVHiPTaFf3LBMAE+JmkrmY8r0Gp0Ep8YBMrvtJLujymNAL/5UwXyj6xuDJaznw==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-linux-arm64-musl@0.13.0':
+    resolution: {integrity: sha512-BV9rfJU9oySbrmYU19umqWY9U5WS0DId6Y+3LDg1uJacqabGHVrMqFwzBk8b2wnUSq0dweyQ0ZVqBYC/9W7gNA==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-linux-x64-gnu@0.13.0':
+    resolution: {integrity: sha512-EM70rjGco5OOEHD2eKPDFziZ1j8wZG2zg8G1T1Z0H2zOSXetu/x9Bou+lNje0kC2jeDx50aY2ntgUTaCsqAAAQ==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-linux-x64-musl@0.13.0':
+    resolution: {integrity: sha512-evmNWY8kQvrhh6xzx4UOCBeT4s7vX5rpJAk03O0arBcEalFNnRERgf1y5tCfg+EMligDGLMjfNHXvdX8ah/sxA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-win32-arm64@0.13.0':
+    resolution: {integrity: sha512-KsibOW0XGvD1rfMVCv9F//Z1c60PwM2CXdLk9ip5YckclkrvXzuCp9aDr1QVYWT7NN/6Sm70PYkVaMfUFkPitw==}
+    cpu: [arm64]
+    os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-parser/binding-win32-x64@0.13.0':
+    resolution: {integrity: sha512-NO7MXk0xNLIAyceV0keu/gXLMpPpgLOZga6B2orkXs1CbUi7YY/FJjI9FYnom+ygWaWHtb0OBofJ9M3zUtTu+Q==}
+    cpu: [x64]
+    os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
+
+  '@yuku-toolchain/types@0.13.0':
+    resolution: {integrity: sha512-7glmpf4vQ2kiSBvSJEz6sX6uPfCrR76Ici8eZHnT+lbEje+32dy74S6/1B0z0p2/W31a+CzhK2zdkjWxVNNR9g==}
 
   '@yuku-toolchain/types@0.19.0':
     resolution: {integrity: sha512-tFkNbsP4WXX9UMUC5syJGdK9dPMLK0PPaIuXCcCYH75sZ8MrebfBZ2XvCILRTw8AgLivSSCfDa4R67iYBDa4Kg==}
@@ -9435,6 +9516,9 @@ packages:
     resolution: {integrity: sha512-kYK9e1XdfirNhkipzW0wmMcSWcVF/CWnuugodfVYRCUwvoBefweL9HzB96OiKEhsx78V5WbUxbJqlizMX869Qg==}
     engines: {node: '>=14.18.0'}
 
+  yuku-parser@0.13.0:
+    resolution: {integrity: sha512-3myLgqDzVRLZmsnm1OItxqGYljEzhMQt6e/xvZLn40OrrphlR8JKTMoUiqBfBRgcwXcVPdUB663oVg6AgzC9/g==}
+
   yuku-parser@0.19.0:
     resolution: {integrity: sha512-XrBh9ZiQK5mJVRxZBAvD6LwRyAYrK3MFtH3+onyuxFL5hFD44EC3QOmIC1FjTj6H2MMwq46/NAI+NZxLZPZgxg==}
     engines: {node: '>=14.18.0'}
@@ -12960,6 +13044,44 @@ snapshots:
 
   '@yuku-core/binding-win32-x64@0.19.0':
     optional: true
+
+  '@yuku-parser/binding-android-arm64@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-darwin-arm64@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-darwin-x64@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-freebsd-x64@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-linux-arm-gnu@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-linux-arm-musl@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-linux-arm64-gnu@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-linux-arm64-musl@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-linux-x64-gnu@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-linux-x64-musl@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-win32-arm64@0.13.0':
+    optional: true
+
+  '@yuku-parser/binding-win32-x64@0.13.0':
+    optional: true
+
+  '@yuku-toolchain/types@0.13.0': {}
 
   '@yuku-toolchain/types@0.19.0': {}
 
@@ -17917,6 +18039,23 @@ snapshots:
       '@yuku-core/binding-linux-x64-musl': 0.19.0
       '@yuku-core/binding-win32-arm64': 0.19.0
       '@yuku-core/binding-win32-x64': 0.19.0
+
+  yuku-parser@0.13.0:
+    dependencies:
+      '@yuku-toolchain/types': 0.13.0
+    optionalDependencies:
+      '@yuku-parser/binding-android-arm64': 0.13.0
+      '@yuku-parser/binding-darwin-arm64': 0.13.0
+      '@yuku-parser/binding-darwin-x64': 0.13.0
+      '@yuku-parser/binding-freebsd-x64': 0.13.0
+      '@yuku-parser/binding-linux-arm-gnu': 0.13.0
+      '@yuku-parser/binding-linux-arm-musl': 0.13.0
+      '@yuku-parser/binding-linux-arm64-gnu': 0.13.0
+      '@yuku-parser/binding-linux-arm64-musl': 0.13.0
+      '@yuku-parser/binding-linux-x64-gnu': 0.13.0
+      '@yuku-parser/binding-linux-x64-musl': 0.13.0
+      '@yuku-parser/binding-win32-arm64': 0.13.0
+      '@yuku-parser/binding-win32-x64': 0.13.0
 
   yuku-parser@0.19.0:
     dependencies:
