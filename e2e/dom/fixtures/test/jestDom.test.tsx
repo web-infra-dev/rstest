@@ -44,4 +44,9 @@ test('matches DOM nodes across VM realms', () => {
     getPrototypeOf: () => cyclicPrototype,
   });
   expect(cyclicPrototype).toContain(nodeLike);
+
+  class Node extends Set<number> {}
+  class DOMTokenList extends Set<string> {}
+  expect(new Node([1])).toContain(1);
+  expect(new DOMTokenList(['active'])).toContain('active');
 });

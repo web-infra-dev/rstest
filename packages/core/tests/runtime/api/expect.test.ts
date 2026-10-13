@@ -258,6 +258,16 @@ it('preserves iterable toContain behavior for proxies with cyclic prototypes', (
   fileExpect(proxy).toContain('needle');
 });
 
+it('does not treat classes named after DOM interfaces as DOM objects', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  class Node extends Set<number> {}
+  class DOMTokenList extends Set<string> {}
+
+  fileExpect(new Node([1])).toContain(1);
+  fileExpect(new DOMTokenList(['active'])).toContain('active');
+});
+
 it('rejects non-iterable toContain receivers, including negated assertions', () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});

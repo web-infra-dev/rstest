@@ -63,10 +63,10 @@ import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
-const hasPrototypeWithConstructorName = (
+const findPrototypeWithConstructorName = (
   value: object,
   constructorName: string,
-): boolean => {
+): object | undefined => {
   const visited = new Set<object>();
   let prototype: object | null;
 
@@ -83,7 +83,7 @@ const hasPrototypeWithConstructorName = (
         constructor.name === constructorName &&
         constructor.prototype === prototype
       ) {
-        return true;
+        return prototype;
       }
       prototype = Object.getPrototypeOf(prototype);
     }
@@ -91,20 +91,44 @@ const hasPrototypeWithConstructorName = (
     // A proxy can deny or cycle prototype inspection; keep iterable matching available.
   }
 
-  return false;
+  return undefined;
 };
 
-const isDomNode = (value: unknown): value is Node =>
-  typeof value === 'object' &&
-  value !== null &&
-  hasPrototypeWithConstructorName(value, 'Node');
+const isDomNode = (value: unknown): value is Node => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  try {
+    const prototype = findPrototypeWithConstructorName(value, 'Node');
+    const getNodeType = prototype
+      ? Object.getOwnPropertyDescriptor(prototype, 'nodeType')?.get
+      : undefined;
+    return (
+      typeof getNodeType === 'function' &&
+      typeof getNodeType.call(value) === 'number'
+    );
+  } catch {
+    return false;
+  }
+};
 
 const isDomTokenList = (value: unknown): value is DOMTokenList => {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
 
-  return hasPrototypeWithConstructorName(value, 'DOMTokenList');
+  try {
+    const prototype = findPrototypeWithConstructorName(value, 'DOMTokenList');
+    const getValue = prototype
+      ? Object.getOwnPropertyDescriptor(prototype, 'value')?.get
+      : undefined;
+    return (
+      typeof getValue === 'function' && typeof getValue.call(value) === 'string'
+    );
+  } catch {
+    return false;
+  }
 };
 
 const defaultChaiConfig: ChaiConfig = {
