@@ -224,6 +224,40 @@ it('preserves iterable toContain behavior for DOMTokenList lookalikes', () => {
   fileExpect(collection).toContain('needle');
 });
 
+it('preserves iterable toContain behavior for node-shaped values', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const item = {
+    nodeType: 1,
+    contains: () => false,
+  };
+  const collection = {
+    nodeType: 1,
+    contains: () => false,
+    *[Symbol.iterator]() {
+      yield item;
+    },
+  };
+
+  fileExpect(collection).toContain(item);
+});
+
+it('preserves iterable toContain behavior for proxies with cyclic prototypes', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const iterable = {
+    *[Symbol.iterator]() {
+      yield 'needle';
+    },
+  };
+  let proxy: typeof iterable;
+  proxy = new Proxy(iterable, {
+    getPrototypeOf: () => proxy,
+  });
+
+  fileExpect(proxy).toContain('needle');
+});
+
 it('rejects non-iterable toContain receivers, including negated assertions', () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});

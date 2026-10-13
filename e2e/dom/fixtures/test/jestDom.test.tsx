@@ -23,4 +23,25 @@ test('matches DOM nodes across VM realms', () => {
   expect(parent).toContain(child);
   expect(parent).not.toContain(document.createElement('span'));
   expect(parent.classList).toContain('active');
+
+  const nodeLike = { nodeType: 1, contains: () => false };
+  const iterable = {
+    nodeType: 1,
+    contains: () => false,
+    *[Symbol.iterator]() {
+      yield nodeLike;
+    },
+  };
+  expect(iterable).toContain(nodeLike);
+
+  const cyclicIterable = {
+    *[Symbol.iterator]() {
+      yield nodeLike;
+    },
+  };
+  let cyclicPrototype: typeof cyclicIterable;
+  cyclicPrototype = new Proxy(cyclicIterable, {
+    getPrototypeOf: () => cyclicPrototype,
+  });
+  expect(cyclicPrototype).toContain(nodeLike);
 });

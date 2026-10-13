@@ -63,35 +63,48 @@ import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
+const hasPrototypeWithConstructorName = (
+  value: object,
+  constructorName: string,
+): boolean => {
+  const visited = new Set<object>();
+  let prototype: object | null;
+
+  try {
+    prototype = Object.getPrototypeOf(value);
+    while (prototype && !visited.has(prototype)) {
+      visited.add(prototype);
+      const constructor = Object.getOwnPropertyDescriptor(
+        prototype,
+        'constructor',
+      )?.value;
+      if (
+        typeof constructor === 'function' &&
+        constructor.name === constructorName &&
+        constructor.prototype === prototype
+      ) {
+        return true;
+      }
+      prototype = Object.getPrototypeOf(prototype);
+    }
+  } catch {
+    // A proxy can deny or cycle prototype inspection; keep iterable matching available.
+  }
+
+  return false;
+};
+
 const isDomNode = (value: unknown): value is Node =>
   typeof value === 'object' &&
   value !== null &&
-  'nodeType' in value &&
-  typeof value.nodeType === 'number' &&
-  'contains' in value &&
-  typeof value.contains === 'function';
+  hasPrototypeWithConstructorName(value, 'Node');
 
 const isDomTokenList = (value: unknown): value is DOMTokenList => {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
 
-  let prototype = Object.getPrototypeOf(value);
-  while (prototype) {
-    const constructor = Object.getOwnPropertyDescriptor(
-      prototype,
-      'constructor',
-    )?.value;
-    if (
-      typeof constructor === 'function' &&
-      constructor.name === 'DOMTokenList' &&
-      constructor.prototype === prototype
-    ) {
-      return true;
-    }
-    prototype = Object.getPrototypeOf(prototype);
-  }
-  return false;
+  return hasPrototypeWithConstructorName(value, 'DOMTokenList');
 };
 
 const defaultChaiConfig: ChaiConfig = {
