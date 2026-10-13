@@ -1,8 +1,10 @@
 import type {
   AssetFileContent,
   AssetFiles,
+  RunWorkerOptions,
   RuntimeRPC,
 } from '../../../types/worker';
+import { isVmPoolType } from '../../../utils/workers';
 import {
   type WorkerCache,
   type WorkerCacheNamespace,
@@ -96,4 +98,24 @@ export const loadCachedAssets = async (
   }
 
   return { assetFiles, sourceMaps };
+};
+
+export const loadTaskAssets = async (
+  options: Pick<RunWorkerOptions['options'], 'assetNames' | 'context'>,
+  assets: RunWorkerOptions['options']['assets'],
+  rpc: Pick<RuntimeRPC, 'getAssetsByEntry'>,
+): Promise<NonNullable<RunWorkerOptions['options']['assets']>> => {
+  const { assetNames, context } = options;
+  if (isVmPoolType(context.pool)) {
+    workerCache.configure(context.workerCacheLimit ?? 0);
+  }
+  if (assets) {
+    return assets;
+  }
+
+  if (!isVmPoolType(context.pool) || context.workerCacheLimit === undefined) {
+    return rpc.getAssetsByEntry(assetNames);
+  }
+
+  return loadCachedAssets(assetNames, workerAssetCache, rpc.getAssetsByEntry);
 };
