@@ -63,35 +63,24 @@ import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
-const findPrototypeWithConstructorName = (
-  value: object,
-  constructorName: string,
-): object | undefined => {
+const hasPrototype = (value: object, expectedPrototype: object): boolean => {
   const visited = new Set<object>();
   let prototype: object | null;
 
   try {
     prototype = Object.getPrototypeOf(value);
     while (prototype && !visited.has(prototype)) {
-      visited.add(prototype);
-      const constructor = Object.getOwnPropertyDescriptor(
-        prototype,
-        'constructor',
-      )?.value;
-      if (
-        typeof constructor === 'function' &&
-        constructor.name === constructorName &&
-        constructor.prototype === prototype
-      ) {
-        return prototype;
+      if (prototype === expectedPrototype) {
+        return true;
       }
+      visited.add(prototype);
       prototype = Object.getPrototypeOf(prototype);
     }
   } catch {
     // A proxy can deny or cycle prototype inspection; keep iterable matching available.
   }
 
-  return undefined;
+  return false;
 };
 
 const isDomNode = (value: unknown): value is Node => {
@@ -100,31 +89,18 @@ const isDomNode = (value: unknown): value is Node => {
   }
 
   try {
-    const prototype = findPrototypeWithConstructorName(value, 'Node');
-    const getNodeType = prototype
-      ? Object.getOwnPropertyDescriptor(prototype, 'nodeType')?.get
-      : undefined;
+    const nodeConstructor = fileContext().runtimeGlobal?.Node;
+    if (typeof nodeConstructor !== 'function') {
+      return false;
+    }
+    const prototype = Object.getOwnPropertyDescriptor(
+      nodeConstructor,
+      'prototype',
+    )?.value;
     return (
-      typeof getNodeType === 'function' &&
-      typeof getNodeType.call(value) === 'number'
-    );
-  } catch {
-    return false;
-  }
-};
-
-const isDomTokenList = (value: unknown): value is DOMTokenList => {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  try {
-    const prototype = findPrototypeWithConstructorName(value, 'DOMTokenList');
-    const getValue = prototype
-      ? Object.getOwnPropertyDescriptor(prototype, 'value')?.get
-      : undefined;
-    return (
-      typeof getValue === 'function' && typeof getValue.call(value) === 'string'
+      typeof prototype === 'object' &&
+      prototype !== null &&
+      hasPrototype(value, prototype)
     );
   } catch {
     return false;
@@ -497,20 +473,6 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
         'expected #{this} not to contain element #{exp}',
         item,
         actual,
-      );
-    }
-
-    if (isDomTokenList(actual)) {
-      if (typeof item !== 'string') {
-        return originalToContain.call(this, item);
-      }
-
-      return this.assert(
-        actual.contains(item),
-        `expected "${actual.value}" to contain "${item}"`,
-        `expected "${actual.value}" not to contain "${item}"`,
-        item,
-        actual.value,
       );
     }
 

@@ -187,9 +187,13 @@ it('does not inspect passing toContain arguments', () => {
 });
 
 it('matches DOM nodes and token lists from another realm in toContain', async () => {
-  publishFile('/expect', 'toContain');
-  const fileExpect = createFileExpect(() => {});
   const environment = await setupVM({}, { scope: 'file' });
+  const runtimeGlobal = vm.runInContext(
+    'globalThis',
+    environment.context,
+  ) as Record<string, unknown>;
+  publishFile('/expect', 'toContain', false, runtimeGlobal);
+  const fileExpect = createFileExpect(() => {});
   try {
     const parent = vm.runInContext(
       'document.createElement("div")',
@@ -242,30 +246,41 @@ it('preserves iterable toContain behavior for node-shaped values', () => {
   fileExpect(collection).toContain(item);
 });
 
-it('preserves iterable toContain behavior for proxies with cyclic prototypes', () => {
-  publishFile('/expect', 'toContain');
+it('preserves iterable toContain behavior for proxies and classes with DOM-like names', async () => {
+  const environment = await setupVM({}, { scope: 'file' });
+  const runtimeGlobal = vm.runInContext(
+    'globalThis',
+    environment.context,
+  ) as Record<string, unknown>;
+  publishFile('/expect', 'toContain', false, runtimeGlobal);
   const fileExpect = createFileExpect(() => {});
-  const iterable = {
-    *[Symbol.iterator]() {
-      yield 'needle';
-    },
-  };
-  let proxy: typeof iterable;
-  proxy = new Proxy(iterable, {
-    getPrototypeOf: () => proxy,
-  });
+  try {
+    const iterable = {
+      *[Symbol.iterator]() {
+        yield 'needle';
+      },
+    };
+    let proxy: typeof iterable;
+    proxy = new Proxy(iterable, {
+      getPrototypeOf: () => proxy,
+    });
+    class Node extends Set<number> {
+      get nodeType() {
+        return 1;
+      }
+    }
+    class DOMTokenList extends Set<string> {
+      get value() {
+        return 'active';
+      }
+    }
 
-  fileExpect(proxy).toContain('needle');
-});
-
-it('does not treat classes named after DOM interfaces as DOM objects', () => {
-  publishFile('/expect', 'toContain');
-  const fileExpect = createFileExpect(() => {});
-  class Node extends Set<number> {}
-  class DOMTokenList extends Set<string> {}
-
-  fileExpect(new Node([1])).toContain(1);
-  fileExpect(new DOMTokenList(['active'])).toContain('active');
+    fileExpect(proxy).toContain('needle');
+    fileExpect(new Node([1])).toContain(1);
+    fileExpect(new DOMTokenList(['active'])).toContain('active');
+  } finally {
+    await environment.teardown();
+  }
 });
 
 it('rejects non-iterable toContain receivers, including negated assertions', () => {

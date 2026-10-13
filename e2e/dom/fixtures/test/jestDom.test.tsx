@@ -45,8 +45,16 @@ test('matches DOM nodes across VM realms', () => {
   });
   expect(cyclicPrototype).toContain(nodeLike);
 
-  class Node extends Set<number> {}
-  class DOMTokenList extends Set<string> {}
+  class Node extends Set<number> {
+    get nodeType() {
+      return 1;
+    }
+  }
+  class DOMTokenList extends Set<string> {
+    get value() {
+      return 'active';
+    }
+  }
   expect(new Node([1])).toContain(1);
   expect(new DOMTokenList(['active'])).toContain('active');
 });
