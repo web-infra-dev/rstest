@@ -13,3 +13,48 @@ test('uses jest-dom', () => {
     'expected <div></div> to be null',
   );
 });
+
+test('matches DOM nodes across VM realms', () => {
+  const parent = document.createElement('div');
+  const child = document.createElement('span');
+  parent.append(child);
+  parent.classList.add('active');
+
+  expect(parent).toContain(child);
+  expect(parent).not.toContain(document.createElement('span'));
+  expect(parent.classList).toContain('active');
+
+  const nodeLike = { nodeType: 1, contains: () => false };
+  const iterable = {
+    nodeType: 1,
+    contains: () => false,
+    *[Symbol.iterator]() {
+      yield nodeLike;
+    },
+  };
+  expect(iterable).toContain(nodeLike);
+
+  const cyclicIterable = {
+    *[Symbol.iterator]() {
+      yield nodeLike;
+    },
+  };
+  let cyclicPrototype: typeof cyclicIterable;
+  cyclicPrototype = new Proxy(cyclicIterable, {
+    getPrototypeOf: () => cyclicPrototype,
+  });
+  expect(cyclicPrototype).toContain(nodeLike);
+
+  class Node extends Set<number> {
+    get nodeType() {
+      return 1;
+    }
+  }
+  class DOMTokenList extends Set<string> {
+    get value() {
+      return 'active';
+    }
+  }
+  expect(new Node([1])).toContain(1);
+  expect(new DOMTokenList(['active'])).toContain('active');
+});

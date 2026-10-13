@@ -22,7 +22,7 @@ it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
             '--pool.maxWorkers',
             '1',
             '--testNamePattern',
-            'formats caught DOM assertions|uses jest-dom',
+            'formats caught DOM assertions|uses jest-dom|matches DOM nodes across VM realms',
           ],
         },
       );

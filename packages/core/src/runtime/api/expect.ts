@@ -63,6 +63,51 @@ import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
+const hasPrototype = (value: object, expectedPrototype: object): boolean => {
+  const visited = new Set<object>();
+  let prototype: object | null;
+
+  try {
+    prototype = Object.getPrototypeOf(value);
+    while (prototype && !visited.has(prototype)) {
+      if (prototype === expectedPrototype) {
+        return true;
+      }
+      visited.add(prototype);
+      prototype = Object.getPrototypeOf(prototype);
+    }
+  } catch {
+    // A proxy can deny or cycle prototype inspection; keep iterable matching available.
+  }
+
+  return false;
+};
+
+const isDomNode = (value: unknown): value is Node => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  try {
+    const runtimeGlobal = fileContext().runtimeGlobal ?? globalThis;
+    const nodeConstructor = runtimeGlobal.Node;
+    if (typeof nodeConstructor !== 'function') {
+      return false;
+    }
+    const prototype = Object.getOwnPropertyDescriptor(
+      nodeConstructor,
+      'prototype',
+    )?.value;
+    return (
+      typeof prototype === 'object' &&
+      prototype !== null &&
+      hasPrototype(value, prototype)
+    );
+  } catch {
+    return false;
+  }
+};
+
 const defaultChaiConfig: ChaiConfig = {
   showDiff: chaiConfig.showDiff,
   truncateThreshold: chaiConfig.truncateThreshold,
@@ -418,8 +463,8 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
   const toContain = wrapAssertion(utils, 'toContain', function (item) {
     const actual = utils.flag(this, 'object');
 
-    if (typeof Node !== 'undefined' && actual instanceof Node) {
-      if (!(item instanceof Node)) {
+    if (isDomNode(actual)) {
+      if (!isDomNode(item)) {
         return originalToContain.call(this, item);
       }
 
@@ -429,20 +474,6 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
         'expected #{this} not to contain element #{exp}',
         item,
         actual,
-      );
-    }
-
-    if (typeof DOMTokenList !== 'undefined' && actual instanceof DOMTokenList) {
-      if (typeof item !== 'string') {
-        return originalToContain.call(this, item);
-      }
-
-      return this.assert(
-        actual.contains(item),
-        `expected "${actual.value}" to contain "${item}"`,
-        `expected "${actual.value}" not to contain "${item}"`,
-        item,
-        actual.value,
       );
     }
 

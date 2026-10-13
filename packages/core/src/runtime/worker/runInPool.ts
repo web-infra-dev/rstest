@@ -1,7 +1,6 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { pathToFileURL } from 'node:url';
-import { setFlagsFromString } from 'node:v8';
-import { createContext, runInContext, Script, type Context } from 'node:vm';
+import type { Context } from 'node:vm';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { normalize } from 'pathe';
 import { install } from 'source-map-support';
@@ -9,7 +8,6 @@ import type {
   AssetFiles,
   MaybePromise,
   RunnerHooks,
-  RuntimeRPC,
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
@@ -35,14 +33,14 @@ import { createAsyncLeakDetector } from './asyncLeaks';
 import { applyRuntimeColors } from './color';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
-import {
-  installObjectURLTracker,
-  installTimerTracking,
-  type NodeTimerPrimitives,
-} from './env/utils';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
-import { loadCachedAssets, workerAssetCache } from './vm/assetCache';
+import { loadTaskAssets } from './vm/assetCache';
+import { disableVmCompilationCache } from './vm/compilationCache';
+import { stripVmContext } from './vm/context';
+import type { VmRuntimeGlobal } from './vm/nodeGlobals';
+import { installVmProcessGuards } from './vm/process';
+import { prepareVmRuntimeRealm } from './vm/realm';
 import {
   createRuntimeRpc,
   createWorkerRpcOptions,
@@ -61,22 +59,6 @@ import { workerCache } from './vm/cache';
 
 let sourceMaps: Record<string, string> = {};
 let currentEnvironmentBundle: { path: string; url: string } | undefined;
-let vmCompilationCacheDisabled = false;
-
-const disableVmCompilationCache = (): void => {
-  if (vmCompilationCacheDisabled) {
-    return;
-  }
-  // V8's isolate-wide compilation cache is unbounded and retains scripts from
-  // every disposed Context. VM pools use the bounded worker cache instead.
-  setFlagsFromString('--no-compilation-cache');
-  vmCompilationCacheDisabled = true;
-};
-
-export const isBlockedProcessKillTarget = (
-  pid: number,
-  currentPid: number,
-): boolean => pid === 0 || pid === -1 || Math.abs(pid) === currentPid;
 
 // Threads-pool workers all share `process.pid` with the host, and each
 // worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
@@ -175,26 +157,6 @@ let activeEnvironmentKey: string | undefined;
  * runtime chunk and reintroducing the cross-project regression (#1376).
  */
 let lastBuildId: number | undefined;
-const loadTaskAssets = async (
-  options: RunWorkerOptions['options'],
-  assets: RunWorkerOptions['options']['assets'],
-  rpc: Pick<RuntimeRPC, 'getAssetsByEntry'>,
-): Promise<NonNullable<RunWorkerOptions['options']['assets']>> => {
-  const { assetNames, context } = options;
-  if (isVmPoolType(context.pool)) {
-    workerCache.configure(context.workerCacheLimit ?? 0);
-  }
-  if (assets) {
-    return assets;
-  }
-
-  if (!isVmPoolType(context.pool) || context.workerCacheLimit === undefined) {
-    return rpc.getAssetsByEntry(assetNames);
-  }
-
-  return loadCachedAssets(assetNames, workerAssetCache, rpc.getAssetsByEntry);
-};
-
 const setErrorName = (error: Error, type: string): Error => {
   try {
     error.name = type;
@@ -233,249 +195,6 @@ const setupEnv = (
   }
 };
 
-type VmRuntimeGlobal = typeof globalThis & Record<string, unknown>;
-
-const createVmFunction = <T>(
-  vmContext: Context,
-  source: string,
-  hostFunction: T,
-): T => {
-  const createFunction = runInContext(source, vmContext) as (value: T) => T;
-  return createFunction(hostFunction);
-};
-
-export const installWorkerHTMLElement = (
-  runtimeGlobal: VmRuntimeGlobal,
-): (() => void) => {
-  // Chai/Loupe runs in the worker realm and identifies DOM nodes through its
-  // global HTMLElement. Release the constructor at file teardown so a reused
-  // worker cannot retain the disposed VM DOM.
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'HTMLElement');
-  Object.defineProperty(globalThis, 'HTMLElement', {
-    configurable: true,
-    get: () => runtimeGlobal.HTMLElement,
-  });
-  return () => {
-    if (descriptor) {
-      Object.defineProperty(globalThis, 'HTMLElement', descriptor);
-    } else {
-      Reflect.deleteProperty(globalThis, 'HTMLElement');
-    }
-  };
-};
-
-export const installVmNodeGlobals = (
-  runtimeGlobal: VmRuntimeGlobal,
-  vmContext: Context,
-): void => {
-  const excluded = new Set([
-    'GLOBAL',
-    'root',
-    'global',
-    'globalThis',
-    'fetch',
-    'structuredClone',
-  ]);
-  for (const key of Object.getOwnPropertyNames(globalThis)) {
-    if (excluded.has(key) || key in runtimeGlobal) {
-      continue;
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
-    if (descriptor) {
-      if ('get' in descriptor || 'set' in descriptor) {
-        const { get, set } = descriptor;
-        let assigned = false;
-        let localValue: unknown;
-        Object.defineProperty(runtimeGlobal, key, {
-          ...descriptor,
-          // Node accessors can require the host global as their receiver.
-          get: get
-            ? () => (assigned ? localValue : get.call(globalThis))
-            : undefined,
-          // Never invoke a host setter: replacements belong to this file only.
-          set: set
-            ? (value: unknown) => {
-                assigned = true;
-                localValue = value;
-              }
-            : undefined,
-        });
-      } else {
-        Object.defineProperty(runtimeGlobal, key, descriptor);
-      }
-    }
-  }
-
-  if (!('fetch' in runtimeGlobal) && typeof globalThis.fetch === 'function') {
-    Reflect.set(
-      runtimeGlobal,
-      'fetch',
-      createVmFunction(
-        vmContext,
-        `(hostFetch) => async (...args) => {
-          try {
-            return await hostFetch(...args);
-          } catch (error) {
-            if (
-              error === null ||
-              (typeof error !== 'object' && typeof error !== 'function') ||
-              Object.prototype.toString.call(error) !== '[object Error]'
-            ) {
-              throw error;
-            }
-            const constructor =
-              typeof error.name === 'string'
-                ? globalThis[error.name]
-                : undefined;
-            const ErrorConstructor =
-              typeof constructor === 'function' &&
-              (constructor === Error || constructor.prototype instanceof Error)
-                ? constructor
-                : Error;
-            const wrapped = new ErrorConstructor(error.message);
-            for (const key of Reflect.ownKeys(error)) {
-              const descriptor = Object.getOwnPropertyDescriptor(error, key);
-              if (descriptor) {
-                Object.defineProperty(wrapped, key, descriptor);
-              }
-            }
-            throw wrapped;
-          }
-        }`,
-        globalThis.fetch,
-      ),
-    );
-  }
-  if (
-    !('structuredClone' in runtimeGlobal) &&
-    typeof globalThis.structuredClone === 'function'
-  ) {
-    Reflect.set(
-      runtimeGlobal,
-      'structuredClone',
-      createVmFunction(
-        vmContext,
-        `(hostStructuredClone) => {
-        const restoreValue = (value, seen) => {
-          if (value === null || typeof value !== 'object' || seen.has(value)) {
-            return value;
-          }
-          seen.add(value);
-
-          const tag = Object.prototype.toString.call(value);
-          if (tag === '[object Array]') {
-            Object.setPrototypeOf(value, Array.prototype);
-          } else if (tag === '[object Map]') {
-            Object.setPrototypeOf(value, Map.prototype);
-            for (const [key, entry] of value) {
-              restoreValue(key, seen);
-              restoreValue(entry, seen);
-            }
-          } else if (tag === '[object Set]') {
-            Object.setPrototypeOf(value, Set.prototype);
-            for (const entry of value) {
-              restoreValue(entry, seen);
-            }
-          } else if (tag === '[object Date]') {
-            Object.setPrototypeOf(value, Date.prototype);
-          } else if (tag === '[object RegExp]') {
-            Object.setPrototypeOf(value, RegExp.prototype);
-          } else if (tag === '[object Error]') {
-            const constructor = globalThis[value.name];
-            Object.setPrototypeOf(
-              value,
-              typeof constructor === 'function' &&
-                (constructor === Error || constructor.prototype instanceof Error)
-                ? constructor.prototype
-                : Error.prototype,
-            );
-          } else if (tag === '[object ArrayBuffer]') {
-            Object.setPrototypeOf(value, ArrayBuffer.prototype);
-          } else if (tag === '[object DataView]') {
-            restoreValue(value.buffer, seen);
-            Object.setPrototypeOf(value, DataView.prototype);
-          } else {
-            const constructorName = tag.slice(8, -1);
-            const constructor = globalThis[constructorName];
-            if (ArrayBuffer.isView(value)) {
-              restoreValue(value.buffer, seen);
-            }
-            if (typeof constructor === 'function' && constructor.prototype) {
-              Object.setPrototypeOf(value, constructor.prototype);
-            } else {
-              Object.setPrototypeOf(
-                value,
-                Object.getPrototypeOf(value) === null
-                  ? null
-                  : Object.prototype,
-              );
-            }
-          }
-
-          const keys =
-            tag === '[object Error]' ? Reflect.ownKeys(value) : Object.keys(value);
-          for (const key of keys) {
-            const descriptor = Object.getOwnPropertyDescriptor(value, key);
-            if (descriptor && 'value' in descriptor) {
-              restoreValue(descriptor.value, seen);
-            }
-          }
-          return value;
-        };
-
-        return (value, options) =>
-          restoreValue(hostStructuredClone(value, options), new WeakSet());
-        }`,
-        globalThis.structuredClone,
-      ),
-    );
-  }
-
-  Object.assign(runtimeGlobal, {
-    process,
-    Buffer,
-    global: runtimeGlobal,
-    setImmediate,
-    clearImmediate,
-  });
-};
-
-const captureVmContextKeysScript = new Script(
-  'Object.getOwnPropertyNames(globalThis).concat(Object.getOwnPropertySymbols(globalThis))',
-);
-const stripVmContextScript = new Script(`(initialKeys) => {
-  const globalObject = globalThis;
-  try { globalObject.document.body.textContent = ''; } catch {}
-  try { globalObject.document.head.textContent = ''; } catch {}
-  let keys = [];
-  try {
-    keys = Object.getOwnPropertyNames(globalObject).concat(Object.getOwnPropertySymbols(globalObject));
-  } catch {}
-  for (const key of keys) {
-    if (initialKeys.has(key)) continue;
-    try { delete globalObject[key]; } catch {}
-  }
-}`);
-
-const captureVmContextKeys = (context: Context): Set<string | symbol> => {
-  try {
-    return new Set(captureVmContextKeysScript.runInContext(context));
-  } catch {
-    return new Set();
-  }
-};
-
-const stripVmContext = (
-  context: Context,
-  initialKeys: Set<string | symbol>,
-): void => {
-  try {
-    stripVmContextScript.runInContext(context)(initialKeys);
-  } catch {
-    // The context may already be in the process of being torn down.
-  }
-};
-
 const createOriginalLogWriter = () => {
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
@@ -493,73 +212,6 @@ const createOriginalLogWriter = () => {
     }
 
     stdoutWrite(content);
-  };
-};
-
-const prepareVmRuntimeRealm = async (
-  context: RunWorkerOptions['options']['context'],
-  cleanupFns: (() => MaybePromise<void>)[],
-  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
-): Promise<{
-  initialKeys: Set<string | symbol>;
-  runtimeGlobal: VmRuntimeGlobal;
-  vmContext: Context;
-  setVirtualConsoleTarget?: (target: Console) => void;
-}> => {
-  const { testEnvironment } = context.runtimeConfig;
-  let vmContext: Context;
-  let setVirtualConsoleTarget: ((target: Console) => void) | undefined;
-  if (testEnvironment.name === 'node') {
-    vmContext = createContext({});
-  } else {
-    const loadEnvironment = environmentLoaders[testEnvironment.name];
-    if (!loadEnvironment) {
-      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
-    }
-    const [{ setupVM }, environmentModule] = await Promise.all([
-      loadEnvironment(),
-      loadTestEnvironmentModule(
-        context.testEnvironmentModule,
-        onTestEnvironmentFallback,
-      ),
-    ]);
-    const vmEnvironment = await setupVM(
-      testEnvironment.options || {},
-      { scope: 'file' },
-      environmentModule,
-    );
-    vmContext = vmEnvironment.context;
-    cleanupFns.push(vmEnvironment.teardown);
-    setVirtualConsoleTarget = vmEnvironment.setVirtualConsoleTarget;
-  }
-
-  const runtimeGlobal = runInContext(
-    'globalThis',
-    vmContext,
-  ) as VmRuntimeGlobal;
-  if (testEnvironment.name !== 'node') {
-    cleanupFns.push(installWorkerHTMLElement(runtimeGlobal));
-  }
-  installVmNodeGlobals(runtimeGlobal, vmContext);
-  if (testEnvironment.name === 'node') {
-    const nodeTimers: NodeTimerPrimitives = {
-      clearImmediate: globalThis.clearImmediate,
-      clearInterval: globalThis.clearInterval,
-      clearTimeout: globalThis.clearTimeout,
-      setImmediate: globalThis.setImmediate,
-      setInterval: globalThis.setInterval,
-      setTimeout: globalThis.setTimeout,
-    };
-    cleanupFns.push(
-      installTimerTracking(runtimeGlobal, nodeTimers, { scope: 'file' }),
-      installObjectURLTracker(runtimeGlobal.URL, { scope: 'file' }),
-    );
-  }
-  return {
-    initialKeys: captureVmContextKeys(vmContext),
-    runtimeGlobal,
-    setVirtualConsoleTarget,
-    vmContext,
   };
 };
 
@@ -596,6 +248,7 @@ const preparePool = async (
   let vmContext: Context | undefined;
   let initialVmContextKeys: Set<string | symbol> | undefined;
   let runtimeGlobal = globalThis as VmRuntimeGlobal;
+  let runtimeError = Error;
   let setVirtualConsoleTarget: ((target: Console) => void) | undefined;
 
   const disposeFns: (() => void)[] = [];
@@ -699,6 +352,7 @@ const preparePool = async (
       );
       vmContext = vmRealm.vmContext;
       runtimeGlobal = vmRealm.runtimeGlobal;
+      runtimeError = vmRealm.runtimeError;
       initialVmContextKeys = vmRealm.initialKeys;
       setVirtualConsoleTarget = vmRealm.setVirtualConsoleTarget;
     }
@@ -898,9 +552,7 @@ const preparePool = async (
     const rstestContext = {
       global: runtimeGlobal,
       console: runtimeGlobal.console,
-      Error: vmContext
-        ? (runInContext('Error', vmContext) as typeof Error)
-        : Error,
+      Error: runtimeError,
     };
 
     Object.assign(rstestContext.global, {
@@ -1116,29 +768,7 @@ export const runInPool = async (
     return call;
   };
 
-  const exit = process.exit.bind(process);
-  process.exit = (code): never => {
-    const effectiveCode = code ?? Reflect.get(process, 'exitCode') ?? 0;
-    throw new Error(`process.exit unexpectedly called with "${effectiveCode}"`);
-  };
-
-  const kill = process.kill.bind(process);
-  process.kill = (pid: number, signal?: NodeJS.Signals) => {
-    // On POSIX, pid 0 targets the current process group. A VM test must not
-    // be able to signal the host shell or sibling workers through this shared
-    // worker-thread process.
-    if (isBlockedProcessKillTarget(pid, process.pid)) {
-      throw new Error(
-        `process.kill unexpectedly called with "${pid}" and "${signal}"`,
-      );
-    }
-    return kill(pid, signal);
-  };
-
-  const restoreProcessGuards = () => {
-    process.kill = kill;
-    process.exit = exit;
-  };
+  const restoreProcessGuards = installVmProcessGuards();
 
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));

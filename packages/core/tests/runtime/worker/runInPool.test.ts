@@ -3,10 +3,25 @@ import vm from 'node:vm';
 import { util } from 'chai';
 import { setupVM } from '../../../src/runtime/worker/env/jsdom';
 import {
+  captureVmContextKeys,
+  stripVmContext,
+} from '../../../src/runtime/worker/vm/context';
+import { isBlockedProcessKillTarget } from '../../../src/runtime/worker/vm/process';
+import {
   installVmNodeGlobals,
   installWorkerHTMLElement,
-  isBlockedProcessKillTarget,
-} from '../../../src/runtime/worker/runInPool';
+} from '../../../src/runtime/worker/vm/nodeGlobals';
+
+test('strips file globals while preserving context globals', () => {
+  const context = vm.createContext({ preserved: true });
+  const initialKeys = captureVmContextKeys(context);
+  vm.runInContext('globalThis.fileGlobal = true', context);
+
+  stripVmContext(context, initialKeys);
+
+  expect(vm.runInContext('preserved', context)).toBe(true);
+  expect(vm.runInContext('typeof fileGlobal', context)).toBe('undefined');
+});
 
 test('bridges host getters without invoking host setters or sharing assignments', () => {
   const key = '__RSTEST_VM_ACCESSOR_TEST__';

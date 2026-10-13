@@ -11,6 +11,7 @@ import {
   type FileContext,
   setFileContext,
 } from '../../../src/runtime/fileContext';
+import { setupVM } from '../../../src/runtime/worker/env/jsdom';
 import { setRealTimers } from '../../../src/runtime/util';
 import type { TestCase, WorkerState } from '../../../src/types';
 import { toNativePath } from '../../../src/utils/helper';
@@ -183,6 +184,130 @@ it('does not inspect passing toContain arguments', () => {
   };
 
   fileExpect([value]).toContain(value);
+});
+
+it('matches DOM nodes and token lists from another realm in toContain', async () => {
+  const environment = await setupVM({}, { scope: 'file' });
+  const runtimeGlobal = vm.runInContext(
+    'globalThis',
+    environment.context,
+  ) as Record<string, unknown>;
+  publishFile('/expect', 'toContain', false, runtimeGlobal);
+  const fileExpect = createFileExpect(() => {});
+  try {
+    const parent = vm.runInContext(
+      'document.createElement("div")',
+      environment.context,
+    ) as HTMLElement;
+    const child = vm.runInContext(
+      'document.createElement("span")',
+      environment.context,
+    ) as HTMLElement;
+    const classList = parent.classList;
+    parent.append(child);
+    classList.add('active', 'selected');
+
+    fileExpect(parent).toContain(child);
+    fileExpect(classList).toContain('selected');
+  } finally {
+    await environment.teardown();
+  }
+});
+
+it('uses the current global Node when runtimeGlobal is not provided', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, 'Node');
+  class TestNode {
+    contains(node: TestNode) {
+      return node === child;
+    }
+  }
+  const parent = new TestNode();
+  const child = new TestNode();
+
+  Object.defineProperty(globalThis, 'Node', {
+    configurable: true,
+    value: TestNode,
+  });
+  try {
+    fileExpect(parent).toContain(child);
+  } finally {
+    if (previousNode) {
+      Object.defineProperty(globalThis, 'Node', previousNode);
+    } else {
+      Reflect.deleteProperty(globalThis, 'Node');
+    }
+  }
+});
+
+it('preserves iterable toContain behavior for DOMTokenList lookalikes', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const collection = {
+    value: 'label',
+    contains: () => false,
+    *[Symbol.iterator]() {
+      yield 'needle';
+    },
+  };
+
+  fileExpect(collection).toContain('needle');
+});
+
+it('preserves iterable toContain behavior for node-shaped values', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const item = {
+    nodeType: 1,
+    contains: () => false,
+  };
+  const collection = {
+    nodeType: 1,
+    contains: () => false,
+    *[Symbol.iterator]() {
+      yield item;
+    },
+  };
+
+  fileExpect(collection).toContain(item);
+});
+
+it('preserves iterable toContain behavior for proxies and classes with DOM-like names', async () => {
+  const environment = await setupVM({}, { scope: 'file' });
+  const runtimeGlobal = vm.runInContext(
+    'globalThis',
+    environment.context,
+  ) as Record<string, unknown>;
+  publishFile('/expect', 'toContain', false, runtimeGlobal);
+  const fileExpect = createFileExpect(() => {});
+  try {
+    const iterable = {
+      *[Symbol.iterator]() {
+        yield 'needle';
+      },
+    };
+    let proxy: typeof iterable;
+    proxy = new Proxy(iterable, {
+      getPrototypeOf: () => proxy,
+    });
+    class Node extends Set<number> {
+      get nodeType() {
+        return 1;
+      }
+    }
+    class DOMTokenList extends Set<string> {
+      get value() {
+        return 'active';
+      }
+    }
+
+    fileExpect(proxy).toContain('needle');
+    fileExpect(new Node([1])).toContain(1);
+    fileExpect(new DOMTokenList(['active'])).toContain('active');
+  } finally {
+    await environment.teardown();
+  }
 });
 
 it('rejects non-iterable toContain receivers, including negated assertions', () => {
