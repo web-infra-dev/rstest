@@ -214,6 +214,33 @@ it('matches DOM nodes and token lists from another realm in toContain', async ()
   }
 });
 
+it('uses the current global Node when runtimeGlobal is not provided', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, 'Node');
+  class TestNode {
+    contains(node: TestNode) {
+      return node === child;
+    }
+  }
+  const parent = new TestNode();
+  const child = new TestNode();
+
+  Object.defineProperty(globalThis, 'Node', {
+    configurable: true,
+    value: TestNode,
+  });
+  try {
+    fileExpect(parent).toContain(child);
+  } finally {
+    if (previousNode) {
+      Object.defineProperty(globalThis, 'Node', previousNode);
+    } else {
+      Reflect.deleteProperty(globalThis, 'Node');
+    }
+  }
+});
+
 it('preserves iterable toContain behavior for DOMTokenList lookalikes', () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});

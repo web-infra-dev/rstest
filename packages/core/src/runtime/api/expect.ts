@@ -89,7 +89,8 @@ const isDomNode = (value: unknown): value is Node => {
   }
 
   try {
-    const nodeConstructor = fileContext().runtimeGlobal?.Node;
+    const runtimeGlobal = fileContext().runtimeGlobal ?? globalThis;
+    const nodeConstructor = runtimeGlobal.Node;
     if (typeof nodeConstructor !== 'function') {
       return false;
     }

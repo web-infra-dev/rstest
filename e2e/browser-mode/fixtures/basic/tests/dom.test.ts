@@ -27,12 +27,14 @@ describe('DOM operations', () => {
     const parent = document.createElement('div');
     const child1 = document.createElement('span');
     const child2 = document.createElement('span');
+    parent.appendChild(child1);
+    parent.appendChild(child2);
+
+    expect(parent).toContain(child1);
+    expect(parent).not.toContain(document.createElement('span'));
 
     child1.textContent = 'Child 1';
     child2.textContent = 'Child 2';
-
-    parent.appendChild(child1);
-    parent.appendChild(child2);
 
     expect(parent.children.length).toBe(2);
     expect(parent.children[0]?.textContent).toBe('Child 1');
