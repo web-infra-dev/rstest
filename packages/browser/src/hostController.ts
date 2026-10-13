@@ -55,7 +55,11 @@ import {
 } from './browserV8Coverage';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
-import { matchBrowserScreenshot } from './screenshotSnapshots';
+import {
+  matchBrowserScreenshot,
+  ScreenshotMismatchError,
+  type ScreenshotMatchOptions,
+} from './screenshotSnapshots';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
@@ -127,11 +131,23 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
 
 const resolveProviderForTestPath = ({
   testPath,
+  projectName,
   browserProjects,
 }: {
   testPath: string;
+  projectName?: string;
   browserProjects: BrowserProviderProject[];
 }): BrowserProvider => {
+  if (projectName) {
+    const project = browserProjects.find((item) => item.name === projectName);
+    if (!project) {
+      throw new Error(
+        `Cannot resolve browser provider for project: ${JSON.stringify(projectName)}`,
+      );
+    }
+    return project.provider;
+  }
+
   const normalizedTestPath = normalize(testPath);
   const sortedProjects = [...browserProjects].sort(
     (a, b) => b.rootPath.length - a.rootPath.length,
@@ -692,6 +708,7 @@ export const runBrowserController = async (
   );
 
   const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
+  const screenshotUnmatchedByFile = new Map<string, number>();
 
   const projectRunnerUrls = Object.fromEntries(
     [...runtime.projectServers].map(([name, server]) => [
@@ -718,6 +735,7 @@ export const runBrowserController = async (
 
   const browserProviderProjects: BrowserProviderProject[] = browserProjects.map(
     (project) => ({
+      name: project.name,
       rootPath: normalize(project.rootPath),
       provider: project.normalizedConfig.browser.provider,
     }),
@@ -778,6 +796,7 @@ export const runBrowserController = async (
     const timeoutFallbackMs = maxTestTimeoutForRpc;
     const provider = resolveProviderForTestPath({
       testPath: request.testPath,
+      projectName: request.projectName,
       browserProjects: browserProviderProjects,
     });
     const implementation = implementationByProvider.get(provider);
@@ -812,16 +831,25 @@ export const runBrowserController = async (
         }
         await matchBrowserScreenshot({
           testPath: request.testPath,
+          projectName: request.projectName,
           testName,
           browserName,
           screenshotBase64: result,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
+          options: request.args[1] as ScreenshotMatchOptions | undefined,
         });
         return undefined;
       }
 
       return result;
     } catch (error) {
+      if (error instanceof ScreenshotMismatchError) {
+        const key = trackerKey(request.projectName, request.testPath);
+        screenshotUnmatchedByFile.set(
+          key,
+          (screenshotUnmatchedByFile.get(key) ?? 0) + 1,
+        );
+      }
       // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
       if (error instanceof Error) {
         throw error.message;
@@ -944,6 +972,9 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
+    screenshotUnmatchedByFile.delete(
+      trackerKey(payload.projectName, payload.testPath),
+    );
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
         trace: {
@@ -1036,6 +1067,25 @@ export const runBrowserController = async (
   const handleTestFileComplete = async (
     payload: TestFileResult,
   ): Promise<void> => {
+    const key = trackerKey(payload.project, payload.testPath);
+    const screenshotUnmatched = screenshotUnmatchedByFile.get(key) ?? 0;
+    screenshotUnmatchedByFile.delete(key);
+    if (screenshotUnmatched > 0) {
+      const snapshotResult = payload.snapshotResult ?? {
+        filepath: payload.testPath,
+        added: 0,
+        fileDeleted: false,
+        matched: 0,
+        unchecked: 0,
+        uncheckedKeys: [],
+        unmatched: 0,
+        updated: 0,
+      };
+      payload.snapshotResult = {
+        ...snapshotResult,
+        unmatched: snapshotResult.unmatched + screenshotUnmatched,
+      };
+    }
     reporterResults.push(payload);
     context.updateReporterResultState([payload], payload.results);
 

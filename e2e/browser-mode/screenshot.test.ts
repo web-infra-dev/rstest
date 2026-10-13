@@ -48,25 +48,36 @@ describe('browser mode - screenshot matching', () => {
   });
 
   it('creates, compares, and updates PNG references', async () => {
-    const screenshotDir = path.join(
-      fixtureDir,
-      'tests',
-      '__screenshots__',
-      'screenshot.test',
-    );
-    expect(fs.existsSync(screenshotDir)).toBe(false);
+    const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
+    expect(fs.existsSync(screenshotRoot)).toBe(false);
 
     const firstRun = await runScreenshot(['tests/screenshot.test.ts']);
     await firstRun.expectExecSuccess();
 
-    const [referenceName] = fs.readdirSync(screenshotDir);
-    if (referenceName === undefined) {
+    const projectDirs = fs.readdirSync(screenshotRoot);
+    expect(projectDirs.sort()).toEqual(['project-a', 'project-b']);
+    const screenshotDir = path.join(
+      screenshotRoot,
+      'project-a',
+      'screenshot.test',
+    );
+    const secondProjectDir = path.join(
+      screenshotRoot,
+      'project-b',
+      'screenshot.test',
+    );
+    const referenceName = fs
+      .readdirSync(screenshotDir)
+      .find((name) => name.startsWith('primary-button-'));
+    if (!referenceName)
       throw new Error('Expected the screenshot reference to be generated.');
-    }
     expect(referenceName).toMatch(
       new RegExp(`^primary-button-chromium-${process.platform}\\.png$`),
     );
     const referencePath = path.join(screenshotDir, referenceName);
+    expect(fs.existsSync(path.join(secondProjectDir, referenceName))).toBe(
+      true,
+    );
     const originalReference = fs.readFileSync(referencePath);
     expect(originalReference.subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -74,6 +85,13 @@ describe('browser mode - screenshot matching', () => {
 
     const matchingRun = await runScreenshot(['tests/screenshot.test.ts']);
     await matchingRun.expectExecSuccess();
+    const unchangedReference = fs.readFileSync(referencePath);
+    const updateMatchingRun = await runScreenshot([
+      'tests/screenshot.test.ts',
+      '--update',
+    ]);
+    await updateMatchingRun.expectExecSuccess();
+    expect(fs.readFileSync(referencePath)).toEqual(unchangedReference);
 
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
@@ -90,6 +108,19 @@ describe('browser mode - screenshot matching', () => {
     expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
       'Screenshot does not match the stored reference',
     );
+    expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
+      'Actual:',
+    );
+    expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
+      'Diff:',
+    );
+    const failureDir = path.join(screenshotDir, '__failures__');
+    expect(
+      fs.readdirSync(failureDir).some((name) => name.endsWith('.actual.png')),
+    ).toBe(true);
+    expect(
+      fs.readdirSync(failureDir).some((name) => name.endsWith('.diff.png')),
+    ).toBe(true);
 
     const updateRun = await runScreenshot([
       'tests/screenshot.test.ts',

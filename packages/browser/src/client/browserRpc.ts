@@ -29,6 +29,16 @@ const getCurrentTestPath = (): string => {
   return testPath;
 };
 
+const getCurrentProjectName = (): string => {
+  const projectName = window.__RSTEST_BROWSER_OPTIONS__?.projectName;
+  if (!projectName) {
+    throw new Error(
+      'Browser RPC requires projectName in __RSTEST_BROWSER_OPTIONS__.',
+    );
+  }
+  return projectName;
+};
+
 const createBrowserDispatchRequest = (
   requestId: string,
   request: BrowserRpcRequest,
@@ -40,12 +50,13 @@ const createBrowserDispatchRequest = (
     args: request,
     target: {
       testFile: request.testPath,
+      projectName: request.projectName,
     },
   };
 };
 
 export const callBrowserRpc = async <T>(
-  payload: Omit<BrowserRpcRequest, 'id' | 'testPath'>,
+  payload: Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>,
 ): Promise<T> => {
   if (
     payload.kind === 'config' &&
@@ -59,6 +70,7 @@ export const callBrowserRpc = async <T>(
   const request: BrowserRpcRequest = {
     id,
     testPath: getCurrentTestPath(),
+    projectName: getCurrentProjectName(),
     ...payload,
   };
   const dispatchRequest = createBrowserDispatchRequest(id, request);

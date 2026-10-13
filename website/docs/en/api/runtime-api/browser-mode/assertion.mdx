@@ -58,7 +58,7 @@ test('save button matches its visual reference', async () => {
 });
 ```
 
-References are stored as PNG files under `__screenshots__` next to the test file. By default, the current test name is used as the reference name; pass a name to reuse or distinguish a reference explicitly:
+References are stored as PNG files under `__screenshots__`, grouped by project and test file. By default, the current test name is used as the reference name; pass a name to reuse or distinguish a reference explicitly:
 
 ```ts
 await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
@@ -66,7 +66,18 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 );
 ```
 
-Screenshot references include the browser and operating system in their file names. A mismatch reports the reference path and the number of differing pixels.
+Screenshot references include the browser and operating system in their file names. Use the optional second argument to tune pixel tolerance, wait for stable captures, and mask dynamic content:
+
+```ts
+await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+  threshold: 0.1,
+  maxDiffPixels: 20,
+  stabilityTimeout: 1000,
+  mask: [page.locator('[data-testid="updated-at"]')],
+});
+```
+
+`maxDiffPixelRatio` can be used instead of `maxDiffPixels` to allow a fraction of pixels to differ. The default allows no differing pixels after applying the per-pixel `threshold`. `--update` creates missing references and replaces only references that differ. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; actual and diff images are written under a sibling `__failures__` directory.
 
 ## Auto-retry and timeout
 

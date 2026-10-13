@@ -175,6 +175,7 @@ describe('browser protocol types', () => {
       const request = validateBrowserRpcRequest({
         id: 'rpc-1',
         testPath: '/tests/example.test.ts',
+        projectName: 'default',
         runId: 'run-1',
         kind: 'locator',
         locator: { steps: [] },
@@ -197,6 +198,7 @@ describe('browser protocol types', () => {
         validateBrowserRpcRequest({
           id: 'rpc-1',
           testPath: '/tests/example.test.ts',
+          projectName: 'default',
           runId: 'run-1',
           kind: 'snapshot',
           locator: { steps: [] },
@@ -211,6 +213,7 @@ describe('browser protocol types', () => {
         validateBrowserRpcRequest({
           id: 'rpc-1',
           testPath: '/tests/example.test.ts',
+          projectName: 'default',
           runId: 'run-1',
           kind: 'expect',
           locator: { steps: 'invalid' },

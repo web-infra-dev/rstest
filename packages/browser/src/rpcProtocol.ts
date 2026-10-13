@@ -74,6 +74,8 @@ export type BrowserRpcRequest = {
   id: string;
   /** Absolute test file path for locating runner iframe */
   testPath: string;
+  /** Project identity; paths alone do not distinguish overlapping projects. */
+  projectName: string;
   kind: 'locator' | 'expect' | 'screenshot' | 'config';
   locator: BrowserLocatorIR;
   method: string;
@@ -157,6 +159,7 @@ export const validateBrowserRpcRequest = (
   const request: BrowserRpcRequest = {
     id: readString(payload, 'id', 'id'),
     testPath: readString(payload, 'testPath', 'testPath'),
+    projectName: readString(payload, 'projectName', 'projectName'),
     kind,
     locator: parseBrowserLocatorIR(payload.locator, 'locator'),
     method: readString(payload, 'method', 'method'),

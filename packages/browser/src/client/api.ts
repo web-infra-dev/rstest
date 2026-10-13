@@ -1,6 +1,7 @@
 import { expect } from '@rstest/core';
 import { registerElementExpect } from '@rstest/core/internal/browser-runtime';
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
+import type { ToMatchScreenshotOptions } from './augmentExpect';
 import type { BrowserElementExpect } from './augmentExpect';
 import { callBrowserRpc } from './browserRpc';
 import {
@@ -33,7 +34,7 @@ const createElementExpect = (
       isNot,
       timeout: getTimeout(timeout),
       timeoutIsExplicit: timeout !== undefined,
-    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
   };
 
   const api: Omit<BrowserElementExpect, 'not'> = {
@@ -168,7 +169,11 @@ const element = (
 registerElementExpect(element);
 
 expect.extend({
-  async toMatchScreenshot(received: unknown, name?: string) {
+  async toMatchScreenshot(
+    received: unknown,
+    name?: string,
+    options?: ToMatchScreenshotOptions,
+  ) {
     if (!isLocator(received)) {
       throw new TypeError(
         'toMatchScreenshot() expects a Locator returned from @rstest/browser.',
@@ -182,12 +187,23 @@ expect.extend({
       );
     }
 
+    const mask = options?.mask ?? [];
+    if (!mask.every(isLocator)) {
+      throw new TypeError(
+        'toMatchScreenshot mask must contain browser-mode Locators.',
+      );
+    }
+    const { mask: _mask, ...serializedOptions } = options ?? {};
+
     await callBrowserRpc<void>({
       kind: 'screenshot',
       locator: received.ir,
       method: 'toMatchScreenshot',
-      args: [screenshotName],
-    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
+      args: [
+        screenshotName,
+        { ...serializedOptions, mask: mask.map((item) => item.ir) },
+      ],
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
 
     return { pass: true, message: () => '' };
   },

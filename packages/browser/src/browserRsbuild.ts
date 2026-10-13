@@ -144,6 +144,7 @@ function __rstest_clean_browser_test_entry__(testEntryPath) {
 }
 
 export type BrowserProviderProject = {
+  name: string;
   rootPath: string;
   provider: BrowserProvider;
 };

@@ -4,6 +4,7 @@
  * Copyright (c) Microsoft Corporation, Apache-2.0.
  */
 import type { FrameLocator, Locator, Page } from 'playwright';
+import { PNG } from 'pngjs';
 import {
   supportedScreenshotMatchers,
   supportedExpectElementMatchers,
@@ -103,6 +104,67 @@ const assertStringArg = (
     throw new Error(`${matcherName} expects ${label}`);
   }
   return value;
+};
+
+const captureStableScreenshot = async (
+  locator: Locator,
+  options: Record<string, unknown>,
+): Promise<Buffer> => {
+  const { stabilityTimeout = 500, ...playwrightOptions } = options;
+  if (typeof stabilityTimeout !== 'number' || stabilityTimeout < 0) {
+    throw new Error(
+      'toMatchScreenshot stabilityTimeout must be a non-negative number.',
+    );
+  }
+  const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
+  const capture = () => locator.screenshot(screenshotOptions as any);
+  const deadline = Date.now() + stabilityTimeout;
+  let previous = await capture();
+  if (stabilityTimeout === 0) return previous;
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const current = await capture();
+    const before = PNG.sync.read(previous);
+    const after = PNG.sync.read(current);
+    if (
+      before.width === after.width &&
+      before.height === after.height &&
+      before.data.equals(after.data)
+    ) {
+      return current;
+    }
+    previous = current;
+  }
+
+  throw new Error(
+    `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
+  );
+};
+
+const readScreenshotOptions = async (
+  root: FrameLocator | Page,
+  value: unknown,
+): Promise<Record<string, unknown>> => {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('toMatchScreenshot options must be an object.');
+  }
+  const options = { ...(value as Record<string, unknown>) };
+  const mask = options.mask;
+  delete options.mask;
+  if (mask !== undefined) {
+    if (!Array.isArray(mask)) {
+      throw new Error('toMatchScreenshot mask must be an array of Locators.');
+    }
+    options.mask = mask.map((item) => {
+      if (!item || typeof item !== 'object') {
+        throw new Error('toMatchScreenshot mask must contain Locators.');
+      }
+      return compilePlaywrightLocator(root, item as BrowserLocatorIR);
+    });
+  }
+  return options;
 };
 
 /** Simple boolean state matchers — no extra args. */
@@ -363,7 +425,8 @@ export async function dispatchPlaywrightBrowserRpc({
     if (!supportedScreenshotMatchers.has(request.method)) {
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
-    const screenshot = await locator.screenshot({ animations: 'disabled' });
+    const options = await readScreenshotOptions(locatorRoot, request.args[1]);
+    const screenshot = await captureStableScreenshot(locator, options);
     return screenshot.toString('base64');
   }
 

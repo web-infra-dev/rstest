@@ -551,6 +551,9 @@ const run = async () => {
     return;
   }
 
+  options = { ...options, projectName: currentProject.name };
+  window.__RSTEST_BROWSER_OPTIONS__ = options;
+
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
   ensureRuntimeEnv(runtimeConfig.env);
 

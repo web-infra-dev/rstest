@@ -1,3 +1,0 @@
-// Rstest Snapshot v1
-
-exports[`snapshot value 1`] = `"stale"`;
