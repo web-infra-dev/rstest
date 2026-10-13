@@ -47,13 +47,13 @@ expect.element(locator: Locator): BrowserElementExpect
 
 <ApiMeta addedVersion="0.12.4" />
 
-使用 Playwright provider 时，`expect(locator).toMatchScreenshot()` 会截取 Locator 对应的内容，并与 PNG 基线比较。首次运行会在 snapshot 更新模式允许新增 snapshot 时生成基线；之后的运行会与基线比较。需要有意更新已有基线时，传入 `--update`。
+使用 Playwright provider 时，`expect(locator).toMatchScreenshot()` 会截取 Locator 对应的内容，并与 PNG 基线比较。若当前 snapshot 更新模式允许新增基线，首次运行会保存 PNG 基线。之后的运行会将截图与基线比较；需要更新已有基线时，传入 `--update`。
 
 ```ts
 import { page } from '@rstest/browser';
 import { expect, test } from '@rstest/core';
 
-test('保存按钮与视觉基线匹配', async () => {
+test('save button matches its visual reference', async () => {
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
 });
 ```
