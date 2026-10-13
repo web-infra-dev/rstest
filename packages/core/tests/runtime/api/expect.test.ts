@@ -11,6 +11,7 @@ import {
   type FileContext,
   setFileContext,
 } from '../../../src/runtime/fileContext';
+import { setupVM } from '../../../src/runtime/worker/env/jsdom';
 import { setRealTimers } from '../../../src/runtime/util';
 import type { TestCase, WorkerState } from '../../../src/types';
 import { toNativePath } from '../../../src/utils/helper';
@@ -185,32 +186,42 @@ it('does not inspect passing toContain arguments', () => {
   fileExpect([value]).toContain(value);
 });
 
-it('matches DOM nodes and token lists from another realm in toContain', () => {
+it('matches DOM nodes and token lists from another realm in toContain', async () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});
-  const context = vm.createContext({});
-  const { parent, child, classList } = vm.runInContext(
-    `(() => {
-      const child = { nodeType: 1, contains: () => false };
-      const parent = {
-        nodeType: 1,
-        contains: (value) => value === child,
-      };
-      const classList = {
-        value: 'active selected',
-        contains: (value) => value === 'active' || value === 'selected',
-      };
-      return { parent, child, classList };
-    })()`,
-    context,
-  ) as {
-    parent: Node;
-    child: Node;
-    classList: DOMTokenList;
+  const environment = await setupVM({}, { scope: 'file' });
+  try {
+    const parent = vm.runInContext(
+      'document.createElement("div")',
+      environment.context,
+    ) as HTMLElement;
+    const child = vm.runInContext(
+      'document.createElement("span")',
+      environment.context,
+    ) as HTMLElement;
+    const classList = parent.classList;
+    parent.append(child);
+    classList.add('active', 'selected');
+
+    fileExpect(parent).toContain(child);
+    fileExpect(classList).toContain('selected');
+  } finally {
+    await environment.teardown();
+  }
+});
+
+it('preserves iterable toContain behavior for DOMTokenList lookalikes', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const collection = {
+    value: 'label',
+    contains: () => false,
+    *[Symbol.iterator]() {
+      yield 'needle';
+    },
   };
 
-  fileExpect(parent).toContain(child);
-  fileExpect(classList).toContain('selected');
+  fileExpect(collection).toContain('needle');
 });
 
 it('rejects non-iterable toContain receivers, including negated assertions', () => {

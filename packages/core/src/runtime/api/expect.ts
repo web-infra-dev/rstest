@@ -71,6 +71,29 @@ const isDomNode = (value: unknown): value is Node =>
   'contains' in value &&
   typeof value.contains === 'function';
 
+const isDomTokenList = (value: unknown): value is DOMTokenList => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  let prototype = Object.getPrototypeOf(value);
+  while (prototype) {
+    const constructor = Object.getOwnPropertyDescriptor(
+      prototype,
+      'constructor',
+    )?.value;
+    if (
+      typeof constructor === 'function' &&
+      constructor.name === 'DOMTokenList' &&
+      constructor.prototype === prototype
+    ) {
+      return true;
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return false;
+};
+
 const defaultChaiConfig: ChaiConfig = {
   showDiff: chaiConfig.showDiff,
   truncateThreshold: chaiConfig.truncateThreshold,
@@ -440,14 +463,7 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
       );
     }
 
-    if (
-      typeof actual === 'object' &&
-      actual !== null &&
-      'value' in actual &&
-      typeof actual.value === 'string' &&
-      'contains' in actual &&
-      typeof actual.contains === 'function'
-    ) {
+    if (isDomTokenList(actual)) {
       if (typeof item !== 'string') {
         return originalToContain.call(this, item);
       }
