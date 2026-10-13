@@ -6,7 +6,7 @@
     "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
     "build": "pnpm --filter \"./packages/*\" run build",
     "bump": "bumpp",
-    "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports --ignore-package @rstest/e2e-environment-affinity-jsdom-26 --ignore-package @rstest/e2e-environment-affinity-jsdom-29 . && echo",
+    "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports --ignore-package @rstest/e2e-environment-affinity-jsdom-26 --ignore-package @rstest/e2e-environment-affinity-jsdom-29 --ignore-package rstest . && echo",
     "check-doc-types": "node .agents/skills/api-doc-sync/scripts/check-type-blocks.mjs",
     "check-harness-docs": "node scripts/harness/check-harness-docs.mjs",
     "check-spell": "cspell && heading-case",
@@ -30,20 +30,20 @@
     "bumpp": "^11.1.0",
     "check-dependency-version-consistency": "^6.0.0",
     "cross-env": "^10.1.0",
-    "cspell": "10.3.5",
+    "cspell": "10.3.6",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.1.8",
-    "knip": "^6.40.0",
-    "lefthook": "^2.1.14",
-    "pkg-pr-new": "^0.0.88",
-    "playwright": "^1.63.0",
-    "prettier": "^3.9.9",
+    "knip": "^6.41.0",
+    "lefthook": "^2.2.1",
+    "pkg-pr-new": "^0.0.91",
+    "playwright": "^1.64.0",
+    "prettier": "^3.9.10",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@12.8.1",
+  "packageManager": "pnpm@12.11.2",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=12.8.1"
+    "pnpm": ">=12.11.2"
   }
 }
