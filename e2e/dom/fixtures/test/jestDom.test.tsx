@@ -9,4 +9,7 @@ test('uses jest-dom', () => {
 
   expect(screen.queryByTestId('not-empty')).not.toBeEmptyDOMElement();
   expect(screen.getByText('Visible Example')).toBeVisible();
+  expect(() => expect(document.createElement('div')).toBeNull()).toThrow(
+    'expected <div></div> to be null',
+  );
 });
