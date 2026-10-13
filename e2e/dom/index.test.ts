@@ -8,6 +8,31 @@ const jestDomFilters = 'test/jestDom';
 
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
+it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
+  'formats React DOM assertions under %s',
+  async (pool) => {
+    for (const environment of ['jsdom', 'happy-dom']) {
+      const { cli, expectExecSuccess } = await runCli(
+        [appFilters, jestDomFilters],
+        environment,
+        {
+          args: [
+            '--pool',
+            pool,
+            '--pool.maxWorkers',
+            '1',
+            '--testNamePattern',
+            'formats caught DOM assertions|uses jest-dom',
+          ],
+        },
+      );
+      await expectExecSuccess();
+      expect(cli.stdout + cli.stderr).not.toContain('Accessing element.ref');
+      expect(cli.stdout + cli.stderr).not.toContain('`key` is not a prop');
+    }
+  },
+);
+
 describe('jsdom', () => {
   it('should keep automatic JSX runtime with an environment comment', async () => {
     const { cli, expectExecSuccess } = await runCli(

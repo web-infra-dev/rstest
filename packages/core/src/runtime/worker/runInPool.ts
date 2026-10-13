@@ -244,6 +244,26 @@ const createVmFunction = <T>(
   return createFunction(hostFunction);
 };
 
+export const installWorkerHTMLElement = (
+  runtimeGlobal: VmRuntimeGlobal,
+): (() => void) => {
+  // Chai/Loupe runs in the worker realm and identifies DOM nodes through its
+  // global HTMLElement. Release the constructor at file teardown so a reused
+  // worker cannot retain the disposed VM DOM.
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'HTMLElement');
+  Object.defineProperty(globalThis, 'HTMLElement', {
+    configurable: true,
+    get: () => runtimeGlobal.HTMLElement,
+  });
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(globalThis, 'HTMLElement', descriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, 'HTMLElement');
+    }
+  };
+};
+
 export const installVmNodeGlobals = (
   runtimeGlobal: VmRuntimeGlobal,
   vmContext: Context,
@@ -517,6 +537,9 @@ const prepareVmRuntimeRealm = async (
     'globalThis',
     vmContext,
   ) as VmRuntimeGlobal;
+  if (testEnvironment.name !== 'node') {
+    cleanupFns.push(installWorkerHTMLElement(runtimeGlobal));
+  }
   installVmNodeGlobals(runtimeGlobal, vmContext);
   if (testEnvironment.name === 'node') {
     const nodeTimers: NodeTimerPrimitives = {

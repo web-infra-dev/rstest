@@ -1,4 +1,4 @@
-import { expect, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import App from '../src/App';
 
@@ -26,4 +26,25 @@ test('should support fetch', async () => {
       signal: AbortSignal.timeout(0),
     }),
   ).rejects.toHaveProperty('name', 'TimeoutError');
+});
+
+test('formats caught DOM assertions without reading React internals', () => {
+  const errors = rs.spyOn(console, 'error');
+  const { getByTestId } = render(
+    <section>
+      {['a'].map((key) => (
+        <div key={key} ref={() => {}}>
+          <div data-testid="pending">
+            <i />
+          </div>
+        </div>
+      ))}
+    </section>,
+  );
+
+  expect(() => expect(getByTestId('pending')).toBeNull()).toThrow(
+    'expected <div data-testid="pending">',
+  );
+  expect(errors).not.toHaveBeenCalled();
+  errors.mockRestore();
 });
