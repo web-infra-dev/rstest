@@ -56,6 +56,10 @@ export type BrowserElementExpect = {
 };
 
 declare module '@rstest/core' {
+  interface Assertion<T> {
+    toMatchScreenshot: (name?: string) => Promise<void>;
+  }
+
   interface ExpectStatic {
     element: (locator: Locator) => BrowserElementExpect;
   }

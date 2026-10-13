@@ -1,3 +1,4 @@
+import { expect } from '@rstest/core';
 import { registerElementExpect } from '@rstest/core/internal/browser-runtime';
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
 import type { BrowserElementExpect } from './augmentExpect';
@@ -165,6 +166,32 @@ const element = (
 };
 
 registerElementExpect(element);
+
+expect.extend({
+  async toMatchScreenshot(received: unknown, name?: string) {
+    if (!isLocator(received)) {
+      throw new TypeError(
+        'toMatchScreenshot() expects a Locator returned from @rstest/browser.',
+      );
+    }
+
+    const screenshotName = name ?? this.currentTestName;
+    if (!screenshotName) {
+      throw new Error(
+        'toMatchScreenshot() must be called inside a test or given a name.',
+      );
+    }
+
+    await callBrowserRpc<void>({
+      kind: 'screenshot',
+      locator: received.ir,
+      method: 'toMatchScreenshot',
+      args: [screenshotName],
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
+
+    return { pass: true, message: () => '' };
+  },
+});
 
 export type {
   BrowserPage,

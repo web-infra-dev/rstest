@@ -5,6 +5,7 @@
  */
 import type { FrameLocator, Locator, Page } from 'playwright';
 import {
+  supportedScreenshotMatchers,
   supportedExpectElementMatchers,
   supportedLocatorActions,
 } from '../../browserRpcRegistry';
@@ -357,6 +358,14 @@ export async function dispatchPlaywrightBrowserRpc({
     locatorRoot,
     request.locator as BrowserLocatorIR,
   );
+
+  if (request.kind === 'screenshot') {
+    if (!supportedScreenshotMatchers.has(request.method)) {
+      throw new Error(`Screenshot matcher not supported: ${request.method}`);
+    }
+    const screenshot = await locator.screenshot({ animations: 'disabled' });
+    return screenshot.toString('base64');
+  }
 
   if (request.kind === 'locator') {
     if (!supportedLocatorActions.has(request.method)) {

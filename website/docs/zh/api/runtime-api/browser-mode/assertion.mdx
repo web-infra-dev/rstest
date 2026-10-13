@@ -4,6 +4,8 @@ description: expect.element 是 Browser Mode 中用于 Locator 断言的 API。�
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Assertion
 
 `expect.element` 是 Browser Mode 中用于 [Locator](/api/runtime-api/browser-mode/locator) 断言的 API。它接收 `Locator`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
@@ -40,6 +42,31 @@ test('asserts element states in browser mode', async () => {
 ```ts
 expect.element(locator: Locator): BrowserElementExpect
 ```
+
+## 截图匹配
+
+<ApiMeta addedVersion="0.12.4" />
+
+使用 Playwright provider 时，`expect(locator).toMatchScreenshot()` 会截取 Locator 对应的内容，并与 PNG 基线比较。首次运行会在 snapshot 更新模式允许新增 snapshot 时生成基线；之后的运行会与基线比较。需要有意更新已有基线时，传入 `--update`。
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('保存按钮与视觉基线匹配', async () => {
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+});
+```
+
+PNG 基线保存在测试文件旁的 `__screenshots__` 目录中。默认使用当前测试名称作为基线名称；也可以传入名称，显式复用或区分基线：
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
+  'primary-save-button',
+);
+```
+
+基线文件名包含浏览器和操作系统信息。截图不匹配时，错误会显示基线路径和不同像素的数量。
 
 ## 自动重试与超时
 

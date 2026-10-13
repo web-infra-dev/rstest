@@ -11,9 +11,12 @@
  * - Locator actions: tripleClick, hover out, drag/drop helpers
  * - Assertions: a11y matchers (accessible name/description), toHaveRole,
  *   toHaveValues
- * - Artifacts intentionally excluded for now: screenshot/toMatchScreenshot/
- *   trace/video
+ * - Artifacts intentionally excluded for now: trace/video
  */
+export const supportedScreenshotMatchers: Set<string> = new Set([
+  'toMatchScreenshot',
+]);
+
 export const supportedLocatorActions: Set<string> = new Set([
   'click',
   'dblclick',

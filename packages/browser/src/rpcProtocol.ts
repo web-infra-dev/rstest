@@ -74,7 +74,7 @@ export type BrowserRpcRequest = {
   id: string;
   /** Absolute test file path for locating runner iframe */
   testPath: string;
-  kind: 'locator' | 'expect' | 'config';
+  kind: 'locator' | 'expect' | 'screenshot' | 'config';
   locator: BrowserLocatorIR;
   method: string;
   args: unknown[];
@@ -143,7 +143,12 @@ export const validateBrowserRpcRequest = (
   }
 
   const kind = readString(payload, 'kind', 'kind');
-  if (kind !== 'locator' && kind !== 'expect' && kind !== 'config') {
+  if (
+    kind !== 'locator' &&
+    kind !== 'expect' &&
+    kind !== 'screenshot' &&
+    kind !== 'config'
+  ) {
     throw new Error(
       `Invalid browser RPC request: unsupported kind ${JSON.stringify(kind)}`,
     );

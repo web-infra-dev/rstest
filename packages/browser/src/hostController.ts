@@ -55,6 +55,7 @@ import {
 } from './browserV8Coverage';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
+import { matchBrowserScreenshot } from './screenshotSnapshots';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
@@ -797,12 +798,29 @@ export const runBrowserController = async (
     }
 
     try {
-      return await implementation.dispatchRpc({
+      const result = await implementation.dispatchRpc({
         containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
         request,
         timeoutFallbackMs,
       });
+
+      if (request.kind === 'screenshot') {
+        const [testName] = request.args;
+        if (typeof result !== 'string' || typeof testName !== 'string') {
+          throw new Error('Invalid screenshot matcher response.');
+        }
+        await matchBrowserScreenshot({
+          testPath: request.testPath,
+          testName,
+          browserName,
+          screenshotBase64: result,
+          updateSnapshot: context.snapshotManager.options.updateSnapshot,
+        });
+        return undefined;
+      }
+
+      return result;
     } catch (error) {
       // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
       if (error instanceof Error) {
