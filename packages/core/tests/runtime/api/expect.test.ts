@@ -185,6 +185,34 @@ it('does not inspect passing toContain arguments', () => {
   fileExpect([value]).toContain(value);
 });
 
+it('matches DOM nodes and token lists from another realm in toContain', () => {
+  publishFile('/expect', 'toContain');
+  const fileExpect = createFileExpect(() => {});
+  const context = vm.createContext({});
+  const { parent, child, classList } = vm.runInContext(
+    `(() => {
+      const child = { nodeType: 1, contains: () => false };
+      const parent = {
+        nodeType: 1,
+        contains: (value) => value === child,
+      };
+      const classList = {
+        value: 'active selected',
+        contains: (value) => value === 'active' || value === 'selected',
+      };
+      return { parent, child, classList };
+    })()`,
+    context,
+  ) as {
+    parent: Node;
+    child: Node;
+    classList: DOMTokenList;
+  };
+
+  fileExpect(parent).toContain(child);
+  fileExpect(classList).toContain('selected');
+});
+
 it('rejects non-iterable toContain receivers, including negated assertions', () => {
   publishFile('/expect', 'toContain');
   const fileExpect = createFileExpect(() => {});

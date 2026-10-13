@@ -13,3 +13,14 @@ test('uses jest-dom', () => {
     'expected <div></div> to be null',
   );
 });
+
+test('matches DOM nodes across VM realms', () => {
+  const parent = document.createElement('div');
+  const child = document.createElement('span');
+  parent.append(child);
+  parent.classList.add('active');
+
+  expect(parent).toContain(child);
+  expect(parent).not.toContain(document.createElement('span'));
+  expect(parent.classList).toContain('active');
+});

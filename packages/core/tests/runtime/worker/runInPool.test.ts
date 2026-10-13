@@ -5,8 +5,8 @@ import { setupVM } from '../../../src/runtime/worker/env/jsdom';
 import {
   installVmNodeGlobals,
   installWorkerHTMLElement,
-  isBlockedProcessKillTarget,
-} from '../../../src/runtime/worker/runInPool';
+} from '../../../src/runtime/worker/vm/nodeGlobals';
+import { isBlockedProcessKillTarget } from '../../../src/runtime/worker/runInPool';
 
 test('bridges host getters without invoking host setters or sharing assignments', () => {
   const key = '__RSTEST_VM_ACCESSOR_TEST__';

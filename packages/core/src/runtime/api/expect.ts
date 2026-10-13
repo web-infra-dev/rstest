@@ -63,6 +63,14 @@ import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 export { assert } from 'chai';
 
+const isDomNode = (value: unknown): value is Node =>
+  typeof value === 'object' &&
+  value !== null &&
+  'nodeType' in value &&
+  typeof value.nodeType === 'number' &&
+  'contains' in value &&
+  typeof value.contains === 'function';
+
 const defaultChaiConfig: ChaiConfig = {
   showDiff: chaiConfig.showDiff,
   truncateThreshold: chaiConfig.truncateThreshold,
@@ -418,8 +426,8 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
   const toContain = wrapAssertion(utils, 'toContain', function (item) {
     const actual = utils.flag(this, 'object');
 
-    if (typeof Node !== 'undefined' && actual instanceof Node) {
-      if (!(item instanceof Node)) {
+    if (isDomNode(actual)) {
+      if (!isDomNode(item)) {
         return originalToContain.call(this, item);
       }
 
@@ -432,7 +440,14 @@ const LazyMatcherMessages: ChaiPlugin = (chai, utils) => {
       );
     }
 
-    if (typeof DOMTokenList !== 'undefined' && actual instanceof DOMTokenList) {
+    if (
+      typeof actual === 'object' &&
+      actual !== null &&
+      'value' in actual &&
+      typeof actual.value === 'string' &&
+      'contains' in actual &&
+      typeof actual.contains === 'function'
+    ) {
       if (typeof item !== 'string') {
         return originalToContain.call(this, item);
       }
