@@ -621,7 +621,7 @@ importers:
   e2e/no-isolate/fixtures/environment-module-affinity/jsdom-30:
     devDependencies:
       jsdom:
-        specifier: 30.1.2
+        specifier: ^30.1.2
         version: 30.1.2
 
   e2e/playwright/fixtures:
