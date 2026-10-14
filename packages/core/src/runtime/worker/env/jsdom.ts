@@ -1,4 +1,5 @@
 import { Blob as NodeBlob } from 'node:buffer';
+import { createRequire } from 'node:module';
 import { URL as NodeURL } from 'node:url';
 import { runInContext } from 'node:vm';
 import type vm from 'node:vm';
@@ -25,6 +26,12 @@ type JSDOMOptions = ConstructorOptions & {
 type JSDOMBlobImpl = {
   _buffer?: Uint8Array;
   _bytes?: Uint8Array;
+};
+
+const { implForWrapper } = createRequire(import.meta.url)(
+  'jsdom/lib/generated/idl/utils',
+) as {
+  implForWrapper: (wrapper: unknown) => JSDOMBlobImpl | undefined;
 };
 
 type VirtualConsoleForwarder =
@@ -254,9 +261,9 @@ function installJSDOMObjectURL(
       value(blob: NodeBlob | Blob | MediaSource): string {
         // The private Symbol(impl) is shared by Blob wrappers from other jsdom
         // realms, unlike their constructors.
-        const impl = (blob as unknown as Record<symbol, JSDOMBlobImpl>)[
-          implSymbol
-        ];
+        const impl =
+          (blob as unknown as Record<symbol, JSDOMBlobImpl>)[implSymbol] ??
+          implForWrapper(blob);
         const bytes = impl?._buffer ?? impl?._bytes;
         if (bytes) {
           return NodeURL.createObjectURL(
