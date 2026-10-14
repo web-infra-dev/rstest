@@ -71,6 +71,9 @@ describe('browser mode - screenshot matching', () => {
     };
     const screenshotDir = screenshotDirForProject('project-a');
     const secondProjectDir = screenshotDirForProject('project-b');
+    expect(
+      fs.readdirSync(screenshotDir).filter((name) => name.endsWith('.png')),
+    ).toHaveLength(4);
     const referenceName = fs
       .readdirSync(screenshotDir)
       .find((name) => name.startsWith('primary-button-'));

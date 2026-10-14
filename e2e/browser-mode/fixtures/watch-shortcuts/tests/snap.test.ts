@@ -7,4 +7,4 @@ it('screenshot reference', async () => {
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
     'watch-snapshot',
   );
-});
+}, 30_000);

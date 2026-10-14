@@ -193,22 +193,25 @@ expect.extend({
     const isConcurrentTest =
       hasAssertionFlag('rstestCurrentTestConcurrent') ||
       Reflect.get(this, 'rstestCurrentTestConcurrent') === true;
-    const screenshotName =
-      name ??
-      (isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
-        ? undefined
-        : this.currentTestName);
-    if (!screenshotName) {
-      throw new Error(
-        'toMatchScreenshot() must be called inside a non-concurrent test or given a name.',
-      );
-    }
     const testCase = Object.prototype.hasOwnProperty.call(
       assertion,
       'rstestTestCase',
     )
       ? Reflect.get(assertion, 'rstestTestCase')
       : undefined;
+    const defaultName = this.currentTestName;
+    const screenshotName =
+      name ??
+      (isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
+        ? undefined
+        : testCase && defaultName
+          ? `${defaultName} [${testCase.testId}]`
+          : defaultName);
+    if (!screenshotName) {
+      throw new Error(
+        'toMatchScreenshot() must be called inside a non-concurrent test or given a name.',
+      );
+    }
 
     const mask = options?.mask ?? [];
     if (!mask.every(isLocator)) {

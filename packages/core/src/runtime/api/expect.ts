@@ -574,11 +574,11 @@ export function createExpect({
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     const assert = chaiExpect(value, message) as unknown as Assertion;
     const _test = getCurrentTest();
+    if (_test) {
+      Reflect.set(assert, 'rstestTestCase', _test);
+    }
     if (isTestScoped) {
       Reflect.set(assert, 'rstestTestScoped', true);
-      if (_test) {
-        Reflect.set(assert, 'rstestTestCase', _test);
-      }
     }
     if (_test) {
       if (_test.concurrent || _test.inConcurrentScope) {
