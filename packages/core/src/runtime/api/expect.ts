@@ -181,16 +181,20 @@ export const registerElementExpect = (handler: ElementExpectHandler): void => {
   elementExpectHandler = handler;
 };
 
-export const getCurrentTestTimeout = (): number | undefined => {
+export const getCurrentTestTimeout = (test?: TestCase): number | undefined => {
   const { testRunner } = fileContext();
   const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
-  const timeoutContext = activeTimeoutContext ?? testRunner.getCurrentTest();
+  const timeoutContext =
+    test ?? activeTimeoutContext ?? testRunner.getCurrentTest();
   if (!timeoutContext) {
     return undefined;
   }
   const currentTimeout = timeoutContext.activeTimeout ?? timeoutContext.timeout;
   if (currentTimeout === 0) return 0;
-  if (timeoutContext.concurrent || timeoutContext.inConcurrentScope) {
+  if (
+    !test &&
+    (timeoutContext.concurrent || timeoutContext.inConcurrentScope)
+  ) {
     return undefined;
   }
   return getRemainingTestTimeout(timeoutContext, TEST_TIMEOUT_BUFFER);
@@ -569,10 +573,13 @@ export function createExpect({
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     const assert = chaiExpect(value, message) as unknown as Assertion;
+    const _test = getCurrentTest();
     if (isTestScoped) {
       Reflect.set(assert, 'rstestTestScoped', true);
+      if (_test) {
+        Reflect.set(assert, 'rstestTestCase', _test);
+      }
     }
-    const _test = getCurrentTest();
     if (_test) {
       if (_test.concurrent || _test.inConcurrentScope) {
         Reflect.set(assert, 'rstestCurrentTestConcurrent', true);

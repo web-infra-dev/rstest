@@ -203,6 +203,12 @@ expect.extend({
         'toMatchScreenshot() must be called inside a non-concurrent test or given a name.',
       );
     }
+    const testCase = Object.prototype.hasOwnProperty.call(
+      assertion,
+      'rstestTestCase',
+    )
+      ? Reflect.get(assertion, 'rstestTestCase')
+      : undefined;
 
     const mask = options?.mask ?? [];
     if (!mask.every(isLocator)) {
@@ -216,7 +222,7 @@ expect.extend({
       kind: 'screenshot',
       locator: received.ir,
       method: 'toMatchScreenshot',
-      timeout: getCurrentTestTimeout(),
+      timeout: getCurrentTestTimeout(testCase),
       args: [
         screenshotName,
         { ...serializedOptions, mask: mask.map((item) => item.ir) },

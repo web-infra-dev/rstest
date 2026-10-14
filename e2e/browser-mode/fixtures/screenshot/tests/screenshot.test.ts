@@ -4,7 +4,7 @@ import { expect, test } from '@rstest/core';
 test('matches a locator screenshot', async () => {
   document.body.innerHTML = `
     <div id="capture" style="width: 360px; height: 80px; overflow: hidden">
-      <button style="width: 180px; height: 40px; background: rgb(20, 80, 180); color: white; padding: 12px 24px; border: 0">Save</button>
+      <button style="appearance: none; display: block; box-sizing: border-box; width: 180px; height: 40px; margin: 0; background: rgb(20, 80, 180); color: white; padding: 0; border: 0; line-height: 40px">Save</button>
       <span id="dynamic" style="display: inline-block; margin-left: 20px">dynamic content</span>
     </div>
   `;
@@ -40,22 +40,9 @@ test.concurrent(
 );
 
 test.concurrent(
-  'uses the pinned name with the test-scoped expect',
+  'uses the pinned test context with the test-scoped expect',
   async ({ expect: testExpect }) => {
-    let matcherError: unknown;
-    try {
-      await testExpect(page.locator('body')).toMatchScreenshot(undefined, {
-        mask: [null!],
-      });
-    } catch (error) {
-      matcherError = error;
-    }
-    if (
-      !(matcherError instanceof Error) ||
-      !matcherError.message.includes('mask must contain browser-mode Locators')
-    ) {
-      throw new Error('Expected the test-scoped matcher to accept its name.');
-    }
+    await testExpect(page.locator('body')).toMatchScreenshot();
   },
 );
 

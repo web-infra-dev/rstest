@@ -220,6 +220,50 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(captures).toBe(2);
   });
 
+  it('bounds follow-up captures by the remaining stability timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 2000,
+        args: ['button', { stabilityTimeout: 1000 }],
+      }),
+      timeoutFallbackMs: 2000,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(2);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeLessThanOrEqual(1000);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeGreaterThan(0);
+  });
+
+  it('rejects a follow-up capture that returns after the stability timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    const captureScreenshot = fakeLocator.screenshotImplementation;
+    let captures = 0;
+    fakeLocator.screenshotImplementation = async () => {
+      captures += 1;
+      if (captures === 2) {
+        await new Promise((resolve) => setTimeout(resolve, 275));
+      }
+      return captureScreenshot();
+    };
+
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          timeout: 2000,
+          args: ['button', { stabilityTimeout: 250 }],
+        }),
+        timeoutFallbackMs: 2000,
+      }),
+    ).rejects.toThrow('did not become stable within 250ms');
+  });
+
   it('normalizes zero expect timeouts for Playwright', async () => {
     const fakeLocator = new FakeLocator();
     await dispatchPlaywrightBrowserRpc({

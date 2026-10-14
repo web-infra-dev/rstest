@@ -131,8 +131,8 @@ const captureStableScreenshot = async (
     );
   }
   const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
-  const capture = () => {
-    const timeout = requestDeadline ? requestDeadline - Date.now() : undefined;
+  const capture = (deadline = requestDeadline) => {
+    const timeout = deadline ? deadline - Date.now() : undefined;
     if (timeout !== undefined && timeout <= 0) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
     }
@@ -157,7 +157,20 @@ const captureStableScreenshot = async (
     if (requestDeadline && Date.now() >= requestDeadline) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
     }
-    const current = await capture();
+    if (Date.now() >= stabilityDeadline) {
+      throw new Error(
+        `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
+      );
+    }
+    const captureDeadline = requestDeadline
+      ? Math.min(requestDeadline, stabilityDeadline)
+      : stabilityDeadline;
+    const current = await capture(captureDeadline);
+    if (Date.now() >= stabilityDeadline) {
+      throw new Error(
+        `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
+      );
+    }
     const before = PNG.sync.read(previous);
     const after = PNG.sync.read(current);
     if (
