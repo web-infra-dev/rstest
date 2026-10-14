@@ -2,9 +2,9 @@ import { HL } from './kernel.js';
 
 /**
  * Stack: three Lego-style bricks, Rspack at the foot, Rsbuild on it, Rstest on top, each with its crab
- * mark and its name raised on its front. The pointer's x scrubs how far the stack is built: to the left the
- * upper two hover apart, to the right each has dropped onto the one below. At rest all three are apart, so
- * the lap reads in build order: Rsbuild snaps onto Rspack, then Rstest onto Rsbuild. The logos are the originals from
+ * mark and its name raised on its front. Hovering a brick builds the stack up to it: every brick up to the
+ * hovered one is seated, the ones above hover apart. Only the bricks answer the pointer; anywhere else the
+ * figure plays on its own, in build order: Rsbuild snaps onto Rspack, then Rstest onto Rsbuild. The logos are the originals from
  * rstack-design-resources; the names are Open Sans
  * SemiBold outlines. The slider is how high a brick hovers, in world units.
  */
@@ -14,6 +14,7 @@ const {
   extremes,
   facing,
   fit,
+  hull,
   open,
   poly,
   prism,
@@ -30,7 +31,6 @@ const {
   tval,
   tdone,
   mk,
-  pointer,
   put,
   register,
   disposer,
@@ -1464,10 +1464,22 @@ function front(m) {
 const MEANS =
   'Three bricks, Rspack, Rsbuild, Rstest: each one snaps onto the one below, the stack your tests build through.';
 
-function mount({ stage, svg, read }, value) {
+/** Whether screen point q lies inside the convex polygon `h`, as `hull` returns it. */
+const inside = (h, [x, y]) =>
+  h.every((a, i) => {
+    const b = h[(i + 1) % h.length];
+    return (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]) >= 0;
+  });
+
+// The build steps the figure plays through on its own while no brick is under the pointer, and how long each holds.
+const PLAY = [1, 2, REST],
+  HOLD = 1800,
+  RESUME = 400;
+
+function mount({ stage, svg, read }, value, play = false) {
   const bag = disposer();
   let lift = value,
-    over = false;
+    over = -1;
   const C = Cam(45, 0.5, 1.5);
   fit(
     C,
@@ -1644,7 +1656,7 @@ function mount({ stage, svg, read }, value) {
     });
   }
   function light() {
-    const focus = p.t < 1 ? 1 : 2;
+    const focus = over >= 0 ? over : p.t < 1 ? 1 : 2;
     bricks.forEach((b, k) => {
       if (b.lit === (k === focus)) return;
       b.lit = k === focus;
@@ -1658,34 +1670,77 @@ function mount({ stage, svg, read }, value) {
         el.cr.style.stroke = tint(TINTS[k], b.lit ? 'mid' : 'lo', 35);
       }
     });
-    read.textContent = over ? MARKS[focus].name : 'rest';
+    read.textContent = over >= 0 ? MARKS[focus].name : 'rest';
   }
   draw(performance.now());
   light();
 
-  const B = register(stage, (dt, now) => {
-    const m = stepS(p, dt);
-    draw(now);
-    return m || bricks.some((b) => !tdone(b.kick, now));
-  });
-  bag.add(B.unregister);
+  // Autoplay: while no brick is under the pointer, step through PLAY on the figure's own clock.
+  const still =
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let step = 0,
+    wait = RESUME;
   const aim = (t) => {
     p.t = t;
     light();
     B.wake();
   };
-  bag.add(
-    pointer(stage, {
-      move: ([x]) => {
-        over = true;
-        aim(clamp((x - 100) / 200, 0, 1) * 2);
-      },
-      leave: () => {
-        over = false;
-        aim(REST);
-      },
-    }),
-  );
+  const B = register(stage, (dt, now) => {
+    let auto = false;
+    if (play && !still && over < 0) {
+      auto = true;
+      wait -= dt * 1e3;
+      if (wait <= 0) {
+        aim(PLAY[step]);
+        step = (step + 1) % PLAY.length;
+        wait = HOLD;
+      }
+    }
+    const m = stepS(p, dt);
+    draw(now);
+    return auto || m || bricks.some((b) => !tdone(b.kick, now));
+  });
+  bag.add(B.unregister);
+
+  // Only the bricks themselves answer the pointer. Brick k is hit where it is drawn now; the brick being
+  // seated also keeps its whole drop, so it cannot slide out from under the pointer as it lands.
+  const zone = (z0, z1) =>
+    hull(ringAt(P, ring, z0).concat(ringAt(P, ring, z1)));
+  function hit(q) {
+    if (over >= 0) {
+      const z = over * BH;
+      if (inside(zone(z, z + over * lift + BH + SH), q)) return over;
+    }
+    for (let k = bricks.length - 1; k >= 0; k--) {
+      const z = bricks[k].drawn;
+      if (inside(zone(z, z + BH + SH), q)) return k;
+    }
+    return -1;
+  }
+  const at = (e) => {
+    const r = stage.getBoundingClientRect();
+    return [
+      ((e.clientX - r.left) / r.width) * 400,
+      ((e.clientY - r.top) / r.height) * 320,
+    ];
+  };
+  const choose = (k) => {
+    if (k === over) return;
+    over = k;
+    if (k >= 0) aim(k);
+    else {
+      // Back to the lap, from the step after the one in place now.
+      step = (PLAY.indexOf(Math.round(p.t)) + 1) % PLAY.length;
+      wait = RESUME;
+      if (!play) aim(REST);
+      light();
+      B.wake();
+    }
+  };
+  bag.on(stage, 'pointermove', (e) => choose(hit(at(e))));
+  bag.on(stage, 'pointerdown', (e) => choose(hit(at(e))));
+  bag.on(stage, 'pointerleave', () => choose(-1));
   bag.add(() => svg.replaceChildren());
 
   return {
@@ -1701,7 +1756,7 @@ function mount({ stage, svg, read }, value) {
   };
 }
 
-/** Mounts the figure in `host` the way the package does, with a fixed hover height, and plays its tour when asked. Returns the tear-down. */
+/** Mounts the figure in `host` the way the package does, with a fixed hover height, and plays on its own when asked. Returns the tear-down. */
 export function mountStack(host, { lift = 22, play = true } = {}) {
   HL.inject(host.ownerDocument);
   host.setAttribute('data-hairline', 'stack');
@@ -1712,11 +1767,12 @@ export function mountStack(host, { lift = 22, play = true } = {}) {
     { viewBox: '0 0 400 320', 'aria-hidden': 'true' },
     host,
   );
-  const figure = mount({ stage: host, svg, read: { textContent: '' } }, lift);
-  // the pointer's x builds the stack: Rsbuild snaps on at 200, Rstest at 300; leaving takes it apart again
-  const lap = play ? HL.tour(host, [[200, 160], [310, 160], null]) : null;
+  const figure = mount(
+    { stage: host, svg, read: { textContent: '' } },
+    lift,
+    play,
+  );
   return () => {
-    lap?.stop();
     figure.destroy();
     svg.remove();
     for (const name of ['data-hairline', 'role', 'aria-label'])
