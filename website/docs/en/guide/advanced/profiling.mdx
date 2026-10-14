@@ -14,9 +14,29 @@ In Rstest, you can enable Rsdoctor analysis as follows:
 
 import { PackageManagerTabs } from '@theme';
 
-<PackageManagerTabs command="add @rsdoctor/rspack-plugin -D" />
+<PackageManagerTabs command="add @rsdoctor/core@latest -D" />
 
-2. Add `RSDOCTOR=true` env variable before the CLI command:
+2. Register Rsdoctor in `rstest.config.ts` when `RSDOCTOR=true`. The `brief` mode generates a standalone HTML report:
+
+```ts title="rstest.config.ts"
+import { RsdoctorRspackPlugin } from '@rsdoctor/core';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack(config) {
+      if (process.env.RSDOCTOR === 'true') {
+        config.plugins ??= [];
+        config.plugins.push(
+          new RsdoctorRspackPlugin({ output: { mode: 'brief' } }),
+        );
+      }
+    },
+  },
+});
+```
+
+3. Add `RSDOCTOR=true` before the CLI command to enable the plugin:
 
 ```json title="package.json"
 {
@@ -39,7 +59,7 @@ As Windows does not support the above usage, you can also use [cross-env](https:
 }
 ```
 
-After running the above commands, Rstest will automatically register the Rsdoctor plugin, and after the build is completed, it will open the build analysis page. For complete features, please refer to [Rsdoctor document](https://rsdoctor.rs/).
+After running the command, Rsdoctor generates an HTML report that you can open in a browser. See the [Rsdoctor documentation](https://rsdoctor.rs/) for more features.
 
 ![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
 
