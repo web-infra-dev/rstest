@@ -7,6 +7,7 @@ import {
   deleteFixtureTarget,
   killCliProcessTree,
   runBrowserCliWithCwd,
+  shouldRunHeadedBrowserTests,
 } from './utils';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,7 +73,9 @@ describe('browser mode - screenshot matching', () => {
     if (!referenceName)
       throw new Error('Expected the screenshot reference to be generated.');
     expect(referenceName).toMatch(
-      new RegExp(`^primary-button-chromium-${process.platform}\\.png$`),
+      new RegExp(
+        `^primary-button-[a-f0-9]{8}-chromium-${process.platform}\\.png$`,
+      ),
     );
     const referencePath = path.join(screenshotDir, referenceName);
     expect(fs.existsSync(path.join(secondProjectDir, referenceName))).toBe(
@@ -131,5 +134,76 @@ describe('browser mode - screenshot matching', () => {
 
     const updatedMatchRun = await runScreenshot(['tests/screenshot.test.ts']);
     await updatedMatchRun.expectExecSuccess();
+
+    for (const projectDir of [screenshotDir, secondProjectDir]) {
+      const projectReference = path.join(
+        projectDir,
+        fs
+          .readdirSync(projectDir)
+          .find((name) => name.startsWith('primary-button-'))!,
+      );
+      fs.writeFileSync(projectReference, 'corrupt PNG reference');
+    }
+    const repairRun = await runScreenshot([
+      'tests/screenshot.test.ts',
+      '--update',
+    ]);
+    await repairRun.expectExecSuccess();
+    const repairedMatchRun = await runScreenshot(['tests/screenshot.test.ts']);
+    await repairedMatchRun.expectExecSuccess();
   });
+
+  it('rejects invalid options before creating a reference', async () => {
+    const invalidTestPath = path.join(
+      fixtureDir,
+      'tests',
+      'invalid-options.test.ts',
+    );
+    fs.writeFileSync(
+      invalidTestPath,
+      `import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('rejects invalid screenshot options', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
+    'invalid-options',
+    { threshold: 2 },
+  );
+});
+`,
+    );
+
+    const result = await runScreenshot(['tests/invalid-options.test.ts']);
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).toBe(1);
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'threshold must be between 0 and 1',
+    );
+    expect(
+      fs.existsSync(path.join(fixtureDir, 'tests', '__screenshots__')),
+    ).toBe(false);
+  });
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'routes headed screenshots to the matching project iframe',
+    async () => {
+      const headedRun = await runScreenshot([
+        '--config=rstest.headed.config.mts',
+        'tests/screenshot.test.ts',
+      ]);
+      await headedRun.expectExecSuccess();
+
+      const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
+      expect(fs.readdirSync(screenshotRoot).sort()).toEqual([
+        'project-a',
+        'project-b',
+      ]);
+      for (const project of ['project-a', 'project-b']) {
+        expect(
+          fs.readdirSync(path.join(screenshotRoot, project, 'screenshot.test')),
+        ).toHaveLength(2);
+      }
+    },
+  );
 });

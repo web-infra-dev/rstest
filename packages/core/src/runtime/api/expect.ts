@@ -178,6 +178,20 @@ export const registerElementExpect = (handler: ElementExpectHandler): void => {
   elementExpectHandler = handler;
 };
 
+export const getCurrentTestTimeout = (): number | undefined => {
+  const { testRunner } = fileContext();
+  const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
+  const timeoutContext = activeTimeoutContext ?? testRunner.getCurrentTest();
+  if (
+    !timeoutContext ||
+    timeoutContext.concurrent ||
+    timeoutContext.inConcurrentScope
+  ) {
+    return undefined;
+  }
+  return getRemainingTestTimeout(timeoutContext, TEST_TIMEOUT_BUFFER);
+};
+
 // Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
 const ReturnedAlias: ChaiPlugin = (chai, utils) => {
   utils.overwriteMethod(chai.Assertion.prototype, 'returned', () => {

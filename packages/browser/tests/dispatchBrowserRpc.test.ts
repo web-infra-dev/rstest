@@ -1,10 +1,17 @@
 import { describe, expect, it } from '@rstest/core';
+import { PNG } from 'pngjs';
 import type { BrowserRpcRequest } from '../src/protocol';
 import { dispatchPlaywrightBrowserRpc } from '../src/providers/playwright/dispatchBrowserRpc';
 
 class FakeLocator {
   actionCalls: Array<{ method: string; args: unknown[] }> = [];
   expectCalls: Array<{ method: string; options: Record<string, unknown> }> = [];
+  screenshotCalls: Array<Record<string, unknown>> = [];
+  screenshotImplementation = async (): Promise<Buffer> => {
+    const png = new PNG({ width: 1, height: 1 });
+    png.data.set([20, 80, 180, 255]);
+    return PNG.sync.write(png);
+  };
 
   locator(): FakeLocator {
     return this;
@@ -46,6 +53,11 @@ class FakeLocator {
     this.expectCalls.push({ method, options });
     return { matches: !options.isNot };
   }
+
+  async screenshot(options: Record<string, unknown>): Promise<Buffer> {
+    this.screenshotCalls.push(options);
+    return this.screenshotImplementation();
+  }
 }
 
 class FakePage {
@@ -53,6 +65,21 @@ class FakePage {
 
   locator(): FakeLocator {
     return this.locatorImpl;
+  }
+}
+
+class FakeContainerPage {
+  selector = '';
+  readonly frame = new FakeLocator();
+
+  locator(selector: string) {
+    this.selector = selector;
+    return { count: async () => 1 };
+  }
+
+  frameLocator(selector: string) {
+    this.selector = selector;
+    return this.frame;
   }
 }
 
@@ -113,6 +140,67 @@ describe('dispatchPlaywrightBrowserRpc', () => {
       isNot: false,
       timeout: 900,
     });
+  });
+
+  it('routes headed requests to the iframe for their project', async () => {
+    const containerPage = new FakeContainerPage();
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: containerPage as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        projectName: 'project-a',
+        args: ['button', { stabilityTimeout: 0 }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(containerPage.selector).toContain("[data-test-project='project-a']");
+  });
+
+  it('bounds screenshot capture by the request timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 25,
+        args: ['button', { stabilityTimeout: 0 }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(1);
+    expect(fakeLocator.screenshotCalls[0]?.timeout).toBeLessThanOrEqual(25);
+  });
+
+  it('starts the stability window after the initial capture', async () => {
+    const fakeLocator = new FakeLocator();
+    let captures = 0;
+    fakeLocator.screenshotImplementation = async () => {
+      captures += 1;
+      if (captures === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 550));
+      }
+      const png = new PNG({ width: 1, height: 1 });
+      png.data.set([20, 80, 180, 255]);
+      return PNG.sync.write(png);
+    };
+
+    const result = await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 2000,
+        args: ['button', { stabilityTimeout: 500 }],
+      }),
+      timeoutFallbackMs: 2000,
+    });
+
+    expect(typeof result).toBe('string');
+    expect(captures).toBe(2);
   });
 
   it('normalizes zero expect timeouts for Playwright', async () => {

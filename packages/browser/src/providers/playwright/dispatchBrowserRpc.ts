@@ -31,9 +31,12 @@ const escapeCssAttrValue = (value: string): string => {
 const getRunnerFrame = async (
   containerPage: Page,
   testPath: string,
+  projectName: string,
   timeoutMs: number,
 ): Promise<FrameLocator> => {
-  const selector = `iframe[data-test-file='${escapeCssAttrValue(testPath)}']`;
+  const selector =
+    `iframe[data-test-file='${escapeCssAttrValue(testPath)}']` +
+    `[data-test-project='${escapeCssAttrValue(projectName)}']`;
   const iframe = containerPage.locator(selector);
 
   const count = await iframe.count();
@@ -41,10 +44,16 @@ const getRunnerFrame = async (
     const known = await containerPage
       .locator('iframe[data-test-file]')
       .evaluateAll((nodes) =>
-        nodes.map((n) => (n as HTMLIFrameElement).dataset.testFile),
+        nodes.map((n) => {
+          const iframe = n as HTMLIFrameElement;
+          return {
+            testPath: iframe.dataset.testFile,
+            projectName: iframe.dataset.testProject,
+          };
+        }),
       );
     throw new Error(
-      `Runner iframe not found for testPath: ${JSON.stringify(testPath)}. ` +
+      `Runner iframe not found for testPath ${JSON.stringify(testPath)} and project ${JSON.stringify(projectName)}. ` +
         `Known iframes: ${JSON.stringify(known)}. ` +
         `Timeout: ${timeoutMs}ms`,
     );
@@ -109,21 +118,40 @@ const assertStringArg = (
 const captureStableScreenshot = async (
   locator: Locator,
   options: Record<string, unknown>,
+  requestDeadline: number,
 ): Promise<Buffer> => {
   const { stabilityTimeout = 500, ...playwrightOptions } = options;
-  if (typeof stabilityTimeout !== 'number' || stabilityTimeout < 0) {
+  if (
+    typeof stabilityTimeout !== 'number' ||
+    !Number.isFinite(stabilityTimeout) ||
+    stabilityTimeout < 0
+  ) {
     throw new Error(
       'toMatchScreenshot stabilityTimeout must be a non-negative number.',
     );
   }
   const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
-  const capture = () => locator.screenshot(screenshotOptions as any);
-  const deadline = Date.now() + stabilityTimeout;
+  const capture = () => {
+    const timeout = requestDeadline - Date.now();
+    if (timeout <= 0) {
+      throw new Error('Screenshot capture exceeded the active test timeout.');
+    }
+    return locator.screenshot({ ...screenshotOptions, timeout } as any);
+  };
   let previous = await capture();
   if (stabilityTimeout === 0) return previous;
 
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+  const stabilityDeadline = Date.now() + stabilityTimeout;
+  while (Date.now() < stabilityDeadline && Date.now() < requestDeadline) {
+    const delay = Math.min(
+      50,
+      stabilityDeadline - Date.now(),
+      requestDeadline - Date.now(),
+    );
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    if (Date.now() >= requestDeadline) {
+      throw new Error('Screenshot capture exceeded the active test timeout.');
+    }
     const current = await capture();
     const before = PNG.sync.read(previous);
     const after = PNG.sync.read(current);
@@ -405,6 +433,7 @@ export async function dispatchPlaywrightBrowserRpc({
 
   const timeout =
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
+  const requestDeadline = Date.now() + Math.max(timeout, 1);
 
   const locatorRoot = runnerPage
     ? runnerPage
@@ -414,6 +443,7 @@ export async function dispatchPlaywrightBrowserRpc({
             throw new Error('Browser container page is not initialized');
           })(),
         testPath,
+        request.projectName,
         timeout,
       );
   const locator = compilePlaywrightLocator(
@@ -426,7 +456,11 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);
-    const screenshot = await captureStableScreenshot(locator, options);
+    const screenshot = await captureStableScreenshot(
+      locator,
+      options,
+      requestDeadline,
+    );
     return screenshot.toString('base64');
   }
 

@@ -66,7 +66,18 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 );
 ```
 
-基线文件名包含浏览器和操作系统信息。截图不匹配时，错误会显示基线路径和不同像素的数量。
+截图基线文件名包含浏览器和操作系统信息。第二个参数可以调整像素容差、等待截图稳定，或遮罩动态内容：
+
+```ts
+await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+  threshold: 0.1,
+  maxDiffPixels: 20,
+  stabilityTimeout: 1000,
+  mask: [page.locator('[data-testid="updated-at"]')],
+});
+```
+
+`maxDiffPixelRatio` 可以代替 `maxDiffPixels`，按像素比例设置容差。应用 `threshold` 后，默认不允许有像素差异。传入 `--update` 会创建缺失的基线，并只替换不匹配的基线。断言失败时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。
 
 ## 自动重试与超时
 

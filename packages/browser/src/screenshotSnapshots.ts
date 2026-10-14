@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import pixelmatch from 'pixelmatch';
 import { basename, dirname, join, parse } from 'pathe';
 import { PNG } from 'pngjs';
@@ -23,7 +24,9 @@ const sanitizeScreenshotName = (name: string): string => {
     .replace(/\s+/g, '-')
     .replace(/^\.+/, '')
     .slice(0, 120);
-  return sanitized || 'screenshot';
+  const safeName = sanitized || 'screenshot';
+  const hash = createHash('sha256').update(name).digest('hex').slice(0, 8);
+  return `${safeName}-${hash}`;
 };
 
 const resolveScreenshotPath = (
@@ -35,7 +38,9 @@ const resolveScreenshotPath = (
   join(
     dirname(testPath),
     '__screenshots__',
-    encodeURIComponent(projectName),
+    encodeURIComponent(projectName).replace(/^\.+$/, (dots) =>
+      '%2E'.repeat(dots.length),
+    ),
     parse(basename(testPath)).name,
     `${sanitizeScreenshotName(testName)}-${browserName}-${process.platform}.png`,
   );
@@ -160,6 +165,7 @@ export const matchBrowserScreenshot = async ({
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
 }): Promise<void> => {
+  const normalizedOptions = validateOptions(options);
   const filepath = resolveScreenshotPath(
     testPath,
     projectName,
@@ -193,8 +199,25 @@ export const matchBrowserScreenshot = async ({
     );
   }
 
-  const expected = PNG.sync.read(expectedBuffer);
-  const normalizedOptions = validateOptions(options);
+  let expected: PNG;
+  try {
+    expected = PNG.sync.read(expectedBuffer);
+  } catch (error) {
+    if (updateSnapshot === 'all') {
+      await writeScreenshot(filepath, actualBuffer);
+      await removeFailureArtifacts(filepath);
+      return;
+    }
+
+    const artifacts = await writeFailureArtifacts({
+      referencePath: filepath,
+      actualBuffer,
+    });
+    const reason = error instanceof Error ? ` ${error.message}` : '';
+    throw new ScreenshotMismatchError(
+      `Screenshot reference for "${testName}" is not a valid PNG.${reason}\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nRun Rstest with --update to replace it.`,
+    );
+  }
   if (expected.width !== actual.width || expected.height !== actual.height) {
     if (updateSnapshot === 'all') {
       await writeScreenshot(filepath, actualBuffer);

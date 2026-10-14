@@ -1,5 +1,8 @@
 import { expect } from '@rstest/core';
-import { registerElementExpect } from '@rstest/core/internal/browser-runtime';
+import {
+  getCurrentTestTimeout,
+  registerElementExpect,
+} from '@rstest/core/internal/browser-runtime';
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
 import type { ToMatchScreenshotOptions } from './augmentExpect';
 import type { BrowserElementExpect } from './augmentExpect';
@@ -199,6 +202,7 @@ expect.extend({
       kind: 'screenshot',
       locator: received.ir,
       method: 'toMatchScreenshot',
+      timeout: getCurrentTestTimeout(),
       args: [
         screenshotName,
         { ...serializedOptions, mask: mask.map((item) => item.ir) },
