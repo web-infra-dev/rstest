@@ -482,14 +482,20 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  e2e/dom/fixtures-happy-dom-20:
+    devDependencies:
+      happy-dom:
+        specifier: 20.14.6
+        version: 20.14.6
 
   e2e/externals:
     devDependencies:
@@ -1022,8 +1028,8 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1065,8 +1071,8 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1114,8 +1120,8 @@ importers:
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       react-refresh:
         specifier: ^0.19.0
         version: 0.19.0
@@ -1181,8 +1187,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       svelte:
         specifier: ^5.57.2
         version: 5.57.2
@@ -1221,8 +1227,8 @@ importers:
         specifier: ^2.5.1
         version: 2.5.1(@vue/compiler-dom@3.5.43)(@vue/server-renderer@3.5.43)(vue@3.5.43(typescript@6.0.3))
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1497,8 +1503,8 @@ importers:
         specifier: ^4.3.1
         version: 4.3.1
       happy-dom:
-        specifier: ^20.14.6
-        version: 20.14.6
+        specifier: ^21.0.1
+        version: 21.0.1
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -6459,6 +6465,10 @@ packages:
 
   happy-dom@20.14.6:
     resolution: {integrity: sha512-5DDsf4QmEIlRL6NkCv/fxSjYHHkZceL/IaYQdJc2h3G7DRTEai++VTjbfL0LB9geW2VrA3+vrjF3Efx+OTtX0Q==}
+    engines: {node: '>=20.0.0'}
+
+  happy-dom@21.0.1:
+    resolution: {integrity: sha512-pRBs/u9fhrncyByOl58DMex0R2uAj6ZPKWIjV5j5yNGZBqLw3P6BTRhlc0DD5b/Ht4/6JYTMuE2LJhUWRC6SGw==}
     engines: {node: '>=20.0.0'}
 
   harfbuzzjs@0.10.0:
@@ -14617,6 +14627,19 @@ snapshots:
   graceful-fs@4.2.11: {}
 
   happy-dom@20.14.6:
+    dependencies:
+      '@types/node': 22.18.6
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.2
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.22.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  happy-dom@21.0.1:
     dependencies:
       '@types/node': 22.18.6
       '@types/whatwg-mimetype': 3.0.2

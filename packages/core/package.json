@@ -102,7 +102,7 @@
     "chai": "^6.3.0",
     "chokidar": "^5.0.0",
     "deepmerge": "^4.3.1",
-    "happy-dom": "^20.14.6",
+    "happy-dom": "^21.0.1",
     "jsdom": "^29.1.1",
     "memfs": "^4.80.0",
     "package-manager-detector": "^1.9.0",

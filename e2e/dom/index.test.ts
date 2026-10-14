@@ -255,3 +255,26 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 });
+
+describe('happy-dom 20 compatibility', () => {
+  it('runs the object URL test with happy-dom 20', async () => {
+    const cwd = fileURLToPath(
+      new URL('./fixtures-happy-dom-20', import.meta.url),
+    );
+    const { cli, expectExecSuccess } = await runCli(
+      ['objectUrl', 'version'],
+      'happy-dom',
+      { cwd },
+    );
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'the happy-dom 20 version fixture passes').toMatch(
+      /✓ version\.test\.ts/,
+    );
+    expect(cli.stdout, 'object URLs work under happy-dom 20').toMatch(
+      /✓ objectUrl\.test\.ts/,
+    );
+    await expectExecSuccess();
+  });
+});

@@ -1,0 +1,7 @@
+{
+  "name": "@rstest/e2e-environment-affinity-happy-dom-20",
+  "private": true,
+  "devDependencies": {
+    "happy-dom": "20.14.6"
+  }
+}
