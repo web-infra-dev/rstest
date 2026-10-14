@@ -5,5 +5,9 @@ export default defineConfig({
   pool: {
     maxWorkers: 1,
   },
-  projects: ['./jsdom-26/rstest.config.mts', './jsdom-29/rstest.config.mts'],
+  projects: [
+    './jsdom-26/rstest.config.mts',
+    './jsdom-29/rstest.config.mts',
+    './jsdom-30/rstest.config.mts',
+  ],
 });
