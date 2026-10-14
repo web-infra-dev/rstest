@@ -10,6 +10,7 @@ export const runCli = async (
   testEnvironment?: 'jsdom' | 'happy-dom' | string,
   extra?: {
     args?: string[];
+    cwd?: string;
   },
 ) => {
   const filters = Array.isArray(_filters) ? _filters : [_filters];
@@ -23,7 +24,7 @@ export const runCli = async (
     ],
     options: {
       nodeOptions: {
-        cwd: join(__dirname, 'fixtures'),
+        cwd: extra?.cwd ?? join(__dirname, 'fixtures'),
       },
     },
   });

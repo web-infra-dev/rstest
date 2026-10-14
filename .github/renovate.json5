@@ -73,6 +73,12 @@
       matchFileNames: ['packages/vscode/package.json'],
       enabled: false,
     },
+    {
+      // Keep happy-dom 20 as a compatibility baseline while the main fixture tracks 21.
+      matchFileNames: ['e2e/dom/fixtures-happy-dom-20/package.json'],
+      matchPackageNames: ['happy-dom'],
+      enabled: false,
+    },
   ],
   ignoreDeps: [
     // align Node.js version minimum requirements
