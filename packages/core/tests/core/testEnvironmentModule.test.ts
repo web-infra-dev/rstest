@@ -52,7 +52,9 @@ const createPackage = (
 ): string => {
   const packageRoot = path.join(root, 'node_modules', name);
   const isJSDOM = name === 'jsdom';
-  const isModernJSDOM = isJSDOM && Number(version.split('.')[0]) >= 29;
+  const [major = 0, minor = 0] = version.split('.').map(Number);
+  const hasGeneratedIdlLayout =
+    isJSDOM && (major > 30 || (major === 30 && minor >= 1));
   const entryPath = path.join(
     packageRoot,
     isJSDOM ? 'lib' : '',
@@ -71,12 +73,13 @@ const createPackage = (
   );
   fs.mkdirSync(path.dirname(entryPath), { recursive: true });
   fs.writeFileSync(entryPath, source);
-  if (isModernJSDOM) {
+  if (isJSDOM && major >= 29) {
     const blobPath = path.join(
       packageRoot,
       'lib',
-      'generated',
-      'idl',
+      ...(hasGeneratedIdlLayout
+        ? ['generated', 'idl']
+        : ['jsdom', 'living', 'generated']),
       'Blob.js',
     );
     fs.mkdirSync(path.dirname(blobPath), { recursive: true });

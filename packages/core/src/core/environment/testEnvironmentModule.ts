@@ -341,7 +341,19 @@ const createBundleEntrySource = async (
     return `export * from 'jsdom';\n`;
   }
 
-  return "export * from 'jsdom';\nexport { convert as __rstestBlobConvert } from 'jsdom/lib/generated/idl/Blob';\n";
+  let blobConverterPath: string;
+  try {
+    blobConverterPath = createRequire(reference.resolvedPath).resolve(
+      'jsdom/lib/generated/idl/Blob',
+    );
+  } catch {
+    return `export * from 'jsdom';\n`;
+  }
+
+  const blobConverterModuleUrl = JSON.stringify(
+    pathToFileURL(blobConverterPath).href,
+  );
+  return `export * from 'jsdom';\nexport { convert as __rstestBlobConvert } from ${blobConverterModuleUrl};\n`;
 };
 
 const buildTestEnvironmentModule = async ({
