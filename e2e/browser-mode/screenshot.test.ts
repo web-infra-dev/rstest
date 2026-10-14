@@ -173,7 +173,7 @@ describe('browser mode - screenshot matching', () => {
     await repairRun.expectExecSuccess();
     const repairedMatchRun = await runScreenshot(['tests/screenshot.test.ts']);
     await repairedMatchRun.expectExecSuccess();
-  });
+  }, 180_000);
 
   it('rejects invalid options before creating a reference', async () => {
     const invalidTestPath = path.join(

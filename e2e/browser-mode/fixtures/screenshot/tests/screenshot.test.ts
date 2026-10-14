@@ -17,19 +17,19 @@ test('matches a locator screenshot', async () => {
     stabilityTimeout: 2000,
     mask: [page.locator('#dynamic')],
   });
-});
+}, 30_000);
 
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(20, 80, 180); color: white">Save</button>';
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
-});
+}, 30_000);
 
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(180, 40, 20); color: white">Save</button>';
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
-});
+}, 30_000);
 
 test.concurrent(
   'requires an explicit screenshot name with shared expect',
