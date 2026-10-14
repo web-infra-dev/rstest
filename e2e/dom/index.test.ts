@@ -138,7 +138,7 @@ describe('jsdom', () => {
     await expectExecSuccess();
   });
 
-  it('should prebundle by default and allow opting out', async ({
+  it('should prebundle by default, force prebundling, and allow opting out', async ({
     onTestFinished,
   }) => {
     const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
@@ -165,9 +165,11 @@ describe('jsdom', () => {
     await native.expectExecSuccess();
     expect(native.cli.stdout).not.toContain('bundled test environment jsdom');
 
-    const explicitAuto = await run('rstest.prebundle.config.mts');
-    await explicitAuto.expectExecSuccess();
-    expect(explicitAuto.cli.stdout).toContain('bundled test environment jsdom');
+    const forcedPrebundle = await run('rstest.prebundle.config.mts');
+    await forcedPrebundle.expectExecSuccess();
+    expect(forcedPrebundle.cli.stdout).toContain(
+      'bundled test environment jsdom',
+    );
   });
 
   it('should run test correctly with custom externals', async () => {

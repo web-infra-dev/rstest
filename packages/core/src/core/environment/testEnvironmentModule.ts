@@ -230,10 +230,12 @@ const createTestEnvironmentBuildConfig = ({
   entryPath,
   outputPath,
   projectRoot,
+  reference,
 }: {
   entryPath: string;
   outputPath: string;
   projectRoot: string;
+  reference: TestEnvironmentModuleReference;
 }): RsbuildConfig => ({
   root: projectRoot,
   source: {
@@ -263,6 +265,12 @@ const createTestEnvironmentBuildConfig = ({
       // TypeScript paths. Avoid traversing its extends/references graph while
       // building the isolated environment bundle.
       delete config.resolve.tsConfig;
+      if (reference.name === 'jsdom') {
+        config.resolve.alias = {
+          ...config.resolve.alias,
+          jsdom: dirname(dirname(reference.resolvedPath)),
+        };
+      }
       config.externals = [testEnvironmentExternal];
       config.externalsPresets ??= {};
       config.externalsPresets.node = false;
@@ -317,11 +325,35 @@ const createTestEnvironmentBuildConfig = ({
   },
 });
 
-const createBundleEntrySource = (
+const createBundleEntrySource = async (
   reference: TestEnvironmentModuleReference,
-): string => {
+): Promise<string> => {
   const moduleUrl = JSON.stringify(pathToFileURL(reference.resolvedPath).href);
-  return `export * from ${moduleUrl};\n`;
+  if (reference.name !== 'jsdom') {
+    return `export * from ${moduleUrl};\n`;
+  }
+
+  const major = await getPackageMajorVersion({
+    packageName: reference.packageName,
+    resolvedPath: reference.resolvedPath,
+  });
+  if (major === undefined || major < 29) {
+    return `export * from 'jsdom';\n`;
+  }
+
+  let blobConverterPath: string;
+  try {
+    blobConverterPath = createRequire(reference.resolvedPath).resolve(
+      'jsdom/lib/generated/idl/Blob',
+    );
+  } catch {
+    return `export * from 'jsdom';\n`;
+  }
+
+  const blobConverterModuleUrl = JSON.stringify(
+    pathToFileURL(blobConverterPath).href,
+  );
+  return `export * from 'jsdom';\nexport { convert as __rstestBlobConvert } from ${blobConverterModuleUrl};\n`;
 };
 
 const buildTestEnvironmentModule = async ({
@@ -348,7 +380,7 @@ const buildTestEnvironmentModule = async ({
   const inputPath = join(environmentRoot, 'entry.mjs');
   const outputPath = join(environmentRoot, 'dist');
   await mkdir(environmentRoot, { recursive: true });
-  await writeFile(inputPath, createBundleEntrySource(reference));
+  await writeFile(inputPath, await createBundleEntrySource(reference));
 
   const rsbuild = await createRsbuild({
     callerName: 'rstest',
@@ -356,6 +388,7 @@ const buildTestEnvironmentModule = async ({
       entryPath: inputPath,
       outputPath,
       projectRoot,
+      reference,
     }),
   });
   rsbuild.logger.level = 'error';
