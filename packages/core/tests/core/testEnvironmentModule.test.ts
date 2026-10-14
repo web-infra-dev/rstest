@@ -51,6 +51,15 @@ const createPackage = (
   } = {},
 ): string => {
   const packageRoot = path.join(root, 'node_modules', name);
+  const isJSDOM = name === 'jsdom';
+  const [major = 0, minor = 0] = version.split('.').map(Number);
+  const hasGeneratedIdlLayout =
+    isJSDOM && (major > 30 || (major === 30 && minor >= 1));
+  const entryPath = path.join(
+    packageRoot,
+    isJSDOM ? 'lib' : '',
+    isJSDOM ? 'api.js' : 'index.js',
+  );
   fs.mkdirSync(packageRoot, { recursive: true });
   fs.writeFileSync(
     path.join(packageRoot, 'package.json'),
@@ -58,12 +67,29 @@ const createPackage = (
       name,
       type,
       version,
-      main: './index.js',
+      main: `./${path.relative(packageRoot, entryPath)}`,
       ...(packageExports ? { exports: packageExports } : {}),
     }),
   );
-  const entryPath = path.join(packageRoot, 'index.js');
+  fs.mkdirSync(path.dirname(entryPath), { recursive: true });
   fs.writeFileSync(entryPath, source);
+  if (isJSDOM && major >= 29) {
+    const blobPath = path.join(
+      packageRoot,
+      'lib',
+      ...(hasGeneratedIdlLayout
+        ? ['generated', 'idl']
+        : ['jsdom', 'living', 'generated']),
+      'Blob.js',
+    );
+    fs.mkdirSync(path.dirname(blobPath), { recursive: true });
+    fs.writeFileSync(
+      blobPath,
+      type === 'commonjs'
+        ? 'exports.convert = (_globalObject, wrapper) => wrapper;'
+        : 'export const convert = (_globalObject, wrapper) => wrapper;',
+    );
+  }
   return fs.realpathSync(entryPath);
 };
 
@@ -81,7 +107,7 @@ describe('prepareTestEnvironmentModules', () => {
           type: 'commonjs',
         },
       );
-      createPackage(
+      const projectJsdomPath = createPackage(
         projectRoot,
         `
 const canvas = require('canvas');
@@ -89,9 +115,6 @@ exports.JSDOM = class JSDOM {};
 exports.canvasToken = canvas.token;
 `,
         { type: 'commonjs' },
-      );
-      const projectJsdomPath = fs.realpathSync(
-        path.join(projectRoot, 'node_modules', 'jsdom', 'index.js'),
       );
 
       const result = await prepareTestEnvironmentModules({
