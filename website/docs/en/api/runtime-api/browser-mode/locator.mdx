@@ -284,6 +284,16 @@ Send a keyboard key press on the element.
 await page.getByLabel('Search').press('Enter');
 ```
 
+### pressSequentially
+
+- **Type:** `(text: string, options?: LocatorPressOptions) => Promise<void>`
+
+Type `text` into the element one character at a time, sending a keyboard key press for each character. Use it when the element reacts to individual key events, such as autocomplete inputs or keyboard shortcuts; otherwise prefer [`fill`](#fill). `delay` sets the wait between key presses in milliseconds.
+
+```ts
+await page.getByLabel('Search').pressSequentially('rstest');
+```
+
 ### fill
 
 - **Type:** `(value: string, options?: LocatorFillOptions) => Promise<void>`

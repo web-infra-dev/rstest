@@ -284,6 +284,16 @@ await page.getByRole('button', { name: 'More' }).hover();
 await page.getByLabel('Search').press('Enter');
 ```
 
+### pressSequentially
+
+- **类型：** `(text: string, options?: LocatorPressOptions) => Promise<void>`
+
+逐个字符地向元素输入 `text`，并为每个字符发送一次键盘按键。适用于需要响应单个按键事件的元素，例如自动补全输入框或键盘快捷键；其他情况下优先使用 [`fill`](#fill)。`delay` 用于设置每次按键之间的等待时间（毫秒）。
+
+```ts
+await page.getByLabel('Search').pressSequentially('rstest');
+```
+
 ### fill
 
 - **类型：** `(value: string, options?: LocatorFillOptions) => Promise<void>`

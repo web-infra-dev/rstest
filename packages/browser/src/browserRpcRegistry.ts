@@ -20,6 +20,7 @@ export const supportedLocatorActions: Set<string> = new Set([
   'fill',
   'hover',
   'press',
+  'pressSequentially',
   'clear',
   'check',
   'uncheck',

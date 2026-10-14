@@ -307,6 +307,16 @@ export class Locator {
     );
   }
 
+  async pressSequentially(
+    text: string,
+    options?: LocatorPressOptions,
+  ): Promise<void> {
+    await this.callLocator(
+      'pressSequentially',
+      options === undefined ? [text] : [text, options],
+    );
+  }
+
   async clear(): Promise<void> {
     await this.callLocator('clear', []);
   }
