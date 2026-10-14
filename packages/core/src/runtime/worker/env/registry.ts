@@ -48,17 +48,13 @@ export const environmentLoaders: Record<
           global,
           options,
           context,
-          environmentModule?.name === 'jsdom'
-            ? environmentModule.module
-            : undefined,
+          environmentModule?.name === 'jsdom' ? environmentModule : undefined,
         ),
       setupVM: (options, context, environmentModule) =>
         setupVM(
           options,
           context,
-          environmentModule?.name === 'jsdom'
-            ? environmentModule.module
-            : undefined,
+          environmentModule?.name === 'jsdom' ? environmentModule : undefined,
         ),
     };
   },

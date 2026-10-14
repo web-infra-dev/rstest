@@ -12,6 +12,7 @@ export type LoadedTestEnvironmentModule =
   | {
       name: 'jsdom';
       module: JSDOMModule;
+      resolvedPath: string;
     }
   | {
       name: 'happy-dom';
@@ -45,6 +46,7 @@ const validateBuiltinDependency = (
       // The runtime shape is checked above; the cast preserves package types
       // without duplicating every jsdom export in this internal wire adapter.
       module: module as JSDOMModule,
+      resolvedPath: reference.resolvedPath,
     };
   }
 
