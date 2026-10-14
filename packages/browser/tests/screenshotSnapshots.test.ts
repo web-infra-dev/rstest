@@ -128,6 +128,21 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('keeps project directory names distinct when they differ by case', async () => {
+    await withRoot(async (root) => {
+      await match(root, { projectName: 'web' });
+      await match(root, { projectName: 'Web' });
+
+      const projectDirs = await fs.readdir(
+        path.join(root, 'tests', '__screenshots__'),
+      );
+      expect(projectDirs).toHaveLength(2);
+      expect(projectDirs.map((name) => name.toLowerCase()).sort()[0]).not.toBe(
+        projectDirs.map((name) => name.toLowerCase()).sort()[1],
+      );
+    });
+  });
+
   it('keeps screenshot paths distinct for test files with different extensions', async () => {
     await withRoot(async (root) => {
       await match(root);

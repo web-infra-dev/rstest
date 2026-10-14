@@ -190,6 +190,14 @@ test('rejects invalid screenshot options', async () => {
     { threshold: 2 },
   );
 });
+
+test('rejects a short screenshot stability timeout', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
+    'short-stability-timeout',
+    { stabilityTimeout: 50 },
+  );
+});
 `,
     );
 
@@ -198,6 +206,9 @@ test('rejects invalid screenshot options', async () => {
     expect(result.cli.exec.exitCode).toBe(1);
     expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
       'threshold must be between 0 and 1',
+    );
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'stabilityTimeout must be 0 or at least 100ms',
     );
     expect(
       fs.existsSync(path.join(fixtureDir, 'tests', '__screenshots__')),

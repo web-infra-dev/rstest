@@ -18,6 +18,8 @@ import type {
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
 
+const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
+
 // ---------------------------------------------------------------------------
 // Iframe lookup
 // ---------------------------------------------------------------------------
@@ -124,10 +126,12 @@ const captureStableScreenshot = async (
   if (
     typeof stabilityTimeout !== 'number' ||
     !Number.isFinite(stabilityTimeout) ||
-    stabilityTimeout < 0
+    stabilityTimeout < 0 ||
+    (stabilityTimeout > 0 &&
+      stabilityTimeout < MIN_SCREENSHOT_STABILITY_TIMEOUT)
   ) {
     throw new Error(
-      'toMatchScreenshot stabilityTimeout must be a non-negative number.',
+      `toMatchScreenshot stabilityTimeout must be 0 or at least ${MIN_SCREENSHOT_STABILITY_TIMEOUT}ms.`,
     );
   }
   const screenshotOptions = { animations: 'disabled', ...playwrightOptions };

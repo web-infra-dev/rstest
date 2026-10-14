@@ -191,6 +191,22 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls).toHaveLength(0);
   });
 
+  it('rejects positive stability windows shorter than the capture minimum', async () => {
+    const fakeLocator = new FakeLocator();
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button', { stabilityTimeout: 50 }],
+        }),
+        timeoutFallbackMs: 500,
+      }),
+    ).rejects.toThrow('stabilityTimeout must be 0 or at least 100ms');
+    expect(fakeLocator.screenshotCalls).toHaveLength(0);
+  });
+
   it('does not add a deadline when screenshot timeouts are disabled', async () => {
     const fakeLocator = new FakeLocator();
     await dispatchPlaywrightBrowserRpc({
