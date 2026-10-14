@@ -244,8 +244,8 @@ importers:
         specifier: ^0.0.4
         version: 0.0.4
       heading-case:
-        specifier: ^1.1.8
-        version: 1.1.8
+        specifier: ^2.0.2
+        version: 2.0.2(prettier@3.9.10)
       knip:
         specifier: ^6.41.0
         version: 6.41.0
@@ -6544,9 +6544,11 @@ packages:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
 
-  heading-case@1.1.8:
-    resolution: {integrity: sha512-zGhfkYlKqTbkXyu6RluO4DFyD3fEGHOMl/16UZcXX315drkUa/sg8vlvQXm3trqpnoj8LhPsYCrg5R6oP9mtyQ==}
+  heading-case@2.0.2:
+    resolution: {integrity: sha512-wP5GB7itAbhvu8Qb7o1JdiE56csfkycq2i2rSq+TkzF9I888d2bUiJDOjtnZmHPdsKvfl9qQhShnM15umslBHA==}
     hasBin: true
+    peerDependencies:
+      prettier: ^3.0.0
 
   hex-rgb@4.3.0:
     resolution: {integrity: sha512-Ox1pJVrDCyGHMG9CFg1tmrRUMRPRsAWYc/PinY0XzJU4K7y7vjNoLKIQ7BR5UJMCxNN8EM1MNDmHWA/B3aZUuw==}
@@ -14809,7 +14811,9 @@ snapshots:
 
   he@1.2.0: {}
 
-  heading-case@1.1.8: {}
+  heading-case@2.0.2(prettier@3.9.10):
+    dependencies:
+      prettier: 3.9.10
 
   hex-rgb@4.3.0: {}
 
