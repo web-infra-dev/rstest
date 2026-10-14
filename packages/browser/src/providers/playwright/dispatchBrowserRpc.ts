@@ -3,6 +3,7 @@
  * https://github.com/microsoft/playwright/blob/main/packages/playwright/src/matchers/matchers.ts
  * Copyright (c) Microsoft Corporation, Apache-2.0.
  */
+import { setTimeout as delay } from 'node:timers/promises';
 import type { FrameLocator, Locator, Page } from 'playwright';
 import {
   supportedExpectElementMatchers,
@@ -55,6 +56,63 @@ const getRunnerFrame = async (
 // Table-driven expect matcher dispatch
 // ---------------------------------------------------------------------------
 
+type PlaywrightExpectResult = {
+  matches: boolean;
+  errorMessage?: string;
+  log?: string[];
+};
+
+/**
+ * Playwright re-checks a pending assertion at growing intervals of up to
+ * 500ms, so a condition that becomes true between two checks is noticed up to
+ * 500ms late. The full-timeout call stays the authority for the deadline and
+ * the failure report; short probes only end the wait early once the condition
+ * holds, and abort the full call (Playwright >= 1.62 honours the signal).
+ */
+const EXPECT_PROBE_INTERVAL_MS = 50;
+
+const expectWithProbes = async (
+  locator: Locator,
+  expectMethod: string,
+  options: { isNot: boolean; timeout: number } & Record<string, unknown>,
+): Promise<PlaywrightExpectResult> => {
+  const expectOnce = (
+    overrides: Record<string, unknown>,
+  ): Promise<PlaywrightExpectResult> =>
+    (locator as any)._expect(expectMethod, { ...options, ...overrides });
+
+  // An explicit `timeout: 0` means "no deadline" to Playwright, so it is probed too.
+  if (options.timeout !== 0 && options.timeout <= EXPECT_PROBE_INTERVAL_MS) {
+    return expectOnce({});
+  }
+
+  const fullCall = new AbortController();
+  const probing = new AbortController();
+  const probe = async (): Promise<PlaywrightExpectResult> => {
+    while (true) {
+      await delay(EXPECT_PROBE_INTERVAL_MS, undefined, {
+        signal: probing.signal,
+      });
+      // `timeout: 0` would wait forever; 1ms makes the probe a single check.
+      // Probe errors are left for the full call to report.
+      const result = await expectOnce({ timeout: 1 }).catch(() => undefined);
+      if (result?.matches === !options.isNot) {
+        fullCall.abort();
+        return result;
+      }
+    }
+  };
+
+  try {
+    return await Promise.race([
+      expectOnce({ signal: fullCall.signal }),
+      probe(),
+    ]);
+  } finally {
+    probing.abort();
+  }
+};
+
 /**
  * Calls Playwright's internal `_expect()` and throws on mismatch.
  *
@@ -67,10 +125,10 @@ const getRunnerFrame = async (
 const callExpect = async (
   locator: Locator,
   expectMethod: string,
-  options: Record<string, unknown>,
+  options: { isNot: boolean; timeout: number } & Record<string, unknown>,
   fallbackMessage: string,
 ): Promise<null> => {
-  const result = await (locator as any)._expect(expectMethod, options);
+  const result = await expectWithProbes(locator, expectMethod, options);
   if (result.matches !== !options.isNot) {
     throw new Error(formatExpectError(result) || fallbackMessage);
   }
