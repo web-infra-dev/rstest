@@ -1019,6 +1019,7 @@ export class TestRunner {
           expect = createExpect({
             getWorkerState: () => this.workerState!,
             getCurrentTest: () => current,
+            isTestScoped: true,
           });
           this.localExpects.set(context, expect);
         }

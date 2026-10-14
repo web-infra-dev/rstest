@@ -22,11 +22,18 @@ const sanitizeScreenshotName = (name: string): string => {
   const sanitized = name
     .replace(/[<>:"/\\|?*\p{Cc}]/gu, '-')
     .replace(/\s+/g, '-')
-    .replace(/^\.+/, '')
-    .slice(0, 120);
+    .replace(/^\.+/, '');
   const safeName = sanitized || 'screenshot';
+  let prefix = '';
+  let prefixBytes = 0;
+  for (const character of safeName) {
+    const characterBytes = Buffer.byteLength(character);
+    if (prefixBytes + characterBytes > 200) break;
+    prefix += character;
+    prefixBytes += characterBytes;
+  }
   const hash = createHash('sha256').update(name).digest('hex').slice(0, 8);
-  return `${safeName}-${hash}`;
+  return `${prefix}-${hash}`;
 };
 
 const resolveScreenshotPath = (

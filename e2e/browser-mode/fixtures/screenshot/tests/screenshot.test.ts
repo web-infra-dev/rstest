@@ -3,9 +3,9 @@ import { expect, test } from '@rstest/core';
 
 test('matches a locator screenshot', async () => {
   document.body.innerHTML = `
-    <div id="capture" style="position: fixed; left: 0; top: 0; width: 360px; height: 80px; overflow: hidden">
-      <button style="position: absolute; left: 0; top: 0; width: 180px; height: 40px; background: rgb(20, 80, 180); color: white; padding: 12px 24px; border: 0">Save</button>
-      <span id="dynamic" style="position: absolute; left: 200px; top: 0">dynamic content</span>
+    <div id="capture" style="width: 360px; height: 80px; overflow: hidden">
+      <button style="width: 180px; height: 40px; background: rgb(20, 80, 180); color: white; padding: 12px 24px; border: 0">Save</button>
+      <span id="dynamic" style="display: inline-block; margin-left: 20px">dynamic content</span>
     </div>
   `;
 
@@ -35,6 +35,26 @@ test.concurrent(
       throw new Error(
         'Expected concurrent screenshots to require an explicit name.',
       );
+    }
+  },
+);
+
+test.concurrent(
+  'uses the pinned name with the test-scoped expect',
+  async ({ expect: testExpect }) => {
+    let matcherError: unknown;
+    try {
+      await testExpect(page.locator('body')).toMatchScreenshot(undefined, {
+        mask: [null!],
+      });
+    } catch (error) {
+      matcherError = error;
+    }
+    if (
+      !(matcherError instanceof Error) ||
+      !matcherError.message.includes('mask must contain browser-mode Locators')
+    ) {
+      throw new Error('Expected the test-scoped matcher to accept its name.');
     }
   },
 );

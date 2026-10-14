@@ -547,6 +547,7 @@ export function createExpect({
   getElementTest,
   getWorkerState,
   snapshotPlugin,
+  isTestScoped = false,
 }: {
   /**
    * Resolved at call time, never captured: the file-level singleton passes a
@@ -558,6 +559,7 @@ export function createExpect({
   getCurrentTest: () => TestCase | undefined;
   getElementTest?: () => TestCase | TestSuite | undefined;
   snapshotPlugin?: ChaiPlugin;
+  isTestScoped?: boolean;
 }): RstestExpect {
   if (snapshotPlugin) {
     use(snapshotPlugin);
@@ -567,8 +569,14 @@ export function createExpect({
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     const assert = chaiExpect(value, message) as unknown as Assertion;
+    if (isTestScoped) {
+      Reflect.set(assert, 'rstestTestScoped', true);
+    }
     const _test = getCurrentTest();
     if (_test) {
+      if (_test.concurrent || _test.inConcurrentScope) {
+        Reflect.set(assert, 'rstestCurrentTestConcurrent', true);
+      }
       // @ts-expect-error internal
       return assert.withTest(_test) as Assertion;
     }

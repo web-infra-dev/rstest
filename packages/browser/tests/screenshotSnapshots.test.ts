@@ -67,6 +67,22 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('limits screenshot filenames by their UTF-8 byte length', async () => {
+    await withRoot(async (root) => {
+      await match(root, { testName: '按钮'.repeat(80) });
+
+      const screenshotDir = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'default',
+        'example.test.ts',
+      );
+      const [referenceName] = await fs.readdir(screenshotDir);
+      expect(Buffer.byteLength(referenceName!)).toBeLessThanOrEqual(255);
+    });
+  });
+
   it('keeps screenshot paths distinct for test files with different extensions', async () => {
     await withRoot(async (root) => {
       await match(root);

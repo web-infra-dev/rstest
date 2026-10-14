@@ -186,9 +186,16 @@ expect.extend({
       );
     }
 
+    const assertion = Reflect.get(this, 'assertion');
+    const hasAssertionFlag = (flag: string): boolean =>
+      Object.prototype.hasOwnProperty.call(assertion, flag) &&
+      Reflect.get(assertion, flag) === true;
+    const isConcurrentTest =
+      hasAssertionFlag('rstestCurrentTestConcurrent') ||
+      Reflect.get(this, 'rstestCurrentTestConcurrent') === true;
     const screenshotName =
       name ??
-      (Reflect.get(this, 'rstestCurrentTestConcurrent') === true
+      (isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
         ? undefined
         : this.currentTestName);
     if (!screenshotName) {
