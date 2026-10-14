@@ -52,7 +52,10 @@ describe('browser mode - screenshot matching', () => {
     const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
     expect(fs.existsSync(screenshotRoot)).toBe(false);
 
-    const firstRun = await runScreenshot(['tests/screenshot.test.ts']);
+    const firstRun = await runScreenshot([
+      'tests/screenshot.test.ts',
+      'tests/concurrent-screenshot.test.ts',
+    ]);
     await firstRun.expectExecSuccess();
 
     const projectDirs = fs.readdirSync(screenshotRoot);
@@ -81,6 +84,13 @@ describe('browser mode - screenshot matching', () => {
     expect(fs.existsSync(path.join(secondProjectDir, referenceName))).toBe(
       true,
     );
+    for (const project of ['project-a', 'project-b']) {
+      expect(
+        fs.readdirSync(
+          path.join(screenshotRoot, project, 'concurrent-screenshot.test.ts'),
+        ),
+      ).toHaveLength(1);
+    }
     const originalReference = fs.readFileSync(referencePath);
     expect(originalReference.subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -193,11 +203,16 @@ test('rejects invalid screenshot options', async () => {
   it.runIf(shouldRunHeadedBrowserTests)(
     'routes headed screenshots to the matching project iframe',
     async () => {
-      const headedRun = await runScreenshot([
-        '--config=rstest.headed.config.mts',
-        'tests/screenshot.test.ts',
-      ]);
-      await headedRun.expectExecSuccess();
+      for (const project of ['project-a', 'project-b']) {
+        const headedRun = await runScreenshot([
+          '--config=rstest.headed.config.mts',
+          '--project',
+          project,
+          'tests/screenshot.test.ts',
+          'tests/concurrent-screenshot.test.ts',
+        ]);
+        await headedRun.expectExecSuccess();
+      }
 
       const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
       expect(fs.readdirSync(screenshotRoot).sort()).toEqual([
@@ -209,7 +224,12 @@ test('rejects invalid screenshot options', async () => {
           fs.readdirSync(
             path.join(screenshotRoot, project, 'screenshot.test.ts'),
           ),
-        ).toHaveLength(3);
+        ).toHaveLength(2);
+        expect(
+          fs.readdirSync(
+            path.join(screenshotRoot, project, 'concurrent-screenshot.test.ts'),
+          ),
+        ).toHaveLength(1);
       }
     },
   );

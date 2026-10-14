@@ -39,13 +39,6 @@ test.concurrent(
   },
 );
 
-test.concurrent(
-  'uses the pinned test context with the test-scoped expect',
-  async ({ expect: testExpect }) => {
-    await testExpect(page.locator('body')).toMatchScreenshot();
-  },
-);
-
 test('explains that negated screenshot assertions are unsupported', async () => {
   try {
     await expect(page.locator('body')).not.toMatchScreenshot('negated');
