@@ -36,10 +36,18 @@ const createHappyDOMWindow = (
   // exposed; Window keeps compatibility with older happy-dom releases.
   const WindowClass = GlobalWindow || Window;
   const resolvedOptions = options ?? {};
+  const settings = resolvedOptions.settings ?? {};
   return new WindowClass({
     ...resolvedOptions,
     url: resolvedOptions.url || 'http://localhost:3000',
     console,
+    // Happy DOM 21 made iframe loading opt-in; retain the prior default while
+    // letting explicit settings override it.
+    settings: {
+      ...settings,
+      enableIframePageLoading:
+        settings.enableIframePageLoading ?? !settings.disableIframePageLoading,
+    },
   });
 };
 
