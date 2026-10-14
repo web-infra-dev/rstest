@@ -59,9 +59,26 @@ describe('matchBrowserScreenshot', () => {
       const files = await fs.readdir(path.join(projectDir, testDirectory!));
       expect(files).toHaveLength(2);
       expect(
-        await fs.readdir(path.join(screenshotRoot, '%2E%2E', 'example.test')),
+        await fs.readdir(
+          path.join(screenshotRoot, '%2E%2E', 'example.test.ts'),
+        ),
       ).toHaveLength(1);
       await expect(fs.access(path.join(root, 'example'))).rejects.toThrow();
+    });
+  });
+
+  it('keeps screenshot paths distinct for test files with different extensions', async () => {
+    await withRoot(async (root) => {
+      await match(root);
+      await match(root, {
+        testPath: path.join(root, 'tests', 'example.test.tsx'),
+      });
+
+      const projectDir = path.join(root, 'tests', '__screenshots__', 'default');
+      expect(await fs.readdir(projectDir)).toEqual([
+        'example.test.ts',
+        'example.test.tsx',
+      ]);
     });
   });
 

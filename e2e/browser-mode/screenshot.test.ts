@@ -60,12 +60,12 @@ describe('browser mode - screenshot matching', () => {
     const screenshotDir = path.join(
       screenshotRoot,
       'project-a',
-      'screenshot.test',
+      'screenshot.test.ts',
     );
     const secondProjectDir = path.join(
       screenshotRoot,
       'project-b',
-      'screenshot.test',
+      'screenshot.test.ts',
     );
     const referenceName = fs
       .readdirSync(screenshotDir)
@@ -88,6 +88,11 @@ describe('browser mode - screenshot matching', () => {
 
     const matchingRun = await runScreenshot(['tests/screenshot.test.ts']);
     await matchingRun.expectExecSuccess();
+    const noTimeoutRun = await runScreenshot([
+      '--config=rstest.no-timeout.config.mts',
+      'tests/screenshot.test.ts',
+    ]);
+    await noTimeoutRun.expectExecSuccess();
     const unchangedReference = fs.readFileSync(referencePath);
     const updateMatchingRun = await runScreenshot([
       'tests/screenshot.test.ts',
@@ -201,7 +206,9 @@ test('rejects invalid screenshot options', async () => {
       ]);
       for (const project of ['project-a', 'project-b']) {
         expect(
-          fs.readdirSync(path.join(screenshotRoot, project, 'screenshot.test')),
+          fs.readdirSync(
+            path.join(screenshotRoot, project, 'screenshot.test.ts'),
+          ),
         ).toHaveLength(2);
       }
     },

@@ -1109,6 +1109,7 @@ export class TestRunner {
       testPath: toNativePath(test.testPath),
       snapshotState,
       currentTestName: getTaskNameWithPrefix(test),
+      rstestCurrentTestConcurrent: test.concurrent || test.inConcurrentScope,
     });
 
     const context = this.createTestContext(test, retryCount);

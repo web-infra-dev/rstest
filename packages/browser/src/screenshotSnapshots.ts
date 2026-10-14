@@ -41,7 +41,7 @@ const resolveScreenshotPath = (
     encodeURIComponent(projectName).replace(/^\.+$/, (dots) =>
       '%2E'.repeat(dots.length),
     ),
-    parse(basename(testPath)).name,
+    basename(testPath),
     `${sanitizeScreenshotName(testName)}-${browserName}-${process.platform}.png`,
   );
 

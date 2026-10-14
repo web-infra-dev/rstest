@@ -175,6 +175,23 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]?.timeout).toBeLessThanOrEqual(25);
   });
 
+  it('does not add a deadline when screenshot timeouts are disabled', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 0,
+        args: ['button', { stabilityTimeout: 0 }],
+      }),
+      timeoutFallbackMs: 0,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(1);
+    expect(fakeLocator.screenshotCalls[0]).not.toHaveProperty('timeout');
+  });
+
   it('starts the stability window after the initial capture', async () => {
     const fakeLocator = new FakeLocator();
     let captures = 0;

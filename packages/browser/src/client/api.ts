@@ -177,16 +177,23 @@ expect.extend({
     name?: string,
     options?: ToMatchScreenshotOptions,
   ) {
+    if (this.isNot) {
+      throw new Error('toMatchScreenshot() does not support .not.');
+    }
     if (!isLocator(received)) {
       throw new TypeError(
         'toMatchScreenshot() expects a Locator returned from @rstest/browser.',
       );
     }
 
-    const screenshotName = name ?? this.currentTestName;
+    const screenshotName =
+      name ??
+      (Reflect.get(this, 'rstestCurrentTestConcurrent') === true
+        ? undefined
+        : this.currentTestName);
     if (!screenshotName) {
       throw new Error(
-        'toMatchScreenshot() must be called inside a test or given a name.',
+        'toMatchScreenshot() must be called inside a non-concurrent test or given a name.',
       );
     }
 

@@ -118,7 +118,7 @@ const assertStringArg = (
 const captureStableScreenshot = async (
   locator: Locator,
   options: Record<string, unknown>,
-  requestDeadline: number,
+  requestDeadline: number | undefined,
 ): Promise<Buffer> => {
   const { stabilityTimeout = 500, ...playwrightOptions } = options;
   if (
@@ -132,24 +132,29 @@ const captureStableScreenshot = async (
   }
   const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
   const capture = () => {
-    const timeout = requestDeadline - Date.now();
-    if (timeout <= 0) {
+    const timeout = requestDeadline ? requestDeadline - Date.now() : undefined;
+    if (timeout !== undefined && timeout <= 0) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
     }
-    return locator.screenshot({ ...screenshotOptions, timeout } as any);
+    return locator.screenshot({
+      ...screenshotOptions,
+      ...(timeout === undefined ? {} : { timeout }),
+    } as any);
   };
   let previous = await capture();
   if (stabilityTimeout === 0) return previous;
 
   const stabilityDeadline = Date.now() + stabilityTimeout;
-  while (Date.now() < stabilityDeadline && Date.now() < requestDeadline) {
-    const delay = Math.min(
-      50,
-      stabilityDeadline - Date.now(),
-      requestDeadline - Date.now(),
-    );
+  while (
+    Date.now() < stabilityDeadline &&
+    (!requestDeadline || Date.now() < requestDeadline)
+  ) {
+    const requestDelay = requestDeadline
+      ? requestDeadline - Date.now()
+      : Number.POSITIVE_INFINITY;
+    const delay = Math.min(50, stabilityDeadline - Date.now(), requestDelay);
     await new Promise((resolve) => setTimeout(resolve, delay));
-    if (Date.now() >= requestDeadline) {
+    if (requestDeadline && Date.now() >= requestDeadline) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
     }
     const current = await capture();
@@ -433,7 +438,7 @@ export async function dispatchPlaywrightBrowserRpc({
 
   const timeout =
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
-  const requestDeadline = Date.now() + Math.max(timeout, 1);
+  const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
   const locatorRoot = runnerPage
     ? runnerPage
@@ -444,7 +449,7 @@ export async function dispatchPlaywrightBrowserRpc({
           })(),
         testPath,
         request.projectName,
-        timeout,
+        timeout > 0 ? timeout : 0,
       );
   const locator = compilePlaywrightLocator(
     locatorRoot,

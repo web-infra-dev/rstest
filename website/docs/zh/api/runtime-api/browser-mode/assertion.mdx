@@ -66,6 +66,8 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 );
 ```
 
+在 `test.concurrent` 中使用共享的文件级 `expect` 时，需要显式传入截图名称。使用测试作用域内的 `expect` fixture 时，可以继续使用默认测试名称。截图 matcher 不支持 `.not`。
+
 截图基线文件名包含浏览器和操作系统信息。第二个参数可以调整像素容差、等待截图稳定，或遮罩动态内容：
 
 ```ts
@@ -78,6 +80,8 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 ```
 
 `maxDiffPixelRatio` 可以代替 `maxDiffPixels`，按像素比例设置容差。应用 `threshold` 后，默认不允许有像素差异。传入 `--update` 会创建缺失的基线，并只替换不匹配的基线。断言失败时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。
+
+截图捕获会受当前测试剩余超时时间限制。设置 `testTimeout: 0` 后，截图捕获不再受测试超时限制；`stabilityTimeout` 仍会限制 Rstest 等待连续截图一致的时长。
 
 ## 自动重试与超时
 

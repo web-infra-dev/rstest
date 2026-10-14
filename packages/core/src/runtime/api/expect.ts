@@ -137,12 +137,15 @@ const EXPECT_BOOKKEEPING_STATE = {
 
 export const resetExpectState = (
   expect: RstestExpect,
-  state: Partial<MatcherState>,
+  state: Partial<MatcherState> & { rstestCurrentTestConcurrent?: boolean },
 ): void => {
   setState<MatcherState>(EXPECT_BOOKKEEPING_STATE, expect);
   // Keep this separate from the bookkeeping reset: setState preserves getters
   // such as the file-level testPath binding, while object spread would not.
-  setState<MatcherState>(state, expect);
+  setState<MatcherState & { rstestCurrentTestConcurrent?: boolean }>(
+    state,
+    expect,
+  );
 };
 
 /**
@@ -182,11 +185,12 @@ export const getCurrentTestTimeout = (): number | undefined => {
   const { testRunner } = fileContext();
   const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
   const timeoutContext = activeTimeoutContext ?? testRunner.getCurrentTest();
-  if (
-    !timeoutContext ||
-    timeoutContext.concurrent ||
-    timeoutContext.inConcurrentScope
-  ) {
+  if (!timeoutContext) {
+    return undefined;
+  }
+  const currentTimeout = timeoutContext.activeTimeout ?? timeoutContext.timeout;
+  if (currentTimeout === 0) return 0;
+  if (timeoutContext.concurrent || timeoutContext.inConcurrentScope) {
     return undefined;
   }
   return getRemainingTestTimeout(timeoutContext, TEST_TIMEOUT_BUFFER);

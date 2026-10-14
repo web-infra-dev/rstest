@@ -66,6 +66,8 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 );
 ```
 
+When using the shared file-level `expect` in `test.concurrent`, pass a screenshot name explicitly. A test-scoped `expect` fixture can use the default test name. Screenshot matchers do not support `.not`.
+
 Screenshot references include the browser and operating system in their file names. Use the optional second argument to tune pixel tolerance, wait for stable captures, and mask dynamic content:
 
 ```ts
@@ -78,6 +80,8 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 ```
 
 `maxDiffPixelRatio` can be used instead of `maxDiffPixels` to allow a fraction of pixels to differ. The default allows no differing pixels after applying the per-pixel `threshold`. `--update` creates missing references and replaces only references that differ. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; actual and diff images are written under a sibling `__failures__` directory.
+
+Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, capture has no test deadline; `stabilityTimeout` still limits how long Rstest waits for consecutive captures to match.
 
 ## Auto-retry and timeout
 
