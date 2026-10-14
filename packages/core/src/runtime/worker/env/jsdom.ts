@@ -31,6 +31,7 @@ type JSDOMBlobImpl = {
 type JSDOMDependency = {
   module: JSDOMModule;
   resolvedPath: string;
+  blobConvert?: (globalObject: unknown, wrapper: unknown) => unknown;
 };
 
 type JSDOMBlobUtils = {
@@ -244,6 +245,7 @@ const createJSDOM = (
         window,
         context,
         dependency.resolvedPath,
+        dependency.blobConvert,
       );
     },
   });
@@ -261,15 +263,29 @@ function installJSDOMObjectURL(
   window: DOMWindow,
   context: TestEnvironmentContext,
   resolvedPath: string,
+  bundledBlobConvert?: (globalObject: unknown, wrapper: unknown) => unknown,
 ): () => void {
   const implSymbol = Object.getOwnPropertySymbols(new window.Blob())[0];
-  const implForWrapper = implSymbol
+  const nativeImplForWrapper = implSymbol
     ? undefined
     : (
         createRequire(resolvedPath)(
           'jsdom/lib/generated/idl/utils',
         ) as JSDOMBlobUtils
       ).implForWrapper;
+  const getImpl = implSymbol
+    ? (blob: NodeBlob | Blob | MediaSource) =>
+        (blob as unknown as Record<symbol, JSDOMBlobImpl>)[implSymbol]
+    : (blob: NodeBlob | Blob | MediaSource) => {
+        if (bundledBlobConvert) {
+          try {
+            return bundledBlobConvert(window, blob) as JSDOMBlobImpl;
+          } catch {
+            // Node Blob values belong to a different implementation.
+          }
+        }
+        return nativeImplForWrapper?.(blob);
+      };
   const URLConstructor = window.URL as typeof URL;
   const createDescriptor = Object.getOwnPropertyDescriptor(
     URLConstructor,
@@ -285,9 +301,7 @@ function installJSDOMObjectURL(
       value(blob: NodeBlob | Blob | MediaSource): string {
         // The private Symbol(impl) is shared by Blob wrappers from other jsdom
         // realms, unlike their constructors.
-        const impl = implSymbol
-          ? (blob as unknown as Record<symbol, JSDOMBlobImpl>)[implSymbol]
-          : implForWrapper?.(blob);
+        const impl = getImpl(blob);
         const bytes = impl?._buffer ?? impl?._bytes;
         if (bytes) {
           return NodeURL.createObjectURL(

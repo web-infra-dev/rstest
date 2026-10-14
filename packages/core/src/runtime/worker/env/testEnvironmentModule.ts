@@ -13,6 +13,7 @@ export type LoadedTestEnvironmentModule =
       name: 'jsdom';
       module: JSDOMModule;
       resolvedPath: string;
+      blobConvert?: (globalObject: unknown, wrapper: unknown) => unknown;
     }
   | {
       name: 'happy-dom';
@@ -47,6 +48,10 @@ const validateBuiltinDependency = (
       // without duplicating every jsdom export in this internal wire adapter.
       module: module as JSDOMModule,
       resolvedPath: reference.resolvedPath,
+      blobConvert:
+        typeof module.__rstestBlobConvert === 'function'
+          ? module.__rstestBlobConvert
+          : undefined,
     };
   }
 
