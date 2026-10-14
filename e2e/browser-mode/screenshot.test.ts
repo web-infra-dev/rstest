@@ -209,7 +209,7 @@ test('rejects invalid screenshot options', async () => {
           fs.readdirSync(
             path.join(screenshotRoot, project, 'screenshot.test.ts'),
           ),
-        ).toHaveLength(2);
+        ).toHaveLength(3);
       }
     },
   );
