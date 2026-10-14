@@ -66,6 +66,8 @@ import type {
   BrowserProjectRuntime,
   BrowserRpcRequest,
   RunnerEnvelope,
+  SnapshotRpcMethod,
+  SnapshotRpcMethodResult,
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
@@ -830,6 +832,26 @@ export const runBrowserController = async (
           throw new Error('Invalid screenshot matcher response.');
         }
         await matchBrowserScreenshot({
+          snapshotStore: {
+            read: (filepath) =>
+              runSnapshotRpc({
+                id: `${request.id}:snapshot-read`,
+                method: 'readSnapshotBinaryFile',
+                args: { filepath },
+              }),
+            save: (filepath, contentBase64) =>
+              runSnapshotRpc({
+                id: `${request.id}:snapshot-save`,
+                method: 'saveSnapshotBinaryFile',
+                args: { filepath, contentBase64 },
+              }),
+            remove: (filepath) =>
+              runSnapshotRpc({
+                id: `${request.id}:snapshot-remove`,
+                method: 'removeSnapshotFile',
+                args: { filepath },
+              }),
+          },
           testPath: request.testPath,
           projectName: request.projectName,
           testName,
@@ -955,10 +977,25 @@ export const runBrowserController = async (
         return null;
       }
     },
+    async readSnapshotBinaryFile(filepath: string): Promise<string | null> {
+      try {
+        return (await fs.readFile(filepath)).toString('base64');
+      } catch {
+        return null;
+      }
+    },
     async saveSnapshotFile(filepath: string, content: string): Promise<void> {
       const dir = dirname(filepath);
       await fs.mkdir(dir, { recursive: true });
       await fs.writeFile(filepath, content, 'utf-8');
+    },
+    async saveSnapshotBinaryFile(
+      filepath: string,
+      contentBase64: string,
+    ): Promise<void> {
+      const dir = dirname(filepath);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(filepath, Buffer.from(contentBase64, 'base64'));
     },
     async removeSnapshotFile(filepath: string): Promise<void> {
       try {
@@ -1143,18 +1180,26 @@ export const runBrowserController = async (
     fatalErrorRef.current = error;
   };
 
-  const runSnapshotRpc = async (
-    request: SnapshotRpcRequest,
-  ): Promise<unknown> => {
+  function runSnapshotRpc<M extends SnapshotRpcMethod>(
+    request: Extract<SnapshotRpcRequest, { method: M }>,
+  ): Promise<SnapshotRpcMethodResult[M]>;
+  async function runSnapshotRpc(request: SnapshotRpcRequest): Promise<unknown> {
     switch (request.method) {
       case 'resolveSnapshotPath':
         return snapshotRpcMethods.resolveSnapshotPath(request.args.testPath);
       case 'readSnapshotFile':
         return snapshotRpcMethods.readSnapshotFile(request.args.filepath);
+      case 'readSnapshotBinaryFile':
+        return snapshotRpcMethods.readSnapshotBinaryFile(request.args.filepath);
       case 'saveSnapshotFile':
         return snapshotRpcMethods.saveSnapshotFile(
           request.args.filepath,
           request.args.content,
+        );
+      case 'saveSnapshotBinaryFile':
+        return snapshotRpcMethods.saveSnapshotBinaryFile(
+          request.args.filepath,
+          request.args.contentBase64,
         );
       case 'removeSnapshotFile':
         return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
@@ -1165,7 +1210,7 @@ export const runBrowserController = async (
         return _exhaustive;
       }
     }
-  };
+  }
 
   const createDispatchRouter = (options?: HostDispatchRouterOptions) => {
     return createHostDispatchRouter({

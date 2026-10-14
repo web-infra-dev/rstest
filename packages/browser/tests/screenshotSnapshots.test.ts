@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { PNG } from 'pngjs';
-import { matchBrowserScreenshot } from '../src/screenshotSnapshots';
+import {
+  matchBrowserScreenshot,
+  type ScreenshotSnapshotStore,
+} from '../src/screenshotSnapshots';
 
 describe('matchBrowserScreenshot', () => {
   const createScreenshot = (): string => {
@@ -12,11 +15,36 @@ describe('matchBrowserScreenshot', () => {
     return PNG.sync.write(png).toString('base64');
   };
 
+  const snapshotStore: ScreenshotSnapshotStore = {
+    async read(filepath) {
+      try {
+        return (await fs.readFile(filepath)).toString('base64');
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          error.code === 'ENOENT'
+        ) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    async save(filepath, contentBase64) {
+      await fs.mkdir(path.dirname(filepath), { recursive: true });
+      await fs.writeFile(filepath, Buffer.from(contentBase64, 'base64'));
+    },
+    async remove(filepath) {
+      await fs.rm(filepath, { force: true });
+    },
+  };
+
   const match = (
     root: string,
     overrides: Partial<Parameters<typeof matchBrowserScreenshot>[0]> = {},
   ) =>
     matchBrowserScreenshot({
+      snapshotStore,
       testPath: path.join(root, 'tests', 'example.test.ts'),
       projectName: 'default',
       testName: 'renders a component',
@@ -54,15 +82,21 @@ describe('matchBrowserScreenshot', () => {
       await match(root, { projectName: '..', testName: 'renders safely' });
 
       const screenshotRoot = path.join(root, 'tests', '__screenshots__');
-      const projectDir = path.join(screenshotRoot, 'default');
+      const projectDirs = await fs.readdir(screenshotRoot);
+      expect(projectDirs).toHaveLength(2);
+      expect(projectDirs.every((name) => Buffer.byteLength(name) <= 255)).toBe(
+        true,
+      );
+      const projectDir = path.join(
+        screenshotRoot,
+        projectDirs.find((name) => name.startsWith('default-'))!,
+      );
       const [testDirectory] = await fs.readdir(projectDir);
       const files = await fs.readdir(path.join(projectDir, testDirectory!));
       expect(files).toHaveLength(2);
-      expect(
-        await fs.readdir(
-          path.join(screenshotRoot, '%2E%2E', 'example.test.ts'),
-        ),
-      ).toHaveLength(1);
+      expect(projectDirs.some((name) => name.startsWith('project-'))).toBe(
+        true,
+      );
       await expect(fs.access(path.join(root, 'example'))).rejects.toThrow();
     });
   });
@@ -75,11 +109,22 @@ describe('matchBrowserScreenshot', () => {
         root,
         'tests',
         '__screenshots__',
-        'default',
+        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
         'example.test.ts',
       );
       const [referenceName] = await fs.readdir(screenshotDir);
       expect(Buffer.byteLength(referenceName!)).toBeLessThanOrEqual(255);
+    });
+  });
+
+  it('limits project directory names by their UTF-8 byte length', async () => {
+    await withRoot(async (root) => {
+      await match(root, { projectName: '项目'.repeat(40) });
+
+      const screenshotRoot = path.join(root, 'tests', '__screenshots__');
+      const [projectDirectory] = await fs.readdir(screenshotRoot);
+      expect(Buffer.byteLength(projectDirectory!)).toBeLessThanOrEqual(255);
+      expect(projectDirectory).toMatch(/-[a-f0-9]{8}$/);
     });
   });
 
@@ -90,7 +135,12 @@ describe('matchBrowserScreenshot', () => {
         testPath: path.join(root, 'tests', 'example.test.tsx'),
       });
 
-      const projectDir = path.join(root, 'tests', '__screenshots__', 'default');
+      const projectDir = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
+      );
       expect(await fs.readdir(projectDir)).toEqual([
         'example.test.ts',
         'example.test.tsx',
@@ -102,7 +152,12 @@ describe('matchBrowserScreenshot', () => {
     await withRoot(async (root) => {
       await match(root);
 
-      const projectDir = path.join(root, 'tests', '__screenshots__', 'default');
+      const projectDir = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
+      );
       const [testDirectory] = await fs.readdir(projectDir);
       const screenshotDir = path.join(projectDir, testDirectory!);
       const [referenceName] = await fs.readdir(screenshotDir);

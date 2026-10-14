@@ -13,6 +13,7 @@ export type {
   SnapshotRpcCall,
   SnapshotRpcMethod,
   SnapshotRpcMethodArgs,
+  SnapshotRpcMethodResult,
   SnapshotRpcRequest,
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';

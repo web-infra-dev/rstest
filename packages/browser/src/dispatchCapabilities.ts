@@ -77,10 +77,20 @@ const snapshotRequestBuilders: {
     method: 'readSnapshotFile',
     args: args as SnapshotRpcMethodArgs['readSnapshotFile'],
   }),
+  readSnapshotBinaryFile: (id, args) => ({
+    id,
+    method: 'readSnapshotBinaryFile',
+    args: args as SnapshotRpcMethodArgs['readSnapshotBinaryFile'],
+  }),
   saveSnapshotFile: (id, args) => ({
     id,
     method: 'saveSnapshotFile',
     args: args as SnapshotRpcMethodArgs['saveSnapshotFile'],
+  }),
+  saveSnapshotBinaryFile: (id, args) => ({
+    id,
+    method: 'saveSnapshotBinaryFile',
+    args: args as SnapshotRpcMethodArgs['saveSnapshotBinaryFile'],
   }),
   removeSnapshotFile: (id, args) => ({
     id,

@@ -204,8 +204,19 @@ export const validateBrowserRpcRequest = (
 export type SnapshotRpcMethodArgs = {
   resolveSnapshotPath: { testPath: string };
   readSnapshotFile: { filepath: string };
+  readSnapshotBinaryFile: { filepath: string };
   saveSnapshotFile: { filepath: string; content: string };
+  saveSnapshotBinaryFile: { filepath: string; contentBase64: string };
   removeSnapshotFile: { filepath: string };
+};
+
+export type SnapshotRpcMethodResult = {
+  resolveSnapshotPath: string;
+  readSnapshotFile: string | null;
+  readSnapshotBinaryFile: string | null;
+  saveSnapshotFile: void;
+  saveSnapshotBinaryFile: void;
+  removeSnapshotFile: void;
 };
 
 export type SnapshotRpcMethod = keyof SnapshotRpcMethodArgs;

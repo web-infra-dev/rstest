@@ -31,7 +31,7 @@ const getCurrentTestPath = (): string => {
 
 const getCurrentProjectName = (): string => {
   const projectName = window.__RSTEST_BROWSER_OPTIONS__?.projectName;
-  if (!projectName) {
+  if (projectName === undefined) {
     throw new Error(
       'Browser RPC requires projectName in __RSTEST_BROWSER_OPTIONS__.',
     );

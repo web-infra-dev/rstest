@@ -175,6 +175,22 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]?.timeout).toBeLessThanOrEqual(25);
   });
 
+  it('rejects unsupported screenshot options before Playwright capture', async () => {
+    const fakeLocator = new FakeLocator();
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button', { path: '/outside/reference.png' }],
+        }),
+        timeoutFallbackMs: 500,
+      }),
+    ).rejects.toThrow('Unsupported toMatchScreenshot option: path');
+    expect(fakeLocator.screenshotCalls).toHaveLength(0);
+  });
+
   it('does not add a deadline when screenshot timeouts are disabled', async () => {
     const fakeLocator = new FakeLocator();
     await dispatchPlaywrightBrowserRpc({

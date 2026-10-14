@@ -59,17 +59,18 @@ describe('browser mode - screenshot matching', () => {
     await firstRun.expectExecSuccess();
 
     const projectDirs = fs.readdirSync(screenshotRoot);
-    expect(projectDirs.sort()).toEqual(['project-a', 'project-b']);
-    const screenshotDir = path.join(
-      screenshotRoot,
-      'project-a',
-      'screenshot.test.ts',
-    );
-    const secondProjectDir = path.join(
-      screenshotRoot,
-      'project-b',
-      'screenshot.test.ts',
-    );
+    expect(projectDirs).toHaveLength(2);
+    const screenshotDirForProject = (projectName: string) => {
+      const projectDir = projectDirs.find((name) =>
+        name.startsWith(`${projectName}-`),
+      );
+      if (!projectDir) {
+        throw new Error(`Expected screenshot directory for ${projectName}.`);
+      }
+      return path.join(screenshotRoot, projectDir, 'screenshot.test.ts');
+    };
+    const screenshotDir = screenshotDirForProject('project-a');
+    const secondProjectDir = screenshotDirForProject('project-b');
     const referenceName = fs
       .readdirSync(screenshotDir)
       .find((name) => name.startsWith('primary-button-'));
@@ -87,7 +88,10 @@ describe('browser mode - screenshot matching', () => {
     for (const project of ['project-a', 'project-b']) {
       expect(
         fs.readdirSync(
-          path.join(screenshotRoot, project, 'concurrent-screenshot.test.ts'),
+          path.join(
+            path.dirname(screenshotDirForProject(project)),
+            'concurrent-screenshot.test.ts',
+          ),
         ),
       ).toHaveLength(1);
     }
@@ -215,19 +219,27 @@ test('rejects invalid screenshot options', async () => {
       }
 
       const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
-      expect(fs.readdirSync(screenshotRoot).sort()).toEqual([
-        'project-a',
-        'project-b',
-      ]);
+      const projectDirs = fs.readdirSync(screenshotRoot);
+      expect(projectDirs).toHaveLength(2);
       for (const project of ['project-a', 'project-b']) {
+        const projectDir = projectDirs.find((name) =>
+          name.startsWith(`${project}-`),
+        );
+        if (!projectDir) {
+          throw new Error(`Expected screenshot directory for ${project}.`);
+        }
         expect(
           fs.readdirSync(
-            path.join(screenshotRoot, project, 'screenshot.test.ts'),
+            path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
           ),
         ).toHaveLength(2);
         expect(
           fs.readdirSync(
-            path.join(screenshotRoot, project, 'concurrent-screenshot.test.ts'),
+            path.join(
+              screenshotRoot,
+              projectDir,
+              'concurrent-screenshot.test.ts',
+            ),
           ),
         ).toHaveLength(1);
       }

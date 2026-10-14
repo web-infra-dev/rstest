@@ -197,6 +197,27 @@ const readScreenshotOptions = async (
     throw new Error('toMatchScreenshot options must be an object.');
   }
   const options = { ...(value as Record<string, unknown>) };
+  const supportedOptions = new Set([
+    'threshold',
+    'maxDiffPixels',
+    'maxDiffPixelRatio',
+    'stabilityTimeout',
+    'mask',
+    'maskColor',
+    'style',
+    'caret',
+    'scale',
+    'omitBackground',
+  ]);
+  const unsupportedOption = Object.keys(options).find(
+    (key) => !supportedOptions.has(key),
+  );
+  if (unsupportedOption) {
+    throw new Error(
+      `Unsupported toMatchScreenshot option: ${unsupportedOption}`,
+    );
+  }
+
   const mask = options.mask;
   delete options.mask;
   if (mask !== undefined) {
@@ -210,7 +231,22 @@ const readScreenshotOptions = async (
       return compilePlaywrightLocator(root, item as BrowserLocatorIR);
     });
   }
-  return options;
+
+  return {
+    ...(options.stabilityTimeout === undefined
+      ? {}
+      : { stabilityTimeout: options.stabilityTimeout }),
+    ...(options.mask === undefined ? {} : { mask: options.mask }),
+    ...(options.maskColor === undefined
+      ? {}
+      : { maskColor: options.maskColor }),
+    ...(options.style === undefined ? {} : { style: options.style }),
+    ...(options.caret === undefined ? {} : { caret: options.caret }),
+    ...(options.scale === undefined ? {} : { scale: options.scale }),
+    ...(options.omitBackground === undefined
+      ? {}
+      : { omitBackground: options.omitBackground }),
+  };
 };
 
 /** Simple boolean state matchers — no extra args. */

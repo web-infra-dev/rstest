@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import pixelmatch from 'pixelmatch';
 import { basename, dirname, join, parse } from 'pathe';
@@ -18,12 +17,12 @@ export type ScreenshotMatchOptions = {
   maxDiffPixelRatio?: number;
 };
 
-const sanitizeScreenshotName = (name: string): string => {
+const sanitizePathComponent = (name: string, fallback: string): string => {
   const sanitized = name
     .replace(/[<>:"/\\|?*\p{Cc}]/gu, '-')
     .replace(/\s+/g, '-')
     .replace(/^\.+/, '');
-  const safeName = sanitized || 'screenshot';
+  const safeName = sanitized || fallback;
   let prefix = '';
   let prefixBytes = 0;
   for (const character of safeName) {
@@ -45,11 +44,9 @@ const resolveScreenshotPath = (
   join(
     dirname(testPath),
     '__screenshots__',
-    encodeURIComponent(projectName).replace(/^\.+$/, (dots) =>
-      '%2E'.repeat(dots.length),
-    ),
+    sanitizePathComponent(projectName, 'project'),
     basename(testPath),
-    `${sanitizeScreenshotName(testName)}-${browserName}-${process.platform}.png`,
+    `${sanitizePathComponent(testName, 'screenshot')}-${browserName}-${process.platform}.png`,
   );
 
 const getFailurePaths = (referencePath: string) => {
@@ -85,27 +82,33 @@ const createDimensionDiff = (expected: PNG, actual: PNG): Buffer => {
   return PNG.sync.write(diff);
 };
 
-const writeScreenshot = async (
-  filepath: string,
-  screenshot: Buffer,
-): Promise<void> => {
-  await fs.mkdir(dirname(filepath), { recursive: true });
-  await fs.writeFile(filepath, screenshot);
+export type ScreenshotSnapshotStore = {
+  read: (filepath: string) => Promise<string | null>;
+  save: (filepath: string, contentBase64: string) => Promise<void>;
+  remove: (filepath: string) => Promise<void>;
 };
 
+const writeScreenshot = async (
+  snapshotStore: ScreenshotSnapshotStore,
+  filepath: string,
+  screenshot: Buffer,
+): Promise<void> => snapshotStore.save(filepath, screenshot.toString('base64'));
+
 const writeFailureArtifacts = async ({
+  snapshotStore,
   referencePath,
   actualBuffer,
   diffBuffer,
 }: {
+  snapshotStore: ScreenshotSnapshotStore;
   referencePath: string;
   actualBuffer: Buffer;
   diffBuffer?: Buffer;
 }): Promise<{ actualPath: string; diffPath?: string }> => {
   const paths = getFailurePaths(referencePath);
-  await writeScreenshot(paths.actual, actualBuffer);
+  await writeScreenshot(snapshotStore, paths.actual, actualBuffer);
   if (diffBuffer) {
-    await writeScreenshot(paths.diff, diffBuffer);
+    await writeScreenshot(snapshotStore, paths.diff, diffBuffer);
     return { actualPath: paths.actual, diffPath: paths.diff };
   }
   return { actualPath: paths.actual };
@@ -156,6 +159,7 @@ const validateOptions = (
 };
 
 export const matchBrowserScreenshot = async ({
+  snapshotStore,
   testPath,
   projectName,
   testName,
@@ -164,6 +168,7 @@ export const matchBrowserScreenshot = async ({
   updateSnapshot,
   options,
 }: {
+  snapshotStore: ScreenshotSnapshotStore;
   testPath: string;
   projectName: string;
   testName: string;
@@ -181,24 +186,16 @@ export const matchBrowserScreenshot = async ({
   );
   const actualBuffer = Buffer.from(screenshotBase64, 'base64');
   const actual = PNG.sync.read(actualBuffer);
-  let expectedBuffer: Buffer | undefined;
-
-  try {
-    expectedBuffer = await fs.readFile(filepath);
-  } catch (error) {
-    if (!(
-      error instanceof Error &&
-      'code' in error &&
-      error.code === 'ENOENT'
-    )) {
-      throw error;
-    }
-  }
+  const expectedContent = await snapshotStore.read(filepath);
+  const expectedBuffer =
+    expectedContent === null
+      ? undefined
+      : Buffer.from(expectedContent, 'base64');
 
   if (!expectedBuffer) {
     if (updateSnapshot === 'new' || updateSnapshot === 'all') {
-      await writeScreenshot(filepath, actualBuffer);
-      await removeFailureArtifacts(filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer);
+      await removeFailureArtifacts(snapshotStore, filepath);
       return;
     }
     throw new ScreenshotMismatchError(
@@ -211,12 +208,13 @@ export const matchBrowserScreenshot = async ({
     expected = PNG.sync.read(expectedBuffer);
   } catch (error) {
     if (updateSnapshot === 'all') {
-      await writeScreenshot(filepath, actualBuffer);
-      await removeFailureArtifacts(filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer);
+      await removeFailureArtifacts(snapshotStore, filepath);
       return;
     }
 
     const artifacts = await writeFailureArtifacts({
+      snapshotStore,
       referencePath: filepath,
       actualBuffer,
     });
@@ -227,11 +225,12 @@ export const matchBrowserScreenshot = async ({
   }
   if (expected.width !== actual.width || expected.height !== actual.height) {
     if (updateSnapshot === 'all') {
-      await writeScreenshot(filepath, actualBuffer);
-      await removeFailureArtifacts(filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer);
+      await removeFailureArtifacts(snapshotStore, filepath);
       return;
     }
     const artifacts = await writeFailureArtifacts({
+      snapshotStore,
       referencePath: filepath,
       actualBuffer,
       diffBuffer: createDimensionDiff(expected, actual),
@@ -259,11 +258,12 @@ export const matchBrowserScreenshot = async ({
 
   if (differentPixels > maxDiffPixels) {
     if (updateSnapshot === 'all') {
-      await writeScreenshot(filepath, actualBuffer);
-      await removeFailureArtifacts(filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer);
+      await removeFailureArtifacts(snapshotStore, filepath);
       return;
     }
     const artifacts = await writeFailureArtifacts({
+      snapshotStore,
       referencePath: filepath,
       actualBuffer,
       diffBuffer: PNG.sync.write(diff),
@@ -273,13 +273,16 @@ export const matchBrowserScreenshot = async ({
     );
   }
 
-  await removeFailureArtifacts(filepath);
+  await removeFailureArtifacts(snapshotStore, filepath);
 };
 
-const removeFailureArtifacts = async (referencePath: string): Promise<void> => {
+const removeFailureArtifacts = async (
+  snapshotStore: ScreenshotSnapshotStore,
+  referencePath: string,
+): Promise<void> => {
   await Promise.all(
     Object.values(getFailurePaths(referencePath)).map((path) =>
-      fs.rm(path, { force: true }),
+      snapshotStore.remove(path),
     ),
   );
 };
