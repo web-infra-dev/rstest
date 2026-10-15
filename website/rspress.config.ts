@@ -7,13 +7,13 @@ import { pluginClientRedirects } from '@rspress/plugin-client-redirects';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
-import pluginSitemap from 'rspress-plugin-sitemap';
 
 const siteUrl = 'https://rstest.rs';
 const description =
   'Rstest is a JavaScript testing framework powered by Rspack';
 
 export default defineConfig({
+  siteOrigin: siteUrl,
   root: path.join(__dirname, 'docs'),
   title: 'Rstest',
   icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
@@ -30,7 +30,6 @@ export default defineConfig({
       transformers: [transformerCompatibleMetaHighlight()],
     },
   },
-  llms: true,
   search: {
     codeBlocks: true,
   },
@@ -239,9 +238,6 @@ export default defineConfig({
       ],
     }),
     pluginFontOpenSans(),
-    pluginSitemap({
-      domain: siteUrl,
-    }),
   ],
   head: [
     ({ routePath }) => {
