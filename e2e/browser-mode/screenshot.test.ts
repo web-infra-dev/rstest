@@ -264,7 +264,7 @@ test('rejects a short screenshot stability timeout', async () => {
           fs.readdirSync(
             path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
           ),
-        ).toHaveLength(4);
+        ).toHaveLength(5);
         expect(
           fs.readdirSync(
             path.join(
