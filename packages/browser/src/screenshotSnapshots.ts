@@ -41,12 +41,16 @@ const resolveScreenshotPath = (
   projectName: string,
   testName: string,
   browserName: string,
+  screenshotAssertionOrdinal?: number,
 ): string =>
   join(
     dirname(testPath),
     '__screenshots__',
     sanitizePathComponent(projectName, 'project'),
     basename(testPath),
+    ...(screenshotAssertionOrdinal === undefined
+      ? []
+      : [`assertion-${screenshotAssertionOrdinal}`]),
     `${sanitizePathComponent(testName, 'screenshot')}-${browserName}-${process.platform}.png`,
   );
 
@@ -223,6 +227,7 @@ export const matchBrowserScreenshot = async ({
   updateSnapshot,
   options,
   deadline,
+  screenshotAssertionOrdinal,
 }: {
   snapshotStore: ScreenshotSnapshotStore;
   testPath: string;
@@ -233,6 +238,7 @@ export const matchBrowserScreenshot = async ({
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
   deadline?: number;
+  screenshotAssertionOrdinal?: number;
 }): Promise<ScreenshotMatchOutcome> => {
   throwIfScreenshotDeadlinePassed(deadline);
   const normalizedOptions = validateOptions(options);
@@ -241,6 +247,7 @@ export const matchBrowserScreenshot = async ({
     projectName,
     testName,
     browserName,
+    screenshotAssertionOrdinal,
   );
   const actualBuffer = Buffer.from(screenshotBase64, 'base64');
   const actual = PNG.sync.read(actualBuffer);

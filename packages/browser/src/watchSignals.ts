@@ -48,6 +48,23 @@ export const createWatchSignals = (
    */
   let signalledCycle: Promise<void> | undefined;
 
+  const runInvalidation = (
+    fileFilters: string[],
+    updateSnapshot?: SnapshotUpdateState,
+  ): Promise<void> =>
+    Promise.resolve(
+      onInvalidate?.({
+        isFirstBuild: false,
+        fileFilters,
+        ...(updateSnapshot === undefined ? {} : { updateSnapshot }),
+      }),
+    ).then(
+      () => {},
+      (error) => {
+        logger.error(color.red('Browser Mode watch cycle failed:'), error);
+      },
+    );
+
   return {
     setDispatchRerun(
       fn: (
@@ -113,20 +130,18 @@ export const createWatchSignals = (
     ): Promise<{ cycle: Promise<void> }> {
       await interruptInFlightRun?.();
       claimScope?.();
-      const cycle = Promise.resolve(
-        onInvalidate?.({
-          isFirstBuild: false,
-          fileFilters,
-          ...(updateSnapshot === undefined ? {} : { updateSnapshot }),
-        }),
-      ).then(
-        () => {},
-        (error) => {
-          logger.error(color.red('Browser Mode watch cycle failed:'), error);
-        },
-      );
+      const cycle = runInvalidation(fileFilters, updateSnapshot);
       signalledCycle = cycle;
       return { cycle };
+    },
+    queueInvalidationAfter(
+      cycle: Promise<void>,
+      fileFilters: string[],
+      updateSnapshot?: SnapshotUpdateState,
+    ): void {
+      signalledCycle = cycle.then(() =>
+        runInvalidation(fileFilters, updateSnapshot),
+      );
     },
     async awaitSignalledCycle(): Promise<void> {
       await signalledCycle;

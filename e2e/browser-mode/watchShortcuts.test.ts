@@ -66,11 +66,32 @@ describe('browser mode - watch CLI shortcuts', () => {
     await cli.waitForStdout('Waiting for file changes...');
     expect(cli.stdout).not.toContain('basic.test.ts');
 
+    // Add a test while its compile is in flight, then request the screenshot
+    // update before the watcher has planned the new file set. The new test must
+    // still run after the scoped update cycle.
+    const addedTestPath = path.join(
+      fixturesTargetPath,
+      'tests/added-during-update.test.ts',
+    );
+    writeFileSync(
+      addedTestPath,
+      `import { expect, test } from '@rstest/core';
+
+test('runs a file added during screenshot update', () => {
+  expect('added').toBe('added');
+});
+`,
+    );
+    await cli.waitForStdout('File changed, re-running tests...');
+
     // ========== `u` reruns the unmatched file and creates its PNG reference ==========
     cli.resetStd();
     cli.exec.process!.stdin!.write('u');
-    await cli.waitForStdout('Re-running 1 affected test file(s)');
+    await cli.waitForStdout(
+      /(?:Re-running 1 affected test file\(s\)|Test file set changed, re-running 1 file\(s\))/,
+    );
     await cli.waitForStdout('✓ tests/snap.test.ts');
+    await cli.waitForStdout('✓ tests/added-during-update.test.ts');
     await cli.waitForStdout('Waiting for file changes...');
     const screenshotFiles = readdirSync(
       path.join(fixturesTargetPath, 'tests/__screenshots__'),
@@ -83,9 +104,10 @@ describe('browser mode - watch CLI shortcuts', () => {
     // ========== `a` reruns every test file ==========
     cli.resetStd();
     cli.exec.process!.stdin!.write('a');
-    await cli.waitForStdout('Re-running 2 affected test file(s)');
+    await cli.waitForStdout('Re-running 3 affected test file(s)');
     await cli.waitForStdout('✓ tests/snap.test.ts');
     await cli.waitForStdout('✓ tests/basic.test.ts');
+    await cli.waitForStdout('✓ tests/added-during-update.test.ts');
     await cli.waitForStdout('Waiting for file changes...');
 
     // The screenshot failure keeps the process non-zero even though the

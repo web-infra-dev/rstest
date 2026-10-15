@@ -42,6 +42,29 @@ test('assigns separate references to repeated unnamed screenshots', async () => 
   ).toMatchScreenshot();
 }, 30_000);
 
+test(
+  'reuses unnamed screenshot references on retry',
+  { retry: 1 },
+  async ({ task }) => {
+    document.body.innerHTML =
+      '<button style="background: rgb(20, 80, 180); color: white">Retry</button>';
+    await expect(
+      page.getByRole('button', { name: 'Retry' }),
+    ).toMatchScreenshot();
+    if (task.retryCount === 0) {
+      throw new Error('Retry this screenshot assertion once.');
+    }
+  },
+);
+
+test('saves long screenshot names atomically', async () => {
+  document.body.innerHTML =
+    '<button style="background: rgb(20, 80, 180); color: white">Long name</button>';
+  await expect(
+    page.getByRole('button', { name: 'Long name' }),
+  ).toMatchScreenshot('界'.repeat(80));
+}, 30_000);
+
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(180, 40, 20); color: white">Save</button>';

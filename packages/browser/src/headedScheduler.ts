@@ -65,7 +65,10 @@ type HeadedSchedulerDeps = {
   fatalErrorRef: { current: Error | null };
   watchSignals: Pick<
     WatchSignals,
-    'setDispatchRerun' | 'signalInvalidation' | 'setAbort'
+    | 'setDispatchRerun'
+    | 'signalInvalidation'
+    | 'setAbort'
+    | 'queueInvalidationAfter'
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
@@ -143,6 +146,9 @@ export const createHeadedScheduler = async ({
   const { browser, browserLaunchOptions, watchState, wss } = runtime;
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
   let currentTestFiles = allTestFiles;
+  if (isWatchMode) {
+    watchState.lastTestFiles = allTestFiles;
+  }
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
   // semantically distinct and in a different runtime, so deliberately NOT shared
@@ -744,16 +750,28 @@ export const createHeadedScheduler = async ({
         logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
           logWatchReady();
+          if (rerunPlan.deferredTestPaths) {
+            watchSignals.queueInvalidationAfter(
+              Promise.resolve(),
+              rerunPlan.deferredTestPaths,
+            );
+          }
           return;
         }
 
-        await watchSignals.signalInvalidation(
+        const { cycle } = await watchSignals.signalInvalidation(
           rerunPlan.decision.kind === 'empty'
             ? []
             : rerunPlan.decision.testPaths,
           undefined,
           updateSnapshot,
         );
+        if (rerunPlan.deferredTestPaths) {
+          watchSignals.queueInvalidationAfter(
+            cycle,
+            rerunPlan.deferredTestPaths,
+          );
+        }
       } catch (error) {
         logWatchReady();
         throw error;

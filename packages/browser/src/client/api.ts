@@ -24,7 +24,6 @@ const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
 };
 
 const screenshotAssertionCounts = new WeakMap<object, number>();
-const sharedScreenshotAssertionCounts = new Map<string, number>();
 
 const createElementExpect = (
   locator: Locator,
@@ -220,23 +219,22 @@ expect.extend({
       );
     }
 
-    let resolvedScreenshotName = screenshotName;
+    let screenshotAssertionOrdinal: number | undefined;
     if (name === undefined) {
-      const canUsePinnedTestCase =
+      const isTestScoped =
         testCase && (!isConcurrentTest || hasAssertionFlag('rstestTestScoped'));
-      if (canUsePinnedTestCase) {
-        const previousCount = screenshotAssertionCounts.get(testCase) ?? 0;
-        screenshotAssertionCounts.set(testCase, previousCount + 1);
-        if (previousCount > 0) {
-          resolvedScreenshotName = `${screenshotName} [screenshot ${previousCount + 1}]`;
-        }
-      } else {
-        const testIdentity = `${window.__RSTEST_BROWSER_OPTIONS__?.projectName ?? ''}\0${window.__RSTEST_BROWSER_OPTIONS__?.testFile ?? ''}\0${screenshotName}`;
+      if (isTestScoped) {
+        const attemptContext = Reflect.get(testCase, 'context');
+        const attemptSignal = Reflect.get(attemptContext, 'signal');
+        const assertionOwner =
+          attemptSignal && typeof attemptSignal === 'object'
+            ? attemptSignal
+            : testCase;
         const previousCount =
-          sharedScreenshotAssertionCounts.get(testIdentity) ?? 0;
-        sharedScreenshotAssertionCounts.set(testIdentity, previousCount + 1);
+          screenshotAssertionCounts.get(assertionOwner) ?? 0;
+        screenshotAssertionCounts.set(assertionOwner, previousCount + 1);
         if (previousCount > 0) {
-          resolvedScreenshotName = `${screenshotName} [screenshot ${previousCount + 1}]`;
+          screenshotAssertionOrdinal = previousCount + 1;
         }
       }
     }
@@ -261,8 +259,11 @@ expect.extend({
       snapshotUpdate:
         window.__RSTEST_BROWSER_OPTIONS__?.snapshot.updateSnapshot,
       args: [
-        resolvedScreenshotName,
+        screenshotName,
         { ...serializedOptions, mask: mask.map((item) => item.ir) },
+        ...(screenshotAssertionOrdinal === undefined
+          ? []
+          : [screenshotAssertionOrdinal]),
       ],
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
 

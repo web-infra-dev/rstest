@@ -158,6 +158,30 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('stores repeated unnamed assertion ordinals as separate path components', async () => {
+    await withRoot(async (root) => {
+      await match(root);
+      await match(root, { screenshotAssertionOrdinal: 2 });
+
+      const screenshotDir = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
+        'example.test.ts',
+      );
+      expect(await fs.readdir(screenshotDir)).toEqual(
+        expect.arrayContaining([
+          'assertion-2',
+          expect.stringMatching(/\.png$/),
+        ]),
+      );
+      expect(
+        (await fs.readdir(path.join(screenshotDir, 'assertion-2')))[0],
+      ).toMatch(/\.png$/);
+    });
+  });
+
   it('limits project directory names by their UTF-8 byte length', async () => {
     await withRoot(async (root) => {
       await match(root, { projectName: '项目'.repeat(40) });

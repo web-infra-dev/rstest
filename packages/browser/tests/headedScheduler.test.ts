@@ -189,6 +189,7 @@ describe('createHeadedScheduler', () => {
         setAbort: () => {},
         setDispatchRerun: () => {},
         signalInvalidation: async () => ({ cycle: Promise.resolve() }),
+        queueInvalidationAfter: () => {},
       },
       setDispatchPageResolver: () => {},
       createWatchSession: () => ({

@@ -31,7 +31,7 @@ import {
   type TestResult,
   type UserConsoleLog,
 } from '@rstest/core/internal/browser';
-import { basename, dirname, join, normalize } from 'pathe';
+import { dirname, join, normalize } from 'pathe';
 import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
@@ -830,8 +830,17 @@ export const runBrowserController = async (
 
       if (request.kind === 'screenshot') {
         const [testName] = request.args;
+        const screenshotAssertionOrdinal = request.args[2];
         if (typeof result !== 'string' || typeof testName !== 'string') {
           throw new Error('Invalid screenshot matcher response.');
+        }
+        if (
+          screenshotAssertionOrdinal !== undefined &&
+          (typeof screenshotAssertionOrdinal !== 'number' ||
+            !Number.isInteger(screenshotAssertionOrdinal) ||
+            screenshotAssertionOrdinal < 2)
+        ) {
+          throw new Error('Invalid screenshot assertion ordinal.');
         }
         const outcome = await matchBrowserScreenshot({
           snapshotStore: {
@@ -858,6 +867,7 @@ export const runBrowserController = async (
           updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
           options: request.args[1] as ScreenshotMatchOptions | undefined,
           deadline: screenshotDeadline,
+          screenshotAssertionOrdinal,
         });
         const key = trackerKey(request.projectName, request.testPath);
         const counts = screenshotCountsByFile.get(key) ?? {
@@ -1013,10 +1023,7 @@ export const runBrowserController = async (
           'Screenshot assertion exceeded the active test timeout.',
         );
       }
-      const temporaryPath = join(
-        dir,
-        `.${basename(filepath)}.${randomUUID()}.tmp`,
-      );
+      const temporaryPath = join(dir, `.${randomUUID()}.tmp`);
       try {
         await fs.writeFile(temporaryPath, Buffer.from(contentBase64, 'base64'));
         if (deadline !== undefined && Date.now() >= deadline) {

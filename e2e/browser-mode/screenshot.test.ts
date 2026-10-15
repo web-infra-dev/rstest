@@ -66,7 +66,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/concurrent-screenshot.test.ts',
     ]);
     await firstRun.expectExecSuccess();
-    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(18);
+    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(22);
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
@@ -85,7 +85,10 @@ describe('browser mode - screenshot matching', () => {
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(7);
+    expect(screenshotNames).toHaveLength(8);
+    expect(
+      fs.readdirSync(screenshotDir).some((name) => name === 'assertion-2'),
+    ).toBe(true);
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
     fs.writeFileSync(
@@ -138,7 +141,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/screenshot.test.ts',
     ]);
     await matchingRun.expectExecSuccess();
-    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(14);
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(20);
     const noTimeoutRun = await runScreenshot([
       '--config=rstest.no-timeout.config.mts',
       'tests/screenshot.test.ts',
@@ -278,7 +281,7 @@ test('rejects a short screenshot stability timeout', async () => {
           fs.readdirSync(
             path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
           ),
-        ).toHaveLength(7);
+        ).toHaveLength(9);
         expect(
           fs.readdirSync(
             path.join(

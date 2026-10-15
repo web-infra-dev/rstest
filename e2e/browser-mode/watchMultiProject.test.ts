@@ -69,7 +69,7 @@ describe('browser mode - watch with multiple projects', () => {
         path.join(fixturesTargetPath, 'shared/shared.test.ts'),
       );
 
-      await cli.waitForStdout('Test file set changed, re-running 4 file(s)');
+      await cli.waitForStdout('Test file set changed, re-running 3 file(s)');
       await cli.waitForStdout(
         '[watch-cycle-files] project-a:a.test.ts,project-a:shared.test.ts,project-b:b.test.ts,project-b:shared.test.ts',
       );

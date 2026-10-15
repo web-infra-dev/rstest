@@ -55,6 +55,7 @@ describe('watch rerun planner', () => {
       testPaths: ['/a.test.ts'],
       message: 'Test file set changed, re-running 1 file(s)...\n',
     });
+    expect(plan.deferredTestPaths).toEqual(['/new.test.ts']);
   });
 
   it('should preserve all project entries for affected test paths', () => {

@@ -84,7 +84,10 @@ type HeadlessSchedulerDeps = {
   };
   watchSignals: Pick<
     WatchSignals,
-    'setDispatchRerun' | 'setInterrupt' | 'signalInvalidation'
+    | 'setDispatchRerun'
+    | 'setInterrupt'
+    | 'signalInvalidation'
+    | 'queueInvalidationAfter'
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
@@ -120,6 +123,10 @@ export const createHeadlessScheduler = async ({
   logWatchReady,
   destroyRuntime,
 }: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
+  if (isWatchMode) {
+    watchState.lastTestFiles = allTestFiles;
+  }
+
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
@@ -811,16 +818,28 @@ export const createHeadlessScheduler = async ({
         logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
           logWatchReady();
+          if (rerunPlan.deferredTestPaths) {
+            watchSignals.queueInvalidationAfter(
+              Promise.resolve(),
+              rerunPlan.deferredTestPaths,
+            );
+          }
           return;
         }
 
-        await watchSignals.signalInvalidation(
+        const { cycle } = await watchSignals.signalInvalidation(
           rerunPlan.decision.kind === 'empty'
             ? []
             : rerunPlan.decision.testPaths,
           undefined,
           updateSnapshot,
         );
+        if (rerunPlan.deferredTestPaths) {
+          watchSignals.queueInvalidationAfter(
+            cycle,
+            rerunPlan.deferredTestPaths,
+          );
+        }
       },
     );
 

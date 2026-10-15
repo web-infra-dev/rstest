@@ -38,6 +38,7 @@ type WatchRerunDecision =
 
 type WatchRerunPlan = {
   fileSetUpdate?: WatchFileSetUpdate;
+  deferredTestPaths?: string[];
   decision: WatchRerunDecision;
 };
 
@@ -98,6 +99,17 @@ export const planWatchRerun = ({
     serializeTestFiles(normalizedPrevious);
 
   if (fileSetChanged) {
+    const previousFileSet = new Set(
+      normalizedPrevious.map(
+        (file) => `${file.projectName}:${getTestPathKey(file.testPath)}`,
+      ),
+    );
+    const addedTestFiles = currentTestFiles.filter(
+      (file) =>
+        !previousFileSet.has(
+          `${file.projectName}:${getTestPathKey(file.testPath)}`,
+        ),
+    );
     const fileSetUpdate = {
       currentTestFiles,
       deletedTestPaths: collectDeletedTestPaths(
@@ -129,6 +141,14 @@ export const planWatchRerun = ({
               requestedPathSet.has(getTestPathKey(testPath)),
             ),
           );
+    const deferredTestPaths =
+      requestedPathSet === undefined
+        ? []
+        : collectTestPaths(
+            addedTestFiles.filter(
+              ({ testPath }) => !requestedPathSet.has(getTestPathKey(testPath)),
+            ),
+          );
 
     if (testPaths.length === 0) {
       return {
@@ -142,6 +162,7 @@ export const planWatchRerun = ({
 
     return {
       fileSetUpdate,
+      ...(deferredTestPaths.length > 0 ? { deferredTestPaths } : {}),
       decision: {
         kind: 'rerun',
         testPaths,
