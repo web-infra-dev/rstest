@@ -23,7 +23,11 @@ export const createWatchSignals = (
   // hand it to core's invalidation subscriber. Populated after the initial
   // cycle.
   let dispatchRerun:
-    ((updateSnapshot?: SnapshotUpdateState) => Promise<void>) | undefined;
+    | ((
+        updateSnapshot?: SnapshotUpdateState,
+        requestedTestPaths?: string[],
+      ) => Promise<void>)
+    | undefined;
 
   /**
    * Latest-wins interrupt, installed by the run branch whose in-flight run can
@@ -45,14 +49,18 @@ export const createWatchSignals = (
 
   return {
     setDispatchRerun(
-      fn: (updateSnapshot?: SnapshotUpdateState) => Promise<void>,
+      fn: (
+        updateSnapshot?: SnapshotUpdateState,
+        requestedTestPaths?: string[],
+      ) => Promise<void>,
     ): void {
       dispatchRerun = fn;
     },
     async runDispatchRerun(
       updateSnapshot?: SnapshotUpdateState,
+      requestedTestPaths?: string[],
     ): Promise<void> {
-      await dispatchRerun?.(updateSnapshot);
+      await dispatchRerun?.(updateSnapshot, requestedTestPaths);
     },
     setInterrupt(fn: () => Promise<void>): void {
       interruptInFlightRun = fn;

@@ -225,7 +225,11 @@ expect.extend({
       kind: 'screenshot',
       locator: received.ir,
       method: 'toMatchScreenshot',
-      timeout: getCurrentTestTimeout(testCase),
+      timeout: getCurrentTestTimeout(
+        isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
+          ? undefined
+          : testCase,
+      ),
       snapshotUpdate:
         window.__RSTEST_BROWSER_OPTIONS__?.snapshot.updateSnapshot,
       args: [

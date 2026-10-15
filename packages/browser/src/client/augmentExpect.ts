@@ -62,7 +62,7 @@ export type ToMatchScreenshotOptions = {
   maxDiffPixels?: number;
   /** Maximum fraction of pixels allowed to differ, from 0 to 1. */
   maxDiffPixelRatio?: number;
-  /** Time allowed for consecutive screenshots to become stable. Defaults to 500 ms; use 0 to disable or at least 100 ms. */
+  /** Time allowed for consecutive screenshots to become stable. Defaults to 2000 ms; use 0 to disable or at least 100 ms. */
   stabilityTimeout?: number;
   /** Mask dynamic content with browser-mode Locators. */
   mask?: Locator[];

@@ -84,31 +84,83 @@ const createDimensionDiff = (expected: PNG, actual: PNG): Buffer => {
 
 export type ScreenshotSnapshotStore = {
   read: (filepath: string) => Promise<string | null>;
-  save: (filepath: string, contentBase64: string) => Promise<void>;
-  remove: (filepath: string) => Promise<void>;
+  save: (
+    filepath: string,
+    contentBase64: string,
+    deadline?: number,
+  ) => Promise<void>;
+  remove: (filepath: string, deadline?: number) => Promise<void>;
+};
+
+const throwIfScreenshotDeadlinePassed = (deadline?: number): void => {
+  if (deadline !== undefined && Date.now() >= deadline) {
+    throw new Error('Screenshot assertion exceeded the active test timeout.');
+  }
+};
+
+const runBeforeScreenshotDeadline = <T>(
+  operation: () => Promise<T>,
+  deadline?: number,
+): Promise<T> => {
+  throwIfScreenshotDeadlinePassed(deadline);
+  if (deadline === undefined) {
+    return operation();
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () =>
+        reject(
+          new Error('Screenshot assertion exceeded the active test timeout.'),
+        ),
+      deadline - Date.now(),
+    );
+    operation().then(
+      (value) => {
+        clearTimeout(timeoutId);
+        try {
+          throwIfScreenshotDeadlinePassed(deadline);
+          resolve(value);
+        } catch (error) {
+          reject(error);
+        }
+      },
+      (error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
 };
 
 const writeScreenshot = async (
   snapshotStore: ScreenshotSnapshotStore,
   filepath: string,
   screenshot: Buffer,
-): Promise<void> => snapshotStore.save(filepath, screenshot.toString('base64'));
+  deadline?: number,
+): Promise<void> =>
+  runBeforeScreenshotDeadline(
+    () => snapshotStore.save(filepath, screenshot.toString('base64'), deadline),
+    deadline,
+  );
 
 const writeFailureArtifacts = async ({
   snapshotStore,
   referencePath,
   actualBuffer,
   diffBuffer,
+  deadline,
 }: {
   snapshotStore: ScreenshotSnapshotStore;
   referencePath: string;
   actualBuffer: Buffer;
   diffBuffer?: Buffer;
+  deadline?: number;
 }): Promise<{ actualPath: string; diffPath?: string }> => {
   const paths = getFailurePaths(referencePath);
-  await writeScreenshot(snapshotStore, paths.actual, actualBuffer);
+  await writeScreenshot(snapshotStore, paths.actual, actualBuffer, deadline);
   if (diffBuffer) {
-    await writeScreenshot(snapshotStore, paths.diff, diffBuffer);
+    await writeScreenshot(snapshotStore, paths.diff, diffBuffer, deadline);
     return { actualPath: paths.actual, diffPath: paths.diff };
   }
   return { actualPath: paths.actual };
@@ -167,6 +219,7 @@ export const matchBrowserScreenshot = async ({
   screenshotBase64,
   updateSnapshot,
   options,
+  deadline,
 }: {
   snapshotStore: ScreenshotSnapshotStore;
   testPath: string;
@@ -176,7 +229,9 @@ export const matchBrowserScreenshot = async ({
   screenshotBase64: string;
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
+  deadline?: number;
 }): Promise<void> => {
+  throwIfScreenshotDeadlinePassed(deadline);
   const normalizedOptions = validateOptions(options);
   const filepath = resolveScreenshotPath(
     testPath,
@@ -186,7 +241,11 @@ export const matchBrowserScreenshot = async ({
   );
   const actualBuffer = Buffer.from(screenshotBase64, 'base64');
   const actual = PNG.sync.read(actualBuffer);
-  const expectedContent = await snapshotStore.read(filepath);
+  throwIfScreenshotDeadlinePassed(deadline);
+  const expectedContent = await runBeforeScreenshotDeadline(
+    () => snapshotStore.read(filepath),
+    deadline,
+  );
   const expectedBuffer =
     expectedContent === null
       ? undefined
@@ -194,8 +253,8 @@ export const matchBrowserScreenshot = async ({
 
   if (!expectedBuffer) {
     if (updateSnapshot === 'new' || updateSnapshot === 'all') {
-      await writeScreenshot(snapshotStore, filepath, actualBuffer);
-      await removeFailureArtifacts(snapshotStore, filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
+      await removeFailureArtifacts(snapshotStore, filepath, deadline);
       return;
     }
     throw new ScreenshotMismatchError(
@@ -207,9 +266,10 @@ export const matchBrowserScreenshot = async ({
   try {
     expected = PNG.sync.read(expectedBuffer);
   } catch (error) {
+    throwIfScreenshotDeadlinePassed(deadline);
     if (updateSnapshot === 'all') {
-      await writeScreenshot(snapshotStore, filepath, actualBuffer);
-      await removeFailureArtifacts(snapshotStore, filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
+      await removeFailureArtifacts(snapshotStore, filepath, deadline);
       return;
     }
 
@@ -217,16 +277,18 @@ export const matchBrowserScreenshot = async ({
       snapshotStore,
       referencePath: filepath,
       actualBuffer,
+      deadline,
     });
     const reason = error instanceof Error ? ` ${error.message}` : '';
     throw new ScreenshotMismatchError(
       `Screenshot reference for "${testName}" is not a valid PNG.${reason}\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nRun Rstest with --update to replace it.`,
     );
   }
+  throwIfScreenshotDeadlinePassed(deadline);
   if (expected.width !== actual.width || expected.height !== actual.height) {
     if (updateSnapshot === 'all') {
-      await writeScreenshot(snapshotStore, filepath, actualBuffer);
-      await removeFailureArtifacts(snapshotStore, filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
+      await removeFailureArtifacts(snapshotStore, filepath, deadline);
       return;
     }
     const artifacts = await writeFailureArtifacts({
@@ -234,6 +296,7 @@ export const matchBrowserScreenshot = async ({
       referencePath: filepath,
       actualBuffer,
       diffBuffer: createDimensionDiff(expected, actual),
+      deadline,
     });
     throw new ScreenshotMismatchError(
       `Screenshot dimensions differ for "${testName}": expected ${expected.width}x${expected.height}, received ${actual.width}x${actual.height}.\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nDiff: ${artifacts.diffPath}\nRun Rstest with --update to replace it.`,
@@ -249,6 +312,7 @@ export const matchBrowserScreenshot = async ({
     expected.height,
     { threshold: normalizedOptions.threshold },
   );
+  throwIfScreenshotDeadlinePassed(deadline);
   const maxDiffPixels = Math.max(
     normalizedOptions.maxDiffPixels,
     Math.floor(
@@ -258,8 +322,8 @@ export const matchBrowserScreenshot = async ({
 
   if (differentPixels > maxDiffPixels) {
     if (updateSnapshot === 'all') {
-      await writeScreenshot(snapshotStore, filepath, actualBuffer);
-      await removeFailureArtifacts(snapshotStore, filepath);
+      await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
+      await removeFailureArtifacts(snapshotStore, filepath, deadline);
       return;
     }
     const artifacts = await writeFailureArtifacts({
@@ -267,22 +331,28 @@ export const matchBrowserScreenshot = async ({
       referencePath: filepath,
       actualBuffer,
       diffBuffer: PNG.sync.write(diff),
+      deadline,
     });
     throw new ScreenshotMismatchError(
       `Screenshot does not match the stored reference for "${testName}": ${differentPixels} pixels differ (allowed: ${maxDiffPixels}).\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nDiff: ${artifacts.diffPath}\nRun Rstest with --update to replace it.`,
     );
   }
 
-  await removeFailureArtifacts(snapshotStore, filepath);
+  await removeFailureArtifacts(snapshotStore, filepath, deadline);
 };
 
 const removeFailureArtifacts = async (
   snapshotStore: ScreenshotSnapshotStore,
   referencePath: string,
+  deadline?: number,
 ): Promise<void> => {
-  await Promise.all(
-    Object.values(getFailurePaths(referencePath)).map((path) =>
-      snapshotStore.remove(path),
-    ),
+  await runBeforeScreenshotDeadline(
+    () =>
+      Promise.all(
+        Object.values(getFailurePaths(referencePath)).map((path) =>
+          snapshotStore.remove(path, deadline),
+        ),
+      ),
+    deadline,
   );
 };

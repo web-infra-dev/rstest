@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -30,7 +31,7 @@ import {
   type TestResult,
   type UserConsoleLog,
 } from '@rstest/core/internal/browser';
-import { dirname, join, normalize } from 'pathe';
+import { basename, dirname, join, normalize } from 'pathe';
 import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
@@ -502,28 +503,16 @@ export const runBrowserController = async (
     };
   }
 
-  // Mark files as pending-affected so the next trigger reruns them through the
-  // normal plan/cycle pipeline (used by explicit rerun requests; omitted paths
-  // = all current files). Returns the number of seeded files so a path-scoped
-  // request matching no browser test file can skip the rerun entirely (mixed
-  // watch 'u' with node-only snapshot updates must produce no browser cycle).
-  const seedPendingRerun = (testPaths?: string[]): number => {
+  // A path-scoped shortcut must match a browser entry. Keep its paths on the
+  // dispatch call instead of putting them in the shared compiler-change set:
+  // an overlapping rebuild can drain that set before the shortcut is planned.
+  const hasRerunnableTestPath = (testPaths: string[]): boolean => {
     const wanted = testPaths
       ? new Set(testPaths.map((testPath) => getTestPathKey(testPath)))
-      : null;
-    let seeded = 0;
-    for (const file of watchState.lastTestFiles) {
-      if (wanted && !wanted.has(getTestPathKey(file.testPath))) {
-        continue;
-      }
-      const pending =
-        watchState.pendingAffectedTestFiles.get(file.projectName) ??
-        new Set<string>();
-      pending.add(file.testPath);
-      watchState.pendingAffectedTestFiles.set(file.projectName, pending);
-      seeded += 1;
-    }
-    return seeded;
+      : new Set<string>();
+    return watchState.lastTestFiles.some((file) =>
+      wanted.has(getTestPathKey(file.testPath)),
+    );
   };
 
   /**
@@ -642,11 +631,12 @@ export const runBrowserController = async (
       });
     },
     requestRerun: async (testPaths, updateSnapshot) => {
-      const seeded = seedPendingRerun(testPaths);
-      if (testPaths && seeded === 0) {
+      if (testPaths && !hasRerunnableTestPath(testPaths)) {
         return;
       }
-      await watchSignals.runDispatchRerun(updateSnapshot);
+      const requestedTestPaths =
+        testPaths ?? watchState.lastTestFiles.map((file) => file.testPath);
+      await watchSignals.runDispatchRerun(updateSnapshot, requestedTestPaths);
       await watchSignals.awaitSignalledCycle();
     },
   });
@@ -800,6 +790,12 @@ export const runBrowserController = async (
     target?: BrowserDispatchRequest['target'];
   }): Promise<unknown> => {
     const timeoutFallbackMs = maxTestTimeoutForRpc;
+    const screenshotTimeout =
+      request.kind === 'screenshot'
+        ? (request.timeout ?? timeoutFallbackMs)
+        : 0;
+    const screenshotDeadline =
+      screenshotTimeout > 0 ? Date.now() + screenshotTimeout : undefined;
     const provider = resolveProviderForTestPath({
       testPath: request.testPath,
       projectName: request.projectName,
@@ -843,18 +839,14 @@ export const runBrowserController = async (
                 method: 'readSnapshotBinaryFile',
                 args: { filepath },
               }),
-            save: (filepath, contentBase64) =>
-              runSnapshotRpc({
-                id: `${request.id}:snapshot-save`,
-                method: 'saveSnapshotBinaryFile',
-                args: { filepath, contentBase64 },
-              }),
-            remove: (filepath) =>
-              runSnapshotRpc({
-                id: `${request.id}:snapshot-remove`,
-                method: 'removeSnapshotFile',
-                args: { filepath },
-              }),
+            save: (filepath, contentBase64, deadline) =>
+              snapshotRpcMethods.saveSnapshotBinaryFile(
+                filepath,
+                contentBase64,
+                deadline,
+              ),
+            remove: (filepath, deadline) =>
+              snapshotRpcMethods.removeSnapshotFile(filepath, deadline),
           },
           testPath: request.testPath,
           projectName: request.projectName,
@@ -863,6 +855,7 @@ export const runBrowserController = async (
           screenshotBase64: result,
           updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
           options: request.args[1] as ScreenshotMatchOptions | undefined,
+          deadline: screenshotDeadline,
         });
         return undefined;
       }
@@ -996,12 +989,40 @@ export const runBrowserController = async (
     async saveSnapshotBinaryFile(
       filepath: string,
       contentBase64: string,
+      deadline?: number,
     ): Promise<void> {
       const dir = dirname(filepath);
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(filepath, Buffer.from(contentBase64, 'base64'));
+      if (deadline !== undefined && Date.now() >= deadline) {
+        throw new Error(
+          'Screenshot assertion exceeded the active test timeout.',
+        );
+      }
+      const temporaryPath = join(
+        dir,
+        `.${basename(filepath)}.${randomUUID()}.tmp`,
+      );
+      try {
+        await fs.writeFile(temporaryPath, Buffer.from(contentBase64, 'base64'));
+        if (deadline !== undefined && Date.now() >= deadline) {
+          throw new Error(
+            'Screenshot assertion exceeded the active test timeout.',
+          );
+        }
+        await fs.rename(temporaryPath, filepath);
+      } finally {
+        await fs.rm(temporaryPath, { force: true });
+      }
     },
-    async removeSnapshotFile(filepath: string): Promise<void> {
+    async removeSnapshotFile(
+      filepath: string,
+      deadline?: number,
+    ): Promise<void> {
+      if (deadline !== undefined && Date.now() >= deadline) {
+        throw new Error(
+          'Screenshot assertion exceeded the active test timeout.',
+        );
+      }
       try {
         await fs.unlink(filepath);
       } catch {

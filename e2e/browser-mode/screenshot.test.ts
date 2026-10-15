@@ -116,7 +116,7 @@ describe('browser mode - screenshot matching', () => {
             'concurrent-screenshot.test.ts',
           ),
         ),
-      ).toHaveLength(1);
+      ).toHaveLength(2);
     }
     const originalReference = fs.readFileSync(referencePath);
     expect(originalReference.subarray(0, 8)).toEqual(
@@ -273,7 +273,7 @@ test('rejects a short screenshot stability timeout', async () => {
               'concurrent-screenshot.test.ts',
             ),
           ),
-        ).toHaveLength(1);
+        ).toHaveLength(2);
       }
     },
   );

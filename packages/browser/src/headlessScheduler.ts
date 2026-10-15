@@ -796,28 +796,35 @@ export const createHeadlessScheduler = async ({
       );
     };
 
-    watchSignals.setDispatchRerun(async (updateSnapshot) => {
-      const newProjectEntries = await collectProjectEntries();
-      const rerunPlan = planWatchRerun({
-        projectEntries: newProjectEntries,
-        previousTestFiles: watchState.lastTestFiles,
-        affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-      });
+    watchSignals.setDispatchRerun(
+      async (updateSnapshot, requestedTestPaths) => {
+        const newProjectEntries = await collectProjectEntries();
+        const rerunPlan = planWatchRerun({
+          projectEntries: newProjectEntries,
+          previousTestFiles: watchState.lastTestFiles,
+          affectedTestFiles: [
+            ...drainPendingAffectedTestFiles(watchState),
+            ...(requestedTestPaths ?? []),
+          ],
+        });
 
-      commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
+        commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
 
-      logger.log(color.cyan(rerunPlan.decision.message));
-      if (rerunPlan.decision.kind === 'idle') {
-        logWatchReady();
-        return;
-      }
+        logger.log(color.cyan(rerunPlan.decision.message));
+        if (rerunPlan.decision.kind === 'idle') {
+          logWatchReady();
+          return;
+        }
 
-      await watchSignals.signalInvalidation(
-        rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths,
-        undefined,
-        updateSnapshot,
-      );
-    });
+        await watchSignals.signalInvalidation(
+          rerunPlan.decision.kind === 'empty'
+            ? []
+            : rerunPlan.decision.testPaths,
+          undefined,
+          updateSnapshot,
+        );
+      },
+    );
 
     watchSession = createWatchSession(runScope);
   }

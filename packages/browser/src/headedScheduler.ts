@@ -709,6 +709,7 @@ export const createHeadedScheduler = async ({
 
     const runDispatchRerunOnce = async (
       updateSnapshot?: SnapshotUpdateState,
+      requestedTestPaths?: string[],
     ): Promise<void> => {
       // Exactly one of `signalInvalidation` / `logWatchReady` must run on
       // every exit path: a rejection escaping after the file-set commit (for
@@ -721,7 +722,10 @@ export const createHeadedScheduler = async ({
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
           previousTestFiles: watchState.lastTestFiles,
-          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+          affectedTestFiles: [
+            ...drainPendingAffectedTestFiles(watchState),
+            ...(requestedTestPaths ?? []),
+          ],
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
@@ -762,8 +766,10 @@ export const createHeadedScheduler = async ({
     // `onAfterDevCompile`, and two interleaved planning passes would race on
     // the drain-once affected set and the file-set commit.
     const dispatchRerunQueue = createHeadedSerialTaskQueue();
-    watchSignals.setDispatchRerun((updateSnapshot) =>
-      dispatchRerunQueue.enqueue(() => runDispatchRerunOnce(updateSnapshot)),
+    watchSignals.setDispatchRerun((updateSnapshot, requestedTestPaths) =>
+      dispatchRerunQueue.enqueue(() =>
+        runDispatchRerunOnce(updateSnapshot, requestedTestPaths),
+      ),
     );
 
     runUiRequestedRerun = async (file, testNamePattern) => {

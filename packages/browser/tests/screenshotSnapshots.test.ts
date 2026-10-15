@@ -75,6 +75,32 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('does not persist a baseline after the screenshot deadline', async () => {
+    await withRoot(async (root) => {
+      let saved = false;
+      const deadline = Date.now() + 30;
+      const delayedStore: ScreenshotSnapshotStore = {
+        ...snapshotStore,
+        async read() {
+          return null;
+        },
+        async save(_filepath, _contentBase64, saveDeadline) {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          if (saveDeadline === undefined || Date.now() < saveDeadline) {
+            saved = true;
+          }
+        },
+      };
+
+      await expect(
+        match(root, { snapshotStore: delayedStore, deadline }),
+      ).rejects.toThrow(
+        'Screenshot assertion exceeded the active test timeout',
+      );
+      expect(saved).toBe(false);
+    });
+  });
+
   it('keeps sanitized test names unique and project names inside the screenshot directory', async () => {
     await withRoot(async (root) => {
       await match(root, { testName: 'renders a b' });

@@ -79,7 +79,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 });
 ```
 
-`stabilityTimeout` 默认值为 `500` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。
+`stabilityTimeout` 默认值为 `2000` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。
 
 `maxDiffPixelRatio` 可以代替 `maxDiffPixels`，按像素比例设置容差。应用 `threshold` 后，默认不允许有像素差异。传入 `--update` 会创建缺失的基线，并只替换不匹配的基线。断言失败时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。
 
