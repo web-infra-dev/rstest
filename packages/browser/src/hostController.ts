@@ -506,7 +506,7 @@ export const runBrowserController = async (
   // A path-scoped shortcut must match a browser entry. Keep its paths on the
   // dispatch call instead of putting them in the shared compiler-change set:
   // an overlapping rebuild can drain that set before the shortcut is planned.
-  const hasRerunnableTestPath = (testPaths: string[]): boolean => {
+  const hasMatchingTestPath = (testPaths: string[]): boolean => {
     const wanted = testPaths
       ? new Set(testPaths.map((testPath) => getTestPathKey(testPath)))
       : new Set<string>();
@@ -631,7 +631,7 @@ export const runBrowserController = async (
       });
     },
     requestRerun: async (testPaths, updateSnapshot) => {
-      if (testPaths && !hasRerunnableTestPath(testPaths)) {
+      if (testPaths && !hasMatchingTestPath(testPaths)) {
         return;
       }
       const requestedTestPaths =
