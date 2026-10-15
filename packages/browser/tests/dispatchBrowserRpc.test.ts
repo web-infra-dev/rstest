@@ -267,6 +267,24 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(captures).toBe(2);
   });
 
+  it('allows slow follow-up captures with the default stability timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 3000,
+        args: ['button'],
+      }),
+      timeoutFallbackMs: 3000,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(2);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeGreaterThan(500);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeLessThanOrEqual(2000);
+  });
+
   it('bounds follow-up captures by the remaining stability timeout', async () => {
     const fakeLocator = new FakeLocator();
     await dispatchPlaywrightBrowserRpc({

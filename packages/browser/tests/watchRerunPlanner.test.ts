@@ -87,6 +87,30 @@ describe('watch rerun planner', () => {
     });
   });
 
+  it('should match Windows paths without regard to drive or segment case', () => {
+    const testPath = 'D:/a/rstest/tests/snap.test.ts';
+    const plan = planWatchRerun({
+      projectEntries: [
+        { project: { name: 'project-a' }, testFiles: [testPath] },
+      ],
+      previousTestFiles: [
+        {
+          testPath: 'd:\\A\\RSTEST\\tests\\snap.test.ts',
+          projectName: 'project-a',
+        },
+      ],
+      affectedTestFiles: ['d:\\a\\rstest\\tests\\snap.test.ts'],
+    });
+
+    expect(plan).toEqual({
+      decision: {
+        kind: 'rerun',
+        testPaths: [testPath],
+        message: 'Re-running 1 affected test file(s)...\n',
+      },
+    });
+  });
+
   it('should commit an empty file-set decision and prune deleted files', () => {
     const previousTestFiles = [
       { testPath: '/a.test.ts', projectName: 'project-a' },

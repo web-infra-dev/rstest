@@ -79,7 +79,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 });
 ```
 
-`stabilityTimeout` defaults to `500` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture.
+`stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture.
 
 `maxDiffPixelRatio` can be used instead of `maxDiffPixels` to allow a fraction of pixels to differ. The default allows no differing pixels after applying the per-pixel `threshold`. `--update` creates missing references and replaces only references that differ. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; actual and diff images are written under a sibling `__failures__` directory.
 

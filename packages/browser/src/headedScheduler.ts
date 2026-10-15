@@ -10,6 +10,7 @@ import {
 } from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import { getTestPathKey } from './pathUtils';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
@@ -105,10 +106,10 @@ export const claimHeadedCycleScope = (
 ): { file: TestFileInfo; testNamePattern?: string }[] => {
   const scope: { file: TestFileInfo; testNamePattern?: string }[] = [];
   const filesByPath = new Map(
-    currentTestFiles.map((file) => [file.testPath, file]),
+    currentTestFiles.map((file) => [getTestPathKey(file.testPath), file]),
   );
   for (const testPath of testPaths) {
-    const normalizedTestPath = normalize(testPath);
+    const normalizedTestPath = getTestPathKey(testPath);
     const file = filesByPath.get(normalizedTestPath);
     if (file) {
       scope.push({
@@ -770,10 +771,10 @@ export const createHeadedScheduler = async ({
         [file.testPath],
         () => {
           if (testNamePattern === undefined) {
-            pendingTestNamePatterns.delete(normalize(file.testPath));
+            pendingTestNamePatterns.delete(getTestPathKey(file.testPath));
           } else {
             pendingTestNamePatterns.set(
-              normalize(file.testPath),
+              getTestPathKey(file.testPath),
               testNamePattern,
             );
           }

@@ -31,6 +31,7 @@ import {
   type UserConsoleLog,
 } from '@rstest/core/internal/browser';
 import { dirname, join, normalize } from 'pathe';
+import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
@@ -508,11 +509,11 @@ export const runBrowserController = async (
   // watch 'u' with node-only snapshot updates must produce no browser cycle).
   const seedPendingRerun = (testPaths?: string[]): number => {
     const wanted = testPaths
-      ? new Set(testPaths.map((testPath) => normalize(testPath)))
+      ? new Set(testPaths.map((testPath) => getTestPathKey(testPath)))
       : null;
     let seeded = 0;
     for (const file of watchState.lastTestFiles) {
-      if (wanted && !wanted.has(file.testPath)) {
+      if (wanted && !wanted.has(getTestPathKey(file.testPath))) {
         continue;
       }
       const pending =

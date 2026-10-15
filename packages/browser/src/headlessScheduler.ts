@@ -8,8 +8,8 @@ import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   logger,
 } from '@rstest/core/internal/browser';
-import { normalize } from 'pathe';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import { getTestPathKey } from './pathUtils';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
@@ -239,8 +239,10 @@ export const createHeadlessScheduler = async ({
         ? String(payload.testPath)
         : files[0]!.testPath;
     const file =
-      files.find((candidate) => candidate.testPath === normalize(testPath)) ??
-      files[0]!;
+      files.find(
+        (candidate) =>
+          getTestPathKey(candidate.testPath) === getTestPathKey(testPath),
+      ) ?? files[0]!;
     const response = await dispatchRouter.dispatch({
       requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
       runToken: run.token,
@@ -501,10 +503,11 @@ export const createHeadlessScheduler = async ({
                 return;
               }
               if (message.type === 'file-start') {
-                const startedPath = normalize(message.payload.testPath);
+                const startedPath = getTestPathKey(message.payload.testPath);
                 activeFile =
                   files.find(
-                    (candidate) => candidate.testPath === startedPath,
+                    (candidate) =>
+                      getTestPathKey(candidate.testPath) === startedPath,
                   ) ?? activeFile;
               }
               if (message.type === 'fatal') {
@@ -782,9 +785,13 @@ export const createHeadlessScheduler = async ({
       testPaths: string[],
       updateSnapshot: SnapshotUpdateState,
     ): Promise<unknown[]> => {
-      const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
+      const pathSet = new Set(
+        testPaths.map((testPath) => getTestPathKey(testPath)),
+      );
       return runFilesWithPool(
-        watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
+        watchState.lastTestFiles.filter((file) =>
+          pathSet.has(getTestPathKey(file.testPath)),
+        ),
         updateSnapshot,
       );
     };

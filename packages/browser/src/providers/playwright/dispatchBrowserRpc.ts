@@ -132,7 +132,7 @@ const captureStableScreenshot = async (
   options: Record<string, unknown>,
   requestDeadline: number | undefined,
 ): Promise<Buffer> => {
-  const { stabilityTimeout = 500, ...playwrightOptions } = options;
+  const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
   if (
     typeof stabilityTimeout !== 'number' ||
     !Number.isFinite(stabilityTimeout) ||

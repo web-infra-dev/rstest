@@ -1,5 +1,6 @@
 import { normalize } from 'pathe';
 import type { TestFileInfo } from './protocol';
+import { getTestPathKey } from './pathUtils';
 
 type WatchPlannerProjectEntry = {
   project: {
@@ -41,7 +42,7 @@ type WatchRerunPlan = {
 
 const serializeTestFiles = (files: TestFileInfo[]): string => {
   return JSON.stringify(
-    files.map((f) => `${f.projectName}:${f.testPath}`).sort(),
+    files.map((f) => `${f.projectName}:${getTestPathKey(f.testPath)}`).sort(),
   );
 };
 
@@ -53,17 +54,23 @@ const normalizeTestFiles = (files: TestFileInfo[]): TestFileInfo[] => {
 };
 
 const collectTestPaths = (files: TestFileInfo[]): string[] => {
-  return [...new Set(files.map((file) => file.testPath))];
+  return [
+    ...new Map(
+      files.map((file) => [getTestPathKey(file.testPath), file.testPath]),
+    ).values(),
+  ];
 };
 
 const collectDeletedTestPaths = (
   previous: TestFileInfo[],
   current: TestFileInfo[],
 ): string[] => {
-  const currentPathSet = new Set(current.map((file) => file.testPath));
+  const currentPathSet = new Set(
+    current.map((file) => getTestPathKey(file.testPath)),
+  );
   return previous
     .map((file) => file.testPath)
-    .filter((testPath) => !currentPathSet.has(testPath));
+    .filter((testPath) => !currentPathSet.has(getTestPathKey(testPath)));
 };
 
 export const collectWatchTestFiles = (
@@ -117,10 +124,10 @@ export const planWatchRerun = ({
   }
 
   const affectedPathSet = new Set(
-    affectedTestFiles.map((testFile) => normalize(testFile)),
+    affectedTestFiles.map((testFile) => getTestPathKey(testFile)),
   );
   const matchedAffectedFiles = currentTestFiles.filter(({ testPath }) =>
-    affectedPathSet.has(testPath),
+    affectedPathSet.has(getTestPathKey(testPath)),
   );
   if (matchedAffectedFiles.length === 0) {
     return {
