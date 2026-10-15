@@ -1,4 +1,4 @@
-import { RsdoctorRspackPlugin } from '@rsdoctor/rspack-plugin';
+import { RsdoctorRspackPlugin } from '@rsdoctor/core';
 
 interface RsdoctorCIPluginOptions {
   /**
