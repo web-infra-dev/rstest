@@ -20,6 +20,7 @@ Currently, Browser Mode only provides out-of-the-box support for React. Other fr
 :::
 
 import { PackageManagerTabs } from '@theme';
+import { ApiMeta } from '@components/ApiMeta';
 
 ## React
 
@@ -85,6 +86,27 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => (
 test('renders with theme context', async () => {
   const { container } = await render(<MyComponent />, { wrapper: Wrapper });
   // ...
+});
+```
+
+<ApiMeta addedVersion="0.12.4" />
+
+For a focused hydration test, Browser Mode can create matching markup with `renderToString` and hydrate it without starting a Node server. This exercises React's hydration path, but not Node-specific SSR behavior. To test your app's actual server output, load that output into the container instead. React root options such as `onRecoverableError` go in `createRootOptions`:
+
+```tsx
+import { render } from '@rstest/browser-react';
+import { renderToString } from 'react-dom/server';
+
+const container = document.createElement('div');
+container.innerHTML = renderToString(<App />);
+
+const recoverableErrors: unknown[] = [];
+await render(<App />, {
+  container,
+  hydrate: true,
+  createRootOptions: {
+    onRecoverableError: (error) => recoverableErrors.push(error),
+  },
 });
 ```
 

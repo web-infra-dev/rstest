@@ -1,6 +1,10 @@
 import type { JSXElementConstructor, ReactNode } from 'react';
 import React from 'react';
-import { createRoot as createReactRoot } from 'react-dom/client';
+import {
+  createRoot as createReactRoot,
+  hydrateRoot as hydrateReactRoot,
+  type RootOptions,
+} from 'react-dom/client';
 import { act } from './act';
 
 // ===== Types =====
@@ -25,6 +29,10 @@ export interface RenderOptions {
   baseElement?: HTMLElement;
   /** Wrapper component (e.g., for providers/context) */
   wrapper?: JSXElementConstructor<{ children: ReactNode }>;
+  /** Hydrate existing server-rendered HTML instead of creating a new root. @default false */
+  hydrate?: boolean;
+  /** Options passed to React's createRoot or hydrateRoot. */
+  createRootOptions?: RootOptions;
 }
 
 export interface RenderHookOptions<Props> extends RenderOptions {
@@ -69,8 +77,8 @@ const config: RenderConfiguration = {
 
 // ===== Internal Helpers =====
 
-function createRoot(container: HTMLElement): ReactRoot {
-  const root = createReactRoot(container);
+function createRoot(container: HTMLElement, options?: RootOptions): ReactRoot {
+  const root = createReactRoot(container, options);
   return {
     render: (element: ReactNode) => root.render(element),
     unmount: () => root.unmount(),
@@ -99,7 +107,7 @@ export async function render(
   ui: ReactNode,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
-  const { wrapper } = options;
+  const { wrapper, hydrate, createRootOptions } = options;
   let { container, baseElement } = options;
 
   if (!baseElement) {
@@ -110,10 +118,18 @@ export async function render(
     container = baseElement.appendChild(document.createElement('div'));
   }
 
-  let root: ReactRoot;
+  let root!: ReactRoot;
 
   if (!mountedContainers.has(container)) {
-    root = createRoot(container);
+    const wrappedUi = wrapUiIfNeeded(strictModeIfNeeded(ui), wrapper);
+    if (hydrate) {
+      await act(() => {
+        root = hydrateReactRoot(container, wrappedUi, createRootOptions);
+      });
+    } else {
+      root = createRoot(container, createRootOptions);
+      await act(() => root.render(wrappedUi));
+    }
 
     mountedRootEntries.push({ container, root });
     mountedContainers.add(container);
@@ -123,10 +139,9 @@ export async function render(
       throw new Error('Container is tracked but root entry not found');
     }
     root = entry.root;
+    const wrappedUi = wrapUiIfNeeded(strictModeIfNeeded(ui), wrapper);
+    await act(() => root.render(wrappedUi));
   }
-
-  const wrappedUi = wrapUiIfNeeded(strictModeIfNeeded(ui), wrapper);
-  await act(() => root.render(wrappedUi));
 
   return {
     container,
