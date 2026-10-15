@@ -591,9 +591,12 @@ export const runBrowserController = async (
    * is what lets the headed transport claim its cycle scope inside it.
    */
   const createWatchSession = (
-    execute: (testPaths: string[]) => Promise<unknown[]>,
+    execute: (
+      testPaths: string[],
+      updateSnapshot: BrowserHostConfig['snapshot']['updateSnapshot'],
+    ) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
-    runCycle: async (testPaths) => {
+    runCycle: async (testPaths, updateSnapshot) => {
       // Signalled by a rebuild that ended in `compiler.hooks.failed`: nothing
       // was emitted, so this cycle reports the failure instead of rerunning
       // tests.
@@ -617,7 +620,7 @@ export const runBrowserController = async (
       let rawCoverage: unknown[] = [];
 
       try {
-        rawCoverage = await execute(testPaths);
+        rawCoverage = await execute(testPaths, updateSnapshot);
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
         // cycle either way, and its results belong in the report even when the
@@ -637,12 +640,12 @@ export const runBrowserController = async (
             : undefined,
       });
     },
-    requestRerun: async (testPaths) => {
+    requestRerun: async (testPaths, updateSnapshot) => {
       const seeded = seedPendingRerun(testPaths);
       if (testPaths && seeded === 0) {
         return;
       }
-      await watchSignals.runDispatchRerun();
+      await watchSignals.runDispatchRerun(updateSnapshot);
       await watchSignals.awaitSignalledCycle();
     },
   });
@@ -711,6 +714,8 @@ export const runBrowserController = async (
 
   const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
   const screenshotUnmatchedByFile = new Map<string, number>();
+  const initialSnapshotUpdate =
+    options?.updateSnapshot ?? context.snapshotManager.options.updateSnapshot;
 
   const projectRunnerUrls = Object.fromEntries(
     [...runtime.projectServers].map(([name, server]) => [
@@ -723,9 +728,7 @@ export const runBrowserController = async (
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
     snapshot: {
-      updateSnapshot:
-        options?.updateSnapshot ??
-        context.snapshotManager.options.updateSnapshot,
+      updateSnapshot: initialSnapshotUpdate,
     },
     // Container origin (fallback). Per-project runner origins below.
     runnerUrl: containerRunnerUrl,
@@ -857,7 +860,7 @@ export const runBrowserController = async (
           testName,
           browserName,
           screenshotBase64: result,
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
+          updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
           options: request.args[1] as ScreenshotMatchOptions | undefined,
         });
         return undefined;

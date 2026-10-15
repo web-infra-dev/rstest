@@ -449,11 +449,12 @@ export async function runTests(context: Rstest): Promise<void> {
     // The host resolves the rerun scope before signalling (its file-set diff is
     // consumed once), so the hint's filters are the scope this trigger asked
     // for — the cycle's own is that, plus whatever any signal folded into it.
-    executor.onInvalidate(({ fileFilters }) =>
+    executor.onInvalidate(({ fileFilters, updateSnapshot }) =>
       watchDriver.runCycle(executor, {
         mode: 'on-demand',
         fileFilters,
         trigger: 'invalidation',
+        updateSnapshot,
       }),
     );
   }
@@ -480,7 +481,8 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       : undefined,
     browser: browserTarget && {
-      rerun: (testPaths) => browserTarget.requestRerun(testPaths),
+      rerun: (testPaths, updateSnapshot) =>
+        browserTarget.requestRerun(testPaths, updateSnapshot),
     },
   };
 

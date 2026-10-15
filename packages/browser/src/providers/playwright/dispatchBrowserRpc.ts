@@ -25,9 +25,19 @@ const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
 // ---------------------------------------------------------------------------
 
 const escapeCssAttrValue = (value: string): string => {
-  // Minimal escaping for use in CSS attribute selectors with single quotes.
-  // https://www.w3.org/TR/selectors-4/#attribute-representation
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return value
+    .replace(/[\\']/g, '\\$&')
+    .split('')
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      if (code === 0) {
+        return '\uFFFD';
+      }
+      return code <= 0x1f || code === 0x7f
+        ? `\\${code.toString(16)} `
+        : character;
+    })
+    .join('');
 };
 
 const getRunnerFrame = async (

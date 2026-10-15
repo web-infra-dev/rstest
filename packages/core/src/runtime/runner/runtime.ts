@@ -31,7 +31,11 @@ import {
   ROOT_SUITE_NAME,
   SYNTHETIC_STACK_ERROR_MESSAGE,
 } from '../../utils/constants';
-import { generateFilePathHash, isPlainObject } from '../../utils/helper';
+import {
+  generateFilePathHash,
+  getTaskNameWithPrefix,
+  isPlainObject,
+} from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import {
   formatName,
@@ -389,7 +393,10 @@ export class RunnerRuntime {
           continue;
         }
 
-        const title = JSON.stringify([...parentNames, test.name]);
+        const title = getTaskNameWithPrefix({
+          name: test.name,
+          parentNames,
+        });
         const duplicates = duplicateTitles.get(title) ?? [];
         duplicates.push(test);
         duplicateTitles.set(title, duplicates);

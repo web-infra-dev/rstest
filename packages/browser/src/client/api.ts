@@ -226,6 +226,8 @@ expect.extend({
       locator: received.ir,
       method: 'toMatchScreenshot',
       timeout: getCurrentTestTimeout(testCase),
+      snapshotUpdate:
+        window.__RSTEST_BROWSER_OPTIONS__?.snapshot.updateSnapshot,
       args: [
         screenshotName,
         { ...serializedOptions, mask: mask.map((item) => item.ir) },

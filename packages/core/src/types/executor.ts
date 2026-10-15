@@ -32,16 +32,10 @@ export interface ExecutorRunCycleOptions {
   /**
    * Per cycle, never captured at executor construction, so a watch `u` (update
    * snapshot) rerun is honored. Core resolves it when the trigger queues its
-   * cycle rather than when the cycle is dispatched: `u` also flips the live
-   * `snapshotManager` flag, for the browser host's per-page reads, and a cycle
-   * queued inside that window by anything else must not rewrite the snapshots of
-   * files no `u` selected.
-   *
-   * That last guarantee reaches as far as an executor honors this field. The
-   * node pool does. The browser host reads the live flag per page load instead
-   * and its executor drops this option on a watch rerun, so a browser cycle
-   * queued inside the `u` window still runs under `'all'` — a gap to close by
-   * plumbing the option through the browser watch session, not a stance.
+   * cycle rather than when the cycle is dispatched: a cycle queued inside the
+   * `u` window by another trigger must not rewrite snapshots for files `u` did
+   * not select. Executors pass this value through their run-cycle boundary;
+   * browser RPC requests also carry the policy captured by their runner page.
    */
   updateSnapshot: SnapshotUpdateState;
   /**
@@ -87,6 +81,7 @@ export interface ExecutorRunCycleOptions {
 export type ExecutorInvalidationCallback = (hint: {
   isFirstBuild: boolean;
   fileFilters?: string[];
+  updateSnapshot?: SnapshotUpdateState;
 }) => void | Promise<void>;
 
 /**
@@ -209,5 +204,8 @@ export interface TestExecutor {
    * Core arms rerun keys after every executor settles its first cycle. Startup
    * failures close the session; ordinary test failures leave it ready to rerun.
    */
-  requestRerun?(testPaths?: string[]): Promise<void>;
+  requestRerun?(
+    testPaths?: string[],
+    updateSnapshot?: SnapshotUpdateState,
+  ): Promise<void>;
 }

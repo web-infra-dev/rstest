@@ -1,4 +1,5 @@
 import type { ExecutorCycleOutcome } from '@rstest/core/internal/browser';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { BrowserDispatchRequest } from './protocol';
 import type { BrowserProviderPage } from './providers';
 
@@ -19,9 +20,15 @@ import type { BrowserProviderPage } from './providers';
  */
 export type BrowserWatchSession = {
   /** Execute the scope the last trigger resolved, as one cycle outcome. */
-  runCycle: (testPaths: string[]) => Promise<ExecutorCycleOutcome>;
+  runCycle: (
+    testPaths: string[],
+    updateSnapshot: SnapshotUpdateState,
+  ) => Promise<ExecutorCycleOutcome>;
   /** Explicit path-scoped rerun request (a CLI shortcut's browser fanout). */
-  requestRerun: (testPaths?: string[]) => Promise<void>;
+  requestRerun: (
+    testPaths?: string[],
+    updateSnapshot?: SnapshotUpdateState,
+  ) => Promise<void>;
 };
 
 export type BrowserV8CoverageRuntime = {

@@ -158,6 +158,21 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(containerPage.selector).toContain("[data-test-project='project-a']");
   });
 
+  it('escapes control characters in headed project selectors', async () => {
+    const containerPage = new FakeContainerPage();
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: containerPage as any,
+      request: createRequest({
+        projectName: "project\nname\r\f'\\",
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(containerPage.selector).toContain(
+      String.raw`[data-test-project='project\a name\d \c \'\\']`,
+    );
+  });
+
   it('bounds screenshot capture by the request timeout', async () => {
     const fakeLocator = new FakeLocator();
     await dispatchPlaywrightBrowserRpc({

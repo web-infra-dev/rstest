@@ -108,30 +108,10 @@ export async function createBrowserExecutor(
       if (watchSession) {
         // A watch rerun: the host's trigger already resolved the scope and
         // handed it over as the invalidation hint, which core passes back here.
-        //
-        // `opts.updateSnapshot` is dropped, and that is a gap rather than a
-        // choice. Core resolves it per trigger so a cycle no `u` selected files
-        // for cannot rewrite their snapshots; the host instead re-reads the live
-        // `snapshotManager` flag for every page it loads, so a browser cycle
-        // queued inside the `u` hold window still runs under `'all'`. Closing it
-        // means plumbing this option through `watchSession.runCycle` to the
-        // per-page config, which is also what would make the seam doc on
-        // `ExecutorRunCycleOptions.updateSnapshot` true on this side.
-        //
-        // Whichever shape that takes has to settle a fold hazard first. Trigger
-        // kind is erased on this side of the seam: a `u` press reaches the host
-        // as `requestRerun`, routes through `dispatchRerun`/`signalInvalidation`
-        // like any rebuild, and arrives back at the driver as
-        // `trigger: 'invalidation'` with the same options — so `canFold` already
-        // unions the two, and only the drop above keeps that from mattering.
-        // Exactly one of two things must therefore be true once the option is
-        // honored: the originating trigger crosses the seam and becomes part of
-        // the fold identity, or `updateSnapshot` rides the per-cycle options the
-        // fold predicate already compares (`'all'` then differs from the session
-        // value, so the two cycles cannot fold). Sending the flag out of band —
-        // straight to the host, driver-side options unchanged — is the one shape
-        // that folds a rebuild's files into the `u` scope.
-        const cycle = watchSession.runCycle(opts.fileFilters ?? []);
+        const cycle = watchSession.runCycle(
+          opts.fileFilters ?? [],
+          opts.updateSnapshot,
+        );
         inFlightCycle = cycle;
         try {
           return await cycle;
@@ -169,9 +149,12 @@ export async function createBrowserExecutor(
     onInvalidate(cb: ExecutorInvalidationCallback): void {
       invalidationCallback = cb;
     },
-    async requestRerun(testPaths?: string[]): Promise<void> {
+    async requestRerun(
+      testPaths?: string[],
+      updateSnapshot?: ExecutorRunCycleOptions['updateSnapshot'],
+    ): Promise<void> {
       // Core arms rerun shortcuts only after startup establishes the session.
-      await watchSession!.requestRerun(testPaths);
+      await watchSession!.requestRerun(testPaths, updateSnapshot);
     },
     async collect(opts): Promise<{ list: ListCommandResult[] }> {
       const pending = listBrowserTests(context, {

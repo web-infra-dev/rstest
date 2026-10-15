@@ -9,6 +9,7 @@ import {
   logger,
 } from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
@@ -67,7 +68,10 @@ type HeadedSchedulerDeps = {
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<unknown[]>,
+    execute: (
+      testPaths: string[],
+      updateSnapshot: SnapshotUpdateState,
+    ) => Promise<unknown[]>,
   ) => BrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
@@ -664,7 +668,11 @@ export const createHeadedScheduler = async ({
     // the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
-    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
+    const runScope = async (
+      testPaths: string[],
+      updateSnapshot: SnapshotUpdateState,
+    ): Promise<unknown[]> => {
+      await refreshHostConfig(updateSnapshot);
       rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
       // nothing this cycle does can change what it runs or which patterns it
@@ -685,18 +693,22 @@ export const createHeadedScheduler = async ({
      * observe live per-rerun values ('u' flips updateSnapshot between reruns);
      * `setContainerOptions` keeps full container reloads in sync.
      */
-    const refreshHostConfig = async (): Promise<void> => {
+    const refreshHostConfig = async (
+      updateSnapshot: SnapshotUpdateState,
+    ): Promise<void> => {
       const refreshedHostOptions: BrowserHostConfig = {
         ...hostOptions,
         snapshot: {
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
+          updateSnapshot,
         },
       };
       runtime.setContainerOptions(refreshedHostOptions);
       await rpcManager.updateHostConfig(refreshedHostOptions);
     };
 
-    const runDispatchRerunOnce = async (): Promise<void> => {
+    const runDispatchRerunOnce = async (
+      updateSnapshot?: SnapshotUpdateState,
+    ): Promise<void> => {
       // Exactly one of `signalInvalidation` / `logWatchReady` must run on
       // every exit path: a rejection escaping after the file-set commit (for
       // example the frame-set wait timing out) would otherwise leave watch
@@ -704,10 +716,7 @@ export const createHeadedScheduler = async ({
       // disconnect to show for it.
       try {
         // Independent: config push to the container vs. local entry collection.
-        const [, newProjectEntries] = await Promise.all([
-          refreshHostConfig(),
-          collectProjectEntries(),
-        ]);
+        const newProjectEntries = await collectProjectEntries();
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
           previousTestFiles: watchState.lastTestFiles,
@@ -739,6 +748,8 @@ export const createHeadedScheduler = async ({
           rerunPlan.decision.kind === 'empty'
             ? []
             : rerunPlan.decision.testPaths,
+          undefined,
+          updateSnapshot,
         );
       } catch (error) {
         logWatchReady();
@@ -750,12 +761,11 @@ export const createHeadedScheduler = async ({
     // `onAfterDevCompile`, and two interleaved planning passes would race on
     // the drain-once affected set and the file-set commit.
     const dispatchRerunQueue = createHeadedSerialTaskQueue();
-    watchSignals.setDispatchRerun(() =>
-      dispatchRerunQueue.enqueue(runDispatchRerunOnce),
+    watchSignals.setDispatchRerun((updateSnapshot) =>
+      dispatchRerunQueue.enqueue(() => runDispatchRerunOnce(updateSnapshot)),
     );
 
     runUiRequestedRerun = async (file, testNamePattern) => {
-      await refreshHostConfig();
       const { cycle } = await watchSignals.signalInvalidation(
         [file.testPath],
         () => {

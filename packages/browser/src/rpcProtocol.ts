@@ -1,3 +1,5 @@
+import type { SnapshotUpdateState } from '@vitest/snapshot';
+
 export type BrowserLocatorText =
   | { type: 'string'; value: string }
   | { type: 'regexp'; source: string; flags?: string };
@@ -89,6 +91,8 @@ export type BrowserRpcRequest = {
   timeout?: number;
   /** Whether timeout was explicitly supplied to the element matcher. */
   timeoutIsExplicit?: boolean;
+  /** Snapshot update policy captured from the runner config for this request. */
+  snapshotUpdate?: SnapshotUpdateState;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -190,6 +194,20 @@ export const validateBrowserRpcRequest = (
       );
     }
     request.timeoutIsExplicit = timeoutIsExplicit;
+  }
+
+  const snapshotUpdate = payload.snapshotUpdate;
+  if (snapshotUpdate !== undefined) {
+    if (
+      snapshotUpdate !== 'all' &&
+      snapshotUpdate !== 'new' &&
+      snapshotUpdate !== 'none'
+    ) {
+      throw new Error(
+        'Invalid browser RPC request: snapshotUpdate must be all, new, or none',
+      );
+    }
+    request.snapshotUpdate = snapshotUpdate;
   }
 
   return request;
