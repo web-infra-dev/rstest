@@ -38,11 +38,10 @@ import {
  * the browser host's file-set diff); the rest are the CLI shortcuts whose whole
  * request lives in the options object — on the node side. The browser host
  * resolves every trigger it owns through the same file-set diff, a shortcut's
- * `requestRerun` included, so every browser cycle arrives as `'invalidation'`
- * and this identity cannot separate them. Harmless only while the browser
- * executor drops the one option a fold could leak; see
- * {@link WatchCycleOptions.updateSnapshot}. The `t`/`p` shortcuts and the browser
- * initial cycle carry no trigger and so never fold: `t`/`p` bind a pattern or
+ * `requestRerun` included, so every browser cycle arrives as `'invalidation'`;
+ * cycle-specific state such as `updateSnapshot` still travels with that cycle.
+ * The `t`/`p` shortcuts and the browser initial cycle carry no trigger and so
+ * never fold: `t`/`p` bind a pattern or
  * filter that lives on `context`, outside the options a fold would union, so
  * two of them are not the same request even when their options match. (The node
  * initial cycle is not in that group — it arrives as `'invalidation'`, because
@@ -59,19 +58,10 @@ export type WatchCycleOptions = {
   outcome?: ExecutorCycleOutcome;
   /**
    * Only for a trigger that asks for one, which is the `u` shortcut. Left out,
-   * a cycle takes the session's configured value — the `u` handler also flips
-   * the live `snapshotManager` flag, for the browser host's per-page reads, and
-   * a node cycle no `u` selected files for must not pick that flip up and
-   * rewrite their snapshots.
-   *
-   * Node-side only, and the qualifier is load-bearing: the browser executor
-   * drops this option on a watch rerun and its host re-reads the live flag per
-   * page load, so a browser cycle queued inside the `u` hold window still runs
-   * under `'all'`. Recorded at the drop site in `browserExecutor.runCycle`,
-   * together with the fold hazard that closing it has to settle: trigger kind is
-   * erased on the browser side, so nothing here can tell a `u` rerun from a
-   * rebuild, and a cycle that honored this option without also making that
-   * difference visible would fold the two.
+   * a cycle takes the session's configured value. The `u` handler also flips
+   * the live `snapshotManager` option for node snapshot APIs, but executors use
+   * this cycle-scoped value so unrelated queued cycles cannot inherit the
+   * update window.
    */
   updateSnapshot?: SnapshotUpdateState;
   /**
@@ -202,10 +192,9 @@ export function createWatchCycleDriver({
   isSessionClosing: () => boolean;
 }): WatchCycleDriver {
   let buildId = 0;
-  // The session's configured value, read before any cycle can run. The `u`
-  // shortcut is the only thing that ever writes the live flag, and it writes it
-  // for the browser host's per-page reads — so this, not the live read, is what
-  // a cycle without an explicit `updateSnapshot` is entitled to.
+  // The session's configured value, read before any cycle can run. A cycle
+  // without an explicit update policy keeps this value even while `u` briefly
+  // changes the live snapshot manager option for compatibility with node runs.
   const sessionUpdateSnapshot = context.snapshotManager.options.updateSnapshot;
   // Reads the *current* buffer at emit time, so a browser cycle's events land
   // in the run buffer this loop rotated in for it.
@@ -417,7 +406,10 @@ export interface WatchSessionTargets {
   };
   browser?: {
     /** Ask the browser host to schedule a cycle over these paths. */
-    rerun: (testPaths?: string[]) => Promise<void>;
+    rerun: (
+      testPaths?: string[],
+      updateSnapshot?: SnapshotUpdateState,
+    ) => Promise<void>;
   };
 }
 
@@ -481,7 +473,7 @@ export function createWatchShortcutHandlers(
     browserPaths?: string[],
   ): Promise<void> => {
     await node?.runCycle(options);
-    await browser?.rerun(browserPaths);
+    await browser?.rerun(browserPaths, options.updateSnapshot);
   };
 
   return {

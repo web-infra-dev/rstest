@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -20,12 +20,11 @@ describe('browser mode - watch CLI shortcuts', () => {
     const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
     const { cli } = result;
 
-    // ========== Initial run: seeded snapshot mismatch ==========
+    // ========== Initial run creates the first screenshot reference ==========
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Test Files 1 failed | 1 passed');
+    expect(cli.stdout).toMatch('Test Files 2 passed');
     await cli.waitForStdout('Waiting for file changes...');
-    // Unmatched snapshot switches the ready hint to the `u` variant.
-    await cli.waitForStdout('press u to update snapshot');
+    expect(cli.stdout).not.toContain('press u to update snapshot');
 
     // The stdin owner installs right after the initial watch run resolves;
     // give it a beat before the first keystroke.
@@ -40,9 +39,26 @@ describe('browser mode - watch CLI shortcuts', () => {
     // t/p are not plumbed through the browser rerun pipeline yet.
     expect(cli.stdout).toMatch('not yet supported in browser watch');
 
+    // Change the captured content so the existing PNG reference mismatches.
+    const screenshotTestPath = path.join(
+      fixturesTargetPath,
+      'tests/snap.test.ts',
+    );
+    const originalTest = readFileSync(screenshotTestPath, 'utf8');
+    const changedTest = originalTest.replace(
+      'rgb(20, 80, 180)',
+      'rgb(180, 40, 20)',
+    );
+    expect(changedTest).not.toBe(originalTest);
+    writeFileSync(screenshotTestPath, changedTest);
+    await cli.waitForStdout('File changed, re-running tests...');
+    await cli.waitForStdout('Test Files 1 failed | 1 passed');
+    await cli.waitForStdout('Waiting for file changes...');
+    await cli.waitForStdout('press u to update snapshot');
+
     // ========== `f` reruns only the failed file ==========
-    // The snapshot is still stale here (before `u`), so the failed set is
-    // exactly the snapshot file, and it fails again.
+    // The screenshot reference is stale, so the failed set is exactly the
+    // screenshot file, and it fails again.
     cli.resetStd();
     cli.exec.process!.stdin!.write('f');
     await cli.waitForStdout('Re-running 1 affected test file(s)');
@@ -50,28 +66,51 @@ describe('browser mode - watch CLI shortcuts', () => {
     await cli.waitForStdout('Waiting for file changes...');
     expect(cli.stdout).not.toContain('basic.test.ts');
 
-    // ========== `u` reruns the unmatched file and updates the snapshot ==========
+    // Add a test while its compile is in flight, then request the screenshot
+    // update before the watcher has planned the new file set. The new test must
+    // still run after the scoped update cycle.
+    const addedTestPath = path.join(
+      fixturesTargetPath,
+      'tests/added-during-update.test.ts',
+    );
+    writeFileSync(
+      addedTestPath,
+      `import { expect, test } from '@rstest/core';
+
+test('runs a file added during screenshot update', () => {
+  expect('added').toBe('added');
+});
+`,
+    );
+    await cli.waitForStdout('File changed, re-running tests...');
+
+    // ========== `u` reruns the unmatched file and creates its PNG reference ==========
     cli.resetStd();
     cli.exec.process!.stdin!.write('u');
-    await cli.waitForStdout('Re-running 1 affected test file(s)');
+    await cli.waitForStdout(
+      /(?:Re-running 1 affected test file\(s\)|Test file set changed, re-running 1 file\(s\))/,
+    );
     await cli.waitForStdout('✓ tests/snap.test.ts');
+    await cli.waitForStdout('✓ tests/added-during-update.test.ts');
     await cli.waitForStdout('Waiting for file changes...');
-    expect(
-      readFileSync(
-        path.join(fixturesTargetPath, 'tests/__snapshots__/snap.test.ts.snap'),
-        'utf8',
-      ),
-    ).toContain('"fresh"');
+    const screenshotFiles = readdirSync(
+      path.join(fixturesTargetPath, 'tests/__screenshots__'),
+      { recursive: true },
+    );
+    expect(screenshotFiles.some((name) => String(name).endsWith('.png'))).toBe(
+      true,
+    );
 
     // ========== `a` reruns every test file ==========
     cli.resetStd();
     cli.exec.process!.stdin!.write('a');
-    await cli.waitForStdout('Re-running 2 affected test file(s)');
+    await cli.waitForStdout('Re-running 3 affected test file(s)');
     await cli.waitForStdout('✓ tests/snap.test.ts');
     await cli.waitForStdout('✓ tests/basic.test.ts');
+    await cli.waitForStdout('✓ tests/added-during-update.test.ts');
     await cli.waitForStdout('Waiting for file changes...');
 
-    // The initial snapshot failure keeps the process non-zero even though the
+    // The screenshot failure keeps the process non-zero even though the
     // update and later rerun pass.
     cli.exec.process!.stdin!.write('q');
     await result.expectExecFailed();

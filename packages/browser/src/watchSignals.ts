@@ -3,6 +3,7 @@ import {
   type ExecutorInvalidationCallback,
   logger,
 } from '@rstest/core/internal/browser';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
 
 /**
  * The handover between this host's rerun triggers and core's watch-cycle
@@ -13,6 +14,7 @@ import {
  * branch is running.
  */
 export type WatchSignals = ReturnType<typeof createWatchSignals>;
+export type RequestedTestPaths = string[] | 'all';
 
 export const createWatchSignals = (
   onInvalidate: ExecutorInvalidationCallback | undefined,
@@ -21,7 +23,12 @@ export const createWatchSignals = (
   // (headless/headed) is driving this run: resolve this rebuild's scope, then
   // hand it to core's invalidation subscriber. Populated after the initial
   // cycle.
-  let dispatchRerun: (() => Promise<void>) | undefined;
+  let dispatchRerun:
+    | ((
+        updateSnapshot?: SnapshotUpdateState,
+        requestedTestPaths?: RequestedTestPaths,
+      ) => Promise<void>)
+    | undefined;
 
   /**
    * Latest-wins interrupt, installed by the run branch whose in-flight run can
@@ -41,12 +48,37 @@ export const createWatchSignals = (
    */
   let signalledCycle: Promise<void> | undefined;
 
+  const runInvalidation = (
+    fileFilters: string[],
+    updateSnapshot?: SnapshotUpdateState,
+  ): Promise<void> =>
+    Promise.resolve(
+      onInvalidate?.({
+        isFirstBuild: false,
+        fileFilters,
+        ...(updateSnapshot === undefined ? {} : { updateSnapshot }),
+      }),
+    ).then(
+      () => {},
+      (error) => {
+        logger.error(color.red('Browser Mode watch cycle failed:'), error);
+      },
+    );
+
   return {
-    setDispatchRerun(fn: () => Promise<void>): void {
+    setDispatchRerun(
+      fn: (
+        updateSnapshot?: SnapshotUpdateState,
+        requestedTestPaths?: RequestedTestPaths,
+      ) => Promise<void>,
+    ): void {
       dispatchRerun = fn;
     },
-    async runDispatchRerun(): Promise<void> {
-      await dispatchRerun?.();
+    async runDispatchRerun(
+      updateSnapshot?: SnapshotUpdateState,
+      requestedTestPaths?: RequestedTestPaths,
+    ): Promise<void> {
+      await dispatchRerun?.(updateSnapshot, requestedTestPaths);
     },
     setInterrupt(fn: () => Promise<void>): void {
       interruptInFlightRun = fn;
@@ -84,7 +116,9 @@ export const createWatchSignals = (
        * the handover — after any interrupt, so no queued cycle can be dequeued in
        * between and read it. The headed rerun's per-file test-name pattern is the
        * one such state; core's cycle options cannot carry it, so the only thing
-       * that makes it the property of one cycle is claiming it here.
+       * that makes it the property of one cycle is claiming it here. The
+       * snapshot policy is passed through the invalidation hint below, so core
+       * can attach it to the queued cycle.
        *
        * Returns a handle to the cycle THIS signal started (still not awaited
        * here — see above). A caller with state to restore must await the
@@ -92,19 +126,22 @@ export const createWatchSignals = (
        * can be overwritten by a concurrent trigger between signal and wait.
        */
       claimScope?: () => void,
+      updateSnapshot?: SnapshotUpdateState,
     ): Promise<{ cycle: Promise<void> }> {
       await interruptInFlightRun?.();
       claimScope?.();
-      const cycle = Promise.resolve(
-        onInvalidate?.({ isFirstBuild: false, fileFilters }),
-      ).then(
-        () => {},
-        (error) => {
-          logger.error(color.red('Browser Mode watch cycle failed:'), error);
-        },
-      );
+      const cycle = runInvalidation(fileFilters, updateSnapshot);
       signalledCycle = cycle;
       return { cycle };
+    },
+    queueInvalidationAfter(
+      cycle: Promise<void>,
+      fileFilters: string[],
+      updateSnapshot?: SnapshotUpdateState,
+    ): void {
+      signalledCycle = cycle.then(() =>
+        runInvalidation(fileFilters, updateSnapshot),
+      );
     },
     async awaitSignalledCycle(): Promise<void> {
       await signalledCycle;

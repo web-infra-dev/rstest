@@ -5,7 +5,9 @@
  */
 import { setTimeout as delay } from 'node:timers/promises';
 import type { FrameLocator, Locator, Page } from 'playwright';
+import { PNG } from 'pngjs';
 import {
+  supportedScreenshotMatchers,
   supportedExpectElementMatchers,
   supportedLocatorActions,
 } from '../../browserRpcRegistry';
@@ -17,22 +19,37 @@ import type {
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
 
+const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
+
 // ---------------------------------------------------------------------------
 // Iframe lookup
 // ---------------------------------------------------------------------------
 
 const escapeCssAttrValue = (value: string): string => {
-  // Minimal escaping for use in CSS attribute selectors with single quotes.
-  // https://www.w3.org/TR/selectors-4/#attribute-representation
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return value
+    .replace(/[\\']/g, '\\$&')
+    .split('')
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      if (code === 0) {
+        return '\uFFFD';
+      }
+      return code <= 0x1f || code === 0x7f
+        ? `\\${code.toString(16)} `
+        : character;
+    })
+    .join('');
 };
 
 const getRunnerFrame = async (
   containerPage: Page,
   testPath: string,
+  projectName: string,
   timeoutMs: number,
 ): Promise<FrameLocator> => {
-  const selector = `iframe[data-test-file='${escapeCssAttrValue(testPath)}']`;
+  const selector =
+    `iframe[data-test-file='${escapeCssAttrValue(testPath)}']` +
+    `[data-test-project='${escapeCssAttrValue(projectName)}']`;
   const iframe = containerPage.locator(selector);
 
   const count = await iframe.count();
@@ -40,10 +57,16 @@ const getRunnerFrame = async (
     const known = await containerPage
       .locator('iframe[data-test-file]')
       .evaluateAll((nodes) =>
-        nodes.map((n) => (n as HTMLIFrameElement).dataset.testFile),
+        nodes.map((n) => {
+          const iframe = n as HTMLIFrameElement;
+          return {
+            testPath: iframe.dataset.testFile,
+            projectName: iframe.dataset.testProject,
+          };
+        }),
       );
     throw new Error(
-      `Runner iframe not found for testPath: ${JSON.stringify(testPath)}. ` +
+      `Runner iframe not found for testPath ${JSON.stringify(testPath)} and project ${JSON.stringify(projectName)}. ` +
         `Known iframes: ${JSON.stringify(known)}. ` +
         `Timeout: ${timeoutMs}ms`,
     );
@@ -160,6 +183,142 @@ const assertStringArg = (
     throw new Error(`${matcherName} expects ${label}`);
   }
   return value;
+};
+
+const captureStableScreenshot = async (
+  locator: Locator,
+  options: Record<string, unknown>,
+  requestDeadline: number | undefined,
+): Promise<Buffer> => {
+  const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
+  if (
+    typeof stabilityTimeout !== 'number' ||
+    !Number.isFinite(stabilityTimeout) ||
+    stabilityTimeout < 0 ||
+    (stabilityTimeout > 0 &&
+      stabilityTimeout < MIN_SCREENSHOT_STABILITY_TIMEOUT)
+  ) {
+    throw new Error(
+      `toMatchScreenshot stabilityTimeout must be 0 or at least ${MIN_SCREENSHOT_STABILITY_TIMEOUT}ms.`,
+    );
+  }
+  const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
+  const capture = (deadline = requestDeadline) => {
+    const timeout = deadline ? deadline - Date.now() : undefined;
+    if (timeout !== undefined && timeout <= 0) {
+      throw new Error('Screenshot capture exceeded the active test timeout.');
+    }
+    return locator.screenshot({
+      ...screenshotOptions,
+      ...(timeout === undefined ? {} : { timeout }),
+    } as any);
+  };
+  let previous = await capture();
+  if (stabilityTimeout === 0) return previous;
+
+  const stabilityDeadline = Date.now() + stabilityTimeout;
+  while (
+    Date.now() < stabilityDeadline &&
+    (!requestDeadline || Date.now() < requestDeadline)
+  ) {
+    const requestDelay = requestDeadline
+      ? requestDeadline - Date.now()
+      : Number.POSITIVE_INFINITY;
+    const delay = Math.min(50, stabilityDeadline - Date.now(), requestDelay);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    if (requestDeadline && Date.now() >= requestDeadline) {
+      throw new Error('Screenshot capture exceeded the active test timeout.');
+    }
+    if (Date.now() >= stabilityDeadline) {
+      throw new Error(
+        `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
+      );
+    }
+    const captureDeadline = requestDeadline
+      ? Math.min(requestDeadline, stabilityDeadline)
+      : stabilityDeadline;
+    const current = await capture(captureDeadline);
+    if (Date.now() >= stabilityDeadline) {
+      throw new Error(
+        `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
+      );
+    }
+    const before = PNG.sync.read(previous);
+    const after = PNG.sync.read(current);
+    if (
+      before.width === after.width &&
+      before.height === after.height &&
+      before.data.equals(after.data)
+    ) {
+      return current;
+    }
+    previous = current;
+  }
+
+  throw new Error(
+    `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
+  );
+};
+
+const readScreenshotOptions = async (
+  root: FrameLocator | Page,
+  value: unknown,
+): Promise<Record<string, unknown>> => {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('toMatchScreenshot options must be an object.');
+  }
+  const options = { ...(value as Record<string, unknown>) };
+  const supportedOptions = new Set([
+    'threshold',
+    'maxDiffPixels',
+    'maxDiffPixelRatio',
+    'stabilityTimeout',
+    'mask',
+    'maskColor',
+    'style',
+    'caret',
+    'scale',
+    'omitBackground',
+  ]);
+  const unsupportedOption = Object.keys(options).find(
+    (key) => !supportedOptions.has(key),
+  );
+  if (unsupportedOption) {
+    throw new Error(
+      `Unsupported toMatchScreenshot option: ${unsupportedOption}`,
+    );
+  }
+
+  const mask = options.mask;
+  delete options.mask;
+  if (mask !== undefined) {
+    if (!Array.isArray(mask)) {
+      throw new Error('toMatchScreenshot mask must be an array of Locators.');
+    }
+    options.mask = mask.map((item) => {
+      if (!item || typeof item !== 'object') {
+        throw new Error('toMatchScreenshot mask must contain Locators.');
+      }
+      return compilePlaywrightLocator(root, item as BrowserLocatorIR);
+    });
+  }
+
+  return {
+    ...(options.stabilityTimeout === undefined
+      ? {}
+      : { stabilityTimeout: options.stabilityTimeout }),
+    ...(options.mask === undefined ? {} : { mask: options.mask }),
+    ...(options.maskColor === undefined
+      ? {}
+      : { maskColor: options.maskColor }),
+    ...(options.style === undefined ? {} : { style: options.style }),
+    ...(options.caret === undefined ? {} : { caret: options.caret }),
+    ...(options.scale === undefined ? {} : { scale: options.scale }),
+    ...(options.omitBackground === undefined
+      ? {}
+      : { omitBackground: options.omitBackground }),
+  };
 };
 
 /** Simple boolean state matchers — no extra args. */
@@ -400,6 +559,7 @@ export async function dispatchPlaywrightBrowserRpc({
 
   const timeout =
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
+  const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
   const locatorRoot = runnerPage
     ? runnerPage
@@ -409,12 +569,26 @@ export async function dispatchPlaywrightBrowserRpc({
             throw new Error('Browser container page is not initialized');
           })(),
         testPath,
-        timeout,
+        request.projectName,
+        timeout > 0 ? timeout : 0,
       );
   const locator = compilePlaywrightLocator(
     locatorRoot,
     request.locator as BrowserLocatorIR,
   );
+
+  if (request.kind === 'screenshot') {
+    if (!supportedScreenshotMatchers.has(request.method)) {
+      throw new Error(`Screenshot matcher not supported: ${request.method}`);
+    }
+    const options = await readScreenshotOptions(locatorRoot, request.args[1]);
+    const screenshot = await captureStableScreenshot(
+      locator,
+      options,
+      requestDeadline,
+    );
+    return screenshot.toString('base64');
+  }
 
   if (request.kind === 'locator') {
     if (!supportedLocatorActions.has(request.method)) {

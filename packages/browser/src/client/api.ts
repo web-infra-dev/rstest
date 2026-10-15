@@ -1,5 +1,14 @@
-import { registerElementExpect } from '@rstest/core/internal/browser-runtime';
-import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
+import { expect } from '@rstest/core';
+import {
+  getCurrentTestTimeout,
+  registerElementExpect,
+} from '@rstest/core/internal/browser-runtime';
+import type {
+  BrowserLocatorText,
+  BrowserRpcRequest,
+  ScreenshotMatchOutcome,
+} from '../rpcProtocol';
+import type { ToMatchScreenshotOptions } from './augmentExpect';
 import type { BrowserElementExpect } from './augmentExpect';
 import { callBrowserRpc } from './browserRpc';
 import {
@@ -13,6 +22,8 @@ import {
 const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
   return serializeText(value);
 };
+
+const screenshotAssertionCounts = new WeakMap<object, number>();
 
 const createElementExpect = (
   locator: Locator,
@@ -32,7 +43,7 @@ const createElementExpect = (
       isNot,
       timeout: getTimeout(timeout),
       timeoutIsExplicit: timeout !== undefined,
-    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
   };
 
   const api: Omit<BrowserElementExpect, 'not'> = {
@@ -165,6 +176,100 @@ const element = (
 };
 
 registerElementExpect(element);
+
+expect.extend({
+  async toMatchScreenshot(
+    received: unknown,
+    name?: string,
+    options?: ToMatchScreenshotOptions,
+  ) {
+    if (this.isNot) {
+      throw new Error('toMatchScreenshot() does not support .not.');
+    }
+    if (!isLocator(received)) {
+      throw new TypeError(
+        'toMatchScreenshot() expects a Locator returned from @rstest/browser.',
+      );
+    }
+
+    const assertion = Reflect.get(this, 'assertion');
+    const hasAssertionFlag = (flag: string): boolean =>
+      Object.prototype.hasOwnProperty.call(assertion, flag) &&
+      Reflect.get(assertion, flag) === true;
+    const isConcurrentTest =
+      hasAssertionFlag('rstestCurrentTestConcurrent') ||
+      Reflect.get(this, 'rstestCurrentTestConcurrent') === true;
+    const testCase = Object.prototype.hasOwnProperty.call(
+      assertion,
+      'rstestTestCase',
+    )
+      ? Reflect.get(assertion, 'rstestTestCase')
+      : undefined;
+    const defaultName = this.currentTestName;
+    const screenshotName =
+      name ??
+      (isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
+        ? undefined
+        : testCase && defaultName
+          ? `${defaultName}${testCase.screenshotNameSuffix ?? ''}`
+          : defaultName);
+    if (!screenshotName) {
+      throw new Error(
+        'toMatchScreenshot() must be called inside a non-concurrent test or given a name.',
+      );
+    }
+
+    let screenshotAssertionOrdinal: number | undefined;
+    if (name === undefined) {
+      const isTestScoped =
+        testCase && (!isConcurrentTest || hasAssertionFlag('rstestTestScoped'));
+      if (isTestScoped) {
+        const attemptContext = Reflect.get(testCase, 'context');
+        const attemptSignal = Reflect.get(attemptContext, 'signal');
+        const assertionOwner =
+          attemptSignal && typeof attemptSignal === 'object'
+            ? attemptSignal
+            : testCase;
+        const previousCount =
+          screenshotAssertionCounts.get(assertionOwner) ?? 0;
+        screenshotAssertionCounts.set(assertionOwner, previousCount + 1);
+        if (previousCount > 0) {
+          screenshotAssertionOrdinal = previousCount + 1;
+        }
+      }
+    }
+
+    const mask = options?.mask ?? [];
+    if (!mask.every(isLocator)) {
+      throw new TypeError(
+        'toMatchScreenshot mask must contain browser-mode Locators.',
+      );
+    }
+    const { mask: _mask, ...serializedOptions } = options ?? {};
+
+    await callBrowserRpc<ScreenshotMatchOutcome>({
+      kind: 'screenshot',
+      locator: received.ir,
+      method: 'toMatchScreenshot',
+      timeout: getCurrentTestTimeout(
+        isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
+          ? undefined
+          : testCase,
+      ),
+      snapshotUpdate:
+        window.__RSTEST_BROWSER_OPTIONS__?.snapshot.updateSnapshot,
+      args: [
+        screenshotName,
+        { ...serializedOptions, mask: mask.map((item) => item.ir) },
+        ...(screenshotAssertionOrdinal === undefined
+          ? []
+          : [screenshotAssertionOrdinal]),
+      ],
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
+
+    return { pass: true, message: () => '' };
+  },
+});
 
 export type {
   BrowserPage,

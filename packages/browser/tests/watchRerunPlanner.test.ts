@@ -34,6 +34,30 @@ describe('watch rerun planner', () => {
     });
   });
 
+  it('keeps update shortcuts scoped when the test file set changes', () => {
+    const plan = planWatchRerun({
+      projectEntries: [
+        {
+          project: { name: 'project-a' },
+          testFiles: ['/a.test.ts', '/b.test.ts', '/new.test.ts'],
+        },
+      ],
+      previousTestFiles: [
+        { testPath: '/a.test.ts', projectName: 'project-a' },
+        { testPath: '/b.test.ts', projectName: 'project-a' },
+      ],
+      affectedTestFiles: [],
+      requestedTestPaths: ['/a.test.ts'],
+    });
+
+    expect(plan.decision).toEqual({
+      kind: 'rerun',
+      testPaths: ['/a.test.ts'],
+      message: 'Test file set changed, re-running 1 file(s)...\n',
+    });
+    expect(plan.deferredTestPaths).toEqual(['/new.test.ts']);
+  });
+
   it('should preserve all project entries for affected test paths', () => {
     const projectEntries = [
       {
@@ -83,6 +107,30 @@ describe('watch rerun planner', () => {
       decision: {
         kind: 'idle',
         message: 'No affected browser test files detected, skipping re-run.\n',
+      },
+    });
+  });
+
+  it('should match Windows paths without regard to drive or segment case', () => {
+    const testPath = 'D:/a/rstest/tests/snap.test.ts';
+    const plan = planWatchRerun({
+      projectEntries: [
+        { project: { name: 'project-a' }, testFiles: [testPath] },
+      ],
+      previousTestFiles: [
+        {
+          testPath: 'd:\\A\\RSTEST\\tests\\snap.test.ts',
+          projectName: 'project-a',
+        },
+      ],
+      affectedTestFiles: ['d:\\a\\rstest\\tests\\snap.test.ts'],
+    });
+
+    expect(plan).toEqual({
+      decision: {
+        kind: 'rerun',
+        testPaths: [testPath],
+        message: 'Re-running 1 affected test file(s)...\n',
       },
     });
   });

@@ -359,6 +359,23 @@ describe('RunnerRuntime', () => {
       expect(a!.timeout).toBe(99);
       expect(b!.timeout).toBe(88);
     });
+
+    it('marks tests with the same emitted title as duplicate screenshots', async () => {
+      const instance = createApi();
+      runtimeAPI.describe('a > b', () => {
+        runtimeAPI.it('c', () => {});
+      });
+      runtimeAPI.describe('a', () => {
+        runtimeAPI.it('b > c', () => {});
+      });
+
+      const tests = (await instance.getTests()) as TestSuite[];
+      const firstTest = tests[0]!.tests[0] as TestCase;
+      const secondTest = tests[1]!.tests[0] as TestCase;
+
+      expect(firstTest.screenshotNameSuffix).toBe(' [duplicate 1]');
+      expect(secondTest.screenshotNameSuffix).toBe(' [duplicate 2]');
+    });
   });
 
   describe('describe TestOptions second argument', () => {

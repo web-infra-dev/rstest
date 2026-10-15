@@ -407,7 +407,7 @@ export class Locator {
       locator: this.ir,
       method,
       args,
-    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
   }
 }
 
@@ -454,5 +454,5 @@ export const setTestIdAttribute = async (attribute: string): Promise<void> => {
     locator: { steps: [] },
     method: 'setTestIdAttribute',
     args: [attribute],
-  } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
+  } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);
 };

@@ -1,10 +1,17 @@
 import { describe, expect, it } from '@rstest/core';
+import { PNG } from 'pngjs';
 import type { BrowserRpcRequest } from '../src/protocol';
 import { dispatchPlaywrightBrowserRpc } from '../src/providers/playwright/dispatchBrowserRpc';
 
 class FakeLocator {
   actionCalls: Array<{ method: string; args: unknown[] }> = [];
   expectCalls: Array<{ method: string; options: Record<string, unknown> }> = [];
+  screenshotCalls: Array<Record<string, unknown>> = [];
+  screenshotImplementation = async (): Promise<Buffer> => {
+    const png = new PNG({ width: 1, height: 1 });
+    png.data.set([20, 80, 180, 255]);
+    return PNG.sync.write(png);
+  };
 
   locator(): FakeLocator {
     return this;
@@ -46,6 +53,11 @@ class FakeLocator {
     this.expectCalls.push({ method, options });
     return { matches: !options.isNot };
   }
+
+  async screenshot(options: Record<string, unknown>): Promise<Buffer> {
+    this.screenshotCalls.push(options);
+    return this.screenshotImplementation();
+  }
 }
 
 class FakePage {
@@ -56,12 +68,28 @@ class FakePage {
   }
 }
 
+class FakeContainerPage {
+  selector = '';
+  readonly frame = new FakeLocator();
+
+  locator(selector: string) {
+    this.selector = selector;
+    return { count: async () => 1 };
+  }
+
+  frameLocator(selector: string) {
+    this.selector = selector;
+    return this.frame;
+  }
+}
+
 const createRequest = (
   overrides: Partial<BrowserRpcRequest>,
 ): BrowserRpcRequest => {
   return {
     id: 'rpc-1',
     testPath: '/tests/example.test.ts',
+    projectName: 'default',
     kind: 'locator',
     locator: { steps: [{ type: 'locator', selector: '#root' }] },
     method: 'click',
@@ -113,6 +141,193 @@ describe('dispatchPlaywrightBrowserRpc', () => {
       timeout: 900,
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it('routes headed requests to the iframe for their project', async () => {
+    const containerPage = new FakeContainerPage();
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: containerPage as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        projectName: 'project-a',
+        args: ['button', { stabilityTimeout: 0 }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(containerPage.selector).toContain("[data-test-project='project-a']");
+  });
+
+  it('escapes control characters in headed project selectors', async () => {
+    const containerPage = new FakeContainerPage();
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: containerPage as any,
+      request: createRequest({
+        projectName: "project\nname\r\f'\\",
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(containerPage.selector).toContain(
+      String.raw`[data-test-project='project\a name\d \c \'\\']`,
+    );
+  });
+
+  it('bounds screenshot capture by the request timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 25,
+        args: ['button', { stabilityTimeout: 0 }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(1);
+    expect(fakeLocator.screenshotCalls[0]?.timeout).toBeLessThanOrEqual(25);
+  });
+
+  it('rejects unsupported screenshot options before Playwright capture', async () => {
+    const fakeLocator = new FakeLocator();
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button', { path: '/outside/reference.png' }],
+        }),
+        timeoutFallbackMs: 500,
+      }),
+    ).rejects.toThrow('Unsupported toMatchScreenshot option: path');
+    expect(fakeLocator.screenshotCalls).toHaveLength(0);
+  });
+
+  it('rejects positive stability windows shorter than the capture minimum', async () => {
+    const fakeLocator = new FakeLocator();
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button', { stabilityTimeout: 50 }],
+        }),
+        timeoutFallbackMs: 500,
+      }),
+    ).rejects.toThrow('stabilityTimeout must be 0 or at least 100ms');
+    expect(fakeLocator.screenshotCalls).toHaveLength(0);
+  });
+
+  it('does not add a deadline when screenshot timeouts are disabled', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 0,
+        args: ['button', { stabilityTimeout: 0 }],
+      }),
+      timeoutFallbackMs: 0,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(1);
+    expect(fakeLocator.screenshotCalls[0]).not.toHaveProperty('timeout');
+  });
+
+  it('starts the stability window after the initial capture', async () => {
+    const fakeLocator = new FakeLocator();
+    let captures = 0;
+    fakeLocator.screenshotImplementation = async () => {
+      captures += 1;
+      if (captures === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 550));
+      }
+      const png = new PNG({ width: 1, height: 1 });
+      png.data.set([20, 80, 180, 255]);
+      return PNG.sync.write(png);
+    };
+
+    const result = await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 2000,
+        args: ['button', { stabilityTimeout: 500 }],
+      }),
+      timeoutFallbackMs: 2000,
+    });
+
+    expect(typeof result).toBe('string');
+    expect(captures).toBe(2);
+  });
+
+  it('allows slow follow-up captures with the default stability timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 3000,
+        args: ['button'],
+      }),
+      timeoutFallbackMs: 3000,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(2);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeGreaterThan(500);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeLessThanOrEqual(2000);
+  });
+
+  it('bounds follow-up captures by the remaining stability timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        timeout: 2000,
+        args: ['button', { stabilityTimeout: 1000 }],
+      }),
+      timeoutFallbackMs: 2000,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(2);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeLessThanOrEqual(1000);
+    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeGreaterThan(0);
+  });
+
+  it('rejects a follow-up capture that returns after the stability timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    const captureScreenshot = fakeLocator.screenshotImplementation;
+    let captures = 0;
+    fakeLocator.screenshotImplementation = async () => {
+      captures += 1;
+      if (captures === 2) {
+        await new Promise((resolve) => setTimeout(resolve, 275));
+      }
+      return captureScreenshot();
+    };
+
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          timeout: 2000,
+          args: ['button', { stabilityTimeout: 250 }],
+        }),
+        timeoutFallbackMs: 2000,
+      }),
+    ).rejects.toThrow('did not become stable within 250ms');
   });
 
   it('normalizes zero expect timeouts for Playwright', async () => {

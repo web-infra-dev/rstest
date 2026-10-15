@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -31,6 +32,7 @@ import {
   type UserConsoleLog,
 } from '@rstest/core/internal/browser';
 import { dirname, join, normalize } from 'pathe';
+import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
@@ -55,12 +57,20 @@ import {
 } from './browserV8Coverage';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
+import {
+  matchBrowserScreenshot,
+  ScreenshotMismatchError,
+  type ScreenshotMatchOptions,
+  type ScreenshotMatchOutcome,
+} from './screenshotSnapshots';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
   BrowserProjectRuntime,
   BrowserRpcRequest,
   RunnerEnvelope,
+  SnapshotRpcMethod,
+  SnapshotRpcMethodResult,
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
@@ -126,11 +136,23 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
 
 const resolveProviderForTestPath = ({
   testPath,
+  projectName,
   browserProjects,
 }: {
   testPath: string;
+  projectName?: string;
   browserProjects: BrowserProviderProject[];
 }): BrowserProvider => {
+  if (projectName) {
+    const project = browserProjects.find((item) => item.name === projectName);
+    if (!project) {
+      throw new Error(
+        `Cannot resolve browser provider for project: ${JSON.stringify(projectName)}`,
+      );
+    }
+    return project.provider;
+  }
+
   const normalizedTestPath = normalize(testPath);
   const sortedProjects = [...browserProjects].sort(
     (a, b) => b.rootPath.length - a.rootPath.length,
@@ -482,28 +504,16 @@ export const runBrowserController = async (
     };
   }
 
-  // Mark files as pending-affected so the next trigger reruns them through the
-  // normal plan/cycle pipeline (used by explicit rerun requests; omitted paths
-  // = all current files). Returns the number of seeded files so a path-scoped
-  // request matching no browser test file can skip the rerun entirely (mixed
-  // watch 'u' with node-only snapshot updates must produce no browser cycle).
-  const seedPendingRerun = (testPaths?: string[]): number => {
+  // A path-scoped shortcut must match a browser entry. Keep its paths on the
+  // dispatch call instead of putting them in the shared compiler-change set:
+  // an overlapping rebuild can drain that set before the shortcut is planned.
+  const hasMatchingTestPath = (testPaths: string[]): boolean => {
     const wanted = testPaths
-      ? new Set(testPaths.map((testPath) => normalize(testPath)))
-      : null;
-    let seeded = 0;
-    for (const file of watchState.lastTestFiles) {
-      if (wanted && !wanted.has(file.testPath)) {
-        continue;
-      }
-      const pending =
-        watchState.pendingAffectedTestFiles.get(file.projectName) ??
-        new Set<string>();
-      pending.add(file.testPath);
-      watchState.pendingAffectedTestFiles.set(file.projectName, pending);
-      seeded += 1;
-    }
-    return seeded;
+      ? new Set(testPaths.map((testPath) => getTestPathKey(testPath)))
+      : new Set<string>();
+    return watchState.lastTestFiles.some((file) =>
+      wanted.has(getTestPathKey(file.testPath)),
+    );
   };
 
   /**
@@ -572,9 +582,12 @@ export const runBrowserController = async (
    * is what lets the headed transport claim its cycle scope inside it.
    */
   const createWatchSession = (
-    execute: (testPaths: string[]) => Promise<unknown[]>,
+    execute: (
+      testPaths: string[],
+      updateSnapshot: BrowserHostConfig['snapshot']['updateSnapshot'],
+    ) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
-    runCycle: async (testPaths) => {
+    runCycle: async (testPaths, updateSnapshot) => {
       // Signalled by a rebuild that ended in `compiler.hooks.failed`: nothing
       // was emitted, so this cycle reports the failure instead of rerunning
       // tests.
@@ -598,7 +611,7 @@ export const runBrowserController = async (
       let rawCoverage: unknown[] = [];
 
       try {
-        rawCoverage = await execute(testPaths);
+        rawCoverage = await execute(testPaths, updateSnapshot);
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
         // cycle either way, and its results belong in the report even when the
@@ -618,12 +631,11 @@ export const runBrowserController = async (
             : undefined,
       });
     },
-    requestRerun: async (testPaths) => {
-      const seeded = seedPendingRerun(testPaths);
-      if (testPaths && seeded === 0) {
+    requestRerun: async (testPaths, updateSnapshot) => {
+      if (testPaths && !hasMatchingTestPath(testPaths)) {
         return;
       }
-      await watchSignals.runDispatchRerun();
+      await watchSignals.runDispatchRerun(updateSnapshot, testPaths ?? 'all');
       await watchSignals.awaitSignalledCycle();
     },
   });
@@ -691,6 +703,12 @@ export const runBrowserController = async (
   );
 
   const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
+  const screenshotCountsByFile = new Map<
+    string,
+    Record<ScreenshotMatchOutcome | 'unmatched', number>
+  >();
+  const initialSnapshotUpdate =
+    options?.updateSnapshot ?? context.snapshotManager.options.updateSnapshot;
 
   const projectRunnerUrls = Object.fromEntries(
     [...runtime.projectServers].map(([name, server]) => [
@@ -703,9 +721,7 @@ export const runBrowserController = async (
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
     snapshot: {
-      updateSnapshot:
-        options?.updateSnapshot ??
-        context.snapshotManager.options.updateSnapshot,
+      updateSnapshot: initialSnapshotUpdate,
     },
     // Container origin (fallback). Per-project runner origins below.
     runnerUrl: containerRunnerUrl,
@@ -717,6 +733,7 @@ export const runBrowserController = async (
 
   const browserProviderProjects: BrowserProviderProject[] = browserProjects.map(
     (project) => ({
+      name: project.name,
       rootPath: normalize(project.rootPath),
       provider: project.normalizedConfig.browser.provider,
     }),
@@ -775,8 +792,15 @@ export const runBrowserController = async (
     target?: BrowserDispatchRequest['target'];
   }): Promise<unknown> => {
     const timeoutFallbackMs = maxTestTimeoutForRpc;
+    const screenshotTimeout =
+      request.kind === 'screenshot'
+        ? (request.timeout ?? timeoutFallbackMs)
+        : 0;
+    const screenshotDeadline =
+      screenshotTimeout > 0 ? Date.now() + screenshotTimeout : undefined;
     const provider = resolveProviderForTestPath({
       testPath: request.testPath,
+      projectName: request.projectName,
       browserProjects: browserProviderProjects,
     });
     const implementation = implementationByProvider.get(provider);
@@ -797,13 +821,79 @@ export const runBrowserController = async (
     }
 
     try {
-      return await implementation.dispatchRpc({
+      const result = await implementation.dispatchRpc({
         containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
         request,
         timeoutFallbackMs,
       });
+
+      if (request.kind === 'screenshot') {
+        const [testName] = request.args;
+        const screenshotAssertionOrdinal = request.args[2];
+        if (typeof result !== 'string' || typeof testName !== 'string') {
+          throw new Error('Invalid screenshot matcher response.');
+        }
+        if (
+          screenshotAssertionOrdinal !== undefined &&
+          (typeof screenshotAssertionOrdinal !== 'number' ||
+            !Number.isInteger(screenshotAssertionOrdinal) ||
+            screenshotAssertionOrdinal < 2)
+        ) {
+          throw new Error('Invalid screenshot assertion ordinal.');
+        }
+        const outcome = await matchBrowserScreenshot({
+          snapshotStore: {
+            read: (filepath) =>
+              runSnapshotRpc({
+                id: `${request.id}:snapshot-read`,
+                method: 'readSnapshotBinaryFile',
+                args: { filepath },
+              }),
+            save: (filepath, contentBase64, deadline) =>
+              snapshotRpcMethods.saveSnapshotBinaryFile(
+                filepath,
+                contentBase64,
+                deadline,
+              ),
+            remove: (filepath, deadline) =>
+              snapshotRpcMethods.removeSnapshotFile(filepath, deadline),
+          },
+          testPath: request.testPath,
+          projectName: request.projectName,
+          testName,
+          browserName,
+          screenshotBase64: result,
+          updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
+          options: request.args[1] as ScreenshotMatchOptions | undefined,
+          deadline: screenshotDeadline,
+          screenshotAssertionOrdinal,
+        });
+        const key = trackerKey(request.projectName, request.testPath);
+        const counts = screenshotCountsByFile.get(key) ?? {
+          added: 0,
+          updated: 0,
+          matched: 0,
+          unmatched: 0,
+        };
+        counts[outcome] += 1;
+        screenshotCountsByFile.set(key, counts);
+        return outcome;
+      }
+
+      return result;
     } catch (error) {
+      if (error instanceof ScreenshotMismatchError) {
+        const key = trackerKey(request.projectName, request.testPath);
+        const counts = screenshotCountsByFile.get(key) ?? {
+          added: 0,
+          updated: 0,
+          matched: 0,
+          unmatched: 0,
+        };
+        counts.unmatched += 1;
+        screenshotCountsByFile.set(key, counts);
+      }
       // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
       if (error instanceof Error) {
         throw error.message;
@@ -909,12 +999,52 @@ export const runBrowserController = async (
         return null;
       }
     },
+    async readSnapshotBinaryFile(filepath: string): Promise<string | null> {
+      try {
+        return (await fs.readFile(filepath)).toString('base64');
+      } catch {
+        return null;
+      }
+    },
     async saveSnapshotFile(filepath: string, content: string): Promise<void> {
       const dir = dirname(filepath);
       await fs.mkdir(dir, { recursive: true });
       await fs.writeFile(filepath, content, 'utf-8');
     },
-    async removeSnapshotFile(filepath: string): Promise<void> {
+    async saveSnapshotBinaryFile(
+      filepath: string,
+      contentBase64: string,
+      deadline?: number,
+    ): Promise<void> {
+      const dir = dirname(filepath);
+      await fs.mkdir(dir, { recursive: true });
+      if (deadline !== undefined && Date.now() >= deadline) {
+        throw new Error(
+          'Screenshot assertion exceeded the active test timeout.',
+        );
+      }
+      const temporaryPath = join(dir, `.${randomUUID()}.tmp`);
+      try {
+        await fs.writeFile(temporaryPath, Buffer.from(contentBase64, 'base64'));
+        if (deadline !== undefined && Date.now() >= deadline) {
+          throw new Error(
+            'Screenshot assertion exceeded the active test timeout.',
+          );
+        }
+        await fs.rename(temporaryPath, filepath);
+      } finally {
+        await fs.rm(temporaryPath, { force: true });
+      }
+    },
+    async removeSnapshotFile(
+      filepath: string,
+      deadline?: number,
+    ): Promise<void> {
+      if (deadline !== undefined && Date.now() >= deadline) {
+        throw new Error(
+          'Screenshot assertion exceeded the active test timeout.',
+        );
+      }
       try {
         await fs.unlink(filepath);
       } catch {
@@ -926,6 +1056,9 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
+    screenshotCountsByFile.delete(
+      trackerKey(payload.projectName, payload.testPath),
+    );
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
         trace: {
@@ -1018,6 +1151,28 @@ export const runBrowserController = async (
   const handleTestFileComplete = async (
     payload: TestFileResult,
   ): Promise<void> => {
+    const key = trackerKey(payload.project, payload.testPath);
+    const screenshotCounts = screenshotCountsByFile.get(key);
+    screenshotCountsByFile.delete(key);
+    if (screenshotCounts) {
+      const snapshotResult = payload.snapshotResult ?? {
+        filepath: payload.testPath,
+        added: 0,
+        fileDeleted: false,
+        matched: 0,
+        unchecked: 0,
+        uncheckedKeys: [],
+        unmatched: 0,
+        updated: 0,
+      };
+      payload.snapshotResult = {
+        ...snapshotResult,
+        added: snapshotResult.added + screenshotCounts.added,
+        updated: snapshotResult.updated + screenshotCounts.updated,
+        matched: snapshotResult.matched + screenshotCounts.matched,
+        unmatched: snapshotResult.unmatched + screenshotCounts.unmatched,
+      };
+    }
     reporterResults.push(payload);
     context.updateReporterResultState([payload], payload.results);
 
@@ -1075,18 +1230,26 @@ export const runBrowserController = async (
     fatalErrorRef.current = error;
   };
 
-  const runSnapshotRpc = async (
-    request: SnapshotRpcRequest,
-  ): Promise<unknown> => {
+  function runSnapshotRpc<M extends SnapshotRpcMethod>(
+    request: Extract<SnapshotRpcRequest, { method: M }>,
+  ): Promise<SnapshotRpcMethodResult[M]>;
+  async function runSnapshotRpc(request: SnapshotRpcRequest): Promise<unknown> {
     switch (request.method) {
       case 'resolveSnapshotPath':
         return snapshotRpcMethods.resolveSnapshotPath(request.args.testPath);
       case 'readSnapshotFile':
         return snapshotRpcMethods.readSnapshotFile(request.args.filepath);
+      case 'readSnapshotBinaryFile':
+        return snapshotRpcMethods.readSnapshotBinaryFile(request.args.filepath);
       case 'saveSnapshotFile':
         return snapshotRpcMethods.saveSnapshotFile(
           request.args.filepath,
           request.args.content,
+        );
+      case 'saveSnapshotBinaryFile':
+        return snapshotRpcMethods.saveSnapshotBinaryFile(
+          request.args.filepath,
+          request.args.contentBase64,
         );
       case 'removeSnapshotFile':
         return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
@@ -1097,7 +1260,7 @@ export const runBrowserController = async (
         return _exhaustive;
       }
     }
-  };
+  }
 
   const createDispatchRouter = (options?: HostDispatchRouterOptions) => {
     return createHostDispatchRouter({

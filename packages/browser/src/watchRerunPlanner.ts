@@ -1,5 +1,6 @@
 import { normalize } from 'pathe';
 import type { TestFileInfo } from './protocol';
+import { getTestPathKey } from './pathUtils';
 
 type WatchPlannerProjectEntry = {
   project: {
@@ -12,6 +13,7 @@ type WatchRerunPlannerInput = {
   projectEntries: WatchPlannerProjectEntry[];
   previousTestFiles: TestFileInfo[];
   affectedTestFiles: string[];
+  requestedTestPaths?: string[] | 'all';
 };
 
 type WatchFileSetUpdate = {
@@ -36,12 +38,13 @@ type WatchRerunDecision =
 
 type WatchRerunPlan = {
   fileSetUpdate?: WatchFileSetUpdate;
+  deferredTestPaths?: string[];
   decision: WatchRerunDecision;
 };
 
 const serializeTestFiles = (files: TestFileInfo[]): string => {
   return JSON.stringify(
-    files.map((f) => `${f.projectName}:${f.testPath}`).sort(),
+    files.map((f) => `${f.projectName}:${getTestPathKey(f.testPath)}`).sort(),
   );
 };
 
@@ -53,17 +56,23 @@ const normalizeTestFiles = (files: TestFileInfo[]): TestFileInfo[] => {
 };
 
 const collectTestPaths = (files: TestFileInfo[]): string[] => {
-  return [...new Set(files.map((file) => file.testPath))];
+  return [
+    ...new Map(
+      files.map((file) => [getTestPathKey(file.testPath), file.testPath]),
+    ).values(),
+  ];
 };
 
 const collectDeletedTestPaths = (
   previous: TestFileInfo[],
   current: TestFileInfo[],
 ): string[] => {
-  const currentPathSet = new Set(current.map((file) => file.testPath));
+  const currentPathSet = new Set(
+    current.map((file) => getTestPathKey(file.testPath)),
+  );
   return previous
     .map((file) => file.testPath)
-    .filter((testPath) => !currentPathSet.has(testPath));
+    .filter((testPath) => !currentPathSet.has(getTestPathKey(testPath)));
 };
 
 export const collectWatchTestFiles = (
@@ -81,6 +90,7 @@ export const planWatchRerun = ({
   projectEntries,
   previousTestFiles,
   affectedTestFiles,
+  requestedTestPaths,
 }: WatchRerunPlannerInput): WatchRerunPlan => {
   const currentTestFiles = collectWatchTestFiles(projectEntries);
   const normalizedPrevious = normalizeTestFiles(previousTestFiles);
@@ -89,6 +99,17 @@ export const planWatchRerun = ({
     serializeTestFiles(normalizedPrevious);
 
   if (fileSetChanged) {
+    const previousFileSet = new Set(
+      normalizedPrevious.map(
+        (file) => `${file.projectName}:${getTestPathKey(file.testPath)}`,
+      ),
+    );
+    const addedTestFiles = currentTestFiles.filter(
+      (file) =>
+        !previousFileSet.has(
+          `${file.projectName}:${getTestPathKey(file.testPath)}`,
+        ),
+    );
     const fileSetUpdate = {
       currentTestFiles,
       deletedTestPaths: collectDeletedTestPaths(
@@ -106,21 +127,64 @@ export const planWatchRerun = ({
       };
     }
 
+    const requestedPathSet =
+      requestedTestPaths === undefined || requestedTestPaths === 'all'
+        ? undefined
+        : new Set(
+            requestedTestPaths.map((testPath) => getTestPathKey(testPath)),
+          );
+    const testPaths =
+      requestedPathSet === undefined
+        ? collectTestPaths(currentTestFiles)
+        : collectTestPaths(
+            currentTestFiles.filter(({ testPath }) =>
+              requestedPathSet.has(getTestPathKey(testPath)),
+            ),
+          );
+    const deferredTestPaths =
+      requestedPathSet === undefined
+        ? []
+        : collectTestPaths(
+            addedTestFiles.filter(
+              ({ testPath }) => !requestedPathSet.has(getTestPathKey(testPath)),
+            ),
+          );
+
+    if (testPaths.length === 0) {
+      return {
+        fileSetUpdate,
+        decision: {
+          kind: 'idle',
+          message: 'No requested browser test files remain after update.\n',
+        },
+      };
+    }
+
     return {
       fileSetUpdate,
+      ...(deferredTestPaths.length > 0 ? { deferredTestPaths } : {}),
       decision: {
         kind: 'rerun',
-        testPaths: collectTestPaths(currentTestFiles),
-        message: `Test file set changed, re-running ${currentTestFiles.length} file(s)...\n`,
+        testPaths,
+        message: `Test file set changed, re-running ${testPaths.length} file(s)...\n`,
       },
     };
   }
 
-  const affectedPathSet = new Set(
-    affectedTestFiles.map((testFile) => normalize(testFile)),
-  );
+  const requestedPathSet =
+    requestedTestPaths === undefined || requestedTestPaths === 'all'
+      ? undefined
+      : new Set(requestedTestPaths.map((testPath) => getTestPathKey(testPath)));
+  const affectedPathSet = new Set([
+    ...affectedTestFiles.map((testFile) => getTestPathKey(testFile)),
+    ...(requestedTestPaths === 'all'
+      ? collectTestPaths(currentTestFiles).map((testPath) =>
+          getTestPathKey(testPath),
+        )
+      : (requestedPathSet ?? [])),
+  ]);
   const matchedAffectedFiles = currentTestFiles.filter(({ testPath }) =>
-    affectedPathSet.has(testPath),
+    affectedPathSet.has(getTestPathKey(testPath)),
   );
   if (matchedAffectedFiles.length === 0) {
     return {

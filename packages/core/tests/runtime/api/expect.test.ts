@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {
   createExpect,
   createFileExpect,
+  getCurrentTestTimeout,
   setupChaiConfig,
   registerElementExpect,
 } from '../../../src/runtime/api/expect';
@@ -520,6 +521,20 @@ describe('file-level expect singleton (isolate: false)', () => {
     (fileExpect as typeof fileExpect & ElementExpect).element('locator');
 
     expect(timeout).toBe(1000);
+  });
+
+  it('uses the pinned test deadline for concurrent assertions', () => {
+    publishFile('/f2', 't2', true);
+    const test = {
+      timeout: 1000,
+      startTime: Date.now() - 200,
+      concurrent: true,
+    } as unknown as TestCase;
+
+    const timeout = getCurrentTestTimeout(test);
+
+    expect(timeout).toBeGreaterThan(500);
+    expect(timeout).toBeLessThanOrEqual(850);
   });
 });
 

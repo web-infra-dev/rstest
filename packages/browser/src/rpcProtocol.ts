@@ -1,3 +1,5 @@
+import type { SnapshotUpdateState } from '@vitest/snapshot';
+
 export type BrowserLocatorText =
   | { type: 'string'; value: string }
   | { type: 'regexp'; source: string; flags?: string };
@@ -70,11 +72,15 @@ export type BrowserLocatorIR = {
   steps: BrowserLocatorStep[];
 };
 
+export type ScreenshotMatchOutcome = 'added' | 'updated' | 'matched';
+
 export type BrowserRpcRequest = {
   id: string;
   /** Absolute test file path for locating runner iframe */
   testPath: string;
-  kind: 'locator' | 'expect' | 'config';
+  /** Project identity; paths alone do not distinguish overlapping projects. */
+  projectName: string;
+  kind: 'locator' | 'expect' | 'screenshot' | 'config';
   locator: BrowserLocatorIR;
   method: string;
   args: unknown[];
@@ -87,6 +93,8 @@ export type BrowserRpcRequest = {
   timeout?: number;
   /** Whether timeout was explicitly supplied to the element matcher. */
   timeoutIsExplicit?: boolean;
+  /** Snapshot update policy captured from the runner config for this request. */
+  snapshotUpdate?: SnapshotUpdateState;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -143,7 +151,12 @@ export const validateBrowserRpcRequest = (
   }
 
   const kind = readString(payload, 'kind', 'kind');
-  if (kind !== 'locator' && kind !== 'expect' && kind !== 'config') {
+  if (
+    kind !== 'locator' &&
+    kind !== 'expect' &&
+    kind !== 'screenshot' &&
+    kind !== 'config'
+  ) {
     throw new Error(
       `Invalid browser RPC request: unsupported kind ${JSON.stringify(kind)}`,
     );
@@ -152,6 +165,7 @@ export const validateBrowserRpcRequest = (
   const request: BrowserRpcRequest = {
     id: readString(payload, 'id', 'id'),
     testPath: readString(payload, 'testPath', 'testPath'),
+    projectName: readString(payload, 'projectName', 'projectName'),
     kind,
     locator: parseBrowserLocatorIR(payload.locator, 'locator'),
     method: readString(payload, 'method', 'method'),
@@ -184,6 +198,20 @@ export const validateBrowserRpcRequest = (
     request.timeoutIsExplicit = timeoutIsExplicit;
   }
 
+  const snapshotUpdate = payload.snapshotUpdate;
+  if (snapshotUpdate !== undefined) {
+    if (
+      snapshotUpdate !== 'all' &&
+      snapshotUpdate !== 'new' &&
+      snapshotUpdate !== 'none'
+    ) {
+      throw new Error(
+        'Invalid browser RPC request: snapshotUpdate must be all, new, or none',
+      );
+    }
+    request.snapshotUpdate = snapshotUpdate;
+  }
+
   return request;
 };
 
@@ -196,8 +224,19 @@ export const validateBrowserRpcRequest = (
 export type SnapshotRpcMethodArgs = {
   resolveSnapshotPath: { testPath: string };
   readSnapshotFile: { filepath: string };
+  readSnapshotBinaryFile: { filepath: string };
   saveSnapshotFile: { filepath: string; content: string };
+  saveSnapshotBinaryFile: { filepath: string; contentBase64: string };
   removeSnapshotFile: { filepath: string };
+};
+
+export type SnapshotRpcMethodResult = {
+  resolveSnapshotPath: string;
+  readSnapshotFile: string | null;
+  readSnapshotBinaryFile: string | null;
+  saveSnapshotFile: void;
+  saveSnapshotBinaryFile: void;
+  removeSnapshotFile: void;
 };
 
 export type SnapshotRpcMethod = keyof SnapshotRpcMethodArgs;

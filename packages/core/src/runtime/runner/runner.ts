@@ -1019,6 +1019,7 @@ export class TestRunner {
           expect = createExpect({
             getWorkerState: () => this.workerState!,
             getCurrentTest: () => current,
+            isTestScoped: true,
           });
           this.localExpects.set(context, expect);
         }
@@ -1109,6 +1110,7 @@ export class TestRunner {
       testPath: toNativePath(test.testPath),
       snapshotState,
       currentTestName: getTaskNameWithPrefix(test),
+      rstestCurrentTestConcurrent: test.concurrent || test.inConcurrentScope,
     });
 
     const context = this.createTestContext(test, retryCount);

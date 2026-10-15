@@ -4,6 +4,8 @@ description: expect.element is the API for Locator assertions in Browser Mode. I
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Assertion
 
 `expect.element` is the API for [Locator](/api/runtime-api/browser-mode/locator) assertions in Browser Mode. It accepts a `Locator` and returns a chainable assertion object. Unlike `expect(value)` which primarily compares JS values, `expect.element` targets the real element state on the page, suitable for verifying visibility, text, form values, count, and other user-observable results.
@@ -40,6 +42,48 @@ test('asserts element states in browser mode', async () => {
 ```ts
 expect.element(locator: Locator): BrowserElementExpect
 ```
+
+## Screenshot matching
+
+<ApiMeta addedVersion="0.12.4" />
+
+With the Playwright provider, `expect(locator).toMatchScreenshot()` captures a Locator and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against it; pass `--update` to replace existing references intentionally.
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('save button matches its visual reference', async () => {
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+});
+```
+
+References are stored as PNG files under `__screenshots__`, grouped by project and test file. By default, the current test name is used as the reference name; pass a name to reuse or distinguish a reference explicitly:
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
+  'primary-save-button',
+);
+```
+
+When using the shared file-level `expect` in `test.concurrent`, pass a screenshot name explicitly. A test-scoped `expect` fixture can use the default test name. Screenshot matchers do not support `.not`.
+
+Screenshot references include the browser and operating system in their file names. Use the optional second argument to tune pixel tolerance, wait for stable captures, and mask dynamic content:
+
+```ts
+await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+  threshold: 0.1,
+  maxDiffPixels: 20,
+  stabilityTimeout: 1000,
+  mask: [page.locator('[data-testid="updated-at"]')],
+});
+```
+
+`stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture.
+
+`maxDiffPixelRatio` can be used instead of `maxDiffPixels` to allow a fraction of pixels to differ. The default allows no differing pixels after applying the per-pixel `threshold`. `--update` creates missing references and replaces only references that differ. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; actual and diff images are written under a sibling `__failures__` directory.
+
+Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, capture has no test deadline; `stabilityTimeout` still limits how long Rstest waits for consecutive captures to match.
 
 ## Auto-retry and timeout
 

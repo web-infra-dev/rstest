@@ -53,6 +53,8 @@ export type TestCaseInfo = {
   testId: string;
   testPath: TestPath;
   name: string;
+  /** @internal Set only when another test has the same full title. */
+  screenshotNameSuffix?: string;
   timeout?: number;
   parentNames?: string[];
   project: string;

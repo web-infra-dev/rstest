@@ -31,7 +31,11 @@ import {
   ROOT_SUITE_NAME,
   SYNTHETIC_STACK_ERROR_MESSAGE,
 } from '../../utils/constants';
-import { generateFilePathHash, isPlainObject } from '../../utils/helper';
+import {
+  generateFilePathHash,
+  getTaskNameWithPrefix,
+  isPlainObject,
+} from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import {
   formatName,
@@ -379,6 +383,35 @@ export class RunnerRuntime {
   async getTests(): Promise<Test[]> {
     while (this.currentCollectList.length > 0) {
       await this.collectCurrentTest();
+    }
+
+    const duplicateTitles = new Map<string, TestCase[]>();
+    const collectDuplicateTitles = (tests: Test[], parentNames: string[]) => {
+      for (const test of tests) {
+        if (test.type === 'suite') {
+          collectDuplicateTitles(test.tests, [...parentNames, test.name]);
+          continue;
+        }
+
+        const title = getTaskNameWithPrefix({
+          name: test.name,
+          parentNames,
+        });
+        const duplicates = duplicateTitles.get(title) ?? [];
+        duplicates.push(test);
+        duplicateTitles.set(title, duplicates);
+      }
+    };
+    collectDuplicateTitles(this.tests, []);
+
+    for (const duplicates of duplicateTitles.values()) {
+      if (duplicates.length < 2) {
+        continue;
+      }
+
+      duplicates.forEach((test, index) => {
+        test.screenshotNameSuffix = ` [duplicate ${index + 1}]`;
+      });
     }
 
     return this.tests;

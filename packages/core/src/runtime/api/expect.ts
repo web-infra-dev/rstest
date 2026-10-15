@@ -137,12 +137,15 @@ const EXPECT_BOOKKEEPING_STATE = {
 
 export const resetExpectState = (
   expect: RstestExpect,
-  state: Partial<MatcherState>,
+  state: Partial<MatcherState> & { rstestCurrentTestConcurrent?: boolean },
 ): void => {
   setState<MatcherState>(EXPECT_BOOKKEEPING_STATE, expect);
   // Keep this separate from the bookkeeping reset: setState preserves getters
   // such as the file-level testPath binding, while object spread would not.
-  setState<MatcherState>(state, expect);
+  setState<MatcherState & { rstestCurrentTestConcurrent?: boolean }>(
+    state,
+    expect,
+  );
 };
 
 /**
@@ -176,6 +179,25 @@ let elementExpectHandler: ElementExpectHandler | undefined;
 
 export const registerElementExpect = (handler: ElementExpectHandler): void => {
   elementExpectHandler = handler;
+};
+
+export const getCurrentTestTimeout = (test?: TestCase): number | undefined => {
+  const { testRunner } = fileContext();
+  const activeTimeoutContext = testRunner.getCurrentTimeoutContext();
+  const timeoutContext =
+    test ?? activeTimeoutContext ?? testRunner.getCurrentTest();
+  if (!timeoutContext) {
+    return undefined;
+  }
+  const currentTimeout = timeoutContext.activeTimeout ?? timeoutContext.timeout;
+  if (currentTimeout === 0) return 0;
+  if (
+    !test &&
+    (timeoutContext.concurrent || timeoutContext.inConcurrentScope)
+  ) {
+    return undefined;
+  }
+  return getRemainingTestTimeout(timeoutContext, TEST_TIMEOUT_BUFFER);
 };
 
 // Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
@@ -529,6 +551,7 @@ export function createExpect({
   getElementTest,
   getWorkerState,
   snapshotPlugin,
+  isTestScoped = false,
 }: {
   /**
    * Resolved at call time, never captured: the file-level singleton passes a
@@ -540,6 +563,7 @@ export function createExpect({
   getCurrentTest: () => TestCase | undefined;
   getElementTest?: () => TestCase | TestSuite | undefined;
   snapshotPlugin?: ChaiPlugin;
+  isTestScoped?: boolean;
 }): RstestExpect {
   if (snapshotPlugin) {
     use(snapshotPlugin);
@@ -551,6 +575,15 @@ export function createExpect({
     const assert = chaiExpect(value, message) as unknown as Assertion;
     const _test = getCurrentTest();
     if (_test) {
+      Reflect.set(assert, 'rstestTestCase', _test);
+    }
+    if (isTestScoped) {
+      Reflect.set(assert, 'rstestTestScoped', true);
+    }
+    if (_test) {
+      if (_test.concurrent || _test.inConcurrentScope) {
+        Reflect.set(assert, 'rstestCurrentTestConcurrent', true);
+      }
       // @ts-expect-error internal
       return assert.withTest(_test) as Assertion;
     }

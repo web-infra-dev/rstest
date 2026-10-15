@@ -16,6 +16,46 @@ const createRunnerCallbacks = () => {
 };
 
 describe('dispatch capabilities', () => {
+  it('routes binary screenshot storage through the snapshot namespace', async () => {
+    const runSnapshotRpc = rstest.fn().mockResolvedValue('png-base64');
+    const router = createHostDispatchRouter({
+      runnerCallbacks: createRunnerCallbacks(),
+      runSnapshotRpc,
+    });
+
+    const result = await router.dispatch({
+      requestId: 'screenshot-read-1',
+      namespace: 'snapshot',
+      method: 'readSnapshotBinaryFile',
+      args: { filepath: '/tests/__screenshots__/reference.png' },
+    });
+
+    expect(result.result).toBe('png-base64');
+    expect(runSnapshotRpc).toHaveBeenCalledWith({
+      id: 'screenshot-read-1',
+      method: 'readSnapshotBinaryFile',
+      args: { filepath: '/tests/__screenshots__/reference.png' },
+    });
+
+    await router.dispatch({
+      requestId: 'screenshot-save-1',
+      namespace: 'snapshot',
+      method: 'saveSnapshotBinaryFile',
+      args: {
+        filepath: '/tests/__screenshots__/reference.png',
+        contentBase64: 'png-base64',
+      },
+    });
+    expect(runSnapshotRpc).toHaveBeenLastCalledWith({
+      id: 'screenshot-save-1',
+      method: 'saveSnapshotBinaryFile',
+      args: {
+        filepath: '/tests/__screenshots__/reference.png',
+        contentBase64: 'png-base64',
+      },
+    });
+  });
+
   it('should route runner lifecycle methods through runner namespace', async () => {
     const callbacks = createRunnerCallbacks();
     const router = createHostDispatchRouter({

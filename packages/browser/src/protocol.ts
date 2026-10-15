@@ -13,6 +13,7 @@ export type {
   SnapshotRpcCall,
   SnapshotRpcMethod,
   SnapshotRpcMethodArgs,
+  SnapshotRpcMethodResult,
   SnapshotRpcRequest,
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';
@@ -115,6 +116,8 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
+  /** Project identity for the currently loaded runner page. */
+  projectName?: string;
   /** Test files assigned to one browser worker session. */
   testFiles?: string[];
   /**

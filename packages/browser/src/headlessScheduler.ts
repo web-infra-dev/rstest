@@ -8,7 +8,8 @@ import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   logger,
 } from '@rstest/core/internal/browser';
-import { normalize } from 'pathe';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
+import { getTestPathKey } from './pathUtils';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
@@ -83,11 +84,17 @@ type HeadlessSchedulerDeps = {
   };
   watchSignals: Pick<
     WatchSignals,
-    'setDispatchRerun' | 'setInterrupt' | 'signalInvalidation'
+    | 'setDispatchRerun'
+    | 'setInterrupt'
+    | 'signalInvalidation'
+    | 'queueInvalidationAfter'
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<unknown[]>,
+    execute: (
+      testPaths: string[],
+      updateSnapshot: SnapshotUpdateState,
+    ) => Promise<unknown[]>,
   ) => BrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
@@ -116,6 +123,10 @@ export const createHeadlessScheduler = async ({
   logWatchReady,
   destroyRuntime,
 }: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
+  if (isWatchMode) {
+    watchState.lastTestFiles = allTestFiles;
+  }
+
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
@@ -235,8 +246,10 @@ export const createHeadlessScheduler = async ({
         ? String(payload.testPath)
         : files[0]!.testPath;
     const file =
-      files.find((candidate) => candidate.testPath === normalize(testPath)) ??
-      files[0]!;
+      files.find(
+        (candidate) =>
+          getTestPathKey(candidate.testPath) === getTestPathKey(testPath),
+      ) ?? files[0]!;
     const response = await dispatchRouter.dispatch({
       requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
       runToken: run.token,
@@ -263,6 +276,7 @@ export const createHeadlessScheduler = async ({
     run: ActiveHeadlessRun,
     files: TestFileInfo[],
     rawCoverage: unknown[],
+    updateSnapshot: SnapshotUpdateState,
   ): Promise<void> => {
     if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
       return;
@@ -496,10 +510,11 @@ export const createHeadlessScheduler = async ({
                 return;
               }
               if (message.type === 'file-start') {
-                const startedPath = normalize(message.payload.testPath);
+                const startedPath = getTestPathKey(message.payload.testPath);
                 activeFile =
                   files.find(
-                    (candidate) => candidate.testPath === startedPath,
+                    (candidate) =>
+                      getTestPathKey(candidate.testPath) === startedPath,
                   ) ?? activeFile;
               }
               if (message.type === 'fatal') {
@@ -553,11 +568,8 @@ export const createHeadlessScheduler = async ({
 
       const inlineOptions: BrowserHostConfig = {
         ...hostOptions,
-        // Read live per page load, not from the construction-time
-        // `hostOptions` value: the 'u' shortcut flips
-        // `snapshotManager.options` between reruns.
         snapshot: {
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
+          updateSnapshot,
         },
         testFile: file.testPath,
         testFiles: files.map((item) => item.testPath),
@@ -669,6 +681,7 @@ export const createHeadlessScheduler = async ({
 
   const runFilesWithPool = async (
     files: TestFileInfo[],
+    updateSnapshot: SnapshotUpdateState = hostOptions.snapshot.updateSnapshot,
   ): Promise<unknown[]> => {
     const rawCoverage: unknown[] = [];
     if (files.length === 0) {
@@ -728,7 +741,7 @@ export const createHeadlessScheduler = async ({
             batch.push(queue.shift()!);
           }
         }
-        await runWorkerFiles(run, batch, rawCoverage);
+        await runWorkerFiles(run, batch, rawCoverage, updateSnapshot);
       }
     };
 
@@ -775,33 +788,60 @@ export const createHeadlessScheduler = async ({
     // trigger may have rebuilt the file set without one of these files — so a
     // path that no longer resolves is skipped rather than failing the cycle
     // beside its still-valid siblings.
-    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
-      const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
+    const runScope = async (
+      testPaths: string[],
+      updateSnapshot: SnapshotUpdateState,
+    ): Promise<unknown[]> => {
+      const pathSet = new Set(
+        testPaths.map((testPath) => getTestPathKey(testPath)),
+      );
       return runFilesWithPool(
-        watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
+        watchState.lastTestFiles.filter((file) =>
+          pathSet.has(getTestPathKey(file.testPath)),
+        ),
+        updateSnapshot,
       );
     };
 
-    watchSignals.setDispatchRerun(async () => {
-      const newProjectEntries = await collectProjectEntries();
-      const rerunPlan = planWatchRerun({
-        projectEntries: newProjectEntries,
-        previousTestFiles: watchState.lastTestFiles,
-        affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-      });
+    watchSignals.setDispatchRerun(
+      async (updateSnapshot, requestedTestPaths) => {
+        const newProjectEntries = await collectProjectEntries();
+        const rerunPlan = planWatchRerun({
+          projectEntries: newProjectEntries,
+          previousTestFiles: watchState.lastTestFiles,
+          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+          requestedTestPaths,
+        });
 
-      commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
+        commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
 
-      logger.log(color.cyan(rerunPlan.decision.message));
-      if (rerunPlan.decision.kind === 'idle') {
-        logWatchReady();
-        return;
-      }
+        logger.log(color.cyan(rerunPlan.decision.message));
+        if (rerunPlan.decision.kind === 'idle') {
+          logWatchReady();
+          if (rerunPlan.deferredTestPaths) {
+            watchSignals.queueInvalidationAfter(
+              Promise.resolve(),
+              rerunPlan.deferredTestPaths,
+            );
+          }
+          return;
+        }
 
-      await watchSignals.signalInvalidation(
-        rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths,
-      );
-    });
+        const { cycle } = await watchSignals.signalInvalidation(
+          rerunPlan.decision.kind === 'empty'
+            ? []
+            : rerunPlan.decision.testPaths,
+          undefined,
+          updateSnapshot,
+        );
+        if (rerunPlan.deferredTestPaths) {
+          watchSignals.queueInvalidationAfter(
+            cycle,
+            rerunPlan.deferredTestPaths,
+          );
+        }
+      },
+    );
 
     watchSession = createWatchSession(runScope);
   }
