@@ -9,9 +9,11 @@ import {
 } from '../src/screenshotSnapshots';
 
 describe('matchBrowserScreenshot', () => {
-  const createScreenshot = (): string => {
+  const createScreenshot = (
+    color: [number, number, number, number] = [20, 80, 180, 255],
+  ): string => {
     const png = new PNG({ width: 1, height: 1 });
-    png.data.set([20, 80, 180, 255]);
+    png.data.set(color);
     return PNG.sync.write(png).toString('base64');
   };
 
@@ -72,6 +74,19 @@ describe('matchBrowserScreenshot', () => {
       await expect(
         fs.access(path.join(root, 'tests', '__screenshots__')),
       ).rejects.toThrow();
+    });
+  });
+
+  it('reports whether a screenshot was added, updated, or matched', async () => {
+    await withRoot(async (root) => {
+      expect(await match(root, { updateSnapshot: 'new' })).toBe('added');
+      expect(await match(root, { updateSnapshot: 'none' })).toBe('matched');
+      expect(
+        await match(root, {
+          screenshotBase64: createScreenshot([180, 40, 20, 255]),
+          updateSnapshot: 'all',
+        }),
+      ).toBe('updated');
     });
   });
 

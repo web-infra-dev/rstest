@@ -14,6 +14,7 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
  * branch is running.
  */
 export type WatchSignals = ReturnType<typeof createWatchSignals>;
+export type RequestedTestPaths = string[] | 'all';
 
 export const createWatchSignals = (
   onInvalidate: ExecutorInvalidationCallback | undefined,
@@ -25,7 +26,7 @@ export const createWatchSignals = (
   let dispatchRerun:
     | ((
         updateSnapshot?: SnapshotUpdateState,
-        requestedTestPaths?: string[],
+        requestedTestPaths?: RequestedTestPaths,
       ) => Promise<void>)
     | undefined;
 
@@ -51,14 +52,14 @@ export const createWatchSignals = (
     setDispatchRerun(
       fn: (
         updateSnapshot?: SnapshotUpdateState,
-        requestedTestPaths?: string[],
+        requestedTestPaths?: RequestedTestPaths,
       ) => Promise<void>,
     ): void {
       dispatchRerun = fn;
     },
     async runDispatchRerun(
       updateSnapshot?: SnapshotUpdateState,
-      requestedTestPaths?: string[],
+      requestedTestPaths?: RequestedTestPaths,
     ): Promise<void> {
       await dispatchRerun?.(updateSnapshot, requestedTestPaths);
     },

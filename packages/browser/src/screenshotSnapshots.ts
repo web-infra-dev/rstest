@@ -3,6 +3,7 @@ import pixelmatch from 'pixelmatch';
 import { basename, dirname, join, parse } from 'pathe';
 import { PNG } from 'pngjs';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { ScreenshotMatchOutcome } from './rpcProtocol';
 
 export class ScreenshotMismatchError extends Error {
   constructor(message: string) {
@@ -91,6 +92,8 @@ export type ScreenshotSnapshotStore = {
   ) => Promise<void>;
   remove: (filepath: string, deadline?: number) => Promise<void>;
 };
+
+export type { ScreenshotMatchOutcome };
 
 const throwIfScreenshotDeadlinePassed = (deadline?: number): void => {
   if (deadline !== undefined && Date.now() >= deadline) {
@@ -230,7 +233,7 @@ export const matchBrowserScreenshot = async ({
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
   deadline?: number;
-}): Promise<void> => {
+}): Promise<ScreenshotMatchOutcome> => {
   throwIfScreenshotDeadlinePassed(deadline);
   const normalizedOptions = validateOptions(options);
   const filepath = resolveScreenshotPath(
@@ -255,7 +258,7 @@ export const matchBrowserScreenshot = async ({
     if (updateSnapshot === 'new' || updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
       await removeFailureArtifacts(snapshotStore, filepath, deadline);
-      return;
+      return 'added';
     }
     throw new ScreenshotMismatchError(
       `No screenshot reference found for "${testName}". Run Rstest with --update to create it.\nReference: ${filepath}`,
@@ -270,7 +273,7 @@ export const matchBrowserScreenshot = async ({
     if (updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
       await removeFailureArtifacts(snapshotStore, filepath, deadline);
-      return;
+      return 'updated';
     }
 
     const artifacts = await writeFailureArtifacts({
@@ -289,7 +292,7 @@ export const matchBrowserScreenshot = async ({
     if (updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
       await removeFailureArtifacts(snapshotStore, filepath, deadline);
-      return;
+      return 'updated';
     }
     const artifacts = await writeFailureArtifacts({
       snapshotStore,
@@ -324,7 +327,7 @@ export const matchBrowserScreenshot = async ({
     if (updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
       await removeFailureArtifacts(snapshotStore, filepath, deadline);
-      return;
+      return 'updated';
     }
     const artifacts = await writeFailureArtifacts({
       snapshotStore,
@@ -339,6 +342,7 @@ export const matchBrowserScreenshot = async ({
   }
 
   await removeFailureArtifacts(snapshotStore, filepath, deadline);
+  return 'matched';
 };
 
 const removeFailureArtifacts = async (

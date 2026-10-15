@@ -61,6 +61,7 @@ import {
   matchBrowserScreenshot,
   ScreenshotMismatchError,
   type ScreenshotMatchOptions,
+  type ScreenshotMatchOutcome,
 } from './screenshotSnapshots';
 import type {
   BrowserDispatchRequest,
@@ -634,9 +635,7 @@ export const runBrowserController = async (
       if (testPaths && !hasMatchingTestPath(testPaths)) {
         return;
       }
-      const requestedTestPaths =
-        testPaths ?? watchState.lastTestFiles.map((file) => file.testPath);
-      await watchSignals.runDispatchRerun(updateSnapshot, requestedTestPaths);
+      await watchSignals.runDispatchRerun(updateSnapshot, testPaths ?? 'all');
       await watchSignals.awaitSignalledCycle();
     },
   });
@@ -704,7 +703,10 @@ export const runBrowserController = async (
   );
 
   const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
-  const screenshotUnmatchedByFile = new Map<string, number>();
+  const screenshotCountsByFile = new Map<
+    string,
+    Record<ScreenshotMatchOutcome | 'unmatched', number>
+  >();
   const initialSnapshotUpdate =
     options?.updateSnapshot ?? context.snapshotManager.options.updateSnapshot;
 
@@ -831,7 +833,7 @@ export const runBrowserController = async (
         if (typeof result !== 'string' || typeof testName !== 'string') {
           throw new Error('Invalid screenshot matcher response.');
         }
-        await matchBrowserScreenshot({
+        const outcome = await matchBrowserScreenshot({
           snapshotStore: {
             read: (filepath) =>
               runSnapshotRpc({
@@ -857,17 +859,30 @@ export const runBrowserController = async (
           options: request.args[1] as ScreenshotMatchOptions | undefined,
           deadline: screenshotDeadline,
         });
-        return undefined;
+        const key = trackerKey(request.projectName, request.testPath);
+        const counts = screenshotCountsByFile.get(key) ?? {
+          added: 0,
+          updated: 0,
+          matched: 0,
+          unmatched: 0,
+        };
+        counts[outcome] += 1;
+        screenshotCountsByFile.set(key, counts);
+        return outcome;
       }
 
       return result;
     } catch (error) {
       if (error instanceof ScreenshotMismatchError) {
         const key = trackerKey(request.projectName, request.testPath);
-        screenshotUnmatchedByFile.set(
-          key,
-          (screenshotUnmatchedByFile.get(key) ?? 0) + 1,
-        );
+        const counts = screenshotCountsByFile.get(key) ?? {
+          added: 0,
+          updated: 0,
+          matched: 0,
+          unmatched: 0,
+        };
+        counts.unmatched += 1;
+        screenshotCountsByFile.set(key, counts);
       }
       // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
       if (error instanceof Error) {
@@ -1034,7 +1049,7 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
-    screenshotUnmatchedByFile.delete(
+    screenshotCountsByFile.delete(
       trackerKey(payload.projectName, payload.testPath),
     );
     if (phaseTrackers) {
@@ -1130,9 +1145,9 @@ export const runBrowserController = async (
     payload: TestFileResult,
   ): Promise<void> => {
     const key = trackerKey(payload.project, payload.testPath);
-    const screenshotUnmatched = screenshotUnmatchedByFile.get(key) ?? 0;
-    screenshotUnmatchedByFile.delete(key);
-    if (screenshotUnmatched > 0) {
+    const screenshotCounts = screenshotCountsByFile.get(key);
+    screenshotCountsByFile.delete(key);
+    if (screenshotCounts) {
       const snapshotResult = payload.snapshotResult ?? {
         filepath: payload.testPath,
         added: 0,
@@ -1145,7 +1160,10 @@ export const runBrowserController = async (
       };
       payload.snapshotResult = {
         ...snapshotResult,
-        unmatched: snapshotResult.unmatched + screenshotUnmatched,
+        added: snapshotResult.added + screenshotCounts.added,
+        updated: snapshotResult.updated + screenshotCounts.updated,
+        matched: snapshotResult.matched + screenshotCounts.matched,
+        unmatched: snapshotResult.unmatched + screenshotCounts.unmatched,
       };
     }
     reporterResults.push(payload);

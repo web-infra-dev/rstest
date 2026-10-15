@@ -34,6 +34,29 @@ describe('watch rerun planner', () => {
     });
   });
 
+  it('keeps update shortcuts scoped when the test file set changes', () => {
+    const plan = planWatchRerun({
+      projectEntries: [
+        {
+          project: { name: 'project-a' },
+          testFiles: ['/a.test.ts', '/b.test.ts', '/new.test.ts'],
+        },
+      ],
+      previousTestFiles: [
+        { testPath: '/a.test.ts', projectName: 'project-a' },
+        { testPath: '/b.test.ts', projectName: 'project-a' },
+      ],
+      affectedTestFiles: [],
+      requestedTestPaths: ['/a.test.ts'],
+    });
+
+    expect(plan.decision).toEqual({
+      kind: 'rerun',
+      testPaths: ['/a.test.ts'],
+      message: 'Test file set changed, re-running 1 file(s)...\n',
+    });
+  });
+
   it('should preserve all project entries for affected test paths', () => {
     const projectEntries = [
       {

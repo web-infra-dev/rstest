@@ -13,6 +13,7 @@ type WatchRerunPlannerInput = {
   projectEntries: WatchPlannerProjectEntry[];
   previousTestFiles: TestFileInfo[];
   affectedTestFiles: string[];
+  requestedTestPaths?: string[] | 'all';
 };
 
 type WatchFileSetUpdate = {
@@ -88,6 +89,7 @@ export const planWatchRerun = ({
   projectEntries,
   previousTestFiles,
   affectedTestFiles,
+  requestedTestPaths,
 }: WatchRerunPlannerInput): WatchRerunPlan => {
   const currentTestFiles = collectWatchTestFiles(projectEntries);
   const normalizedPrevious = normalizeTestFiles(previousTestFiles);
@@ -113,19 +115,53 @@ export const planWatchRerun = ({
       };
     }
 
+    const requestedPathSet =
+      requestedTestPaths === undefined || requestedTestPaths === 'all'
+        ? undefined
+        : new Set(
+            requestedTestPaths.map((testPath) => getTestPathKey(testPath)),
+          );
+    const testPaths =
+      requestedPathSet === undefined
+        ? collectTestPaths(currentTestFiles)
+        : collectTestPaths(
+            currentTestFiles.filter(({ testPath }) =>
+              requestedPathSet.has(getTestPathKey(testPath)),
+            ),
+          );
+
+    if (testPaths.length === 0) {
+      return {
+        fileSetUpdate,
+        decision: {
+          kind: 'idle',
+          message: 'No requested browser test files remain after update.\n',
+        },
+      };
+    }
+
     return {
       fileSetUpdate,
       decision: {
         kind: 'rerun',
-        testPaths: collectTestPaths(currentTestFiles),
-        message: `Test file set changed, re-running ${currentTestFiles.length} file(s)...\n`,
+        testPaths,
+        message: `Test file set changed, re-running ${testPaths.length} file(s)...\n`,
       },
     };
   }
 
-  const affectedPathSet = new Set(
-    affectedTestFiles.map((testFile) => getTestPathKey(testFile)),
-  );
+  const requestedPathSet =
+    requestedTestPaths === undefined || requestedTestPaths === 'all'
+      ? undefined
+      : new Set(requestedTestPaths.map((testPath) => getTestPathKey(testPath)));
+  const affectedPathSet = new Set([
+    ...affectedTestFiles.map((testFile) => getTestPathKey(testFile)),
+    ...(requestedTestPaths === 'all'
+      ? collectTestPaths(currentTestFiles).map((testPath) =>
+          getTestPathKey(testPath),
+        )
+      : (requestedPathSet ?? [])),
+  ]);
   const matchedAffectedFiles = currentTestFiles.filter(({ testPath }) =>
     affectedPathSet.has(getTestPathKey(testPath)),
   );

@@ -3,7 +3,11 @@ import {
   getCurrentTestTimeout,
   registerElementExpect,
 } from '@rstest/core/internal/browser-runtime';
-import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
+import type {
+  BrowserLocatorText,
+  BrowserRpcRequest,
+  ScreenshotMatchOutcome,
+} from '../rpcProtocol';
 import type { ToMatchScreenshotOptions } from './augmentExpect';
 import type { BrowserElementExpect } from './augmentExpect';
 import { callBrowserRpc } from './browserRpc';
@@ -18,6 +22,9 @@ import {
 const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
   return serializeText(value);
 };
+
+const screenshotAssertionCounts = new WeakMap<object, number>();
+const sharedScreenshotAssertionCounts = new Map<string, number>();
 
 const createElementExpect = (
   locator: Locator,
@@ -213,6 +220,27 @@ expect.extend({
       );
     }
 
+    let resolvedScreenshotName = screenshotName;
+    if (name === undefined) {
+      const canUsePinnedTestCase =
+        testCase && (!isConcurrentTest || hasAssertionFlag('rstestTestScoped'));
+      if (canUsePinnedTestCase) {
+        const previousCount = screenshotAssertionCounts.get(testCase) ?? 0;
+        screenshotAssertionCounts.set(testCase, previousCount + 1);
+        if (previousCount > 0) {
+          resolvedScreenshotName = `${screenshotName} [screenshot ${previousCount + 1}]`;
+        }
+      } else {
+        const testIdentity = `${window.__RSTEST_BROWSER_OPTIONS__?.projectName ?? ''}\0${window.__RSTEST_BROWSER_OPTIONS__?.testFile ?? ''}\0${screenshotName}`;
+        const previousCount =
+          sharedScreenshotAssertionCounts.get(testIdentity) ?? 0;
+        sharedScreenshotAssertionCounts.set(testIdentity, previousCount + 1);
+        if (previousCount > 0) {
+          resolvedScreenshotName = `${screenshotName} [screenshot ${previousCount + 1}]`;
+        }
+      }
+    }
+
     const mask = options?.mask ?? [];
     if (!mask.every(isLocator)) {
       throw new TypeError(
@@ -221,7 +249,7 @@ expect.extend({
     }
     const { mask: _mask, ...serializedOptions } = options ?? {};
 
-    await callBrowserRpc<void>({
+    await callBrowserRpc<ScreenshotMatchOutcome>({
       kind: 'screenshot',
       locator: received.ir,
       method: 'toMatchScreenshot',
@@ -233,7 +261,7 @@ expect.extend({
       snapshotUpdate:
         window.__RSTEST_BROWSER_OPTIONS__?.snapshot.updateSnapshot,
       args: [
-        screenshotName,
+        resolvedScreenshotName,
         { ...serializedOptions, mask: mask.map((item) => item.ir) },
       ],
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>);

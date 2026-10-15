@@ -802,10 +802,8 @@ export const createHeadlessScheduler = async ({
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
           previousTestFiles: watchState.lastTestFiles,
-          affectedTestFiles: [
-            ...drainPendingAffectedTestFiles(watchState),
-            ...(requestedTestPaths ?? []),
-          ],
+          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+          requestedTestPaths,
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);

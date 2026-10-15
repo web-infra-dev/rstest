@@ -72,6 +72,8 @@ export type BrowserLocatorIR = {
   steps: BrowserLocatorStep[];
 };
 
+export type ScreenshotMatchOutcome = 'added' | 'updated' | 'matched';
+
 export type BrowserRpcRequest = {
   id: string;
   /** Absolute test file path for locating runner iframe */

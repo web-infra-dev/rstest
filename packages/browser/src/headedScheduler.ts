@@ -38,7 +38,7 @@ import type {
   DispatchPageResolver,
   SchedulerRunResult,
 } from './schedulerSeam';
-import type { WatchSignals } from './watchSignals';
+import type { RequestedTestPaths, WatchSignals } from './watchSignals';
 
 type HeadedSchedulerContext = Pick<
   InternalContext,
@@ -709,7 +709,7 @@ export const createHeadedScheduler = async ({
 
     const runDispatchRerunOnce = async (
       updateSnapshot?: SnapshotUpdateState,
-      requestedTestPaths?: string[],
+      requestedTestPaths?: RequestedTestPaths,
     ): Promise<void> => {
       // Exactly one of `signalInvalidation` / `logWatchReady` must run on
       // every exit path: a rejection escaping after the file-set commit (for
@@ -722,10 +722,8 @@ export const createHeadedScheduler = async ({
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
           previousTestFiles: watchState.lastTestFiles,
-          affectedTestFiles: [
-            ...drainPendingAffectedTestFiles(watchState),
-            ...(requestedTestPaths ?? []),
-          ],
+          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+          requestedTestPaths,
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);

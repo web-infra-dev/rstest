@@ -12,6 +12,14 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const parseJsonReport = (output: string) => {
+  const jsonStart = output.indexOf('{');
+  if (jsonStart === -1) {
+    throw new Error(`Cannot find JSON report in output:\n${output}`);
+  }
+  return JSON.parse(output.slice(jsonStart));
+};
+
 describe('browser mode - screenshot matching', () => {
   const fixturesTargetPath = path.join(
     __dirname,
@@ -53,10 +61,12 @@ describe('browser mode - screenshot matching', () => {
     expect(fs.existsSync(screenshotRoot)).toBe(false);
 
     const firstRun = await runScreenshot([
+      '--reporters=json',
       'tests/screenshot.test.ts',
       'tests/concurrent-screenshot.test.ts',
     ]);
     await firstRun.expectExecSuccess();
+    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(18);
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
@@ -75,7 +85,7 @@ describe('browser mode - screenshot matching', () => {
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(5);
+    expect(screenshotNames).toHaveLength(7);
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
     fs.writeFileSync(
@@ -123,8 +133,12 @@ describe('browser mode - screenshot matching', () => {
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     );
 
-    const matchingRun = await runScreenshot(['tests/screenshot.test.ts']);
+    const matchingRun = await runScreenshot([
+      '--reporters=json',
+      'tests/screenshot.test.ts',
+    ]);
     await matchingRun.expectExecSuccess();
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(14);
     const noTimeoutRun = await runScreenshot([
       '--config=rstest.no-timeout.config.mts',
       'tests/screenshot.test.ts',
@@ -264,7 +278,7 @@ test('rejects a short screenshot stability timeout', async () => {
           fs.readdirSync(
             path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
           ),
-        ).toHaveLength(5);
+        ).toHaveLength(7);
         expect(
           fs.readdirSync(
             path.join(

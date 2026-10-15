@@ -31,6 +31,17 @@ test('keeps default screenshot references stable when earlier tests are added', 
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
 }, 30_000);
 
+test('assigns separate references to repeated unnamed screenshots', async () => {
+  document.body.innerHTML = `
+    <button style="background: rgb(20, 80, 180); color: white">First</button>
+    <button style="background: rgb(180, 40, 20); color: white">Second</button>
+  `;
+  await expect(page.getByRole('button', { name: 'First' })).toMatchScreenshot();
+  await expect(
+    page.getByRole('button', { name: 'Second' }),
+  ).toMatchScreenshot();
+}, 30_000);
+
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(180, 40, 20); color: white">Save</button>';
