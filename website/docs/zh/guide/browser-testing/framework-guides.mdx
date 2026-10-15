@@ -20,6 +20,7 @@ description: 本指南提供各前端框架在浏览器模式下的测试配置�
 :::
 
 import { PackageManagerTabs } from '@theme';
+import { ApiMeta } from '@components/ApiMeta';
 
 ## React
 
@@ -87,6 +88,27 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => (
 test('renders with theme context', async () => {
   const { container } = await render(<MyComponent />, { wrapper: Wrapper });
   // ...
+});
+```
+
+<ApiMeta addedVersion="0.12.4" />
+
+组件级 hydration 测试可以在 Browser Mode 中用 `renderToString` 生成匹配的 HTML，再执行 hydration，无需启动 Node 服务。这样能覆盖 React 的 hydration 流程，但不验证 Node 特有的 SSR 行为。若要测试应用实际的服务端输出，则应将该输出放入容器。`onRecoverableError` 等 React root 选项放在 `createRootOptions` 中：
+
+```tsx
+import { render } from '@rstest/browser-react';
+import { renderToString } from 'react-dom/server';
+
+const container = document.createElement('div');
+container.innerHTML = renderToString(<App />);
+
+const recoverableErrors: unknown[] = [];
+await render(<App />, {
+  container,
+  hydrate: true,
+  createRootOptions: {
+    onRecoverableError: (error) => recoverableErrors.push(error),
+  },
 });
 ```
 

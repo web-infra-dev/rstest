@@ -175,14 +175,27 @@ Renders a React element into the DOM.
 ```typescript
 function render(ui: ReactNode, options?: RenderOptions): Promise<RenderResult>;
 
-interface RenderOptions {
+type RenderOptions = {
   /** Custom container element to render into */
   container?: HTMLElement;
   /** Base element for queries, defaults to document.body */
   baseElement?: HTMLElement;
   /** Wrapper component (e.g., for providers/context) */
   wrapper?: JSXElementConstructor<{ children: ReactNode }>;
-}
+} & (
+  | {
+      /** Hydrate existing server-rendered HTML instead of creating a new root */
+      hydrate: true;
+      /** Options passed to React's hydrateRoot */
+      createRootOptions?: HydrationOptions;
+    }
+  | {
+      /** @default false */
+      hydrate?: false;
+      /** Options passed to React's createRoot */
+      createRootOptions?: RootOptions;
+    }
+);
 
 interface RenderResult {
   /** The container element the component is rendered into */
@@ -198,6 +211,24 @@ interface RenderResult {
 }
 ```
 
+For a focused hydration test, the browser test can create matching server markup with `renderToString`, then pass it through `container` with `hydrate: true`. This exercises hydration without starting a Node server, but does not test Node-specific SSR behavior. To test your actual server output, provide that output through `container` instead. React root options are passed through `createRootOptions`:
+
+```tsx
+import { renderToString } from 'react-dom/server';
+
+const container = document.createElement('div');
+container.innerHTML = renderToString(<App />);
+
+const recoverableErrors: unknown[] = [];
+await render(<App />, {
+  container,
+  hydrate: true,
+  createRootOptions: {
+    onRecoverableError: (error) => recoverableErrors.push(error),
+  },
+});
+```
+
 ### `renderHook(callback, options?)`
 
 Renders a custom React hook for testing.
@@ -208,10 +239,10 @@ function renderHook<Props, Result>(
   options?: RenderHookOptions<Props>,
 ): Promise<RenderHookResult<Result, Props>>;
 
-interface RenderHookOptions<Props> extends RenderOptions {
+type RenderHookOptions<Props> = RenderOptions & {
   /** Initial props passed to the hook */
   initialProps?: Props;
-}
+};
 
 interface RenderHookResult<Result, Props> {
   /** Reference to the latest hook return value */

@@ -1,5 +1,6 @@
-import { render } from '@rstest/browser-react';
+import { cleanup, render } from '@rstest/browser-react';
 import { describe, expect, it } from '@rstest/core';
+import { renderToString } from 'react-dom/server';
 import { App, Button, Counter } from '../src/App';
 
 describe('@rstest/browser-react render', () => {
@@ -68,6 +69,36 @@ describe('@rstest/browser-react render', () => {
 });
 
 describe('@rstest/browser-react render options', () => {
+  it('should hydrate existing server-rendered markup', async () => {
+    const ServerApp = () => <button>Hydrated content</button>;
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<ServerApp />);
+    const serverButton = container.querySelector('button');
+
+    const { container: hydratedContainer } = await render(<ServerApp />, {
+      container,
+      hydrate: true,
+      createRootOptions: { formState: null },
+    });
+
+    expect(hydratedContainer.querySelector('button')).toBe(serverButton);
+    expect(hydratedContainer.textContent).toBe('Hydrated content');
+  });
+
+  it('should clean up the root when the initial render throws', async () => {
+    const initialChildCount = document.body.childElementCount;
+    const ThrowingApp = () => {
+      throw new Error('initial render failed');
+    };
+
+    await expect(render(<ThrowingApp />)).rejects.toThrow(
+      'initial render failed',
+    );
+    await cleanup();
+
+    expect(document.body.childElementCount).toBe(initialChildCount);
+  });
+
   it('should support custom container', async () => {
     const customContainer = document.createElement('div');
     customContainer.id = 'custom-container';
