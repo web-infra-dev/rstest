@@ -128,6 +128,22 @@ test('locator + expect.element proxy works', async () => {
     .toHaveCount(2);
 });
 
+test('pressSequentially types text one key event at a time', async () => {
+  const input = document.createElement('input');
+  input.placeholder = 'Search query';
+  const keys: string[] = [];
+  input.addEventListener('keydown', (event) => keys.push(event.key));
+  document.body.appendChild(input);
+
+  await page.getByPlaceholder('Search query').pressSequentially('rs test');
+
+  await expect
+    .element(page.getByPlaceholder('Search query'))
+    .toHaveValue('rs test');
+  expect(keys).toEqual(['r', 's', ' ', 't', 'e', 's', 't']);
+  input.remove();
+});
+
 test('counts a retried element assertion once', async () => {
   expect.assertions(1);
 
