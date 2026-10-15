@@ -205,7 +205,7 @@ expect.extend({
       (isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
         ? undefined
         : testCase && defaultName
-          ? `${defaultName} [${testCase.testId}]`
+          ? `${defaultName}${testCase.screenshotNameSuffix ?? ''}`
           : defaultName);
     if (!screenshotName) {
       throw new Error(

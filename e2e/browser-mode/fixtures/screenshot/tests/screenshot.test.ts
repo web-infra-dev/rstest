@@ -25,6 +25,12 @@ test('uses distinct references for duplicate test titles', async () => {
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
 }, 30_000);
 
+test('keeps default screenshot references stable when earlier tests are added', async () => {
+  document.body.innerHTML =
+    '<button style="background: rgb(20, 80, 180); color: white">Save</button>';
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+}, 30_000);
+
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(180, 40, 20); color: white">Save</button>';

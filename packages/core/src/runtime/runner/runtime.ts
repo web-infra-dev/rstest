@@ -381,6 +381,32 @@ export class RunnerRuntime {
       await this.collectCurrentTest();
     }
 
+    const duplicateTitles = new Map<string, TestCase[]>();
+    const collectDuplicateTitles = (tests: Test[], parentNames: string[]) => {
+      for (const test of tests) {
+        if (test.type === 'suite') {
+          collectDuplicateTitles(test.tests, [...parentNames, test.name]);
+          continue;
+        }
+
+        const title = JSON.stringify([...parentNames, test.name]);
+        const duplicates = duplicateTitles.get(title) ?? [];
+        duplicates.push(test);
+        duplicateTitles.set(title, duplicates);
+      }
+    };
+    collectDuplicateTitles(this.tests, []);
+
+    for (const duplicates of duplicateTitles.values()) {
+      if (duplicates.length < 2) {
+        continue;
+      }
+
+      duplicates.forEach((test, index) => {
+        test.screenshotNameSuffix = ` [duplicate ${index + 1}]`;
+      });
+    }
+
     return this.tests;
   }
 

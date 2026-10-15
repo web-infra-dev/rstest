@@ -71,9 +71,29 @@ describe('browser mode - screenshot matching', () => {
     };
     const screenshotDir = screenshotDirForProject('project-a');
     const secondProjectDir = screenshotDirForProject('project-b');
+    const screenshotNames = fs
+      .readdirSync(screenshotDir)
+      .filter((name) => name.endsWith('.png'))
+      .sort();
+    expect(screenshotNames).toHaveLength(5);
+    const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
+    const originalTest = fs.readFileSync(testPath, 'utf8');
+    fs.writeFileSync(
+      testPath,
+      originalTest.replace(
+        "test('matches a locator screenshot'",
+        "test('an unrelated earlier test', () => {});\n\ntest('matches a locator screenshot'",
+      ),
+    );
+    const stablePathRun = await runScreenshot(['tests/screenshot.test.ts']);
+    await stablePathRun.expectExecSuccess();
     expect(
-      fs.readdirSync(screenshotDir).filter((name) => name.endsWith('.png')),
-    ).toHaveLength(4);
+      fs
+        .readdirSync(screenshotDir)
+        .filter((name) => name.endsWith('.png'))
+        .sort(),
+    ).toEqual(screenshotNames);
+    fs.writeFileSync(testPath, originalTest);
     const referenceName = fs
       .readdirSync(screenshotDir)
       .find((name) => name.startsWith('primary-button-'));
@@ -118,8 +138,6 @@ describe('browser mode - screenshot matching', () => {
     await updateMatchingRun.expectExecSuccess();
     expect(fs.readFileSync(referencePath)).toEqual(unchangedReference);
 
-    const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
-    const originalTest = fs.readFileSync(testPath, 'utf8');
     const changedTest = originalTest.replace(
       'rgb(20, 80, 180)',
       'rgb(180, 40, 20)',
