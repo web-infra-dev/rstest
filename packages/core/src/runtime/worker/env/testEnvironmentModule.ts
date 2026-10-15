@@ -7,11 +7,14 @@ import { finalizeDynamicImport } from '../resolveDynamicImport';
 
 type JSDOMModule = typeof import('jsdom');
 type HappyDOMModule = typeof import('happy-dom');
+type JSDOMBlobConvert = (globalObject: unknown, wrapper: unknown) => unknown;
 
 export type LoadedTestEnvironmentModule =
   | {
       name: 'jsdom';
       module: JSDOMModule;
+      resolvedPath: string;
+      blobConvert?: JSDOMBlobConvert;
     }
   | {
       name: 'happy-dom';
@@ -40,11 +43,19 @@ const validateBuiltinDependency = (
     reference.name === 'jsdom' &&
     requiredJSDOMExports.every((name) => typeof module[name] === 'function')
   ) {
+    // Dynamic imports expose functions as the broad Function type.
+    const blobConvert =
+      typeof module.__rstestBlobConvert === 'function'
+        ? (module.__rstestBlobConvert as JSDOMBlobConvert)
+        : undefined;
+
     return {
       name: 'jsdom',
       // The runtime shape is checked above; the cast preserves package types
       // without duplicating every jsdom export in this internal wire adapter.
       module: module as JSDOMModule,
+      resolvedPath: reference.resolvedPath,
+      blobConvert,
     };
   }
 

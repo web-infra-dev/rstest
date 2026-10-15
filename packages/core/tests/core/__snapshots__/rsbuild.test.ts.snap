@@ -67,6 +67,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
                 "options": {
                   "filename": "static/css/[name].css",
+                  "minimized": false,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -806,6 +807,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
                 "options": {
                   "filename": "static/css/[name].css",
+                  "minimized": false,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -1502,6 +1504,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
                 "options": {
                   "filename": "static/css/[name].css",
+                  "minimized": false,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -2185,6 +2188,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
                 "options": {
                   "filename": "static/css/[name].css",
+                  "minimized": false,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -2832,6 +2836,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
             "options": {
               "filename": "static/css/[name].css",
+              "minimized": false,
               "modules": {
                 "auto": true,
                 "exportGlobals": false,
@@ -2998,6 +3003,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
             "options": {
               "filename": "static/css/[name].css",
+              "minimized": false,
               "modules": {
                 "auto": true,
                 "exportGlobals": false,
@@ -3233,6 +3239,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
                 "options": {
                   "filename": "static/css/[name].css",
+                  "minimized": false,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -3929,6 +3936,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
                 "options": {
                   "filename": "static/css/[name].css",
+                  "minimized": false,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,

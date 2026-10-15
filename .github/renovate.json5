@@ -73,6 +73,20 @@
       matchFileNames: ['packages/vscode/package.json'],
       enabled: false,
     },
+    // Environment module affinity fixtures intentionally pin legacy jsdom versions.
+    {
+      matchFileNames: [
+        'e2e/no-isolate/fixtures/environment-module-affinity/jsdom-26/package.json',
+        'e2e/no-isolate/fixtures/environment-module-affinity/jsdom-29/package.json',
+      ],
+      enabled: false,
+    },
+    {
+      // Keep happy-dom 20 as a compatibility baseline while the main fixture tracks 21.
+      matchFileNames: ['e2e/dom/fixtures-happy-dom-20/package.json'],
+      matchPackageNames: ['happy-dom'],
+      enabled: false,
+    },
   ],
   ignoreDeps: [
     // align Node.js version minimum requirements

@@ -1,4 +1,5 @@
 import { Blob as NodeBlob } from 'node:buffer';
+import { createRequire } from 'node:module';
 import { URL as NodeURL } from 'node:url';
 import { runInContext } from 'node:vm';
 import type vm from 'node:vm';
@@ -25,6 +26,16 @@ type JSDOMOptions = ConstructorOptions & {
 type JSDOMBlobImpl = {
   _buffer?: Uint8Array;
   _bytes?: Uint8Array;
+};
+
+type JSDOMDependency = {
+  module: JSDOMModule;
+  resolvedPath: string;
+  blobConvert?: (globalObject: unknown, wrapper: unknown) => unknown;
+};
+
+type JSDOMBlobUtils = {
+  implForWrapper: (wrapper: unknown) => JSDOMBlobImpl | undefined;
 };
 
 type VirtualConsoleForwarder =
@@ -165,21 +176,30 @@ function patchAddEventListener(
 
 type JSDOMModule = typeof import('jsdom');
 
-const loadJSDOM = async (dependency?: JSDOMModule): Promise<JSDOMModule> => {
-  if (!dependency) {
-    checkPkgInstalled('jsdom');
+const loadJSDOM = async (
+  dependency?: JSDOMDependency,
+): Promise<JSDOMDependency> => {
+  if (dependency) {
+    return dependency;
   }
-  return dependency ?? import('jsdom');
+
+  checkPkgInstalled('jsdom');
+  const require = createRequire(import.meta.url);
+  return {
+    module: await import('jsdom'),
+    resolvedPath: require.resolve('jsdom'),
+  };
 };
 
 const createJSDOM = (
-  dependency: JSDOMModule,
+  dependency: JSDOMDependency,
   options: Record<string, any>,
   context: TestEnvironmentContext,
   enableVirtualConsole: boolean,
   virtualConsoleTarget?: Console,
 ) => {
-  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } = dependency;
+  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
+    dependency.module;
   const {
     html = '<!DOCTYPE html>',
     userAgent,
@@ -221,7 +241,12 @@ const createJSDOM = (
     ...restOptions,
     beforeParse(window) {
       beforeParse?.(window);
-      cleanupObjectURLs = installJSDOMObjectURL(window, context);
+      cleanupObjectURLs = installJSDOMObjectURL(
+        window,
+        context,
+        dependency.resolvedPath,
+        dependency.blobConvert,
+      );
     },
   });
 
@@ -237,8 +262,30 @@ const createJSDOM = (
 function installJSDOMObjectURL(
   window: DOMWindow,
   context: TestEnvironmentContext,
+  resolvedPath: string,
+  bundledBlobConvert?: (globalObject: unknown, wrapper: unknown) => unknown,
 ): () => void {
-  const implSymbol = Object.getOwnPropertySymbols(new window.Blob())[0]!;
+  const implSymbol = Object.getOwnPropertySymbols(new window.Blob())[0];
+  const nativeImplForWrapper = implSymbol
+    ? undefined
+    : (
+        createRequire(resolvedPath)(
+          'jsdom/lib/generated/idl/utils',
+        ) as JSDOMBlobUtils
+      ).implForWrapper;
+  const getImpl = implSymbol
+    ? (blob: NodeBlob | Blob | MediaSource) =>
+        (blob as unknown as Record<symbol, JSDOMBlobImpl>)[implSymbol]
+    : (blob: NodeBlob | Blob | MediaSource) => {
+        if (bundledBlobConvert) {
+          try {
+            return bundledBlobConvert(window, blob) as JSDOMBlobImpl;
+          } catch {
+            // Node Blob values belong to a different implementation.
+          }
+        }
+        return nativeImplForWrapper?.(blob);
+      };
   const URLConstructor = window.URL as typeof URL;
   const createDescriptor = Object.getOwnPropertyDescriptor(
     URLConstructor,
@@ -254,9 +301,7 @@ function installJSDOMObjectURL(
       value(blob: NodeBlob | Blob | MediaSource): string {
         // The private Symbol(impl) is shared by Blob wrappers from other jsdom
         // realms, unlike their constructors.
-        const impl = (blob as unknown as Record<symbol, JSDOMBlobImpl>)[
-          implSymbol
-        ];
+        const impl = getImpl(blob);
         const bytes = impl?._buffer ?? impl?._bytes;
         if (bytes) {
           return NodeURL.createObjectURL(
@@ -309,7 +354,7 @@ export const setupEnvironment = async (
   global: typeof globalThis,
   options: Record<string, any>,
   context: TestEnvironmentContext,
-  dependency?: JSDOMModule,
+  dependency?: JSDOMDependency,
 ): Promise<TestEnvironmentReturn> => {
   const jsdom = await loadJSDOM(dependency);
   const nodeTimers: NodeTimerPrimitives = {
@@ -355,7 +400,7 @@ export const setupEnvironment = async (
 export const setupVM = async (
   options: Record<string, any>,
   context: TestEnvironmentContext,
-  dependency?: JSDOMModule,
+  dependency?: JSDOMDependency,
 ): Promise<{
   context: vm.Context;
   setVirtualConsoleTarget: (target: Console) => void;

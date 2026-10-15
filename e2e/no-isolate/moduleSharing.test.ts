@@ -5,23 +5,37 @@ import { prepareFixtures, runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const [nodeMajor = 0, nodeMinor = 0, nodePatch = 0] = process.versions.node
+  .split('.')
+  .map(Number);
+const supportsJSDOM30 =
+  nodeMajor >= 26 ||
+  (nodeMajor === 24 && nodeMinor >= 15) ||
+  (nodeMajor === 22 &&
+    (nodeMinor > 22 || (nodeMinor === 22 && nodePatch >= 2)));
 
 describe('module state sharing under isolate: false', () => {
   it('keeps workers pinned to the resolved environment module', async ({
     onTestFinished,
   }) => {
-    const { expectExecSuccess } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       onTestFinished,
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures', 'environment-module-affinity'),
+          env: { DEBUG: 'rstest' },
         },
       },
     });
 
     await expectExecSuccess();
+    if (supportsJSDOM30) {
+      expect(cli.stdout).toContain('bundled test environment jsdom');
+    } else {
+      expect(cli.stdout).not.toContain('bundled test environment jsdom');
+    }
   });
 
   it('restores project-scoped globals before reusing a worker', async ({
