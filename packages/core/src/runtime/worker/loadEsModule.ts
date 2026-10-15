@@ -232,6 +232,9 @@ const compilationCache = workerCache.namespace<EsmCompilationCacheEntry>(
 // See https://github.com/web-infra-dev/rstest/issues/1373.
 const accumulatedAssetFiles: AssetFiles = {};
 
+/** The assets of every file this worker loaded since the last full cache clear. */
+export const getLoadedAssetFiles = (): AssetFiles => accumulatedAssetFiles;
+
 // Every shared runtime chunk this (possibly reused) worker has loaded under
 // `isolate: false`. The pool has no environment affinity — with multiple node
 // projects dispatched concurrently a reused worker can run project A, then B,
