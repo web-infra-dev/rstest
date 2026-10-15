@@ -175,18 +175,27 @@ Renders a React element into the DOM.
 ```typescript
 function render(ui: ReactNode, options?: RenderOptions): Promise<RenderResult>;
 
-interface RenderOptions {
+type RenderOptions = {
   /** Custom container element to render into */
   container?: HTMLElement;
   /** Base element for queries, defaults to document.body */
   baseElement?: HTMLElement;
   /** Wrapper component (e.g., for providers/context) */
   wrapper?: JSXElementConstructor<{ children: ReactNode }>;
-  /** Hydrate existing server-rendered HTML instead of creating a new root */
-  hydrate?: boolean;
-  /** Options passed to React's createRoot or hydrateRoot */
-  createRootOptions?: RootOptions;
-}
+} & (
+  | {
+      /** Hydrate existing server-rendered HTML instead of creating a new root */
+      hydrate: true;
+      /** Options passed to React's hydrateRoot */
+      createRootOptions?: HydrationOptions;
+    }
+  | {
+      /** @default false */
+      hydrate?: false;
+      /** Options passed to React's createRoot */
+      createRootOptions?: RootOptions;
+    }
+);
 
 interface RenderResult {
   /** The container element the component is rendered into */
@@ -230,10 +239,10 @@ function renderHook<Props, Result>(
   options?: RenderHookOptions<Props>,
 ): Promise<RenderHookResult<Result, Props>>;
 
-interface RenderHookOptions<Props> extends RenderOptions {
+type RenderHookOptions<Props> = RenderOptions & {
   /** Initial props passed to the hook */
   initialProps?: Props;
-}
+};
 
 interface RenderHookResult<Result, Props> {
   /** Reference to the latest hook return value */

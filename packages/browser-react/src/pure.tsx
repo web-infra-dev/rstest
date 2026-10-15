@@ -3,6 +3,7 @@ import React from 'react';
 import {
   createRoot as createReactRoot,
   hydrateRoot as hydrateReactRoot,
+  type HydrationOptions,
   type RootOptions,
 } from 'react-dom/client';
 import { act } from './act';
@@ -22,23 +23,35 @@ export interface RenderResult {
   asFragment: () => DocumentFragment;
 }
 
-export interface RenderOptions {
+interface BaseRenderOptions {
   /** Custom container element to render into */
   container?: HTMLElement;
   /** Base element for queries, defaults to document.body */
   baseElement?: HTMLElement;
   /** Wrapper component (e.g., for providers/context) */
   wrapper?: JSXElementConstructor<{ children: ReactNode }>;
-  /** Hydrate existing server-rendered HTML instead of creating a new root. @default false */
-  hydrate?: boolean;
-  /** Options passed to React's createRoot or hydrateRoot. */
-  createRootOptions?: RootOptions;
 }
 
-export interface RenderHookOptions<Props> extends RenderOptions {
+export type RenderOptions = BaseRenderOptions &
+  (
+    | {
+        /** Hydrate existing server-rendered HTML instead of creating a new root. */
+        hydrate: true;
+        /** Options passed to React's hydrateRoot. */
+        createRootOptions?: HydrationOptions;
+      }
+    | {
+        /** @default false */
+        hydrate?: false;
+        /** Options passed to React's createRoot. */
+        createRootOptions?: RootOptions;
+      }
+  );
+
+export type RenderHookOptions<Props> = RenderOptions & {
   /** Initial props passed to the hook */
   initialProps?: Props;
-}
+};
 
 export interface RenderHookResult<Result, Props> {
   /** Reference to the latest hook return value */
@@ -85,6 +98,11 @@ function createRoot(container: HTMLElement, options?: RootOptions): ReactRoot {
   };
 }
 
+function trackRoot(container: HTMLElement, root: ReactRoot): void {
+  mountedRootEntries.push({ container, root });
+  mountedContainers.add(container);
+}
+
 function strictModeIfNeeded(ui: ReactNode): ReactNode {
   return config.reactStrictMode
     ? React.createElement(React.StrictMode, null, ui)
@@ -107,7 +125,7 @@ export async function render(
   ui: ReactNode,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
-  const { wrapper, hydrate, createRootOptions } = options;
+  const { wrapper } = options;
   let { container, baseElement } = options;
 
   if (!baseElement) {
@@ -122,17 +140,20 @@ export async function render(
 
   if (!mountedContainers.has(container)) {
     const wrappedUi = wrapUiIfNeeded(strictModeIfNeeded(ui), wrapper);
-    if (hydrate) {
+    if (options.hydrate) {
       await act(() => {
-        root = hydrateReactRoot(container, wrappedUi, createRootOptions);
+        root = hydrateReactRoot(
+          container,
+          wrappedUi,
+          options.createRootOptions,
+        );
+        trackRoot(container, root);
       });
     } else {
-      root = createRoot(container, createRootOptions);
+      root = createRoot(container, options.createRootOptions);
+      trackRoot(container, root);
       await act(() => root.render(wrappedUi));
     }
-
-    mountedRootEntries.push({ container, root });
-    mountedContainers.add(container);
   } else {
     const entry = mountedRootEntries.find((e) => e.container === container);
     if (!entry) {
