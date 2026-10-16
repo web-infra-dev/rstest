@@ -6,8 +6,8 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe('vue sfc', () => {
-  it('should run vue SFC test correctly', async () => {
+describe('vue', () => {
+  it('should run vue SFC and JSX tests correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'index', 'jsx'],
