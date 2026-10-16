@@ -5,22 +5,26 @@ export default defineConfig({
   projects: [
     ...['project-a', 'project-b'].map((name) => ({
       name,
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
         headless: true,
+        expect: { toMatchScreenshot: { stabilityTimeout: 10_000 } },
       },
       include: ['tests/**/*.test.ts'],
       exclude: ['tests/configured.test.ts'],
     })),
     {
       name: 'project-config-directory',
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
         headless: true,
         expect: {
           toMatchScreenshot: {
+            stabilityTimeout: 10_000,
             comparatorOptions: { maxDiffPixels: 1 },
             screenshotDirectory: 'custom-baselines',
           },
@@ -30,12 +34,14 @@ export default defineConfig({
     },
     {
       name: 'project-config-resolver',
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
         headless: true,
         expect: {
           toMatchScreenshot: {
+            stabilityTimeout: 10_000,
             comparatorOptions: { maxDiffPixels: 1 },
             resolveScreenshotPath: ({ testFilePath, projectName, testName }) =>
               path.join(

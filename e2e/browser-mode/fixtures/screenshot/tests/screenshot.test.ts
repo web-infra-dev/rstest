@@ -11,10 +11,9 @@ test('matches a locator screenshot', async () => {
 
   await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
     'primary-button',
-    { threshold: 0.1, maxDiffPixels: 0, stabilityTimeout: 2000 },
+    { threshold: 0.1, maxDiffPixels: 0 },
   );
   await expect(page.locator('#capture')).toMatchScreenshot('masked-capture', {
-    stabilityTimeout: 2000,
     mask: [page.locator('#dynamic')],
   });
 }, 30_000);
