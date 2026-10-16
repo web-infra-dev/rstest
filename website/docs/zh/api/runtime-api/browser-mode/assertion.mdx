@@ -150,6 +150,63 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 - `locator` 必须是 `@rstest/browser` 返回的 `Locator`。这样运行时才能识别并回放完整查询链路；手写对象或其他库的 locator 无法被这套机制解析。
 - 在非 Browser Mode 中，`expect.element` 不可用。因为它依赖 Browser Mode 的浏览器运行时与通信通道来执行元素断言；纯 Node 测试环境只支持普通 `expect(value)` 断言。
 
+## 截图匹配 \{#screenshot-matching}
+
+### toMatchScreenshot \{#toMatchScreenshot}
+
+<ApiMeta addedVersion="0.12.4" />
+
+使用 Playwright provider 时，`toMatchScreenshot()` 可以截取 Locator 或页面，并与 PNG 基线比较。若当前 snapshot 更新模式允许新增基线，首次运行会保存基线。之后的运行会与基线比较；需要替换不匹配的基线时，使用 `--update`。
+
+matcher 接收可选的基线名称，以及截图或比较选项。
+
+传入 `@rstest/browser` 的 `Locator` 或 `page` 对象。此 matcher 仅支持 Playwright provider，且不支持 `.not`。
+
+默认使用当前测试名称作为基线名称。传入名称可以让多个断言共用一份基线，也可以为同一测试中的多张截图分别命名：
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
+  'primary-save-button',
+);
+```
+
+同一测试中的未命名断言会自动使用不同的基线。在 `test.concurrent` 中，使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）即可继续使用测试名称；若使用共享的文件级 `expect`，则需要显式传入名称。
+
+第二个参数用于设置比较和截图选项。例如，允许最多 20 个像素不同、最多等待一秒让截图稳定，并遮罩每次运行都会变化的时间戳：
+
+```ts
+await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+  maxDiffPixels: 20,
+  stabilityTimeout: 1000,
+  mask: [page.locator('[data-testid="updated-at"]')],
+});
+```
+
+`threshold` 设置单像素颜色距离阈值，范围为 `0`（严格）到 `1`（宽松）。`maxDiffPixels` 设置允许不同的像素数上限；也可以改用 `maxDiffPixelRatio` 设置差异像素比例。默认的 `threshold` 为 `0.1`，且不允许像素差异。`maxDiffPixels` 和 `maxDiffPixelRatio` 只能设置一个。
+
+`stabilityTimeout` 默认值为 `2000` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。截图时 Rstest 会禁用动画。动态内容可通过 `mask` 遮罩；也可以用 `maskColor` 修改遮罩颜色，或通过 `style` 在截图前注入 CSS。其他截图选项（`caret`、`scale` 和 `omitBackground`）会传给 Playwright screenshot API。`fullPage` 仅适用于页面断言。
+
+#### 元素截图 \{#element-screenshots}
+
+传入 Locator，只截取匹配到的元素：
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+```
+
+#### 页面截图 \{#page-screenshots}
+
+传入 `@rstest/browser` 的 `page` 对象，默认截取当前视口；设置 `fullPage: true` 可截取整个页面：
+
+```ts
+await expect(page).toMatchScreenshot();
+await expect(page).toMatchScreenshot('full-page', { fullPage: true });
+```
+
+PNG 基线保存在 `__screenshots__` 目录中，并按项目和测试文件分组；文件名包含测试名称、浏览器和操作系统。断言不匹配时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。截图捕获受当前测试剩余超时时间限制。设置 `testTimeout: 0` 后不再受测试超时限制，但 `stabilityTimeout` 仍然生效。
+
+可通过 [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot) 设置项目级 matcher 默认值和基线路径。
+
 ## 元素断言
 
 以下列出的 matcher 是当前支持的子集，未列出的 matcher 暂不可用。

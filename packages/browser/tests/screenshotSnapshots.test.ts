@@ -270,6 +270,31 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('keeps numbered names distinct from repeated assertion ordinals', async () => {
+    await withRoot(async (root) => {
+      await match(root, {
+        testName: 'foo',
+        screenshotAssertionOrdinal: 1,
+      });
+      await match(root, { testName: 'foo 1' });
+
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
+      );
+      const filenames = await fs.readdir(screenshotDirectory);
+      expect(filenames).toHaveLength(2);
+      expect(filenames).toContain('foo-1-chromium-linux.png');
+      expect(
+        filenames.some((name) =>
+          /^foo-1~[a-f0-9]{64}-chromium-linux\.png$/.test(name),
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('keeps screenshot paths distinct for test files with different extensions', async () => {
     await withRoot(async (root) => {
       await match(root);

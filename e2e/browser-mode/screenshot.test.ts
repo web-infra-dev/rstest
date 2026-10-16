@@ -66,7 +66,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/concurrent-screenshot.test.ts',
     ]);
     await firstRun.expectExecSuccess();
-    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(26);
+    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(34);
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
@@ -75,7 +75,27 @@ describe('browser mode - screenshot matching', () => {
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(11);
+    expect(screenshotNames).toHaveLength(15);
+    const viewportScreenshotName = screenshotNames.find((name) =>
+      name.startsWith('viewport-'),
+    );
+    if (!viewportScreenshotName) {
+      throw new Error('Expected the viewport screenshot reference.');
+    }
+    const viewportScreenshot = fs.readFileSync(
+      path.join(screenshotDir, viewportScreenshotName),
+    );
+    expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
+    const pageScreenshotName = screenshotNames.find((name) =>
+      name.startsWith('whole-page~'),
+    );
+    if (!pageScreenshotName) {
+      throw new Error('Expected the full page screenshot reference.');
+    }
+    const pageScreenshot = fs.readFileSync(
+      path.join(screenshotDir, pageScreenshotName),
+    );
+    expect(pageScreenshot.readUInt32BE(20)).toBeGreaterThan(1000);
     expect(
       screenshotNames.every((name) => Buffer.byteLength(name) <= 240),
     ).toBe(true);
@@ -89,7 +109,7 @@ describe('browser mode - screenshot matching', () => {
       fs
         .readdirSync(secondProjectScreenshotDir)
         .filter((name) => name.endsWith('.png')),
-    ).toHaveLength(11);
+    ).toHaveLength(15);
     expect(screenshotNames).toContain(
       `assigns-separate-references-to-repeated-unnamed-screenshots-1-chromium-${process.platform}.png`,
     );
@@ -106,6 +126,16 @@ describe('browser mode - screenshot matching', () => {
     expect(screenshotNames).toContain(
       `header-chromium-${process.platform}.png`,
     );
+    expect(screenshotNames).toContain(
+      `ordinal-collision-1-chromium-${process.platform}.png`,
+    );
+    expect(
+      screenshotNames.some((name) =>
+        new RegExp(
+          `^ordinal-collision-1~[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
+        ).test(name),
+      ),
+    ).toBe(true);
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
     fs.writeFileSync(
@@ -163,7 +193,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/screenshot.test.ts',
     ]);
     await matchingRun.expectExecSuccess();
-    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(24);
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(32);
     const noTimeoutRun = await runScreenshot([
       '--config=rstest.no-timeout.config.mts',
       'tests/screenshot.test.ts',
@@ -335,6 +365,18 @@ test('rejects a short screenshot stability timeout', async () => {
   it.runIf(shouldRunHeadedBrowserTests)(
     'routes headed screenshots to the matching project iframe',
     async () => {
+      const screenshotTestPath = path.join(
+        fixtureDir,
+        'tests',
+        'screenshot.test.ts',
+      );
+      const originalTest = fs.readFileSync(screenshotTestPath, 'utf8');
+      const headedTest = originalTest.replace(
+        "toMatchScreenshot('viewport', {",
+        "toMatchScreenshot('headed-viewport', {",
+      );
+      expect(headedTest).not.toBe(originalTest);
+      fs.writeFileSync(screenshotTestPath, headedTest);
       for (const project of ['project-a', 'project-b']) {
         const headedRun = await runScreenshot([
           '--config=rstest.headed.config.mts',
@@ -351,7 +393,7 @@ test('rejects a short screenshot stability timeout', async () => {
       expect(projectDirs).toHaveLength(2);
       expect(
         fs.readdirSync(path.join(screenshotRoot, 'screenshot.test.ts')),
-      ).toHaveLength(11);
+      ).toHaveLength(15);
       expect(
         fs.readdirSync(
           path.join(screenshotRoot, 'concurrent-screenshot.test.ts'),
@@ -366,7 +408,113 @@ test('rejects a short screenshot stability timeout', async () => {
             'screenshot.test.ts',
           ),
         ),
-      ).toHaveLength(11);
+      ).toHaveLength(15);
+      for (const headedScreenshotDir of [
+        path.join(screenshotRoot, 'screenshot.test.ts'),
+        path.join(
+          fixtureDir,
+          'tests',
+          'project-b-baselines',
+          'screenshot.test.ts',
+        ),
+      ]) {
+        const headedScreenshotNames = fs.readdirSync(headedScreenshotDir);
+        const viewportScreenshotName = headedScreenshotNames.find((name) =>
+          name.startsWith('headed-viewport~'),
+        );
+        if (!viewportScreenshotName) {
+          throw new Error('Expected the headed viewport screenshot reference.');
+        }
+        const viewportScreenshot = fs.readFileSync(
+          path.join(headedScreenshotDir, viewportScreenshotName),
+        );
+        expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
+      }
+    },
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'includes horizontal overflow in headed full-page captures',
+    async () => {
+      const screenshotTestPath = path.join(
+        fixtureDir,
+        'tests',
+        'screenshot.test.ts',
+      );
+      const originalTest = fs.readFileSync(screenshotTestPath, 'utf8');
+      const regressionTest = [
+        "test('captures a full page with horizontal overflow', async () => {",
+        '  document.body.innerHTML = \'<main style="width: 1600px; height: 1200px"></main>\';',
+        "  await expect(page).toMatchScreenshot('wide-full-page', { fullPage: true });",
+        '});',
+        "test('captures the full page after applying screenshot styles', async () => {",
+        '  document.body.innerHTML = \'<main style="width: 400px; height: 100px"></main>\';',
+        "  await expect(page).toMatchScreenshot('styled-full-page', { fullPage: true, style: 'body { min-height: 2000px !important; }' });",
+        '});',
+        "test('captures content added during full-page stability checks', async () => {",
+        '  document.body.innerHTML = \'<main style="height: 100px"></main>\';',
+        "  setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<section style=\"height: 2000px\"></section>'), 25);",
+        "  await expect(page).toMatchScreenshot('async-full-page', { fullPage: true });",
+        '});',
+      ].join('\n');
+      fs.writeFileSync(
+        screenshotTestPath,
+        `${originalTest}\n${regressionTest}\n`,
+      );
+
+      const headedRun = await runScreenshot([
+        '--config=rstest.headed.config.mts',
+        '--project',
+        'project-a',
+        'tests/screenshot.test.ts',
+        '--update',
+      ]);
+      await headedRun.expectExecSuccess();
+
+      const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
+      const projectDir = fs
+        .readdirSync(screenshotRoot)
+        .find((name) => name.startsWith('project-a-'));
+      if (!projectDir) {
+        throw new Error('Expected the headed project screenshot directory.');
+      }
+      const screenshotDir = path.join(
+        screenshotRoot,
+        projectDir,
+        'screenshot.test.ts',
+      );
+      const wideScreenshot = fs
+        .readdirSync(screenshotDir)
+        .find((name) => name.startsWith('wide-full-page-'));
+      if (!wideScreenshot) {
+        throw new Error('Expected the wide full-page screenshot reference.');
+      }
+      const wideScreenshotBuffer = fs.readFileSync(
+        path.join(screenshotDir, wideScreenshot),
+      );
+      expect(wideScreenshotBuffer.readUInt32BE(16)).toBeGreaterThan(1500);
+      expect(wideScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1000);
+      const styledScreenshot = fs
+        .readdirSync(screenshotDir)
+        .find((name) => name.startsWith('styled-full-page-'));
+      if (!styledScreenshot) {
+        throw new Error('Expected the styled full-page screenshot reference.');
+      }
+      const styledScreenshotBuffer = fs.readFileSync(
+        path.join(screenshotDir, styledScreenshot),
+      );
+      expect(styledScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1900);
+      const asyncScreenshot = fs
+        .readdirSync(screenshotDir)
+        .find((name) => name.startsWith('async-full-page-'));
+      if (!asyncScreenshot) {
+        throw new Error('Expected the async full-page screenshot reference.');
+      }
+      const asyncScreenshotBuffer = fs.readFileSync(
+        path.join(screenshotDir, asyncScreenshot),
+      );
+      expect(asyncScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1900);
+      fs.writeFileSync(screenshotTestPath, originalTest);
     },
   );
 });

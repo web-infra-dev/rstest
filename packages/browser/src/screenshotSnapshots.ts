@@ -46,8 +46,10 @@ const isWindowsReservedName = (name: string): boolean =>
   /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i.test(
     name.replace(/[ .]+$/, '').split('.')[0] ?? '',
   );
-const isSafeScreenshotName = (name: string): boolean =>
-  /^[a-z0-9]+(?: [a-z0-9]+)*$/.test(name) && !isWindowsReservedName(name);
+const isSafeScreenshotName = (name: string, assertionSuffix: string): boolean =>
+  /^[a-z0-9]+(?: [a-z0-9]+)*$/.test(name) &&
+  !isWindowsReservedName(name) &&
+  !(assertionSuffix === '' && / [1-9]\d*$/.test(name));
 
 const sanitizeScreenshotName = (
   name: string,
@@ -64,7 +66,7 @@ const sanitizeScreenshotName = (
       const isLastSegment = index === segments.length - 1;
       const suffix = isLastSegment ? `${assertionSuffix}${fileSuffix}` : '';
       const needsHash =
-        !isSafeScreenshotName(segment) ||
+        !isSafeScreenshotName(segment, isLastSegment ? assertionSuffix : '') ||
         Buffer.byteLength(`${sanitized}${suffix}`) > screenshotNameByteLimit;
       const hash = needsHash
         ? `~${createHash('sha256').update(segment).digest('hex')}`

@@ -19,6 +19,19 @@ test('matches a locator screenshot', async () => {
   });
 }, 30_000);
 
+test('matches a full page screenshot', async () => {
+  document.body.innerHTML = `
+    <main style="height: 1800px; background: linear-gradient(white, rgb(20, 80, 180))">
+      <h1>Page screenshot</h1>
+    </main>
+  `;
+
+  await expect(page).toMatchScreenshot('viewport', {
+    mask: [page.locator('h1')],
+  });
+  await expect(page).toMatchScreenshot('whole-page', { fullPage: true });
+}, 30_000);
+
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(20, 80, 180); color: white">Save</button>';
@@ -71,6 +84,14 @@ test('keeps case-only screenshot names distinct', async () => {
   const button = page.getByRole('button', { name: 'Save' });
   await expect(button).toMatchScreenshot('Header');
   await expect(button).toMatchScreenshot('header');
+}, 30_000);
+
+test('ordinal collision', async () => {
+  document.body.innerHTML =
+    '<button style="background: rgb(20, 80, 180); color: white">Save</button>';
+  const button = page.getByRole('button', { name: 'Save' });
+  await expect(button).toMatchScreenshot();
+  await expect(button).toMatchScreenshot('ordinal collision 1');
 }, 30_000);
 
 test('uses distinct references for duplicate test titles', async () => {

@@ -13,6 +13,7 @@ import type { BrowserElementExpect } from './augmentExpect';
 import { callBrowserRpc } from './browserRpc';
 import {
   isLocator,
+  isBrowserPage,
   Locator,
   page,
   serializeText,
@@ -186,9 +187,11 @@ expect.extend({
     if (this.isNot) {
       throw new Error('toMatchScreenshot() does not support .not.');
     }
-    if (!isLocator(received)) {
+    const receivedLocator = isLocator(received) ? received : undefined;
+    const isPageScreenshot = isBrowserPage(received);
+    if (!receivedLocator && !isPageScreenshot) {
       throw new TypeError(
-        'toMatchScreenshot() expects a Locator returned from @rstest/browser.',
+        'toMatchScreenshot() expects a Locator or page from @rstest/browser.',
       );
     }
 
@@ -247,8 +250,9 @@ expect.extend({
 
     await callBrowserRpc<ScreenshotMatchOutcome>({
       kind: 'screenshot',
-      locator: received.ir,
+      locator: receivedLocator?.ir ?? { steps: [] },
       method: 'toMatchScreenshot',
+      ...(isPageScreenshot ? { screenshotTarget: 'page' as const } : {}),
       timeout: getCurrentTestTimeout(
         isConcurrentTest && !hasAssertionFlag('rstestTestScoped')
           ? undefined

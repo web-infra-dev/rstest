@@ -150,6 +150,63 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 - `locator` must be a `Locator` returned by `@rstest/browser`. This allows the runtime to recognize and replay the complete query chain; hand-crafted objects or locators from other libraries cannot be parsed by this mechanism.
 - `expect.element` is not available outside of Browser Mode. It relies on Browser Mode's browser runtime and communication channel to execute element assertions; pure Node test environments only support regular `expect(value)` assertions.
 
+## Screenshot matching
+
+### toMatchScreenshot \{#toMatchScreenshot}
+
+<ApiMeta addedVersion="0.12.4" />
+
+With the Playwright provider, `toMatchScreenshot()` captures either a Locator or the page and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
+
+The matcher accepts an optional reference name and capture or comparison options.
+
+Pass a Locator or the `page` object from `@rstest/browser`. The matcher is only available with the Playwright provider and does not support `.not`.
+
+By default, the current test name identifies the reference. Pass a name to share a reference across assertions or give multiple screenshots in one test distinct names:
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
+  'primary-save-button',
+);
+```
+
+Unnamed assertions in the same test are assigned distinct references automatically. In `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) to use the test name; if you use the shared file-level `expect`, provide a name explicitly.
+
+The second argument controls comparison and capture. For example, allow up to 20 differing pixels, wait up to one second for a stable capture, and mask a timestamp that changes between runs:
+
+```ts
+await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+  maxDiffPixels: 20,
+  stabilityTimeout: 1000,
+  mask: [page.locator('[data-testid="updated-at"]')],
+});
+```
+
+`threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` sets an absolute limit on differing pixels; use `maxDiffPixelRatio` instead to set a fraction of the image. The defaults allow no differing pixels after applying the default `threshold` of `0.1`. Set either `maxDiffPixels` or `maxDiffPixelRatio`, not both.
+
+`stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture. Rstest disables animations during capture. Use `mask` for dynamic content, `maskColor` to change the overlay color, or `style` to inject CSS before capture. The remaining capture options (`caret`, `scale`, and `omitBackground`) are passed to Playwright's screenshot API. `fullPage` is available only for page assertions.
+
+#### Element screenshots
+
+Pass a Locator to capture only the matched element:
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+```
+
+#### Page screenshots
+
+Pass the `page` object from `@rstest/browser` to capture the current viewport. Set `fullPage: true` to capture the full page:
+
+```ts
+await expect(page).toMatchScreenshot();
+await expect(page).toMatchScreenshot('full-page', { fullPage: true });
+```
+
+References are PNG files under `__screenshots__`, grouped by project and test file. Their names include the test name, browser, and operating system. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
+
+Set project-wide matcher defaults and reference paths with [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot).
+
 ## Element assertions
 
 The matchers listed below represent the currently supported subset. Matchers not listed here are not yet available.

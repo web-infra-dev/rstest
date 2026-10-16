@@ -438,6 +438,9 @@ const createBrowserPage = (): BrowserPage => {
 
 export const page: BrowserPage = createBrowserPage();
 
+export const isBrowserPage = (value: unknown): value is BrowserPage =>
+  value === page;
+
 export const isLocator = (value: unknown): value is Locator => {
   return value instanceof Locator;
 };

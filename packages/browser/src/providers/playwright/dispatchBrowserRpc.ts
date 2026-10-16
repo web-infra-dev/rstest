@@ -46,7 +46,7 @@ const getRunnerFrame = async (
   testPath: string,
   projectName: string,
   timeoutMs: number,
-): Promise<FrameLocator> => {
+): Promise<{ frame: FrameLocator; iframe: Locator }> => {
   const selector =
     `iframe[data-test-file='${escapeCssAttrValue(testPath)}']` +
     `[data-test-project='${escapeCssAttrValue(projectName)}']`;
@@ -72,7 +72,7 @@ const getRunnerFrame = async (
     );
   }
 
-  return containerPage.frameLocator(selector);
+  return { frame: containerPage.frameLocator(selector), iframe };
 };
 
 // ---------------------------------------------------------------------------
@@ -186,9 +186,10 @@ const assertStringArg = (
 };
 
 const captureStableScreenshot = async (
-  locator: Locator,
+  target: Locator | Page,
   options: Record<string, unknown>,
   requestDeadline: number | undefined,
+  beforeCapture?: () => Promise<void>,
 ): Promise<Buffer> => {
   const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
   if (
@@ -203,12 +204,13 @@ const captureStableScreenshot = async (
     );
   }
   const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
-  const capture = (deadline = requestDeadline) => {
+  const capture = async (deadline = requestDeadline) => {
+    await beforeCapture?.();
     const timeout = deadline ? deadline - Date.now() : undefined;
     if (timeout !== undefined && timeout <= 0) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
     }
-    return locator.screenshot({
+    return target.screenshot({
       ...screenshotOptions,
       ...(timeout === undefined ? {} : { timeout }),
     } as any);
@@ -276,6 +278,7 @@ const readScreenshotOptions = async (
     'stabilityTimeout',
     'mask',
     'maskColor',
+    'fullPage',
     'style',
     'caret',
     'scale',
@@ -312,6 +315,7 @@ const readScreenshotOptions = async (
     ...(options.maskColor === undefined
       ? {}
       : { maskColor: options.maskColor }),
+    ...(options.fullPage === undefined ? {} : { fullPage: options.fullPage }),
     ...(options.style === undefined ? {} : { style: options.style }),
     ...(options.caret === undefined ? {} : { caret: options.caret }),
     ...(options.scale === undefined ? {} : { scale: options.scale }),
@@ -561,17 +565,22 @@ export async function dispatchPlaywrightBrowserRpc({
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
   const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
-  const locatorRoot = runnerPage
-    ? runnerPage
-    : await getRunnerFrame(
-        containerPage ??
-          (() => {
-            throw new Error('Browser container page is not initialized');
-          })(),
-        testPath,
-        request.projectName,
-        timeout > 0 ? timeout : 0,
-      );
+  let locatorRoot: FrameLocator | Page;
+  let headedRunner: Awaited<ReturnType<typeof getRunnerFrame>> | undefined;
+  if (runnerPage) {
+    locatorRoot = runnerPage;
+  } else {
+    headedRunner = await getRunnerFrame(
+      containerPage ??
+        (() => {
+          throw new Error('Browser container page is not initialized');
+        })(),
+      testPath,
+      request.projectName,
+      timeout > 0 ? timeout : 0,
+    );
+    locatorRoot = headedRunner.frame;
+  }
   const locator = compilePlaywrightLocator(
     locatorRoot,
     request.locator as BrowserLocatorIR,
@@ -582,11 +591,88 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);
-    const screenshot = await captureStableScreenshot(
-      locator,
-      options,
-      requestDeadline,
-    );
+    let screenshotTarget: Locator | Page = locator;
+    let restoreScreenshotState: (() => Promise<void>) | undefined;
+    let beforeScreenshotCapture: (() => Promise<void>) | undefined;
+    if (request.screenshotTarget === 'page') {
+      if (runnerPage) {
+        screenshotTarget = runnerPage;
+      } else if (headedRunner) {
+        const root = headedRunner.frame.locator(':root');
+        if (options.fullPage === true) {
+          const originalSize = await root.evaluate((element) => {
+            const htmlElement = element as HTMLElement;
+            return {
+              width: htmlElement.style.width,
+              height: htmlElement.style.height,
+            };
+          });
+          beforeScreenshotCapture = async () => {
+            await root.evaluate((element, size) => {
+              const htmlElement = element as HTMLElement;
+              htmlElement.style.width = size.width;
+              htmlElement.style.height = size.height;
+            }, originalSize);
+            const styleTag =
+              typeof options.style === 'string'
+                ? await headedRunner.frame
+                    .locator('head')
+                    .evaluateHandle((head, content) => {
+                      const style = document.createElement('style');
+                      style.textContent = content;
+                      head.appendChild(style);
+                      return style;
+                    }, options.style)
+                : undefined;
+            let scrollSize: { width: number; height: number };
+            try {
+              scrollSize = await root.evaluate((element) => ({
+                width: element.scrollWidth,
+                height: element.scrollHeight,
+              }));
+            } finally {
+              await styleTag?.evaluate((element) => element.remove());
+              await styleTag?.dispose();
+            }
+            await root.evaluate((element, size) => {
+              const htmlElement = element as HTMLElement;
+              htmlElement.style.width = `${size.width}px`;
+              htmlElement.style.height = `${size.height}px`;
+            }, scrollSize);
+          };
+          restoreScreenshotState = async () => {
+            await root.evaluate((element, size) => {
+              const htmlElement = element as HTMLElement;
+              htmlElement.style.width = size.width;
+              htmlElement.style.height = size.height;
+            }, originalSize);
+          };
+        } else {
+          screenshotTarget = headedRunner.iframe;
+        }
+        delete options.fullPage;
+      } else {
+        throw new Error(
+          'Browser runner frame is not available for screenshot capture.',
+        );
+      }
+    }
+    if (request.screenshotTarget !== 'page' && options.fullPage !== undefined) {
+      throw new Error(
+        'toMatchScreenshot fullPage is only supported when asserting the page.',
+      );
+    }
+    let screenshot: Buffer;
+    try {
+      screenshot = await captureStableScreenshot(
+        screenshotTarget,
+        options,
+        requestDeadline,
+        beforeScreenshotCapture,
+      );
+    } finally {
+      await restoreScreenshotState?.();
+    }
     return screenshot.toString('base64');
   }
 
