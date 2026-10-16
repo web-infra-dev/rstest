@@ -2,10 +2,10 @@ import { defineConfig } from '@rstest/core';
 import path from 'node:path';
 
 export default defineConfig({
-  testTimeout: 30_000,
   projects: [
     ...['project-a', 'project-b'].map((name) => ({
       name,
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
@@ -17,6 +17,7 @@ export default defineConfig({
     })),
     {
       name: 'project-config-directory',
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
@@ -33,6 +34,7 @@ export default defineConfig({
     },
     {
       name: 'project-config-resolver',
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,

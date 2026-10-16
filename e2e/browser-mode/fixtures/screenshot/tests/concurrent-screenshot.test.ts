@@ -12,7 +12,10 @@ test.concurrent(
     }, 1200);
     await new Promise((resolve) => setTimeout(resolve, 300));
     await expect(
-      page.getByRole('button', { name: 'Shared concurrent screenshot' }),
+      page.getByRole('button', {
+        name: 'Shared concurrent screenshot',
+        exact: true,
+      }),
     ).toMatchScreenshot('shared-concurrent-screenshot', {
       stabilityTimeout: 0,
     });
@@ -36,7 +39,10 @@ test.concurrent(
       '<button>Concurrent screenshot</button>',
     );
     await expect(
-      page.getByRole('button', { name: 'Concurrent screenshot' }),
+      page.getByRole('button', {
+        name: 'Concurrent screenshot',
+        exact: true,
+      }),
     ).toMatchScreenshot();
   },
 );
