@@ -66,7 +66,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/concurrent-screenshot.test.ts',
     ]);
     await firstRun.expectExecSuccess();
-    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(22);
+    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(26);
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
@@ -75,7 +75,7 @@ describe('browser mode - screenshot matching', () => {
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(9);
+    expect(screenshotNames).toHaveLength(11);
     expect(
       screenshotNames.every((name) => Buffer.byteLength(name) <= 240),
     ).toBe(true);
@@ -89,20 +89,22 @@ describe('browser mode - screenshot matching', () => {
       fs
         .readdirSync(secondProjectScreenshotDir)
         .filter((name) => name.endsWith('.png')),
-    ).toHaveLength(9);
-    expect(screenshotNames).toContainEqual(
-      expect.stringMatching(
-        new RegExp(
-          `^assigns-separate-references-to-repeated-unnamed-screenshots-1-[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
-        ),
-      ),
+    ).toHaveLength(11);
+    expect(screenshotNames).toContain(
+      `assigns-separate-references-to-repeated-unnamed-screenshots-1-chromium-${process.platform}.png`,
     );
-    expect(screenshotNames).toContainEqual(
-      expect.stringMatching(
+    expect(screenshotNames).toContain(
+      `assigns-separate-references-to-repeated-unnamed-screenshots-2-chromium-${process.platform}.png`,
+    );
+    expect(
+      screenshotNames.some((name) =>
         new RegExp(
-          `^assigns-separate-references-to-repeated-unnamed-screenshots-2-[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
-        ),
+          `^Header~[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
+        ).test(name),
       ),
+    ).toBe(true);
+    expect(screenshotNames).toContain(
+      `header-chromium-${process.platform}.png`,
     );
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
@@ -124,11 +126,13 @@ describe('browser mode - screenshot matching', () => {
     fs.writeFileSync(testPath, originalTest);
     const referenceName = fs
       .readdirSync(screenshotDir)
-      .find((name) => name.startsWith('primary-button-'));
+      .find((name) => name.startsWith('primary-button'));
     if (!referenceName)
       throw new Error('Expected the screenshot reference to be generated.');
     expect(referenceName).toMatch(
-      new RegExp(`^primary-button-chromium-${process.platform}\\.png$`),
+      new RegExp(
+        `^primary-button~[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
+      ),
     );
     const referencePath = path.join(screenshotDir, referenceName);
     expect(
@@ -159,7 +163,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/screenshot.test.ts',
     ]);
     await matchingRun.expectExecSuccess();
-    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(20);
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(24);
     const noTimeoutRun = await runScreenshot([
       '--config=rstest.no-timeout.config.mts',
       'tests/screenshot.test.ts',
@@ -215,7 +219,7 @@ describe('browser mode - screenshot matching', () => {
         projectDir,
         fs
           .readdirSync(projectDir)
-          .find((name) => name.startsWith('primary-button-'))!,
+          .find((name) => name.startsWith('primary-button'))!,
       );
       fs.writeFileSync(projectReference, 'corrupt PNG reference');
     }
@@ -289,9 +293,9 @@ test('rejects a short screenshot stability timeout', async () => {
     const directoryReference = fs
       .readdirSync(customBaselineRoot)
       .find((name) =>
-        new RegExp(`^global-default-chromium-${process.platform}\\.png$`).test(
-          name,
-        ),
+        new RegExp(
+          `^global-default~[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
+        ).test(name),
       );
     const resolverReference = path.join(
       fixtureDir,
@@ -347,7 +351,7 @@ test('rejects a short screenshot stability timeout', async () => {
       expect(projectDirs).toHaveLength(2);
       expect(
         fs.readdirSync(path.join(screenshotRoot, 'screenshot.test.ts')),
-      ).toHaveLength(10);
+      ).toHaveLength(11);
       expect(
         fs.readdirSync(
           path.join(screenshotRoot, 'concurrent-screenshot.test.ts'),
@@ -362,7 +366,7 @@ test('rejects a short screenshot stability timeout', async () => {
             'screenshot.test.ts',
           ),
         ),
-      ).toHaveLength(10);
+      ).toHaveLength(11);
     },
   );
 });

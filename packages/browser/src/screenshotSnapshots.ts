@@ -42,8 +42,14 @@ export type ScreenshotPathOptions = {
 };
 
 const screenshotNameByteLimit = 240;
+const isSafeScreenshotName = (name: string): boolean =>
+  /^[a-z0-9]+(?: [a-z0-9]+)*$/.test(name);
 
-const sanitizeScreenshotName = (name: string, fileSuffix: string): string =>
+const sanitizeScreenshotName = (
+  name: string,
+  fileSuffix: string,
+  assertionSuffix: string,
+): string =>
   relative('/', join('/', name))
     .split('/')
     .map((segment, index, segments) => {
@@ -51,12 +57,13 @@ const sanitizeScreenshotName = (name: string, fileSuffix: string): string =>
         .replace(/\s+/g, '-')
         .replace(/[^\w-]+/g, '')
         .replace(/-{2,}/g, '-');
-      const suffix = index === segments.length - 1 ? fileSuffix : '';
+      const isLastSegment = index === segments.length - 1;
+      const suffix = isLastSegment ? `${assertionSuffix}${fileSuffix}` : '';
       const needsHash =
-        sanitized !== segment ||
+        !isSafeScreenshotName(segment) ||
         Buffer.byteLength(`${sanitized}${suffix}`) > screenshotNameByteLimit;
       const hash = needsHash
-        ? `-${createHash('sha256').update(segment).digest('hex')}`
+        ? `~${createHash('sha256').update(segment).digest('hex')}`
         : '';
       const prefixLimit =
         screenshotNameByteLimit - Buffer.byteLength(`${hash}${suffix}`);
@@ -70,7 +77,7 @@ const sanitizeScreenshotName = (name: string, fileSuffix: string): string =>
         prefix += character;
         prefixBytes += characterBytes;
       }
-      return `${prefix}${hash}`;
+      return `${prefix}${hash}${isLastSegment ? assertionSuffix : ''}`;
     })
     .join('/');
 
@@ -103,17 +110,17 @@ const resolveScreenshotPath = (
         ? customPath
         : resolve(rootPath, customPath);
     }
-    const name =
+    const assertionSuffix =
       screenshotAssertionOrdinal === undefined
-        ? testName
-        : `${testName}-${screenshotAssertionOrdinal}`;
+        ? ''
+        : `-${screenshotAssertionOrdinal}`;
     const fileSuffix = `-${browserName}-${platform}.png`;
     return resolve(
       rootPath,
       relative(rootPath, dirname(testPath)),
       screenshotDirectory ?? '__screenshots__',
       basename(testPath),
-      `${sanitizeScreenshotName(name, fileSuffix)}${fileSuffix}`,
+      `${sanitizeScreenshotName(testName, fileSuffix, assertionSuffix)}${fileSuffix}`,
     );
   })();
 

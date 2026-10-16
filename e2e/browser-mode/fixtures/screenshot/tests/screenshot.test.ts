@@ -65,6 +65,14 @@ test('saves long screenshot names atomically', async () => {
   ).toMatchScreenshot('a'.repeat(300));
 }, 30_000);
 
+test('keeps case-only screenshot names distinct', async () => {
+  document.body.innerHTML =
+    '<button style="background: rgb(20, 80, 180); color: white">Save</button>';
+  const button = page.getByRole('button', { name: 'Save' });
+  await expect(button).toMatchScreenshot('Header');
+  await expect(button).toMatchScreenshot('header');
+}, 30_000);
+
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(180, 40, 20); color: white">Save</button>';

@@ -117,9 +117,9 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
-  it('uses the Vitest screenshot directory and filename layout', async () => {
+  it('uses the default screenshot directory and filename layout', async () => {
     await withRoot(async (root) => {
-      await match(root, { testName: 'renders-a-component' });
+      await match(root, { testName: 'renders a component' });
 
       const screenshotDirectory = path.join(
         root,
@@ -148,6 +148,29 @@ describe('matchBrowserScreenshot', () => {
       expect(filenames).toHaveLength(2);
       expect(new Set(filenames).size).toBe(2);
       expect(filenames).toContain('renders-a-b-chromium-linux.png');
+      expect(
+        filenames.some((name) => /renders-a-b~[a-f0-9]{64}/.test(name)),
+      ).toBe(true);
+    });
+  });
+
+  it('keeps case-only screenshot names distinct', async () => {
+    await withRoot(async (root) => {
+      await match(root, { testName: 'Header' });
+      await match(root, { testName: 'header' });
+
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
+      );
+      const filenames = await fs.readdir(screenshotDirectory);
+      expect(filenames).toHaveLength(2);
+      expect(filenames).toContain('header-chromium-linux.png');
+      expect(filenames.some((name) => /Header~[a-f0-9]{64}/.test(name))).toBe(
+        true,
+      );
     });
   });
 
@@ -202,11 +225,11 @@ describe('matchBrowserScreenshot', () => {
   it('adds repeated unnamed assertion ordinals to the screenshot name', async () => {
     await withRoot(async (root) => {
       await match(root, {
-        testName: 'renders-a-component',
+        testName: 'renders a component',
         screenshotAssertionOrdinal: 1,
       });
       await match(root, {
-        testName: 'renders-a-component',
+        testName: 'renders a component',
         screenshotAssertionOrdinal: 2,
       });
 

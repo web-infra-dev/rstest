@@ -434,13 +434,13 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 
 `comparatorOptions.maxDiffPixels` 和 `comparatorOptions.maxDiffPixelRatio` 只能配置其中一个。`screenshotDirectory` 用于更改测试文件旁的截图目录；未配置时默认为 `__screenshots__`。
 
-默认路径与 Vitest 保持一致：
+默认路径如下：
 
 ```text
 <测试文件目录>/__screenshots__/<测试文件名>/<测试名>-<浏览器>-<平台>.png
 ```
 
-测试名会转换为适合文件系统的路径。同一测试中的重复未命名断言会在名称后追加序号，例如 `<测试名>-1` 和 `<测试名>-2`。
+测试名会转换为适合文件系统的路径；可能因清理规则产生冲突的名称会追加稳定后缀。同一测试中的重复未命名断言会在名称后追加序号，例如 `<测试名>-1` 和 `<测试名>-2`。
 
 默认路径不包含项目名，因此测试文件、截图名、浏览器和平台相同的项目会共用一份基线。如需按项目隔离基线，可通过 `resolveScreenshotPath` 自定义路径。Rstest 旧哈希布局中的基线不会自动迁移；请将其移动到新路径，或使用 `--update` 重新生成。
 
