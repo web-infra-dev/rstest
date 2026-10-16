@@ -9,6 +9,7 @@ import {
   plainDeepMerge,
   resolveConfigFileExtends,
   resolveExtends,
+  trackDerivedTriggers,
 } from '../config';
 import type { LoadProjectConfig } from '../projectLoader';
 import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
@@ -449,18 +450,20 @@ export async function resolveProjects({
 
         inlineProjectConfigPromises.push(
           resolveExtends({ ...p }).then(
-            (projectConfig) => ({
-              content: mergeWithCLIOptions(
+            (projectConfig) => {
+              const content = mergeWithCLIOptions(
                 {
                   root: projectRoot,
                   ...projectConfig,
                   name: p.name ? p.name : getDefaultProjectName(projectRoot),
                 },
                 options,
-              ),
-              filePath: null,
-              dependencies: [],
-            }),
+              );
+              if (p.forceRerunTriggers === undefined) {
+                trackDerivedTriggers(content);
+              }
+              return { content, filePath: null, dependencies: [] };
+            },
             (error) => ({ error }),
           ),
         );

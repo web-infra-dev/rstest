@@ -180,7 +180,12 @@ describe('PROJECT_LOADER', () => {
     const loader = rs.fn<LoadProjectConfig>(({ dirPath }) => {
       if (dirPath === join(root, 'packages')) {
         const content: RootConfig = {
-          projects: ['./a', './b'],
+          projects: [
+            './a',
+            './b',
+            { name: 'inline:c', root: './c' },
+            { name: 'inline:d', root: './d', forceRerunTriggers: [] },
+          ],
           [PROJECT_LOADER]: nestedLoader,
         };
         return {
@@ -211,10 +216,15 @@ describe('PROJECT_LOADER', () => {
     expect(projects.map((p) => p.config.name).sort()).toEqual([
       'host:a',
       'host:b',
+      'inline:c',
+      'inline:d',
     ]);
     for (const project of projects) {
+      const leafDeps = project.config.name!.startsWith('host:')
+        ? [hostDep(join(root, 'packages', project.config.name!.slice(5)))]
+        : [];
       expect(project.configFileDependencies).toEqual([
-        hostDep(join(root, 'packages', project.config.name!.slice(5))),
+        ...leafDeps,
         '/deps/parent-dep.ts',
         parentFile,
       ]);
@@ -231,6 +241,13 @@ describe('PROJECT_LOADER', () => {
       parentFile,
     ]);
     expect(triggersByName['host:b']).toEqual([]);
+    expect(triggersByName['inline:c']).toEqual([
+      '**/package.json/**',
+      '**/rstest.config.*',
+      '/deps/parent-dep.ts',
+      parentFile,
+    ]);
+    expect(triggersByName['inline:d']).toEqual([]);
   });
 
   it('keeps the loader when the root config has extends (API path)', async () => {
