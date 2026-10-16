@@ -51,6 +51,7 @@ describe('matchBrowserScreenshot', () => {
       projectName: 'default',
       testName: 'renders a component',
       browserName: 'chromium',
+      platform: 'linux',
       screenshotBase64: createScreenshot(),
       updateSnapshot: 'all',
       ...overrides,
@@ -116,29 +117,19 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
-  it('keeps sanitized test names unique and project names inside the screenshot directory', async () => {
+  it('uses the Vitest screenshot directory and filename layout', async () => {
     await withRoot(async (root) => {
-      await match(root, { testName: 'renders a b' });
-      await match(root, { testName: 'renders a-b' });
-      await match(root, { projectName: '..', testName: 'renders safely' });
+      await match(root, { testName: 'renders a -- component!' });
 
-      const screenshotRoot = path.join(root, 'tests', '__screenshots__');
-      const projectDirs = await fs.readdir(screenshotRoot);
-      expect(projectDirs).toHaveLength(2);
-      expect(projectDirs.every((name) => Buffer.byteLength(name) <= 255)).toBe(
-        true,
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
       );
-      const projectDir = path.join(
-        screenshotRoot,
-        projectDirs.find((name) => name.startsWith('default-'))!,
-      );
-      const [testDirectory] = await fs.readdir(projectDir);
-      const files = await fs.readdir(path.join(projectDir, testDirectory!));
-      expect(files).toHaveLength(2);
-      expect(projectDirs.some((name) => name.startsWith('project-'))).toBe(
-        true,
-      );
-      await expect(fs.access(path.join(root, 'example'))).rejects.toThrow();
+      expect(await fs.readdir(screenshotDirectory)).toEqual([
+        'renders-a-component-chromium-linux.png',
+      ]);
     });
   });
 
@@ -175,69 +166,21 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
-  it('limits screenshot filenames by their UTF-8 byte length', async () => {
+  it('adds repeated unnamed assertion ordinals to the screenshot name', async () => {
     await withRoot(async (root) => {
-      await match(root, { testName: '按钮'.repeat(80) });
-
-      const screenshotDir = path.join(
-        root,
-        'tests',
-        '__screenshots__',
-        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
-        'example.test.ts',
-      );
-      const [referenceName] = await fs.readdir(screenshotDir);
-      expect(Buffer.byteLength(referenceName!)).toBeLessThanOrEqual(255);
-    });
-  });
-
-  it('stores repeated unnamed assertion ordinals as separate path components', async () => {
-    await withRoot(async (root) => {
-      await match(root);
+      await match(root, { screenshotAssertionOrdinal: 1 });
       await match(root, { screenshotAssertionOrdinal: 2 });
 
-      const screenshotDir = path.join(
+      const screenshotDirectory = path.join(
         root,
         'tests',
         '__screenshots__',
-        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
         'example.test.ts',
       );
-      expect(await fs.readdir(screenshotDir)).toEqual(
-        expect.arrayContaining([
-          'assertion-2',
-          expect.stringMatching(/\.png$/),
-        ]),
-      );
-      expect(
-        (await fs.readdir(path.join(screenshotDir, 'assertion-2')))[0],
-      ).toMatch(/\.png$/);
-    });
-  });
-
-  it('limits project directory names by their UTF-8 byte length', async () => {
-    await withRoot(async (root) => {
-      await match(root, { projectName: '项目'.repeat(40) });
-
-      const screenshotRoot = path.join(root, 'tests', '__screenshots__');
-      const [projectDirectory] = await fs.readdir(screenshotRoot);
-      expect(Buffer.byteLength(projectDirectory!)).toBeLessThanOrEqual(255);
-      expect(projectDirectory).toMatch(/-[a-f0-9]{8}$/);
-    });
-  });
-
-  it('keeps project directory names distinct when they differ by case', async () => {
-    await withRoot(async (root) => {
-      await match(root, { projectName: 'web' });
-      await match(root, { projectName: 'Web' });
-
-      const projectDirs = await fs.readdir(
-        path.join(root, 'tests', '__screenshots__'),
-      );
-      expect(projectDirs).toHaveLength(2);
-      expect(projectDirs.map((name) => name.toLowerCase()).sort()[0]).not.toBe(
-        projectDirs.map((name) => name.toLowerCase()).sort()[1],
-      );
+      expect(await fs.readdir(screenshotDirectory)).toEqual([
+        'renders-a-component-1-chromium-linux.png',
+        'renders-a-component-2-chromium-linux.png',
+      ]);
     });
   });
 
@@ -248,13 +191,8 @@ describe('matchBrowserScreenshot', () => {
         testPath: path.join(root, 'tests', 'example.test.tsx'),
       });
 
-      const projectDir = path.join(
-        root,
-        'tests',
-        '__screenshots__',
-        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
-      );
-      expect(await fs.readdir(projectDir)).toEqual([
+      const screenshotRoot = path.join(root, 'tests', '__screenshots__');
+      expect(await fs.readdir(screenshotRoot)).toEqual([
         'example.test.ts',
         'example.test.tsx',
       ]);
@@ -265,14 +203,12 @@ describe('matchBrowserScreenshot', () => {
     await withRoot(async (root) => {
       await match(root);
 
-      const projectDir = path.join(
+      const screenshotDir = path.join(
         root,
         'tests',
         '__screenshots__',
-        (await fs.readdir(path.join(root, 'tests', '__screenshots__')))[0]!,
+        'example.test.ts',
       );
-      const [testDirectory] = await fs.readdir(projectDir);
-      const screenshotDir = path.join(projectDir, testDirectory!);
       const [referenceName] = await fs.readdir(screenshotDir);
       const referencePath = path.join(screenshotDir, referenceName!);
       await fs.writeFile(referencePath, 'not a PNG');

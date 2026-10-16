@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import pixelmatch from 'pixelmatch';
 import {
   basename,
@@ -41,23 +40,16 @@ export type ScreenshotPathOptions = {
   screenshotAssertionOrdinal?: number;
 };
 
-const sanitizePathComponent = (name: string, fallback: string): string => {
-  const sanitized = name
-    .replace(/[<>:"/\\|?*\p{Cc}]/gu, '-')
-    .replace(/\s+/g, '-')
-    .replace(/^\.+/, '');
-  const safeName = sanitized || fallback;
-  let prefix = '';
-  let prefixBytes = 0;
-  for (const character of safeName) {
-    const characterBytes = Buffer.byteLength(character);
-    if (prefixBytes + characterBytes > 200) break;
-    prefix += character;
-    prefixBytes += characterBytes;
-  }
-  const hash = createHash('sha256').update(name).digest('hex').slice(0, 8);
-  return `${prefix}-${hash}`;
-};
+const sanitizeScreenshotName = (name: string): string =>
+  relative('/', join('/', name))
+    .split('/')
+    .map((segment) =>
+      segment
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/-{2,}/g, '-'),
+    )
+    .join('/');
 
 const resolveScreenshotPath = (
   rootPath: string,
@@ -88,32 +80,16 @@ const resolveScreenshotPath = (
         ? customPath
         : resolve(rootPath, customPath);
     }
-    const directory = screenshotDirectory
-      ? isAbsolute(screenshotDirectory)
-        ? screenshotDirectory
-        : resolve(rootPath, screenshotDirectory)
-      : dirname(testPath);
-    const relativeTestPath = relative(rootPath, testPath)
-      .split(/[\\/]/)
-      .filter((segment) => segment && segment !== '.');
-    return join(
-      directory,
-      ...(screenshotDirectory
-        ? [
-            sanitizePathComponent(projectName, 'project'),
-            ...relativeTestPath.map((segment) =>
-              sanitizePathComponent(segment, 'test-path'),
-            ),
-          ]
-        : [
-            '__screenshots__',
-            sanitizePathComponent(projectName, 'project'),
-            basename(testPath),
-          ]),
-      ...(screenshotAssertionOrdinal === undefined
-        ? []
-        : [`assertion-${screenshotAssertionOrdinal}`]),
-      `${sanitizePathComponent(testName, 'screenshot')}-${browserName}-${platform}.png`,
+    const name =
+      screenshotAssertionOrdinal === undefined
+        ? testName
+        : `${testName}-${screenshotAssertionOrdinal}`;
+    return resolve(
+      rootPath,
+      relative(rootPath, dirname(testPath)),
+      screenshotDirectory ?? '__screenshots__',
+      basename(testPath),
+      `${sanitizeScreenshotName(name)}-${browserName}-${platform}.png`,
     );
   })();
 

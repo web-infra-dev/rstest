@@ -88,7 +88,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 
 `stabilityTimeout` 默认值为 `2000` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。截图时 Rstest 会禁用动画。动态内容可通过 `mask` 遮罩；也可以用 `maskColor` 修改遮罩颜色，或通过 `style` 在截图前注入 CSS。其他截图选项（`caret`、`scale` 和 `omitBackground`）会传给 Playwright 的 Locator screenshot API。
 
-PNG 基线保存在 `__screenshots__` 目录中，并按项目和测试文件分组；文件名包含测试名称、浏览器和操作系统。断言不匹配时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。截图捕获受当前测试剩余超时时间限制。设置 `testTimeout: 0` 后不再受测试超时限制，但 `stabilityTimeout` 仍然生效。
+PNG 基线保存在 `__screenshots__` 目录中，并按测试文件分组。文件名采用与 Vitest 一致的格式：经过路径清理的测试名称、浏览器和操作系统；重复的未命名断言会在测试名称后追加序号。断言不匹配时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。截图捕获受当前测试剩余超时时间限制。设置 `testTimeout: 0` 后不再受测试超时限制，但 `stabilityTimeout` 仍然生效。
 
 可通过 [`browser.expect.toMatchScreenshot`](/config/test/browser) 设置项目级 matcher 默认值和基线路径。
 

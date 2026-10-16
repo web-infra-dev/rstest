@@ -88,7 +88,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 
 `stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture. Rstest disables animations during capture. Use `mask` for dynamic content, `maskColor` to change the overlay color, or `style` to inject CSS before capture. The remaining capture options (`caret`, `scale`, and `omitBackground`) are passed to Playwright's Locator screenshot API.
 
-References are PNG files under `__screenshots__`, grouped by project and test file. Their names include the test name, browser, and operating system. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
+References are PNG files under `__screenshots__`, grouped by test file. Their names follow Vitest's format: the sanitized test name, browser, and operating system. Repeated unnamed assertions add a sequence number to the test name. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
 
 Set project-wide matcher defaults and reference paths with [`browser.expect.toMatchScreenshot`](/config/test/browser).
 

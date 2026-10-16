@@ -70,25 +70,29 @@ describe('browser mode - screenshot matching', () => {
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
-    const screenshotDirForProject = (projectName: string) => {
-      const projectDir = projectDirs.find((name) =>
-        name.startsWith(`${projectName}-`),
-      );
-      if (!projectDir) {
-        throw new Error(`Expected screenshot directory for ${projectName}.`);
-      }
-      return path.join(screenshotRoot, projectDir, 'screenshot.test.ts');
-    };
-    const screenshotDir = screenshotDirForProject('project-a');
-    const secondProjectDir = screenshotDirForProject('project-b');
+    const screenshotDir = path.join(screenshotRoot, 'screenshot.test.ts');
     const screenshotNames = fs
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(8);
+    expect(screenshotNames).toHaveLength(9);
+    const secondProjectScreenshotDir = path.join(
+      fixtureDir,
+      'tests',
+      'project-b-baselines',
+      'screenshot.test.ts',
+    );
     expect(
-      fs.readdirSync(screenshotDir).some((name) => name === 'assertion-2'),
-    ).toBe(true);
+      fs
+        .readdirSync(secondProjectScreenshotDir)
+        .filter((name) => name.endsWith('.png')),
+    ).toHaveLength(9);
+    expect(screenshotNames).toContain(
+      `assigns-separate-references-to-repeated-unnamed-screenshots-1-chromium-${process.platform}.png`,
+    );
+    expect(screenshotNames).toContain(
+      `assigns-separate-references-to-repeated-unnamed-screenshots-2-chromium-${process.platform}.png`,
+    );
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
     fs.writeFileSync(
@@ -113,24 +117,27 @@ describe('browser mode - screenshot matching', () => {
     if (!referenceName)
       throw new Error('Expected the screenshot reference to be generated.');
     expect(referenceName).toMatch(
-      new RegExp(
-        `^primary-button-[a-f0-9]{8}-chromium-${process.platform}\\.png$`,
-      ),
+      new RegExp(`^primary-button-chromium-${process.platform}\\.png$`),
     );
     const referencePath = path.join(screenshotDir, referenceName);
-    expect(fs.existsSync(path.join(secondProjectDir, referenceName))).toBe(
-      true,
-    );
-    for (const project of ['project-a', 'project-b']) {
-      expect(
-        fs.readdirSync(
-          path.join(
-            path.dirname(screenshotDirForProject(project)),
-            'concurrent-screenshot.test.ts',
-          ),
+    expect(
+      fs.existsSync(path.join(secondProjectScreenshotDir, referenceName)),
+    ).toBe(true);
+    expect(
+      fs.readdirSync(
+        path.join(screenshotRoot, 'concurrent-screenshot.test.ts'),
+      ),
+    ).toHaveLength(2);
+    expect(
+      fs.readdirSync(
+        path.join(
+          fixtureDir,
+          'tests',
+          'project-b-baselines',
+          'concurrent-screenshot.test.ts',
         ),
-      ).toHaveLength(2);
-    }
+      ),
+    ).toHaveLength(2);
     const originalReference = fs.readFileSync(referencePath);
     expect(originalReference.subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -192,7 +199,7 @@ describe('browser mode - screenshot matching', () => {
     const updatedMatchRun = await runScreenshot(['tests/screenshot.test.ts']);
     await updatedMatchRun.expectExecSuccess();
 
-    for (const projectDir of [screenshotDir, secondProjectDir]) {
+    for (const projectDir of [screenshotDir, secondProjectScreenshotDir]) {
       const projectReference = path.join(
         projectDir,
         fs
@@ -262,30 +269,18 @@ test('rejects a short screenshot stability timeout', async () => {
     ]);
     await firstRun.expectExecSuccess();
 
-    const customBaselineRoot = path.join(fixtureDir, 'custom-baselines');
-    const projectDirectory = fs
-      .readdirSync(customBaselineRoot)
-      .find((name) => name.startsWith('project-config-directory-'))!;
-    const projectDirectoryPath = path.join(
-      customBaselineRoot,
-      projectDirectory,
-    );
-    const testsDirectory = fs
-      .readdirSync(projectDirectoryPath)
-      .find((name) => /^tests-[a-f0-9]{8}$/.test(name))!;
-    const testsDirectoryPath = path.join(projectDirectoryPath, testsDirectory);
-    const projectBaselineRoot = path.join(
-      testsDirectoryPath,
-      fs
-        .readdirSync(testsDirectoryPath)
-        .find((name) => /^configured\.test\.ts-[a-f0-9]{8}$/.test(name))!,
+    const customBaselineRoot = path.join(
+      fixtureDir,
+      'tests',
+      'custom-baselines',
+      'configured.test.ts',
     );
     const directoryReference = fs
-      .readdirSync(projectBaselineRoot)
+      .readdirSync(customBaselineRoot)
       .find((name) =>
-        new RegExp(
-          `^global-default-[a-f0-9]{8}-chromium-${process.platform}\\.png$`,
-        ).test(name),
+        new RegExp(`^global-default-chromium-${process.platform}\\.png$`).test(
+          name,
+        ),
       );
     const resolverReference = path.join(
       fixtureDir,
@@ -339,28 +334,24 @@ test('rejects a short screenshot stability timeout', async () => {
       const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
       const projectDirs = fs.readdirSync(screenshotRoot);
       expect(projectDirs).toHaveLength(2);
-      for (const project of ['project-a', 'project-b']) {
-        const projectDir = projectDirs.find((name) =>
-          name.startsWith(`${project}-`),
-        );
-        if (!projectDir) {
-          throw new Error(`Expected screenshot directory for ${project}.`);
-        }
-        expect(
-          fs.readdirSync(
-            path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
+      expect(
+        fs.readdirSync(path.join(screenshotRoot, 'screenshot.test.ts')),
+      ).toHaveLength(10);
+      expect(
+        fs.readdirSync(
+          path.join(screenshotRoot, 'concurrent-screenshot.test.ts'),
+        ),
+      ).toHaveLength(2);
+      expect(
+        fs.readdirSync(
+          path.join(
+            fixtureDir,
+            'tests',
+            'project-b-baselines',
+            'screenshot.test.ts',
           ),
-        ).toHaveLength(9);
-        expect(
-          fs.readdirSync(
-            path.join(
-              screenshotRoot,
-              projectDir,
-              'concurrent-screenshot.test.ts',
-            ),
-          ),
-        ).toHaveLength(2);
-      }
+        ),
+      ).toHaveLength(10);
     },
   );
 });

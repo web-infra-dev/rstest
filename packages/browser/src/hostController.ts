@@ -887,7 +887,7 @@ export const runBrowserController = async (
           screenshotAssertionOrdinal !== undefined &&
           (typeof screenshotAssertionOrdinal !== 'number' ||
             !Number.isInteger(screenshotAssertionOrdinal) ||
-            screenshotAssertionOrdinal < 2)
+            screenshotAssertionOrdinal < 1)
         ) {
           throw new Error('Invalid screenshot assertion ordinal.');
         }
