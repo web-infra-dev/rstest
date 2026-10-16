@@ -107,21 +107,11 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 
 <ApiMeta addedVersion="0.12.4" />
 
-With the Playwright provider, `expect(locator).toMatchScreenshot()` captures a Locator, while `expect(page).toMatchScreenshot()` captures the page. Both compare the screenshot with a PNG reference. Page screenshots capture the viewport by default; set `fullPage: true` to capture the full page. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
+With the Playwright provider, `toMatchScreenshot()` captures either a Locator or the page and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
 
 The matcher accepts an optional reference name and capture or comparison options.
 
 Pass a Locator or the `page` object from `@rstest/browser`. The matcher is only available with the Playwright provider and does not support `.not`.
-
-```ts
-import { page } from '@rstest/browser';
-import { expect, test } from '@rstest/core';
-
-test('save button matches its visual reference', async () => {
-  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
-  await expect(page).toMatchScreenshot('full-page', { fullPage: true });
-});
-```
 
 By default, the current test name identifies the reference. Pass a name to share a reference across assertions or give multiple screenshots in one test distinct names:
 
@@ -146,6 +136,23 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 `threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` sets an absolute limit on differing pixels; use `maxDiffPixelRatio` instead to set a fraction of the image. The defaults allow no differing pixels after applying the default `threshold` of `0.1`. Set either `maxDiffPixels` or `maxDiffPixelRatio`, not both.
 
 `stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture. Rstest disables animations during capture. Use `mask` for dynamic content, `maskColor` to change the overlay color, or `style` to inject CSS before capture. The remaining capture options (`caret`, `scale`, and `omitBackground`) are passed to Playwright's screenshot API. `fullPage` is available only for page assertions.
+
+#### Element screenshots
+
+Pass a Locator to capture only the matched element:
+
+```ts
+await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+```
+
+#### Page screenshots
+
+Pass the `page` object from `@rstest/browser` to capture the current viewport. Set `fullPage: true` to capture the full page:
+
+```ts
+await expect(page).toMatchScreenshot();
+await expect(page).toMatchScreenshot('full-page', { fullPage: true });
+```
 
 References are PNG files under `__screenshots__`, grouped by project and test file. Their names include the test name, browser, and operating system. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
 
