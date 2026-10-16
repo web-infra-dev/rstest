@@ -385,6 +385,11 @@ describe('matchBrowserScreenshot', () => {
       await match(root, {
         rootPath: root,
         testPath,
+        screenshotDirectory: path.dirname(testPath),
+      });
+      await match(root, {
+        rootPath: root,
+        testPath,
         screenshotDirectory: root,
       });
 

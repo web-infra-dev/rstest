@@ -136,9 +136,10 @@ const resolveScreenshotPath = (
     );
     const referenceLocation = relative(testDirectory, referenceRoot);
     const isSharedDirectory =
-      (screenshotDirectory !== undefined && isAbsolute(screenshotDirectory)) ||
-      referenceLocation === '..' ||
-      referenceLocation.startsWith('../');
+      referenceRoot !== testDirectory &&
+      ((screenshotDirectory !== undefined && isAbsolute(screenshotDirectory)) ||
+        referenceLocation === '..' ||
+        referenceLocation.startsWith('../'));
     const sourceDirectory = relative(rootPath, testDirectory);
     const testDirectoryUnderReferenceRoot = isSharedDirectory
       ? join(

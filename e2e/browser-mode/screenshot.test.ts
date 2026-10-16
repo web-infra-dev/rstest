@@ -451,9 +451,11 @@ test('captures two unnamed screenshots', async () => {
   }, 120_000);
 
   it('stores references outside the test file when the directory is dot', async () => {
-    fs.writeFileSync(
-      path.join(fixtureDir, 'rstest.dot-screenshots.config.mts'),
-      `import { defineConfig } from '@rstest/core';
+    const configPath = path.join(
+      fixtureDir,
+      'rstest.dot-screenshots.config.mts',
+    );
+    const dotConfig = `import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   browser: {
@@ -466,8 +468,8 @@ export default defineConfig({
   },
   include: ['tests/dot-directory.test.ts'],
 });
-`,
-    );
+`;
+    fs.writeFileSync(configPath, dotConfig);
     const testPath = path.join(fixtureDir, 'tests', 'dot-directory.test.ts');
     fs.writeFileSync(
       testPath,
@@ -497,6 +499,24 @@ test('captures a screenshot', async () => {
     ).toEqual([`captures-a-screenshot-1-chromium-${process.platform}.png`]);
     const secondRun = await runScreenshot(args);
     await secondRun.expectExecSuccess();
+    fs.writeFileSync(
+      configPath,
+      dotConfig
+        .replace(
+          "import { defineConfig } from '@rstest/core';",
+          "import path from 'node:path';\nimport { defineConfig } from '@rstest/core';",
+        )
+        .replace(
+          "screenshotDirectory: '.'",
+          "screenshotDirectory: path.join(import.meta.dirname, 'tests')",
+        ),
+    );
+    const absoluteRun = await runScreenshot(['--reporters=json', ...args]);
+    await absoluteRun.expectExecSuccess();
+    expect(parseJsonReport(absoluteRun.cli.stdout).snapshot.added).toBe(0);
+    expect(fs.existsSync(path.join(fixtureDir, 'tests', '__projects__'))).toBe(
+      false,
+    );
   }, 120_000);
 
   it('uses global matcher defaults and screenshot path configuration', async () => {
