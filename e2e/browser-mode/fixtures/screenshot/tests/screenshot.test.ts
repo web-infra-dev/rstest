@@ -19,6 +19,16 @@ test('matches a locator screenshot', async () => {
   });
 }, 30_000);
 
+test('matches a full page screenshot', async () => {
+  document.body.innerHTML = `
+    <main style="height: 1800px; background: linear-gradient(white, rgb(20, 80, 180))">
+      <h1>Page screenshot</h1>
+    </main>
+  `;
+
+  await expect(page).toMatchScreenshot('whole-page', { fullPage: true });
+}, 30_000);
+
 test('uses distinct references for duplicate test titles', async () => {
   document.body.innerHTML =
     '<button style="background: rgb(20, 80, 180); color: white">Save</button>';

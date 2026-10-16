@@ -67,6 +67,8 @@ export type ToMatchScreenshotOptions = {
   /** Mask dynamic content with browser-mode Locators. */
   mask?: Locator[];
   maskColor?: string;
+  /** Capture the full page instead of the viewport. Only supported by page assertions. */
+  fullPage?: boolean;
   style?: string;
   caret?: 'hide' | 'initial';
   scale?: 'css' | 'device';

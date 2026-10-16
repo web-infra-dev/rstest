@@ -66,7 +66,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/concurrent-screenshot.test.ts',
     ]);
     await firstRun.expectExecSuccess();
-    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(22);
+    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(24);
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
@@ -85,7 +85,17 @@ describe('browser mode - screenshot matching', () => {
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(8);
+    expect(screenshotNames).toHaveLength(9);
+    const pageScreenshotName = screenshotNames.find((name) =>
+      name.startsWith('whole-page-'),
+    );
+    if (!pageScreenshotName) {
+      throw new Error('Expected the full page screenshot reference.');
+    }
+    const pageScreenshot = fs.readFileSync(
+      path.join(screenshotDir, pageScreenshotName),
+    );
+    expect(pageScreenshot.readUInt32BE(20)).toBeGreaterThan(1000);
     expect(
       fs.readdirSync(screenshotDir).some((name) => name === 'assertion-2'),
     ).toBe(true);
@@ -141,7 +151,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/screenshot.test.ts',
     ]);
     await matchingRun.expectExecSuccess();
-    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(20);
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(22);
     const noTimeoutRun = await runScreenshot([
       '--config=rstest.no-timeout.config.mts',
       'tests/screenshot.test.ts',
@@ -350,7 +360,7 @@ test('rejects a short screenshot stability timeout', async () => {
           fs.readdirSync(
             path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
           ),
-        ).toHaveLength(9);
+        ).toHaveLength(10);
         expect(
           fs.readdirSync(
             path.join(

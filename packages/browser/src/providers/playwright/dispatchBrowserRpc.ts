@@ -186,7 +186,7 @@ const assertStringArg = (
 };
 
 const captureStableScreenshot = async (
-  locator: Locator,
+  target: Locator | Page,
   options: Record<string, unknown>,
   requestDeadline: number | undefined,
 ): Promise<Buffer> => {
@@ -208,7 +208,7 @@ const captureStableScreenshot = async (
     if (timeout !== undefined && timeout <= 0) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
     }
-    return locator.screenshot({
+    return target.screenshot({
       ...screenshotOptions,
       ...(timeout === undefined ? {} : { timeout }),
     } as any);
@@ -276,6 +276,7 @@ const readScreenshotOptions = async (
     'stabilityTimeout',
     'mask',
     'maskColor',
+    'fullPage',
     'style',
     'caret',
     'scale',
@@ -312,6 +313,7 @@ const readScreenshotOptions = async (
     ...(options.maskColor === undefined
       ? {}
       : { maskColor: options.maskColor }),
+    ...(options.fullPage === undefined ? {} : { fullPage: options.fullPage }),
     ...(options.style === undefined ? {} : { style: options.style }),
     ...(options.caret === undefined ? {} : { caret: options.caret }),
     ...(options.scale === undefined ? {} : { scale: options.scale }),
@@ -582,8 +584,26 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);
+    const screenshotTarget =
+      request.screenshotTarget === 'page'
+        ? 'screenshot' in locatorRoot
+          ? locatorRoot
+          : locatorRoot.locator(':root')
+        : locator;
+    if (request.screenshotTarget !== 'page' && options.fullPage !== undefined) {
+      throw new Error(
+        'toMatchScreenshot fullPage is only supported when asserting the page.',
+      );
+    }
+    if (
+      request.screenshotTarget === 'page' &&
+      !('screenshot' in screenshotTarget) &&
+      options.fullPage !== undefined
+    ) {
+      delete options.fullPage;
+    }
     const screenshot = await captureStableScreenshot(
-      locator,
+      screenshotTarget,
       options,
       requestDeadline,
     );
