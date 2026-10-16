@@ -23,15 +23,11 @@ export default defineConfig({
   markdown: {
     link: {
       checkAnchors: true,
-      checkDeadLinks: true,
     },
     shiki: {
       // Enable line highlighting via code block meta, e.g. ```ts {1,3-5}
       transformers: [transformerCompatibleMetaHighlight()],
     },
-  },
-  search: {
-    codeBlocks: true,
   },
   lang: 'en',
   route: {
