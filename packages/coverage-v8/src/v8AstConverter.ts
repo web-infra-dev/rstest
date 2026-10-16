@@ -1026,6 +1026,53 @@ function applyCoverageHits(
   }
 }
 
+/**
+ * Adds the per-offset hit counts the converter resolves for `scriptCoverage`
+ * into `ranges`: sorted, disjoint `[startOffset, endOffset)` ranges with
+ * non-zero counts, usable as the block ranges of a single function. Statement,
+ * function and explicit branch hits are read by offset, so converting the sum
+ * equals summing separate conversions. Implicit else hits clamp against the
+ * summed counts instead: when an `if` follows a conditional await or yield,
+ * payloads from separate test files can yield a lower else count than their
+ * separate conversions, the same count one payload making every call yields.
+ */
+export function addScriptCoverageHits(
+  ranges: Profiler.CoverageRange[],
+  scriptCoverage: Pick<Profiler.ScriptCoverage, 'functions'>,
+): Profiler.CoverageRange[] {
+  const events: [offset: number, delta: number][] = [];
+  const addEvents = (start: number, end: number, count: number) => {
+    if (count !== 0 && start < end) events.push([start, count], [end, -count]);
+  };
+  for (const range of ranges) {
+    addEvents(range.startOffset, range.endOffset, range.count);
+  }
+  for (const range of normalize(scriptCoverage)) {
+    addEvents(range.start, range.end + 1, range.count);
+  }
+  events.sort((a, b) => a[0] - b[0]);
+
+  const merged: Profiler.CoverageRange[] = [];
+  let count = 0;
+  let index = 0;
+  while (index < events.length) {
+    const offset = events[index]![0];
+    while (index < events.length && events[index]![0] === offset) {
+      count += events[index++]![1];
+    }
+    const next = events[index]?.[0];
+    if (next === undefined || count === 0) continue;
+
+    const previous = merged.at(-1);
+    if (previous?.endOffset === offset && previous.count === count) {
+      previous.endOffset = next;
+    } else {
+      merged.push({ startOffset: offset, endOffset: next, count });
+    }
+  }
+  return merged;
+}
+
 function normalize(scriptCoverage: Pick<Profiler.ScriptCoverage, 'functions'>) {
   const rawRanges = getSortedRawCoverageRanges(scriptCoverage);
 
