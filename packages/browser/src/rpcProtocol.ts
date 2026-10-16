@@ -95,6 +95,8 @@ export type BrowserRpcRequest = {
   timeoutIsExplicit?: boolean;
   /** Snapshot update policy captured from the runner config for this request. */
   snapshotUpdate?: SnapshotUpdateState;
+  /** Screenshot target; omitted for Locator screenshots. */
+  screenshotTarget?: 'page';
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -171,6 +173,16 @@ export const validateBrowserRpcRequest = (
     method: readString(payload, 'method', 'method'),
     args: readUnknownArray(payload, 'args', 'args'),
   };
+
+  const screenshotTarget = payload.screenshotTarget;
+  if (screenshotTarget !== undefined) {
+    if (screenshotTarget !== 'page') {
+      throw new Error(
+        'Invalid browser RPC request: screenshotTarget must be "page"',
+      );
+    }
+    request.screenshotTarget = screenshotTarget;
+  }
 
   const isNot = payload.isNot;
   if (isNot !== undefined) {
