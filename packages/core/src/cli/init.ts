@@ -3,7 +3,14 @@ import type { LoadConfigOptions, LoadConfigResult } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RunOptions } from '../api/types';
-import { loadConfig, plainDeepMerge, resolveExtends } from '../config';
+import {
+  loadConfig,
+  mergeForceRerunTriggers,
+  plainDeepMerge,
+  resolveConfigFileExtends,
+  resolveExtends,
+} from '../config';
+import type { LoadProjectConfig } from '../projectLoader';
 import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
 import {
   castArray,
@@ -336,12 +343,34 @@ export function mergeWithCLIOptions(
 
 async function resolveConfig(
   options: CommonOptions & { cwd: string },
+  projectLoader: LoadProjectConfig | undefined,
 ): Promise<LoadConfigResult<RstestConfig>> {
-  const result = await loadConfig({
-    cwd: options.cwd,
-    path: options.config,
-    configLoader: options.configLoader,
-  });
+  let result: LoadConfigResult<RstestConfig>;
+  if (projectLoader) {
+    // Glob results for directories end with `/`, so normalize with `resolve()`.
+    const dirPath = resolve(options.cwd);
+    const loaded = (await projectLoader(
+      options.config
+        ? { dirPath, filePath: resolve(options.cwd, options.config) }
+        : { dirPath },
+    )) ?? { content: {}, filePath: null, dependencies: [] };
+    const dependencies = [...(loaded.dependencies ?? [])];
+    result = {
+      content: await resolveConfigFileExtends({
+        content: { ...loaded.content },
+        filePath: loaded.filePath,
+        dependencies,
+      }),
+      filePath: loaded.filePath,
+      dependencies,
+    };
+  } else {
+    result = await loadConfig({
+      cwd: options.cwd,
+      path: options.config,
+      configLoader: options.configLoader,
+    });
+  }
 
   mergeWithCLIOptions(result.content, options);
   result.content.root ||= options.cwd;
@@ -366,10 +395,12 @@ export async function resolveProjects({
   config,
   root,
   options,
+  projectLoader,
 }: {
   config: RstestConfig;
   root: string;
   options: CommonOptions;
+  projectLoader?: LoadProjectConfig;
 }): Promise<Project[]> {
   if (!config.projects) {
     return [];
@@ -473,11 +504,14 @@ export async function resolveProjects({
       projectPaths.map(async (project) => {
         const isDirectory = statSync(project).isDirectory();
         const projectRoot = isDirectory ? project : dirname(project);
-        const result = await resolveConfig({
-          ...options,
-          config: isDirectory ? undefined : project,
-          cwd: projectRoot,
-        });
+        const result = await resolveConfig(
+          {
+            ...options,
+            config: isDirectory ? undefined : project,
+            cwd: projectRoot,
+          },
+          projectLoader,
+        );
 
         if (result.filePath) {
           if (resolvedProjectPaths.has(result.filePath)) {
@@ -491,10 +525,20 @@ export async function resolveProjects({
 
         if (config.projects?.length) {
           const childProjects = await getProjects(config, projectRoot);
+          const parentFiles = result.filePath
+            ? [...result.dependencies, result.filePath]
+            : result.dependencies;
+          // Expand `<rootDir>` against the parent before leaves resolve it.
+          const parentTriggers = config.forceRerunTriggers?.map((trigger) =>
+            formatRootStr(trigger, config.root ?? projectRoot),
+          );
           for (const child of childProjects) {
-            child.dependencies.push(...result.dependencies);
-            if (result.filePath) {
-              child.dependencies.push(result.filePath);
+            child.dependencies.push(...parentFiles);
+            if (parentTriggers?.length) {
+              child.content.forceRerunTriggers = mergeForceRerunTriggers(
+                child.content.forceRerunTriggers,
+                parentTriggers,
+              );
             }
           }
           projects.push(...childProjects);

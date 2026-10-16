@@ -71,9 +71,40 @@ export async function loadConfig({
     logger.debug('no rstest config file found');
   }
 
-  result.content = await resolveExtends(result.content);
+  result.content = await resolveConfigFileExtends(result);
   return result;
 }
+
+/** Appends `triggers` to `base`, or to the defaults when `base` is unset. */
+export const mergeForceRerunTriggers = (
+  base: string[] | undefined,
+  triggers: string[],
+): string[] =>
+  Array.from(new Set([...(base ?? DEFAULT_FORCE_RERUN_TRIGGERS), ...triggers]));
+
+/**
+ * Like `resolveExtends`, and also adds the config file and its dependencies to
+ * `forceRerunTriggers` when the config file does not set that option.
+ */
+export const resolveConfigFileExtends = async ({
+  content,
+  filePath,
+  dependencies = [],
+}: LoadConfigResult<RstestConfig>): Promise<RstestConfig> => {
+  const hasOwnTriggers = content.forceRerunTriggers !== undefined;
+  const resolved = await resolveExtends(content);
+
+  const configFiles = filePath ? [filePath, ...dependencies] : dependencies;
+
+  if (!hasOwnTriggers && configFiles.length) {
+    resolved.forceRerunTriggers = mergeForceRerunTriggers(
+      resolved.forceRerunTriggers,
+      configFiles,
+    );
+  }
+
+  return resolved;
+};
 
 const resolveExtendEntry = async (
   entry: ResolvedExtendEntry,
@@ -105,6 +136,10 @@ export const resolveExtends = async (
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
   merged.extends = undefined;
+  // Keep the user layer's symbol keys, such as a host's `PROJECT_LOADER`.
+  for (const key of Object.getOwnPropertySymbols(config)) {
+    Reflect.set(merged, key, Reflect.get(config, key));
+  }
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(
