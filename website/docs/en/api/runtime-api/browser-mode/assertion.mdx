@@ -45,9 +45,9 @@ expect.element(locator: Locator): BrowserElementExpect
 
 ## Screenshot matching
 
-<ApiMeta addedVersion="0.12.4" />
-
 ### toMatchScreenshot \{#toMatchScreenshot}
+
+<ApiMeta addedVersion="0.12.4" />
 
 With the Playwright provider, `expect(locator).toMatchScreenshot()` captures the Locator's content and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
 
