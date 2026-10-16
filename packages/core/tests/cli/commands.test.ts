@@ -740,6 +740,26 @@ describe('getForceRerunTriggers', () => {
       'apps/b/rspack.config.ts',
     ]);
   });
+
+  it('includes root and project config file paths', () => {
+    expect(
+      getForceRerunTriggers({
+        rootTriggers: ['**/rstest.config.*'],
+        configFilePath: '/repo/custom.config.ts',
+        projects: [
+          {
+            configFilePath: '/repo/packages/a/host.config.ts',
+            normalizedConfig: { forceRerunTriggers: ['**/rstest.config.*'] },
+          },
+          { normalizedConfig: { forceRerunTriggers: [] } },
+        ],
+      }),
+    ).toEqual([
+      '**/rstest.config.*',
+      '/repo/custom.config.ts',
+      '/repo/packages/a/host.config.ts',
+    ]);
+  });
 });
 
 describe('hasForceRerunTrigger', () => {

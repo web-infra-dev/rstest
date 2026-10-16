@@ -105,6 +105,10 @@ export const resolveExtends = async (
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
   merged.extends = undefined;
+  // Keep the user layer's symbol keys, such as a host's `PROJECT_LOADER`.
+  for (const key of Object.getOwnPropertySymbols(config)) {
+    Reflect.set(merged, key, Reflect.get(config, key));
+  }
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(

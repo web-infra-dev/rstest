@@ -62,17 +62,24 @@ const formatGitError = (error: unknown): string | undefined => {
 
 export const getForceRerunTriggers = ({
   rootTriggers,
+  configFilePath,
   projects,
 }: {
   rootTriggers: string[];
-  projects: Array<{ normalizedConfig: { forceRerunTriggers: string[] } }>;
+  configFilePath?: string;
+  projects: Array<{
+    configFilePath?: string;
+    normalizedConfig: { forceRerunTriggers: string[] };
+  }>;
 }): string[] =>
   Array.from(
     new Set([
       ...rootTriggers,
-      ...projects.flatMap(
-        (project) => project.normalizedConfig.forceRerunTriggers,
-      ),
+      ...(configFilePath ? [configFilePath] : []),
+      ...projects.flatMap((project) => [
+        ...project.normalizedConfig.forceRerunTriggers,
+        ...(project.configFilePath ? [project.configFilePath] : []),
+      ]),
     ]),
   );
 
@@ -222,6 +229,7 @@ const resolveEffectiveFilters = async ({
         changedFiles: sourceFilters,
         triggers: getForceRerunTriggers({
           rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
+          configFilePath: rstest.context.configFilePath,
           projects: rstest.context.projects,
         }),
         rootPath: rstest.context.rootPath,

@@ -8,6 +8,7 @@ import type {
   TestRunEndPayload,
 } from '../types';
 import type { LoadedRstestConfig } from '../config';
+import type { LoadProjectConfig } from '../projectLoader';
 
 export type {
   CoverageMapData,
@@ -22,6 +23,7 @@ export type {
   RstestConfig,
   TestLocation,
   LoadedRstestConfig,
+  LoadProjectConfig,
 };
 
 /** @experimental Subject to change until 1.0.0. */
