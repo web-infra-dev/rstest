@@ -44,6 +44,32 @@ type BrowserModeConfig = {
   viewport?: BrowserViewport;
   strictPort?: boolean;
   providerOptions?: Record<string, unknown>;
+  expect?: {
+    toMatchScreenshot?: {
+      comparatorOptions?: {
+        threshold?: number;
+        maxDiffPixels?: number;
+        maxDiffPixelRatio?: number;
+      };
+      stabilityTimeout?: number;
+      maskColor?: string;
+      style?: string;
+      caret?: 'hide' | 'initial';
+      scale?: 'css' | 'device';
+      omitBackground?: boolean;
+      screenshotDirectory?: string;
+      resolveScreenshotPath?: (options: BrowserScreenshotPathOptions) => string;
+    };
+  };
+};
+
+type BrowserScreenshotPathOptions = {
+  testFilePath: string;
+  projectName: string;
+  testName: string;
+  browserName: 'chromium' | 'firefox' | 'webkit';
+  platform: string;
+  screenshotAssertionOrdinal?: number;
 };
 ```
 
@@ -363,6 +389,90 @@ export default defineConfig({
 
 ```bash
 npx rstest --browser.providerOptions.launch.channel=chrome
+```
+
+### expect.toMatchScreenshot
+
+- **类型：** `BrowserScreenshotMatcherConfig`
+- **默认值：**
+
+```ts
+{
+  comparatorOptions: {
+    threshold: 0.1,
+    maxDiffPixels: 0,
+  },
+  stabilityTimeout: 2000,
+  maskColor: '#FF00FF',
+  caret: 'hide',
+  scale: 'css',
+  omitBackground: false,
+}
+```
+
+`maxDiffPixelRatio` 的默认值同样为 `0`；如需按比例设置容差，请用它替代 `maxDiffPixels`。默认不注入额外的 `style`，也不遮罩任何元素；`mask` 仅支持在断言中配置。
+
+为 Browser Mode 项目中的 [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#screenshot-matching) 配置全局默认值。像素比较容差配置在 `comparatorOptions` 下；截图和路径选项与它同级。单次断言传入的值会覆盖对应的全局值。`mask` 仍需在断言中单独传入，因为它需要浏览器中的 `Locator` 对象。
+
+省略选项时会使用以下默认行为。`maskColor`、`caret`、`scale` 和 `omitBackground` 的截图默认值由 Playwright 提供。
+
+| 选项                                  | 默认值    | 说明                                            |
+| ------------------------------------- | --------- | ----------------------------------------------- |
+| `comparatorOptions.threshold`         | `0.1`     | 单像素颜色距离阈值，`0` 最严格，`1` 最宽松。    |
+| `comparatorOptions.maxDiffPixels`     | `0`       | 允许差异的最大像素数。                          |
+| `comparatorOptions.maxDiffPixelRatio` | `0`       | 允许差异像素所占的最大比例。                    |
+| `stabilityTimeout`                    | `2000`    | 等待连续截图一致的最长时间，单位为毫秒。        |
+| `maskColor`                           | `#FF00FF` | 遮罩内容使用的颜色。                            |
+| `style`                               | 未设置    | 不注入额外 CSS。                                |
+| `caret`                               | `hide`    | 截图时隐藏文本光标。                            |
+| `scale`                               | `css`     | 每个 CSS 像素对应截图中的一个像素。             |
+| `omitBackground`                      | `false`   | 截图保留页面背景。                              |
+| `screenshotDirectory`                 | 未设置    | 基线保存在测试文件旁的 `__screenshots__` 目录。 |
+| `resolveScreenshotPath`               | 内置默认  | 使用下文介绍的默认路径布局。                    |
+
+`comparatorOptions.maxDiffPixels` 和 `comparatorOptions.maxDiffPixelRatio` 只能配置其中一个。`screenshotDirectory` 用于更改默认路径布局；相对路径以项目根目录为基准。未配置时，基线保存在测试文件旁的 `__screenshots__` 目录中。
+
+默认情况下，基线保存在测试文件旁，路径结构如下：
+
+```text
+<测试文件目录>/__screenshots__/<项目名>-<哈希>/<测试文件名>/<测试名>-<哈希>-<浏览器>-<平台>.png
+```
+
+同一测试中重复的未命名断言会在文件名前增加 `assertion-<序号>` 目录，例如 `assertion-2`。项目名和测试名会转换为适合文件系统的名称，并附加短哈希以避免冲突。
+
+如需自定义路径布局，可使用 `resolveScreenshotPath`。回调会收到测试文件绝对路径、项目名、测试名、浏览器、平台，以及重复未命名断言使用的可选序号。返回绝对路径或相对于项目根目录的路径。配置此回调后，它的优先级高于 `screenshotDirectory`。
+
+```ts title="rstest.config.ts"
+import path from 'node:path';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    expect: {
+      toMatchScreenshot: {
+        comparatorOptions: {
+          threshold: 0.1,
+          maxDiffPixels: 10,
+        },
+        resolveScreenshotPath: ({
+          testFilePath,
+          projectName,
+          testName,
+          browserName,
+          platform,
+        }) =>
+          path.join(
+            'visual-baselines',
+            projectName,
+            path.relative(process.cwd(), testFilePath),
+            `${testName}-${browserName}-${platform}.png`,
+          ),
+      },
+    },
+  },
+});
 ```
 
 ## 当前限制：同一次 run 的 browser 启动配置必须一致

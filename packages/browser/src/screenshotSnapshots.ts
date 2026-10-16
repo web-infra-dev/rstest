@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto';
 import pixelmatch from 'pixelmatch';
-import { basename, dirname, join, parse } from 'pathe';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  parse,
+  relative,
+  resolve,
+} from 'pathe';
 import { PNG } from 'pngjs';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { ScreenshotMatchOutcome } from './rpcProtocol';
@@ -16,6 +24,21 @@ export type ScreenshotMatchOptions = {
   threshold?: number;
   maxDiffPixels?: number;
   maxDiffPixelRatio?: number;
+  stabilityTimeout?: number;
+  maskColor?: string;
+  style?: string;
+  caret?: 'hide' | 'initial';
+  scale?: 'css' | 'device';
+  omitBackground?: boolean;
+};
+
+export type ScreenshotPathOptions = {
+  testFilePath: string;
+  projectName: string;
+  testName: string;
+  browserName: 'chromium' | 'firefox' | 'webkit';
+  platform: string;
+  screenshotAssertionOrdinal?: number;
 };
 
 const sanitizePathComponent = (name: string, fallback: string): string => {
@@ -37,22 +60,58 @@ const sanitizePathComponent = (name: string, fallback: string): string => {
 };
 
 const resolveScreenshotPath = (
+  rootPath: string,
   testPath: string,
   projectName: string,
   testName: string,
-  browserName: string,
+  browserName: ScreenshotPathOptions['browserName'],
+  platform: string,
   screenshotAssertionOrdinal?: number,
+  screenshotDirectory?: string,
+  resolvePath?: (options: ScreenshotPathOptions) => string,
 ): string =>
-  join(
-    dirname(testPath),
-    '__screenshots__',
-    sanitizePathComponent(projectName, 'project'),
-    basename(testPath),
-    ...(screenshotAssertionOrdinal === undefined
-      ? []
-      : [`assertion-${screenshotAssertionOrdinal}`]),
-    `${sanitizePathComponent(testName, 'screenshot')}-${browserName}-${process.platform}.png`,
-  );
+  (() => {
+    const pathOptions = {
+      testFilePath: testPath,
+      projectName,
+      testName,
+      browserName,
+      platform,
+      screenshotAssertionOrdinal,
+    };
+    if (resolvePath) {
+      const customPath = resolvePath(pathOptions);
+      if (!customPath) {
+        throw new Error('resolveScreenshotPath must return a non-empty path.');
+      }
+      return isAbsolute(customPath)
+        ? customPath
+        : resolve(rootPath, customPath);
+    }
+    const directory = screenshotDirectory
+      ? isAbsolute(screenshotDirectory)
+        ? screenshotDirectory
+        : resolve(rootPath, screenshotDirectory)
+      : dirname(testPath);
+    const relativeTestPath = relative(rootPath, testPath)
+      .split(/[\\/]/)
+      .map((segment) => (segment === '..' ? '_parent_' : segment))
+      .filter((segment) => segment && segment !== '.');
+    return join(
+      directory,
+      ...(screenshotDirectory
+        ? [sanitizePathComponent(projectName, 'project'), ...relativeTestPath]
+        : [
+            '__screenshots__',
+            sanitizePathComponent(projectName, 'project'),
+            basename(testPath),
+          ]),
+      ...(screenshotAssertionOrdinal === undefined
+        ? []
+        : [`assertion-${screenshotAssertionOrdinal}`]),
+      `${sanitizePathComponent(testName, 'screenshot')}-${browserName}-${platform}.png`,
+    );
+  })();
 
 const getFailurePaths = (referencePath: string) => {
   const referenceName = parse(referencePath).name;
@@ -175,7 +234,12 @@ const writeFailureArtifacts = async ({
 
 const validateOptions = (
   options: ScreenshotMatchOptions | undefined,
-): Required<ScreenshotMatchOptions> => {
+): Required<
+  Pick<
+    ScreenshotMatchOptions,
+    'threshold' | 'maxDiffPixels' | 'maxDiffPixelRatio'
+  >
+> => {
   const result = {
     threshold: options?.threshold ?? 0.1,
     maxDiffPixels: options?.maxDiffPixels ?? 0,
@@ -220,6 +284,7 @@ const validateOptions = (
 export const matchBrowserScreenshot = async ({
   snapshotStore,
   testPath,
+  rootPath = dirname(testPath),
   projectName,
   testName,
   browserName,
@@ -228,26 +293,37 @@ export const matchBrowserScreenshot = async ({
   options,
   deadline,
   screenshotAssertionOrdinal,
+  screenshotDirectory,
+  resolvePath,
+  platform = process.platform,
 }: {
   snapshotStore: ScreenshotSnapshotStore;
   testPath: string;
+  rootPath?: string;
   projectName: string;
   testName: string;
-  browserName: string;
+  browserName: 'chromium' | 'firefox' | 'webkit';
   screenshotBase64: string;
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
   deadline?: number;
   screenshotAssertionOrdinal?: number;
+  screenshotDirectory?: string;
+  resolvePath?: (options: ScreenshotPathOptions) => string;
+  platform?: string;
 }): Promise<ScreenshotMatchOutcome> => {
   throwIfScreenshotDeadlinePassed(deadline);
   const normalizedOptions = validateOptions(options);
   const filepath = resolveScreenshotPath(
+    rootPath,
     testPath,
     projectName,
     testName,
     browserName,
+    platform,
     screenshotAssertionOrdinal,
+    screenshotDirectory,
+    resolvePath,
   );
   const actualBuffer = Buffer.from(screenshotBase64, 'base64');
   const actual = PNG.sync.read(actualBuffer);

@@ -253,6 +253,66 @@ test('rejects a short screenshot stability timeout', async () => {
     ).toBe(false);
   });
 
+  it('uses global matcher defaults and screenshot path configuration', async () => {
+    const testPath = path.join(fixtureDir, 'tests', 'configured.test.ts');
+    const originalTest = fs.readFileSync(testPath, 'utf8');
+    const firstRun = await runScreenshot([
+      '--update',
+      'tests/configured.test.ts',
+    ]);
+    await firstRun.expectExecSuccess();
+
+    const projectBaselineRoot = path.join(
+      fixtureDir,
+      'custom-baselines',
+      fs
+        .readdirSync(path.join(fixtureDir, 'custom-baselines'))
+        .find((name) => name.startsWith('project-config-directory-'))!,
+      'tests',
+      'configured.test.ts',
+    );
+    const directoryReference = fs
+      .readdirSync(projectBaselineRoot)
+      .find((name) =>
+        new RegExp(
+          `^global-default-[a-f0-9]{8}-chromium-${process.platform}\\.png$`,
+        ).test(name),
+      );
+    const resolverReference = path.join(
+      fixtureDir,
+      'custom-paths',
+      'project-config-resolver',
+      'configured.test.ts',
+      'global-default.png',
+    );
+    expect(directoryReference).toBeDefined();
+    expect(fs.existsSync(resolverReference)).toBe(true);
+
+    const changedTest = originalTest.replace(
+      'rgb(10, 20, 30)',
+      'rgb(180, 40, 20)',
+    );
+    fs.writeFileSync(testPath, changedTest);
+    const globalThresholdRun = await runScreenshot([
+      'tests/configured.test.ts',
+    ]);
+    await globalThresholdRun.expectExecSuccess();
+
+    fs.writeFileSync(
+      testPath,
+      changedTest.replace(
+        ").toMatchScreenshot('global-default');",
+        ").toMatchScreenshot('global-default', { maxDiffPixels: 0 });",
+      ),
+    );
+    const overrideRun = await runScreenshot(['tests/configured.test.ts']);
+    await overrideRun.cli.exec;
+    expect(overrideRun.cli.exec.exitCode).toBe(1);
+    expect(`${overrideRun.cli.stdout}\n${overrideRun.cli.stderr}`).toContain(
+      'Screenshot does not match the stored reference',
+    );
+  }, 120_000);
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'routes headed screenshots to the matching project iframe',
     async () => {

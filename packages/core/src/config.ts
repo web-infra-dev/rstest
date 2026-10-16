@@ -378,6 +378,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     strictPort: merged.browser?.strictPort ?? false,
     viewport: merged.browser?.viewport,
     providerOptions: merged.browser?.providerOptions ?? {},
+    expect: merged.browser?.expect,
   };
 
   return {
