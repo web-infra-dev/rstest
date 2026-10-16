@@ -15,6 +15,7 @@ import picomatch from 'picomatch';
 import { parse } from 'yuku-parser';
 import { createFastCoverageMap, mapWithConcurrency } from './utils';
 import {
+  addScriptCoverageHits,
   applyV8CoverageWithAst,
   convertV8CoverageWithAst,
   resolveSourceMapFilenames,
@@ -245,6 +246,8 @@ export class CoverageProvider implements RstestCoverageProvider {
     Map<string, string>
   >();
   private diskSourceMapCache = new Map<string, Promise<boolean>>();
+  /** Target payloads `foldRawCoverage` created in a retained-payload list. */
+  private foldedRawPayloads = new WeakSet<RawCoveragePayload>();
 
   constructor(
     public options: NormalizedCoverageOptions,
@@ -777,6 +780,60 @@ export class CoverageProvider implements RstestCoverageProvider {
       options?.loadAssetFiles,
       options?.loadSourceMaps,
     );
+  }
+
+  /**
+   * Malformed payloads and payloads carrying their own resources stay
+   * unfolded. `addScriptCoverageHits` describes the one count that can differ
+   * from converting each payload separately.
+   */
+  foldRawCoverage(payloads: unknown[], payload: unknown): void {
+    // A payload's conversion identity includes the assets and source maps it
+    // carries (`getRawCoverageGroupKey`), so only host-loaded payloads, which
+    // share one identity per cycle, can fold together.
+    if (
+      !isRawCoveragePayload(payload) ||
+      payload.options?.assetFiles ||
+      payload.options?.sourceMaps
+    ) {
+      payloads.push(payload);
+      return;
+    }
+
+    const outputModule = payload.options?.outputModule ?? true;
+    let target = payloads.find((retained): retained is RawCoveragePayload => {
+      // `has` is false for anything this provider did not create.
+      const candidate = retained as RawCoveragePayload;
+      return (
+        this.foldedRawPayloads.has(candidate) &&
+        candidate.root === payload.root &&
+        (candidate.options?.outputModule ?? true) === outputModule
+      );
+    });
+    if (!target) {
+      target = { entries: [], options: payload.options, root: payload.root };
+      this.foldedRawPayloads.add(target);
+      payloads.push(target);
+    }
+    const entriesByFilePath = new Map(
+      target.entries.map((entry) => [entry.filePath, entry]),
+    );
+
+    for (const entry of payload.entries) {
+      let folded = entriesByFilePath.get(entry.filePath);
+      if (!folded) {
+        folded = {
+          url: entry.url,
+          scriptId: entry.scriptId,
+          filePath: entry.filePath,
+          functions: [{ functionName: '', isBlockCoverage: true, ranges: [] }],
+        };
+        entriesByFilePath.set(entry.filePath, folded);
+        target.entries.push(folded);
+      }
+      const hits = folded.functions[0]!;
+      hits.ranges = addScriptCoverageHits(hits.ranges, entry);
+    }
   }
 
   async collectRaw(

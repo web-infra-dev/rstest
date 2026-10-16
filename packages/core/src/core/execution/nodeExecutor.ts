@@ -359,13 +359,17 @@ export function createNodeExecutor(
     };
     const mergeRawCoverage =
       coverageProvider?.mergeRawCoverage?.bind(coverageProvider);
+    const foldRawCoverage =
+      coverageProvider?.foldRawCoverage?.bind(coverageProvider) ??
+      ((payloads: unknown[], raw: unknown) => {
+        payloads.push(raw);
+      });
     const onRawCoverageResult =
       mergeRawCoverage && mergedCoverageMap
         ? (raw: unknown) =>
             foldCoverage(() => mergeRawCoverage(mergedCoverageMap, raw))
-        : (raw: unknown) => {
-            rawCoverageResults.push(raw);
-          };
+        : (raw: unknown) =>
+            foldCoverage(() => foldRawCoverage(rawCoverageResults, raw));
 
     const traceRun = getTraceRun();
     const { span } = traceRun;

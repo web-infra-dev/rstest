@@ -8,7 +8,9 @@ import { rspack } from '@rsbuild/core';
 import { decodedMappings, TraceMap } from '@jridgewell/trace-mapping';
 import libCoverage from 'istanbul-lib-coverage';
 import { parse } from 'yuku-parser';
+import { createFastCoverageMap } from '../src/utils';
 import {
+  addScriptCoverageHits,
   convertV8CoverageWithAst,
   applyV8CoverageWithAst,
 } from '../src/v8AstConverter';
@@ -66,9 +68,32 @@ async function main() {
 globalThis.done = main();
 `;
 
+const splitAwait = `type Body = { code: number } | undefined;
+async function loadBody(status: number): Promise<Body> {
+  return { code: status === 400 ? 2 : 1 };
+}
+async function handle(passed: Body, status: number) {
+  if (status === 404) {
+    return 'not-found';
+  }
+  const body = passed ?? (await loadBody(status));
+  if (status === 403) {
+    return 'forbidden';
+  }
+  return body;
+}
+async function main() {
+  for (const [passed, status] of globalThis.calls) {
+    await handle(passed ? { code: 1 } : undefined, status);
+  }
+}
+globalThis.done = main();
+`;
+
 async function collect(
   code: string,
   url: string,
+  calls: [passed: number, status: number][] = [],
 ): Promise<Profiler.ScriptCoverage> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(
@@ -82,7 +107,7 @@ async function collect(
         try {
           await session.post('Profiler.enable');
           await session.post('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
-          const context = vm.createContext({ make: value => value });
+          const context = vm.createContext({ make: value => value, calls: workerData.calls });
           const module = new vm.SourceTextModule(workerData.code, {
             context, identifier: workerData.url,
           });
@@ -98,7 +123,7 @@ async function collect(
       `,
       {
         eval: true,
-        workerData: { code, url },
+        workerData: { code, url, calls },
         execArgv: ['--experimental-vm-modules'],
       },
     );
@@ -229,6 +254,71 @@ describe('coverage-v8 converter regressions', () => {
       );
       expect(branch).toBeDefined();
       expect(coverage.b[branch![0]]).toEqual([10, 2]);
+    },
+  );
+
+  // The implicit-else difference `addScriptCoverageHits` documents.
+  it.each([
+    ['es2022', [3, 0]],
+    ['es2016', [3, 0]],
+    ['es5', [3, 2]],
+  ] as const)(
+    'merges split payloads of a conditional await (%s)',
+    async (form, mergedHits) => {
+      const { file, options } = await prepare(splitAwait, 'split-await', form);
+      const { url } = options.coverage;
+      const awaited = await collect(options.code, url, [
+        [0, 403],
+        [0, 403],
+        [0, 403],
+      ]);
+      const passed = await collect(options.code, url, [
+        [1, 500],
+        [1, 500],
+      ]);
+      const single = await collect(options.code, url, [
+        [0, 403],
+        [0, 403],
+        [0, 403],
+        [1, 500],
+        [1, 500],
+      ]);
+
+      const separate = createFastCoverageMap();
+      for (const coverage of [awaited, passed]) {
+        await applyV8CoverageWithAst({
+          ...options,
+          coverage,
+          coverageMap: separate,
+        });
+      }
+      let ranges: Profiler.CoverageRange[] = [];
+      for (const coverage of [awaited, passed]) {
+        ranges = addScriptCoverageHits(ranges, coverage);
+      }
+      const mergedMap = createFastCoverageMap();
+      await applyV8CoverageWithAst({
+        ...options,
+        coverage: {
+          url,
+          functions: [{ functionName: '', isBlockCoverage: true, ranges }],
+        },
+        coverageMap: mergedMap,
+      });
+      const merged = mergedMap.fileCoverageFor(file).data;
+      const [key] = Object.entries(merged.branchMap).find(
+        ([, value]) => value.type === 'if' && value.loc.start.line === 10,
+      )!;
+      expect(merged.b[key]).toEqual(mergedHits);
+      const singleCoverage = await convertV8CoverageWithAst({
+        ...options,
+        coverage: single,
+      });
+      expect(singleCoverage[file]!.b[key]).toEqual(mergedHits);
+      expect(separate.fileCoverageFor(file).data).toEqual({
+        ...merged,
+        b: { ...merged.b, [key]: [3, 2] },
+      });
     },
   );
 

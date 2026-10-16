@@ -229,6 +229,15 @@ export declare class CoverageProvider {
   /** @internal Fold a raw worker result immediately, without buffering. */
   mergeRawCoverage?(map: CoverageMap, payload: unknown): void;
 
+  /**
+   * Fold one `collectRaw` payload into the payloads the runner retains for
+   * `resolveRawCoverage`, so retained raw coverage grows with distinct scripts
+   * rather than with test files. Without it, the runner appends each payload.
+   *
+   * @internal
+   */
+  foldRawCoverage?(payloads: unknown[], payload: unknown): void;
+
   /** @internal Called by the pool when dispatching a run task; passed to the worker's collectRaw. */
   getKnownCoverageStructures?(map: CoverageMap): KnownCoverageStructure[];
 

@@ -1405,6 +1405,152 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('folds raw coverage payloads on arrival without mutating them', () => {
+    const provider = new CoverageProvider(createOptions(), '/root');
+    const createEntry = (
+      filePath: string,
+      ranges: { startOffset: number; endOffset: number; count: number }[],
+    ) => ({
+      url: pathToFileURL(filePath).href,
+      filePath,
+      scriptId: '1',
+      functions: [{ functionName: '', isBlockCoverage: true, ranges }],
+    });
+    const options = { outputModule: true };
+    const first = {
+      entries: [
+        createEntry('/root/a.js', [
+          { startOffset: 0, endOffset: 10, count: 1 },
+        ]),
+      ],
+      options,
+      root: '/root',
+    };
+    const second = {
+      entries: [
+        createEntry('/root/a.js', [
+          { startOffset: 0, endOffset: 10, count: 2 },
+        ]),
+        createEntry('/root/a.js', [
+          { startOffset: 0, endOffset: 20, count: 5 },
+        ]),
+        createEntry('/root/b.js', [
+          { startOffset: 0, endOffset: 10, count: 1 },
+        ]),
+      ],
+      options,
+      root: '/root',
+    };
+    const otherRoot = {
+      entries: [
+        createEntry('/root/a.js', [
+          { startOffset: 0, endOffset: 10, count: 4 },
+        ]),
+      ],
+      options,
+      root: '/other',
+    };
+    const malformed = { entries: 'malformed' };
+    const payloads: unknown[] = [];
+
+    for (const payload of [first, second, otherRoot, malformed]) {
+      provider.foldRawCoverage(payloads, payload);
+    }
+
+    expect(payloads).toEqual([
+      {
+        entries: [
+          createEntry('/root/a.js', [
+            { startOffset: 0, endOffset: 10, count: 8 },
+            { startOffset: 10, endOffset: 20, count: 5 },
+          ]),
+          createEntry('/root/b.js', [
+            { startOffset: 0, endOffset: 10, count: 1 },
+          ]),
+        ],
+        options,
+        root: '/root',
+      },
+      {
+        entries: [
+          createEntry('/root/a.js', [
+            { startOffset: 0, endOffset: 10, count: 4 },
+          ]),
+        ],
+        options,
+        root: '/other',
+      },
+      malformed,
+    ]);
+    expect(first.entries).toEqual([
+      createEntry('/root/a.js', [{ startOffset: 0, endOffset: 10, count: 1 }]),
+    ]);
+  });
+
+  it('converts merged raw coverage like the separate payloads', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-shapes');
+    const file = join(root, 'src', 'pick.js');
+    const code =
+      'function pick(x) { if (x) { return 1; } return 2; }\npick(true);\npick(false);';
+    const fnStart = code.indexOf('function');
+    const fnEnd = code.indexOf('}\n') + 1;
+    const thenStart = code.indexOf('{ return 1');
+    const thenEnd = code.indexOf('}', thenStart) + 1;
+    const elseStart = code.indexOf('return 2');
+    // Payloads from files that took different branches have different shapes.
+    const createPayload = (x: boolean) => ({
+      entries: [
+        {
+          url: pathToFileURL(file).href,
+          filePath: file,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+            {
+              functionName: 'pick',
+              isBlockCoverage: true,
+              ranges: [
+                { startOffset: fnStart, endOffset: fnEnd, count: 1 },
+                x
+                  ? { startOffset: elseStart, endOffset: fnEnd - 1, count: 0 }
+                  : { startOffset: thenStart, endOffset: thenEnd, count: 0 },
+              ],
+            },
+          ],
+        },
+      ],
+      options: { outputModule: false },
+      root,
+    });
+    const resolveOptions = {
+      loadAssetFiles: async () => ({ [file]: code }),
+      loadSourceMaps: async () => ({}),
+    };
+    const resolve = (payloads: unknown[]) =>
+      new CoverageProvider(createOptions(), root).resolveRawCoverage(
+        payloads,
+        resolveOptions,
+      );
+
+    const provider = new CoverageProvider(createOptions(), root);
+    const merged: unknown[] = [];
+    for (const x of [true, false, true]) {
+      provider.foldRawCoverage(merged, createPayload(x));
+    }
+
+    expect(merged).toHaveLength(1);
+    expect((merged[0] as { entries: unknown[] }).entries).toHaveLength(1);
+    const expected = await resolve([true, false, true].map(createPayload));
+    expect(expected?.fileCoverageFor(file).b).toEqual({
+      0: [2, 1],
+    });
+    expect((await resolve(merged))?.toJSON()).toEqual(expected?.toJSON());
+  });
+
   it('filters external original sources from browser raw coverage', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-browser-external-source');
     const generatedFile = 'https://cdn.example.com/bundle.js';
