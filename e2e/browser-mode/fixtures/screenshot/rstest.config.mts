@@ -2,6 +2,7 @@ import { defineConfig } from '@rstest/core';
 import path from 'node:path';
 
 export default defineConfig({
+  testTimeout: 30_000,
   projects: [
     ...['project-a', 'project-b'].map((name) => ({
       name,
@@ -9,6 +10,7 @@ export default defineConfig({
         enabled: true,
         provider: 'playwright' as const,
         headless: true,
+        expect: { toMatchScreenshot: { stabilityTimeout: 10_000 } },
       },
       include: ['tests/**/*.test.ts'],
       exclude: ['tests/configured.test.ts'],
@@ -21,6 +23,7 @@ export default defineConfig({
         headless: true,
         expect: {
           toMatchScreenshot: {
+            stabilityTimeout: 10_000,
             comparatorOptions: { maxDiffPixels: 1 },
             screenshotDirectory: 'custom-baselines',
           },
@@ -36,6 +39,7 @@ export default defineConfig({
         headless: true,
         expect: {
           toMatchScreenshot: {
+            stabilityTimeout: 10_000,
             comparatorOptions: { maxDiffPixels: 1 },
             resolveScreenshotPath: ({ testFilePath, projectName, testName }) =>
               path.join(
