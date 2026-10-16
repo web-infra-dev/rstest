@@ -236,9 +236,7 @@ expect.extend({
         const previousCount =
           screenshotAssertionCounts.get(assertionOwner) ?? 0;
         screenshotAssertionCounts.set(assertionOwner, previousCount + 1);
-        if (previousCount > 0) {
-          screenshotAssertionOrdinal = previousCount + 1;
-        }
+        screenshotAssertionOrdinal = previousCount + 1;
       }
     }
 

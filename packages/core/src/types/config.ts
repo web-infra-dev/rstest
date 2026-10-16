@@ -234,6 +234,7 @@ export type BrowserScreenshotPathOptions = {
   testName: string;
   browserName: BrowserName;
   platform: string;
+  /** Undefined for the first unnamed assertion; subsequent assertions start at 2. */
   screenshotAssertionOrdinal?: number;
 };
 
@@ -283,7 +284,7 @@ export type BrowserScreenshotMatcherConfig = {
    */
   omitBackground?: boolean;
   /**
-   * Directory for references, relative to the project root when not absolute.
+   * Directory for references. Relative paths are resolved from the test file's directory.
    * @default `__screenshots__` beside each test file
    */
   screenshotDirectory?: string;

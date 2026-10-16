@@ -418,31 +418,33 @@ Configure defaults for [`toMatchScreenshot()`](/api/runtime-api/browser-mode/ass
 
 The defaults below apply when an option is omitted. Playwright supplies the capture defaults for `maskColor`, `caret`, `scale`, and `omitBackground`.
 
-| Option                                | Default   | Description                                                          |
-| ------------------------------------- | --------- | -------------------------------------------------------------------- |
-| `comparatorOptions.threshold`         | `0.1`     | Per-pixel color distance threshold from `0` (strict) to `1` (loose). |
-| `comparatorOptions.maxDiffPixels`     | `0`       | Maximum number of pixels allowed to differ.                          |
-| `comparatorOptions.maxDiffPixelRatio` | `0`       | Maximum fraction of pixels allowed to differ.                        |
-| `stabilityTimeout`                    | `2000`    | Maximum time to wait for consecutive captures to match, in ms.       |
-| `maskColor`                           | `#FF00FF` | Color used to cover masked content.                                  |
-| `style`                               | Not set   | No additional CSS is injected.                                       |
-| `caret`                               | `hide`    | Hides the text caret during capture.                                 |
-| `scale`                               | `device`  | Captures at the device pixel ratio.                                  |
-| `omitBackground`                      | `false`   | Keeps the page background in the screenshot.                         |
-| `screenshotDirectory`                 | Not set   | Uses `__screenshots__` beside each test file.                        |
-| `resolveScreenshotPath`               | Built-in  | Uses the path layout described below.                                |
+| Option                                | Default           | Description                                                          |
+| ------------------------------------- | ----------------- | -------------------------------------------------------------------- |
+| `comparatorOptions.threshold`         | `0.1`             | Per-pixel color distance threshold from `0` (strict) to `1` (loose). |
+| `comparatorOptions.maxDiffPixels`     | `0`               | Maximum number of pixels allowed to differ.                          |
+| `comparatorOptions.maxDiffPixelRatio` | `0`               | Maximum fraction of pixels allowed to differ.                        |
+| `stabilityTimeout`                    | `2000`            | Maximum time to wait for consecutive captures to match, in ms.       |
+| `maskColor`                           | `#FF00FF`         | Color used to cover masked content.                                  |
+| `style`                               | Not set           | No additional CSS is injected.                                       |
+| `caret`                               | `hide`            | Hides the text caret during capture.                                 |
+| `scale`                               | `device`          | Captures at the device pixel ratio.                                  |
+| `omitBackground`                      | `false`           | Keeps the page background in the screenshot.                         |
+| `screenshotDirectory`                 | `__screenshots__` | Directory for references beside each test file.                      |
+| `resolveScreenshotPath`               | Built-in          | Uses the path layout described below.                                |
 
-Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. `screenshotDirectory` relocates the default layout; relative paths are resolved from the project root. If it is omitted, references are stored under `__screenshots__` beside each test file.
+Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. A shared directory keeps references separate by project name and test file, so paths stay stable across checkouts. When the chosen directory is the test file's own directory, Rstest places references in its `__screenshots__` subdirectory.
 
-By default, a reference is stored next to its test file using this layout:
+By default, references are stored in this layout:
 
 ```text
-<test-directory>/__screenshots__/<project>-<hash>/<test-file>/<test-name>-<hash>-<browser>-<platform>.png
+<test-directory>/__screenshots__/<test-file>/<reference-name>-<browser>-<platform>.png
 ```
 
-For repeated unnamed assertions, Rstest adds an `assertion-<n>` directory before the filename (for example, `assertion-2`). The project and test-name components are made filesystem-safe and include a short hash to avoid collisions.
+The reference name comes from the explicit name or the test name, sanitized for use as a path. Names that could collide after sanitization receive a stable suffix. Every unnamed assertion gets a sequence number starting at `1`, including a test's only screenshot (for example, `<test-name>-1`). Explicitly named assertions do not get this number.
 
-Use `resolveScreenshotPath` when you need a different layout. It receives the absolute test file path, project and test names, browser, platform, and optional ordinal used for repeated unnamed assertions. Return an absolute path or a path relative to the project root. When configured, the resolver takes precedence over `screenshotDirectory`.
+Project names are not part of the default path, so projects using the same test file, screenshot name, browser, and platform share a reference. Use `resolveScreenshotPath` to isolate project-specific references. Existing references from Rstest's previous hashed layout are not moved automatically; move them to the new paths or regenerate them with `--update`.
+
+Use `resolveScreenshotPath` when you need a different layout. It receives the absolute test file path, project and test names, browser, platform, and an optional ordinal for unnamed assertions. The first unnamed assertion receives no ordinal; later ones start at `2`. Return an absolute path or a path relative to the project root. When configured, the resolver takes precedence over `screenshotDirectory`.
 
 ```ts title="rstest.config.ts"
 import path from 'node:path';

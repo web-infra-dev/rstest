@@ -41,22 +41,55 @@ export type ScreenshotPathOptions = {
   screenshotAssertionOrdinal?: number;
 };
 
-const sanitizePathComponent = (name: string, fallback: string): string => {
-  const sanitized = name
-    .replace(/[<>:"/\\|?*\p{Cc}]/gu, '-')
-    .replace(/\s+/g, '-')
-    .replace(/^\.+/, '');
-  const safeName = sanitized || fallback;
-  let prefix = '';
-  let prefixBytes = 0;
-  for (const character of safeName) {
-    const characterBytes = Buffer.byteLength(character);
-    if (prefixBytes + characterBytes > 200) break;
-    prefix += character;
-    prefixBytes += characterBytes;
-  }
-  const hash = createHash('sha256').update(name).digest('hex').slice(0, 8);
-  return `${prefix}-${hash}`;
+const screenshotNameByteLimit = 240;
+const isWindowsReservedName = (name: string): boolean =>
+  /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i.test(
+    name.replace(/[ .]+$/, '').split('.')[0] ?? '',
+  );
+const isSafeScreenshotName = (name: string, assertionSuffix: string): boolean =>
+  /^[a-z0-9]+(?: [a-z0-9]+)*$/.test(name) &&
+  !isWindowsReservedName(name) &&
+  !(assertionSuffix === '' && / [1-9]\d*$/.test(name));
+
+const sanitizeScreenshotName = (
+  name: string,
+  fileSuffix: string,
+  assertionSuffix: string,
+): string => {
+  const normalizedName = relative('/', join('/', name));
+  return normalizedName
+    .split('/')
+    .map((segment, index, segments) => {
+      const sanitized = segment
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/-{2,}/g, '-');
+      const isLastSegment = index === segments.length - 1;
+      const suffix = isLastSegment ? `${assertionSuffix}${fileSuffix}` : '';
+      const hashSource =
+        isLastSegment && normalizedName !== name ? name : segment;
+      const needsHash =
+        hashSource !== segment ||
+        !isSafeScreenshotName(segment, isLastSegment ? assertionSuffix : '') ||
+        Buffer.byteLength(`${sanitized}${suffix}`) > screenshotNameByteLimit;
+      const hash = needsHash
+        ? `~${createHash('sha256').update(hashSource).digest('hex')}`
+        : '';
+      const prefixLimit =
+        screenshotNameByteLimit - Buffer.byteLength(`${hash}${suffix}`);
+      let prefix = '';
+      let prefixBytes = 0;
+      for (const character of sanitized) {
+        const characterBytes = Buffer.byteLength(character);
+        if (prefixBytes + characterBytes > prefixLimit) {
+          break;
+        }
+        prefix += character;
+        prefixBytes += characterBytes;
+      }
+      return `${prefix}${hash}${isLastSegment ? assertionSuffix : ''}`;
+    })
+    .join('/');
 };
 
 const resolveScreenshotPath = (
@@ -77,7 +110,10 @@ const resolveScreenshotPath = (
       testName,
       browserName,
       platform,
-      screenshotAssertionOrdinal,
+      screenshotAssertionOrdinal:
+        screenshotAssertionOrdinal === 1
+          ? undefined
+          : screenshotAssertionOrdinal,
     };
     if (resolvePath) {
       const customPath = resolvePath(pathOptions);
@@ -88,32 +124,47 @@ const resolveScreenshotPath = (
         ? customPath
         : resolve(rootPath, customPath);
     }
-    const directory = screenshotDirectory
-      ? isAbsolute(screenshotDirectory)
-        ? screenshotDirectory
-        : resolve(rootPath, screenshotDirectory)
-      : dirname(testPath);
-    const relativeTestPath = relative(rootPath, testPath)
-      .split(/[\\/]/)
-      .filter((segment) => segment && segment !== '.');
-    return join(
-      directory,
-      ...(screenshotDirectory
-        ? [
-            sanitizePathComponent(projectName, 'project'),
-            ...relativeTestPath.map((segment) =>
-              sanitizePathComponent(segment, 'test-path'),
-            ),
-          ]
-        : [
-            '__screenshots__',
-            sanitizePathComponent(projectName, 'project'),
-            basename(testPath),
-          ]),
-      ...(screenshotAssertionOrdinal === undefined
-        ? []
-        : [`assertion-${screenshotAssertionOrdinal}`]),
-      `${sanitizePathComponent(testName, 'screenshot')}-${browserName}-${platform}.png`,
+    const assertionSuffix =
+      screenshotAssertionOrdinal === undefined
+        ? ''
+        : `-${screenshotAssertionOrdinal}`;
+    const fileSuffix = `-${browserName}-${platform}.png`;
+    const testDirectory = dirname(testPath);
+    const referenceRoot = resolve(
+      testDirectory,
+      screenshotDirectory ?? '__screenshots__',
+    );
+    const referenceLocation = relative(testDirectory, referenceRoot);
+    const isSharedDirectory =
+      referenceRoot !== testDirectory &&
+      ((screenshotDirectory !== undefined && isAbsolute(screenshotDirectory)) ||
+        referenceLocation === '..' ||
+        referenceLocation.startsWith('../'));
+    const sourceDirectory = relative(rootPath, testDirectory);
+    const testDirectoryUnderReferenceRoot = isSharedDirectory
+      ? join(
+          '__projects__',
+          createHash('sha256').update(projectName).digest('hex'),
+          sourceDirectory === '..' ||
+            sourceDirectory.startsWith('../') ||
+            isAbsolute(sourceDirectory)
+            ? join(
+                '__external__',
+                createHash('sha256').update(sourceDirectory).digest('hex'),
+              )
+            : sourceDirectory,
+        )
+      : '';
+    const testGroupDirectory = resolve(
+      referenceRoot,
+      testDirectoryUnderReferenceRoot,
+      basename(testPath),
+    );
+    return resolve(
+      testGroupDirectory === resolve(testPath)
+        ? join(referenceRoot, '__screenshots__', basename(testPath))
+        : testGroupDirectory,
+      `${sanitizeScreenshotName(testName, fileSuffix, assertionSuffix)}${fileSuffix}`,
     );
   })();
 
