@@ -189,6 +189,13 @@ describe('PROJECT_LOADER', () => {
           dependencies: ['/deps/parent-dep.ts'],
         };
       }
+      if (dirPath === join(root, 'packages/b')) {
+        return {
+          content: { name: 'host:b', forceRerunTriggers: [] },
+          filePath: hostFile('b'),
+          dependencies: [hostDep(dirPath)],
+        };
+      }
       return createHostLoader()({ dirPath });
     });
 
@@ -212,6 +219,18 @@ describe('PROJECT_LOADER', () => {
         parentFile,
       ]);
     }
+    const triggersByName = Object.fromEntries(
+      projects.map((p) => [p.config.name, p.config.forceRerunTriggers]),
+    );
+    expect(triggersByName['host:a']).toEqual([
+      '**/package.json/**',
+      '**/rstest.config.*',
+      hostFile('a'),
+      hostDep(join(root, 'packages/a')),
+      '/deps/parent-dep.ts',
+      parentFile,
+    ]);
+    expect(triggersByName['host:b']).toEqual([]);
   });
 
   it('keeps the loader when the root config has extends (API path)', async () => {

@@ -4,6 +4,7 @@ import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RunOptions } from '../api/types';
 import {
+  appendConfigFileTriggers,
   loadConfig,
   plainDeepMerge,
   resolveConfigFileExtends,
@@ -524,11 +525,12 @@ export async function resolveProjects({
 
         if (config.projects?.length) {
           const childProjects = await getProjects(config, projectRoot);
+          const parentFiles = result.filePath
+            ? [...result.dependencies, result.filePath]
+            : result.dependencies;
           for (const child of childProjects) {
-            child.dependencies.push(...result.dependencies);
-            if (result.filePath) {
-              child.dependencies.push(result.filePath);
-            }
+            child.dependencies.push(...parentFiles);
+            appendConfigFileTriggers(child.content, parentFiles);
           }
           projects.push(...childProjects);
         } else {

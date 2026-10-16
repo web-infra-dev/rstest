@@ -75,6 +75,28 @@ export async function loadConfig({
   return result;
 }
 
+/** Configs whose `forceRerunTriggers` is not set by the user. */
+const configsWithDerivedTriggers = new WeakSet<RstestConfig>();
+
+/**
+ * Adds config files to `forceRerunTriggers`, unless the user set that option
+ * in the config file that produced `config`.
+ */
+export const appendConfigFileTriggers = (
+  config: RstestConfig,
+  files: string[],
+): void => {
+  if (!files.length || !configsWithDerivedTriggers.has(config)) {
+    return;
+  }
+  config.forceRerunTriggers = Array.from(
+    new Set([
+      ...(config.forceRerunTriggers ?? DEFAULT_FORCE_RERUN_TRIGGERS),
+      ...files,
+    ]),
+  );
+};
+
 /**
  * Like `resolveExtends`, and also adds the config file and its dependencies to
  * `forceRerunTriggers` when the config file does not set that option.
@@ -86,14 +108,12 @@ export const resolveConfigFileExtends = async ({
 }: LoadConfigResult<RstestConfig>): Promise<RstestConfig> => {
   const hasOwnTriggers = content.forceRerunTriggers !== undefined;
   const resolved = await resolveExtends(content);
-  const configFiles = filePath ? [filePath, ...dependencies] : dependencies;
 
-  if (!hasOwnTriggers && configFiles.length) {
-    resolved.forceRerunTriggers = Array.from(
-      new Set([
-        ...(resolved.forceRerunTriggers ?? DEFAULT_FORCE_RERUN_TRIGGERS),
-        ...configFiles,
-      ]),
+  if (!hasOwnTriggers) {
+    configsWithDerivedTriggers.add(resolved);
+    appendConfigFileTriggers(
+      resolved,
+      filePath ? [filePath, ...dependencies] : dependencies,
     );
   }
 
