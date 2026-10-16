@@ -55,8 +55,9 @@ const sanitizeScreenshotName = (
   name: string,
   fileSuffix: string,
   assertionSuffix: string,
-): string =>
-  relative('/', join('/', name))
+): string => {
+  const normalizedName = relative('/', join('/', name));
+  return normalizedName
     .split('/')
     .map((segment, index, segments) => {
       const sanitized = segment
@@ -65,11 +66,14 @@ const sanitizeScreenshotName = (
         .replace(/-{2,}/g, '-');
       const isLastSegment = index === segments.length - 1;
       const suffix = isLastSegment ? `${assertionSuffix}${fileSuffix}` : '';
+      const hashSource =
+        isLastSegment && normalizedName !== name ? name : segment;
       const needsHash =
+        hashSource !== segment ||
         !isSafeScreenshotName(segment, isLastSegment ? assertionSuffix : '') ||
         Buffer.byteLength(`${sanitized}${suffix}`) > screenshotNameByteLimit;
       const hash = needsHash
-        ? `~${createHash('sha256').update(segment).digest('hex')}`
+        ? `~${createHash('sha256').update(hashSource).digest('hex')}`
         : '';
       const prefixLimit =
         screenshotNameByteLimit - Buffer.byteLength(`${hash}${suffix}`);
@@ -86,6 +90,7 @@ const sanitizeScreenshotName = (
       return `${prefix}${hash}${isLastSegment ? assertionSuffix : ''}`;
     })
     .join('/');
+};
 
 const resolveScreenshotPath = (
   rootPath: string,
@@ -121,10 +126,30 @@ const resolveScreenshotPath = (
         ? ''
         : `-${screenshotAssertionOrdinal}`;
     const fileSuffix = `-${browserName}-${platform}.png`;
-    return resolve(
-      rootPath,
-      relative(rootPath, dirname(testPath)),
+    const testDirectory = dirname(testPath);
+    const referenceRoot = resolve(
+      testDirectory,
       screenshotDirectory ?? '__screenshots__',
+    );
+    const referenceLocation = relative(testDirectory, referenceRoot);
+    const isSharedDirectory =
+      (screenshotDirectory !== undefined && isAbsolute(screenshotDirectory)) ||
+      referenceLocation === '..' ||
+      referenceLocation.startsWith('../');
+    const sourceDirectory = relative(rootPath, testDirectory);
+    const testDirectoryUnderReferenceRoot = isSharedDirectory
+      ? sourceDirectory === '..' ||
+        sourceDirectory.startsWith('../') ||
+        isAbsolute(sourceDirectory)
+        ? join(
+            '__external__',
+            createHash('sha256').update(testDirectory).digest('hex'),
+          )
+        : sourceDirectory
+      : '';
+    return resolve(
+      referenceRoot,
+      testDirectoryUnderReferenceRoot,
       basename(testPath),
       `${sanitizeScreenshotName(testName, fileSuffix, assertionSuffix)}${fileSuffix}`,
     );

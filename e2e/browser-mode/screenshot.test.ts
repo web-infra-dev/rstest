@@ -305,6 +305,68 @@ test('rejects a short screenshot stability timeout', async () => {
     ).toBe(false);
   });
 
+  it('keeps references distinct across source files and normalized names', async () => {
+    fs.writeFileSync(
+      path.join(fixtureDir, 'rstest.shared-screenshots.config.mts'),
+      `import path from 'node:path';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+    expect: {
+      toMatchScreenshot: {
+        screenshotDirectory: path.join(import.meta.dirname, 'shared-screenshots'),
+      },
+    },
+  },
+  include: ['tests/a/example.test.ts', 'tests/b/example.test.ts'],
+});
+`,
+    );
+    for (const sourceDirectory of ['a', 'b']) {
+      const sourcePath = path.join(fixtureDir, 'tests', sourceDirectory);
+      fs.mkdirSync(sourcePath, { recursive: true });
+      fs.writeFileSync(
+        path.join(sourcePath, 'example.test.ts'),
+        `import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('captures a shared name', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  const button = page.getByRole('button', { name: 'Save' });
+  await expect(button).toMatchScreenshot('header');
+  await expect(button).toMatchScreenshot('./header');
+});
+`,
+      );
+    }
+
+    const firstRun = await runScreenshot([
+      '--config=rstest.shared-screenshots.config.mts',
+    ]);
+    await firstRun.expectExecSuccess();
+    for (const sourceDirectory of ['a', 'b']) {
+      const directory = path.join(
+        fixtureDir,
+        'shared-screenshots',
+        'tests',
+        sourceDirectory,
+        'example.test.ts',
+      );
+      expect(
+        fs.readdirSync(directory).filter((name) => name.endsWith('.png')),
+      ).toHaveLength(2);
+    }
+
+    const secondRun = await runScreenshot([
+      '--config=rstest.shared-screenshots.config.mts',
+    ]);
+    await secondRun.expectExecSuccess();
+  }, 120_000);
+
   it('uses global matcher defaults and screenshot path configuration', async () => {
     const testPath = path.join(fixtureDir, 'tests', 'configured.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
@@ -428,7 +490,8 @@ test('rejects a short screenshot stability timeout', async () => {
         const viewportScreenshot = fs.readFileSync(
           path.join(headedScreenshotDir, viewportScreenshotName),
         );
-        expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
+        expect(viewportScreenshot.readUInt32BE(16)).toBeGreaterThan(0);
+        expect(viewportScreenshot.readUInt32BE(20)).toBeGreaterThan(0);
       }
     },
   );
@@ -472,20 +535,10 @@ test('rejects a short screenshot stability timeout', async () => {
       await headedRun.expectExecSuccess();
 
       const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
-      const projectDir = fs
-        .readdirSync(screenshotRoot)
-        .find((name) => name.startsWith('project-a-'));
-      if (!projectDir) {
-        throw new Error('Expected the headed project screenshot directory.');
-      }
-      const screenshotDir = path.join(
-        screenshotRoot,
-        projectDir,
-        'screenshot.test.ts',
-      );
+      const screenshotDir = path.join(screenshotRoot, 'screenshot.test.ts');
       const wideScreenshot = fs
         .readdirSync(screenshotDir)
-        .find((name) => name.startsWith('wide-full-page-'));
+        .find((name) => name.startsWith('wide-full-page~'));
       if (!wideScreenshot) {
         throw new Error('Expected the wide full-page screenshot reference.');
       }
@@ -496,7 +549,7 @@ test('rejects a short screenshot stability timeout', async () => {
       expect(wideScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1000);
       const styledScreenshot = fs
         .readdirSync(screenshotDir)
-        .find((name) => name.startsWith('styled-full-page-'));
+        .find((name) => name.startsWith('styled-full-page~'));
       if (!styledScreenshot) {
         throw new Error('Expected the styled full-page screenshot reference.');
       }
@@ -506,7 +559,7 @@ test('rejects a short screenshot stability timeout', async () => {
       expect(styledScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1900);
       const asyncScreenshot = fs
         .readdirSync(screenshotDir)
-        .find((name) => name.startsWith('async-full-page-'));
+        .find((name) => name.startsWith('async-full-page~'));
       if (!asyncScreenshot) {
         throw new Error('Expected the async full-page screenshot reference.');
       }

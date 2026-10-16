@@ -432,7 +432,7 @@ The defaults below apply when an option is omitted. Playwright supplies the capt
 | `screenshotDirectory`                 | `__screenshots__` | Directory for references beside each test file.                      |
 | `resolveScreenshotPath`               | Built-in          | Uses the path layout described below.                                |
 
-Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. `screenshotDirectory` changes the directory used beside each test file. If omitted, it defaults to `__screenshots__`.
+Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. An absolute directory stores references in one place, retaining the test file's path relative to the project root beneath it.
 
 By default, references are stored in this layout:
 

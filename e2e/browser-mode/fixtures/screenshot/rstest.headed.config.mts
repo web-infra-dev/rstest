@@ -7,6 +7,15 @@ export default defineConfig({
       enabled: true,
       provider: 'playwright' as const,
       headless: false,
+      ...(name === 'project-b'
+        ? {
+            expect: {
+              toMatchScreenshot: {
+                screenshotDirectory: 'project-b-baselines',
+              },
+            },
+          }
+        : {}),
     },
     include: ['tests/**/*.test.ts'],
   })),

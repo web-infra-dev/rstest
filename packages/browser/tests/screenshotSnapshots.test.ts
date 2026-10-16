@@ -174,6 +174,89 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('keeps names distinct when path normalization changes the input', async () => {
+    await withRoot(async (root) => {
+      for (const testName of ['header', './header', 'a/../header']) {
+        await match(root, { testName });
+      }
+
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
+      );
+      const filenames = await fs.readdir(screenshotDirectory);
+      expect(filenames).toHaveLength(3);
+      expect(filenames).toContain('header-chromium-linux.png');
+    });
+  });
+
+  it('preserves test source directories under a shared screenshot root', async () => {
+    await withRoot(async (root) => {
+      const screenshotDirectory = path.join(root, 'references');
+      for (const sourceDirectory of ['a', 'b']) {
+        await match(root, {
+          rootPath: root,
+          testPath: path.join(
+            root,
+            'tests',
+            sourceDirectory,
+            'example.test.ts',
+          ),
+          screenshotDirectory,
+          testName: 'same name',
+        });
+      }
+
+      for (const sourceDirectory of ['a', 'b']) {
+        expect(
+          await fs.readdir(
+            path.join(
+              screenshotDirectory,
+              'tests',
+              sourceDirectory,
+              'example.test.ts',
+            ),
+          ),
+        ).toEqual(['same-name-chromium-linux.png']);
+      }
+    });
+  });
+
+  it('preserves test source directories when a relative directory is shared', async () => {
+    await withRoot(async (root) => {
+      for (const sourceDirectory of ['a', 'b']) {
+        await match(root, {
+          rootPath: root,
+          testPath: path.join(
+            root,
+            'tests',
+            sourceDirectory,
+            'example.test.ts',
+          ),
+          screenshotDirectory: '../references',
+          testName: 'same name',
+        });
+      }
+
+      for (const sourceDirectory of ['a', 'b']) {
+        expect(
+          await fs.readdir(
+            path.join(
+              root,
+              'tests',
+              'references',
+              'tests',
+              sourceDirectory,
+              'example.test.ts',
+            ),
+          ),
+        ).toEqual(['same-name-chromium-linux.png']);
+      }
+    });
+  });
+
   it('disambiguates Windows reserved device names in path segments', async () => {
     await withRoot(async (root) => {
       for (const testName of ['con/header', 'AUX/icon', 'lpt1/view']) {
