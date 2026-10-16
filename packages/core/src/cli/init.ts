@@ -4,12 +4,11 @@ import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RunOptions } from '../api/types';
 import {
-  appendConfigFileTriggers,
   loadConfig,
+  mergeForceRerunTriggers,
   plainDeepMerge,
   resolveConfigFileExtends,
   resolveExtends,
-  trackDerivedTriggers,
 } from '../config';
 import type { LoadProjectConfig } from '../projectLoader';
 import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
@@ -450,20 +449,18 @@ export async function resolveProjects({
 
         inlineProjectConfigPromises.push(
           resolveExtends({ ...p }).then(
-            (projectConfig) => {
-              const content = mergeWithCLIOptions(
+            (projectConfig) => ({
+              content: mergeWithCLIOptions(
                 {
                   root: projectRoot,
                   ...projectConfig,
                   name: p.name ? p.name : getDefaultProjectName(projectRoot),
                 },
                 options,
-              );
-              if (p.forceRerunTriggers === undefined) {
-                trackDerivedTriggers(content);
-              }
-              return { content, filePath: null, dependencies: [] };
-            },
+              ),
+              filePath: null,
+              dependencies: [],
+            }),
             (error) => ({ error }),
           ),
         );
@@ -531,9 +528,15 @@ export async function resolveProjects({
           const parentFiles = result.filePath
             ? [...result.dependencies, result.filePath]
             : result.dependencies;
+          const parentTriggers = config.forceRerunTriggers;
           for (const child of childProjects) {
             child.dependencies.push(...parentFiles);
-            appendConfigFileTriggers(child.content, parentFiles);
+            if (parentTriggers?.length) {
+              child.content.forceRerunTriggers = mergeForceRerunTriggers(
+                child.content.forceRerunTriggers,
+                parentTriggers,
+              );
+            }
           }
           projects.push(...childProjects);
         } else {

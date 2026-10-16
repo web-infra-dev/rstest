@@ -232,22 +232,25 @@ describe('PROJECT_LOADER', () => {
     const triggersByName = Object.fromEntries(
       projects.map((p) => [p.config.name, p.config.forceRerunTriggers]),
     );
-    expect(triggersByName['host:a']).toEqual([
+    const parentTriggers = [
       '**/package.json/**',
       '**/rstest.config.*',
-      hostFile('a'),
-      hostDep(join(root, 'packages/a')),
-      '/deps/parent-dep.ts',
       parentFile,
-    ]);
-    expect(triggersByName['host:b']).toEqual([]);
-    expect(triggersByName['inline:c']).toEqual([
-      '**/package.json/**',
-      '**/rstest.config.*',
       '/deps/parent-dep.ts',
-      parentFile,
-    ]);
-    expect(triggersByName['inline:d']).toEqual([]);
+    ];
+    expect(triggersByName).toEqual({
+      'host:a': [
+        '**/package.json/**',
+        '**/rstest.config.*',
+        hostFile('a'),
+        hostDep(join(root, 'packages/a')),
+        parentFile,
+        '/deps/parent-dep.ts',
+      ],
+      'host:b': parentTriggers,
+      'inline:c': parentTriggers,
+      'inline:d': parentTriggers,
+    });
   });
 
   it('keeps the loader when the root config has extends (API path)', async () => {
