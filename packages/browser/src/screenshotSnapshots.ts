@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import pixelmatch from 'pixelmatch';
 import {
   basename,
@@ -40,15 +41,37 @@ export type ScreenshotPathOptions = {
   screenshotAssertionOrdinal?: number;
 };
 
-const sanitizeScreenshotName = (name: string): string =>
+const screenshotNameByteLimit = 240;
+
+const sanitizeScreenshotName = (name: string, fileSuffix: string): string =>
   relative('/', join('/', name))
     .split('/')
-    .map((segment) =>
-      segment
+    .map((segment, index, segments) => {
+      const sanitized = segment
         .replace(/\s+/g, '-')
         .replace(/[^\w-]+/g, '')
-        .replace(/-{2,}/g, '-'),
-    )
+        .replace(/-{2,}/g, '-');
+      const suffix = index === segments.length - 1 ? fileSuffix : '';
+      const needsHash =
+        sanitized !== segment ||
+        Buffer.byteLength(`${sanitized}${suffix}`) > screenshotNameByteLimit;
+      const hash = needsHash
+        ? `-${createHash('sha256').update(segment).digest('hex')}`
+        : '';
+      const prefixLimit =
+        screenshotNameByteLimit - Buffer.byteLength(`${hash}${suffix}`);
+      let prefix = '';
+      let prefixBytes = 0;
+      for (const character of sanitized) {
+        const characterBytes = Buffer.byteLength(character);
+        if (prefixBytes + characterBytes > prefixLimit) {
+          break;
+        }
+        prefix += character;
+        prefixBytes += characterBytes;
+      }
+      return `${prefix}${hash}`;
+    })
     .join('/');
 
 const resolveScreenshotPath = (
@@ -84,12 +107,13 @@ const resolveScreenshotPath = (
       screenshotAssertionOrdinal === undefined
         ? testName
         : `${testName}-${screenshotAssertionOrdinal}`;
+    const fileSuffix = `-${browserName}-${platform}.png`;
     return resolve(
       rootPath,
       relative(rootPath, dirname(testPath)),
       screenshotDirectory ?? '__screenshots__',
       basename(testPath),
-      `${sanitizeScreenshotName(name)}-${browserName}-${platform}.png`,
+      `${sanitizeScreenshotName(name, fileSuffix)}${fileSuffix}`,
     );
   })();
 

@@ -62,7 +62,7 @@ test('saves long screenshot names atomically', async () => {
     '<button style="background: rgb(20, 80, 180); color: white">Long name</button>';
   await expect(
     page.getByRole('button', { name: 'Long name' }),
-  ).toMatchScreenshot('界'.repeat(80));
+  ).toMatchScreenshot('a'.repeat(300));
 }, 30_000);
 
 test('uses distinct references for duplicate test titles', async () => {

@@ -119,7 +119,7 @@ describe('matchBrowserScreenshot', () => {
 
   it('uses the Vitest screenshot directory and filename layout', async () => {
     await withRoot(async (root) => {
-      await match(root, { testName: 'renders a -- component!' });
+      await match(root, { testName: 'renders-a-component' });
 
       const screenshotDirectory = path.join(
         root,
@@ -130,6 +130,39 @@ describe('matchBrowserScreenshot', () => {
       expect(await fs.readdir(screenshotDirectory)).toEqual([
         'renders-a-component-chromium-linux.png',
       ]);
+    });
+  });
+
+  it('keeps sanitized screenshot names distinct', async () => {
+    await withRoot(async (root) => {
+      await match(root, { testName: 'renders a b' });
+      await match(root, { testName: 'renders-a-b' });
+
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
+      );
+      const filenames = await fs.readdir(screenshotDirectory);
+      expect(filenames).toHaveLength(2);
+      expect(new Set(filenames).size).toBe(2);
+      expect(filenames).toContain('renders-a-b-chromium-linux.png');
+    });
+  });
+
+  it('keeps generated screenshot filenames below the filesystem limit', async () => {
+    await withRoot(async (root) => {
+      await match(root, { testName: 'a'.repeat(300) });
+
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
+      );
+      const [filename] = await fs.readdir(screenshotDirectory);
+      expect(Buffer.byteLength(filename!)).toBeLessThanOrEqual(240);
     });
   });
 
@@ -168,8 +201,14 @@ describe('matchBrowserScreenshot', () => {
 
   it('adds repeated unnamed assertion ordinals to the screenshot name', async () => {
     await withRoot(async (root) => {
-      await match(root, { screenshotAssertionOrdinal: 1 });
-      await match(root, { screenshotAssertionOrdinal: 2 });
+      await match(root, {
+        testName: 'renders-a-component',
+        screenshotAssertionOrdinal: 1,
+      });
+      await match(root, {
+        testName: 'renders-a-component',
+        screenshotAssertionOrdinal: 2,
+      });
 
       const screenshotDirectory = path.join(
         root,

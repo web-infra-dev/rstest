@@ -76,6 +76,9 @@ describe('browser mode - screenshot matching', () => {
       .filter((name) => name.endsWith('.png'))
       .sort();
     expect(screenshotNames).toHaveLength(9);
+    expect(
+      screenshotNames.every((name) => Buffer.byteLength(name) <= 240),
+    ).toBe(true);
     const secondProjectScreenshotDir = path.join(
       fixtureDir,
       'tests',
@@ -87,11 +90,19 @@ describe('browser mode - screenshot matching', () => {
         .readdirSync(secondProjectScreenshotDir)
         .filter((name) => name.endsWith('.png')),
     ).toHaveLength(9);
-    expect(screenshotNames).toContain(
-      `assigns-separate-references-to-repeated-unnamed-screenshots-1-chromium-${process.platform}.png`,
+    expect(screenshotNames).toContainEqual(
+      expect.stringMatching(
+        new RegExp(
+          `^assigns-separate-references-to-repeated-unnamed-screenshots-1-[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
+        ),
+      ),
     );
-    expect(screenshotNames).toContain(
-      `assigns-separate-references-to-repeated-unnamed-screenshots-2-chromium-${process.platform}.png`,
+    expect(screenshotNames).toContainEqual(
+      expect.stringMatching(
+        new RegExp(
+          `^assigns-separate-references-to-repeated-unnamed-screenshots-2-[a-f0-9]{64}-chromium-${process.platform}\\.png$`,
+        ),
+      ),
     );
     const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
     const originalTest = fs.readFileSync(testPath, 'utf8');
