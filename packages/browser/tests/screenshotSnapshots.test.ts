@@ -338,6 +338,41 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('keeps external test paths stable when the checkout moves', async () => {
+    await withRoot(async (root) => {
+      const savedPaths: string[] = [];
+      const trackingStore: ScreenshotSnapshotStore = {
+        ...snapshotStore,
+        async read() {
+          return null;
+        },
+        async save(filepath) {
+          savedPaths.push(filepath);
+        },
+      };
+      const referenceDirectories: string[] = [];
+      for (const checkout of ['alice', 'ci']) {
+        const checkoutRoot = path.join(root, checkout);
+        const projectRoot = path.join(checkoutRoot, 'repo');
+        const screenshotDirectory = path.join(projectRoot, 'references');
+        referenceDirectories.push(screenshotDirectory);
+        await match(root, {
+          snapshotStore: trackingStore,
+          rootPath: projectRoot,
+          projectName: 'app',
+          testPath: path.join(checkoutRoot, 'external', 'example.test.ts'),
+          screenshotDirectory,
+          testName: 'same name',
+        });
+      }
+
+      expect(savedPaths).toHaveLength(2);
+      expect(path.relative(referenceDirectories[0]!, savedPaths[0]!)).toBe(
+        path.relative(referenceDirectories[1]!, savedPaths[1]!),
+      );
+    });
+  });
+
   it('does not use the test file as a screenshot directory', async () => {
     await withRoot(async (root) => {
       const testPath = path.join(root, 'tests', 'example.test.ts');

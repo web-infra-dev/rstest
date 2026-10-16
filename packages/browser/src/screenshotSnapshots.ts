@@ -149,7 +149,7 @@ const resolveScreenshotPath = (
             isAbsolute(sourceDirectory)
             ? join(
                 '__external__',
-                createHash('sha256').update(testDirectory).digest('hex'),
+                createHash('sha256').update(sourceDirectory).digest('hex'),
               )
             : sourceDirectory,
         )

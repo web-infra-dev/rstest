@@ -440,7 +440,7 @@ By default, references are stored in this layout:
 <test-directory>/__screenshots__/<test-file>/<test-name>-<browser>-<platform>.png
 ```
 
-The test name is sanitized for use as a path. Names that could collide after sanitization receive a stable suffix. Repeated unnamed assertions add a sequence number to the name (for example, `<test-name>-1` and `<test-name>-2`).
+The test name is sanitized for use as a path. Names that could collide after sanitization receive a stable suffix. Every unnamed assertion gets a sequence number starting at `1`, including a test's only screenshot (for example, `<test-name>-1`). Explicitly named assertions do not get this number.
 
 Project names are not part of the default path, so projects using the same test file, screenshot name, browser, and platform share a reference. Use `resolveScreenshotPath` to isolate project-specific references. Existing references from Rstest's previous hashed layout are not moved automatically; move them to the new paths or regenerate them with `--update`.
 

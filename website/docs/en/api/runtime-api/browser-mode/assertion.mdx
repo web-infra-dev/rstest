@@ -154,7 +154,7 @@ await expect(page).toMatchScreenshot();
 await expect(page).toMatchScreenshot('full-page', { fullPage: true });
 ```
 
-References are PNG files under `__screenshots__`, grouped by test file. Their names include the sanitized test name, browser, and operating system; names that could collide after sanitization receive a stable suffix. Repeated unnamed assertions add a sequence number. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
+References are PNG files under `__screenshots__`, grouped by test file. Their names include the sanitized test name, browser, and operating system; names that could collide after sanitization receive a stable suffix. Every unnamed assertion gets a sequence number starting at `1`; explicitly named assertions do not. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
 
 Set project-wide matcher defaults and reference paths with [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot).
 
