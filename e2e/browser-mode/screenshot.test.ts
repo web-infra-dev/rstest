@@ -66,7 +66,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/concurrent-screenshot.test.ts',
     ]);
     await firstRun.expectExecSuccess();
-    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(24);
+    expect(parseJsonReport(firstRun.cli.stdout).snapshot.added).toBe(26);
 
     const projectDirs = fs.readdirSync(screenshotRoot);
     expect(projectDirs).toHaveLength(2);
@@ -85,7 +85,17 @@ describe('browser mode - screenshot matching', () => {
       .readdirSync(screenshotDir)
       .filter((name) => name.endsWith('.png'))
       .sort();
-    expect(screenshotNames).toHaveLength(9);
+    expect(screenshotNames).toHaveLength(10);
+    const viewportScreenshotName = screenshotNames.find((name) =>
+      name.startsWith('viewport-'),
+    );
+    if (!viewportScreenshotName) {
+      throw new Error('Expected the viewport screenshot reference.');
+    }
+    const viewportScreenshot = fs.readFileSync(
+      path.join(screenshotDir, viewportScreenshotName),
+    );
+    expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
     const pageScreenshotName = screenshotNames.find((name) =>
       name.startsWith('whole-page-'),
     );
@@ -151,7 +161,7 @@ describe('browser mode - screenshot matching', () => {
       'tests/screenshot.test.ts',
     ]);
     await matchingRun.expectExecSuccess();
-    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(22);
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(24);
     const noTimeoutRun = await runScreenshot([
       '--config=rstest.no-timeout.config.mts',
       'tests/screenshot.test.ts',
@@ -335,6 +345,18 @@ test('rejects a short screenshot stability timeout', async () => {
   it.runIf(shouldRunHeadedBrowserTests)(
     'routes headed screenshots to the matching project iframe',
     async () => {
+      const screenshotTestPath = path.join(
+        fixtureDir,
+        'tests',
+        'screenshot.test.ts',
+      );
+      const originalTest = fs.readFileSync(screenshotTestPath, 'utf8');
+      const headedTest = originalTest.replace(
+        "toMatchScreenshot('viewport', {",
+        "toMatchScreenshot('headed-viewport', {",
+      );
+      expect(headedTest).not.toBe(originalTest);
+      fs.writeFileSync(screenshotTestPath, headedTest);
       for (const project of ['project-a', 'project-b']) {
         const headedRun = await runScreenshot([
           '--config=rstest.headed.config.mts',
@@ -356,11 +378,23 @@ test('rejects a short screenshot stability timeout', async () => {
         if (!projectDir) {
           throw new Error(`Expected screenshot directory for ${project}.`);
         }
-        expect(
-          fs.readdirSync(
-            path.join(screenshotRoot, projectDir, 'screenshot.test.ts'),
-          ),
-        ).toHaveLength(10);
+        const screenshotDir = path.join(
+          screenshotRoot,
+          projectDir,
+          'screenshot.test.ts',
+        );
+        const screenshotNames = fs.readdirSync(screenshotDir);
+        expect(screenshotNames).toHaveLength(11);
+        const viewportScreenshotName = screenshotNames.find((name) =>
+          name.startsWith('headed-viewport-'),
+        );
+        if (!viewportScreenshotName) {
+          throw new Error('Expected the headed viewport screenshot reference.');
+        }
+        const viewportScreenshot = fs.readFileSync(
+          path.join(screenshotDir, viewportScreenshotName),
+        );
+        expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
         expect(
           fs.readdirSync(
             path.join(

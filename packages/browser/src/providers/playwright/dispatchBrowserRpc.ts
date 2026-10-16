@@ -46,7 +46,7 @@ const getRunnerFrame = async (
   testPath: string,
   projectName: string,
   timeoutMs: number,
-): Promise<FrameLocator> => {
+): Promise<{ frame: FrameLocator; iframe: Locator }> => {
   const selector =
     `iframe[data-test-file='${escapeCssAttrValue(testPath)}']` +
     `[data-test-project='${escapeCssAttrValue(projectName)}']`;
@@ -72,7 +72,7 @@ const getRunnerFrame = async (
     );
   }
 
-  return containerPage.frameLocator(selector);
+  return { frame: containerPage.frameLocator(selector), iframe };
 };
 
 // ---------------------------------------------------------------------------
@@ -563,17 +563,22 @@ export async function dispatchPlaywrightBrowserRpc({
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
   const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
-  const locatorRoot = runnerPage
-    ? runnerPage
-    : await getRunnerFrame(
-        containerPage ??
-          (() => {
-            throw new Error('Browser container page is not initialized');
-          })(),
-        testPath,
-        request.projectName,
-        timeout > 0 ? timeout : 0,
-      );
+  let locatorRoot: FrameLocator | Page;
+  let headedRunner: Awaited<ReturnType<typeof getRunnerFrame>> | undefined;
+  if (runnerPage) {
+    locatorRoot = runnerPage;
+  } else {
+    headedRunner = await getRunnerFrame(
+      containerPage ??
+        (() => {
+          throw new Error('Browser container page is not initialized');
+        })(),
+      testPath,
+      request.projectName,
+      timeout > 0 ? timeout : 0,
+    );
+    locatorRoot = headedRunner.frame;
+  }
   const locator = compilePlaywrightLocator(
     locatorRoot,
     request.locator as BrowserLocatorIR,
@@ -584,23 +589,26 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);
-    const screenshotTarget =
-      request.screenshotTarget === 'page'
-        ? 'screenshot' in locatorRoot
-          ? locatorRoot
-          : locatorRoot.locator(':root')
-        : locator;
+    let screenshotTarget: Locator | Page = locator;
+    if (request.screenshotTarget === 'page') {
+      if (runnerPage) {
+        screenshotTarget = runnerPage;
+      } else if (headedRunner) {
+        screenshotTarget =
+          options.fullPage === true
+            ? headedRunner.frame.locator(':root')
+            : headedRunner.iframe;
+        delete options.fullPage;
+      } else {
+        throw new Error(
+          'Browser runner frame is not available for screenshot capture.',
+        );
+      }
+    }
     if (request.screenshotTarget !== 'page' && options.fullPage !== undefined) {
       throw new Error(
         'toMatchScreenshot fullPage is only supported when asserting the page.',
       );
-    }
-    if (
-      request.screenshotTarget === 'page' &&
-      !('screenshot' in screenshotTarget) &&
-      options.fullPage !== undefined
-    ) {
-      delete options.fullPage;
     }
     const screenshot = await captureStableScreenshot(
       screenshotTarget,

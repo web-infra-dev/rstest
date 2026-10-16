@@ -26,6 +26,9 @@ test('matches a full page screenshot', async () => {
     </main>
   `;
 
+  await expect(page).toMatchScreenshot('viewport', {
+    mask: [page.locator('h1')],
+  });
   await expect(page).toMatchScreenshot('whole-page', { fullPage: true });
 }, 30_000);
 
