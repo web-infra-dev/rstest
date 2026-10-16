@@ -422,6 +422,10 @@ test('rejects a short screenshot stability timeout', async () => {
         '  document.body.innerHTML = \'<main style="width: 1600px; height: 1200px"></main>\';',
         "  await expect(page).toMatchScreenshot('wide-full-page', { fullPage: true });",
         '});',
+        "test('captures the full page after applying screenshot styles', async () => {",
+        '  document.body.innerHTML = \'<main style="width: 400px; height: 100px"></main>\';',
+        "  await expect(page).toMatchScreenshot('styled-full-page', { fullPage: true, style: 'body { min-height: 2000px !important; }' });",
+        '});',
       ].join('\n');
       fs.writeFileSync(
         screenshotTestPath,
@@ -460,6 +464,16 @@ test('rejects a short screenshot stability timeout', async () => {
       );
       expect(wideScreenshotBuffer.readUInt32BE(16)).toBeGreaterThan(1500);
       expect(wideScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1000);
+      const styledScreenshot = fs
+        .readdirSync(screenshotDir)
+        .find((name) => name.startsWith('styled-full-page-'));
+      if (!styledScreenshot) {
+        throw new Error('Expected the styled full-page screenshot reference.');
+      }
+      const styledScreenshotBuffer = fs.readFileSync(
+        path.join(screenshotDir, styledScreenshot),
+      );
+      expect(styledScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1900);
       fs.writeFileSync(screenshotTestPath, originalTest);
     },
   );

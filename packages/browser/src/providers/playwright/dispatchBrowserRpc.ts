@@ -604,10 +604,27 @@ export async function dispatchPlaywrightBrowserRpc({
               height: htmlElement.style.height,
             };
           });
-          const scrollSize = await root.evaluate((element) => ({
-            width: element.scrollWidth,
-            height: element.scrollHeight,
-          }));
+          const styleTag =
+            typeof options.style === 'string'
+              ? await headedRunner.frame
+                  .locator('head')
+                  .evaluateHandle((head, content) => {
+                    const style = document.createElement('style');
+                    style.textContent = content;
+                    head.appendChild(style);
+                    return style;
+                  }, options.style)
+              : undefined;
+          let scrollSize: { width: number; height: number };
+          try {
+            scrollSize = await root.evaluate((element) => ({
+              width: element.scrollWidth,
+              height: element.scrollHeight,
+            }));
+          } finally {
+            await styleTag?.evaluate((element) => element.remove());
+            await styleTag?.dispose();
+          }
           await root.evaluate((element, size) => {
             const htmlElement = element as HTMLElement;
             htmlElement.style.width = `${size.width}px`;
