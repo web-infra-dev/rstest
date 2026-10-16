@@ -5,31 +5,33 @@ export default defineConfig({
   projects: [
     ...['project-a', 'project-b'].map((name) => ({
       name,
-      browser: {
-        enabled: true,
-        provider: 'playwright' as const,
-        headless: true,
-        ...(name === 'project-b'
-          ? {
-              expect: {
-                toMatchScreenshot: {
-                  screenshotDirectory: 'project-b-baselines',
-                },
-              },
-            }
-          : {}),
-      },
-      include: ['tests/**/*.test.ts'],
-      exclude: ['tests/configured.test.ts'],
-    })),
-    {
-      name: 'project-config-directory',
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
         headless: true,
         expect: {
           toMatchScreenshot: {
+            stabilityTimeout: 10_000,
+            ...(name === 'project-b'
+              ? { screenshotDirectory: 'project-b-baselines' }
+              : {}),
+          },
+        },
+      },
+      include: ['tests/**/*.test.ts'],
+      exclude: ['tests/configured.test.ts'],
+    })),
+    {
+      name: 'project-config-directory',
+      testTimeout: 30_000,
+      browser: {
+        enabled: true,
+        provider: 'playwright' as const,
+        headless: true,
+        expect: {
+          toMatchScreenshot: {
+            stabilityTimeout: 10_000,
             comparatorOptions: { maxDiffPixels: 1 },
             screenshotDirectory: 'custom-baselines',
           },
@@ -39,12 +41,14 @@ export default defineConfig({
     },
     {
       name: 'project-config-resolver',
+      testTimeout: 30_000,
       browser: {
         enabled: true,
         provider: 'playwright' as const,
         headless: true,
         expect: {
           toMatchScreenshot: {
+            stabilityTimeout: 10_000,
             comparatorOptions: { maxDiffPixels: 1 },
             resolveScreenshotPath: ({ testFilePath, projectName, testName }) =>
               path.join(

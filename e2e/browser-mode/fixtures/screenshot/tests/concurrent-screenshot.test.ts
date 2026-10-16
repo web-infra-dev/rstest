@@ -5,11 +5,17 @@ test.concurrent(
   'uses the active task deadline with shared expect',
   async () => {
     setTimeout(() => {
-      document.body.innerHTML = '<button>Shared concurrent screenshot</button>';
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        '<button>Shared concurrent screenshot</button>',
+      );
     }, 1200);
     await new Promise((resolve) => setTimeout(resolve, 300));
     await expect(
-      page.getByRole('button', { name: 'Shared concurrent screenshot' }),
+      page.getByRole('button', {
+        name: 'Shared concurrent screenshot',
+        exact: true,
+      }),
     ).toMatchScreenshot('shared-concurrent-screenshot', {
       stabilityTimeout: 0,
     });
@@ -28,9 +34,15 @@ test.concurrent(
 test.concurrent(
   'uses the pinned test context with the test-scoped expect',
   async ({ expect }) => {
-    document.body.innerHTML = '<button>Concurrent screenshot</button>';
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<button>Concurrent screenshot</button>',
+    );
     await expect(
-      page.getByRole('button', { name: 'Concurrent screenshot' }),
+      page.getByRole('button', {
+        name: 'Concurrent screenshot',
+        exact: true,
+      }),
     ).toMatchScreenshot();
   },
 );
