@@ -186,6 +186,7 @@ describe('PROJECT_LOADER', () => {
             { name: 'inline:c', root: './c' },
             { name: 'inline:d', root: './d', forceRerunTriggers: [] },
           ],
+          forceRerunTriggers: ['<rootDir>/shared.ts'],
           [PROJECT_LOADER]: nestedLoader,
         };
         return {
@@ -232,24 +233,18 @@ describe('PROJECT_LOADER', () => {
     const triggersByName = Object.fromEntries(
       projects.map((p) => [p.config.name, p.config.forceRerunTriggers]),
     );
-    const parentTriggers = [
-      '**/package.json/**',
-      '**/rstest.config.*',
-      parentFile,
-      '/deps/parent-dep.ts',
-    ];
+    const parentShared = join(root, 'packages', 'shared.ts');
     expect(triggersByName).toEqual({
       'host:a': [
         '**/package.json/**',
         '**/rstest.config.*',
         hostFile('a'),
         hostDep(join(root, 'packages/a')),
-        parentFile,
-        '/deps/parent-dep.ts',
+        parentShared,
       ],
-      'host:b': parentTriggers,
-      'inline:c': parentTriggers,
-      'inline:d': parentTriggers,
+      'host:b': [parentShared],
+      'inline:c': ['**/package.json/**', '**/rstest.config.*', parentShared],
+      'inline:d': [parentShared],
     });
   });
 

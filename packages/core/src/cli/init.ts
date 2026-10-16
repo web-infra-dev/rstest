@@ -528,7 +528,10 @@ export async function resolveProjects({
           const parentFiles = result.filePath
             ? [...result.dependencies, result.filePath]
             : result.dependencies;
-          const parentTriggers = config.forceRerunTriggers;
+          // Expand `<rootDir>` against the parent before leaves resolve it.
+          const parentTriggers = config.forceRerunTriggers?.map((trigger) =>
+            formatRootStr(trigger, config.root ?? projectRoot),
+          );
           for (const child of childProjects) {
             child.dependencies.push(...parentFiles);
             if (parentTriggers?.length) {
