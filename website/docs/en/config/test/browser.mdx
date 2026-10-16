@@ -407,7 +407,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
   stabilityTimeout: 2000,
   maskColor: '#FF00FF',
   caret: 'hide',
-  scale: 'css',
+  scale: 'device',
   omitBackground: false,
 }
 ```
@@ -427,7 +427,7 @@ The defaults below apply when an option is omitted. Playwright supplies the capt
 | `maskColor`                           | `#FF00FF` | Color used to cover masked content.                                  |
 | `style`                               | Not set   | No additional CSS is injected.                                       |
 | `caret`                               | `hide`    | Hides the text caret during capture.                                 |
-| `scale`                               | `css`     | Captures one pixel per CSS pixel.                                    |
+| `scale`                               | `device`  | Captures at the device pixel ratio.                                  |
 | `omitBackground`                      | `false`   | Keeps the page background in the screenshot.                         |
 | `screenshotDirectory`                 | Not set   | Uses `__screenshots__` beside each test file.                        |
 | `resolveScreenshotPath`               | Built-in  | Uses the path layout described below.                                |

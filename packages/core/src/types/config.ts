@@ -247,23 +247,50 @@ export type BrowserScreenshotComparatorOptions = {
 };
 
 export type BrowserScreenshotMatcherConfig = {
-  /** Options passed to the pixel comparator. */
+  /**
+   * Options passed to the pixel comparator.
+   * @default `{ threshold: 0.1, maxDiffPixels: 0, maxDiffPixelRatio: 0 }`
+   */
   comparatorOptions?: BrowserScreenshotComparatorOptions;
-  /** Time allowed for consecutive screenshots to become stable. */
+  /**
+   * Time allowed for consecutive screenshots to become stable.
+   * @default 2000
+   */
   stabilityTimeout?: number;
-  /** Color used to cover masked content. */
+  /**
+   * Color used to cover masked content.
+   * @default '#FF00FF'
+   */
   maskColor?: string;
-  /** CSS injected before capturing a screenshot. */
+  /**
+   * CSS injected before capturing a screenshot.
+   * @default undefined (no additional CSS)
+   */
   style?: string;
-  /** Whether to hide the text caret during capture. */
+  /**
+   * Whether to hide the text caret during capture.
+   * @default 'hide'
+   */
   caret?: 'hide' | 'initial';
-  /** Screenshot scale. */
+  /**
+   * Screenshot scale.
+   * @default 'device'
+   */
   scale?: 'css' | 'device';
-  /** Whether to omit the page background. */
+  /**
+   * Whether to omit the page background.
+   * @default false
+   */
   omitBackground?: boolean;
-  /** Directory for references, relative to the project root when not absolute. */
+  /**
+   * Directory for references, relative to the project root when not absolute.
+   * @default `__screenshots__` beside each test file
+   */
   screenshotDirectory?: string;
-  /** Resolve a reference path. Relative results are resolved from the project root. */
+  /**
+   * Resolve a reference path. Relative results are resolved from the project root.
+   * @default Built-in screenshot path layout
+   */
   resolveScreenshotPath?: (options: BrowserScreenshotPathOptions) => string;
 };
 

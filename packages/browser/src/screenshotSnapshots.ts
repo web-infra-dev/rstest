@@ -95,12 +95,16 @@ const resolveScreenshotPath = (
       : dirname(testPath);
     const relativeTestPath = relative(rootPath, testPath)
       .split(/[\\/]/)
-      .map((segment) => (segment === '..' ? '_parent_' : segment))
       .filter((segment) => segment && segment !== '.');
     return join(
       directory,
       ...(screenshotDirectory
-        ? [sanitizePathComponent(projectName, 'project'), ...relativeTestPath]
+        ? [
+            sanitizePathComponent(projectName, 'project'),
+            ...relativeTestPath.map((segment) =>
+              sanitizePathComponent(segment, 'test-path'),
+            ),
+          ]
         : [
             '__screenshots__',
             sanitizePathComponent(projectName, 'project'),

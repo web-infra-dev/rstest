@@ -262,14 +262,23 @@ test('rejects a short screenshot stability timeout', async () => {
     ]);
     await firstRun.expectExecSuccess();
 
+    const customBaselineRoot = path.join(fixtureDir, 'custom-baselines');
+    const projectDirectory = fs
+      .readdirSync(customBaselineRoot)
+      .find((name) => name.startsWith('project-config-directory-'))!;
+    const projectDirectoryPath = path.join(
+      customBaselineRoot,
+      projectDirectory,
+    );
+    const testsDirectory = fs
+      .readdirSync(projectDirectoryPath)
+      .find((name) => /^tests-[a-f0-9]{8}$/.test(name))!;
+    const testsDirectoryPath = path.join(projectDirectoryPath, testsDirectory);
     const projectBaselineRoot = path.join(
-      fixtureDir,
-      'custom-baselines',
+      testsDirectoryPath,
       fs
-        .readdirSync(path.join(fixtureDir, 'custom-baselines'))
-        .find((name) => name.startsWith('project-config-directory-'))!,
-      'tests',
-      'configured.test.ts',
+        .readdirSync(testsDirectoryPath)
+        .find((name) => /^configured\.test\.ts-[a-f0-9]{8}$/.test(name))!,
     );
     const directoryReference = fs
       .readdirSync(projectBaselineRoot)

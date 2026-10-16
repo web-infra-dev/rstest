@@ -407,7 +407,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
   stabilityTimeout: 2000,
   maskColor: '#FF00FF',
   caret: 'hide',
-  scale: 'css',
+  scale: 'device',
   omitBackground: false,
 }
 ```
@@ -427,7 +427,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 | `maskColor`                           | `#FF00FF` | 遮罩内容使用的颜色。                            |
 | `style`                               | 未设置    | 不注入额外 CSS。                                |
 | `caret`                               | `hide`    | 截图时隐藏文本光标。                            |
-| `scale`                               | `css`     | 每个 CSS 像素对应截图中的一个像素。             |
+| `scale`                               | `device`  | 按设备像素比截图。                              |
 | `omitBackground`                      | `false`   | 截图保留页面背景。                              |
 | `screenshotDirectory`                 | 未设置    | 基线保存在测试文件旁的 `__screenshots__` 目录。 |
 | `resolveScreenshotPath`               | 内置默认  | 使用下文介绍的默认路径布局。                    |
