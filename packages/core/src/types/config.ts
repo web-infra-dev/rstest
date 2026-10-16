@@ -283,7 +283,7 @@ export type BrowserScreenshotMatcherConfig = {
    */
   omitBackground?: boolean;
   /**
-   * Directory for references, relative to the project root when not absolute.
+   * Directory for references. Relative paths are resolved from the test file's directory.
    * @default `__screenshots__` beside each test file
    */
   screenshotDirectory?: string;
