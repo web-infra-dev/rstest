@@ -189,6 +189,7 @@ const captureStableScreenshot = async (
   target: Locator | Page,
   options: Record<string, unknown>,
   requestDeadline: number | undefined,
+  beforeCapture?: () => Promise<void>,
 ): Promise<Buffer> => {
   const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
   if (
@@ -203,7 +204,8 @@ const captureStableScreenshot = async (
     );
   }
   const screenshotOptions = { animations: 'disabled', ...playwrightOptions };
-  const capture = (deadline = requestDeadline) => {
+  const capture = async (deadline = requestDeadline) => {
+    await beforeCapture?.();
     const timeout = deadline ? deadline - Date.now() : undefined;
     if (timeout !== undefined && timeout <= 0) {
       throw new Error('Screenshot capture exceeded the active test timeout.');
@@ -591,6 +593,7 @@ export async function dispatchPlaywrightBrowserRpc({
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);
     let screenshotTarget: Locator | Page = locator;
     let restoreScreenshotState: (() => Promise<void>) | undefined;
+    let beforeScreenshotCapture: (() => Promise<void>) | undefined;
     if (request.screenshotTarget === 'page') {
       if (runnerPage) {
         screenshotTarget = runnerPage;
@@ -604,32 +607,39 @@ export async function dispatchPlaywrightBrowserRpc({
               height: htmlElement.style.height,
             };
           });
-          const styleTag =
-            typeof options.style === 'string'
-              ? await headedRunner.frame
-                  .locator('head')
-                  .evaluateHandle((head, content) => {
-                    const style = document.createElement('style');
-                    style.textContent = content;
-                    head.appendChild(style);
-                    return style;
-                  }, options.style)
-              : undefined;
-          let scrollSize: { width: number; height: number };
-          try {
-            scrollSize = await root.evaluate((element) => ({
-              width: element.scrollWidth,
-              height: element.scrollHeight,
-            }));
-          } finally {
-            await styleTag?.evaluate((element) => element.remove());
-            await styleTag?.dispose();
-          }
-          await root.evaluate((element, size) => {
-            const htmlElement = element as HTMLElement;
-            htmlElement.style.width = `${size.width}px`;
-            htmlElement.style.height = `${size.height}px`;
-          }, scrollSize);
+          beforeScreenshotCapture = async () => {
+            await root.evaluate((element, size) => {
+              const htmlElement = element as HTMLElement;
+              htmlElement.style.width = size.width;
+              htmlElement.style.height = size.height;
+            }, originalSize);
+            const styleTag =
+              typeof options.style === 'string'
+                ? await headedRunner.frame
+                    .locator('head')
+                    .evaluateHandle((head, content) => {
+                      const style = document.createElement('style');
+                      style.textContent = content;
+                      head.appendChild(style);
+                      return style;
+                    }, options.style)
+                : undefined;
+            let scrollSize: { width: number; height: number };
+            try {
+              scrollSize = await root.evaluate((element) => ({
+                width: element.scrollWidth,
+                height: element.scrollHeight,
+              }));
+            } finally {
+              await styleTag?.evaluate((element) => element.remove());
+              await styleTag?.dispose();
+            }
+            await root.evaluate((element, size) => {
+              const htmlElement = element as HTMLElement;
+              htmlElement.style.width = `${size.width}px`;
+              htmlElement.style.height = `${size.height}px`;
+            }, scrollSize);
+          };
           restoreScreenshotState = async () => {
             await root.evaluate((element, size) => {
               const htmlElement = element as HTMLElement;
@@ -658,6 +668,7 @@ export async function dispatchPlaywrightBrowserRpc({
         screenshotTarget,
         options,
         requestDeadline,
+        beforeScreenshotCapture,
       );
     } finally {
       await restoreScreenshotState?.();
