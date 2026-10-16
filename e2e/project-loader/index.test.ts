@@ -75,7 +75,7 @@ describe('PROJECT_LOADER', () => {
     );
 
     await cli.waitForStdout(
-      'restarting Rstest as packages/pkg-a/custom.config.mts changed',
+      `restarting Rstest as ${join('packages', 'pkg-a', 'custom.config.mts')} changed`,
     );
     await cli.waitForStdout('Waiting for file changes...');
     expect(cli.stdout).toContain('[custom-a-renamed]');

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative } from 'pathe';
 import type { RstestConfig } from '@rstest/core';
 import { type LoadProjectConfig, PROJECT_LOADER } from '@rstest/core/api';
 // @ts-expect-error untyped fixture helper
