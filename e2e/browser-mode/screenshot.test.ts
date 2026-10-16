@@ -407,4 +407,60 @@ test('rejects a short screenshot stability timeout', async () => {
       }
     },
   );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'includes horizontal overflow in headed full-page captures',
+    async () => {
+      const screenshotTestPath = path.join(
+        fixtureDir,
+        'tests',
+        'screenshot.test.ts',
+      );
+      const originalTest = fs.readFileSync(screenshotTestPath, 'utf8');
+      const regressionTest = [
+        "test('captures a full page with horizontal overflow', async () => {",
+        '  document.body.innerHTML = \'<main style="width: 1600px; height: 1200px"></main>\';',
+        "  await expect(page).toMatchScreenshot('wide-full-page', { fullPage: true });",
+        '});',
+      ].join('\n');
+      fs.writeFileSync(
+        screenshotTestPath,
+        `${originalTest}\n${regressionTest}\n`,
+      );
+
+      const headedRun = await runScreenshot([
+        '--config=rstest.headed.config.mts',
+        '--project',
+        'project-a',
+        'tests/screenshot.test.ts',
+        '--update',
+      ]);
+      await headedRun.expectExecSuccess();
+
+      const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
+      const projectDir = fs
+        .readdirSync(screenshotRoot)
+        .find((name) => name.startsWith('project-a-'));
+      if (!projectDir) {
+        throw new Error('Expected the headed project screenshot directory.');
+      }
+      const screenshotDir = path.join(
+        screenshotRoot,
+        projectDir,
+        'screenshot.test.ts',
+      );
+      const wideScreenshot = fs
+        .readdirSync(screenshotDir)
+        .find((name) => name.startsWith('wide-full-page-'));
+      if (!wideScreenshot) {
+        throw new Error('Expected the wide full-page screenshot reference.');
+      }
+      const wideScreenshotBuffer = fs.readFileSync(
+        path.join(screenshotDir, wideScreenshot),
+      );
+      expect(wideScreenshotBuffer.readUInt32BE(16)).toBeGreaterThan(1500);
+      expect(wideScreenshotBuffer.readUInt32BE(20)).toBeGreaterThan(1000);
+      fs.writeFileSync(screenshotTestPath, originalTest);
+    },
+  );
 });

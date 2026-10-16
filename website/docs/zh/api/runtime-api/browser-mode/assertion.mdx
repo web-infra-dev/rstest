@@ -156,7 +156,7 @@ await expect(page).toMatchScreenshot('full-page', { fullPage: true });
 
 PNG 基线保存在 `__screenshots__` 目录中，并按项目和测试文件分组；文件名包含测试名称、浏览器和操作系统。断言不匹配时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。截图捕获受当前测试剩余超时时间限制。设置 `testTimeout: 0` 后不再受测试超时限制，但 `stabilityTimeout` 仍然生效。
 
-可通过 [`browser.expect.toMatchScreenshot`](/config/test/browser) 设置项目级 matcher 默认值和基线路径。
+可通过 [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot) 设置项目级 matcher 默认值和基线路径。
 
 ## 元素断言
 

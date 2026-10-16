@@ -590,14 +590,39 @@ export async function dispatchPlaywrightBrowserRpc({
     }
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);
     let screenshotTarget: Locator | Page = locator;
+    let restoreScreenshotState: (() => Promise<void>) | undefined;
     if (request.screenshotTarget === 'page') {
       if (runnerPage) {
         screenshotTarget = runnerPage;
       } else if (headedRunner) {
-        screenshotTarget =
-          options.fullPage === true
-            ? headedRunner.frame.locator(':root')
-            : headedRunner.iframe;
+        const root = headedRunner.frame.locator(':root');
+        if (options.fullPage === true) {
+          const originalSize = await root.evaluate((element) => {
+            const htmlElement = element as HTMLElement;
+            return {
+              width: htmlElement.style.width,
+              height: htmlElement.style.height,
+            };
+          });
+          const scrollSize = await root.evaluate((element) => ({
+            width: element.scrollWidth,
+            height: element.scrollHeight,
+          }));
+          await root.evaluate((element, size) => {
+            const htmlElement = element as HTMLElement;
+            htmlElement.style.width = `${size.width}px`;
+            htmlElement.style.height = `${size.height}px`;
+          }, scrollSize);
+          restoreScreenshotState = async () => {
+            await root.evaluate((element, size) => {
+              const htmlElement = element as HTMLElement;
+              htmlElement.style.width = size.width;
+              htmlElement.style.height = size.height;
+            }, originalSize);
+          };
+        } else {
+          screenshotTarget = headedRunner.iframe;
+        }
         delete options.fullPage;
       } else {
         throw new Error(
@@ -610,11 +635,16 @@ export async function dispatchPlaywrightBrowserRpc({
         'toMatchScreenshot fullPage is only supported when asserting the page.',
       );
     }
-    const screenshot = await captureStableScreenshot(
-      screenshotTarget,
-      options,
-      requestDeadline,
-    );
+    let screenshot: Buffer;
+    try {
+      screenshot = await captureStableScreenshot(
+        screenshotTarget,
+        options,
+        requestDeadline,
+      );
+    } finally {
+      await restoreScreenshotState?.();
+    }
     return screenshot.toString('base64');
   }
 
