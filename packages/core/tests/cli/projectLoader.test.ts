@@ -141,6 +141,39 @@ describe('PROJECT_LOADER', () => {
     expect(projects[0]!.config.testTimeout).toBe(3000);
   });
 
+  it('adds the loaded config file and its dependencies to forceRerunTriggers', async () => {
+    const loader = createHostLoader();
+    const projects = await resolveProjects({
+      config: { projects: ['packages/a'] },
+      root,
+      options: {},
+      projectLoader: loader,
+    });
+
+    expect(projects[0]!.config.forceRerunTriggers).toEqual([
+      '**/package.json/**',
+      '**/rstest.config.*',
+      hostFile('a'),
+      hostDep(join(root, 'packages/a')),
+    ]);
+  });
+
+  it('keeps explicit forceRerunTriggers from loader results', async () => {
+    const loader = rs.fn<LoadProjectConfig>(({ dirPath }) => ({
+      content: { name: 'explicit-triggers', forceRerunTriggers: [] },
+      filePath: join(dirPath, 'host.config.ts'),
+      dependencies: [hostDep(dirPath)],
+    }));
+    const projects = await resolveProjects({
+      config: { projects: ['packages/a'] },
+      root,
+      options: {},
+      projectLoader: loader,
+    });
+
+    expect(projects[0]!.config.forceRerunTriggers).toEqual([]);
+  });
+
   it('uses the root loader for nested projects and ignores a loader on project configs', async () => {
     const nestedLoader = rs.fn<LoadProjectConfig>(() => null);
     const parentFile = join(root, 'packages', 'host.config.ts');

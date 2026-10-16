@@ -71,9 +71,34 @@ export async function loadConfig({
     logger.debug('no rstest config file found');
   }
 
-  result.content = await resolveExtends(result.content);
+  result.content = await resolveConfigFileExtends(result);
   return result;
 }
+
+/**
+ * Like `resolveExtends`, and also adds the config file and its dependencies to
+ * `forceRerunTriggers` when the config file does not set that option.
+ */
+export const resolveConfigFileExtends = async ({
+  content,
+  filePath,
+  dependencies = [],
+}: LoadConfigResult<RstestConfig>): Promise<RstestConfig> => {
+  const hasOwnTriggers = content.forceRerunTriggers !== undefined;
+  const resolved = await resolveExtends(content);
+  const configFiles = filePath ? [filePath, ...dependencies] : dependencies;
+
+  if (!hasOwnTriggers && configFiles.length) {
+    resolved.forceRerunTriggers = Array.from(
+      new Set([
+        ...(resolved.forceRerunTriggers ?? DEFAULT_FORCE_RERUN_TRIGGERS),
+        ...configFiles,
+      ]),
+    );
+  }
+
+  return resolved;
+};
 
 const resolveExtendEntry = async (
   entry: ResolvedExtendEntry,

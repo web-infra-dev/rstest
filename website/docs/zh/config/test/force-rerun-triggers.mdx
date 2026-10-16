@@ -15,7 +15,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 这适用于可能影响大量测试、但不一定会出现在 module graph 中的文件，例如 package manifest、测试配置，或由子进程执行的生成文件。
 
-如果你通过 `withRsbuildConfig`、`withRslibConfig` 或 `withRspackConfig` 等 adapter 扩展配置，Rstest 也会把被加载的 Rsbuild、Rslib 或 Rspack 配置文件作为 force-rerun trigger。除非你在 Rstest 配置中显式设置 `forceRerunTriggers`，否则 adapter 提供的 trigger 会追加到默认值之后。
+如果你通过 `withRsbuildConfig`、`withRslibConfig` 或 `withRspackConfig` 等 adapter 扩展配置，Rstest 也会把被加载的 Rsbuild、Rslib 或 Rspack 配置文件作为 force-rerun trigger。除非你在 Rstest 配置中显式设置 `forceRerunTriggers`，否则 adapter 提供的 trigger 会追加到默认值之后。Rstest 对已加载的配置文件本身及其 import 的本地文件也采用相同规则：只有在未显式配置 `forceRerunTriggers` 时才会追加。
 
 ```ts
 import { defineConfig } from '@rstest/core';

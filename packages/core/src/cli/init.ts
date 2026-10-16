@@ -3,7 +3,12 @@ import type { LoadConfigOptions, LoadConfigResult } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RunOptions } from '../api/types';
-import { loadConfig, plainDeepMerge, resolveExtends } from '../config';
+import {
+  loadConfig,
+  plainDeepMerge,
+  resolveConfigFileExtends,
+  resolveExtends,
+} from '../config';
 import type { LoadProjectConfig } from '../projectLoader';
 import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
 import {
@@ -348,10 +353,15 @@ async function resolveConfig(
         ? { dirPath, filePath: resolve(options.cwd, options.config) }
         : { dirPath },
     )) ?? { content: {}, filePath: null, dependencies: [] };
+    const dependencies = [...(loaded.dependencies ?? [])];
     result = {
-      content: await resolveExtends({ ...loaded.content }),
+      content: await resolveConfigFileExtends({
+        content: { ...loaded.content },
+        filePath: loaded.filePath,
+        dependencies,
+      }),
       filePath: loaded.filePath,
-      dependencies: [...(loaded.dependencies ?? [])],
+      dependencies,
     };
   } else {
     result = await loadConfig({
