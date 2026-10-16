@@ -432,7 +432,7 @@ The defaults below apply when an option is omitted. Playwright supplies the capt
 | `screenshotDirectory`                 | `__screenshots__` | Directory for references beside each test file.                      |
 | `resolveScreenshotPath`               | Built-in          | Uses the path layout described below.                                |
 
-Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. A shared directory keeps references separate by project root and test file. When the chosen directory is the test file's own directory, Rstest places references in its `__screenshots__` subdirectory.
+Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. A shared directory keeps references separate by project name and test file, so paths stay stable across checkouts. When the chosen directory is the test file's own directory, Rstest places references in its `__screenshots__` subdirectory.
 
 By default, references are stored in this layout:
 

@@ -348,16 +348,16 @@ test('captures a shared name', async () => {
       '--config=rstest.shared-screenshots.config.mts',
     ]);
     await firstRun.expectExecSuccess();
-    const rootDirectories = fs.readdirSync(
-      path.join(fixtureDir, 'shared-screenshots', '__roots__'),
+    const projectDirectories = fs.readdirSync(
+      path.join(fixtureDir, 'shared-screenshots', '__projects__'),
     );
-    expect(rootDirectories).toHaveLength(1);
+    expect(projectDirectories).toHaveLength(1);
     for (const sourceDirectory of ['a', 'b']) {
       const directory = path.join(
         fixtureDir,
         'shared-screenshots',
-        '__roots__',
-        rootDirectories[0]!,
+        '__projects__',
+        projectDirectories[0]!,
         'tests',
         sourceDirectory,
         'example.test.ts',
@@ -371,6 +371,37 @@ test('captures a shared name', async () => {
       '--config=rstest.shared-screenshots.config.mts',
     ]);
     await secondRun.expectExecSuccess();
+
+    const relocatedFixture = fs.mkdtempSync(
+      path.join(__dirname, 'fixtures-test-screenshot-relocated-'),
+    );
+    try {
+      fs.cpSync(
+        path.join(fixtureDir, 'rstest.shared-screenshots.config.mts'),
+        path.join(relocatedFixture, 'rstest.shared-screenshots.config.mts'),
+      );
+      fs.cpSync(
+        path.join(fixtureDir, 'tests'),
+        path.join(relocatedFixture, 'tests'),
+        { recursive: true },
+      );
+      fs.cpSync(
+        path.join(fixtureDir, 'shared-screenshots'),
+        path.join(relocatedFixture, 'shared-screenshots'),
+        { recursive: true },
+      );
+      const relocatedRun = await runBrowserCliWithCwd(relocatedFixture, {
+        args: [
+          '--reporters=json',
+          '--config=rstest.shared-screenshots.config.mts',
+        ],
+      });
+      cliToKill = relocatedRun.cli;
+      await relocatedRun.expectExecSuccess();
+      expect(parseJsonReport(relocatedRun.cli.stdout).snapshot.added).toBe(0);
+    } finally {
+      fs.rmSync(relocatedFixture, { recursive: true, force: true });
+    }
   }, 120_000);
 
   it('keeps custom resolver ordinals compatible for unnamed assertions', async () => {

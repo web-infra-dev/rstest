@@ -142,8 +142,8 @@ const resolveScreenshotPath = (
     const sourceDirectory = relative(rootPath, testDirectory);
     const testDirectoryUnderReferenceRoot = isSharedDirectory
       ? join(
-          '__roots__',
-          createHash('sha256').update(resolve(rootPath)).digest('hex'),
+          '__projects__',
+          createHash('sha256').update(projectName).digest('hex'),
           sourceDirectory === '..' ||
             sourceDirectory.startsWith('../') ||
             isAbsolute(sourceDirectory)

@@ -432,7 +432,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 | `screenshotDirectory`                 | `__screenshots__` | 测试文件旁存放基线的目录。                   |
 | `resolveScreenshotPath`               | 内置默认          | 使用下文介绍的默认路径布局。                 |
 
-`comparatorOptions.maxDiffPixels` 和 `comparatorOptions.maxDiffPixelRatio` 只能配置其中一个。相对路径的 `screenshotDirectory` 从各测试文件所在目录解析；未配置时默认为 `__screenshots__`。共用同一截图目录时，Rstest 会按项目根目录和测试文件隔离基线。如果所选目录就是测试文件所在目录，基线会存入其中的 `__screenshots__` 子目录。
+`comparatorOptions.maxDiffPixels` 和 `comparatorOptions.maxDiffPixelRatio` 只能配置其中一个。相对路径的 `screenshotDirectory` 从各测试文件所在目录解析；未配置时默认为 `__screenshots__`。共用同一截图目录时，Rstest 会按项目名和测试文件隔离基线，切换 checkout 后路径仍保持稳定。如果所选目录就是测试文件所在目录，基线会存入其中的 `__screenshots__` 子目录。
 
 默认路径如下：
 

@@ -209,18 +209,18 @@ describe('matchBrowserScreenshot', () => {
         });
       }
 
-      const rootDirectories = await fs.readdir(
-        path.join(screenshotDirectory, '__roots__'),
+      const projectDirectories = await fs.readdir(
+        path.join(screenshotDirectory, '__projects__'),
       );
-      expect(rootDirectories).toHaveLength(1);
+      expect(projectDirectories).toHaveLength(1);
 
       for (const sourceDirectory of ['a', 'b']) {
         expect(
           await fs.readdir(
             path.join(
               screenshotDirectory,
-              '__roots__',
-              rootDirectories[0]!,
+              '__projects__',
+              projectDirectories[0]!,
               'tests',
               sourceDirectory,
               'example.test.ts',
@@ -248,18 +248,18 @@ describe('matchBrowserScreenshot', () => {
       }
 
       const referenceRoot = path.join(root, 'tests', 'references');
-      const rootDirectories = await fs.readdir(
-        path.join(referenceRoot, '__roots__'),
+      const projectDirectories = await fs.readdir(
+        path.join(referenceRoot, '__projects__'),
       );
-      expect(rootDirectories).toHaveLength(1);
+      expect(projectDirectories).toHaveLength(1);
 
       for (const sourceDirectory of ['a', 'b']) {
         expect(
           await fs.readdir(
             path.join(
               referenceRoot,
-              '__roots__',
-              rootDirectories[0]!,
+              '__projects__',
+              projectDirectories[0]!,
               'tests',
               sourceDirectory,
               'example.test.ts',
@@ -277,29 +277,64 @@ describe('matchBrowserScreenshot', () => {
         const projectRoot = path.join(root, project);
         await match(root, {
           rootPath: projectRoot,
+          projectName: project,
           testPath: path.join(projectRoot, 'tests', 'example.test.ts'),
           screenshotDirectory,
           testName: 'same name',
         });
       }
 
-      const rootDirectories = await fs.readdir(
-        path.join(screenshotDirectory, '__roots__'),
+      const projectDirectories = await fs.readdir(
+        path.join(screenshotDirectory, '__projects__'),
       );
-      expect(rootDirectories).toHaveLength(2);
-      for (const rootDirectory of rootDirectories) {
+      expect(projectDirectories).toHaveLength(2);
+      for (const projectDirectory of projectDirectories) {
         expect(
           await fs.readdir(
             path.join(
               screenshotDirectory,
-              '__roots__',
-              rootDirectory,
+              '__projects__',
+              projectDirectory,
               'tests',
               'example.test.ts',
             ),
           ),
         ).toEqual(['same-name-chromium-linux.png']);
       }
+    });
+  });
+
+  it('keeps shared screenshot paths stable when a checkout moves', async () => {
+    await withRoot(async (root) => {
+      const savedPaths: string[] = [];
+      const trackingStore: ScreenshotSnapshotStore = {
+        ...snapshotStore,
+        async read() {
+          return null;
+        },
+        async save(filepath) {
+          savedPaths.push(filepath);
+        },
+      };
+      const referenceDirectories: string[] = [];
+      for (const checkout of ['alice', 'ci']) {
+        const projectRoot = path.join(root, checkout, 'repo');
+        const screenshotDirectory = path.join(projectRoot, 'references');
+        referenceDirectories.push(screenshotDirectory);
+        await match(root, {
+          snapshotStore: trackingStore,
+          rootPath: projectRoot,
+          projectName: 'app',
+          testPath: path.join(projectRoot, 'tests', 'example.test.ts'),
+          screenshotDirectory,
+          testName: 'same name',
+        });
+      }
+
+      expect(savedPaths).toHaveLength(2);
+      expect(path.relative(referenceDirectories[0]!, savedPaths[0]!)).toBe(
+        path.relative(referenceDirectories[1]!, savedPaths[1]!),
+      );
     });
   });
 
@@ -324,7 +359,9 @@ describe('matchBrowserScreenshot', () => {
           path.join(root, 'tests', '__screenshots__', 'example.test.ts'),
         ),
       ).toEqual(['renders-a-component-chromium-linux.png']);
-      expect((await fs.readdir(path.join(root, '__roots__'))).length).toBe(1);
+      expect((await fs.readdir(path.join(root, '__projects__'))).length).toBe(
+        1,
+      );
     });
   });
 
