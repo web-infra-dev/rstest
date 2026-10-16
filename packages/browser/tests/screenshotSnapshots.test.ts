@@ -209,11 +209,18 @@ describe('matchBrowserScreenshot', () => {
         });
       }
 
+      const rootDirectories = await fs.readdir(
+        path.join(screenshotDirectory, '__roots__'),
+      );
+      expect(rootDirectories).toHaveLength(1);
+
       for (const sourceDirectory of ['a', 'b']) {
         expect(
           await fs.readdir(
             path.join(
               screenshotDirectory,
+              '__roots__',
+              rootDirectories[0]!,
               'tests',
               sourceDirectory,
               'example.test.ts',
@@ -240,13 +247,19 @@ describe('matchBrowserScreenshot', () => {
         });
       }
 
+      const referenceRoot = path.join(root, 'tests', 'references');
+      const rootDirectories = await fs.readdir(
+        path.join(referenceRoot, '__roots__'),
+      );
+      expect(rootDirectories).toHaveLength(1);
+
       for (const sourceDirectory of ['a', 'b']) {
         expect(
           await fs.readdir(
             path.join(
-              root,
-              'tests',
-              'references',
+              referenceRoot,
+              '__roots__',
+              rootDirectories[0]!,
               'tests',
               sourceDirectory,
               'example.test.ts',
@@ -254,6 +267,79 @@ describe('matchBrowserScreenshot', () => {
           ),
         ).toEqual(['same-name-chromium-linux.png']);
       }
+    });
+  });
+
+  it('keeps different project roots distinct in one shared screenshot directory', async () => {
+    await withRoot(async (root) => {
+      const screenshotDirectory = path.join(root, 'references');
+      for (const project of ['a', 'b']) {
+        const projectRoot = path.join(root, project);
+        await match(root, {
+          rootPath: projectRoot,
+          testPath: path.join(projectRoot, 'tests', 'example.test.ts'),
+          screenshotDirectory,
+          testName: 'same name',
+        });
+      }
+
+      const rootDirectories = await fs.readdir(
+        path.join(screenshotDirectory, '__roots__'),
+      );
+      expect(rootDirectories).toHaveLength(2);
+      for (const rootDirectory of rootDirectories) {
+        expect(
+          await fs.readdir(
+            path.join(
+              screenshotDirectory,
+              '__roots__',
+              rootDirectory,
+              'tests',
+              'example.test.ts',
+            ),
+          ),
+        ).toEqual(['same-name-chromium-linux.png']);
+      }
+    });
+  });
+
+  it('does not use the test file as a screenshot directory', async () => {
+    await withRoot(async (root) => {
+      const testPath = path.join(root, 'tests', 'example.test.ts');
+      await fs.writeFile(testPath, '');
+      await match(root, {
+        rootPath: root,
+        testPath,
+        screenshotDirectory: '.',
+      });
+      await match(root, {
+        rootPath: root,
+        testPath,
+        screenshotDirectory: root,
+      });
+
+      expect(await fs.readFile(testPath, 'utf8')).toBe('');
+      expect(
+        await fs.readdir(
+          path.join(root, 'tests', '__screenshots__', 'example.test.ts'),
+        ),
+      ).toEqual(['renders-a-component-chromium-linux.png']);
+      expect((await fs.readdir(path.join(root, '__roots__'))).length).toBe(1);
+    });
+  });
+
+  it('keeps the first unnamed assertion ordinal absent for a custom resolver', async () => {
+    await withRoot(async (root) => {
+      const ordinals: (number | undefined)[] = [];
+      const resolvePath: NonNullable<
+        Parameters<typeof matchBrowserScreenshot>[0]['resolvePath']
+      > = (options) => {
+        ordinals.push(options.screenshotAssertionOrdinal);
+        return path.join(root, `reference-${ordinals.length}.png`);
+      };
+      await match(root, { resolvePath, screenshotAssertionOrdinal: 1 });
+      await match(root, { resolvePath, screenshotAssertionOrdinal: 2 });
+      expect(ordinals).toEqual([undefined, 2]);
     });
   });
 

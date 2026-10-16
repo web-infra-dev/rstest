@@ -234,6 +234,7 @@ export type BrowserScreenshotPathOptions = {
   testName: string;
   browserName: BrowserName;
   platform: string;
+  /** Undefined for the first unnamed assertion; subsequent assertions start at 2. */
   screenshotAssertionOrdinal?: number;
 };
 

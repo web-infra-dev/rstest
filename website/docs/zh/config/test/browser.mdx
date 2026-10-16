@@ -432,7 +432,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 | `screenshotDirectory`                 | `__screenshots__` | 测试文件旁存放基线的目录。                   |
 | `resolveScreenshotPath`               | 内置默认          | 使用下文介绍的默认路径布局。                 |
 
-`comparatorOptions.maxDiffPixels` 和 `comparatorOptions.maxDiffPixelRatio` 只能配置其中一个。相对路径的 `screenshotDirectory` 从各测试文件所在目录解析；未配置时默认为 `__screenshots__`。使用绝对路径时，基线集中存放，并在该目录下保留测试文件相对于项目根目录的路径。
+`comparatorOptions.maxDiffPixels` 和 `comparatorOptions.maxDiffPixelRatio` 只能配置其中一个。相对路径的 `screenshotDirectory` 从各测试文件所在目录解析；未配置时默认为 `__screenshots__`。共用同一截图目录时，Rstest 会按项目根目录和测试文件隔离基线。如果所选目录就是测试文件所在目录，基线会存入其中的 `__screenshots__` 子目录。
 
 默认路径如下：
 
@@ -444,7 +444,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 
 默认路径不包含项目名，因此测试文件、截图名、浏览器和平台相同的项目会共用一份基线。如需按项目隔离基线，可通过 `resolveScreenshotPath` 自定义路径。Rstest 旧哈希布局中的基线不会自动迁移；请将其移动到新路径，或使用 `--update` 重新生成。
 
-如需自定义路径布局，可使用 `resolveScreenshotPath`。回调会收到测试文件绝对路径、项目名、测试名、浏览器、平台，以及重复未命名断言使用的可选序号。返回绝对路径或相对于项目根目录的路径。配置此回调后，它的优先级高于 `screenshotDirectory`。
+如需自定义路径布局，可使用 `resolveScreenshotPath`。回调会收到测试文件绝对路径、项目名、测试名、浏览器、平台，以及未命名断言使用的可选序号。第一个未命名断言不传序号，后续断言从 `2` 开始。返回绝对路径或相对于项目根目录的路径。配置此回调后，它的优先级高于 `screenshotDirectory`。
 
 ```ts title="rstest.config.ts"
 import path from 'node:path';

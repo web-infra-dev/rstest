@@ -348,10 +348,16 @@ test('captures a shared name', async () => {
       '--config=rstest.shared-screenshots.config.mts',
     ]);
     await firstRun.expectExecSuccess();
+    const rootDirectories = fs.readdirSync(
+      path.join(fixtureDir, 'shared-screenshots', '__roots__'),
+    );
+    expect(rootDirectories).toHaveLength(1);
     for (const sourceDirectory of ['a', 'b']) {
       const directory = path.join(
         fixtureDir,
         'shared-screenshots',
+        '__roots__',
+        rootDirectories[0]!,
         'tests',
         sourceDirectory,
         'example.test.ts',
@@ -364,6 +370,101 @@ test('captures a shared name', async () => {
     const secondRun = await runScreenshot([
       '--config=rstest.shared-screenshots.config.mts',
     ]);
+    await secondRun.expectExecSuccess();
+  }, 120_000);
+
+  it('keeps custom resolver ordinals compatible for unnamed assertions', async () => {
+    fs.writeFileSync(
+      path.join(fixtureDir, 'rstest.resolver-ordinals.config.mts'),
+      `import path from 'node:path';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+    expect: {
+      toMatchScreenshot: {
+        resolveScreenshotPath: ({ screenshotAssertionOrdinal }) =>
+          path.join('resolver-references', \`reference-\${screenshotAssertionOrdinal ?? 'first'}.png\`),
+      },
+    },
+  },
+  include: ['tests/resolver-ordinals.test.ts'],
+});
+`,
+    );
+    fs.writeFileSync(
+      path.join(fixtureDir, 'tests', 'resolver-ordinals.test.ts'),
+      `import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('captures two unnamed screenshots', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  const button = page.getByRole('button', { name: 'Save' });
+  await expect(button).toMatchScreenshot();
+  await expect(button).toMatchScreenshot();
+});
+`,
+    );
+
+    const args = ['--config=rstest.resolver-ordinals.config.mts'];
+    const firstRun = await runScreenshot(args);
+    await firstRun.expectExecSuccess();
+    expect(
+      fs.readdirSync(path.join(fixtureDir, 'resolver-references')),
+    ).toEqual(['reference-2.png', 'reference-first.png']);
+    const secondRun = await runScreenshot(args);
+    await secondRun.expectExecSuccess();
+  }, 120_000);
+
+  it('stores references outside the test file when the directory is dot', async () => {
+    fs.writeFileSync(
+      path.join(fixtureDir, 'rstest.dot-screenshots.config.mts'),
+      `import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+    expect: {
+      toMatchScreenshot: { screenshotDirectory: '.' },
+    },
+  },
+  include: ['tests/dot-directory.test.ts'],
+});
+`,
+    );
+    const testPath = path.join(fixtureDir, 'tests', 'dot-directory.test.ts');
+    fs.writeFileSync(
+      testPath,
+      `import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('captures a screenshot', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
+});
+`,
+    );
+
+    const args = ['--config=rstest.dot-screenshots.config.mts'];
+    const firstRun = await runScreenshot(args);
+    await firstRun.expectExecSuccess();
+    expect(fs.statSync(testPath).isFile()).toBe(true);
+    expect(
+      fs.readdirSync(
+        path.join(
+          fixtureDir,
+          'tests',
+          '__screenshots__',
+          'dot-directory.test.ts',
+        ),
+      ),
+    ).toEqual([`captures-a-screenshot-1-chromium-${process.platform}.png`]);
+    const secondRun = await runScreenshot(args);
     await secondRun.expectExecSuccess();
   }, 120_000);
 

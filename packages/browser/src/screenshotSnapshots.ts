@@ -110,7 +110,10 @@ const resolveScreenshotPath = (
       testName,
       browserName,
       platform,
-      screenshotAssertionOrdinal,
+      screenshotAssertionOrdinal:
+        screenshotAssertionOrdinal === 1
+          ? undefined
+          : screenshotAssertionOrdinal,
     };
     if (resolvePath) {
       const customPath = resolvePath(pathOptions);
@@ -138,19 +141,28 @@ const resolveScreenshotPath = (
       referenceLocation.startsWith('../');
     const sourceDirectory = relative(rootPath, testDirectory);
     const testDirectoryUnderReferenceRoot = isSharedDirectory
-      ? sourceDirectory === '..' ||
-        sourceDirectory.startsWith('../') ||
-        isAbsolute(sourceDirectory)
-        ? join(
-            '__external__',
-            createHash('sha256').update(testDirectory).digest('hex'),
-          )
-        : sourceDirectory
+      ? join(
+          '__roots__',
+          createHash('sha256').update(resolve(rootPath)).digest('hex'),
+          sourceDirectory === '..' ||
+            sourceDirectory.startsWith('../') ||
+            isAbsolute(sourceDirectory)
+            ? join(
+                '__external__',
+                createHash('sha256').update(testDirectory).digest('hex'),
+              )
+            : sourceDirectory,
+        )
       : '';
-    return resolve(
+    const testGroupDirectory = resolve(
       referenceRoot,
       testDirectoryUnderReferenceRoot,
       basename(testPath),
+    );
+    return resolve(
+      testGroupDirectory === resolve(testPath)
+        ? join(referenceRoot, '__screenshots__', basename(testPath))
+        : testGroupDirectory,
       `${sanitizeScreenshotName(testName, fileSuffix, assertionSuffix)}${fileSuffix}`,
     );
   })();

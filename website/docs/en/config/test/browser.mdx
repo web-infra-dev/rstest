@@ -432,7 +432,7 @@ The defaults below apply when an option is omitted. Playwright supplies the capt
 | `screenshotDirectory`                 | `__screenshots__` | Directory for references beside each test file.                      |
 | `resolveScreenshotPath`               | Built-in          | Uses the path layout described below.                                |
 
-Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. An absolute directory stores references in one place, retaining the test file's path relative to the project root beneath it.
+Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. A shared directory keeps references separate by project root and test file. When the chosen directory is the test file's own directory, Rstest places references in its `__screenshots__` subdirectory.
 
 By default, references are stored in this layout:
 
@@ -444,7 +444,7 @@ The test name is sanitized for use as a path. Names that could collide after san
 
 Project names are not part of the default path, so projects using the same test file, screenshot name, browser, and platform share a reference. Use `resolveScreenshotPath` to isolate project-specific references. Existing references from Rstest's previous hashed layout are not moved automatically; move them to the new paths or regenerate them with `--update`.
 
-Use `resolveScreenshotPath` when you need a different layout. It receives the absolute test file path, project and test names, browser, platform, and optional ordinal used for repeated unnamed assertions. Return an absolute path or a path relative to the project root. When configured, the resolver takes precedence over `screenshotDirectory`.
+Use `resolveScreenshotPath` when you need a different layout. It receives the absolute test file path, project and test names, browser, platform, and an optional ordinal for unnamed assertions. The first unnamed assertion receives no ordinal; later ones start at `2`. Return an absolute path or a path relative to the project root. When configured, the resolver takes precedence over `screenshotDirectory`.
 
 ```ts title="rstest.config.ts"
 import path from 'node:path';
