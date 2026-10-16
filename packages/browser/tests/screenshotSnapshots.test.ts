@@ -174,6 +174,30 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('disambiguates Windows reserved device names in path segments', async () => {
+    await withRoot(async (root) => {
+      for (const testName of ['con/header', 'AUX/icon', 'lpt1/view']) {
+        await match(root, { testName });
+      }
+
+      const screenshotDirectory = path.join(
+        root,
+        'tests',
+        '__screenshots__',
+        'example.test.ts',
+      );
+      const directories = await fs.readdir(screenshotDirectory);
+      expect(directories).toHaveLength(3);
+      expect(directories).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/^con~[a-f0-9]{64}$/),
+          expect.stringMatching(/^AUX~[a-f0-9]{64}$/),
+          expect.stringMatching(/^lpt1~[a-f0-9]{64}$/),
+        ]),
+      );
+    });
+  });
+
   it('keeps generated screenshot filenames below the filesystem limit', async () => {
     await withRoot(async (root) => {
       await match(root, { testName: 'a'.repeat(300) });

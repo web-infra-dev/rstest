@@ -42,8 +42,12 @@ export type ScreenshotPathOptions = {
 };
 
 const screenshotNameByteLimit = 240;
+const isWindowsReservedName = (name: string): boolean =>
+  /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i.test(
+    name.replace(/[ .]+$/, '').split('.')[0] ?? '',
+  );
 const isSafeScreenshotName = (name: string): boolean =>
-  /^[a-z0-9]+(?: [a-z0-9]+)*$/.test(name);
+  /^[a-z0-9]+(?: [a-z0-9]+)*$/.test(name) && !isWindowsReservedName(name);
 
 const sanitizeScreenshotName = (
   name: string,
