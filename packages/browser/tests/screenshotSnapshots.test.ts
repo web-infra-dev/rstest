@@ -142,6 +142,39 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('keeps external test paths distinct from similarly named in-root paths', async () => {
+    await withRoot(async (root) => {
+      const savedPaths: string[] = [];
+      const trackingStore: ScreenshotSnapshotStore = {
+        ...snapshotStore,
+        async read() {
+          return null;
+        },
+        async save(filepath) {
+          savedPaths.push(filepath);
+        },
+      };
+
+      await match(root, {
+        snapshotStore: trackingStore,
+        rootPath: root,
+        testPath: path.join(root, '..', 'foo.test.ts'),
+        screenshotDirectory: 'references',
+        testName: 'same test',
+      });
+      await match(root, {
+        snapshotStore: trackingStore,
+        rootPath: root,
+        testPath: path.join(root, '_parent_', 'foo.test.ts'),
+        screenshotDirectory: 'references',
+        testName: 'same test',
+      });
+
+      expect(savedPaths).toHaveLength(2);
+      expect(savedPaths[0]).not.toBe(savedPaths[1]);
+    });
+  });
+
   it('limits screenshot filenames by their UTF-8 byte length', async () => {
     await withRoot(async (root) => {
       await match(root, { testName: '按钮'.repeat(80) });

@@ -227,6 +227,77 @@ export type BrowserViewport =
     }
   | DevicePreset;
 
+export type BrowserScreenshotPathOptions = {
+  /** Absolute path to the test file. */
+  testFilePath: string;
+  projectName: string;
+  testName: string;
+  browserName: BrowserName;
+  platform: string;
+  screenshotAssertionOrdinal?: number;
+};
+
+export type BrowserScreenshotComparatorOptions = {
+  /** Per-pixel color distance threshold from 0 (strict) to 1 (loose). @default 0.1 */
+  threshold?: number;
+  /** Maximum number of pixels allowed to differ. @default 0 */
+  maxDiffPixels?: number;
+  /** Maximum fraction of pixels allowed to differ. @default 0 */
+  maxDiffPixelRatio?: number;
+};
+
+export type BrowserScreenshotMatcherConfig = {
+  /**
+   * Options passed to the pixel comparator.
+   * @default `{ threshold: 0.1, maxDiffPixels: 0, maxDiffPixelRatio: 0 }`
+   */
+  comparatorOptions?: BrowserScreenshotComparatorOptions;
+  /**
+   * Time allowed for consecutive screenshots to become stable.
+   * @default 2000
+   */
+  stabilityTimeout?: number;
+  /**
+   * Color used to cover masked content.
+   * @default '#FF00FF'
+   */
+  maskColor?: string;
+  /**
+   * CSS injected before capturing a screenshot.
+   * @default undefined (no additional CSS)
+   */
+  style?: string;
+  /**
+   * Whether to hide the text caret during capture.
+   * @default 'hide'
+   */
+  caret?: 'hide' | 'initial';
+  /**
+   * Screenshot scale.
+   * @default 'device'
+   */
+  scale?: 'css' | 'device';
+  /**
+   * Whether to omit the page background.
+   * @default false
+   */
+  omitBackground?: boolean;
+  /**
+   * Directory for references, relative to the project root when not absolute.
+   * @default `__screenshots__` beside each test file
+   */
+  screenshotDirectory?: string;
+  /**
+   * Resolve a reference path. Relative results are resolved from the project root.
+   * @default Built-in screenshot path layout
+   */
+  resolveScreenshotPath?: (options: BrowserScreenshotPathOptions) => string;
+};
+
+export type BrowserExpectConfig = {
+  toMatchScreenshot?: BrowserScreenshotMatcherConfig;
+};
+
 export type BrowserModeConfig = {
   /**
    * Enable browser mode when running tests.
@@ -278,6 +349,8 @@ export type BrowserModeConfig = {
    * IntelliSense for this field.
    */
   providerOptions?: Record<string, unknown>;
+  /** Global defaults and path settings for Browser Mode screenshot assertions. */
+  expect?: BrowserExpectConfig;
 };
 
 type SnapshotFormat = Omit<
@@ -711,6 +784,7 @@ export type NormalizedBrowserModeConfig = {
   strictPort: boolean;
   viewport?: BrowserViewport;
   providerOptions: Record<string, unknown>;
+  expect?: BrowserExpectConfig;
 };
 
 // Exported from `/api` as `RstestContext.config`; shape changes are public API changes.

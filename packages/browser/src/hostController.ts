@@ -808,6 +808,55 @@ export const runBrowserController = async (
       throw new Error(`Browser provider implementation not found: ${provider}`);
     }
 
+    const screenshotProject =
+      request.kind === 'screenshot'
+        ? browserProjects.find(
+            (project) => project.name === request.projectName,
+          )
+        : undefined;
+    const screenshotConfig =
+      screenshotProject?.normalizedConfig.browser.expect?.toMatchScreenshot;
+    const {
+      comparatorOptions,
+      screenshotDirectory,
+      resolveScreenshotPath,
+      ...matcherDefaults
+    } = screenshotConfig ?? {};
+    const assertionScreenshotOptions = request.args[1] as
+      ScreenshotMatchOptions | undefined;
+    const screenshotOptions =
+      request.kind === 'screenshot'
+        ? {
+            ...matcherDefaults,
+            ...comparatorOptions,
+            ...assertionScreenshotOptions,
+          }
+        : undefined;
+    if (
+      screenshotOptions &&
+      assertionScreenshotOptions?.maxDiffPixels !== undefined &&
+      assertionScreenshotOptions.maxDiffPixelRatio === undefined
+    ) {
+      delete screenshotOptions.maxDiffPixelRatio;
+    } else if (
+      screenshotOptions &&
+      assertionScreenshotOptions?.maxDiffPixelRatio !== undefined &&
+      assertionScreenshotOptions.maxDiffPixels === undefined
+    ) {
+      delete screenshotOptions.maxDiffPixels;
+    }
+    const dispatchRequest =
+      screenshotOptions && request.kind === 'screenshot'
+        ? {
+            ...request,
+            args: [
+              request.args[0],
+              screenshotOptions,
+              ...request.args.slice(2),
+            ],
+          }
+        : request;
+
     const { runnerPage, containerPage } = resolveDispatchPages(target);
 
     if (target?.sessionId && !runnerPage) {
@@ -824,7 +873,7 @@ export const runBrowserController = async (
       const result = await implementation.dispatchRpc({
         containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
-        request,
+        request: dispatchRequest,
         timeoutFallbackMs,
       });
 
@@ -860,14 +909,18 @@ export const runBrowserController = async (
               snapshotRpcMethods.removeSnapshotFile(filepath, deadline),
           },
           testPath: request.testPath,
+          rootPath: screenshotProject?.rootPath ?? context.rootPath,
           projectName: request.projectName,
           testName,
           browserName,
           screenshotBase64: result,
           updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
-          options: request.args[1] as ScreenshotMatchOptions | undefined,
+          options: screenshotOptions,
           deadline: screenshotDeadline,
           screenshotAssertionOrdinal,
+          screenshotDirectory,
+          resolvePath: resolveScreenshotPath,
+          platform: process.platform,
         });
         const key = trackerKey(request.projectName, request.testPath);
         const counts = screenshotCountsByFile.get(key) ?? {

@@ -47,7 +47,11 @@ expect.element(locator: Locator): BrowserElementExpect
 
 <ApiMeta addedVersion="0.12.4" />
 
-With the Playwright provider, `expect(locator).toMatchScreenshot()` captures a Locator and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against it; pass `--update` to replace existing references intentionally.
+With the Playwright provider, `expect(locator).toMatchScreenshot()` captures the Locator's content and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
+
+The matcher accepts an optional reference name and capture or comparison options.
+
+`locator` must be a Locator from `@rstest/browser`. The matcher is only available with the Playwright provider and does not support `.not`.
 
 ```ts
 import { page } from '@rstest/browser';
@@ -58,7 +62,7 @@ test('save button matches its visual reference', async () => {
 });
 ```
 
-References are stored as PNG files under `__screenshots__`, grouped by project and test file. By default, the current test name is used as the reference name; pass a name to reuse or distinguish a reference explicitly:
+By default, the current test name identifies the reference. Pass a name to share a reference across assertions or give multiple screenshots in one test distinct names:
 
 ```ts
 await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
@@ -66,24 +70,25 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 );
 ```
 
-When using the shared file-level `expect` in `test.concurrent`, pass a screenshot name explicitly. A test-scoped `expect` fixture can use the default test name. Screenshot matchers do not support `.not`.
+Unnamed assertions in the same test are assigned distinct references automatically. In `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) to use the test name; if you use the shared file-level `expect`, provide a name explicitly.
 
-Screenshot references include the browser and operating system in their file names. Use the optional second argument to tune pixel tolerance, wait for stable captures, and mask dynamic content:
+The second argument controls comparison and capture. For example, allow up to 20 differing pixels, wait up to one second for a stable capture, and mask a timestamp that changes between runs:
 
 ```ts
 await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
-  threshold: 0.1,
   maxDiffPixels: 20,
   stabilityTimeout: 1000,
   mask: [page.locator('[data-testid="updated-at"]')],
 });
 ```
 
-`stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture.
+`threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` sets an absolute limit on differing pixels; use `maxDiffPixelRatio` instead to set a fraction of the image. The defaults allow no differing pixels after applying the default `threshold` of `0.1`. Set either `maxDiffPixels` or `maxDiffPixelRatio`, not both.
 
-`maxDiffPixelRatio` can be used instead of `maxDiffPixels` to allow a fraction of pixels to differ. The default allows no differing pixels after applying the per-pixel `threshold`. `--update` creates missing references and replaces only references that differ. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; actual and diff images are written under a sibling `__failures__` directory.
+`stabilityTimeout` defaults to `2000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture. Rstest disables animations during capture. Use `mask` for dynamic content, `maskColor` to change the overlay color, or `style` to inject CSS before capture. The remaining capture options (`caret`, `scale`, and `omitBackground`) are passed to Playwright's Locator screenshot API.
 
-Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, capture has no test deadline; `stabilityTimeout` still limits how long Rstest waits for consecutive captures to match.
+References are PNG files under `__screenshots__`, grouped by project and test file. Their names include the test name, browser, and operating system. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
+
+Set project-wide matcher defaults and reference paths with [`browser.expect.toMatchScreenshot`](/config/test/browser).
 
 ## Auto-retry and timeout
 

@@ -44,6 +44,32 @@ type BrowserModeConfig = {
   viewport?: BrowserViewport;
   strictPort?: boolean;
   providerOptions?: Record<string, unknown>;
+  expect?: {
+    toMatchScreenshot?: {
+      comparatorOptions?: {
+        threshold?: number;
+        maxDiffPixels?: number;
+        maxDiffPixelRatio?: number;
+      };
+      stabilityTimeout?: number;
+      maskColor?: string;
+      style?: string;
+      caret?: 'hide' | 'initial';
+      scale?: 'css' | 'device';
+      omitBackground?: boolean;
+      screenshotDirectory?: string;
+      resolveScreenshotPath?: (options: BrowserScreenshotPathOptions) => string;
+    };
+  };
+};
+
+type BrowserScreenshotPathOptions = {
+  testFilePath: string;
+  projectName: string;
+  testName: string;
+  browserName: 'chromium' | 'firefox' | 'webkit';
+  platform: string;
+  screenshotAssertionOrdinal?: number;
 };
 ```
 
@@ -363,6 +389,92 @@ You can also pass nested provider options from the CLI:
 
 ```bash
 npx rstest --browser.providerOptions.launch.channel=chrome
+```
+
+### expect.toMatchScreenshot
+
+<ApiMeta addedVersion="0.12.4" />
+
+- **Type:** `BrowserScreenshotMatcherConfig`
+- **Default:**
+
+```ts
+{
+  comparatorOptions: {
+    threshold: 0.1,
+    maxDiffPixels: 0,
+  },
+  stabilityTimeout: 2000,
+  maskColor: '#FF00FF',
+  caret: 'hide',
+  scale: 'device',
+  omitBackground: false,
+}
+```
+
+`maxDiffPixelRatio` also defaults to `0`; configure it instead of `maxDiffPixels` when you want to set a ratio. `style` is not injected by default. `mask` is assertion-only and defaults to no masks.
+
+Configure defaults for [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#screenshot-matching) across a Browser Mode project. Put pixel-comparison tolerances under `comparatorOptions`; capture and path options are siblings of it. Assertion-level values override the corresponding global values. `mask` remains assertion-specific because it uses browser `Locator` objects.
+
+The defaults below apply when an option is omitted. Playwright supplies the capture defaults for `maskColor`, `caret`, `scale`, and `omitBackground`.
+
+| Option                                | Default   | Description                                                          |
+| ------------------------------------- | --------- | -------------------------------------------------------------------- |
+| `comparatorOptions.threshold`         | `0.1`     | Per-pixel color distance threshold from `0` (strict) to `1` (loose). |
+| `comparatorOptions.maxDiffPixels`     | `0`       | Maximum number of pixels allowed to differ.                          |
+| `comparatorOptions.maxDiffPixelRatio` | `0`       | Maximum fraction of pixels allowed to differ.                        |
+| `stabilityTimeout`                    | `2000`    | Maximum time to wait for consecutive captures to match, in ms.       |
+| `maskColor`                           | `#FF00FF` | Color used to cover masked content.                                  |
+| `style`                               | Not set   | No additional CSS is injected.                                       |
+| `caret`                               | `hide`    | Hides the text caret during capture.                                 |
+| `scale`                               | `device`  | Captures at the device pixel ratio.                                  |
+| `omitBackground`                      | `false`   | Keeps the page background in the screenshot.                         |
+| `screenshotDirectory`                 | Not set   | Uses `__screenshots__` beside each test file.                        |
+| `resolveScreenshotPath`               | Built-in  | Uses the path layout described below.                                |
+
+Set either `comparatorOptions.maxDiffPixels` or `comparatorOptions.maxDiffPixelRatio`, not both. `screenshotDirectory` relocates the default layout; relative paths are resolved from the project root. If it is omitted, references are stored under `__screenshots__` beside each test file.
+
+By default, a reference is stored next to its test file using this layout:
+
+```text
+<test-directory>/__screenshots__/<project>-<hash>/<test-file>/<test-name>-<hash>-<browser>-<platform>.png
+```
+
+For repeated unnamed assertions, Rstest adds an `assertion-<n>` directory before the filename (for example, `assertion-2`). The project and test-name components are made filesystem-safe and include a short hash to avoid collisions.
+
+Use `resolveScreenshotPath` when you need a different layout. It receives the absolute test file path, project and test names, browser, platform, and optional ordinal used for repeated unnamed assertions. Return an absolute path or a path relative to the project root. When configured, the resolver takes precedence over `screenshotDirectory`.
+
+```ts title="rstest.config.ts"
+import path from 'node:path';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    expect: {
+      toMatchScreenshot: {
+        comparatorOptions: {
+          threshold: 0.1,
+          maxDiffPixels: 10,
+        },
+        resolveScreenshotPath: ({
+          testFilePath,
+          projectName,
+          testName,
+          browserName,
+          platform,
+        }) =>
+          path.join(
+            'visual-baselines',
+            projectName,
+            path.relative(process.cwd(), testFilePath),
+            `${testName}-${browserName}-${platform}.png`,
+          ),
+      },
+    },
+  },
+});
 ```
 
 ## Current limitation: browser launch options must match in one run
