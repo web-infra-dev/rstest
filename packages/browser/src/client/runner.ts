@@ -679,10 +679,15 @@ const run = async () => {
   // collector (undefined between files, so stray late events are ignored).
   let activeUnhandledErrors: Error[] | undefined;
   const onWindowError = (event: ErrorEvent): void => {
+    if (event.error == null) {
+      console.error(new Error(event.message));
+      return;
+    }
+
     activeUnhandledErrors?.push(
       event.error instanceof Error
         ? event.error
-        : new Error(event.message || String(event.error)),
+        : new Error(String(event.error)),
     );
   };
   const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
