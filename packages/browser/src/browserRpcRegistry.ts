@@ -5,8 +5,8 @@
  * data) to keep this module focused on host-side validation.
  *
  * Planned gaps (non-exhaustive):
- * - Locator query/interop: filter({ hasNot, hasNotText }), locator.selector/length,
- *   locator.query()/element()/elements()/all(), page.elementLocator(element),
+ * - Locator query/interop: locator.selector/length, locator.query()/element()/elements()/all(),
+ *   page.elementLocator(element),
  *   locators.extend(...)
  * - Locator actions: tripleClick, hover out, drag/drop helpers
  * - Assertions: a11y matchers (accessible name/description), toHaveRole,
