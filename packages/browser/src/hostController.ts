@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -884,21 +884,42 @@ export const runBrowserController = async (
             (item) => item.name === request.projectName,
           );
           const testName = request.args[0];
+          const testIdentity = request.args[2];
           if (
             !project ||
             typeof testName !== 'string' ||
+            typeof testIdentity !== 'object' ||
+            testIdentity === null ||
+            !('testId' in testIdentity) ||
+            typeof testIdentity.testId !== 'string' ||
+            !('parentNames' in testIdentity) ||
+            !Array.isArray(testIdentity.parentNames) ||
+            !testIdentity.parentNames.every(
+              (name) => typeof name === 'string',
+            ) ||
             typeof result !== 'string'
           ) {
             throw new Error('Invalid failed-test screenshot response.');
           }
           const safeName = `${basename(request.testPath)}-${testName}`
             .replace(/[^a-zA-Z0-9._-]+/g, '-')
-            .slice(0, 180);
+            .slice(0, 140);
+          const identityHash = createHash('sha256')
+            .update(
+              JSON.stringify({
+                project: request.projectName,
+                testPath: request.testPath,
+                testId: testIdentity.testId,
+                parentNames: testIdentity.parentNames,
+              }),
+            )
+            .digest('hex')
+            .slice(0, 16);
           const filepath = join(
             project.rootPath,
             '.rstest',
             'screenshots',
-            `${safeName}.png`,
+            `${safeName}-${identityHash}.png`,
           );
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));

@@ -309,12 +309,20 @@ test('rejects a short screenshot stability timeout', async () => {
     const result = await runScreenshot(['tests/failure.test.ts']);
     await result.cli.exec;
     expect(result.cli.exec.exitCode).not.toBe(0);
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'captures the failed page state',
+    );
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'expected true to be false',
+    );
 
     const screenshotPath = fs
       .readdirSync(fixtureDir, { recursive: true })
       .map((entry) => path.join(fixtureDir, entry.toString()))
       .find((entry) =>
-        entry.endsWith('failure.test.ts-captures-the-failed-page-state.png'),
+        /failure\.test\.ts-captures-the-failed-page-state-[a-f0-9]{16}\.png$/.test(
+          entry,
+        ),
       );
     expect(screenshotPath).toBeDefined();
     if (!screenshotPath)
@@ -331,6 +339,12 @@ test('rejects a short screenshot stability timeout', async () => {
     ]);
     await result.cli.exec;
     expect(result.cli.exec.exitCode).not.toBe(0);
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'captures the failed page state',
+    );
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'expected true to be false',
+    );
     expect(
       fs
         .readdirSync(fixtureDir, { recursive: true })

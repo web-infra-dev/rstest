@@ -269,6 +269,11 @@ export function mergeWithCLIOptions(
       if (options.browser.headless !== undefined) {
         config.browser.headless = options.browser.headless;
       }
+      if (options.browser.screenshotFailures !== undefined) {
+        config.browser.screenshotFailures = coerceCliBoolean(
+          options.browser.screenshotFailures,
+        );
+      }
       if (options.browser.port !== undefined) {
         config.browser.port = Number(options.browser.port);
       }

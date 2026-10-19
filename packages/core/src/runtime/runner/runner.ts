@@ -510,6 +510,19 @@ export class TestRunner {
         }
       }
 
+      if (result?.status === 'fail') {
+        await hooks.onTestCaseFailure?.({
+          testId: test.testId,
+          testPath,
+          name: test.name,
+          parentNames: test.parentNames,
+          project,
+          type: 'case',
+          runMode: test.runMode,
+          meta: test.meta,
+        });
+      }
+
       test.startTime = undefined;
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]

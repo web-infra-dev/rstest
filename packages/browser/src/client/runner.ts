@@ -912,26 +912,28 @@ const run = async () => {
           syncCurrentTask();
           dispatchRunnerLifecycle('case-start', test);
         },
+        onTestCaseFailure: async (test) => {
+          if (!projectRuntime.screenshotFailures) return;
+          try {
+            await callBrowserRpc<string>({
+              kind: 'screenshot',
+              locator: { steps: [] },
+              method: 'captureFailure',
+              screenshotTarget: 'page',
+              args: [
+                test.name,
+                {},
+                { testId: test.testId, parentNames: test.parentNames },
+              ],
+            });
+          } catch (error) {
+            console.warn('Failed to capture browser test screenshot:', error);
+          }
+        },
         onTestCaseResult: async (result) => {
           removeTaskFromStack(result.testId);
           if (result.status === 'fail') {
             failedTestsCount++;
-            if (projectRuntime.screenshotFailures) {
-              try {
-                await callBrowserRpc<string>({
-                  kind: 'screenshot',
-                  locator: { steps: [] },
-                  method: 'captureFailure',
-                  screenshotTarget: 'page',
-                  args: [result.name, {}],
-                });
-              } catch (error) {
-                console.warn(
-                  'Failed to capture browser test screenshot:',
-                  error,
-                );
-              }
-            }
           }
           send({
             type: 'case-result',
