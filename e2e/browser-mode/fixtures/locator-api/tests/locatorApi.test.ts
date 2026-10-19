@@ -66,6 +66,20 @@ test('locator + expect.element proxy works', async () => {
     .getByRole('button', { name: 'Save' });
   await expect.element(profileSave).toHaveCount(1, { timeout: 1000 });
 
+  const draftItems = document.createElement('ul');
+  draftItems.innerHTML = `
+    <li><span>Published</span></li>
+    <li><span>Draft</span></li>
+    <li><span>Draft</span><span>Locked</span></li>
+  `;
+  document.body.append(draftItems);
+  await expect
+    .element(page.locator('li').filter({ hasNotText: 'Draft' }))
+    .toHaveCount(1);
+  await expect
+    .element(page.locator('li').filter({ hasNot: page.getByText('Locked') }))
+    .toHaveCount(2);
+
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.id = 'agree';
