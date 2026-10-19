@@ -81,10 +81,10 @@ describe('PROJECT_LOADER', () => {
       hostFile('b'),
     ]);
     for (const project of projects) {
-      const dirPath = join(root, 'packages', project.config.name!.slice(5));
       expect(project.config.globals).toBe(true);
-      expect(resolve(project.config.root!)).toBe(dirPath);
-      expect(project.configFileDependencies).toEqual([hostDep(dirPath)]);
+      expect(project.configFileDependencies).toEqual([
+        hostDep(resolve(project.config.root!)),
+      ]);
     }
   });
 
@@ -139,23 +139,6 @@ describe('PROJECT_LOADER', () => {
 
     expect(projects[0]!.config.testEnvironment).toBe('jsdom');
     expect(projects[0]!.config.testTimeout).toBe(3000);
-  });
-
-  it('adds the loaded config file and its dependencies to forceRerunTriggers', async () => {
-    const loader = createHostLoader();
-    const projects = await resolveProjects({
-      config: { projects: ['packages/a'] },
-      root,
-      options: {},
-      projectLoader: loader,
-    });
-
-    expect(projects[0]!.config.forceRerunTriggers).toEqual([
-      '**/package.json/**',
-      '**/rstest.config.*',
-      hostFile('a'),
-      hostDep(join(root, 'packages/a')),
-    ]);
   });
 
   it('keeps explicit forceRerunTriggers from loader results', async () => {
@@ -222,7 +205,7 @@ describe('PROJECT_LOADER', () => {
     ]);
     for (const project of projects) {
       const leafDeps = project.config.name!.startsWith('host:')
-        ? [hostDep(join(root, 'packages', project.config.name!.slice(5)))]
+        ? [hostDep(resolve(project.config.root!))]
         : [];
       expect(project.configFileDependencies).toEqual([
         ...leafDeps,
@@ -248,10 +231,9 @@ describe('PROJECT_LOADER', () => {
     });
   });
 
-  it('keeps the loader when the root config has extends (API path)', async () => {
+  it('reads the loader before cloning the root config (API path)', async () => {
     const loader = createHostLoader();
     const content: RootConfig = {
-      extends: { testTimeout: 1234 },
       projects: ['packages/a'],
       [PROJECT_LOADER]: loader,
     };

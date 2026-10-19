@@ -5,7 +5,7 @@ import {
   mergeWithCLIOptions,
   resolveProjects,
 } from '../../cli/init';
-import { clonePlainConfig, resolveConfigFileExtends } from '../../config';
+import { clonePlainConfig, resolveExtends } from '../../config';
 import { getProjectLoader } from '../../projectLoader';
 import type { Project, RstestConfig } from '../../types';
 import { filterProjects, getAbsolutePath } from '../../utils';
@@ -62,11 +62,7 @@ export async function resolveRunnerInputs({
   // `clonePlainConfig` drops symbol keys, so read the loader first.
   const projectLoader = getProjectLoader(result.content);
   // Cloning must preserve exclude.override until defaults are applied.
-  const config = await resolveConfigFileExtends({
-    content: clonePlainConfig(result.content),
-    filePath: result.filePath,
-    dependencies: result.dependencies,
-  });
+  const config = await resolveExtends(clonePlainConfig(result.content), result);
 
   mergeWithCLIOptions(config, options);
   config.root = config.root ? getAbsolutePath(cwd, config.root) : cwd;

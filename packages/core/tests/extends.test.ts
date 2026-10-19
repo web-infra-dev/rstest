@@ -1,15 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync,
-  mkdtempSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from '@rstest/core';
 import { loadConfig } from '../src/config';
+import { withTempDir } from './helpers/tempDir';
 
 describe('Config Extends Mechanism', () => {
   let testConfigPath: string;
@@ -255,21 +249,15 @@ export default defineConfig({
 });
 
 describe('config file force rerun triggers', () => {
-  let dir: string;
-
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
-
-  const loadCustomConfig = async (config: string) => {
-    dir = mkdtempSync(join(tmpdir(), 'rstest-config-triggers-'));
-    writeFileSync(join(dir, 'custom.config.mts'), config);
-    const { content, filePath } = await loadConfig({
-      cwd: dir,
-      path: 'custom.config.mts',
+  const loadCustomConfig = (config: string) =>
+    withTempDir('rstest-config-triggers-', async (dir) => {
+      writeFileSync(join(dir, 'custom.config.mts'), config);
+      const { content, filePath } = await loadConfig({
+        cwd: dir,
+        path: 'custom.config.mts',
+      });
+      return { triggers: content.forceRerunTriggers, filePath };
     });
-    return { triggers: content.forceRerunTriggers, filePath };
-  };
 
   it('adds the config file after the default triggers', async () => {
     const { triggers, filePath } = await loadCustomConfig('export default {};');

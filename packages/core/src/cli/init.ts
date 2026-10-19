@@ -7,7 +7,6 @@ import {
   loadConfig,
   mergeForceRerunTriggers,
   plainDeepMerge,
-  resolveConfigFileExtends,
   resolveExtends,
 } from '../config';
 import type { LoadProjectConfig } from '../projectLoader';
@@ -356,11 +355,10 @@ async function resolveConfig(
     )) ?? { content: {}, filePath: null, dependencies: [] };
     const dependencies = [...(loaded.dependencies ?? [])];
     result = {
-      content: await resolveConfigFileExtends({
-        content: { ...loaded.content },
-        filePath: loaded.filePath,
-        dependencies,
-      }),
+      content: await resolveExtends(
+        { ...loaded.content },
+        { filePath: loaded.filePath, dependencies },
+      ),
       filePath: loaded.filePath,
       dependencies,
     };
