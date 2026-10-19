@@ -179,6 +179,16 @@ describe('browser mode - error handling', () => {
     );
   });
 
+  it('logs browser error events without an error object without failing the file', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli('error', {
+      args: ['tests/errorEventWithoutError.test.ts'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('Test Files 1 passed');
+    expect(cli.stderr).toContain('BROWSER_ERROR_REPORT_WITHOUT_ERROR');
+  });
+
   it('keeps a zero poll timeout finite in Browser Mode', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('error', {
       args: [
