@@ -8,13 +8,11 @@ import { playwrightProviderImplementation } from './playwright';
  * When adding a new built-in provider, implement `BrowserProviderImplementation`
  * and register it in `providerImplementations` below.
  *
- * Provider-agnostic policy:
- * - keep shared contracts and behavior provider-neutral
- * - `browser.providerOptions` stays opaque at the framework boundary
- * - do not export provider-owned config types from `@rstest/browser`
- * - do not reference optional peer provider types from public declarations
- * - keep provider-specific behavior and config decoding inside provider implementations
- * - prefer direct passthrough to provider APIs over provider-specific translation
+ * Internal provider boundary. Playwright is the only supported provider today.
+ * Keep provider-owned options opaque at the framework boundary and avoid
+ * generalizing this contract for a hypothetical implementation. If another
+ * provider is added, keep its config decoding and runtime behavior in its
+ * implementation and promote only genuinely shared behavior into this layer.
  *
  * The provider-name union is owned by `@rstest/core` (see `BROWSER_PROVIDERS`)
  * because core's CLI `init` templates need it but cannot import this package

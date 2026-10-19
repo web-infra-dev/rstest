@@ -128,8 +128,6 @@ npx playwright install chromium
 
 浏览器驱动提供者。目前仅支持 [Playwright](https://playwright.dev/)。
 
-同一次测试运行（single run）暂不支持混用多个 provider。
-
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -365,9 +363,9 @@ export default defineConfig({
 - **默认值：** `{}`
 - **CLI：** `--browser.providerOptions.*`
 
-传递给选定 browser provider 的特定选项。Rstest 不会验证或解析该对象的内容——它会在浏览器启动和 context 创建时原样转发给 provider。
+传递给 Playwright 浏览器启动和 context 创建过程的选项。Rstest 不会验证或解析该对象，而是将值原样转发给 Playwright。
 
-`providerOptions` 的结构由各 provider 自行定义。详见下方 [Provider 选项](#provider-选项)。
+支持的字段详见下方 [Playwright provider 选项](#provider-选项)。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -385,7 +383,7 @@ export default defineConfig({
 });
 ```
 
-也可以通过 CLI 传入嵌套的 provider 选项：
+也可以通过 CLI 传入嵌套的 Playwright 选项：
 
 ```bash
 npx rstest --browser.providerOptions.launch.channel=chrome
@@ -486,7 +484,7 @@ export default defineConfig({
 - `headless`
 - `providerOptions`
 
-这意味着目前还不支持在同一次 run 里通过 `projects` 混用多个 provider，或同时配置 Chromium/Firefox/WebKit。
+同一次 run 中的所有 Browser Mode 项目共用一个 browser engine，因此 Chromium、Firefox 和 WebKit 需要分开执行。
 
 如果你需要跨浏览器覆盖，建议拆成多次执行（例如在 CI matrix 中分别跑）：
 
