@@ -71,4 +71,4 @@ Common commands (run from this package):
 
 CI
 
-- The extension is frozen at its final release, 0.12.3. CI no longer builds, publishes or E2E-tests it.
+- The extension is frozen at its final release, 0.12.3. CI no longer packages (`.vsix`), publishes or E2E-tests it.
