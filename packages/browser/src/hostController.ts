@@ -140,6 +140,38 @@ const getFailureScreenshotKey = (
   testId: string,
 ): string => JSON.stringify([project, testPath, testId]);
 
+const getFailureScreenshotPath = ({
+  projectRoot,
+  projectName,
+  testPath,
+  testName,
+  testId,
+  parentNames,
+}: {
+  projectRoot: string;
+  projectName: string;
+  testPath: string;
+  testName: string;
+  testId: string;
+  parentNames: string[];
+}): string => {
+  const safeName = `${basename(testPath)}-${testName}`
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .slice(0, 140);
+  const identityHash = createHash('sha256')
+    .update(
+      JSON.stringify({ project: projectName, testPath, testId, parentNames }),
+    )
+    .digest('hex')
+    .slice(0, 16);
+  return join(
+    projectRoot,
+    '.rstest',
+    'screenshots',
+    `${safeName}-${identityHash}.png`,
+  );
+};
+
 const resolveProviderForTestPath = ({
   testPath,
   projectName,
@@ -907,26 +939,14 @@ export const runBrowserController = async (
           ) {
             throw new Error('Invalid failed-test screenshot response.');
           }
-          const safeName = `${basename(request.testPath)}-${testName}`
-            .replace(/[^a-zA-Z0-9._-]+/g, '-')
-            .slice(0, 140);
-          const identityHash = createHash('sha256')
-            .update(
-              JSON.stringify({
-                project: request.projectName,
-                testPath: request.testPath,
-                testId: testIdentity.testId,
-                parentNames: testIdentity.parentNames,
-              }),
-            )
-            .digest('hex')
-            .slice(0, 16);
-          const filepath = join(
-            project.rootPath,
-            '.rstest',
-            'screenshots',
-            `${safeName}-${identityHash}.png`,
-          );
+          const filepath = getFailureScreenshotPath({
+            projectRoot: project.rootPath,
+            projectName: request.projectName,
+            testPath: request.testPath,
+            testName,
+            testId: testIdentity.testId,
+            parentNames: testIdentity.parentNames,
+          });
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));
           failureScreenshots.set(
@@ -1255,13 +1275,28 @@ export const runBrowserController = async (
     failureScreenshots.delete(screenshotKey);
     if (payload.status === 'fail' && failureScreenshot) {
       logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
-    } else if (failureScreenshot) {
-      await fs.rm(failureScreenshot, { force: true }).catch((error) => {
-        logger.warn(
-          `Failed to remove non-failing test screenshot: ${failureScreenshot}`,
-          error,
-        );
-      });
+    } else if (payload.status !== 'fail') {
+      const project = browserProjects.find(
+        (item) => item.name === payload.project,
+      );
+      const screenshotPath = project
+        ? getFailureScreenshotPath({
+            projectRoot: project.rootPath,
+            projectName: payload.project,
+            testPath: payload.testPath,
+            testName: payload.name,
+            testId: payload.testId,
+            parentNames: payload.parentNames ?? [],
+          })
+        : failureScreenshot;
+      if (screenshotPath) {
+        await fs.rm(screenshotPath, { force: true }).catch((error) => {
+          logger.warn(
+            `Failed to remove non-failing test screenshot: ${screenshotPath}`,
+            error,
+          );
+        });
+      }
     }
     caseResults.push(payload);
     phaseTrackers

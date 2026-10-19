@@ -7,6 +7,7 @@ import {
   deleteFixtureTarget,
   killCliProcessTree,
   runBrowserCliWithCwd,
+  runBrowserWatchCliWithCwd,
   shouldRunHeadedBrowserTests,
 } from './utils';
 
@@ -385,6 +386,44 @@ test('rejects a short screenshot stability timeout', async () => {
         .some((entry) => entry.toString().endsWith('.png')),
     ).toBe(false);
   });
+
+  it('removes stale failure screenshots after a watch rerun passes', async () => {
+    const result = await runBrowserWatchCliWithCwd(fixtureDir, {
+      args: ['--project=project-a', 'tests/failure.test.ts'],
+    });
+    cliToKill = result.cli;
+    const getFailureScreenshots = () =>
+      fs
+        .readdirSync(fixtureDir, { recursive: true })
+        .map((entry) => entry.toString())
+        .filter((entry) =>
+          /failure\.test\.ts-captures-the-failed-page-state-[a-f0-9]{16}\.png$/.test(
+            entry,
+          ),
+        );
+
+    try {
+      await result.cli.waitForStdout('Saved failed browser test screenshot:');
+      await result.cli.waitForStdout('Waiting for file changes...');
+      expect(getFailureScreenshots()).toHaveLength(1);
+
+      result.cli.resetStd();
+      const testPath = path.join(fixtureDir, 'tests/failure.test.ts');
+      fs.writeFileSync(
+        testPath,
+        fs
+          .readFileSync(testPath, 'utf8')
+          .replace('expect(true).toBe(false)', 'expect(true).toBe(true)'),
+      );
+
+      await result.cli.waitForStdout('Re-running 1 affected test file(s)');
+      await result.cli.waitForStdout('✓ tests/failure.test.ts');
+      await result.cli.waitForStdout('Waiting for file changes...');
+      expect(getFailureScreenshots()).toHaveLength(0);
+    } finally {
+      await killCliProcessTree(result.cli);
+    }
+  }, 60_000);
 
   it('saves a screenshot when teardown fails', async () => {
     const result = await runScreenshot(['tests/teardown-failure.test.ts']);
