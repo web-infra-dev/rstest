@@ -358,6 +358,27 @@ test('rejects a short screenshot stability timeout', async () => {
       'tests/retry-pass.test.ts',
     ]);
     await result.expectExecSuccess();
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).not.toContain(
+      'Saved failed browser test screenshot:',
+    );
+    expect(
+      fs
+        .readdirSync(fixtureDir, { recursive: true })
+        .some((entry) => entry.toString().endsWith('.png')),
+    ).toBe(false);
+  });
+
+  it('removes screenshots when a retry skips', async () => {
+    const result = await runScreenshot([
+      '--retry=1',
+      'tests/retry-skip.test.ts',
+    ]);
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).toBe(0);
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain('skipped');
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).not.toContain(
+      'Saved failed browser test screenshot:',
+    );
     expect(
       fs
         .readdirSync(fixtureDir, { recursive: true })

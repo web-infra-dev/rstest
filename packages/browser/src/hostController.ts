@@ -937,7 +937,6 @@ export const runBrowserController = async (
             ),
             filepath,
           );
-          logger.info(`Saved failed browser test screenshot: ${filepath}`);
           return;
         }
         const [testName] = request.args;
@@ -1254,10 +1253,12 @@ export const runBrowserController = async (
     );
     const failureScreenshot = failureScreenshots.get(screenshotKey);
     failureScreenshots.delete(screenshotKey);
-    if (payload.status === 'pass' && failureScreenshot) {
+    if (payload.status === 'fail' && failureScreenshot) {
+      logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
+    } else if (failureScreenshot) {
       await fs.rm(failureScreenshot, { force: true }).catch((error) => {
         logger.warn(
-          `Failed to remove recovered test screenshot: ${failureScreenshot}`,
+          `Failed to remove non-failing test screenshot: ${failureScreenshot}`,
           error,
         );
       });

@@ -670,14 +670,24 @@ export async function dispatchPlaywrightBrowserRpc({
     }
     let screenshot: Buffer;
     try {
-      screenshot = isFailureCapture
-        ? await screenshotTarget.screenshot({ animations: 'disabled' })
-        : await captureStableScreenshot(
-            screenshotTarget,
-            options,
-            requestDeadline,
-            beforeScreenshotCapture,
-          );
+      if (isFailureCapture) {
+        const screenshotTimeout = requestDeadline
+          ? Math.max(1, requestDeadline - Date.now())
+          : undefined;
+        screenshot = await screenshotTarget.screenshot({
+          animations: 'disabled',
+          ...(screenshotTimeout === undefined
+            ? {}
+            : { timeout: screenshotTimeout }),
+        });
+      } else {
+        screenshot = await captureStableScreenshot(
+          screenshotTarget,
+          options,
+          requestDeadline,
+          beforeScreenshotCapture,
+        );
+      }
     } finally {
       await restoreScreenshotState?.();
     }

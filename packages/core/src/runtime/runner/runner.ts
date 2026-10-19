@@ -512,6 +512,7 @@ export class TestRunner {
 
       let failureScreenshotCaptured = false;
       const captureFailedAttempt = async () => {
+        if (failureScreenshotCaptured) return;
         failureScreenshotCaptured = true;
         await hooks.onTestCaseFailure?.({
           testId: test.testId,
@@ -547,6 +548,9 @@ export class TestRunner {
         result.errors ??= [];
         result.errors.push(...(await formatTestError(hookResult.error)));
         test.context.task.result = result;
+        if (result.status === 'fail' && !failureScreenshotCaptured) {
+          await captureFailedAttempt();
+        }
         if (hookResult.phase === 'callback') {
           break;
         }
@@ -560,6 +564,9 @@ export class TestRunner {
           result.errors ??= [];
           result.errors.push(...(await formatTestError(error)));
           test.context.task.result = result;
+          if (!failureScreenshotCaptured) {
+            await captureFailedAttempt();
+          }
         }
       }
 
@@ -571,6 +578,9 @@ export class TestRunner {
           result.errors ??= [];
           result.errors.push(...(await formatTestError(error)));
           test.context.task.result = result;
+          if (!failureScreenshotCaptured) {
+            await captureFailedAttempt();
+          }
         }
       }
 
@@ -589,10 +599,6 @@ export class TestRunner {
         }
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
-      }
-
-      if (result.status === 'fail' && !failureScreenshotCaptured) {
-        await captureFailedAttempt();
       }
 
       result.meta = test.meta;

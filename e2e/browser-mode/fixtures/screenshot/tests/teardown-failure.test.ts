@@ -1,10 +1,12 @@
-import { afterEach, expect, it } from '@rstest/core';
+import { afterEach, expect, it, onTestFinished } from '@rstest/core';
 
 it('fails in afterEach', () => {
   document.body.innerHTML = '<main>before teardown</main>';
+  onTestFinished(() => {
+    document.body.innerHTML = '<main>later cleanup</main>';
+  });
 });
 
 afterEach(() => {
-  document.body.innerHTML = '';
   expect(true).toBe(false);
 });
