@@ -387,7 +387,7 @@ test('rejects a short screenshot stability timeout', async () => {
     ).toBe(false);
   });
 
-  it('removes stale failure screenshots after a watch rerun passes', async () => {
+  it('removes stale screenshots when test and file identities change', async () => {
     const result = await runBrowserWatchCliWithCwd(fixtureDir, {
       args: ['--project=project-a', 'tests/failure.test.ts'],
     });
@@ -397,9 +397,7 @@ test('rejects a short screenshot stability timeout', async () => {
         .readdirSync(fixtureDir, { recursive: true })
         .map((entry) => entry.toString())
         .filter((entry) =>
-          /failure\.test\.ts-captures-the-failed-page-state-[a-f0-9]{16}\.png$/.test(
-            entry,
-          ),
+          /failure\.test\.ts-.*-[a-f0-9]{16}\.png$/.test(entry),
         );
 
     try {
@@ -413,11 +411,27 @@ test('rejects a short screenshot stability timeout', async () => {
         testPath,
         fs
           .readFileSync(testPath, 'utf8')
-          .replace('expect(true).toBe(false)', 'expect(true).toBe(true)'),
+          .replace(
+            'captures the failed page state',
+            'renamed failed page state',
+          ),
       );
 
       await result.cli.waitForStdout('Re-running 1 affected test file(s)');
-      await result.cli.waitForStdout('✓ tests/failure.test.ts');
+      await result.cli.waitForStdout('Saved failed browser test screenshot:');
+      await result.cli.waitForStdout('Waiting for file changes...');
+      expect(getFailureScreenshots()).toHaveLength(1);
+      expect(getFailureScreenshots()[0]).toContain('renamed-failed-page-state');
+
+      result.cli.resetStd();
+      const renamedTestPath = path.join(
+        fixtureDir,
+        'tests/failure-renamed.test.ts',
+      );
+      fs.renameSync(testPath, renamedTestPath);
+      await result.cli.waitForStdout(
+        'No browser test files remain after update.',
+      );
       await result.cli.waitForStdout('Waiting for file changes...');
       expect(getFailureScreenshots()).toHaveLength(0);
     } finally {

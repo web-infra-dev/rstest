@@ -140,6 +140,46 @@ const getFailureScreenshotKey = (
   testId: string,
 ): string => JSON.stringify([project, testPath, testId]);
 
+const getFailureScreenshotDirectory = (
+  projectRoot: string,
+  testPath: string,
+): string => {
+  const fileHash = createHash('sha256')
+    .update(getTestPathKey(testPath))
+    .digest('hex')
+    .slice(0, 16);
+  const safeFileName = basename(testPath).replace(/[^a-zA-Z0-9._-]+/g, '-');
+  return join(
+    projectRoot,
+    '.rstest',
+    'screenshots',
+    `${safeFileName}-${fileHash}`,
+  );
+};
+
+const removeFailureScreenshotsForTestPaths = async (
+  projects: Pick<InternalProjectContext, 'rootPath'>[],
+  testPaths: string[],
+): Promise<void> => {
+  await Promise.all(
+    testPaths.flatMap((testPath) =>
+      projects.map((project) =>
+        fs
+          .rm(getFailureScreenshotDirectory(project.rootPath, testPath), {
+            recursive: true,
+            force: true,
+          })
+          .catch((error) => {
+            logger.warn(
+              `Failed to remove stale browser test screenshots for ${testPath}`,
+              error,
+            );
+          }),
+      ),
+    ),
+  );
+};
+
 const getFailureScreenshotPath = ({
   projectRoot,
   projectName,
@@ -165,9 +205,7 @@ const getFailureScreenshotPath = ({
     .digest('hex')
     .slice(0, 16);
   return join(
-    projectRoot,
-    '.rstest',
-    'screenshots',
+    getFailureScreenshotDirectory(projectRoot, testPath),
     `${safeName}-${identityHash}.png`,
   );
 };
@@ -540,6 +578,8 @@ export const runBrowserController = async (
     watchState.triggerRerun = async () => {
       await watchSignals.runDispatchRerun();
     };
+    watchState.removeFailureScreenshots = (testPaths) =>
+      removeFailureScreenshotsForTestPaths(browserProjects, testPaths);
   }
 
   // A path-scoped shortcut must match a browser entry. Keep its paths on the
@@ -572,6 +612,7 @@ export const runBrowserController = async (
     rawCoverage: unknown[];
     unhandledErrors?: Error[];
   }): ExecutorCycleOutcome => {
+    const deletedTestPaths = drainPendingDeletedTestPaths(watchState);
     const rerunPathSet = new Set(rerunTestPaths);
     const rerunResults = context.reporterResults.results.filter((result) =>
       rerunPathSet.has(result.testPath),
@@ -587,7 +628,7 @@ export const runBrowserController = async (
       ),
       errors: unhandledErrors ?? [],
       testPaths: rerunTestPaths,
-      deletedTestPaths: drainPendingDeletedTestPaths(watchState),
+      deletedTestPaths,
       duration: {
         buildTime: drainPendingBuildTime(watchState),
         testTime,
@@ -1191,6 +1232,12 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
+    const project = browserProjects.find(
+      (item) => item.name === payload.projectName,
+    );
+    if (project) {
+      await removeFailureScreenshotsForTestPaths([project], [payload.testPath]);
+    }
     screenshotCountsByFile.delete(
       trackerKey(payload.projectName, payload.testPath),
     );

@@ -225,6 +225,7 @@ type BrowserWatchState = {
   // Test files a file-set update retired, held until the next cycle's outcome
   // carries them: core prunes reporter state from the outcome, not from here.
   pendingDeletedTestPaths: string[];
+  removeFailureScreenshots?: (testPaths: string[]) => Promise<void>;
   // Per-project compile start times and the accumulated compile duration of
   // the pending rerun, so the rerun's finalize reports the real buildTime.
   compileStartTimes: Map<string, number>;

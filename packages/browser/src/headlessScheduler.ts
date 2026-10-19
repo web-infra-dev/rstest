@@ -814,6 +814,9 @@ export const createHeadlessScheduler = async ({
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
+        await watchState.removeFailureScreenshots?.(
+          rerunPlan.fileSetUpdate?.deletedTestPaths ?? [],
+        );
 
         logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
