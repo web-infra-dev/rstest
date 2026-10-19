@@ -54,6 +54,7 @@ import {
   setRpcPhase,
   sendDispatchRequest,
 } from './dispatchTransport';
+import { callBrowserRpc } from './browserRpc';
 import { adoptRunIdentity, getRunIdentity } from './runIdentity';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
@@ -915,6 +916,22 @@ const run = async () => {
           removeTaskFromStack(result.testId);
           if (result.status === 'fail') {
             failedTestsCount++;
+            if (projectRuntime.screenshotFailures) {
+              try {
+                await callBrowserRpc<string>({
+                  kind: 'screenshot',
+                  locator: { steps: [] },
+                  method: 'captureFailure',
+                  screenshotTarget: 'page',
+                  args: [result.name, {}],
+                });
+              } catch (error) {
+                console.warn(
+                  'Failed to capture browser test screenshot:',
+                  error,
+                );
+              }
+            }
           }
           send({
             type: 'case-result',

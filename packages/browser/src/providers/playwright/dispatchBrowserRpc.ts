@@ -587,7 +587,10 @@ export async function dispatchPlaywrightBrowserRpc({
   );
 
   if (request.kind === 'screenshot') {
-    if (!supportedScreenshotMatchers.has(request.method)) {
+    if (
+      request.method !== 'captureFailure' &&
+      !supportedScreenshotMatchers.has(request.method)
+    ) {
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const options = await readScreenshotOptions(locatorRoot, request.args[1]);

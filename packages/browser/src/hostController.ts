@@ -31,7 +31,7 @@ import {
   type TestResult,
   type UserConsoleLog,
 } from '@rstest/core/internal/browser';
-import { dirname, join, normalize } from 'pathe';
+import { basename, dirname, join, normalize } from 'pathe';
 import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
@@ -692,6 +692,7 @@ export const runBrowserController = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       hasSetupFiles: (project.normalizedConfig.setupFiles?.length ?? 0) > 0,
+      screenshotFailures: project.normalizedConfig.browser.screenshotFailures,
       runtimeConfig: serializableConfig(
         // `env` is the post-globalSetup change-set from the core pre-cycle
         // stage; the projection layers it between the static base and the
@@ -878,6 +879,32 @@ export const runBrowserController = async (
       });
 
       if (request.kind === 'screenshot') {
+        if (request.method === 'captureFailure') {
+          const project = browserProjects.find(
+            (item) => item.name === request.projectName,
+          );
+          const testName = request.args[0];
+          if (
+            !project ||
+            typeof testName !== 'string' ||
+            typeof result !== 'string'
+          ) {
+            throw new Error('Invalid failed-test screenshot response.');
+          }
+          const safeName = `${basename(request.testPath)}-${testName}`
+            .replace(/[^a-zA-Z0-9._-]+/g, '-')
+            .slice(0, 180);
+          const filepath = join(
+            project.rootPath,
+            '.rstest',
+            'screenshots',
+            `${safeName}.png`,
+          );
+          await fs.mkdir(dirname(filepath), { recursive: true });
+          await fs.writeFile(filepath, Buffer.from(result, 'base64'));
+          logger.info(`Saved failed browser test screenshot: ${filepath}`);
+          return;
+        }
         const [testName] = request.args;
         const screenshotAssertionOrdinal = request.args[2];
         if (typeof result !== 'string' || typeof testName !== 'string') {
@@ -1541,6 +1568,7 @@ export const listBrowserTests = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       hasSetupFiles: (project.normalizedConfig.setupFiles?.length ?? 0) > 0,
+      screenshotFailures: project.normalizedConfig.browser.screenshotFailures,
       runtimeConfig: serializableConfig(
         projectRuntimeConfig(project, {
           envMode: 'static',

@@ -34,6 +34,7 @@ describe('browser protocol types', () => {
         environmentName: 'browser',
         projectRoot: '/root',
         hasSetupFiles: false,
+        screenshotFailures: true,
         runtimeConfig: {} as BrowserProjectRuntime['runtimeConfig'],
       };
 

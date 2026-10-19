@@ -289,6 +289,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     provider: 'playwright',
     browser: 'chromium',
     headless: isCI,
+    screenshotFailures: isCI,
     strictPort: false,
     providerOptions: {},
   },
@@ -374,6 +375,8 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     provider: merged.browser?.provider ?? 'playwright',
     browser: merged.browser?.browser ?? 'chromium',
     headless: merged.browser?.headless ?? isCI,
+    screenshotFailures:
+      config.browser?.screenshotFailures ?? merged.browser?.headless ?? isCI,
     port: merged.browser?.port,
     strictPort: merged.browser?.strictPort ?? false,
     viewport: merged.browser?.viewport,

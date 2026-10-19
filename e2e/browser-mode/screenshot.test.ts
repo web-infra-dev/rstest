@@ -20,7 +20,7 @@ const parseJsonReport = (output: string) => {
   return JSON.parse(output.slice(jsonStart));
 };
 
-describe('browser mode - screenshot matching', () => {
+describe.sequential('browser mode - screenshot matching', () => {
   const fixturesTargetPath = path.join(
     __dirname,
     `fixtures-test-screenshot${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`,
@@ -302,6 +302,39 @@ test('rejects a short screenshot stability timeout', async () => {
     );
     expect(
       fs.existsSync(path.join(fixtureDir, 'tests', '__screenshots__')),
+    ).toBe(false);
+  });
+
+  it('saves a PNG for a failed test', async () => {
+    const result = await runScreenshot(['tests/failure.test.ts']);
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).not.toBe(0);
+
+    const screenshotPath = fs
+      .readdirSync(fixtureDir, { recursive: true })
+      .map((entry) => path.join(fixtureDir, entry.toString()))
+      .find((entry) =>
+        entry.endsWith('failure.test.ts-captures-the-failed-page-state.png'),
+      );
+    expect(screenshotPath).toBeDefined();
+    if (!screenshotPath)
+      throw new Error('Failed-test screenshot was not saved.');
+    expect(fs.readFileSync(screenshotPath).subarray(0, 8)).toEqual(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+  });
+
+  it('can disable failed-test screenshots', async () => {
+    const result = await runScreenshot([
+      '--browser.screenshotFailures=false',
+      'tests/failure.test.ts',
+    ]);
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).not.toBe(0);
+    expect(
+      fs
+        .readdirSync(fixtureDir, { recursive: true })
+        .some((entry) => entry.toString().endsWith('.png')),
     ).toBe(false);
   });
 

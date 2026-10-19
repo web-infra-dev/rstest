@@ -44,6 +44,7 @@ export type BrowserProjectRuntime = {
   projectRoot: string;
   /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
   hasSetupFiles: boolean;
+  screenshotFailures: boolean;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
 };
