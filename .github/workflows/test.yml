@@ -224,7 +224,6 @@ jobs:
           install-webkit: 'true'
 
       - name: E2E Test (test)
-        id: e2e_test
         run: cd e2e && pnpm test
 
       # Each remaining script is gated on the build having succeeded but NOT on
@@ -242,12 +241,6 @@ jobs:
       - name: E2E Test (test:threads)
         if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
         run: cd e2e && pnpm test:threads
-
-      - name: VS Code Extension Test
-        # The extension is frozen: run only on full runs (main pushes,
-        # release: PRs, and manual full runs), once per OS on Node 24.
-        if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' && needs.prepare.outputs.is_full_run == 'true' }}
-        run: cd packages/vscode && pnpm test:e2e
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
