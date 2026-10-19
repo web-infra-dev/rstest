@@ -69,6 +69,7 @@ test('locator + expect.element proxy works', async () => {
   const draftItems = document.createElement('ul');
   draftItems.innerHTML = `
     <li><span>Published</span></li>
+    <li><span>Draft</span></li>
     <li><span>Draft</span><span>Locked</span></li>
   `;
   document.body.append(draftItems);
@@ -77,7 +78,7 @@ test('locator + expect.element proxy works', async () => {
     .toHaveCount(1);
   await expect
     .element(page.locator('li').filter({ hasNot: page.getByText('Locked') }))
-    .toHaveCount(1);
+    .toHaveCount(2);
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
