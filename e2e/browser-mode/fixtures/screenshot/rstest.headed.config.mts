@@ -8,7 +8,14 @@ export default defineConfig({
       enabled: true,
       provider: 'playwright' as const,
       headless: false,
-      expect: { toMatchScreenshot: { stabilityTimeout: 10_000 } },
+      expect: {
+        toMatchScreenshot: {
+          stabilityTimeout: 10_000,
+          ...(name === 'project-b'
+            ? { screenshotDirectory: 'project-b-baselines' }
+            : {}),
+        },
+      },
     },
     include: ['tests/**/*.test.ts'],
   })),
