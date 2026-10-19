@@ -510,7 +510,9 @@ export class TestRunner {
         }
       }
 
-      if (result?.status === 'fail') {
+      let failureScreenshotCaptured = false;
+      const captureFailedAttempt = async () => {
+        failureScreenshotCaptured = true;
         await hooks.onTestCaseFailure?.({
           testId: test.testId,
           testPath,
@@ -521,6 +523,9 @@ export class TestRunner {
           runMode: test.runMode,
           meta: test.meta,
         });
+      };
+      if (result?.status === 'fail') {
+        await captureFailedAttempt();
       }
 
       test.startTime = undefined;
@@ -584,6 +589,10 @@ export class TestRunner {
         }
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
+      }
+
+      if (result.status === 'fail' && !failureScreenshotCaptured) {
+        await captureFailedAttempt();
       }
 
       result.meta = test.meta;

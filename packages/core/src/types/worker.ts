@@ -54,6 +54,7 @@ export type RuntimeRPC = {
   onTestSuiteStart: (test: TestSuiteInfo) => Promise<void>;
   onTestSuiteResult: (result: TestResult) => Promise<void>;
   onTestCaseStart: (test: TestCaseInfo) => Promise<void>;
+  onTestCaseFailure: (test: TestCaseInfo) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   getCountOfFailedTests: () => Promise<number>;
   onConsoleLog: (log: UserConsoleLog) => void;

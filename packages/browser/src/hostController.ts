@@ -134,6 +134,12 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
     ),
   );
 
+const getFailureScreenshotKey = (
+  project: string,
+  testPath: string,
+  testId: string,
+): string => JSON.stringify([project, testPath, testId]);
+
 const resolveProviderForTestPath = ({
   testPath,
   projectName,
@@ -923,6 +929,14 @@ export const runBrowserController = async (
           );
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));
+          failureScreenshots.set(
+            getFailureScreenshotKey(
+              request.projectName,
+              request.testPath,
+              testIdentity.testId,
+            ),
+            filepath,
+          );
           logger.info(`Saved failed browser test screenshot: ${filepath}`);
           return;
         }
@@ -1019,6 +1033,7 @@ export const runBrowserController = async (
   // Track test results from browser runners
   const reporterResults: TestFileResult[] = [];
   const caseResults: TestResult[] = [];
+  const failureScreenshots = new Map<string, string>();
   const fatalErrorRef = { current: null as Error | null };
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
@@ -1232,6 +1247,21 @@ export const runBrowserController = async (
   };
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
+    const screenshotKey = getFailureScreenshotKey(
+      payload.project,
+      payload.testPath,
+      payload.testId,
+    );
+    const failureScreenshot = failureScreenshots.get(screenshotKey);
+    failureScreenshots.delete(screenshotKey);
+    if (payload.status === 'pass' && failureScreenshot) {
+      await fs.rm(failureScreenshot, { force: true }).catch((error) => {
+        logger.warn(
+          `Failed to remove recovered test screenshot: ${failureScreenshot}`,
+          error,
+        );
+      });
+    }
     caseResults.push(payload);
     phaseTrackers
       ?.get(trackerKey(payload.project, payload.testPath))

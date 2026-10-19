@@ -53,6 +53,8 @@ interface HostDrivenEvents {
 export interface RunnerEventSink extends HostDrivenEvents {
   /** FIRE-AND-FORGET on both transports (matches node's unawaited fanout). */
   onTestCaseStart(test: TestCaseInfo): void;
+  /** Attempt-local lifecycle hook; it is not exposed to reporters. */
+  onTestCaseFailure(test: TestCaseInfo): Promise<void>;
   onTestFileStart(test: TestFileInfo): Promise<void>;
   onTestFileReady(test: TestFileInfo): Promise<void>;
   onTestSuiteStart(test: TestSuiteInfo): Promise<void>;
@@ -121,6 +123,7 @@ export function createRunnerEventSink(
         reporter.onTestCaseStart?.(test),
       );
     },
+    async onTestCaseFailure() {},
     async onTestCaseResult(result) {
       context.stateManager.onTestCaseResult(result);
       await fanout(result.testPath, (reporter) =>
@@ -204,6 +207,7 @@ export function sinkToRuntimeRpc(
     onTestSuiteStart: (test) => sink.onTestSuiteStart(test),
     onTestSuiteResult: (result) => sink.onTestSuiteResult(result),
     onTestCaseStart: async (test) => sink.onTestCaseStart(test),
+    onTestCaseFailure: (test) => sink.onTestCaseFailure(test),
     onTestCaseResult: (result) => sink.onTestCaseResult(result),
     getCountOfFailedTests: async () => sink.getCountOfFailedTests(),
     onConsoleLog: (log) => sink.onConsoleLog(log),
@@ -220,13 +224,12 @@ export function sinkToRuntimeRpc(
 type RunnerRpcMethod = keyof Omit<RuntimeRPC, 'getAssetsByEntry'>;
 type SinkRpcMethod = keyof Omit<RunnerEventSink, keyof HostDrivenEvents>;
 /**
- * The runner lifecycle events reporters observe — the wire methods minus the
- * host-answered queries. `BlobReporter`'s compile guard consumes this so a new
- * lifecycle event cannot ship without a blob track recording for it.
+ * Reporter-visible lifecycle events, excluding host-answered queries and
+ * attempt-only hooks that blob reports do not replay.
  */
 export type RunnerLifecycleEvent = Exclude<
   SinkRpcMethod,
-  'getCountOfFailedTests' | 'resolveSnapshotPath'
+  'getCountOfFailedTests' | 'onTestCaseFailure' | 'resolveSnapshotPath'
 >;
 type _SinkCoversRpc = RunnerRpcMethod extends SinkRpcMethod ? true : never;
 type _RpcCoversSink = SinkRpcMethod extends RunnerRpcMethod ? true : never;

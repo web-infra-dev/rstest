@@ -352,6 +352,37 @@ test('rejects a short screenshot stability timeout', async () => {
     ).toBe(false);
   });
 
+  it('removes screenshots when a retry passes', async () => {
+    const result = await runScreenshot([
+      '--retry=1',
+      'tests/retry-pass.test.ts',
+    ]);
+    await result.expectExecSuccess();
+    expect(
+      fs
+        .readdirSync(fixtureDir, { recursive: true })
+        .some((entry) => entry.toString().endsWith('.png')),
+    ).toBe(false);
+  });
+
+  it('saves a screenshot when teardown fails', async () => {
+    const result = await runScreenshot(['tests/teardown-failure.test.ts']);
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).not.toBe(0);
+    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain(
+      'fails in afterEach',
+    );
+    expect(
+      fs
+        .readdirSync(fixtureDir, { recursive: true })
+        .some((entry) =>
+          /teardown-failure\.test\.ts-fails-in-afterEach-[a-f0-9]{16}\.png$/.test(
+            entry.toString(),
+          ),
+        ),
+    ).toBe(true);
+  });
+
   it('keeps references distinct across source files and normalized names', async () => {
     fs.writeFileSync(
       path.join(fixtureDir, 'rstest.shared-screenshots.config.mts'),
