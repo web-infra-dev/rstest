@@ -58,7 +58,7 @@ describe('--onlyFailures', () => {
     removeExtra();
   });
 
-  it('re-runs only the test files that failed on the previous run', async ({
+  it('re-runs only the test files that failed on the previous run and does not select newly added files', async ({
     onTestFinished,
   }) => {
     // Full run with `first` failing → all three files execute and the run fails.

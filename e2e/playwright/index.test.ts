@@ -309,60 +309,17 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_ON_FINISHED_FAIL_OK');
   });
 
-  it('retains Playwright trace when later fixture teardown fails', async () => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'trace-teardown-failure.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_TEARDOWN_FAIL_OK');
-  });
-
-  it('finalizes Playwright trace when context close fails', async () => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'trace-context-close-failure.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-    expect(cli.stdout).toContain(
-      'RSTEST_PLAYWRIGHT_TRACE_CONTEXT_CLOSE_FAIL_OK',
-    );
-  });
-
-  it('keeps Playwright resources alive for failure diagnostics', async () => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'failure-diagnostics.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FAILURE_DIAGNOSTICS_OK');
-  });
-
-  it('cleans up request and serve fixtures after another fixture fails', async () => {
+  it('reports missing hook fixtures, retains traces on teardown and context close failures, keeps resources for failure diagnostics and cleans up after fixture failures', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'cleanup-failure.test.ts'],
+      args: [
+        'run',
+        'hook-fixture-mismatch.test.ts',
+        'trace-teardown-failure.test.ts',
+        'trace-context-close-failure.test.ts',
+        'failure-diagnostics.test.ts',
+        'cleanup-failure.test.ts',
+      ],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -370,26 +327,53 @@ describe('@rstest/playwright', () => {
       },
     });
 
-    await expectExecFailed();
-    expect(cli.log).toContain('user cleanup failed');
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
-  });
-
-  it('reports extended hook fixtures missing from base tests', async () => {
-    const { cli, expectExecFailed } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'hook-fixture-mismatch.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await expectExecFailed();
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
     const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(cli.stdout, 'hook fixture mismatch file fails').toMatch(
+      /✗ hook-fixture-mismatch\.test\.ts/,
+    );
     expect(output).toContain('Hook has unknown fixture "customValue"');
     expect(output).not.toContain('Playwright hook received a missing fixture');
+
+    expect(cli.stdout, 'teardown-failure trace file fails as designed').toMatch(
+      /✗ trace-teardown-failure\.test\.ts/,
+    );
+    expect(
+      cli.stdout,
+      'trace retained when later fixture teardown fails',
+    ).toContain('RSTEST_PLAYWRIGHT_TRACE_TEARDOWN_FAIL_OK');
+
+    expect(cli.stdout, 'context-close trace file fails as designed').toMatch(
+      /✗ trace-context-close-failure\.test\.ts/,
+    );
+    expect(cli.stdout, 'trace finalized when context close fails').toContain(
+      'RSTEST_PLAYWRIGHT_TRACE_CONTEXT_CLOSE_FAIL_OK',
+    );
+
+    expect(cli.stdout, 'failure-diagnostics file fails as designed').toMatch(
+      /✗ failure-diagnostics\.test\.ts/,
+    );
+    expect(
+      cli.stdout,
+      'page and serve stay alive inside onTestFailed',
+    ).toContain('RSTEST_PLAYWRIGHT_FAILURE_DIAGNOSTICS_OK');
+
+    expect(cli.stdout, 'cleanup-failure file fails as designed').toMatch(
+      /✗ cleanup-failure\.test\.ts/,
+    );
+    expect(cli.log, 'user fixture cleanup error is reported').toContain(
+      'user cleanup failed',
+    );
+    expect(
+      cli.stdout,
+      'request and serve fixtures cleaned up after another fixture fails',
+    ).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+
+    await expectExecFailed();
+    expect(cli.exec.process?.exitCode).toBe(1);
   });
 
   it('does not write retained traces for passing tests', async () => {

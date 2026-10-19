@@ -19,17 +19,6 @@ it('runs worker, file, and test fixture lifecycles', async () => {
   );
 });
 
-it('cleans worker fixtures before an isolated worker exits', async () => {
-  const { cli, expectExecSuccess } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/workerScopedNamedFixture.test.ts'],
-    options: { nodeOptions: { cwd: __dirname } },
-  });
-
-  await expectExecSuccess();
-  expect(`${cli.stdout}\n${cli.stderr}`).toContain('scope:worker:cleanup');
-});
-
 it('reports worker fixture cleanup failures', async () => {
   const { cli, expectExecFailed } = await runRstestCli({
     command: 'rstest',

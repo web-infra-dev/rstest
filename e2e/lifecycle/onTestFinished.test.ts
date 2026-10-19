@@ -50,10 +50,14 @@ describe('onTestFinished', () => {
     `);
   });
 
-  it('should run test failed when onTestFinished error', async () => {
-    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+  it('fails the test when onTestFinished throws and the file when it is called outside a test', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'onTestFinished.failed.test'],
+      args: [
+        'run',
+        'onTestFinished.failed.test',
+        'onTestFinished.outside.test',
+      ],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -63,22 +67,24 @@ describe('onTestFinished', () => {
 
     await expectExecFailed();
 
-    expectStderrLog('onTestFinished failed');
-  });
-
-  it('should run onTestFinished failed when onTestFinished outside', async () => {
-    const { expectExecFailed, expectStderrLog } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'onTestFinished.outside.test'],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await expectExecFailed();
-
-    expectStderrLog('onTestFinished() can only be called inside a test');
+    expect(cli.stdout, 'a throwing onTestFinished fails its test').toMatch(
+      /✗ fixtures\/onTestFinished\.failed\.test\.ts/,
+    );
+    expect(
+      cli.stderr,
+      'onTestFinished error is reported for the test that registered it',
+    ).toMatch(
+      /FAIL\s+fixtures\/onTestFinished\.failed\.test\.ts > level A > it in level A\nError: onTestFinished failed/,
+    );
+    expect(
+      cli.stdout,
+      'calling onTestFinished outside a test fails the file',
+    ).toMatch(/✗ fixtures\/onTestFinished\.outside\.test\.ts/);
+    expect(
+      cli.stderr,
+      'onTestFinished outside a test reports a usage error for that file',
+    ).toMatch(
+      /FAIL\s+fixtures\/onTestFinished\.outside\.test\.ts\s*\nError: onTestFinished\(\) can only be called inside a test/,
+    );
   });
 });

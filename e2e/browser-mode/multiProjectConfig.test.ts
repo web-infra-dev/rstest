@@ -18,30 +18,6 @@ const getFixturePath = (name: string) => join(__dirname, 'fixtures', name);
  * start the `multi-project-config` fixture from several test files at once.
  */
 describe.sequential('browser mode - multi project config isolation', () => {
-  it('should apply each browser project config independently', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli(
-      'multi-project-config',
-      {
-        args: ['project-a/tests/jsxRuntime.test.tsx'],
-      },
-    );
-
-    await expectExecSuccess();
-    expect(cli.stdout).toContain('jsxRuntime.test.tsx');
-    expect(cli.stdout).toMatch(/Tests.*passed/);
-  });
-
-  it('exits when a node project has no tests but a browser project does', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli(
-      'multi-project-config',
-      { args: ['project-b/tests/smoke.test.ts'] },
-    );
-
-    await expectExecSuccess();
-    expect(cli.stdout).toContain('smoke.test.ts');
-    expect(cli.stdout).toMatch(/Tests.*passed/);
-  });
-
   // https://github.com/web-infra-dev/rstest/issues/1473
   // Run BOTH browser projects together (no file filter). project-a needs its
   // own `pluginReact` and project-b needs its own `resolve.alias` (`@only-b`).
@@ -49,11 +25,23 @@ describe.sequential('browser mode - multi project config isolation', () => {
   // the other project's environment, so `@only-b` failed to resolve -> "Module
   // not found" -> the whole run hung. Each project now owns an isolated rsbuild
   // instance, so both compile with their own config.
-  it('runs all browser projects together with divergent per-project config', async () => {
+  it('runs all browser projects together with divergent per-project config and an empty node project', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'multi-project-config',
     );
 
+    // Assert per file before the exit code, so a broken fixture fails the
+    // expect that names its behavior.
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(
+      cli.stdout,
+      'project-a uses its own pluginReact (automatic JSX runtime), not the first browser project config',
+    ).toMatch(/✓ .*project-a\/tests\/jsxRuntime\.test\.tsx/);
+    expect(
+      cli.stdout,
+      'run with zero-file node project (#1363) completes and project-b test passes',
+    ).toMatch(/✓ .*project-b\/tests\/smoke\.test\.ts/);
     await expectExecSuccess();
     expect(cli.stdout).toContain('jsxRuntime.test.tsx');
     expect(cli.stdout).toContain('smoke.test.ts');
