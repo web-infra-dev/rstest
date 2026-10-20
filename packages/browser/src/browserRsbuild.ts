@@ -339,6 +339,7 @@ const applyDefaultWatchOptions = (
   rspackConfig: Rspack.Configuration,
   isWatchMode: boolean,
   config: InternalContext['normalizedConfig'],
+  projectRoot: string,
 ) => {
   rspackConfig.watchOptions ??= {};
 
@@ -347,11 +348,10 @@ const applyDefaultWatchOptions = (
     return;
   }
 
-  applyRstestWatchIgnored(
-    rspackConfig,
-    config,
-    rspackConfig.output?.path ? [rspackConfig.output.path] : [],
-  );
+  applyRstestWatchIgnored(rspackConfig, config, [
+    ...(rspackConfig.output?.path ? [rspackConfig.output.path] : []),
+    resolve(projectRoot, '.rstest/screenshots/**'),
+  ]);
 };
 
 type LazyCompilationModule = {
@@ -1793,6 +1793,7 @@ export const createBrowserRuntime = async ({
                         rspackConfig,
                         isWatchMode,
                         context.normalizedConfig,
+                        project.rootPath,
                       );
                     },
                   },
