@@ -510,6 +510,25 @@ export class TestRunner {
         }
       }
 
+      let failureScreenshotCaptured = false;
+      const captureFailedAttempt = async () => {
+        if (failureScreenshotCaptured) return;
+        failureScreenshotCaptured = true;
+        await hooks.onTestCaseFailure?.({
+          testId: test.testId,
+          testPath,
+          name: test.name,
+          parentNames: test.parentNames,
+          project,
+          type: 'case',
+          runMode: test.runMode,
+          meta: test.meta,
+        });
+      };
+      if (result?.status === 'fail') {
+        await captureFailedAttempt();
+      }
+
       test.startTime = undefined;
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
@@ -529,6 +548,9 @@ export class TestRunner {
         result.errors ??= [];
         result.errors.push(...(await formatTestError(hookResult.error)));
         test.context.task.result = result;
+        if (result.status === 'fail' && !failureScreenshotCaptured) {
+          await captureFailedAttempt();
+        }
         if (hookResult.phase === 'callback') {
           break;
         }
@@ -542,6 +564,9 @@ export class TestRunner {
           result.errors ??= [];
           result.errors.push(...(await formatTestError(error)));
           test.context.task.result = result;
+          if (!failureScreenshotCaptured) {
+            await captureFailedAttempt();
+          }
         }
       }
 
@@ -553,6 +578,9 @@ export class TestRunner {
           result.errors ??= [];
           result.errors.push(...(await formatTestError(error)));
           test.context.task.result = result;
+          if (!failureScreenshotCaptured) {
+            await captureFailedAttempt();
+          }
         }
       }
 
@@ -852,7 +880,7 @@ export class TestRunner {
               result.retryErrors = retryErrors;
             }
             result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
-            hooks.onTestCaseResult?.(result);
+            await hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
           },

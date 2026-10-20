@@ -54,6 +54,7 @@ import {
   setRpcPhase,
   sendDispatchRequest,
 } from './dispatchTransport';
+import { callBrowserRpc } from './browserRpc';
 import { adoptRunIdentity, getRunIdentity } from './runIdentity';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
@@ -910,6 +911,24 @@ const run = async () => {
           });
           syncCurrentTask();
           dispatchRunnerLifecycle('case-start', test);
+        },
+        onTestCaseFailure: async (test) => {
+          if (!projectRuntime.screenshotFailures) return;
+          try {
+            await callBrowserRpc<string>({
+              kind: 'screenshot',
+              locator: { steps: [] },
+              method: 'captureFailure',
+              screenshotTarget: 'page',
+              args: [
+                test.name,
+                {},
+                { testId: test.testId, parentNames: test.parentNames },
+              ],
+            });
+          } catch (error) {
+            console.warn('Failed to capture browser test screenshot:', error);
+          }
         },
         onTestCaseResult: async (result) => {
           removeTaskFromStack(result.testId);

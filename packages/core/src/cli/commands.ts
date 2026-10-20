@@ -172,6 +172,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Browser to use: chromium, firefox, webkit (default: chromium)',
   ],
   ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
+  [
+    '--browser.screenshotFailures',
+    'Save a screenshot when a browser test fails',
+  ],
   ['--browser.port <port>', 'Port for the browser mode dev server'],
   ['--browser.strictPort', 'Exit if the specified port is already in use'],
   ['--browser.providerOptions.*', 'Provider-specific browser options'],
@@ -494,6 +498,7 @@ const allowedWildcardOptions = {
     'enabled',
     'name',
     'headless',
+    'screenshotFailures',
     'port',
     'strictPort',
     'providerOptions',

@@ -82,6 +82,7 @@ export interface RunOptions {
         enabled?: boolean;
         name?: BrowserName;
         headless?: boolean;
+        screenshotFailures?: boolean;
         port?: number;
         strictPort?: boolean;
         providerOptions?: Record<string, unknown>;

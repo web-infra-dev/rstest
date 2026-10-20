@@ -224,7 +224,9 @@ type BrowserWatchState = {
   pendingAffectedTestFiles: Map<string, Set<string>>;
   // Test files a file-set update retired, held until the next cycle's outcome
   // carries them: core prunes reporter state from the outcome, not from here.
-  pendingDeletedTestPaths: string[];
+  pendingDeletedTestFiles: TestFileInfo[];
+  removeFailureScreenshots?: (testFiles: TestFileInfo[]) => void;
+  awaitFailureScreenshotCleanups?: () => Promise<void>;
   // Per-project compile start times and the accumulated compile duration of
   // the pending rerun, so the rerun's finalize reports the real buildTime.
   compileStartTimes: Map<string, number>;
@@ -237,14 +239,18 @@ const createBrowserWatchState = (): BrowserWatchState => ({
   headedFileSetVersion: 1,
   invalidation: new Map(),
   pendingAffectedTestFiles: new Map(),
-  pendingDeletedTestPaths: [],
+  pendingDeletedTestFiles: [],
   compileStartTimes: new Map(),
   pendingBuildTimeMs: 0,
 });
 
 export const drainPendingDeletedTestPaths = (
   watchState: BrowserWatchState,
-): string[] => watchState.pendingDeletedTestPaths.splice(0);
+): string[] => [
+  ...new Set(
+    watchState.pendingDeletedTestFiles.splice(0).map((file) => file.testPath),
+  ),
+];
 
 export const drainPendingBuildTime = (
   watchState: BrowserWatchState,
@@ -333,6 +339,7 @@ const applyDefaultWatchOptions = (
   rspackConfig: Rspack.Configuration,
   isWatchMode: boolean,
   config: InternalContext['normalizedConfig'],
+  projectRoot: string,
 ) => {
   rspackConfig.watchOptions ??= {};
 
@@ -341,11 +348,10 @@ const applyDefaultWatchOptions = (
     return;
   }
 
-  applyRstestWatchIgnored(
-    rspackConfig,
-    config,
-    rspackConfig.output?.path ? [rspackConfig.output.path] : [],
-  );
+  applyRstestWatchIgnored(rspackConfig, config, [
+    ...(rspackConfig.output?.path ? [rspackConfig.output.path] : []),
+    resolve(projectRoot, '.rstest/screenshots/**'),
+  ]);
 };
 
 type LazyCompilationModule = {
@@ -1787,6 +1793,7 @@ export const createBrowserRuntime = async ({
                         rspackConfig,
                         isWatchMode,
                         context.normalizedConfig,
+                        project.rootPath,
                       );
                     },
                   },
@@ -1894,11 +1901,16 @@ export const createBrowserRuntime = async ({
                 return;
               }
 
-              // Late-bound through the watch state: this plugin outlives the
-              // controller entry that created it (config-change restarts reuse
-              // the runtime), so it must drive the CURRENT entry's trigger,
-              // never one captured at runtime creation.
-              await watchState.triggerRerun?.();
+              // This plugin outlives controller entries, so dispatch through
+              // the current trigger. The dev server keeps its filesystem watcher
+              // detached until this hook settles, and dispatch may wait for an
+              // active cycle to interrupt, so hand it off without holding the
+              // hook open.
+              void watchState.triggerRerun?.().catch((error: unknown) => {
+                watchState.signalFatalCompile?.(
+                  error instanceof Error ? error : new Error(String(error)),
+                );
+              });
             });
           },
         },

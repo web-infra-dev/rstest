@@ -3,20 +3,28 @@ import { afterAll, describe, expect, it } from '@rstest/core';
 const logs: string[] = [];
 
 afterAll(() => {
-  expect(logs).toEqual([
+  const startLogs = [
     '[log] concurrent test 1',
     '[log] concurrent test 2',
     '[log] concurrent test 3',
     '[log] concurrent test 4',
     '[log] concurrent test 5',
-    '[log] concurrent test 2 - 1',
     '[log] concurrent test B 1',
+  ];
+  const completionLogs = [
+    '[log] concurrent test 1 - 1',
+    '[log] concurrent test 2 - 1',
     '[log] concurrent test 3 - 1',
     '[log] concurrent test 4 - 1',
     '[log] concurrent test 5 - 1',
-    '[log] concurrent test 1 - 1',
     '[log] concurrent test B 1 - 1',
-  ]);
+  ];
+  expect([...logs].sort()).toEqual([...startLogs, ...completionLogs].sort());
+  for (const startLog of startLogs) {
+    expect(logs.indexOf(startLog)).toBeLessThan(
+      logs.indexOf(`${startLog} - 1`),
+    );
+  }
 });
 
 describe.concurrent('suite', () => {

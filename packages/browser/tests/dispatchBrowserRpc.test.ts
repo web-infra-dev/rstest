@@ -191,6 +191,23 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]?.timeout).toBeLessThanOrEqual(25);
   });
 
+  it('bounds failure screenshot capture by the request timeout', async () => {
+    const fakeLocator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'captureFailure',
+        timeout: 25,
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(fakeLocator.screenshotCalls).toHaveLength(1);
+    expect(fakeLocator.screenshotCalls[0]?.timeout).toBeLessThanOrEqual(25);
+    expect(fakeLocator.screenshotCalls[0]?.timeout).toBeGreaterThan(0);
+  });
+
   it('rejects unsupported screenshot options before Playwright capture', async () => {
     const fakeLocator = new FakeLocator();
     await expect(

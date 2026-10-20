@@ -33,6 +33,8 @@ import { BlobReporter } from '../../reporter/blob';
  */
 interface HostDrivenEvents {
   discardAttempt(testPath: string): void;
+  /** Drain queued case-result reporter delivery for deterministic replay. */
+  awaitTestCaseResults(testPath: string): Promise<void>;
   /**
    * AWAITED by both transports, and ingests `result.snapshotResult`. The pool
    * calls it after `pool.runTest` returns, the browser host after a client
@@ -53,6 +55,8 @@ interface HostDrivenEvents {
 export interface RunnerEventSink extends HostDrivenEvents {
   /** FIRE-AND-FORGET on both transports (matches node's unawaited fanout). */
   onTestCaseStart(test: TestCaseInfo): void;
+  /** Attempt-local lifecycle hook; it is not exposed to reporters. */
+  onTestCaseFailure(test: TestCaseInfo): Promise<void>;
   onTestFileStart(test: TestFileInfo): Promise<void>;
   onTestFileReady(test: TestFileInfo): Promise<void>;
   onTestSuiteStart(test: TestSuiteInfo): Promise<void>;
@@ -71,6 +75,7 @@ export function createRunnerEventSink(
 ): RunnerEventSink {
   const { reporters } = context;
   const attempts = new Map<string, number>();
+  const pendingCaseResultDeliveries = new Map<string, Promise<void>>();
 
   const fanoutConsoleLog = (log: UserConsoleLog): Promise<void> =>
     fanout(log.testPath, (reporter) => reporter.onUserConsoleLog?.(log));
@@ -96,11 +101,14 @@ export function createRunnerEventSink(
   const fanout = async (
     testPath: string,
     notify: (reporter: Reporter) => MaybePromise<void>,
+    expectedAttempt = attempts.get(testPath),
   ): Promise<void> => {
-    const currentAttempt = attempts.get(testPath);
     await context.openReporterRun?.();
-    if (currentAttempt !== attempts.get(testPath)) return;
+    if (expectedAttempt !== attempts.get(testPath)) return;
     await Promise.all(reporters.map(notify));
+  };
+  const awaitTestCaseResults = async (testPath: string): Promise<void> => {
+    await pendingCaseResultDeliveries.get(testPath);
   };
 
   return {
@@ -113,6 +121,7 @@ export function createRunnerEventSink(
         }
       }
     },
+    awaitTestCaseResults,
     onTestCaseStart(test) {
       context.stateManager.onTestCaseStart(test);
       // Fire-and-forget: reporter case-start hooks are not awaited (parity with
@@ -121,11 +130,32 @@ export function createRunnerEventSink(
         reporter.onTestCaseStart?.(test),
       );
     },
+    async onTestCaseFailure() {},
     async onTestCaseResult(result) {
       context.stateManager.onTestCaseResult(result);
-      await fanout(result.testPath, (reporter) =>
-        reporter.onTestCaseResult?.(result),
-      );
+      const expectedAttempt = attempts.get(result.testPath);
+      const previous =
+        pendingCaseResultDeliveries.get(result.testPath) ?? Promise.resolve();
+      const delivery = previous
+        .then(() =>
+          fanout(
+            result.testPath,
+            (reporter) => reporter.onTestCaseResult?.(result),
+            expectedAttempt,
+          ),
+        )
+        .catch((error) => {
+          logger.error(
+            color.red('Failed to handle test case result:'),
+            toError(error),
+          );
+        });
+      pendingCaseResultDeliveries.set(result.testPath, delivery);
+      void delivery.then(() => {
+        if (pendingCaseResultDeliveries.get(result.testPath) === delivery) {
+          pendingCaseResultDeliveries.delete(result.testPath);
+        }
+      });
     },
     async onTestFileStart(test) {
       context.stateManager.onTestFileStart(test.testPath);
@@ -150,6 +180,7 @@ export function createRunnerEventSink(
     },
     async onTestFileResult(result) {
       context.stateManager.onTestFileResult(result);
+      await awaitTestCaseResults(result.testPath);
       await fanout(result.testPath, (reporter) =>
         reporter.onTestFileResult?.(result),
       );
@@ -204,6 +235,7 @@ export function sinkToRuntimeRpc(
     onTestSuiteStart: (test) => sink.onTestSuiteStart(test),
     onTestSuiteResult: (result) => sink.onTestSuiteResult(result),
     onTestCaseStart: async (test) => sink.onTestCaseStart(test),
+    onTestCaseFailure: (test) => sink.onTestCaseFailure(test),
     onTestCaseResult: (result) => sink.onTestCaseResult(result),
     getCountOfFailedTests: async () => sink.getCountOfFailedTests(),
     onConsoleLog: (log) => sink.onConsoleLog(log),
@@ -220,13 +252,12 @@ export function sinkToRuntimeRpc(
 type RunnerRpcMethod = keyof Omit<RuntimeRPC, 'getAssetsByEntry'>;
 type SinkRpcMethod = keyof Omit<RunnerEventSink, keyof HostDrivenEvents>;
 /**
- * The runner lifecycle events reporters observe — the wire methods minus the
- * host-answered queries. `BlobReporter`'s compile guard consumes this so a new
- * lifecycle event cannot ship without a blob track recording for it.
+ * Reporter-visible lifecycle events, excluding host-answered queries and
+ * attempt-only hooks that blob reports do not replay.
  */
 export type RunnerLifecycleEvent = Exclude<
   SinkRpcMethod,
-  'getCountOfFailedTests' | 'resolveSnapshotPath'
+  'getCountOfFailedTests' | 'onTestCaseFailure' | 'resolveSnapshotPath'
 >;
 type _SinkCoversRpc = RunnerRpcMethod extends SinkRpcMethod ? true : never;
 type _RpcCoversSink = SinkRpcMethod extends RunnerRpcMethod ? true : never;

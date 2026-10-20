@@ -18,7 +18,7 @@ import {
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedRunRegistry } from './headedRunRegistry';
-import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
+import { createSerialTaskQueue } from './serialTaskQueue';
 import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
@@ -289,7 +289,7 @@ export const createHeadedScheduler = async ({
   setDispatchPageResolver(() => ({ containerPage }));
 
   const dispatchRouter = createDispatchRouter();
-  const headedReloadQueue = createHeadedSerialTaskQueue();
+  const headedReloadQueue = createSerialTaskQueue();
   let rawCoverage: unknown[] = [];
   // The session's project is recorded at start rather than re-derived at each
   // take site: headed reloads are strictly serial, so at most one coverage
@@ -679,6 +679,7 @@ export const createHeadedScheduler = async ({
       testPaths: string[],
       updateSnapshot: SnapshotUpdateState,
     ): Promise<unknown[]> => {
+      await watchState.awaitFailureScreenshotCleanups?.();
       await refreshHostConfig(updateSnapshot);
       rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
@@ -733,6 +734,11 @@ export const createHeadedScheduler = async ({
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
+        watchState.removeFailureScreenshots?.(
+          rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
+        );
+        const failureScreenshotCleanup =
+          watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
 
         if (rerunPlan.fileSetUpdate) {
           currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
@@ -747,18 +753,23 @@ export const createHeadedScheduler = async ({
           }
         }
 
-        logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
-          logWatchReady();
-          if (rerunPlan.deferredTestPaths) {
-            watchSignals.queueInvalidationAfter(
-              Promise.resolve(),
-              rerunPlan.deferredTestPaths,
-            );
-          }
+          void failureScreenshotCleanup.then(() => {
+            logger.log(color.cyan(rerunPlan.decision.message));
+            logWatchReady();
+            if (rerunPlan.deferredTestPaths) {
+              watchSignals.queueInvalidationAfter(
+                Promise.resolve(),
+                rerunPlan.deferredTestPaths,
+              );
+            }
+          });
           return;
         }
 
+        void failureScreenshotCleanup.then(() => {
+          logger.log(color.cyan(rerunPlan.decision.message));
+        });
         const { cycle } = await watchSignals.signalInvalidation(
           rerunPlan.decision.kind === 'empty'
             ? []
@@ -781,7 +792,7 @@ export const createHeadedScheduler = async ({
     // Serialized against itself: each per-project compiler fires its own
     // `onAfterDevCompile`, and two interleaved planning passes would race on
     // the drain-once affected set and the file-set commit.
-    const dispatchRerunQueue = createHeadedSerialTaskQueue();
+    const dispatchRerunQueue = createSerialTaskQueue();
     watchSignals.setDispatchRerun((updateSnapshot, requestedTestPaths) =>
       dispatchRerunQueue.enqueue(() =>
         runDispatchRerunOnce(updateSnapshot, requestedTestPaths),

@@ -6,6 +6,15 @@ import type { InlineProjectConfig, RstestConfig } from '../../src/types';
 const rootPath = join(__dirname, '../..');
 
 describe('mergeWithCLIOptions', () => {
+  it('merges browser screenshot failure overrides', () => {
+    const config = mergeWithCLIOptions(
+      { browser: { provider: 'playwright', screenshotFailures: true } },
+      { browser: { screenshotFailures: false } },
+    );
+
+    expect(config.browser?.screenshotFailures).toBe(false);
+  });
+
   it('creates simple nested build config objects from CLI', () => {
     const config = mergeWithCLIOptions(
       {},

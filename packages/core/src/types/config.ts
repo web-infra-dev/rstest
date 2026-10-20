@@ -324,6 +324,8 @@ export type BrowserModeConfig = {
    * @default Inferred from CI environment. `true` in CI, `false` otherwise.
    */
   headless?: boolean;
+  /** Capture a screenshot for each failed browser test. @default browser.headless */
+  screenshotFailures?: boolean;
   /**
    * Port for the browser mode dev server.
    *
@@ -781,6 +783,7 @@ export type NormalizedBrowserModeConfig = {
   provider: BrowserProvider;
   browser: BrowserName;
   headless: boolean;
+  screenshotFailures: boolean;
   port?: number;
   strictPort: boolean;
   viewport?: BrowserViewport;

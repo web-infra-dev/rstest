@@ -40,6 +40,7 @@ type BrowserModeConfig = {
   provider: 'playwright';
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
+  screenshotFailures?: boolean;
   port?: number;
   viewport?: BrowserViewport;
   strictPort?: boolean;
@@ -81,6 +82,7 @@ const defaultBrowser = {
   provider: 'playwright',
   browser: 'chromium',
   headless: true, // CI 环境；本地开发为 false
+  screenshotFailures: true, // 默认与 headless 设置一致
   port: undefined, // 随机可用端口
   viewport: undefined, // Browser UI 填满预览面板
   strictPort: false,
@@ -91,6 +93,16 @@ const defaultBrowser = {
 浏览器模式配置。启用后，测试将在真实浏览器中运行，而非 Node.js 环境。
 
 ## 选项
+
+### screenshotFailures
+
+<ApiMeta addedVersion="0.12.4" />
+
+每个失败的浏览器测试都会保存一张 PNG 截图，默认值与 `headless` 设置一致。截图位于项目根目录下的 `.rstest/screenshots/`，文件名包含测试文件和测试名称。设为 `false` 可关闭截图。
+
+- **类型：** `boolean`
+- **默认值：** `browser.headless`
+- **CLI：** `--browser.screenshotFailures`
 
 ### enabled
 

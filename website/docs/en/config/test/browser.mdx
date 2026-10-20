@@ -40,6 +40,7 @@ type BrowserModeConfig = {
   provider: 'playwright';
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
+  screenshotFailures?: boolean;
   port?: number;
   viewport?: BrowserViewport;
   strictPort?: boolean;
@@ -81,6 +82,7 @@ const defaultBrowser = {
   provider: 'playwright',
   browser: 'chromium',
   headless: true, // CI environment; false for local development
+  screenshotFailures: true, // Defaults to the headless setting
   port: undefined, // Random available port
   viewport: undefined, // Browser UI fills the preview panel
   strictPort: false,
@@ -91,6 +93,16 @@ const defaultBrowser = {
 Browser Mode configuration. When enabled, tests run in a real browser instead of the Node.js environment.
 
 ## Options
+
+### screenshotFailures
+
+<ApiMeta addedVersion="0.12.4" />
+
+Capture a PNG screenshot for each failed browser test. Defaults to the `headless` setting. Screenshots are saved under `.rstest/screenshots/` in the project root, with the test file and test name in the filename. Set this to `false` to disable capture.
+
+- **Type:** `boolean`
+- **Default:** `browser.headless`
+- **CLI:** `--browser.screenshotFailures`
 
 ### enabled
 

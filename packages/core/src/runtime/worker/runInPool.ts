@@ -1096,6 +1096,7 @@ export const runInPool = async (
             await rpc.onTestCaseStart(test);
           })(),
         ),
+      onTestCaseFailure: (test) => trackRunnerHook(rpc.onTestCaseFailure(test)),
       onTestCaseResult: (result) =>
         trackRunnerHook(
           (async () => {

@@ -587,10 +587,16 @@ export async function dispatchPlaywrightBrowserRpc({
   );
 
   if (request.kind === 'screenshot') {
-    if (!supportedScreenshotMatchers.has(request.method)) {
+    if (
+      request.method !== 'captureFailure' &&
+      !supportedScreenshotMatchers.has(request.method)
+    ) {
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
-    const options = await readScreenshotOptions(locatorRoot, request.args[1]);
+    const isFailureCapture = request.method === 'captureFailure';
+    const options = isFailureCapture
+      ? {}
+      : await readScreenshotOptions(locatorRoot, request.args[1]);
     let screenshotTarget: Locator | Page = locator;
     let restoreScreenshotState: (() => Promise<void>) | undefined;
     let beforeScreenshotCapture: (() => Promise<void>) | undefined;
@@ -664,12 +670,24 @@ export async function dispatchPlaywrightBrowserRpc({
     }
     let screenshot: Buffer;
     try {
-      screenshot = await captureStableScreenshot(
-        screenshotTarget,
-        options,
-        requestDeadline,
-        beforeScreenshotCapture,
-      );
+      if (isFailureCapture) {
+        const screenshotTimeout = requestDeadline
+          ? Math.max(1, requestDeadline - Date.now())
+          : undefined;
+        screenshot = await screenshotTarget.screenshot({
+          animations: 'disabled',
+          ...(screenshotTimeout === undefined
+            ? {}
+            : { timeout: screenshotTimeout }),
+        });
+      } else {
+        screenshot = await captureStableScreenshot(
+          screenshotTarget,
+          options,
+          requestDeadline,
+          beforeScreenshotCapture,
+        );
+      }
     } finally {
       await restoreScreenshotState?.();
     }
