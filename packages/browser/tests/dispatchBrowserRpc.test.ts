@@ -46,6 +46,11 @@ class FakeLocator {
     return 'clicked';
   }
 
+  async dragTo(...args: unknown[]): Promise<string> {
+    this.actionCalls.push({ method: 'dragTo', args });
+    return 'dragged';
+  }
+
   async _expect(
     method: string,
     options: Record<string, unknown>,
@@ -115,15 +120,33 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     });
   });
 
-  it('rejects unsupported locator actions', async () => {
+  it('compiles the drag target and forwards drag options', async () => {
     const fakeLocator = new FakeLocator();
+    const options = { sourcePosition: { x: 4, y: 5 }, trial: true };
+    const result = await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(fakeLocator) as any,
+      request: createRequest({
+        kind: 'locator',
+        method: 'dragTo',
+        args: [{ steps: [{ type: 'locator', selector: '#target' }] }, options],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    expect(result).toBe('dragged');
+    expect(fakeLocator.actionCalls).toContainEqual({
+      method: 'dragTo',
+      args: [fakeLocator, options],
+    });
+  });
+
+  it('rejects unsupported locator actions', async () => {
     await expect(
       dispatchPlaywrightBrowserRpc({
-        runnerPage: new FakePage(fakeLocator) as any,
-        request: createRequest({ kind: 'locator', method: 'dragTo' }),
+        runnerPage: new FakePage(new FakeLocator()) as any,
+        request: createRequest({ kind: 'locator', method: 'tripleClick' }),
         timeoutFallbackMs: 500,
       }),
-    ).rejects.toThrow('Locator method not supported: dragTo');
+    ).rejects.toThrow('Locator method not supported: tripleClick');
   });
 
   it('dispatches supported expect matchers via _expect', async () => {
@@ -141,6 +164,38 @@ describe('dispatchPlaywrightBrowserRpc', () => {
       timeout: 900,
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it('forwards accessibility assertions to Playwright', async () => {
+    const fakeLocator = new FakeLocator();
+    for (const [matcher, expectMethod, expected] of [
+      ['toHaveRole', 'to.have.role', { type: 'string', value: 'button' }],
+      [
+        'toHaveAccessibleName',
+        'to.have.accessible.name',
+        { type: 'regexp', source: '^Save', flags: 'i' },
+      ],
+      [
+        'toHaveAccessibleDescription',
+        'to.have.accessible.description',
+        { type: 'string', value: 'Stores changes' },
+      ],
+    ] as const) {
+      await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'expect',
+          method: matcher,
+          args: [expected],
+        }),
+        timeoutFallbackMs: 900,
+      });
+      expect(fakeLocator.expectCalls.at(-1)?.method).toBe(expectMethod);
+      expect(fakeLocator.expectCalls.at(-1)?.options).toMatchObject({
+        isNot: false,
+        expectedText: expect.any(Array),
+      });
+    }
   });
 
   it('routes headed requests to the iframe for their project', async () => {
@@ -472,10 +527,10 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     await expect(
       dispatchPlaywrightBrowserRpc({
         runnerPage: new FakePage(fakeLocator) as any,
-        request: createRequest({ kind: 'expect', method: 'toHaveRole' }),
+        request: createRequest({ kind: 'expect', method: 'toHaveValues' }),
         timeoutFallbackMs: 500,
       }),
-    ).rejects.toThrow('Expect matcher not supported: toHaveRole');
+    ).rejects.toThrow('Expect matcher not supported: toHaveValues');
   });
 
   it('validates matcher arguments for toHaveCount', async () => {

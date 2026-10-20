@@ -21,6 +21,15 @@ export type BrowserElementExpect = {
     text: string | RegExp,
     options?: { timeout?: number },
   ) => Promise<void>;
+  toHaveRole: (role: string, options?: { timeout?: number }) => Promise<void>;
+  toHaveAccessibleName: (
+    name: string | RegExp,
+    options?: { timeout?: number },
+  ) => Promise<void>;
+  toHaveAccessibleDescription: (
+    description: string | RegExp,
+    options?: { timeout?: number },
+  ) => Promise<void>;
   toContainText: (
     text: string | RegExp,
     options?: { timeout?: number },

@@ -347,6 +347,15 @@ const textMatchers: Record<
   }
 > = {
   toHaveId: { expectMethod: 'to.have.id' },
+  toHaveRole: { expectMethod: 'to.have.role' },
+  toHaveAccessibleName: {
+    expectMethod: 'to.have.accessible.name',
+    textOptions: { normalizeWhiteSpace: true },
+  },
+  toHaveAccessibleDescription: {
+    expectMethod: 'to.have.accessible.description',
+    textOptions: { normalizeWhiteSpace: true },
+  },
   toHaveText: {
     expectMethod: 'to.have.text',
     textOptions: { normalizeWhiteSpace: true },
@@ -390,6 +399,9 @@ const dispatchExpectMatcher = (
   const textDef = textMatchers[method];
   if (textDef) {
     const expected = assertSerializedText(args[0], method);
+    if (method === 'toHaveRole' && expected.type !== 'string') {
+      throw new TypeError('toHaveRole expects a string role');
+    }
     return callExpect(
       locator,
       textDef.expectMethod,
@@ -697,6 +709,22 @@ export async function dispatchPlaywrightBrowserRpc({
   if (request.kind === 'locator') {
     if (!supportedLocatorActions.has(request.method)) {
       throw new Error(`Locator method not supported: ${request.method}`);
+    }
+    if (request.method === 'dragTo') {
+      if (
+        !request.args[0] ||
+        !Array.isArray((request.args[0] as BrowserLocatorIR).steps)
+      ) {
+        throw new TypeError('Locator.dragTo() expects a target Locator.');
+      }
+      const dragTarget = compilePlaywrightLocator(
+        locatorRoot,
+        request.args[0] as BrowserLocatorIR,
+      );
+      return await locator.dragTo(
+        dragTarget,
+        request.args[1] as Parameters<Locator['dragTo']>[1],
+      );
     }
     const target: any = locator as any;
     return await target[request.method](...request.args);

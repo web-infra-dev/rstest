@@ -158,6 +158,56 @@ test('pressSequentially types text one key event at a time', async () => {
   input.remove();
 });
 
+test('dragTo moves a draggable element to a drop target', async () => {
+  const source = document.createElement('div');
+  source.id = 'drag-source';
+  source.textContent = 'Drag item';
+  source.draggable = true;
+  const target = document.createElement('div');
+  target.id = 'drop-target';
+  target.textContent = 'Drop here';
+  target.style.width = '150px';
+  target.style.height = '80px';
+  target.addEventListener('dragover', (event) => event.preventDefault());
+  target.addEventListener('drop', (event) => {
+    event.preventDefault();
+    target.textContent = 'Dropped';
+  });
+  document.body.append(source, target);
+
+  await page.locator('#drag-source').dragTo(page.locator('#drop-target'));
+  await expect.element(page.locator('#drop-target')).toHaveText('Dropped');
+  source.remove();
+  target.remove();
+});
+
+test('asserts accessible role, name, and description', async () => {
+  const description = document.createElement('p');
+  description.id = 'save-description';
+  description.textContent = 'Stores your changes';
+  const button = document.createElement('button');
+  button.id = 'accessible-save';
+  button.setAttribute('aria-label', 'Save changes');
+  button.setAttribute('aria-describedby', description.id);
+  document.body.append(button, description);
+
+  const locator = page.locator('#accessible-save');
+  await expect.element(locator).toHaveRole('button');
+  await expect.element(locator).toHaveAccessibleName('Save changes');
+  await expect.element(locator).toHaveAccessibleName(/^Save/);
+  await expect
+    .element(locator)
+    .toHaveAccessibleDescription('Stores your changes');
+  await expect.element(locator).toHaveAccessibleDescription(/your changes$/);
+  await expect.element(locator).not.toHaveRole('link');
+  await expect.element(locator).not.toHaveAccessibleName('Delete changes');
+  await expect
+    .element(locator)
+    .not.toHaveAccessibleDescription('Deletes changes');
+  button.remove();
+  description.remove();
+});
+
 test('counts a retried element assertion once', async () => {
   expect.assertions(1);
 

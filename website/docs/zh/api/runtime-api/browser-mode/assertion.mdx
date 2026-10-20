@@ -324,6 +324,44 @@ await expect.element(page.locator('#empty-state')).toBeEmpty();
 await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
 ```
 
+### toHaveRole
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **类型：** `(role: string, options?: { timeout?: number }) => Promise<void>`
+
+断言元素的 ARIA role。role 必须完全一致，不按 role 层级匹配。
+
+```ts
+await expect.element(page.getByTestId('save')).toHaveRole('button');
+```
+
+### toHaveAccessibleName
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **类型：** `(name: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+断言元素的可访问名称。字符串会与归一化后的完整名称匹配。
+
+```ts
+await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
+```
+
+### toHaveAccessibleDescription
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **类型：** `(description: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+断言元素的可访问描述。字符串会与归一化后的完整描述匹配。
+
+```ts
+await expect
+  .element(page.getByTestId('save'))
+  .toHaveAccessibleDescription('Saves your changes');
+```
+
 ### toHaveText
 
 - **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`

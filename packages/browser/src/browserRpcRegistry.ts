@@ -8,9 +8,8 @@
  * - Locator query/interop: locator.selector/length, locator.query()/element()/elements()/all(),
  *   page.elementLocator(element),
  *   locators.extend(...)
- * - Locator actions: tripleClick, hover out, drag/drop helpers
- * - Assertions: a11y matchers (accessible name/description), toHaveRole,
- *   toHaveValues
+ * - Locator actions: tripleClick, hover out, other drag/drop helpers
+ * - Assertions: toHaveValues
  * - Artifacts intentionally excluded for now: trace/video
  */
 export const supportedScreenshotMatchers: Set<string> = new Set([
@@ -20,6 +19,7 @@ export const supportedScreenshotMatchers: Set<string> = new Set([
 export const supportedLocatorActions: Set<string> = new Set([
   'click',
   'dblclick',
+  'dragTo',
   'fill',
   'hover',
   'press',
@@ -48,6 +48,9 @@ export const supportedExpectElementMatchers: Set<string> = new Set([
   'toBeEmpty',
   'toBeInViewport',
   'toHaveText',
+  'toHaveRole',
+  'toHaveAccessibleName',
+  'toHaveAccessibleDescription',
   'toContainText',
   'toHaveValue',
   'toHaveAttribute',

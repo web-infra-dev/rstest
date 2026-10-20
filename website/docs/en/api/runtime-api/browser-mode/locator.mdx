@@ -4,6 +4,8 @@ description: Locator is the core API for element querying and interaction in Bro
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Locator
 
 `Locator` is the core API for element querying and interaction in Browser Mode. You can build query chains via `page.getBy*` or `page.locator()`, then execute interaction actions. Concrete execution semantics are provided by the configured browser `provider`.
@@ -236,6 +238,7 @@ These `*Options` types represent the set of options currently supported in Brows
 
 - `LocatorClickOptions` / `LocatorDblclickOptions`: `button`, `delay`, `force`, `modifiers`, `position`, `timeout`, `trial` (`click` additionally supports `clickCount`)
 - `LocatorHoverOptions`: `force`, `modifiers`, `position`, `timeout`, `trial`
+- `LocatorDragToOptions`: `force`, `sourcePosition`, `targetPosition`, `timeout`, `trial`
 - `LocatorPressOptions`: `delay`, `timeout`
 - `LocatorFillOptions`: `force`, `timeout`
 - `LocatorCheckOptions`: `force`, `position`, `timeout`, `trial`
@@ -262,6 +265,18 @@ Double-click the element.
 
 ```ts
 await page.getByText('Open details').dblclick();
+```
+
+### dragTo
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `(target: Locator, options?: LocatorDragToOptions) => Promise<void>`
+
+Drag this element to a target Locator. `sourcePosition` and `targetPosition` are coordinates relative to the respective elements' top-left padding-box corners.
+
+```ts
+await page.getByTestId('card').dragTo(page.getByTestId('column'));
 ```
 
 ### hover

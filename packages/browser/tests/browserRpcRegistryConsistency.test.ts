@@ -95,6 +95,9 @@ const createExpectArgs = (method: string): unknown[] => {
     case 'toHaveValue':
     case 'toHaveId':
     case 'toHaveClass':
+    case 'toHaveRole':
+    case 'toHaveAccessibleName':
+    case 'toHaveAccessibleDescription':
       return [createSerializedText('expected')];
     case 'toBeInViewport':
       return [0.5];
@@ -133,6 +136,9 @@ describe('browser RPC registry consistency', () => {
       async toBeEmpty() {},
       async toBeInViewport() {},
       async toHaveText() {},
+      async toHaveRole() {},
+      async toHaveAccessibleName() {},
+      async toHaveAccessibleDescription() {},
       async toContainText() {},
       async toHaveValue() {},
       async toHaveId() {},
@@ -154,7 +160,14 @@ describe('browser RPC registry consistency', () => {
       await expect(
         dispatchPlaywrightBrowserRpc({
           runnerPage: new FakePage(fakeLocator) as any,
-          request: createRequest({ kind: 'locator', method, args: [] }),
+          request: createRequest({
+            kind: 'locator',
+            method,
+            args:
+              method === 'dragTo'
+                ? [{ steps: [{ type: 'locator', selector: '#target' }] }]
+                : [],
+          }),
           timeoutFallbackMs: 500,
         }),
       ).resolves.toBeNull();

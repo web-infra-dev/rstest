@@ -324,6 +324,44 @@ The element intersects with the viewport (based on Intersection Observer semanti
 await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
 ```
 
+### toHaveRole
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `(role: string, options?: { timeout?: number }) => Promise<void>`
+
+Assert the element's ARIA role. The role must match exactly; role hierarchy is not considered.
+
+```ts
+await expect.element(page.getByTestId('save')).toHaveRole('button');
+```
+
+### toHaveAccessibleName
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `(name: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+Assert the element's accessible name. String values match the full normalized name.
+
+```ts
+await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
+```
+
+### toHaveAccessibleDescription
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `(description: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+Assert the element's accessible description. String values match the full normalized description.
+
+```ts
+await expect
+  .element(page.getByTestId('save'))
+  .toHaveAccessibleDescription('Saves your changes');
+```
+
 ### toHaveText
 
 - **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
