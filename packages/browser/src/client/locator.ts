@@ -4,6 +4,7 @@ import type {
   BrowserRpcRequest,
 } from '../rpcProtocol';
 import { callBrowserRpc } from './browserRpc';
+import { registerElementLocator } from './elementLocator';
 
 export const serializeText = (value: string | RegExp): BrowserLocatorText => {
   if (typeof value === 'string') {
@@ -444,16 +445,25 @@ const browserPageQueryMethods = [
 
 type BrowserPageQueryMethod = (typeof browserPageQueryMethods)[number];
 
-export type BrowserPage = Pick<Locator, BrowserPageQueryMethod>;
+export type BrowserPage = Pick<Locator, BrowserPageQueryMethod> & {
+  elementLocator: (element: Element) => Locator;
+};
 
 const rootLocator = new Locator({ steps: [] });
 
 const createBrowserPage = (): BrowserPage => {
-  return Object.fromEntries(
+  const queries = Object.fromEntries(
     browserPageQueryMethods.map((methodName) => {
       return [methodName, rootLocator[methodName].bind(rootLocator)];
     }),
-  ) as BrowserPage;
+  ) as Pick<Locator, BrowserPageQueryMethod>;
+  return {
+    ...queries,
+    elementLocator: (element) =>
+      new Locator({
+        steps: [{ type: 'element', id: registerElementLocator(element) }],
+      }),
+  };
 };
 
 export const page: BrowserPage = createBrowserPage();

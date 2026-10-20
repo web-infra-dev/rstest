@@ -5,6 +5,7 @@ export type BrowserLocatorText =
   | { type: 'regexp'; source: string; flags?: string };
 
 export type BrowserLocatorStep =
+  | { type: 'element'; id: string }
   | {
       type: 'getByRole';
       role: string;

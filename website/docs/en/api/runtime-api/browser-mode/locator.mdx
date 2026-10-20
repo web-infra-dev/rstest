@@ -45,9 +45,9 @@ The `submitButton` above is a `Locator`. You can continue chaining calls on it (
 
 ## BrowserPage
 
-- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'>`
+- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator }`
 
-`BrowserPage` is the type definition for `page`. It only exposes query entry points and does not include interaction methods like `click`, `fill`, etc.
+`BrowserPage` is the type definition for `page`. It exposes query entry points and DOM-to-Locator conversion, and does not include interaction methods like `click`, `fill`, etc.
 
 This means you need to first obtain a `Locator` through `page`, then call interactions and assertions on the `Locator`.
 
@@ -136,6 +136,26 @@ Query by test id.
 ```ts
 const settingsPanel = page.getByTestId('settings-panel');
 ```
+
+### elementLocator
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `(element: Element) => Locator`
+
+Synchronously wrap a DOM `Element` from the current test document in a Locator. This lets you use elements returned by Testing Library or third-party tools with native browser actions and Rstest assertions. HTML and SVG elements, including elements inside shadow DOM, are supported.
+
+```ts
+import { getByRole } from '@testing-library/dom';
+
+const button = getByRole(document.body, 'button', { name: 'Save' });
+await page.elementLocator(button).click();
+await expect.element(button).toBeEnabled();
+```
+
+The Locator retains the identity of the original element without changing DOM attributes. If a component replaces that node, this Locator still refers to the old node: detached assertions pass and actions wait for the original node to become attached again or time out. Use query Locators such as `page.getByRole()` when the target should be found again after a rerender.
+
+Elements from other documents or iframes are rejected. A detached element from the current document can be wrapped before it is inserted.
 
 ## Configuration API
 

@@ -11,6 +11,7 @@ import type {
 import type { ToMatchScreenshotOptions } from './augmentExpect';
 import type { BrowserElementExpect } from './augmentExpect';
 import { callBrowserRpc } from './browserRpc';
+import { isDomElement } from './elementLocator';
 import {
   isLocator,
   isBrowserPage,
@@ -192,12 +193,13 @@ const createElementExpect = (
 };
 
 const element = (
-  locator: unknown,
+  target: unknown,
   options: { getTimeout: () => number },
 ): BrowserElementExpect => {
+  const locator = isDomElement(target) ? page.elementLocator(target) : target;
   if (!isLocator(locator)) {
     throw new TypeError(
-      'expect.element() expects a Locator returned from @rstest/browser page.getBy* APIs.',
+      'expect.element() expects an Rstest Locator or a DOM Element from the current test document.',
     );
   }
 

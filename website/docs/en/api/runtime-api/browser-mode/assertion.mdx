@@ -1,6 +1,6 @@
 ---
 title: Assertion
-description: expect.element is the API for Locator assertions in Browser Mode. It accepts a Locator and returns a chainable assertion object.
+description: expect.element is the API for DOM assertions in Browser Mode. It accepts a Locator or DOM Element and returns a chainable assertion object.
 overviewHeaders: [2, 3]
 ---
 
@@ -8,7 +8,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Assertion
 
-`expect.element` is the API for [Locator](/api/runtime-api/browser-mode/locator) assertions in Browser Mode. It accepts a `Locator` and returns a chainable assertion object. Unlike `expect(value)` which primarily compares JS values, `expect.element` targets the real element state on the page, suitable for verifying visibility, text, form values, count, and other user-observable results.
+`expect.element` is the API for DOM assertions in Browser Mode. It accepts a [Locator](/api/runtime-api/browser-mode/locator) or DOM `Element` and returns a chainable assertion object. Unlike `expect(value)` which primarily compares JS values, `expect.element` targets the real element state on the page, suitable for verifying visibility, text, form values, count, and other user-observable results.
 
 :::tip Auto-retry
 With the Playwright provider, all `expect.element` matchers automatically retry until the assertion passes or the timeout is reached. You do not need to write manual `waitFor` or polling logic — just assert the expected state and the framework handles the waiting.
@@ -40,7 +40,7 @@ test('asserts element states in browser mode', async () => {
 ## Type signature
 
 ```ts
-expect.element(locator: Locator): BrowserElementExpect
+expect.element(target: Locator | Element): BrowserElementExpect
 ```
 
 ## Auto-retry and timeout
@@ -98,8 +98,24 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 
 ## Input constraints
 
-- `locator` must be a `Locator` returned by `@rstest/browser`. This allows the runtime to recognize and replay the complete query chain; hand-crafted objects or locators from other libraries cannot be parsed by this mechanism.
+- The target must be an Rstest `Locator` or a DOM `Element` from the current test document. Hand-crafted objects and locators from other libraries are not supported.
 - `expect.element` is not available outside of Browser Mode. It relies on Browser Mode's browser runtime and communication channel to execute element assertions; pure Node test environments only support regular `expect(value)` assertions.
+
+## DOM elements
+
+<ApiMeta addedVersion="0.12.5" />
+
+`expect.element()` also accepts DOM elements returned by Testing Library or native DOM queries. It converts the element through [`page.elementLocator()`](/api/runtime-api/browser-mode/locator#elementlocator) and uses the same retry and timeout behavior as Locator assertions.
+
+```ts
+import { getByRole } from '@testing-library/dom';
+
+const button = getByRole(document.body, 'button', { name: 'Save' });
+await expect.element(button).toBeEnabled();
+await expect.element(button).not.toBeDisabled();
+```
+
+Retries check the same element. If a rerender replaces it, use a query Locator to find the replacement. Elements from another document or iframe are rejected.
 
 ## Screenshot matching
 

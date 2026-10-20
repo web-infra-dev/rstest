@@ -142,6 +142,66 @@ test('locator + expect.element proxy works', async () => {
     .toHaveCount(2);
 });
 
+test('supports native DOM references in detached nodes, shadow DOM, and SVG', async () => {
+  const host = document.createElement('div');
+  const button = document.createElement('button');
+  button.textContent = 'Shadow action';
+  const shadow = host.attachShadow({ mode: 'open' });
+  shadow.appendChild(button);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('aria-label', 'Icon');
+  host.appendChild(svg);
+  const locator = page.elementLocator(button);
+  await expect.element(locator).toBeDetached();
+
+  setTimeout(() => document.body.appendChild(host), 50);
+  await expect.element(button).toBeVisible({ timeout: 1000 });
+  await expect
+    .element(page.elementLocator(host).getByRole('button'))
+    .toHaveText('Shadow action');
+  await expect
+    .element(page.locator('body').filter({ has: locator }))
+    .toHaveCount(1);
+  await expect.element(svg).toHaveAttribute('aria-label', 'Icon');
+
+  button.onclick = () => {
+    button.textContent = 'Clicked original';
+  };
+  await locator.click();
+  await expect.element(button).toHaveText('Clicked original');
+
+  host.remove();
+  await expect.element(locator).toBeDetached();
+});
+
+test('rejects invalid elements and elements from another document', () => {
+  for (const value of [null, document, document.createTextNode('text'), {}]) {
+    expect(() => Reflect.apply(page.elementLocator, page, [value])).toThrow(
+      /DOM Element from the current test document/,
+    );
+    expect(() => Reflect.apply(expect.element, expect, [value])).toThrow(
+      /DOM Element from the current test document/,
+    );
+  }
+  const foreign = document.implementation
+    .createHTMLDocument()
+    .createElement('button');
+  expect(() => page.elementLocator(foreign)).toThrow(/current test document/);
+  expect(() => expect.element(foreign)).toThrow(/current test document/);
+
+  const iframe = document.createElement('iframe');
+  document.body.appendChild(iframe);
+  const foreignFrameElement = iframe.contentDocument?.createElement('button');
+  if (!foreignFrameElement) throw new Error('Expected a same-origin iframe');
+  expect(() => page.elementLocator(foreignFrameElement)).toThrow(
+    /current test document/,
+  );
+  expect(() => expect.element(foreignFrameElement)).toThrow(
+    /current test document/,
+  );
+  iframe.remove();
+});
+
 test('asserts multi-select values with strings, regexes, and retries', async () => {
   const select = document.createElement('select');
   select.id = 'language-values';

@@ -1,4 +1,5 @@
 import type { FrameLocator, Locator, Page } from 'playwright';
+import { ELEMENT_LOCATOR_SELECTOR_ENGINE } from '../../elementLocator';
 import type { BrowserLocatorIR } from '../../protocol';
 import { reviveBrowserLocatorText } from './textMatcher';
 
@@ -20,6 +21,11 @@ export const compilePlaywrightLocator = (
 
     for (const step of ir.steps as any[]) {
       switch (step.type) {
+        case 'element':
+          current = current.locator(
+            `${ELEMENT_LOCATOR_SELECTOR_ENGINE}=${step.id}`,
+          );
+          break;
         case 'getByRole': {
           const name = step.options?.name
             ? reviveBrowserLocatorText(step.options.name)
