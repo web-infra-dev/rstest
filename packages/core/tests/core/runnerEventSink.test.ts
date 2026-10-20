@@ -69,6 +69,31 @@ const log = (content: string): UserConsoleLog => ({
 });
 
 describe('createRunnerEventSink', () => {
+  it('does not wait for reporter case-result handlers', async () => {
+    const { context, projectConfig } = makeContext();
+    const onStateCaseResult = rs.fn();
+    (
+      context.stateManager as unknown as {
+        onTestCaseResult: typeof onStateCaseResult;
+      }
+    ).onTestCaseResult = onStateCaseResult;
+    context.reporters.push({
+      onTestCaseResult: () => new Promise<void>(() => {}),
+    });
+    const sink = createRunnerEventSink(context, projectConfig);
+    const result = {
+      testId: 'case',
+      testPath: '/a.test.ts',
+      project: 'test',
+      name: 'case',
+      status: 'pass' as const,
+      errors: [],
+    };
+
+    await sink.onTestCaseResult(result);
+    expect(onStateCaseResult).toHaveBeenCalledWith(result);
+  });
+
   it('clears discarded failures and drops reporter events still waiting for run start', async () => {
     const { context, projectConfig } = makeContext();
     context.stateManager = new TestStateManager();

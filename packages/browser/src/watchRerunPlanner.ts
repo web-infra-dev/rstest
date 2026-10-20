@@ -18,6 +18,7 @@ type WatchRerunPlannerInput = {
 
 type WatchFileSetUpdate = {
   currentTestFiles: TestFileInfo[];
+  deletedTestFiles: TestFileInfo[];
   deletedTestPaths: string[];
 };
 
@@ -63,16 +64,21 @@ const collectTestPaths = (files: TestFileInfo[]): string[] => {
   ];
 };
 
-const collectDeletedTestPaths = (
+const collectDeletedTestFiles = (
   previous: TestFileInfo[],
   current: TestFileInfo[],
-): string[] => {
+): TestFileInfo[] => {
   const currentPathSet = new Set(
-    current.map((file) => getTestPathKey(file.testPath)),
+    current.map(
+      (file) => `${file.projectName}:${getTestPathKey(file.testPath)}`,
+    ),
   );
-  return previous
-    .map((file) => file.testPath)
-    .filter((testPath) => !currentPathSet.has(getTestPathKey(testPath)));
+  return previous.filter(
+    (file) =>
+      !currentPathSet.has(
+        `${file.projectName}:${getTestPathKey(file.testPath)}`,
+      ),
+  );
 };
 
 export const collectWatchTestFiles = (
@@ -110,12 +116,14 @@ export const planWatchRerun = ({
           `${file.projectName}:${getTestPathKey(file.testPath)}`,
         ),
     );
+    const deletedTestFiles = collectDeletedTestFiles(
+      normalizedPrevious,
+      currentTestFiles,
+    );
     const fileSetUpdate = {
       currentTestFiles,
-      deletedTestPaths: collectDeletedTestPaths(
-        normalizedPrevious,
-        currentTestFiles,
-      ),
+      deletedTestFiles,
+      deletedTestPaths: [...new Set(deletedTestFiles.map((f) => f.testPath))],
     };
     if (currentTestFiles.length === 0) {
       return {
@@ -208,12 +216,12 @@ export const commitWatchFileSetUpdate = (
   update: WatchFileSetUpdate | undefined,
   watchState: {
     lastTestFiles: TestFileInfo[];
-    pendingDeletedTestPaths: string[];
+    pendingDeletedTestFiles: TestFileInfo[];
   },
 ): void => {
   if (!update) {
     return;
   }
-  watchState.pendingDeletedTestPaths.push(...update.deletedTestPaths);
+  watchState.pendingDeletedTestFiles.push(...update.deletedTestFiles);
   watchState.lastTestFiles = update.currentTestFiles;
 };

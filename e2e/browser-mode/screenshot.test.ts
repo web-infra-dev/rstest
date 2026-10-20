@@ -333,6 +333,52 @@ test('rejects a short screenshot stability timeout', async () => {
     );
   });
 
+  it('keeps failed screenshots separate for projects sharing a root', async () => {
+    fs.writeFileSync(
+      path.join(fixtureDir, 'rstest.shared-root-projects.config.mts'),
+      `import { defineConfig } from '@rstest/core';
+
+const browser = {
+  enabled: true,
+  provider: 'playwright',
+  headless: true,
+} as const;
+
+export default defineConfig({
+  projects: [
+    { name: 'project-a', include: ['tests/shared-failure.test.ts'], browser },
+    { name: 'project-b', include: ['tests/shared-failure.test.ts'], browser },
+  ],
+});
+`,
+    );
+    fs.writeFileSync(
+      path.join(fixtureDir, 'tests/shared-failure.test.ts'),
+      `import { expect, test } from '@rstest/core';
+
+test('fails in both projects', () => {
+  expect(true).toBe(false);
+});
+`,
+    );
+
+    const result = await runScreenshot([
+      '--config=rstest.shared-root-projects.config.mts',
+    ]);
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).not.toBe(0);
+    const screenshotRoot = path.join(fixtureDir, '.rstest', 'screenshots');
+    const projectDirectories = fs.readdirSync(screenshotRoot);
+    expect(projectDirectories).toHaveLength(2);
+    for (const directory of projectDirectories) {
+      expect(
+        fs
+          .readdirSync(path.join(screenshotRoot, directory))
+          .filter((name) => name.endsWith('.png')),
+      ).toHaveLength(1);
+    }
+  });
+
   it('can disable failed-test screenshots', async () => {
     const result = await runScreenshot([
       '--browser.screenshotFailures=false',

@@ -24,6 +24,7 @@ describe('watch rerun planner', () => {
           { testPath: '/a.test.ts', projectName: 'project-a' },
           { testPath: '/b.test.ts', projectName: 'project-a' },
         ],
+        deletedTestFiles: [],
         deletedTestPaths: [],
       },
       decision: {
@@ -148,6 +149,9 @@ describe('watch rerun planner', () => {
     expect(plan).toEqual({
       fileSetUpdate: {
         currentTestFiles: [],
+        deletedTestFiles: [
+          { testPath: '/a.test.ts', projectName: 'project-a' },
+        ],
         deletedTestPaths: ['/a.test.ts'],
       },
       decision: {
@@ -158,11 +162,31 @@ describe('watch rerun planner', () => {
 
     const watchState = {
       lastTestFiles: previousTestFiles,
-      pendingDeletedTestPaths: [] as string[],
+      pendingDeletedTestFiles: [] as typeof previousTestFiles,
     };
     commitWatchFileSetUpdate(plan.fileSetUpdate, watchState);
 
     expect(watchState.lastTestFiles).toEqual([]);
-    expect(watchState.pendingDeletedTestPaths).toEqual(['/a.test.ts']);
+    expect(watchState.pendingDeletedTestFiles).toEqual(previousTestFiles);
+  });
+
+  it('keeps deleted screenshot files scoped to their project', () => {
+    const sameTestPath = '/a.test.ts';
+    const plan = planWatchRerun({
+      projectEntries: [
+        { project: { name: 'project-b' }, testFiles: [sameTestPath] },
+      ],
+      previousTestFiles: [
+        { testPath: sameTestPath, projectName: 'project-a' },
+        { testPath: sameTestPath, projectName: 'project-b' },
+      ],
+      affectedTestFiles: [],
+    });
+
+    expect(plan.fileSetUpdate).toEqual({
+      currentTestFiles: [{ testPath: sameTestPath, projectName: 'project-b' }],
+      deletedTestFiles: [{ testPath: sameTestPath, projectName: 'project-a' }],
+      deletedTestPaths: [sameTestPath],
+    });
   });
 });

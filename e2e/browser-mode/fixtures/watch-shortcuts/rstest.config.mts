@@ -11,6 +11,7 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
+    screenshotFailures: false,
     port: BROWSER_PORTS['watch-shortcuts'],
   },
   include: ['tests/**/*.test.ts'],

@@ -734,7 +734,7 @@ export const createHeadedScheduler = async ({
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
         await watchState.removeFailureScreenshots?.(
-          rerunPlan.fileSetUpdate?.deletedTestPaths ?? [],
+          rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
         );
 
         if (rerunPlan.fileSetUpdate) {

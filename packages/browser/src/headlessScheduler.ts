@@ -815,7 +815,7 @@ export const createHeadlessScheduler = async ({
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
         await watchState.removeFailureScreenshots?.(
-          rerunPlan.fileSetUpdate?.deletedTestPaths ?? [],
+          rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
         );
 
         logger.log(color.cyan(rerunPlan.decision.message));

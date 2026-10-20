@@ -126,9 +126,14 @@ export function createRunnerEventSink(
     async onTestCaseFailure() {},
     async onTestCaseResult(result) {
       context.stateManager.onTestCaseResult(result);
-      await fanout(result.testPath, (reporter) =>
+      void fanout(result.testPath, (reporter) =>
         reporter.onTestCaseResult?.(result),
-      );
+      ).catch((error) => {
+        logger.error(
+          color.red('Failed to handle test case result:'),
+          toError(error),
+        );
+      });
     },
     async onTestFileStart(test) {
       context.stateManager.onTestFileStart(test.testPath);

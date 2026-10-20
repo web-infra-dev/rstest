@@ -140,12 +140,18 @@ const getFailureScreenshotKey = (
   testId: string,
 ): string => JSON.stringify([project, testPath, testId]);
 
+const getFailureScreenshotFileKey = (
+  project: string,
+  testPath: string,
+): string => JSON.stringify([project, testPath]);
+
 const getFailureScreenshotDirectory = (
   projectRoot: string,
+  projectName: string,
   testPath: string,
 ): string => {
   const fileHash = createHash('sha256')
-    .update(getTestPathKey(testPath))
+    .update(JSON.stringify([projectName, getTestPathKey(testPath)]))
     .digest('hex')
     .slice(0, 16);
   const safeFileName = basename(testPath).replace(/[^a-zA-Z0-9._-]+/g, '-');
@@ -157,26 +163,36 @@ const getFailureScreenshotDirectory = (
   );
 };
 
-const removeFailureScreenshotsForTestPaths = async (
-  projects: Pick<InternalProjectContext, 'rootPath'>[],
-  testPaths: string[],
+const removeFailureScreenshotsForFiles = async (
+  projects: Pick<InternalProjectContext, 'name' | 'rootPath'>[],
+  testFiles: TestFileInfo[],
 ): Promise<void> => {
   await Promise.all(
-    testPaths.flatMap((testPath) =>
-      projects.map((project) =>
-        fs
-          .rm(getFailureScreenshotDirectory(project.rootPath, testPath), {
-            recursive: true,
-            force: true,
-          })
-          .catch((error) => {
-            logger.warn(
-              `Failed to remove stale browser test screenshots for ${testPath}`,
-              error,
-            );
-          }),
-      ),
-    ),
+    testFiles.flatMap(({ projectName, testPath }) => {
+      const project = projects.find((item) => item.name === projectName);
+      return project
+        ? [
+            fs
+              .rm(
+                getFailureScreenshotDirectory(
+                  project.rootPath,
+                  projectName,
+                  testPath,
+                ),
+                {
+                  recursive: true,
+                  force: true,
+                },
+              )
+              .catch((error) => {
+                logger.warn(
+                  `Failed to remove stale browser test screenshots for ${testPath}`,
+                  error,
+                );
+              }),
+          ]
+        : [];
+    }),
   );
 };
 
@@ -205,7 +221,7 @@ const getFailureScreenshotPath = ({
     .digest('hex')
     .slice(0, 16);
   return join(
-    getFailureScreenshotDirectory(projectRoot, testPath),
+    getFailureScreenshotDirectory(projectRoot, projectName, testPath),
     `${safeName}-${identityHash}.png`,
   );
 };
@@ -578,8 +594,8 @@ export const runBrowserController = async (
     watchState.triggerRerun = async () => {
       await watchSignals.runDispatchRerun();
     };
-    watchState.removeFailureScreenshots = (testPaths) =>
-      removeFailureScreenshotsForTestPaths(browserProjects, testPaths);
+    watchState.removeFailureScreenshots = (testFiles) =>
+      removeFailureScreenshotsForFiles(browserProjects, testFiles);
   }
 
   // A path-scoped shortcut must match a browser entry. Keep its paths on the
@@ -988,6 +1004,9 @@ export const runBrowserController = async (
             testId: testIdentity.testId,
             parentNames: testIdentity.parentNames,
           });
+          await failureScreenshotCleanups.get(
+            getFailureScreenshotFileKey(request.projectName, request.testPath),
+          );
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));
           failureScreenshots.set(
@@ -1094,6 +1113,7 @@ export const runBrowserController = async (
   const reporterResults: TestFileResult[] = [];
   const caseResults: TestResult[] = [];
   const failureScreenshots = new Map<string, string>();
+  const failureScreenshotCleanups = new Map<string, Promise<void>>();
   const fatalErrorRef = { current: null as Error | null };
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
@@ -1236,7 +1256,22 @@ export const runBrowserController = async (
       (item) => item.name === payload.projectName,
     );
     if (project) {
-      await removeFailureScreenshotsForTestPaths([project], [payload.testPath]);
+      const cleanupKey = getFailureScreenshotFileKey(
+        payload.projectName,
+        payload.testPath,
+      );
+      const cleanup = removeFailureScreenshotsForFiles(
+        [project],
+        [{ projectName: payload.projectName, testPath: payload.testPath }],
+      );
+      failureScreenshotCleanups.set(cleanupKey, cleanup);
+      try {
+        await cleanup;
+      } finally {
+        if (failureScreenshotCleanups.get(cleanupKey) === cleanup) {
+          failureScreenshotCleanups.delete(cleanupKey);
+        }
+      }
     }
     screenshotCountsByFile.delete(
       trackerKey(payload.projectName, payload.testPath),
