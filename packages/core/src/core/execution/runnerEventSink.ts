@@ -73,6 +73,7 @@ export function createRunnerEventSink(
 ): RunnerEventSink {
   const { reporters } = context;
   const attempts = new Map<string, number>();
+  const pendingCaseResultDeliveries = new Map<string, Promise<void>>();
 
   const fanoutConsoleLog = (log: UserConsoleLog): Promise<void> =>
     fanout(log.testPath, (reporter) => reporter.onUserConsoleLog?.(log));
@@ -98,10 +99,10 @@ export function createRunnerEventSink(
   const fanout = async (
     testPath: string,
     notify: (reporter: Reporter) => MaybePromise<void>,
+    expectedAttempt = attempts.get(testPath),
   ): Promise<void> => {
-    const currentAttempt = attempts.get(testPath);
     await context.openReporterRun?.();
-    if (currentAttempt !== attempts.get(testPath)) return;
+    if (expectedAttempt !== attempts.get(testPath)) return;
     await Promise.all(reporters.map(notify));
   };
 
@@ -126,13 +127,28 @@ export function createRunnerEventSink(
     async onTestCaseFailure() {},
     async onTestCaseResult(result) {
       context.stateManager.onTestCaseResult(result);
-      void fanout(result.testPath, (reporter) =>
-        reporter.onTestCaseResult?.(result),
-      ).catch((error) => {
-        logger.error(
-          color.red('Failed to handle test case result:'),
-          toError(error),
-        );
+      const expectedAttempt = attempts.get(result.testPath);
+      const previous =
+        pendingCaseResultDeliveries.get(result.testPath) ?? Promise.resolve();
+      const delivery = previous
+        .then(() =>
+          fanout(
+            result.testPath,
+            (reporter) => reporter.onTestCaseResult?.(result),
+            expectedAttempt,
+          ),
+        )
+        .catch((error) => {
+          logger.error(
+            color.red('Failed to handle test case result:'),
+            toError(error),
+          );
+        });
+      pendingCaseResultDeliveries.set(result.testPath, delivery);
+      void delivery.then(() => {
+        if (pendingCaseResultDeliveries.get(result.testPath) === delivery) {
+          pendingCaseResultDeliveries.delete(result.testPath);
+        }
       });
     },
     async onTestFileStart(test) {
@@ -158,6 +174,7 @@ export function createRunnerEventSink(
     },
     async onTestFileResult(result) {
       context.stateManager.onTestFileResult(result);
+      await pendingCaseResultDeliveries.get(result.testPath);
       await fanout(result.testPath, (reporter) =>
         reporter.onTestFileResult?.(result),
       );

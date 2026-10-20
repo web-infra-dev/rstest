@@ -69,7 +69,7 @@ const log = (content: string): UserConsoleLog => ({
 });
 
 describe('createRunnerEventSink', () => {
-  it('does not wait for reporter case-result handlers', async () => {
+  it('defers reporter case-result handlers without allowing file results to overtake them', async () => {
     const { context, projectConfig } = makeContext();
     const onStateCaseResult = rs.fn();
     (
@@ -77,8 +77,24 @@ describe('createRunnerEventSink', () => {
         onTestCaseResult: typeof onStateCaseResult;
       }
     ).onTestCaseResult = onStateCaseResult;
+    const order: string[] = [];
+    let finishCaseResult!: () => void;
+    let markCaseResultStarted!: () => void;
+    const caseResultStarted = new Promise<void>((resolve) => {
+      markCaseResultStarted = resolve;
+    });
     context.reporters.push({
-      onTestCaseResult: () => new Promise<void>(() => {}),
+      onTestCaseResult: async () => {
+        order.push('case-start');
+        markCaseResultStarted();
+        await new Promise<void>((resolve) => {
+          finishCaseResult = resolve;
+        });
+        order.push('case-end');
+      },
+      onTestFileResult: () => {
+        order.push('file');
+      },
     });
     const sink = createRunnerEventSink(context, projectConfig);
     const result = {
@@ -92,6 +108,24 @@ describe('createRunnerEventSink', () => {
 
     await sink.onTestCaseResult(result);
     expect(onStateCaseResult).toHaveBeenCalledWith(result);
+    await caseResultStarted;
+    expect(order).toEqual(['case-start']);
+
+    const fileResult = sink.onTestFileResult({
+      testId: '/a.test.ts',
+      project: 'test',
+      testPath: '/a.test.ts',
+      name: '/a.test.ts',
+      status: 'pass',
+      errors: [],
+      results: [result],
+    });
+    await Promise.resolve();
+    expect(order).toEqual(['case-start']);
+
+    finishCaseResult();
+    await fileResult;
+    expect(order).toEqual(['case-start', 'case-end', 'file']);
   });
 
   it('clears discarded failures and drops reporter events still waiting for run start', async () => {
@@ -129,6 +163,26 @@ describe('createRunnerEventSink', () => {
     expect(await second.getCountOfFailedTests()).toBe(0);
     open();
     await Promise.all([delivered, otherDelivered]);
+    await Promise.all([
+      sink.onTestFileResult({
+        testId: '/a.test.ts',
+        project: 'test',
+        testPath: '/a.test.ts',
+        name: '/a.test.ts',
+        status: 'pass',
+        errors: [],
+        results: [],
+      }),
+      sink.onTestFileResult({
+        testId: '/b.test.ts',
+        project: 'test',
+        testPath: '/b.test.ts',
+        name: '/b.test.ts',
+        status: 'pass',
+        errors: [],
+        results: [success],
+      }),
+    ]);
     expect(onTestCaseResult).toHaveBeenCalledExactlyOnceWith(success);
   });
 

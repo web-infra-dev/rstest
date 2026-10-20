@@ -154,7 +154,9 @@ const getFailureScreenshotDirectory = (
     .update(JSON.stringify([projectName, getTestPathKey(testPath)]))
     .digest('hex')
     .slice(0, 16);
-  const safeFileName = basename(testPath).replace(/[^a-zA-Z0-9._-]+/g, '-');
+  const safeFileName = basename(testPath)
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .slice(0, 200);
   return join(
     projectRoot,
     '.rstest',
@@ -1371,13 +1373,14 @@ export const runBrowserController = async (
     );
     const failureScreenshot = failureScreenshots.get(screenshotKey);
     failureScreenshots.delete(screenshotKey);
+    let screenshotPathToRemove: string | undefined;
     if (payload.status === 'fail' && failureScreenshot) {
       logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
     } else if (payload.status !== 'fail') {
       const project = browserProjects.find(
         (item) => item.name === payload.project,
       );
-      const screenshotPath = project
+      screenshotPathToRemove = project
         ? getFailureScreenshotPath({
             projectRoot: project.rootPath,
             projectName: payload.project,
@@ -1387,14 +1390,6 @@ export const runBrowserController = async (
             parentNames: payload.parentNames ?? [],
           })
         : failureScreenshot;
-      if (screenshotPath) {
-        await fs.rm(screenshotPath, { force: true }).catch((error) => {
-          logger.warn(
-            `Failed to remove non-failing test screenshot: ${screenshotPath}`,
-            error,
-          );
-        });
-      }
     }
     caseResults.push(payload);
     phaseTrackers
@@ -1411,6 +1406,15 @@ export const runBrowserController = async (
       taskType: 'case',
       testPath: payload.testPath,
     });
+
+    if (screenshotPathToRemove) {
+      await fs.rm(screenshotPathToRemove, { force: true }).catch((error) => {
+        logger.warn(
+          `Failed to remove non-failing test screenshot: ${screenshotPathToRemove}`,
+          error,
+        );
+      });
+    }
   };
 
   const handleTestFileComplete = async (
