@@ -120,10 +120,21 @@ export const planWatchRerun = ({
       normalizedPrevious,
       currentTestFiles,
     );
+    const currentTestPathSet = new Set(
+      currentTestFiles.map((file) => getTestPathKey(file.testPath)),
+    );
     const fileSetUpdate = {
       currentTestFiles,
       deletedTestFiles,
-      deletedTestPaths: [...new Set(deletedTestFiles.map((f) => f.testPath))],
+      deletedTestPaths: [
+        ...new Set(
+          normalizedPrevious
+            .map((file) => file.testPath)
+            .filter(
+              (testPath) => !currentTestPathSet.has(getTestPathKey(testPath)),
+            ),
+        ),
+      ],
     };
     if (currentTestFiles.length === 0) {
       return {
