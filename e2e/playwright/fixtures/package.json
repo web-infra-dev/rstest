@@ -7,6 +7,6 @@
     "@rsbuild/core": "catalog:",
     "@rstest/core": "workspace:*",
     "@rstest/playwright": "workspace:*",
-    "playwright": "^1.64.0"
+    "playwright": "^1.64.1"
   }
 }
