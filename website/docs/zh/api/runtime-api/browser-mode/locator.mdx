@@ -4,6 +4,8 @@ description: Locator 是 Browser Mode 的元素查询与交互核心 API。你�
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Locator
 
 `Locator` 是 Browser Mode 的元素查询与交互核心 API。你可以通过 `page.getBy*` 或 `page.locator()` 构建查询链，再执行交互操作。具体执行语义由 browser `provider` 决定。
@@ -236,6 +238,7 @@ Locator 是严格的。如果交互操作（如 `click`、`fill`）匹配到多�
 
 - `LocatorClickOptions` / `LocatorDblclickOptions`: `button`、`delay`、`force`、`modifiers`、`position`、`timeout`、`trial`（`click` 额外支持 `clickCount`）
 - `LocatorHoverOptions`: `force`、`modifiers`、`position`、`timeout`、`trial`
+- `LocatorDragToOptions`: `force`、`sourcePosition`、`targetPosition`、`timeout`、`trial`
 - `LocatorPressOptions`: `delay`、`timeout`
 - `LocatorFillOptions`: `force`、`timeout`
 - `LocatorCheckOptions`: `force`、`position`、`timeout`、`trial`
@@ -262,6 +265,18 @@ await page.getByRole('button', { name: 'Submit' }).click();
 
 ```ts
 await page.getByText('Open details').dblclick();
+```
+
+### dragTo
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **类型：** `(target: Locator, options?: LocatorDragToOptions) => Promise<void>`
+
+将当前元素拖到目标 Locator。`sourcePosition` 和 `targetPosition` 分别相对于源元素和目标元素的左上角内边距边界。
+
+```ts
+await page.getByTestId('card').dragTo(page.getByTestId('column'));
 ```
 
 ### hover

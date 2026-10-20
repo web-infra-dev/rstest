@@ -56,6 +56,14 @@ export type LocatorHoverOptions = Pick<
   'force' | 'modifiers' | 'position' | 'timeout' | 'trial'
 >;
 
+export type LocatorDragToOptions = {
+  force?: boolean;
+  sourcePosition?: LocatorPosition;
+  targetPosition?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
 export type LocatorPressOptions = {
   delay?: number;
   timeout?: number;
@@ -287,6 +295,18 @@ export class Locator {
 
   async dblclick(options?: LocatorDblclickOptions): Promise<void> {
     await this.callLocator('dblclick', options === undefined ? [] : [options]);
+  }
+
+  async dragTo(target: Locator, options?: LocatorDragToOptions): Promise<void> {
+    if (!isLocator(target)) {
+      throw new TypeError(
+        'Locator.dragTo() expects a target Locator returned from @rstest/browser page.getBy* APIs.',
+      );
+    }
+    await this.callLocator(
+      'dragTo',
+      options === undefined ? [target.ir] : [target.ir, options],
+    );
   }
 
   async fill(value: string, options?: LocatorFillOptions): Promise<void> {

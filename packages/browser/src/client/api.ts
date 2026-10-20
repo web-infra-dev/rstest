@@ -96,6 +96,27 @@ const createElementExpect = (
         options?.timeout,
       );
     },
+    async toHaveRole(role, options) {
+      await callExpect(
+        'toHaveRole',
+        [serializeMatcherText(role)],
+        options?.timeout,
+      );
+    },
+    async toHaveAccessibleName(name, options) {
+      await callExpect(
+        'toHaveAccessibleName',
+        [serializeMatcherText(name)],
+        options?.timeout,
+      );
+    },
+    async toHaveAccessibleDescription(description, options) {
+      await callExpect(
+        'toHaveAccessibleDescription',
+        [serializeMatcherText(description)],
+        options?.timeout,
+      );
+    },
     async toContainText(text, options) {
       await callExpect(
         'toContainText',
@@ -280,6 +301,7 @@ export type {
   LocatorCheckOptions,
   LocatorClickOptions,
   LocatorDblclickOptions,
+  LocatorDragToOptions,
   LocatorDispatchEventInit,
   LocatorFillOptions,
   LocatorFilterOptions,
