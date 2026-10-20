@@ -142,6 +142,42 @@ test('locator + expect.element proxy works', async () => {
     .toHaveCount(2);
 });
 
+test('asserts multi-select values with strings, regexes, and retries', async () => {
+  const select = document.createElement('select');
+  select.id = 'language-values';
+  select.multiple = true;
+  const javascript = new Option('JavaScript', 'javascript');
+  select.append(
+    new Option('TypeScript', 'typescript'),
+    javascript,
+    new Option('Rust', 'rust'),
+  );
+  document.body.appendChild(select);
+  const locator = page.locator('#language-values');
+
+  await expect.element(locator).toHaveValues([]);
+  await locator.selectOption(['rust', 'typescript']);
+  await expect.element(locator).toHaveValues(['typescript', 'rust']);
+  await expect.element(locator).toHaveValues([/^TYPESCRIPT$/i, 'rust']);
+  await expect.element(locator).not.toHaveValues(['javascript']);
+  await expect(
+    expect
+      .element(locator)
+      .toHaveValues(['rust', 'typescript'], { timeout: 50 }),
+  ).rejects.toThrow();
+
+  setTimeout(() => {
+    javascript.selected = true;
+  }, 100);
+  await expect
+    .element(locator)
+    .toHaveValues(['typescript', /^java/, 'rust'], { timeout: 1000 });
+
+  await locator.selectOption([]);
+  await expect.element(locator).toHaveValues([]);
+  select.remove();
+});
+
 test('pressSequentially types text one key event at a time', async () => {
   const input = document.createElement('input');
   input.placeholder = 'Search query';

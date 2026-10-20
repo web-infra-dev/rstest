@@ -527,10 +527,64 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     await expect(
       dispatchPlaywrightBrowserRpc({
         runnerPage: new FakePage(fakeLocator) as any,
-        request: createRequest({ kind: 'expect', method: 'toHaveValues' }),
+        request: createRequest({ kind: 'expect', method: 'toHaveFormValues' }),
         timeoutFallbackMs: 500,
       }),
-    ).rejects.toThrow('Expect matcher not supported: toHaveValues');
+    ).rejects.toThrow('Expect matcher not supported: toHaveFormValues');
+  });
+
+  it('forwards multi-select values, regex flags, negation, and timeout', async () => {
+    const locator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toHaveValues',
+        args: [
+          [
+            { type: 'string', value: 'typescript' },
+            { type: 'regexp', source: '^RUST$', flags: 'i' },
+          ],
+        ],
+        isNot: true,
+        timeout: 25,
+      }),
+      timeoutFallbackMs: 500,
+    });
+    expect(locator.expectCalls).toMatchObject([
+      {
+        method: 'to.have.values',
+        options: {
+          isNot: true,
+          timeout: 25,
+          expectedText: [
+            { string: 'typescript' },
+            {
+              regexSource: '^RUST$',
+              regexFlags: 'i',
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('rejects malformed multi-select value arguments at the RPC boundary', async () => {
+    const locator = new FakeLocator();
+    for (const values of ['typescript', [123]]) {
+      await expect(
+        dispatchPlaywrightBrowserRpc({
+          runnerPage: new FakePage(locator) as any,
+          request: createRequest({
+            kind: 'expect',
+            method: 'toHaveValues',
+            args: [values],
+          }),
+          timeoutFallbackMs: 500,
+        }),
+      ).rejects.toThrow(/toHaveValues expects/);
+    }
+    expect(locator.expectCalls).toHaveLength(0);
   });
 
   it('validates matcher arguments for toHaveCount', async () => {
