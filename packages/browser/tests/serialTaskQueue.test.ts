@@ -1,5 +1,5 @@
 import { describe, expect, it, rstest } from '@rstest/core';
-import { createHeadedSerialTaskQueue } from '../src/headedSerialTaskQueue';
+import { createSerialTaskQueue } from '../src/serialTaskQueue';
 
 type Deferred = {
   promise: Promise<void>;
@@ -14,9 +14,9 @@ const createDeferred = (): Deferred => {
   return { promise, resolve };
 };
 
-describe('headed serial task queue', () => {
+describe('serial task queue', () => {
   it('should run enqueued tasks strictly in order', async () => {
-    const queue = createHeadedSerialTaskQueue();
+    const queue = createSerialTaskQueue();
     const firstGate = createDeferred();
     const steps: string[] = [];
 
@@ -47,7 +47,7 @@ describe('headed serial task queue', () => {
   });
 
   it('should continue draining after a task failure', async () => {
-    const queue = createHeadedSerialTaskQueue();
+    const queue = createSerialTaskQueue();
     const onSettled = rstest.fn();
 
     const first = queue.enqueue(async () => {

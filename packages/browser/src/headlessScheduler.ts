@@ -10,6 +10,7 @@ import {
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getTestPathKey } from './pathUtils';
+import { createSerialTaskQueue } from './serialTaskQueue';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
@@ -804,8 +805,11 @@ export const createHeadlessScheduler = async ({
       );
     };
 
-    watchSignals.setDispatchRerun(
-      async (updateSnapshot, requestedTestPaths) => {
+    // Each project compiler can trigger a rebuild independently; serialize
+    // planning so the drain-once affected set and file-set commit cannot race.
+    const dispatchRerunQueue = createSerialTaskQueue();
+    watchSignals.setDispatchRerun((updateSnapshot, requestedTestPaths) =>
+      dispatchRerunQueue.enqueue(async () => {
         const newProjectEntries = await collectProjectEntries();
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
@@ -851,7 +855,7 @@ export const createHeadlessScheduler = async ({
             rerunPlan.deferredTestPaths,
           );
         }
-      },
+      }),
     );
 
     watchSession = createWatchSession(runScope);

@@ -18,7 +18,7 @@ import {
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedRunRegistry } from './headedRunRegistry';
-import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
+import { createSerialTaskQueue } from './serialTaskQueue';
 import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
@@ -289,7 +289,7 @@ export const createHeadedScheduler = async ({
   setDispatchPageResolver(() => ({ containerPage }));
 
   const dispatchRouter = createDispatchRouter();
-  const headedReloadQueue = createHeadedSerialTaskQueue();
+  const headedReloadQueue = createSerialTaskQueue();
   let rawCoverage: unknown[] = [];
   // The session's project is recorded at start rather than re-derived at each
   // take site: headed reloads are strictly serial, so at most one coverage
@@ -792,7 +792,7 @@ export const createHeadedScheduler = async ({
     // Serialized against itself: each per-project compiler fires its own
     // `onAfterDevCompile`, and two interleaved planning passes would race on
     // the drain-once affected set and the file-set commit.
-    const dispatchRerunQueue = createHeadedSerialTaskQueue();
+    const dispatchRerunQueue = createSerialTaskQueue();
     watchSignals.setDispatchRerun((updateSnapshot, requestedTestPaths) =>
       dispatchRerunQueue.enqueue(() =>
         runDispatchRerunOnce(updateSnapshot, requestedTestPaths),
