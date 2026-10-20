@@ -202,6 +202,7 @@ async function replayTestFile(
         break;
       case 'caseResult':
         await sink.onTestCaseResult(event.result);
+        await sink.awaitTestCaseResults(event.result.testPath);
         break;
       case 'log':
         await sink.emitConsoleLog(event.log);

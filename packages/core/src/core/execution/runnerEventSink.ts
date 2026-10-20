@@ -33,6 +33,8 @@ import { BlobReporter } from '../../reporter/blob';
  */
 interface HostDrivenEvents {
   discardAttempt(testPath: string): void;
+  /** Drain queued case-result reporter delivery for deterministic replay. */
+  awaitTestCaseResults(testPath: string): Promise<void>;
   /**
    * AWAITED by both transports, and ingests `result.snapshotResult`. The pool
    * calls it after `pool.runTest` returns, the browser host after a client
@@ -105,6 +107,9 @@ export function createRunnerEventSink(
     if (expectedAttempt !== attempts.get(testPath)) return;
     await Promise.all(reporters.map(notify));
   };
+  const awaitTestCaseResults = async (testPath: string): Promise<void> => {
+    await pendingCaseResultDeliveries.get(testPath);
+  };
 
   return {
     discardAttempt(testPath) {
@@ -116,6 +121,7 @@ export function createRunnerEventSink(
         }
       }
     },
+    awaitTestCaseResults,
     onTestCaseStart(test) {
       context.stateManager.onTestCaseStart(test);
       // Fire-and-forget: reporter case-start hooks are not awaited (parity with
@@ -174,7 +180,7 @@ export function createRunnerEventSink(
     },
     async onTestFileResult(result) {
       context.stateManager.onTestFileResult(result);
-      await pendingCaseResultDeliveries.get(result.testPath);
+      await awaitTestCaseResults(result.testPath);
       await fanout(result.testPath, (reporter) =>
         reporter.onTestFileResult?.(result),
       );
