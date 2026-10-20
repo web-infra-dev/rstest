@@ -71,5 +71,4 @@ Common commands (run from this package):
 
 CI
 
-- On tag push or manual dispatch, GitHub Actions runs on Linux and publishes for all platforms using `vsce publish --target` (win32/darwin/linux; x64 and arm64).
-- Configure the `VSCE_PAT` repository secret for Marketplace publishing.
+- The extension is frozen at its final release, 0.12.3. CI no longer packages (`.vsix`), publishes or E2E-tests it.
