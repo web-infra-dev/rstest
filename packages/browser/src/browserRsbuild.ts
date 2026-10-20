@@ -1900,11 +1900,16 @@ export const createBrowserRuntime = async ({
                 return;
               }
 
-              // Late-bound through the watch state: this plugin outlives the
-              // controller entry that created it (config-change restarts reuse
-              // the runtime), so it must drive the CURRENT entry's trigger,
-              // never one captured at runtime creation.
-              await watchState.triggerRerun?.();
+              // This plugin outlives controller entries, so dispatch through
+              // the current trigger. The dev server keeps its filesystem watcher
+              // detached until this hook settles, and dispatch may wait for an
+              // active cycle to interrupt, so hand it off without holding the
+              // hook open.
+              void watchState.triggerRerun?.().catch((error: unknown) => {
+                watchState.signalFatalCompile?.(
+                  error instanceof Error ? error : new Error(String(error)),
+                );
+              });
             });
           },
         },
