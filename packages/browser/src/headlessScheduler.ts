@@ -792,6 +792,7 @@ export const createHeadlessScheduler = async ({
       testPaths: string[],
       updateSnapshot: SnapshotUpdateState,
     ): Promise<unknown[]> => {
+      await watchState.awaitFailureScreenshotCleanups?.();
       const pathSet = new Set(
         testPaths.map((testPath) => getTestPathKey(testPath)),
       );
@@ -814,22 +815,29 @@ export const createHeadlessScheduler = async ({
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
-        await watchState.removeFailureScreenshots?.(
+        watchState.removeFailureScreenshots?.(
           rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
         );
+        const failureScreenshotCleanup =
+          watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
 
-        logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
-          logWatchReady();
-          if (rerunPlan.deferredTestPaths) {
-            watchSignals.queueInvalidationAfter(
-              Promise.resolve(),
-              rerunPlan.deferredTestPaths,
-            );
-          }
+          void failureScreenshotCleanup.then(() => {
+            logger.log(color.cyan(rerunPlan.decision.message));
+            logWatchReady();
+            if (rerunPlan.deferredTestPaths) {
+              watchSignals.queueInvalidationAfter(
+                Promise.resolve(),
+                rerunPlan.deferredTestPaths,
+              );
+            }
+          });
           return;
         }
 
+        void failureScreenshotCleanup.then(() => {
+          logger.log(color.cyan(rerunPlan.decision.message));
+        });
         const { cycle } = await watchSignals.signalInvalidation(
           rerunPlan.decision.kind === 'empty'
             ? []

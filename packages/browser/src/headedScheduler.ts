@@ -679,6 +679,7 @@ export const createHeadedScheduler = async ({
       testPaths: string[],
       updateSnapshot: SnapshotUpdateState,
     ): Promise<unknown[]> => {
+      await watchState.awaitFailureScreenshotCleanups?.();
       await refreshHostConfig(updateSnapshot);
       rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
@@ -733,9 +734,11 @@ export const createHeadedScheduler = async ({
         });
 
         commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
-        await watchState.removeFailureScreenshots?.(
+        watchState.removeFailureScreenshots?.(
           rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
         );
+        const failureScreenshotCleanup =
+          watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
 
         if (rerunPlan.fileSetUpdate) {
           currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
@@ -750,18 +753,23 @@ export const createHeadedScheduler = async ({
           }
         }
 
-        logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
-          logWatchReady();
-          if (rerunPlan.deferredTestPaths) {
-            watchSignals.queueInvalidationAfter(
-              Promise.resolve(),
-              rerunPlan.deferredTestPaths,
-            );
-          }
+          void failureScreenshotCleanup.then(() => {
+            logger.log(color.cyan(rerunPlan.decision.message));
+            logWatchReady();
+            if (rerunPlan.deferredTestPaths) {
+              watchSignals.queueInvalidationAfter(
+                Promise.resolve(),
+                rerunPlan.deferredTestPaths,
+              );
+            }
+          });
           return;
         }
 
+        void failureScreenshotCleanup.then(() => {
+          logger.log(color.cyan(rerunPlan.decision.message));
+        });
         const { cycle } = await watchSignals.signalInvalidation(
           rerunPlan.decision.kind === 'empty'
             ? []

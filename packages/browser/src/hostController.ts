@@ -584,6 +584,33 @@ export const runBrowserController = async (
   }
   signal?.addEventListener('abort', onAbort, { once: true });
   const watchState = runtime.watchState;
+  const failureScreenshotCleanups = new Map<string, Promise<void>>();
+  const queueFailureScreenshotCleanup = (
+    testFile: TestFileInfo,
+  ): Promise<void> => {
+    const project = browserProjects.find(
+      (item) => item.name === testFile.projectName,
+    );
+    if (!project) {
+      return Promise.resolve();
+    }
+
+    const cleanupKey = getFailureScreenshotFileKey(
+      testFile.projectName,
+      testFile.testPath,
+    );
+    const cleanup = (
+      failureScreenshotCleanups.get(cleanupKey) ?? Promise.resolve()
+    ).then(() => removeFailureScreenshotsForFiles([project], [testFile]));
+    failureScreenshotCleanups.set(cleanupKey, cleanup);
+    const clear = () => {
+      if (failureScreenshotCleanups.get(cleanupKey) === cleanup) {
+        failureScreenshotCleanups.delete(cleanupKey);
+      }
+    };
+    void cleanup.then(clear, clear);
+    return cleanup;
+  };
 
   // Track initial test files for watch mode (from this controller's freshly
   // collected entries, before adopting the runtime's entry snapshot below).
@@ -594,8 +621,14 @@ export const runBrowserController = async (
     watchState.triggerRerun = async () => {
       await watchSignals.runDispatchRerun();
     };
-    watchState.removeFailureScreenshots = (testFiles) =>
-      removeFailureScreenshotsForFiles(browserProjects, testFiles);
+    watchState.removeFailureScreenshots = (testFiles) => {
+      testFiles.forEach((testFile) => {
+        void queueFailureScreenshotCleanup(testFile);
+      });
+    };
+    watchState.awaitFailureScreenshotCleanups = async () => {
+      await Promise.all(failureScreenshotCleanups.values());
+    };
   }
 
   // A path-scoped shortcut must match a browser entry. Keep its paths on the
@@ -996,12 +1029,13 @@ export const runBrowserController = async (
           ) {
             throw new Error('Invalid failed-test screenshot response.');
           }
+          const testId = testIdentity.testId;
           const filepath = getFailureScreenshotPath({
             projectRoot: project.rootPath,
             projectName: request.projectName,
             testPath: request.testPath,
             testName,
-            testId: testIdentity.testId,
+            testId,
             parentNames: testIdentity.parentNames,
           });
           await failureScreenshotCleanups.get(
@@ -1013,7 +1047,7 @@ export const runBrowserController = async (
             getFailureScreenshotKey(
               request.projectName,
               request.testPath,
-              testIdentity.testId,
+              testId,
             ),
             filepath,
           );
@@ -1113,7 +1147,6 @@ export const runBrowserController = async (
   const reporterResults: TestFileResult[] = [];
   const caseResults: TestResult[] = [];
   const failureScreenshots = new Map<string, string>();
-  const failureScreenshotCleanups = new Map<string, Promise<void>>();
   const fatalErrorRef = { current: null as Error | null };
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
@@ -1252,27 +1285,10 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
-    const project = browserProjects.find(
-      (item) => item.name === payload.projectName,
-    );
-    if (project) {
-      const cleanupKey = getFailureScreenshotFileKey(
-        payload.projectName,
-        payload.testPath,
-      );
-      const cleanup = removeFailureScreenshotsForFiles(
-        [project],
-        [{ projectName: payload.projectName, testPath: payload.testPath }],
-      );
-      failureScreenshotCleanups.set(cleanupKey, cleanup);
-      try {
-        await cleanup;
-      } finally {
-        if (failureScreenshotCleanups.get(cleanupKey) === cleanup) {
-          failureScreenshotCleanups.delete(cleanupKey);
-        }
-      }
-    }
+    await queueFailureScreenshotCleanup({
+      projectName: payload.projectName,
+      testPath: payload.testPath,
+    });
     screenshotCountsByFile.delete(
       trackerKey(payload.projectName, payload.testPath),
     );
