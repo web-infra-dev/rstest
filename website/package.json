@@ -23,12 +23,12 @@
     "@types/node": "^22.16.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "rsbuild-plugin-google-analytics": "^1.0.6",
     "rsbuild-plugin-open-graph": "^1.1.3",
     "rspress-plugin-font-open-sans": "^1.0.4",
-    "satori": "^0.47.1",
+    "satori": "^0.62.0",
     "satori-html": "^0.3.2",
     "typescript": "^6.0.3"
   }
