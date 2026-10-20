@@ -131,6 +131,13 @@ const createElementExpect = (
         options?.timeout,
       );
     },
+    async toHaveValues(values, options) {
+      await callExpect(
+        'toHaveValues',
+        [values.map(serializeMatcherText)],
+        options?.timeout,
+      );
+    },
     async toHaveId(value, options) {
       await callExpect(
         'toHaveId',

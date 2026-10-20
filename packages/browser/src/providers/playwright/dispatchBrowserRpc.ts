@@ -416,6 +416,21 @@ const dispatchExpectMatcher = (
 
   // --- Matchers with custom arg handling ---
   switch (method) {
+    case 'toHaveValues': {
+      const values = args[0];
+      if (!Array.isArray(values)) {
+        throw new TypeError('toHaveValues expects an array of text matchers');
+      }
+      const expectedText = values.flatMap((value) =>
+        serializeExpectedText(assertSerializedText(value, method)),
+      );
+      return callExpect(
+        locator,
+        'to.have.values',
+        { isNot, timeout, expectedText },
+        'Expected element toHaveValues',
+      );
+    }
     case 'toBeInViewport': {
       const ratio = args[0];
       if (ratio !== undefined && typeof ratio !== 'number') {

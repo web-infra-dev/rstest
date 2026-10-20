@@ -38,6 +38,10 @@ export type BrowserElementExpect = {
     value: string | RegExp,
     options?: { timeout?: number },
   ) => Promise<void>;
+  toHaveValues: (
+    values: (string | RegExp)[],
+    options?: { timeout?: number },
+  ) => Promise<void>;
   toHaveId: (
     value: string | RegExp,
     options?: { timeout?: number },

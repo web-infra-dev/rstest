@@ -90,6 +90,8 @@ const createSerializedText = (value: string) => ({
 
 const createExpectArgs = (method: string): unknown[] => {
   switch (method) {
+    case 'toHaveValues':
+      return [[createSerializedText('expected')]];
     case 'toHaveText':
     case 'toContainText':
     case 'toHaveValue':
@@ -141,6 +143,7 @@ describe('browser RPC registry consistency', () => {
       async toHaveAccessibleDescription() {},
       async toContainText() {},
       async toHaveValue() {},
+      async toHaveValues() {},
       async toHaveId() {},
       async toHaveAttribute() {},
       async toHaveClass() {},

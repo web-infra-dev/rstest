@@ -398,6 +398,20 @@ Applicable to `input`, `textarea`, `select`, and other elements with retrievable
 await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
 ```
 
+### toHaveValues
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `(values: (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
+
+Assert all selected option values of a `<select multiple>` element. Values must match the expected array in DOM order. Each item can be a string or a regular expression; an empty array asserts that no options are selected.
+
+```ts
+const languages = page.getByLabel('Languages');
+await languages.selectOption(['typescript', 'rust']);
+await expect.element(languages).toHaveValues(['typescript', /^rust$/]);
+```
+
 ### toHaveId
 
 - **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`

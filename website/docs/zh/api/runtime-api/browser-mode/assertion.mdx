@@ -398,6 +398,20 @@ await expect.element(page.getByRole('status')).toContainText('Save');
 await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
 ```
 
+### toHaveValues
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **类型：** `(values: (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
+
+断言 `<select multiple>` 元素所有已选中选项的值。各项必须按 DOM 顺序与期望数组匹配，支持字符串和正则混用。空数组表示没有选中任何选项。
+
+```ts
+const languages = page.getByLabel('Languages');
+await languages.selectOption(['typescript', 'rust']);
+await expect.element(languages).toHaveValues(['typescript', /^rust$/]);
+```
+
 ### toHaveId
 
 - **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`

@@ -9,7 +9,6 @@
  *   page.elementLocator(element),
  *   locators.extend(...)
  * - Locator actions: tripleClick, hover out, other drag/drop helpers
- * - Assertions: toHaveValues
  * - Artifacts intentionally excluded for now: trace/video
  */
 export const supportedScreenshotMatchers: Set<string> = new Set([
@@ -53,6 +52,7 @@ export const supportedExpectElementMatchers: Set<string> = new Set([
   'toHaveAccessibleDescription',
   'toContainText',
   'toHaveValue',
+  'toHaveValues',
   'toHaveAttribute',
   'toHaveClass',
   'toHaveCount',
