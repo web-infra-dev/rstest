@@ -400,6 +400,34 @@ test('keyboard tab follows browser focus order in both directions', async () => 
   }
 });
 
+test('keyboard can unblock a locator waiting for actionability', async () => {
+  const input = document.createElement('input');
+  const button = document.createElement('button');
+  button.disabled = true;
+  button.textContent = 'Continue';
+  let clicked = false;
+  button.onclick = () => {
+    clicked = true;
+  };
+  input.onkeydown = (event) => {
+    if (event.key === 'Escape') {
+      button.disabled = false;
+    }
+  };
+  document.body.append(input, button);
+  try {
+    await page.elementLocator(input).focus();
+    await Promise.all([
+      page.elementLocator(button).click({ timeout: 1000 }),
+      page.keyboard.press('Escape'),
+    ]);
+    expect(clicked).toBe(true);
+  } finally {
+    input.remove();
+    button.remove();
+  }
+});
+
 test('headed keyboard routes input to the runner after the container takes focus', async () => {
   if (window.parent === window) {
     return;

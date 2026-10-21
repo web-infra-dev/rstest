@@ -12,7 +12,9 @@ import { ApiMeta } from '@components/ApiMeta';
 
 `page.keyboard` sends native keyboard input to the currently focused element. Use it to test shortcuts, keyboard navigation, and interactions that move focus between elements.
 
-Unlike `locator.press()`, which focuses the matching element first, `page.keyboard` uses the current focus without selecting an element. In headed mode, input is routed to the test's runner iframe, including when the outer test UI has taken focus. Moving focus outside the iframe can clear its focused element; focus the desired element explicitly before continuing to type.
+Unlike `locator.press()`, which focuses the matching element first, `page.keyboard` uses the current focus without selecting an element. In headed mode, Rstest focuses the test's runner iframe before starting input if the outer test UI has taken focus. Moving focus outside the iframe can clear its focused element; focus the desired element explicitly before continuing to type.
+
+Keyboard input shares the browser page's focus and modifier state. Run focus-dependent interactions sequentially, and await each press before changing focus or navigating. If another task moves focus or the runner reloads during a press, its remaining events follow the browser's current focus, including during headed watch updates. Run invalidation drops queued presses that have not started; it cannot cancel or roll back native input already in progress.
 
 ## press
 

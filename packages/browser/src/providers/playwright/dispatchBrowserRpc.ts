@@ -16,54 +16,15 @@ import type {
   BrowserLocatorText,
   BrowserRpcRequest,
 } from '../../rpcProtocol';
+import { createSerialTaskQueue } from '../../serialTaskQueue';
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
 
 const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
-const pageInputQueues = new WeakMap<Page, Promise<void>>();
-
-const enqueuePageInput = async <T>(
-  page: Page,
-  operation: () => Promise<T>,
-  isRequestCurrent?: () => boolean,
-): Promise<T | undefined> => {
-  const previous = pageInputQueues.get(page) ?? Promise.resolve();
-  let release = () => {};
-  const current = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  pageInputQueues.set(page, current);
-
-  await previous;
-  try {
-    if (isRequestCurrent && !isRequestCurrent()) {
-      return undefined;
-    }
-    return await operation();
-  } finally {
-    release();
-    if (pageInputQueues.get(page) === current) {
-      pageInputQueues.delete(page);
-    }
-  }
-};
-
-const focusChangingLocatorActions = new Set([
-  'click',
-  'dblclick',
-  'dragTo',
-  'fill',
-  'press',
-  'pressSequentially',
-  'clear',
-  'check',
-  'uncheck',
-  'focus',
-  'blur',
-  'dispatchEvent',
-  'selectOption',
-  'setInputFiles',
-]);
+const keyboardQueues = new WeakMap<
+  Page,
+  ReturnType<typeof createSerialTaskQueue>
+>();
 
 // ---------------------------------------------------------------------------
 // Iframe lookup
@@ -643,6 +604,49 @@ export async function dispatchPlaywrightBrowserRpc({
     throw new Error('Browser container page is not initialized');
   }
 
+  if (request.kind === 'keyboard') {
+    if (request.method !== 'press') {
+      throw new Error(`Keyboard method not supported: ${request.method}`);
+    }
+    const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
+    let queue = keyboardQueues.get(keyboardPage);
+    if (!queue) {
+      queue = createSerialTaskQueue();
+      keyboardQueues.set(keyboardPage, queue);
+    }
+    return queue.enqueue(async () => {
+      if (isRequestCurrent && !isRequestCurrent()) {
+        return;
+      }
+      if (!runnerPage) {
+        const { iframe } = await getRunnerFrame(
+          keyboardPage,
+          testPath,
+          request.projectName,
+          timeout > 0 ? timeout : 0,
+        );
+        await iframe.evaluate((element) => {
+          // Focusing an already active iframe would reset native Tab navigation.
+          if (
+            element instanceof HTMLIFrameElement &&
+            document.activeElement !== element
+          ) {
+            element.focus({ preventScroll: true });
+          }
+        });
+        // Frame lookup and focus yield to watch invalidation before input starts.
+        if (isRequestCurrent && !isRequestCurrent()) {
+          return;
+        }
+      }
+      await keyboardPage.keyboard.press(
+        key,
+        // RPC arguments cross the untyped transport boundary.
+        request.args[1] as Parameters<Page['keyboard']['press']>[1],
+      );
+    });
+  }
+
   let locatorRoot: FrameLocator | Page;
   let headedRunner: Awaited<ReturnType<typeof getRunnerFrame>> | undefined;
   if (runnerPage) {
@@ -655,34 +659,6 @@ export async function dispatchPlaywrightBrowserRpc({
       timeout > 0 ? timeout : 0,
     );
     locatorRoot = headedRunner.frame;
-  }
-  if (request.kind === 'keyboard') {
-    if (request.method !== 'press') {
-      throw new Error(`Keyboard method not supported: ${request.method}`);
-    }
-    const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
-    return enqueuePageInput(
-      keyboardPage,
-      async () => {
-        if (headedRunner?.iframe) {
-          await headedRunner.iframe.evaluate((element) => {
-            // Focusing an already active iframe would reset native Tab navigation.
-            if (
-              element instanceof HTMLIFrameElement &&
-              document.activeElement !== element
-            ) {
-              element.focus({ preventScroll: true });
-            }
-          });
-        }
-        await keyboardPage.keyboard.press(
-          key,
-          // RPC arguments cross the untyped transport boundary.
-          request.args[1] as Parameters<Page['keyboard']['press']>[1],
-        );
-      },
-      isRequestCurrent,
-    );
   }
 
   const locator = compilePlaywrightLocator(
@@ -802,30 +778,24 @@ export async function dispatchPlaywrightBrowserRpc({
     if (!supportedLocatorActions.has(request.method)) {
       throw new Error(`Locator method not supported: ${request.method}`);
     }
-    const dispatchAction = async () => {
-      if (request.method === 'dragTo') {
-        if (
-          !request.args[0] ||
-          !Array.isArray((request.args[0] as BrowserLocatorIR).steps)
-        ) {
-          throw new TypeError('Locator.dragTo() expects a target Locator.');
-        }
-        const dragTarget = compilePlaywrightLocator(
-          locatorRoot,
-          request.args[0] as BrowserLocatorIR,
-        );
-        return await locator.dragTo(
-          dragTarget,
-          request.args[1] as Parameters<Locator['dragTo']>[1],
-        );
+    if (request.method === 'dragTo') {
+      if (
+        !request.args[0] ||
+        !Array.isArray((request.args[0] as BrowserLocatorIR).steps)
+      ) {
+        throw new TypeError('Locator.dragTo() expects a target Locator.');
       }
-      const target: any = locator as any;
-      return await target[request.method](...request.args);
-    };
-    if (focusChangingLocatorActions.has(request.method)) {
-      return enqueuePageInput(keyboardPage, dispatchAction, isRequestCurrent);
+      const dragTarget = compilePlaywrightLocator(
+        locatorRoot,
+        request.args[0] as BrowserLocatorIR,
+      );
+      return await locator.dragTo(
+        dragTarget,
+        request.args[1] as Parameters<Locator['dragTo']>[1],
+      );
     }
-    return dispatchAction();
+    const target: any = locator as any;
+    return await target[request.method](...request.args);
   }
 
   if (request.kind === 'expect') {

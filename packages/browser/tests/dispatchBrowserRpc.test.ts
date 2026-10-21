@@ -12,7 +12,6 @@ class FakeLocator {
     png.data.set([20, 80, 180, 255]);
     return PNG.sync.write(png);
   };
-  onAction?: (method: string) => void;
 
   locator(): FakeLocator {
     return this;
@@ -44,13 +43,7 @@ class FakeLocator {
 
   async click(...args: unknown[]): Promise<string> {
     this.actionCalls.push({ method: 'click', args });
-    this.onAction?.('click');
     return 'clicked';
-  }
-
-  async focus(): Promise<void> {
-    this.actionCalls.push({ method: 'focus', args: [] });
-    this.onAction?.('focus');
   }
 
   async dragTo(...args: unknown[]): Promise<string> {
@@ -257,58 +250,24 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     ]);
   });
 
-  it('serializes focus-changing locator actions with keyboard presses', async () => {
+  it('does not send a key if the headed run expires while focusing its iframe', async () => {
     const fakePage = new FakeContainerPage();
-    const events: string[] = [];
-    fakePage.frame.onAction = (method) => events.push(`action:${method}`);
-    let releaseFirstPress = () => {};
-    const firstPress = new Promise<void>((resolve) => {
-      releaseFirstPress = resolve;
-    });
-    let firstPressStarted = () => {};
-    const firstPressStartedPromise = new Promise<void>((resolve) => {
-      firstPressStarted = resolve;
-    });
+    let runCurrent = true;
     fakePage.onFocus = async () => {
-      events.push('iframe:focus');
+      runCurrent = false;
     };
-    fakePage.onPress = async () => {
-      events.push('press:start');
-      firstPressStarted();
-      await firstPress;
-      events.push('press:end');
-    };
-
-    const keyboard = dispatchPlaywrightBrowserRpc({
+    await dispatchPlaywrightBrowserRpc({
       containerPage: fakePage as any,
       request: createRequest({
         kind: 'keyboard',
         method: 'press',
         args: ['a'],
       }),
+      isRequestCurrent: () => runCurrent,
       timeoutFallbackMs: 500,
     });
-    await firstPressStartedPromise;
-    const locatorFocus = dispatchPlaywrightBrowserRpc({
-      containerPage: fakePage as any,
-      request: createRequest({
-        kind: 'locator',
-        method: 'focus',
-        locator: { steps: [{ type: 'locator', selector: '#input' }] },
-      }),
-      timeoutFallbackMs: 500,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(events).toEqual(['iframe:focus', 'press:start']);
-
-    releaseFirstPress();
-    await Promise.all([keyboard, locatorFocus]);
-    expect(events).toEqual([
-      'iframe:focus',
-      'press:start',
-      'press:end',
-      'action:focus',
-    ]);
+    expect(fakePage.focusChecks).toBe(1);
+    expect(fakePage.keyboardCalls).toEqual([]);
   });
 
   it('drops a queued keyboard press after its headed run expires', async () => {
