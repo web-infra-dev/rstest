@@ -20,6 +20,42 @@ import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
 
 const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
+const keyboardDispatchQueues = new WeakMap<Page, Promise<void>>();
+
+const dispatchKeyboardPress = async (
+  page: Page,
+  iframe: Locator | undefined,
+  key: string,
+  options: Parameters<Page['keyboard']['press']>[1],
+): Promise<void> => {
+  const previous = keyboardDispatchQueues.get(page) ?? Promise.resolve();
+  let release = () => {};
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  keyboardDispatchQueues.set(page, current);
+
+  await previous;
+  try {
+    if (iframe) {
+      await iframe.evaluate((element) => {
+        // Focusing an already active iframe would reset native Tab navigation.
+        if (
+          element instanceof HTMLIFrameElement &&
+          document.activeElement !== element
+        ) {
+          element.focus({ preventScroll: true });
+        }
+      });
+    }
+    await page.keyboard.press(key, options);
+  } finally {
+    release();
+    if (keyboardDispatchQueues.get(page) === current) {
+      keyboardDispatchQueues.delete(page);
+    }
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Iframe lookup
@@ -615,18 +651,9 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Keyboard method not supported: ${request.method}`);
     }
     const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
-    if (headedRunner) {
-      await headedRunner.iframe.evaluate((iframe) => {
-        // Focusing an already active iframe would reset native Tab navigation.
-        if (
-          iframe instanceof HTMLIFrameElement &&
-          document.activeElement !== iframe
-        ) {
-          iframe.focus({ preventScroll: true });
-        }
-      });
-    }
-    return keyboardPage.keyboard.press(
+    return dispatchKeyboardPress(
+      keyboardPage,
+      headedRunner?.iframe,
       key,
       // RPC arguments cross the untyped transport boundary.
       request.args[1] as Parameters<Page['keyboard']['press']>[1],

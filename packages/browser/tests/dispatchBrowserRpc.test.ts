@@ -84,9 +84,16 @@ class FakeContainerPage {
   readonly frame = new FakeLocator();
   keyboardCalls: unknown[][] = [];
   focusChecks = 0;
+  readonly keyboardEvents: string[] = [];
+  onFocus?: (selector: string) => Promise<void>;
+  onPress?: (key: string) => Promise<void>;
   keyboard = {
     press: async (...args: unknown[]) => {
       this.keyboardCalls.push(args);
+      const key = String(args[0]);
+      this.keyboardEvents.push(`press:start:${key}`);
+      await this.onPress?.(key);
+      this.keyboardEvents.push(`press:end:${key}`);
     },
   };
 
@@ -96,6 +103,8 @@ class FakeContainerPage {
       count: async () => 1,
       evaluate: async () => {
         this.focusChecks++;
+        this.keyboardEvents.push(`focus:${selector}`);
+        await this.onFocus?.(selector);
       },
     };
   }
@@ -158,6 +167,87 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     );
     expect(fakePage.focusChecks).toBe(1);
     expect(fakePage.keyboardCalls).toEqual([['Tab', undefined]]);
+  });
+
+  it('serializes headed focus and keyboard presses per page', async () => {
+    const fakePage = new FakeContainerPage();
+    let releaseFirstFocus = () => {};
+    const firstFocus = new Promise<void>((resolve) => {
+      releaseFirstFocus = resolve;
+    });
+    let firstFocusStarted = () => {};
+    const firstFocusStartedPromise = new Promise<void>((resolve) => {
+      firstFocusStarted = resolve;
+    });
+    let releaseFirstPress = () => {};
+    const firstPress = new Promise<void>((resolve) => {
+      releaseFirstPress = resolve;
+    });
+    let firstPressStarted = () => {};
+    const firstPressStartedPromise = new Promise<void>((resolve) => {
+      firstPressStarted = resolve;
+    });
+    let secondFocusStarted = () => {};
+    const secondFocusStartedPromise = new Promise<void>((resolve) => {
+      secondFocusStarted = resolve;
+    });
+    fakePage.onFocus = async (selector) => {
+      if (selector.includes('first.test.ts')) {
+        firstFocusStarted();
+        await firstFocus;
+      } else {
+        secondFocusStarted();
+      }
+    };
+    fakePage.onPress = async (key) => {
+      if (key === 'a') {
+        firstPressStarted();
+        await firstPress;
+      }
+    };
+
+    const dispatch = (testPath: string, key: string) =>
+      dispatchPlaywrightBrowserRpc({
+        containerPage: fakePage as any,
+        request: createRequest({
+          testPath,
+          kind: 'keyboard',
+          method: 'press',
+          args: [key],
+        }),
+        timeoutFallbackMs: 500,
+      });
+    const first = dispatch('/tests/first.test.ts', 'a');
+    await firstFocusStartedPromise;
+    const second = dispatch('/tests/second.test.ts', 'b');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fakePage.keyboardEvents).toHaveLength(1);
+
+    releaseFirstFocus();
+    await firstPressStartedPromise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fakePage.keyboardEvents).toEqual([
+      expect.stringContaining(
+        "focus:iframe[data-test-file='/tests/first.test.ts']",
+      ),
+      'press:start:a',
+    ]);
+
+    releaseFirstPress();
+    await secondFocusStartedPromise;
+    await Promise.all([first, second]);
+    expect(fakePage.keyboardEvents).toEqual([
+      expect.stringContaining(
+        "focus:iframe[data-test-file='/tests/first.test.ts']",
+      ),
+      'press:start:a',
+      'press:end:a',
+      expect.stringContaining(
+        "focus:iframe[data-test-file='/tests/second.test.ts']",
+      ),
+      'press:start:b',
+      'press:end:b',
+    ]);
   });
 
   it('rejects unsupported keyboard methods and invalid keys', async () => {
