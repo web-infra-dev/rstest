@@ -1,0 +1,59 @@
+---
+title: Keyboard
+description: Send native keyboard input to the currently focused element in Browser Mode.
+overviewHeaders: [2, 3]
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Keyboard
+
+<ApiMeta addedVersion="0.12.5" />
+
+`page.keyboard` sends native keyboard input to the currently focused element. Use it to test shortcuts, keyboard navigation, and interactions that move focus between elements.
+
+Unlike `locator.press()`, which focuses the matching element first, `page.keyboard` uses the current focus without selecting an element. In headed mode, input is routed to the test's runner iframe, including when the outer test UI has taken focus. Moving focus outside the iframe can clear its focused element; focus the desired element explicitly before continuing to type.
+
+## press
+
+- **Type:** `(key: string, options?: BrowserKeyboardPressOptions) => Promise<void>`
+
+Press and release a key, or a combination such as `Shift+ArrowLeft` or `ControlOrMeta+A`. With the Playwright provider, key names follow [Playwright keyboard syntax](https://playwright.dev/docs/api/class-keyboard#keyboard-press). `ControlOrMeta` resolves to `Meta` on macOS and `Control` on other platforms. Modifiers in a combination are released after the key press.
+
+`BrowserKeyboardPressOptions` accepts:
+
+- `delay?: number`: Time in milliseconds between keydown and keyup. Defaults to `0`.
+
+```ts
+import { page } from '@rstest/browser';
+
+await page.getByLabel('Search').focus();
+await page.keyboard.press('ControlOrMeta+A');
+await page.keyboard.press('Backspace');
+await page.keyboard.press('Escape', { delay: 20 });
+```
+
+## tab
+
+- **Type:** `(options?: BrowserKeyboardTabOptions) => Promise<void>`
+
+Move focus using native Tab navigation. The browser determines focus order, including skipping disabled elements.
+
+`BrowserKeyboardTabOptions` accepts:
+
+- `shift?: boolean`: Move backwards with Shift+Tab. Defaults to `false`.
+
+```ts
+import { page } from '@rstest/browser';
+import { expect } from '@rstest/core';
+
+await page.getByLabel('Email').focus();
+await page.keyboard.tab();
+await expect.element(page.getByLabel('Password')).toBeFocused();
+await page.keyboard.tab({ shift: true });
+await expect.element(page.getByLabel('Email')).toBeFocused();
+```
+
+`tab()` is equivalent to `press('Tab')`; `tab({ shift: true })` is equivalent to `press('Shift+Tab')`. Focus can leave a component or iframe when navigation reaches its boundary, following browser behavior.
+
+`BrowserKeyboard`, `BrowserKeyboardPressOptions`, and `BrowserKeyboardTabOptions` are exported from `@rstest/browser`.

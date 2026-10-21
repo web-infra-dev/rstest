@@ -592,22 +592,47 @@ export async function dispatchPlaywrightBrowserRpc({
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
   const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
+  const keyboardPage = runnerPage ?? containerPage;
+  if (!keyboardPage) {
+    throw new Error('Browser container page is not initialized');
+  }
+
   let locatorRoot: FrameLocator | Page;
   let headedRunner: Awaited<ReturnType<typeof getRunnerFrame>> | undefined;
   if (runnerPage) {
     locatorRoot = runnerPage;
   } else {
     headedRunner = await getRunnerFrame(
-      containerPage ??
-        (() => {
-          throw new Error('Browser container page is not initialized');
-        })(),
+      keyboardPage,
       testPath,
       request.projectName,
       timeout > 0 ? timeout : 0,
     );
     locatorRoot = headedRunner.frame;
   }
+  if (request.kind === 'keyboard') {
+    if (request.method !== 'press') {
+      throw new Error(`Keyboard method not supported: ${request.method}`);
+    }
+    const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
+    if (headedRunner) {
+      await headedRunner.iframe.evaluate((iframe) => {
+        // Focusing an already active iframe would reset native Tab navigation.
+        if (
+          iframe instanceof HTMLIFrameElement &&
+          document.activeElement !== iframe
+        ) {
+          iframe.focus({ preventScroll: true });
+        }
+      });
+    }
+    return keyboardPage.keyboard.press(
+      key,
+      // RPC arguments cross the untyped transport boundary.
+      request.args[1] as Parameters<Page['keyboard']['press']>[1],
+    );
+  }
+
   const locator = compilePlaywrightLocator(
     locatorRoot,
     request.locator as BrowserLocatorIR,

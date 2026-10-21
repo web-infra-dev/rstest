@@ -327,4 +327,9 @@ export type {
   LocatorTextOptions,
   LocatorWaitForOptions,
 } from './locator';
+export type {
+  BrowserKeyboard,
+  BrowserKeyboardPressOptions,
+  BrowserKeyboardTabOptions,
+} from './keyboard';
 export { Locator, page, setTestIdAttribute };

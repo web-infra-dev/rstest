@@ -66,6 +66,12 @@ class FakeLocator {
 }
 
 class FakePage {
+  keyboardCalls: unknown[][] = [];
+  keyboard = {
+    press: async (...args: unknown[]) => {
+      this.keyboardCalls.push(args);
+    },
+  };
   constructor(private readonly locatorImpl: FakeLocator) {}
 
   locator(): FakeLocator {
@@ -76,10 +82,22 @@ class FakePage {
 class FakeContainerPage {
   selector = '';
   readonly frame = new FakeLocator();
+  keyboardCalls: unknown[][] = [];
+  focusChecks = 0;
+  keyboard = {
+    press: async (...args: unknown[]) => {
+      this.keyboardCalls.push(args);
+    },
+  };
 
   locator(selector: string) {
     this.selector = selector;
-    return { count: async () => 1 };
+    return {
+      count: async () => 1,
+      evaluate: async () => {
+        this.focusChecks++;
+      },
+    };
   }
 
   frameLocator(selector: string) {
@@ -104,6 +122,62 @@ const createRequest = (
 };
 
 describe('dispatchPlaywrightBrowserRpc', () => {
+  it('dispatches keyboard presses without resolving a locator', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    fakePage.locator = () => {
+      throw new Error('Keyboard must not resolve a locator');
+    };
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: fakePage as any,
+      request: createRequest({
+        kind: 'keyboard',
+        method: 'press',
+        args: ['ControlOrMeta+A', { delay: 10 }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    expect(fakePage.keyboardCalls).toEqual([
+      ['ControlOrMeta+A', { delay: 10 }],
+    ]);
+  });
+
+  it('routes headed keyboard presses through the requested runner frame', async () => {
+    const fakePage = new FakeContainerPage();
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: fakePage as any,
+      request: createRequest({
+        kind: 'keyboard',
+        method: 'press',
+        args: ['Tab'],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    expect(fakePage.selector).toContain("data-test-project='default'");
+    expect(fakePage.selector).toContain(
+      "data-test-file='/tests/example.test.ts'",
+    );
+    expect(fakePage.focusChecks).toBe(1);
+    expect(fakePage.keyboardCalls).toEqual([['Tab', undefined]]);
+  });
+
+  it('rejects unsupported keyboard methods and invalid keys', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    for (const [method, args, message] of [
+      ['down', ['Shift'], 'Keyboard method not supported: down'],
+      ['press', [''], 'keyboard.press expects a key'],
+      ['press', [42], 'keyboard.press expects a key'],
+    ] as const) {
+      await expect(
+        dispatchPlaywrightBrowserRpc({
+          runnerPage: fakePage as any,
+          request: createRequest({ kind: 'keyboard', method, args: [...args] }),
+          timeoutFallbackMs: 500,
+        }),
+      ).rejects.toThrow(message);
+    }
+    expect(fakePage.keyboardCalls).toEqual([]);
+  });
+
   it('dispatches supported locator actions', async () => {
     const fakeLocator = new FakeLocator();
     const result = await dispatchPlaywrightBrowserRpc({

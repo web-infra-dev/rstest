@@ -1,0 +1,59 @@
+---
+title: Keyboard
+description: 在 Browser Mode 中向当前获得焦点的元素发送原生键盘输入。
+overviewHeaders: [2, 3]
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Keyboard
+
+<ApiMeta addedVersion="0.12.5" />
+
+`page.keyboard` 向当前获得焦点的元素发送原生键盘输入，可用于测试快捷键、键盘导航，以及会在元素之间移动焦点的交互。
+
+`locator.press()` 会先聚焦匹配的元素，`page.keyboard` 则直接使用当前焦点，无需选择元素。在 headed 模式下，即使外层测试 UI 拿走了焦点，输入也会发送到当前测试的 runner iframe。焦点移出 iframe 时，浏览器可能会清除其内部元素焦点；要继续向指定元素输入，请先显式聚焦该元素。
+
+## press
+
+- **类型：** `(key: string, options?: BrowserKeyboardPressOptions) => Promise<void>`
+
+按下并释放一个按键，或 `Shift+ArrowLeft`、`ControlOrMeta+A` 这样的组合键。使用 Playwright provider 时，按键名称遵循 [Playwright 键盘语法](https://playwright.dev/docs/api/class-keyboard#keyboard-press)。`ControlOrMeta` 在 macOS 上对应 `Meta`，在其他平台上对应 `Control`。组合键中的修饰键会在按键操作完成后释放。
+
+`BrowserKeyboardPressOptions` 支持：
+
+- `delay?: number`：keydown 与 keyup 之间的间隔，单位为毫秒，默认为 `0`。
+
+```ts
+import { page } from '@rstest/browser';
+
+await page.getByLabel('Search').focus();
+await page.keyboard.press('ControlOrMeta+A');
+await page.keyboard.press('Backspace');
+await page.keyboard.press('Escape', { delay: 20 });
+```
+
+## tab
+
+- **类型：** `(options?: BrowserKeyboardTabOptions) => Promise<void>`
+
+通过原生 Tab 导航移动焦点。焦点顺序由浏览器决定，包括跳过禁用的元素。
+
+`BrowserKeyboardTabOptions` 支持：
+
+- `shift?: boolean`：使用 Shift+Tab 向后移动焦点，默认为 `false`。
+
+```ts
+import { page } from '@rstest/browser';
+import { expect } from '@rstest/core';
+
+await page.getByLabel('Email').focus();
+await page.keyboard.tab();
+await expect.element(page.getByLabel('Password')).toBeFocused();
+await page.keyboard.tab({ shift: true });
+await expect.element(page.getByLabel('Email')).toBeFocused();
+```
+
+`tab()` 等价于 `press('Tab')`；`tab({ shift: true })` 等价于 `press('Shift+Tab')`。导航到组件或 iframe 边界时，焦点可能移出其范围，行为由浏览器决定。
+
+`BrowserKeyboard`、`BrowserKeyboardPressOptions` 和 `BrowserKeyboardTabOptions` 均从 `@rstest/browser` 导出。
