@@ -110,6 +110,7 @@ export type DispatchBrowserRpcInput = {
   containerPage?: BrowserProviderPage;
   runnerPage?: BrowserProviderPage;
   request: BrowserRpcRequest;
+  isRequestCurrent?: () => boolean;
   timeoutFallbackMs: number;
 };
 

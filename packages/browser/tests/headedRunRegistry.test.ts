@@ -31,6 +31,19 @@ describe('headed run registry', () => {
     expect(runs.admit(runId, false)).toBe(false);
   });
 
+  it('should report only open runs as current', () => {
+    const runs = createHeadedRunRegistry();
+    const open = runs.mint('/open.test.ts');
+    const claimed = runs.mint('/claimed.test.ts');
+
+    expect(runs.isCurrent(open.runId)).toBe(true);
+    runs.admit(claimed.runId, true);
+    expect(runs.isCurrent(claimed.runId)).toBe(false);
+    runs.retainPaths([]);
+    expect(runs.isCurrent(open.runId)).toBe(false);
+    expect(runs.isCurrent('unknown-run')).toBe(false);
+  });
+
   it('should refuse a second terminal admit — a duplicate terminal message is stale', async () => {
     const runs = createHeadedRunRegistry();
     const { runId } = runs.mint('/a.test.ts');

@@ -20,42 +20,50 @@ import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
 
 const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
-const keyboardDispatchQueues = new WeakMap<Page, Promise<void>>();
+const pageInputQueues = new WeakMap<Page, Promise<void>>();
 
-const dispatchKeyboardPress = async (
+const enqueuePageInput = async <T>(
   page: Page,
-  iframe: Locator | undefined,
-  key: string,
-  options: Parameters<Page['keyboard']['press']>[1],
-): Promise<void> => {
-  const previous = keyboardDispatchQueues.get(page) ?? Promise.resolve();
+  operation: () => Promise<T>,
+  isRequestCurrent?: () => boolean,
+): Promise<T | undefined> => {
+  const previous = pageInputQueues.get(page) ?? Promise.resolve();
   let release = () => {};
   const current = new Promise<void>((resolve) => {
     release = resolve;
   });
-  keyboardDispatchQueues.set(page, current);
+  pageInputQueues.set(page, current);
 
   await previous;
   try {
-    if (iframe) {
-      await iframe.evaluate((element) => {
-        // Focusing an already active iframe would reset native Tab navigation.
-        if (
-          element instanceof HTMLIFrameElement &&
-          document.activeElement !== element
-        ) {
-          element.focus({ preventScroll: true });
-        }
-      });
+    if (isRequestCurrent && !isRequestCurrent()) {
+      return undefined;
     }
-    await page.keyboard.press(key, options);
+    return await operation();
   } finally {
     release();
-    if (keyboardDispatchQueues.get(page) === current) {
-      keyboardDispatchQueues.delete(page);
+    if (pageInputQueues.get(page) === current) {
+      pageInputQueues.delete(page);
     }
   }
 };
+
+const focusChangingLocatorActions = new Set([
+  'click',
+  'dblclick',
+  'dragTo',
+  'fill',
+  'press',
+  'pressSequentially',
+  'clear',
+  'check',
+  'uncheck',
+  'focus',
+  'blur',
+  'dispatchEvent',
+  'selectOption',
+  'setInputFiles',
+]);
 
 // ---------------------------------------------------------------------------
 // Iframe lookup
@@ -607,11 +615,13 @@ export async function dispatchPlaywrightBrowserRpc({
   containerPage,
   runnerPage,
   request,
+  isRequestCurrent,
   timeoutFallbackMs,
 }: {
   containerPage?: Page;
   runnerPage?: Page;
   request: BrowserRpcRequest;
+  isRequestCurrent?: () => boolean;
   timeoutFallbackMs: number;
 }): Promise<unknown> {
   // Config operations don't need a locator or runner frame.
@@ -651,12 +661,27 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Keyboard method not supported: ${request.method}`);
     }
     const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
-    return dispatchKeyboardPress(
+    return enqueuePageInput(
       keyboardPage,
-      headedRunner?.iframe,
-      key,
-      // RPC arguments cross the untyped transport boundary.
-      request.args[1] as Parameters<Page['keyboard']['press']>[1],
+      async () => {
+        if (headedRunner?.iframe) {
+          await headedRunner.iframe.evaluate((element) => {
+            // Focusing an already active iframe would reset native Tab navigation.
+            if (
+              element instanceof HTMLIFrameElement &&
+              document.activeElement !== element
+            ) {
+              element.focus({ preventScroll: true });
+            }
+          });
+        }
+        await keyboardPage.keyboard.press(
+          key,
+          // RPC arguments cross the untyped transport boundary.
+          request.args[1] as Parameters<Page['keyboard']['press']>[1],
+        );
+      },
+      isRequestCurrent,
     );
   }
 
@@ -777,24 +802,30 @@ export async function dispatchPlaywrightBrowserRpc({
     if (!supportedLocatorActions.has(request.method)) {
       throw new Error(`Locator method not supported: ${request.method}`);
     }
-    if (request.method === 'dragTo') {
-      if (
-        !request.args[0] ||
-        !Array.isArray((request.args[0] as BrowserLocatorIR).steps)
-      ) {
-        throw new TypeError('Locator.dragTo() expects a target Locator.');
+    const dispatchAction = async () => {
+      if (request.method === 'dragTo') {
+        if (
+          !request.args[0] ||
+          !Array.isArray((request.args[0] as BrowserLocatorIR).steps)
+        ) {
+          throw new TypeError('Locator.dragTo() expects a target Locator.');
+        }
+        const dragTarget = compilePlaywrightLocator(
+          locatorRoot,
+          request.args[0] as BrowserLocatorIR,
+        );
+        return await locator.dragTo(
+          dragTarget,
+          request.args[1] as Parameters<Locator['dragTo']>[1],
+        );
       }
-      const dragTarget = compilePlaywrightLocator(
-        locatorRoot,
-        request.args[0] as BrowserLocatorIR,
-      );
-      return await locator.dragTo(
-        dragTarget,
-        request.args[1] as Parameters<Locator['dragTo']>[1],
-      );
+      const target: any = locator as any;
+      return await target[request.method](...request.args);
+    };
+    if (focusChangingLocatorActions.has(request.method)) {
+      return enqueuePageInput(keyboardPage, dispatchAction, isRequestCurrent);
     }
-    const target: any = locator as any;
-    return await target[request.method](...request.args);
+    return dispatchAction();
   }
 
   if (request.kind === 'expect') {
