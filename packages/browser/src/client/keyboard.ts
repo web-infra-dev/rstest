@@ -21,7 +21,7 @@ export const keyboard: BrowserKeyboard = {
       kind: 'keyboard',
       locator: { steps: [] },
       method: 'press',
-      args: [key, options],
+      args: options === undefined ? [key] : [key, options],
     });
   },
   async tab(options) {
