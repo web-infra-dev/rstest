@@ -6,7 +6,6 @@
  *
  * Planned gaps (non-exhaustive):
  * - Locator query/interop: locator.selector/length, locator.query()/element()/elements()/all(),
- *   page.elementLocator(element),
  *   locators.extend(...)
  * - Locator actions: tripleClick, hover out, other drag/drop helpers
  * - Artifacts intentionally excluded for now: trace/video

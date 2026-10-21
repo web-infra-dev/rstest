@@ -4,6 +4,13 @@ import type {
   BrowserProviderPage,
   BrowserProviderRuntime,
 } from '../index';
+import {
+  ELEMENT_LOCATOR_REGISTRY_KEY,
+  ELEMENT_LOCATOR_SELECTOR_ENGINE,
+} from '../../elementLocator';
+import { createElementLocatorEngine } from './elementLocatorEngine';
+
+let elementLocatorRegistration: Promise<void> | undefined;
 
 type PlaywrightPageLike = Omit<
   BrowserProviderPage,
@@ -117,6 +124,14 @@ export async function launchPlaywrightBrowser({
   providerOptions: Record<string, unknown>;
 }): Promise<BrowserProviderRuntime> {
   const playwright = await import('playwright');
+  elementLocatorRegistration ??= playwright.selectors.register(
+    ELEMENT_LOCATOR_SELECTOR_ENGINE,
+    {
+      content: `(${createElementLocatorEngine.toString()})(${JSON.stringify(ELEMENT_LOCATOR_REGISTRY_KEY)})`,
+    },
+    { contentScript: false },
+  );
+  await elementLocatorRegistration;
   const browserType = playwright[browserName];
   const launchOptions = providerOptions.launch as
     Record<string, unknown> | undefined;

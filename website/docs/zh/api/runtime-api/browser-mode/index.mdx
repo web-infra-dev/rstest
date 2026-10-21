@@ -15,7 +15,7 @@ Browser Mode API 由 [@rstest/browser](https://github.com/web-infra-dev/rstest/t
 
 以下是 `@rstest/browser` 当前导出的 API：
 
-- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` 查询入口（仅查询）
+- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` 查询和 DOM 转换入口
 - [`Locator`](/api/runtime-api/browser-mode/locator) - 链式查询与交互的核心类
 - [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage) - `page` 的类型定义
 - [`setTestIdAttribute`](/api/runtime-api/browser-mode/locator#settestidattribute) - 配置 `getByTestId()` 使用的属性名
@@ -26,11 +26,11 @@ Browser Mode API 由 [@rstest/browser](https://github.com/web-infra-dev/rstest/t
 
 当你在 Browser Mode 测试里导入 `@rstest/browser`（例如 `import { page } from '@rstest/browser'`）时，`expect` 会自动具备 `element` 能力。
 
-它的职责是对 `Locator` 执行 web-first assertion（带自动等待），例如 `toBeVisible`、`toHaveText`。
+它的职责是对 `Locator` 或 DOM `Element` 执行 web-first assertion（带自动等待），例如 `toBeVisible`、`toHaveText`。
 
 两者关系可以理解为：`@rstest/browser` 负责**找元素和操作元素**，`expect.element` 负责**验证元素状态**。
 
-- [`expect.element(locator)`](/api/runtime-api/browser-mode/assertion) - 对 `Locator` 执行自动等待断言
+- [`expect.element(target)`](/api/runtime-api/browser-mode/assertion) - 对 `Locator` 或 DOM `Element` 执行自动等待断言
 
 ## 示例：查询、交互与断言
 

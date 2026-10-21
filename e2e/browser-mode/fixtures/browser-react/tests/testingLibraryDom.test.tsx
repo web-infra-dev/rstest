@@ -2,6 +2,7 @@
  * This test demonstrates using @rstest/browser-react with @testing-library/dom
  * for DOM queries. This is the recommended approach for browser mode testing.
  */
+import { page } from '@rstest/browser';
 import { act, render } from '@rstest/browser-react';
 import { describe, expect, it } from '@rstest/core';
 import {
@@ -14,6 +15,48 @@ import userEvent from '@testing-library/user-event';
 import { App, Button, Counter } from '../src/App';
 
 describe('@rstest/browser-react + @testing-library/dom', () => {
+  it('uses Testing Library elements with native actions and retried assertions', async () => {
+    const { container } = await render(<Counter />);
+    const increment = getByRole(container, 'button', { name: 'Increment' });
+    const count = getByTestId(container, 'count');
+    const originalHtml = container.outerHTML;
+    const button = page.elementLocator(increment);
+    expect(container.outerHTML).toBe(originalHtml);
+
+    await act(() => button.click());
+    await expect.element(count).toHaveText('1');
+    await expect.element(increment).toHaveRole('button');
+    await expect
+      .element(page.elementLocator(container).getByRole('button'))
+      .toHaveCount(2);
+
+    await act(() => page.elementLocator(increment).click());
+    await expect.element(count).toHaveText('2');
+    await expect
+      .element(page.locator('.counter').filter({ has: button }))
+      .toHaveCount(1);
+  });
+
+  it('keeps element identity when React replaces or unmounts a node', async () => {
+    const { container, rerender, unmount } = await render(
+      <Button key="original">Save</Button>,
+    );
+    const original = getByRole(container, 'button', { name: 'Save' });
+    const locator = page.elementLocator(original);
+    await expect.element(locator).toBeAttached();
+
+    await rerender(<Button key="replacement">Save</Button>);
+    const replacement = getByRole(container, 'button', { name: 'Save' });
+    expect(replacement).not.toBe(original);
+    await expect.element(locator).toBeDetached();
+    await expect.element(original).toBeDetached();
+    await expect.element(replacement).toBeAttached();
+    await expect(locator.click({ timeout: 50 })).rejects.toThrow();
+
+    await unmount();
+    await expect.element(replacement).toBeDetached();
+  });
+
   it('should work with getByRole query', async () => {
     const { container } = await render(<App />);
 

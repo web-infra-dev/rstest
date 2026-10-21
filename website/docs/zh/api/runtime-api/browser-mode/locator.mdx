@@ -45,9 +45,9 @@ const submitButton = page.getByRole('button', { name: 'Submit' });
 
 ## BrowserPage
 
-- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'>`
+- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator }`
 
-`BrowserPage` 是 `page` 的类型定义，只暴露查询入口，不包含 `click`、`fill` 等交互方法。
+`BrowserPage` 是 `page` 的类型定义，提供查询入口和 DOM 到 Locator 的转换，不包含 `click`、`fill` 等交互方法。
 
 也就是说，你需要先通过 `page` 拿到 `Locator`，再在 `Locator` 上调用交互和断言。
 
@@ -136,6 +136,26 @@ const helpIcon = page.getByTitle('Help');
 ```ts
 const settingsPanel = page.getByTestId('settings-panel');
 ```
+
+### elementLocator
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **类型：** `(element: Element) => Locator`
+
+将当前测试文档中的 DOM `Element` 同步转换为 Locator。这样可以把 Testing Library 或第三方工具返回的元素用于真实浏览器操作和 Rstest 断言，支持 HTML、SVG 以及 shadow DOM 中的元素。
+
+```ts
+import { getByRole } from '@testing-library/dom';
+
+const button = getByRole(document.body, 'button', { name: 'Save' });
+await page.elementLocator(button).click();
+await expect.element(button).toBeEnabled();
+```
+
+Locator 始终指向原始元素，不会修改 DOM 属性。组件替换节点后，这个 Locator 仍指向旧节点：断言元素已卸载会通过，交互操作会等待原节点重新挂载或超时。如果需要在重渲染后重新查找元素，请使用 `page.getByRole()` 等查询 Locator。
+
+不接受其他文档或 iframe 中的元素。当前文档中尚未挂载的元素可以提前转换。
 
 ## 配置 API
 

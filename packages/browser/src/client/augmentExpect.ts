@@ -97,6 +97,6 @@ declare module '@rstest/core' {
   }
 
   interface ExpectStatic {
-    element: (locator: Locator) => BrowserElementExpect;
+    element: (locator: Locator | Element) => BrowserElementExpect;
   }
 }

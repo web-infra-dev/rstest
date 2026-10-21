@@ -103,6 +103,16 @@ class FakeFrameLocator {
 }
 
 describe('compilePlaywrightLocator', () => {
+  it('resolves element identities within the runner frame', () => {
+    const frame = new FakeFrameLocator();
+    const result = compilePlaywrightLocator(frame as any, {
+      steps: [{ type: 'element', id: 'document-id:0' }],
+    }) as unknown as FakeLocator;
+    expect(result.ops).toEqual([
+      { name: 'frame.locator', args: ['rstest-element=document-id:0'] },
+    ]);
+  });
+
   it('should compile nested filter({ has }) and and/or steps recursively', () => {
     const ir: BrowserLocatorIR = {
       steps: [

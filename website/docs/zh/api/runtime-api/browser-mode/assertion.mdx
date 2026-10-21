@@ -1,6 +1,6 @@
 ---
 title: Assertion
-description: expect.element 是 Browser Mode 中用于 Locator 断言的 API。它接收 Locator，返回可链式调用的断言对象。
+description: expect.element 是 Browser Mode 中用于 DOM 断言的 API。它接收 Locator 或 DOM Element，返回可链式调用的断言对象。
 overviewHeaders: [2, 3]
 ---
 
@@ -8,7 +8,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Assertion
 
-`expect.element` 是 Browser Mode 中用于 [Locator](/api/runtime-api/browser-mode/locator) 断言的 API。它接收 `Locator`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
+`expect.element` 是 Browser Mode 中用于 DOM 断言的 API。它接收 [Locator](/api/runtime-api/browser-mode/locator) 或 DOM `Element`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
 
 :::tip 自动重试
 使用 Playwright provider 时，所有 `expect.element` matcher 都会自动重试，直到断言通过或超时。你不需要手写 `waitFor` 或轮询逻辑——只需断言期望状态，框架会自动处理等待。
@@ -40,7 +40,7 @@ test('asserts element states in browser mode', async () => {
 ## 类型签名
 
 ```ts
-expect.element(locator: Locator): BrowserElementExpect
+expect.element(target: Locator | Element): BrowserElementExpect
 ```
 
 ## 自动重试与超时
@@ -98,8 +98,24 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 
 ## 输入约束
 
-- `locator` 必须是 `@rstest/browser` 返回的 `Locator`。这样运行时才能识别并回放完整查询链路；手写对象或其他库的 locator 无法被这套机制解析。
+- 目标必须是 Rstest `Locator` 或当前测试文档中的 DOM `Element`。不支持手写对象或其他库的 locator。
 - 在非 Browser Mode 中，`expect.element` 不可用。因为它依赖 Browser Mode 的浏览器运行时与通信通道来执行元素断言；纯 Node 测试环境只支持普通 `expect(value)` 断言。
+
+## DOM 元素 \{#dom-elements}
+
+<ApiMeta addedVersion="0.12.5" />
+
+`expect.element()` 也接受 Testing Library 或原生 DOM 查询返回的元素。它会通过 [`page.elementLocator()`](/api/runtime-api/browser-mode/locator#elementlocator) 转换元素，沿用 Locator 断言的重试和超时行为。
+
+```ts
+import { getByRole } from '@testing-library/dom';
+
+const button = getByRole(document.body, 'button', { name: 'Save' });
+await expect.element(button).toBeEnabled();
+await expect.element(button).not.toBeDisabled();
+```
+
+每次重试都检查同一个元素。如果重渲染替换了节点，请用查询 Locator 查找新节点。不接受其他文档或 iframe 中的元素。
 
 ## 截图匹配 \{#screenshot-matching}
 
