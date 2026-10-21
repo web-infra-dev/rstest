@@ -140,8 +140,6 @@ npx playwright install chromium
 
 Browser driver provider. Currently only [Playwright](https://playwright.dev/) is supported.
 
-Mixing multiple providers in the same test run is currently not supported.
-
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -377,9 +375,9 @@ export default defineConfig({
 - **Default:** `{}`
 - **CLI:** `--browser.providerOptions.*`
 
-Provider-specific options passed through to the selected browser provider. Rstest does not validate or interpret the contents of this object — it is forwarded as-is to the provider at both browser launch and context creation time.
+Playwright options passed through to browser launch and context creation. Rstest does not validate or interpret the contents of this object — it forwards the values as-is to Playwright.
 
-The structure of `providerOptions` is defined by each provider. See the [Provider options](#provider-options) section below for details.
+See [Playwright provider options](#provider-options) below for the supported fields.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -397,7 +395,7 @@ export default defineConfig({
 });
 ```
 
-You can also pass nested provider options from the CLI:
+You can also pass nested Playwright options from the CLI:
 
 ```bash
 npx rstest --browser.providerOptions.launch.channel=chrome
@@ -500,7 +498,7 @@ In one `rstest` process, all Browser Mode projects must share the same browser l
 - `headless`
 - `providerOptions`
 
-This means mixing multiple providers, or running Chromium/Firefox/WebKit together in the same run, is not supported yet.
+Each run uses one browser engine for all Browser Mode projects, so Chromium, Firefox, and WebKit must be run in separate executions.
 
 For cross-browser coverage, run tests in separate executions (for example, in a CI matrix):
 
