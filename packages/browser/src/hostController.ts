@@ -918,9 +918,11 @@ export const runBrowserController = async (
   const dispatchBrowserRpcRequest = async ({
     request,
     target,
+    runId,
   }: {
     request: BrowserRpcRequest;
     target?: BrowserDispatchRequest['target'];
+    runId?: string;
   }): Promise<unknown> => {
     const timeoutFallbackMs = maxTestTimeoutForRpc;
     const screenshotTimeout =
@@ -988,7 +990,10 @@ export const runBrowserController = async (
           }
         : request;
 
-    const { runnerPage, containerPage } = resolveDispatchPages(target);
+    const { runnerPage, containerPage, isRunCurrent } = resolveDispatchPages(
+      target,
+      runId,
+    );
 
     if (target?.sessionId && !runnerPage) {
       throw new Error(
@@ -1005,6 +1010,7 @@ export const runBrowserController = async (
         containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
         request: dispatchRequest,
+        isRequestCurrent: isRunCurrent,
         timeoutFallbackMs,
       });
 
@@ -1139,6 +1145,7 @@ export const runBrowserController = async (
       return dispatchBrowserRpcRequest({
         request,
         target: dispatchRequest.target,
+        runId: dispatchRequest.runId,
       });
     },
   );

@@ -29,12 +29,14 @@ export const playwrightProviderImplementation: BrowserProviderImplementation = {
     containerPage,
     runnerPage,
     request,
+    isRequestCurrent,
     timeoutFallbackMs,
   }): Promise<unknown> {
     return dispatchPlaywrightBrowserRpc({
       containerPage: containerPage as Page | undefined,
       runnerPage: runnerPage as Page | undefined,
       request,
+      isRequestCurrent,
       timeoutFallbackMs,
     });
   },

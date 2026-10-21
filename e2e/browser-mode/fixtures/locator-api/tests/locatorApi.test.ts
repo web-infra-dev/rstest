@@ -330,3 +330,129 @@ test.concurrent(
     target.remove();
   },
 );
+
+test('keyboard presses use the current focus and native events', async () => {
+  const input = document.createElement('input');
+  document.body.append(input);
+  const events: {
+    type: string;
+    key: string;
+    shift: boolean;
+    trusted: boolean;
+  }[] = [];
+  for (const type of ['keydown', 'keyup'] as const) {
+    input.addEventListener(type, (event) => {
+      events.push({
+        type,
+        key: event.key,
+        shift: event.shiftKey,
+        trusted: event.isTrusted,
+      });
+    });
+  }
+  try {
+    await page.elementLocator(input).focus();
+    await page.keyboard.press('Shift+A', { delay: 5 });
+    await page.keyboard.press('b');
+    await expect.element(input).toHaveValue('Ab');
+    expect(events).toEqual([
+      { type: 'keydown', key: 'Shift', shift: true, trusted: true },
+      { type: 'keydown', key: 'A', shift: true, trusted: true },
+      { type: 'keyup', key: 'A', shift: true, trusted: true },
+      { type: 'keyup', key: 'Shift', shift: false, trusted: true },
+      { type: 'keydown', key: 'b', shift: false, trusted: true },
+      { type: 'keyup', key: 'b', shift: false, trusted: true },
+    ]);
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Backspace');
+    await expect.element(input).toHaveValue('');
+    await page.keyboard.press('x');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('y');
+    await expect.element(input).toHaveValue('yx');
+  } finally {
+    input.remove();
+  }
+});
+
+test('keyboard tab follows browser focus order in both directions', async () => {
+  const container = document.createElement('div');
+  container.innerHTML =
+    '<input aria-label="First"><input disabled><input aria-label="Second"><button>Last</button>';
+  document.body.append(container);
+  const first = page.elementLocator(container).getByLabel('First');
+  const second = page.elementLocator(container).getByLabel('Second');
+  const last = page.elementLocator(container).getByRole('button');
+  try {
+    await first.focus();
+    await page.keyboard.tab();
+    await expect.element(second).toBeFocused();
+    await page.keyboard.tab();
+    await expect.element(last).toBeFocused();
+    await page.keyboard.tab({ shift: true });
+    await expect.element(second).toBeFocused();
+    await page.keyboard.tab({ shift: true });
+    await expect.element(first).toBeFocused();
+    await page.keyboard.press('a');
+    await expect.element(first).toHaveValue('a');
+  } finally {
+    container.remove();
+  }
+});
+
+test('keyboard can unblock a locator waiting for actionability', async () => {
+  const input = document.createElement('input');
+  const button = document.createElement('button');
+  button.disabled = true;
+  button.textContent = 'Continue';
+  let clicked = false;
+  button.onclick = () => {
+    clicked = true;
+  };
+  input.onkeydown = (event) => {
+    if (event.key === 'Escape') {
+      button.disabled = false;
+    }
+  };
+  document.body.append(input, button);
+  try {
+    await page.elementLocator(input).focus();
+    await Promise.all([
+      page.elementLocator(button).click({ timeout: 1000 }),
+      page.keyboard.press('Escape'),
+    ]);
+    expect(clicked).toBe(true);
+  } finally {
+    input.remove();
+    button.remove();
+  }
+});
+
+test('headed keyboard routes input to the runner after the container takes focus', async () => {
+  if (window.parent === window) {
+    return;
+  }
+  const input = document.createElement('input');
+  const outside = window.parent.document.createElement('input');
+  document.body.append(input);
+  window.parent.document.body.append(outside);
+  let receivedEscape = false;
+  const onKeyDown = (event: KeyboardEvent) => {
+    receivedEscape = event.key === 'Escape' && event.isTrusted;
+  };
+  document.addEventListener('keydown', onKeyDown);
+  try {
+    await page.elementLocator(input).focus();
+    await page.keyboard.press('a');
+    outside.focus();
+    expect(window.parent.document.activeElement).toBe(outside);
+    await page.keyboard.press('Escape');
+    expect(receivedEscape).toBe(true);
+    await expect.element(input).toHaveValue('a');
+    expect(outside.value).toBe('');
+  } finally {
+    document.removeEventListener('keydown', onKeyDown);
+    input.remove();
+    outside.remove();
+  }
+});

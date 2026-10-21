@@ -188,6 +188,21 @@ describe('browser protocol types', () => {
       expect(request.method).toBe('click');
     });
 
+    it('accepts keyboard RPC requests', () => {
+      const request = validateBrowserRpcRequest({
+        id: 'rpc-keyboard',
+        testPath: '/tests/example.test.ts',
+        projectName: 'default',
+        runId: 'run-1',
+        kind: 'keyboard',
+        locator: { steps: [] },
+        method: 'press',
+        args: ['Tab'],
+      });
+      expect(request.kind).toBe('keyboard');
+      expect(request.args).toEqual(['Tab']);
+    });
+
     it('throws when payload shape is invalid', () => {
       expect(() => validateBrowserRpcRequest(null)).toThrow(
         'Invalid browser RPC request: payload must be an object',

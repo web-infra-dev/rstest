@@ -81,7 +81,7 @@ export type BrowserRpcRequest = {
   testPath: string;
   /** Project identity; paths alone do not distinguish overlapping projects. */
   projectName: string;
-  kind: 'locator' | 'expect' | 'screenshot' | 'config';
+  kind: 'locator' | 'expect' | 'screenshot' | 'config' | 'keyboard';
   locator: BrowserLocatorIR;
   method: string;
   args: unknown[];
@@ -158,7 +158,8 @@ export const validateBrowserRpcRequest = (
     kind !== 'locator' &&
     kind !== 'expect' &&
     kind !== 'screenshot' &&
-    kind !== 'config'
+    kind !== 'config' &&
+    kind !== 'keyboard'
   ) {
     throw new Error(
       `Invalid browser RPC request: unsupported kind ${JSON.stringify(kind)}`,
