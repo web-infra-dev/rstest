@@ -41,17 +41,14 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 - Console interception is per test file and must restore the original console methods in `finally`.
 - A window `error` event with a non-null `error` value or an escaping `unhandledrejection` fails the file even when every test passed. A browser report with no error object is logged to the console instead. The runner deliberately yields macrotasks before finalizing each file result so late-dispatched rejections are still observed — the timing rationale is commented in `runner.ts`.
 
-## Provider-agnostic design
+## Browser provider support
 
-Browser mode must stay provider-neutral at the framework boundary.
+Playwright is the only supported Browser Mode provider. Keep the public provider choice closed until another implementation has a concrete user need.
 
-- Keep shared config, protocol, scheduling, and public APIs provider-agnostic.
-- Treat `browser.providerOptions` as an opaque passthrough at the framework boundary.
-- Do not export provider-owned config types from `@rstest/browser` public entrypoints.
-- Do not reference optional peer provider modules from public declarations, including `import type` and `import('pkg')` in type positions.
-- Keep provider-specific behavior, config decoding, and runtime quirks inside provider implementations whenever possible.
-- Prefer direct passthrough to provider APIs over provider-specific post-init translation layers; promote behavior into shared contracts only when it is meaningful across multiple providers.
-- When richer DX is needed later, prefer provider-owned helpers or separate optional type entrypoints over coupling the main package surface to a specific provider.
+- Keep `browser.providerOptions` opaque while it passes through core config, and decode its Playwright fields in the provider implementation.
+- Do not export Playwright-owned config types from `@rstest/browser` public entrypoints or reference the optional `playwright` peer in public declarations.
+- Keep Playwright launch, RPC, and coverage behavior within its implementation where practical.
+- Do not generalize shared config, protocol, or scheduling for a hypothetical provider. If another provider is implemented, first identify which behaviors and page primitives are genuinely shared.
 
 ## Commands
 
