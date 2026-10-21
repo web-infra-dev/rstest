@@ -7,6 +7,53 @@ import { runRstestCli } from '../scripts';
 const fixturePath = join(__dirname, 'fixtures');
 
 describe('coverage istanbul-specific behavior', () => {
+  it('loads report dependencies only when generating reports', async ({
+    onTestFinished,
+  }) => {
+    const reportsDirectory = 'test-temp-istanbul-lazy-reports';
+    onTestFinished(() => fs.removeSync(join(fixturePath, reportsDirectory)));
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'node',
+      args: [
+        '--input-type=module',
+        '--eval',
+        `import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { sep } from 'node:path';
+import { CoverageProvider } from '@rstest/coverage-istanbul';
+
+const require = createRequire(import.meta.url);
+const reportingModules = () => Object.keys(require.cache).filter((file) =>
+  file.split(sep).some((part) =>
+    part === 'istanbul-lib-report' || part === 'istanbul-reports',
+  ),
+);
+assert.deepEqual(reportingModules(), []);
+
+const provider = new CoverageProvider({
+  reporters: ['json'],
+  reportsDirectory: ${JSON.stringify(reportsDirectory)},
+});
+provider.init();
+assert.deepEqual(provider.collectRaw(), { full: [], packed: [] });
+assert.deepEqual(reportingModules(), []);
+await provider.generateReports(provider.createCoverageMap());
+assert(reportingModules().length > 0);
+provider.cleanup();`,
+        '--',
+      ],
+      options: { nodeOptions: { cwd: fixturePath } },
+    });
+
+    await expectExecSuccess();
+    expect(
+      fs.readJsonSync(
+        join(fixturePath, reportsDirectory, 'coverage-final.json'),
+      ),
+    ).toEqual({});
+  });
+
   it('preserves shared-module counts across isolated fork waves', async ({
     onTestFinished,
   }) => {
