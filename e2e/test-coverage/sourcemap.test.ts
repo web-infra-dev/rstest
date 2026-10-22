@@ -3,7 +3,7 @@ import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
 import { normalize } from 'pathe';
 import { x } from 'tinyexec';
-import { runRstestCli } from '../scripts';
+import { getCoverageSummaryEntry, runRstestCli } from '../scripts';
 import { coverageProviders } from './providers';
 
 const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
@@ -146,28 +146,34 @@ for (const provider of coverageProviders) {
             });
             await untested.expectExecSuccess();
 
-            const summary = fs.readJsonSync(
+            const summary: Record<
+              string,
+              Record<string, { total: number; covered: number }>
+            > = fs.readJsonSync(
               join(fixturePath, reportsDirectory, 'coverage-summary.json'),
             );
             const sourcePath = normalize(join(fixturePath, 'src/sourcemap.ts'));
             const ignoredPath = normalize(
               join(fixturePath, 'src/untested.jsx'),
             );
-            expect(Object.keys(summary).sort()).toEqual(
+            expect(Object.keys(summary).map(normalize).sort()).toEqual(
               ['total', sourcePath, ignoredPath].sort(),
             );
-            expect(summary[sourcePath]).toMatchObject({
+            const sourceSummary = getCoverageSummaryEntry(summary, sourcePath);
+            expect(sourceSummary).toMatchObject({
               lines: { covered: 0 },
               statements: { covered: 0 },
               functions: { covered: 0 },
               branches: { covered: 0 },
             });
-            expect(summary[sourcePath].statements.total).toBeGreaterThan(0);
-            expect(summary[ignoredPath]).toMatchObject({
-              statements: { covered: 0 },
-              functions: { total: 0, covered: 0 },
-              branches: { total: 0, covered: 0 },
-            });
+            expect(sourceSummary?.statements?.total).toBeGreaterThan(0);
+            expect(getCoverageSummaryEntry(summary, ignoredPath)).toMatchObject(
+              {
+                statements: { covered: 0 },
+                functions: { total: 0, covered: 0 },
+                branches: { total: 0, covered: 0 },
+              },
+            );
             const report = fs.readJsonSync(
               join(fixturePath, reportsDirectory, 'coverage-final.json'),
             );
