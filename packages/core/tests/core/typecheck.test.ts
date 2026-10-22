@@ -105,3 +105,13 @@ it.for([
     ).toHaveLength(1);
   },
 );
+
+it('separates compiler input paths from diagnostics', () => {
+  const result = parseDiagnostics(
+    'a.ts(1,1): error TS2322: Invalid type\n/project/a.ts\nC:/project/b.ts\n',
+    '/project',
+  );
+  expect(result.files).toEqual(['/project/a.ts', 'C:/project/b.ts']);
+  expect(result.diagnostics).toHaveLength(1);
+  expect(result.unparsed).toEqual([]);
+});

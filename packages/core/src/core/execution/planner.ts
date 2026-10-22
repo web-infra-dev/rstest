@@ -66,7 +66,6 @@ export type NodeBuild = {
  */
 export interface TestPlanner extends BrowserRunPlan {
   readonly typecheckProjects: TypecheckProject[];
-  discoverTypeTests(fileFilters?: string[]): Promise<TypecheckProject[]>;
   /** The resolved plan: browser + node runnable subsets and their entries. */
   getPlan(): ProjectPlan;
   hasNodeTestsToRun(): boolean;
@@ -96,6 +95,7 @@ export async function createTestPlanner(
   }: CreateTestPlannerOptions,
 ): Promise<TestPlanner> {
   const configuredProjects = [...context.projects];
+  if (isWatchMode) await discoverTypeTests(context, configuredProjects);
   const projectPlanState = createProjectPlanState({
     context,
     isWatchMode,
@@ -226,8 +226,6 @@ export async function createTestPlanner(
 
   return {
     typecheckProjects,
-    discoverTypeTests: (fileFilters = context.fileFilters) =>
-      discoverTypeTests(context, typeProjects, fileFilters),
     ...browserPlan,
     getPlan,
     hasNodeTestsToRun: () => getPlan().nodeProjectsToRun.length > 0,

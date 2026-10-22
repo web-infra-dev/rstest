@@ -27,4 +27,4 @@ interface TypecheckOptions {
 
 `checker` resolves the project's installed `typescript` or `vue-tsc` executable. `tsconfig` is relative to the project root and defaults to `tsconfig.json`. Rstest checks with `noEmit` and overrides `noCheck: true` to keep assertions active. Every discovered type test must be a root file of that config. Solution-style configs containing only project references need a dedicated test tsconfig with `files` or `include`.
 
-See [Type testing](/guide/advanced/type-testing) for assertions, collection limits, watch behavior, and migration of declaration tests.
+See [Type testing](/guide/advanced/type-testing) for assertions, collection limits, compiler behavior, and migration of declaration tests.

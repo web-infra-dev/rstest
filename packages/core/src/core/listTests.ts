@@ -427,7 +427,6 @@ export async function listTests(
       const executor = createTypecheckExecutor(
         context,
         planner.typecheckProjects,
-        planner.discoverTypeTests,
       );
       try {
         list.push(

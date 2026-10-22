@@ -27,4 +27,4 @@ interface TypecheckOptions {
 
 `checker` 解析项目安装的 `typescript` 或 `vue-tsc` 可执行文件。`tsconfig` 相对项目根目录解析，默认为 `tsconfig.json`。Rstest 使用 `noEmit` 检查，并覆盖 `noCheck: true`，确保类型断言生效。所有发现的类型测试都必须是该配置的根文件。只有项目引用的 solution-style 配置，需要另建包含 `files` 或 `include` 的测试 tsconfig。
 
-断言、收集限制、watch 行为和声明测试迁移见[类型测试](/guide/advanced/type-testing)。
+断言、收集限制、编译器行为和声明测试迁移见[类型测试](/guide/advanced/type-testing)。

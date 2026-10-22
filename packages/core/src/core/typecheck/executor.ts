@@ -1,86 +1,36 @@
-import { readFile, stat } from 'node:fs/promises';
-import { watch, type FSWatcher } from 'chokidar';
+import { readFile } from 'node:fs/promises';
 import { normalize } from 'pathe';
 import type {
   ExecutorCycleOutcome,
-  ExecutorInvalidationCallback,
   SerializedError,
   TestExecutor,
   TestInfo,
   TestResult,
 } from '../../types';
-import { logger, toError, getFileTaskId } from '../../utils';
+import { toError, getFileTaskId } from '../../utils';
 import type { Rstest } from '../rstest';
 import { createRunnerEventSink } from '../execution/runnerEventSink';
-import { collectTypeTests, type TypeTestFile } from './collect';
+import { collectTypeTests } from './collect';
 import { createTypeChecker } from './checker';
 import type { TypecheckProject } from './plan';
 
 export function createTypecheckExecutor(
   context: Rstest,
   initialPlans: TypecheckProject[],
-  discover: (fileFilters?: string[]) => Promise<TypecheckProject[]>,
 ): TestExecutor {
   const projects = initialPlans.map(({ project }) => project);
   const checkers = new Map<string, ReturnType<typeof createTypeChecker>>();
-  const watchers: FSWatcher[] = [];
-  let sourceWatcher: FSWatcher | undefined;
-  let dependencyWatcher: FSWatcher | undefined;
-  let invalidated: ExecutorInvalidationCallback | undefined;
   let closed = false;
-  let revision = 0;
-  let previousPaths = initialPlans.flatMap(({ testPaths }) => testPaths);
-  const changed = () => {
-    revision++;
-    if (!closed && invalidated) {
-      Promise.resolve(invalidated({ isFirstBuild: false })).catch((error) =>
-        logger.error(toError(error)),
-      );
-    }
-  };
   const close = async () => {
     closed = true;
     await Promise.all([
-      ...watchers.map((watcher) => watcher.close()),
       ...[...checkers.values()].map((checker) => checker.close()),
     ]);
   };
   return {
     name: 'typecheck',
     projects,
-    async init() {
-      if (context.command !== 'watch') return;
-      const watcher = watch(
-        projects.map((project) => project.normalizedConfig.root),
-        {
-          ignoreInitial: true,
-          ignored:
-            /(?:^|[/\\])(?:node_modules|\.git|dist|\.rstest|\.rstest-reports)(?:[/\\]|$)/,
-        },
-      );
-      sourceWatcher = watcher;
-      dependencyWatcher = watch([], { ignoreInitial: true });
-      watchers.push(watcher, dependencyWatcher);
-      watcher.on('all', (_event, file) => {
-        // Custom JSON report files must not trigger the run that writes them.
-        // Imported JSON and extended configs are watched explicitly below.
-        if (
-          /\.(?:[cm]?[jt]sx?|vue)$/.test(file) ||
-          /(?:^|[/\\])(?:tsconfig[^/\\]*\.json|package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/.test(
-            file,
-          )
-        )
-          changed();
-      });
-      dependencyWatcher.on('all', changed);
-      await new Promise<void>((resolve, reject) => {
-        watcher.once('ready', resolve);
-        watcher.once('error', reject);
-      });
-    },
-    onInvalidate(callback) {
-      invalidated = callback;
-    },
+    async init() {},
     async collect() {
       return {
         list: await Promise.all(
@@ -96,7 +46,7 @@ export function createTypecheckExecutor(
         ),
       };
     },
-    async runCycle(options) {
+    async runCycle() {
       const started = performance.now();
       const outcome: ExecutorCycleOutcome = {
         results: [],
@@ -105,24 +55,7 @@ export function createTypecheckExecutor(
         testPaths: [],
         duration: { buildTime: 0, testTime: 0 },
       };
-      const plans = await discover(options.fileFilters ?? context.fileFilters);
-      const nextPaths = plans.flatMap(({ testPaths }) => testPaths);
-      outcome.deletedTestPaths = (
-        await Promise.all(
-          previousPaths.map(async (file) => {
-            try {
-              await stat(file);
-              return undefined;
-            } catch {
-              return file;
-            }
-          }),
-        )
-      ).filter((file): file is string => file !== undefined);
-      previousPaths = [...new Set([...previousPaths, ...nextPaths])].filter(
-        (file) => !outcome.deletedTestPaths!.includes(file),
-      );
-      for (const { project, testPaths } of plans) {
+      for (const { project, testPaths } of initialPlans) {
         if (closed || !testPaths.length) continue;
         try {
           let checker = checkers.get(project.environmentName);
@@ -130,42 +63,19 @@ export function createTypecheckExecutor(
             checker = createTypeChecker(project);
             checkers.set(project.environmentName, checker);
           }
-          let files: TypeTestFile[];
-          let diagnostics: Awaited<ReturnType<typeof checker.check>>;
-          for (;;) {
-            const { files: dependencies, directories } =
-              await checker.prepare(testPaths);
-            dependencyWatcher?.add(dependencies);
-            sourceWatcher?.add(directories);
-            const before = revision;
-            const stamps = async () =>
-              Promise.all(
-                dependencies.map(async (file) => {
-                  try {
-                    const info = await stat(file);
-                    return `${info.mtimeMs}:${info.size}`;
-                  } catch {
-                    return 'missing';
-                  }
-                }),
-              );
-            const versions = await stamps();
-            files = await Promise.all(
+          const [files, diagnostics] = await Promise.all([
+            Promise.all(
               testPaths.map((testPath) => collectTypeTests(testPath, project)),
+            ),
+            checker.check(testPaths),
+          ]);
+          const sources = await Promise.all(
+            files.map((file) => readFile(file.testPath, 'utf8')),
+          );
+          if (files.some((file, index) => file.source !== sources[index]))
+            throw new Error(
+              'Type test files changed during checking. Run the tests again.',
             );
-            diagnostics = await checker.check();
-            const current = await stamps();
-            const sources = await Promise.all(
-              files.map((file) => readFile(file.testPath, 'utf8')),
-            );
-            if (
-              before === revision &&
-              versions.every((value, index) => value === current[index]) &&
-              files.every((file, index) => file.source === sources[index])
-            )
-              break;
-            if (closed) return outcome;
-          }
           const sink = createRunnerEventSink(context, project.normalizedConfig);
           const errorsByCase = new Map<string, SerializedError[]>();
           const pattern =

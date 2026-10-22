@@ -11,6 +11,13 @@ export async function discoverTypeTests(
   projects: InternalProjectContext[],
   fileFilters: string[] | undefined = context.fileFilters,
 ): Promise<TypecheckProject[]> {
+  if (
+    context.command === 'watch' &&
+    projects.some((project) => project.normalizedConfig.typecheck.enabled)
+  )
+    throw new Error(
+      'Type testing does not support watch mode. Use "rstest run --typecheck" instead.',
+    );
   const plans = await Promise.all(
     projects
       .filter((project) => project.normalizedConfig.typecheck.enabled)

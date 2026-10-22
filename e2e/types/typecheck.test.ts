@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile, cp } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import { expect, test } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
@@ -119,35 +120,20 @@ test('rejects a type test omitted from the tsconfig', async ({
   expect(cli.log).toContain('not included in');
 });
 
-test('rechecks imported types in watch mode', async ({ onTestFinished }) => {
-  const cwd = await setup(onTestFinished);
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    options: { nodeOptions: { cwd } },
-    args: ['watch', '--typecheck.only'],
-  });
-  await cli.waitForStdout('2 passed');
-  const file = join(cwd, 'source.ts');
-  const original = await readFile(file, 'utf8');
-  await writeFile(
-    file,
-    'export const twice = (value: number): string => String(value * 2);',
-  );
-  await cli.waitForStdout('1 failed');
-  cli.stdout = '';
-  await writeFile(file, original);
-  await cli.waitForStdout('2 passed');
-  cli.stdout = '';
-  await writeFile(
-    join(cwd, 'new.test-d.ts'),
-    `import {test, expectTypeOf} from '@rstest/core'; test('new case',()=> {expectTypeOf<string>().toBeString();});`,
-  );
-  await cli.waitForStdout('3 passed');
-  cli.stdout = '';
-  await rm(join(cwd, 'new.test-d.ts'));
-  await cli.waitForStdout('2 passed');
-  await cli.killProcessTree();
-});
+test.for([false, true])(
+  'rejects type testing in watch mode (only: %s)',
+  async (only, { onTestFinished }) => {
+    const cwd = await setup(onTestFinished);
+    const { expectExecFailed, cli } = await runRstestCli({
+      command: 'rstest',
+      options: { nodeOptions: { cwd } },
+      args: ['watch', ...(only ? ['--typecheck.only'] : [])],
+    });
+    await expectExecFailed();
+    expect(cli.log).toContain('Type testing does not support watch mode');
+    expect(cli.log).toContain('rstest run --typecheck');
+  },
+);
 
 test('checks browser projects on the host without launching a browser', async ({
   onTestFinished,
@@ -271,7 +257,7 @@ test('fails a checker that exits unsuccessfully without diagnostics', async ({
   );
   await writeFile(
     join(packageDir, 'compiler.cjs'),
-    `if (process.argv.includes('--showConfig')) console.log(JSON.stringify({files:['basic.test-d.ts']})); else if (process.argv.includes('--listFilesOnly')) console.log(require('node:path').resolve('basic.test-d.ts')); else {console.error('compiler crashed');process.exitCode=9;}`,
+    `console.error('compiler crashed');process.exitCode=9;`,
   );
   const { expectExecFailed, cli } = await runRstestCli({
     command: 'rstest',
@@ -327,13 +313,17 @@ test('round-trips type results through blob and merge-reports', async ({
   ).toBe(true);
 });
 
-test('overrides noCheck so a compiler-only config cannot silently pass assertions', async ({
+test('resolves inherited includes and overrides inherited noCheck', async ({
   onTestFinished,
 }) => {
   const cwd = await setup(onTestFinished);
   const config = JSON.parse(await readFile(join(cwd, 'tsconfig.json'), 'utf8'));
   config.compilerOptions.noCheck = true;
-  await writeFile(join(cwd, 'tsconfig.json'), JSON.stringify(config));
+  await writeFile(join(cwd, 'base.json'), JSON.stringify(config));
+  await writeFile(
+    join(cwd, 'tsconfig.json'),
+    JSON.stringify({ extends: './base.json' }),
+  );
   await writeFile(join(cwd, 'basic.test-d.ts'), source);
   const { expectExecFailed, cli } = await runRstestCli({
     command: 'rstest',
@@ -344,34 +334,78 @@ test('overrides noCheck so a compiler-only config cannot silently pass assertion
   expect(cli.log).toContain('TS2344');
 });
 
-test('watches extended configs outside the project root', async ({
+test('checks once per run and invalidates incremental results after edits', async ({
   onTestFinished,
 }) => {
   const cwd = await setup(onTestFinished);
-  const external = await mkdtemp(
-    join(__dirname, 'fixtures-test-typecheck-config-'),
-  );
-  onTestFinished(() => rm(external, { recursive: true, force: true }));
-  const base = join(external, 'base.json');
-  await writeFile(base, JSON.stringify({ compilerOptions: { strict: false } }));
-  const config = JSON.parse(await readFile(join(cwd, 'tsconfig.json'), 'utf8'));
-  delete config.compilerOptions.strict;
-  config.extends = base;
-  await writeFile(join(cwd, 'tsconfig.json'), JSON.stringify(config));
+  const require = createRequire(join(cwd, 'package.json'));
+  const metadataPath = require.resolve('typescript/package.json');
+  const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+  const compiler = join(dirname(metadataPath), metadata.bin.tsc);
+  const { mkdir } = await import('node:fs/promises');
+  const packageDir = join(cwd, 'node_modules/typescript');
+  await mkdir(packageDir, { recursive: true });
   await writeFile(
-    join(cwd, 'basic.test-d.ts'),
-    `import {test, assertType} from '@rstest/core'; test('strict null', () => { assertType<number>(undefined); });`,
+    join(packageDir, 'package.json'),
+    JSON.stringify({
+      name: 'typescript',
+      version: metadata.version,
+      bin: { tsc: 'compiler.cjs' },
+    }),
   );
-  const { cli } = await runRstestCli({
+  await writeFile(
+    join(packageDir, 'compiler.cjs'),
+    `
+const fs = require('node:fs');
+fs.appendFileSync('invocations.jsonl', JSON.stringify(process.argv.slice(2)) + '\\n');
+const result = require('node:child_process').spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], { stdio: 'inherit' });
+process.exit(result.status ?? 1);
+`,
+  );
+  const testFile = join(cwd, 'basic.test-d.ts');
+  const original = await readFile(testFile, 'utf8');
+  for (const [content, fails] of [
+    [original, false],
+    [source, true],
+    [original, false],
+  ] as const) {
+    await writeFile(testFile, content);
+    const run = await runRstestCli({
+      command: 'rstest',
+      options: { nodeOptions: { cwd } },
+      args: ['run', '--typecheck.only'],
+    });
+    if (fails) {
+      await run.expectExecFailed();
+      expect(run.cli.log).toContain('TS2344');
+    } else await run.expectExecSuccess();
+  }
+  const invocations = (await readFile(join(cwd, 'invocations.jsonl'), 'utf8'))
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  expect(invocations).toHaveLength(3);
+  for (const args of invocations) {
+    expect(args).toContain('--noEmit');
+    expect(args).toContain('--listFiles');
+  }
+});
+
+test('fails a discovered file omitted by the compiler due to extension precedence', async ({
+  onTestFinished,
+}) => {
+  const cwd = await setup(onTestFinished);
+  const config = JSON.parse(await readFile(join(cwd, 'tsconfig.json'), 'utf8'));
+  config.include = ['*.ts', '*.tsx'];
+  config.compilerOptions.jsx = 'preserve';
+  await writeFile(join(cwd, 'tsconfig.json'), JSON.stringify(config));
+  await writeFile(join(cwd, 'basic.test-d.tsx'), source);
+  const { expectExecFailed, cli } = await runRstestCli({
     command: 'rstest',
     options: { nodeOptions: { cwd } },
-    args: ['watch', '--typecheck.only'],
+    args: ['run', '--typecheck.only'],
   });
-  await cli.waitForStdout('1 passed');
-  await writeFile(base, JSON.stringify({ compilerOptions: { strict: true } }));
-  await cli.waitForStdout('1 failed');
-  cli.stdout = '';
-  await writeFile(base, JSON.stringify({ compilerOptions: { strict: false } }));
-  await cli.waitForStdout('1 passed');
-  await cli.killProcessTree();
+  await expectExecFailed();
+  expect(cli.log).toContain('Type test files were not checked by tsc');
+  expect(cli.log).toContain('basic.test-d.tsx');
 });

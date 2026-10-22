@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, normalize, resolve } from 'pathe';
-import { readTsconfig } from 'get-tsconfig';
+import { isFileIncluded, readTsconfig } from 'get-tsconfig';
 import type { InternalProjectContext, SerializedError } from '../../types';
 
 export interface TypeDiagnostic {
@@ -20,9 +20,11 @@ export function parseDiagnostics(
 ): {
   diagnostics: TypeDiagnostic[];
   unparsed: string[];
+  files: string[];
 } {
   const diagnostics: TypeDiagnostic[] = [];
   const unparsed: string[] = [];
+  const files: string[] = [];
   let current: TypeDiagnostic | undefined;
   for (const line of output.replace(/\r\n/g, '\n').split('\n')) {
     if (!line.trim()) continue;
@@ -50,19 +52,19 @@ export function parseDiagnostics(
       diagnostics.push(current);
     } else if (/^\s/.test(line) && current) {
       current.error.message += `\n${line}`;
+    } else if (isAbsolute(line)) {
+      current = undefined;
+      files.push(normalize(line));
     } else {
       current = undefined;
       unparsed.push(line);
     }
   }
-  return { diagnostics, unparsed };
+  return { diagnostics, unparsed, files };
 }
 
 export function createTypeChecker(project: InternalProjectContext): {
-  prepare(
-    testPaths: string[],
-  ): Promise<{ files: string[]; directories: string[] }>;
-  check(): Promise<TypeDiagnostic[]>;
+  check(testPaths: string[]): Promise<TypeDiagnostic[]>;
   close(): Promise<void>;
   readonly version: string;
 } {
@@ -77,7 +79,6 @@ export function createTypeChecker(project: InternalProjectContext): {
   let child: ChildProcess | undefined;
   let pending: Promise<unknown> | undefined;
   let closed = false;
-  let noCheck = false;
   let compiler: string;
   let version: string;
   try {
@@ -140,88 +141,42 @@ export function createTypeChecker(project: InternalProjectContext): {
   };
   return {
     version,
-    async prepare(testPaths: string[]) {
-      const config = await run(['--showConfig']);
-      if (config.code !== 0)
-        throw new Error(
-          `Cannot load type test config ${configPath}:\n${config.output}`,
-        );
-      const parsed: {
-        files?: string[];
-        compilerOptions?: { noCheck?: boolean };
-      } = JSON.parse(config.output);
-      noCheck = parsed.compilerOptions?.noCheck === true;
-      if (!Array.isArray(parsed.files))
-        throw new Error(
-          `Type test config ${configPath} has no root files. Solution-style configs require a test tsconfig with files/include.`,
-        );
-      const roots = new Set(
-        parsed.files.map((file) => resolve(dirname(configPath), file)),
-      );
-      const missing = testPaths.filter((file) => !roots.has(normalize(file)));
+    async check(testPaths: string[]) {
+      const config = readTsconfig(configPath, { typescriptVersion: false });
+      const missing = testPaths.filter((file) => !isFileIncluded(config, file));
       if (missing.length)
         throw new Error(
           `Type test files are not included in ${configPath}:\n${missing.join('\n')}`,
         );
-      const listing = await run(['--listFilesOnly']);
-      if (listing.code !== 0)
-        throw new Error(
-          `Cannot resolve type test dependencies:\n${listing.output}`,
-        );
-      const dependencies = listing.output
-        .split(/\r?\n/)
-        .filter((file) => isAbsolute(file));
-      const resolvedConfig = readTsconfig(configPath, {
-        typescriptVersion: false,
-      });
-      const configDependencies = resolvedConfig.sources ?? [configPath];
-      const metadata = new Set<string>();
-      for (const file of [...dependencies, ...configDependencies]) {
-        let directory = dirname(file);
-        while (dirname(directory) !== directory) {
-          metadata.add(resolve(directory, 'package.json'));
-          if (directory === root) break;
-          directory = dirname(directory);
-        }
-      }
-      const directories = (resolvedConfig.config.include ?? []).map(
-        (pattern) => {
-          const prefix = pattern.split(/[?*{[]/, 1)[0]!;
-          return resolve(
-            dirname(configPath),
-            prefix.endsWith('/') ? prefix : dirname(prefix),
-          );
-        },
-      );
-      return {
-        files: [
-          ...new Set([
-            configPath,
-            ...dependencies,
-            ...configDependencies,
-            ...metadata,
-          ]),
-        ],
-        directories,
-      };
-    },
-    async check() {
       await mkdir(dirname(cacheFile), { recursive: true });
       const { output, code } = await run([
         '--noEmit',
-        ...(noCheck ? ['--noCheck', 'false'] : []),
+        ...(config.config.compilerOptions?.noCheck
+          ? ['--noCheck', 'false']
+          : []),
+        '--listFiles',
         '--locale',
         'en',
         '--incremental',
         '--tsBuildInfoFile',
         cacheFile,
       ]);
-      const { diagnostics, unparsed } = parseDiagnostics(output, root);
+      const { diagnostics, unparsed, files } = parseDiagnostics(output, root);
       if (unparsed.length || (code !== 0 && !diagnostics.length)) {
         throw new Error(
           `Type checker failed (exit ${code}):\n${output || 'No diagnostics were produced.'}`,
         );
       }
+      // The compiler is authoritative: an included file can still be omitted,
+      // for example when a .ts sibling takes precedence over a .tsx file.
+      const inputs = new Set(files);
+      const unchecked = testPaths.filter(
+        (file) => !inputs.has(normalize(file)),
+      );
+      if (!diagnostics.length && unchecked.length)
+        throw new Error(
+          `Type test files were not checked by ${typecheck.checker}:\n${unchecked.join('\n')}`,
+        );
       return diagnostics;
     },
     async close() {

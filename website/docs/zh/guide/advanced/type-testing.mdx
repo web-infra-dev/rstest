@@ -36,7 +36,7 @@ describe('add', () => {
 });
 ```
 
-运行 `rstest --typecheck`，同时检查类型和运行时测试；运行 `rstest --typecheck.only`，仅检查类型。类型测试支持 `run`、`list`、`watch`、多项目和 JavaScript 实例 API。浏览器项目的类型测试也在 host 执行。纯类型运行不执行 setup 文件，也不启动测试 worker 或浏览器。
+运行 `rstest run --typecheck`，同时检查类型和运行时测试；运行 `rstest run --typecheck.only`，仅检查类型。类型测试支持 `run`、`list`、多项目和 JavaScript 实例 API。浏览器项目的类型测试也在 host 执行。纯类型运行不执行 setup 文件，也不启动测试 worker 或浏览器。
 
 ## 断言 \{#assertions}
 
@@ -56,9 +56,11 @@ describe('add', () => {
 
 `--related` 和 `--changed` 在源码变化时保守地纳入所有类型测试，因为打包器的依赖图不包含纯类型导入和全局声明。
 
-## Watch 与声明产物 \{#watch-and-declarations}
+## 编译器与声明产物 \{#compiler-and-declarations}
 
-Watch 模式会在源码、声明或配置修改后重新检查类型。增量缓存独立存储在 `node_modules/.cache/rstest/typecheck`。类型测试不执行运行时 Hook、Mock、快照、重试或覆盖率收集。交互式名称和文件筛选快捷键目前只作用于 Node 运行时测试；重新运行全部和失败测试的快捷键包含类型测试。
+Rstest 为每个项目调用一次项目安装的 `tsc` 或 `vue-tsc` CLI，并禁用文件输出。支持 TypeScript 6 和 TypeScript 7。编译器输入文件与诊断来自同一次调用，增量结果缓存在 `node_modules/.cache/rstest/typecheck`，供后续运行复用。即使配置了 `noCheck`，也会覆盖该选项，确保断言得到检查。
+
+类型测试暂不支持 watch 模式。请运行 `rstest run --typecheck` 或 `rstest run --typecheck.only`。类型测试不执行运行时 Hook、Mock、快照、重试或覆盖率收集。
 
 测试库的声明产物时，先构建声明，再运行消费方类型测试。从发布的包入口导入，避免通过 `paths` 映射回源码，确保检查的是用户收到的声明。需要验证不同模块解析环境时，使用独立项目和对应的 tsconfig。
 

@@ -186,12 +186,11 @@ export async function runTests(context: Rstest): Promise<void> {
     ? (await import('./typecheck/executor')).createTypecheckExecutor(
         context,
         planner.typecheckProjects,
-        planner.discoverTypeTests,
       )
     : undefined;
-  const hasTypeTests =
-    planner.typecheckProjects.some(({ testPaths }) => testPaths.length > 0) ||
-    (isWatchMode && !!typecheckExecutor);
+  const hasTypeTests = planner.typecheckProjects.some(
+    ({ testPaths }) => testPaths.length > 0,
+  );
   const isEmptyRun =
     !hasNodeTestsToRun && !hasBrowserTestsToRun && !hasTypeTests;
 
@@ -476,13 +475,6 @@ export async function runTests(context: Rstest): Promise<void> {
     );
   }
 
-  typecheckExecutor?.onInvalidate?.(() =>
-    watchDriver.runCycle(typecheckExecutor, {
-      mode: 'all',
-      trigger: 'invalidation',
-    }),
-  );
-
   let nodeFileFilterPatterns = context.fileFilters;
   let nodeFileFilters =
     nodeFileFilterPatterns !== undefined
@@ -490,9 +482,6 @@ export async function runTests(context: Rstest): Promise<void> {
       : undefined;
   const browserTarget = browserExecutor;
   const watchTargets: WatchSessionTargets = {
-    typecheck: typecheckExecutor && {
-      runCycle: (options) => watchDriver.runCycle(typecheckExecutor, options),
-    },
     node: nodeExecutorToRun
       ? {
           runCycle: (options) =>
@@ -517,7 +506,6 @@ export async function runTests(context: Rstest): Promise<void> {
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
   const executors: TestExecutor[] = [
-    ...(typecheckExecutor ? [typecheckExecutor] : []),
     ...(browserExecutor ? [browserExecutor] : []),
     ...(nodeExecutor ? [nodeExecutor] : []),
   ];
@@ -552,7 +540,6 @@ export async function runTests(context: Rstest): Promise<void> {
     // cycle, and in a mixed run the node side gets there first while the browser
     // host still has no watch session.
     const shortcutExecutors = [
-      ...(typecheckExecutor ? [typecheckExecutor] : []),
       ...(nodeExecutorToRun ? [nodeExecutorToRun] : []),
       ...(browserExecutor ? [browserExecutor] : []),
     ];
@@ -575,7 +562,6 @@ export async function runTests(context: Rstest): Promise<void> {
   // never need it (the executor drops them).
   let browserWatchEnv: Record<string, string | undefined> | undefined;
   try {
-    if (typecheckExecutor) await typecheckExecutor.init();
     if (browserExecutor) {
       // Ahead of the node dev server, for the reason the non-watch assembly runs
       // the stage before dispatching node work: the pool composes its env from
@@ -631,9 +617,6 @@ export async function runTests(context: Rstest): Promise<void> {
         return;
       }
     }
-
-    if (typecheckExecutor)
-      await watchDriver.runCycle(typecheckExecutor, { mode: 'all' });
 
     if (browserExecutor) {
       // Launch only after node startup succeeds, so a rejected node session

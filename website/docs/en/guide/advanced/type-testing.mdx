@@ -36,7 +36,7 @@ describe('add', () => {
 });
 ```
 
-Run `rstest --typecheck` to check types together with runtime tests, or `rstest --typecheck.only` to check only types. Type tests work with `run`, `list`, `watch`, projects, and the JavaScript instance API. They run on the host even when the project uses browser mode. Type-only runs do not execute setup files or start test workers or browsers.
+Run `rstest run --typecheck` to check types together with runtime tests, or `rstest run --typecheck.only` to check only types. Type tests work with `run`, `list`, projects, and the JavaScript instance API. They run on the host even when the project uses browser mode. Type-only runs do not execute setup files or start test workers or browsers.
 
 ## Assertions
 
@@ -56,9 +56,11 @@ The entire selected tsconfig is checked. A diagnostic inside a collected case fa
 
 `--related` and `--changed` conservatively include all type tests when sources change: bundler dependency graphs omit type-only imports and ambient declarations.
 
-## Watch and declarations
+## Compiler and declarations
 
-Watch mode rechecks types after source, declaration, or configuration edits. Type checking uses a separate incremental cache under `node_modules/.cache/rstest/typecheck`. Runtime hooks, mocks, snapshots, retries, and coverage do not run for type tests. Interactive name and file filter shortcuts currently apply to runtime Node tests; rerun-all and rerun-failed include type tests.
+Rstest invokes the project's `tsc` or `vue-tsc` CLI once per project, with emission disabled. Both TypeScript 6 and TypeScript 7 are supported. Compiler input files and diagnostics come from the same invocation, and incremental results are cached under `node_modules/.cache/rstest/typecheck` between runs. A `noCheck` setting is overridden so assertions are always checked.
+
+Type testing does not support watch mode. Run `rstest run --typecheck` or `rstest run --typecheck.only`. Runtime hooks, mocks, snapshots, retries, and coverage do not run for type tests.
 
 For a library, build its declarations before running consumer type tests. Import from the published package entry points and avoid `paths` mappings back to source, so tests exercise the declarations users receive. Use separate projects with appropriate tsconfigs to check different module-resolution environments.
 
