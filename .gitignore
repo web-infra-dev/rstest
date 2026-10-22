@@ -31,6 +31,8 @@ test-temp-*
 .history/
 .claude/worktrees/
 .claude/settings.local.json
+# Per-developer drawing skill, installed with `npx skills add lucasmarkes/hairline`
+.agents/skills/hairline-create/
 .env.local
 .env.*.local
 
