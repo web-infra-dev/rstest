@@ -91,6 +91,7 @@ liyincode
 llms
 lockfiles
 longpaths
+lucasmarkes
 macrotask
 macrotasks
 manypkg
@@ -104,6 +105,7 @@ microtask
 microtasks
 misattributed
 mjsx
+modernjs
 modu
 modularly
 mtsx
