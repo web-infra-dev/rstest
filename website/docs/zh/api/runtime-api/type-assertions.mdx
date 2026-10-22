@@ -1,0 +1,39 @@
+---
+description: 使用 expectTypeOf 和 assertType 验证 TypeScript 类型相等和可赋值关系。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# 类型断言
+
+<ApiMeta addedVersion="0.12.5" />
+
+## expectTypeOf
+
+- **类型：** `typeof import('expect-type').expectTypeOf`
+
+`expectTypeOf` 和 `ExpectTypeOf` 转出自 [expect-type](https://github.com/mmkal/expect-type)。该 API 接收值或类型参数，通过编译器约束验证类型相等、可赋值性、函数参数、返回值等类型属性。
+
+```ts
+import { expectTypeOf } from '@rstest/core';
+
+expectTypeOf(123).toEqualTypeOf<number>();
+expectTypeOf<{ name: string }>().toExtend<{ name: string }>();
+expectTypeOf<(value: string) => number>().returns.toEqualTypeOf<number>();
+```
+
+## assertType
+
+- **类型：** `<T>(value: T) => void`
+
+检查一个值能否赋值给 `T`，没有运行时效果。
+
+```ts
+import { assertType } from '@rstest/core';
+
+assertType<number>(123);
+// @ts-expect-error 字符串不能赋值给 number。
+assertType<number>('123');
+```
+
+设置 `globals: true`，并在 tsconfig 的 `types` 中加入 `@rstest/core/globals` 后，也可以使用这两个全局 API。运行编译器并报告失败的方法见[类型测试指南](/guide/advanced/type-testing)。仅在运行时测试中调用类型断言不会验证类型。

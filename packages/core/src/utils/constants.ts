@@ -319,6 +319,8 @@ export const DEFAULT_CONFIG_EXTENSIONS = [
 // key union (the exported alias below is widened for consumers); `satisfies`
 // rejects a *wrong* key here.
 const globalApiList = [
+  'expectTypeOf',
+  'assertType',
   'test',
   'describe',
   'it',

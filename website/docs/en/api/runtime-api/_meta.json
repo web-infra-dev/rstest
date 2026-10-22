@@ -10,6 +10,11 @@
     "label": "Test API"
   },
   {
+    "type": "file",
+    "name": "type-assertions",
+    "label": "Type assertions"
+  },
+  {
     "type": "dir",
     "name": "browser-mode",
     "label": "Browser Mode"

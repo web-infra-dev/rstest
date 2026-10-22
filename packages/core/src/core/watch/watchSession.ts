@@ -397,6 +397,7 @@ export function createWatchCycleDriver({
  * shortcut fans out to it — and, for `t`/`p`, whether the key is offered at all.
  */
 export interface WatchSessionTargets {
+  typecheck?: { runCycle: (options?: WatchCycleOptions) => Promise<void> };
   node?: {
     runCycle: (options?: WatchCycleOptions) => Promise<void>;
     /** Select node entries for the `p` (file filter) shortcut. */
@@ -425,7 +426,7 @@ export interface WatchSessionTargets {
  */
 export function createWatchShortcutHandlers(
   context: Rstest,
-  { node, browser }: WatchSessionTargets,
+  { node, browser, typecheck }: WatchSessionTargets,
   close: () => Promise<void>,
   /**
    * Whether every executor of this run is past its first cycle. Shortcuts are
@@ -472,6 +473,7 @@ export function createWatchShortcutHandlers(
     options: WatchCycleOptions,
     browserPaths?: string[],
   ): Promise<void> => {
+    await typecheck?.runCycle(options);
     await node?.runCycle(options);
     await browser?.rerun(browserPaths, options.updateSnapshot);
   };
@@ -487,6 +489,7 @@ export function createWatchShortcutHandlers(
         node.setFileFilters(undefined);
         await node.runCycle({ mode: 'all', trigger: 'run-all' });
       }
+      await typecheck?.runCycle({ mode: 'all', trigger: 'run-all' });
       await browser?.rerun();
     }),
     runWithTestNamePattern:

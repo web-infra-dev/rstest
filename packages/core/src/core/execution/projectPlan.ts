@@ -22,6 +22,7 @@ export const getProjectEntries = async ({
   project: InternalProjectContext;
   fileFilters?: string[];
 }): Promise<Record<string, string>> => {
+  if (project.normalizedConfig.typecheck.only) return {};
   const { include, exclude, includeSource, root } = project.normalizedConfig;
 
   return getTestEntries({

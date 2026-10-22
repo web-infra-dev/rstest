@@ -37,7 +37,8 @@ export const resolveRunnableProjectsByEntries = async ({
   const browserProjects = projects.filter(isBrowserProject);
   if (!groupEnvironmentComments) {
     const shouldRunProject = (project: InternalProjectContext): boolean =>
-      !skipEmptyProjects || hasEntries(entriesCache, project.environmentName);
+      !project.normalizedConfig.typecheck.only &&
+      (!skipEmptyProjects || hasEntries(entriesCache, project.environmentName));
 
     return {
       projects,
@@ -71,8 +72,9 @@ export const resolveRunnableProjectsByEntries = async ({
     ? [...browserProjects, ...grouped.projects]
     : projects;
   const shouldRunProject = (project: InternalProjectContext): boolean =>
-    !skipEmptyProjects ||
-    hasEntries(resolvedEntriesCache, project.environmentName);
+    !project.normalizedConfig.typecheck.only &&
+    (!skipEmptyProjects ||
+      hasEntries(resolvedEntriesCache, project.environmentName));
 
   return {
     projects: resolvedProjects,

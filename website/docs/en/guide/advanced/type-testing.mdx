@@ -1,0 +1,65 @@
+---
+description: Check TypeScript APIs with static assertions and report their results alongside runtime tests.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Type testing
+
+<ApiMeta addedVersion="0.12.5" />
+
+Type tests verify inferred types and public declarations using your project's TypeScript compiler. Rstest collects cases without executing the file, checks the original TypeScript, and reports compiler diagnostics alongside runtime test results.
+
+Install `typescript` as a dev dependency, then enable [typecheck](/config/test/typecheck):
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  typecheck: { enabled: true },
+});
+```
+
+Create a file ending in `.test-d.ts` or `.spec-d.ts` and include it in your `tsconfig.json`:
+
+```ts title="add.test-d.ts"
+import { assertType, describe, expectTypeOf, test } from '@rstest/core';
+import { add } from './add';
+
+describe('add', () => {
+  test('returns a number', () => {
+    expectTypeOf(add).returns.toEqualTypeOf<number>();
+    assertType<number>(add(1, 2));
+    // @ts-expect-error Strings must be rejected.
+    add('1', '2');
+  });
+});
+```
+
+Run `rstest --typecheck` to check types together with runtime tests, or `rstest --typecheck.only` to check only types. Type tests work with `run`, `list`, `watch`, projects, and the JavaScript instance API. They run on the host even when the project uses browser mode. Type-only runs do not execute setup files or start test workers or browsers.
+
+## Assertions
+
+`expectTypeOf` and its `ExpectTypeOf` type are re-exported from [expect-type](https://github.com/mmkal/expect-type). Its generic signatures make incorrect assertions compiler errors. Common checks include `.toEqualTypeOf<T>()` for equality, `.toExtend<T>()` for assignability, `.returns`, `.parameters`, `.not`, `.toBeAny()`, and `.toBeNever()`.
+
+`assertType<T>(value)` checks whether `value` is assignable to `T`. It has no runtime effect. `@ts-expect-error` checks that the following line produces a compiler error; TypeScript reports an unused directive if that error disappears.
+
+These assertions are callable inside ordinary runtime tests, but their type checks only happen when a compiler checks those files. Ordinary `expect(...).toEqual(...)` assertions are runtime assertions and provide no type-test guarantees.
+
+## Collection and filtering
+
+Type tests support direct `test`, `it`, and nested `describe` calls with inline callbacks. Import aliases, namespace imports, and configured globals are recognized. Literal names are displayed as strings; expressions are displayed as their source text without evaluation.
+
+Modifiers such as `.only`, `.skip`, `.todo`, `.each`, `.for`, and conditional modifiers are unsupported and produce collection errors. Loops, conditional registration, and callbacks supplied by reference are also unsupported. Indirect registrations, including fixture factories, are checked as ordinary TypeScript; Rstest does not expand them into cases. A file without recognized cases is reported as one `[typecheck]` case.
+
+The entire selected tsconfig is checked. A diagnostic inside a collected case fails that case; diagnostics outside cases fail the file or project. File and name filters narrow reported cases, but never suppress compiler diagnostics elsewhere in that tsconfig. Do not include the same file in both runtime and type-test discovery in one project.
+
+`--related` and `--changed` conservatively include all type tests when sources change: bundler dependency graphs omit type-only imports and ambient declarations.
+
+## Watch and declarations
+
+Watch mode rechecks types after source, declaration, or configuration edits. Type checking uses a separate incremental cache under `node_modules/.cache/rstest/typecheck`. Runtime hooks, mocks, snapshots, retries, and coverage do not run for type tests. Interactive name and file filter shortcuts currently apply to runtime Node tests; rerun-all and rerun-failed include type tests.
+
+For a library, build its declarations before running consumer type tests. Import from the published package entry points and avoid `paths` mappings back to source, so tests exercise the declarations users receive. Use separate projects with appropriate tsconfigs to check different module-resolution environments.
+
+Rspack aliases do not automatically configure TypeScript resolution. Set `paths`, `types`, and asset declarations in the test tsconfig. For Vue projects, install `vue-tsc` and select `checker: 'vue-tsc'`.

@@ -1,0 +1,30 @@
+---
+description: Configure static type tests and select the project's TypeScript checker and tsconfig.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# typecheck
+
+<ApiMeta addedVersion="0.12.5" />
+
+- **Type:** `TypecheckOptions`
+- **Default:** `{ enabled: false, only: false, include: ['**/*.{test,spec}-d.{ts,tsx,mts,cts}'], exclude: [], checker: 'tsc', tsconfig: 'tsconfig.json' }`
+- **CLI:** `--typecheck`, `--typecheck.only`, `--typecheck.enabled`, `--typecheck.checker <name>`, `--typecheck.tsconfig <path>`
+
+```ts
+interface TypecheckOptions {
+  enabled?: boolean;
+  only?: boolean;
+  include?: string[];
+  exclude?: string[];
+  checker?: 'tsc' | 'vue-tsc';
+  tsconfig?: string;
+}
+```
+
+`enabled` adds static type tests to a run. `only` enables type tests and excludes runtime tests. `include` and `exclude` are resolved relative to the project root; project-level exclusions also apply. Nested options merge by field, and later arrays replace earlier arrays.
+
+`checker` resolves the project's installed `typescript` or `vue-tsc` executable. `tsconfig` is relative to the project root and defaults to `tsconfig.json`. Rstest checks with `noEmit` and overrides `noCheck: true` to keep assertions active. Every discovered type test must be a root file of that config. Solution-style configs containing only project references need a dedicated test tsconfig with `files` or `include`.
+
+See [Type testing](/guide/advanced/type-testing) for assertions, collection limits, watch behavior, and migration of declaration tests.

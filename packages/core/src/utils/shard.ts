@@ -79,21 +79,41 @@ export async function resolveShardedEntries(
   const allTestEntriesBeforeSharding = (
     await Promise.all(
       allProjects.map(async (p) => {
-        const { include, exclude, includeSource, root } = p.normalizedConfig;
+        const { include, exclude, includeSource, root, typecheck } =
+          p.normalizedConfig;
         const fileFilters = getFileFilters(p);
         const entries = await getTestEntries({
-          include,
+          include: typecheck.only ? [] : include,
           exclude: exclude.patterns,
-          includeSource,
+          includeSource: typecheck.only ? [] : includeSource,
           rootPath,
           projectRoot: root,
           fileFilters,
         });
-        return Object.entries(entries).map(([alias, testPath]) => ({
-          project: p.environmentName,
-          alias,
-          testPath,
-        }));
+        const types = typecheck.enabled
+          ? await getTestEntries({
+              include: typecheck.include,
+              exclude: [...exclude.patterns, ...typecheck.exclude],
+              includeSource: [],
+              rootPath,
+              projectRoot: root,
+              fileFilters,
+            })
+          : {};
+        return [
+          ...Object.entries(entries).map(([alias, testPath]) => ({
+            project: p.environmentName,
+            alias,
+            testPath,
+            typecheck: false,
+          })),
+          ...Object.entries(types).map(([alias, testPath]) => ({
+            project: p.environmentName,
+            alias,
+            testPath,
+            typecheck: true,
+          })),
+        ];
       }),
     )
   ).flat();
@@ -110,7 +130,8 @@ export async function resolveShardedEntries(
   onShardCounts?.({ testFilesInShardCount, totalTestFileCount });
 
   const shardedEntriesByProject = new Map<string, Record<string, string>>();
-  for (const { project, alias, testPath } of shardedEntries) {
+  for (const { project, alias, testPath, typecheck } of shardedEntries) {
+    if (typecheck) continue;
     if (!shardedEntriesByProject.has(project)) {
       shardedEntriesByProject.set(project, {});
     }

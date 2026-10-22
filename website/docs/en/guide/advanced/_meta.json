@@ -1,1 +1,8 @@
-["ci", "metadata", "scoped-cleanup", "adapters", "module-federation"]
+[
+  "ci",
+  "metadata",
+  "scoped-cleanup",
+  "adapters",
+  "module-federation",
+  "type-testing"
+]

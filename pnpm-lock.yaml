@@ -1432,6 +1432,9 @@ importers:
       cjs-module-lexer:
         specifier: ^2.3.0
         version: 2.3.0
+      expect-type:
+        specifier: ^1.4.0
+        version: 1.4.0
     devDependencies:
       '@antfu/install-pkg':
         specifier: ^1.1.0
@@ -1439,6 +1442,15 @@ importers:
       '@babel/code-frame':
         specifier: ^7.29.7
         version: 7.29.7
+      '@babel/parser':
+        specifier: 7.29.9
+        version: 7.29.9
+      '@babel/traverse':
+        specifier: 7.29.7
+        version: 7.29.7(supports-color@8.1.1)
+      '@babel/types':
+        specifier: ^7.29.8
+        version: 7.29.8
       '@clack/prompts':
         specifier: ^1.8.1
         version: 1.8.1
@@ -1469,6 +1481,9 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.27.0
         version: 7.27.0
+      '@types/babel__traverse':
+        specifier: ^7.28.0
+        version: 7.28.0
       '@types/istanbul-lib-coverage':
         specifier: ^2.0.6
         version: 2.0.6
@@ -1514,6 +1529,9 @@ importers:
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
+      get-tsconfig:
+        specifier: 5.0.0-beta.6
+        version: 5.0.0-beta.6
       happy-dom:
         specifier: ^21.0.3
         version: 21.0.3
@@ -6100,6 +6118,10 @@ packages:
   expand-template@2.0.3:
     resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
     engines: {node: '>=6'}
+
+  expect-type@1.4.0:
+    resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
+    engines: {node: '>=12.0.0'}
 
   expect@30.0.5:
     resolution: {integrity: sha512-P0te2pt+hHI5qLJkIR+iMvS+lYUZml8rKKsohVHAGY+uClp9XVbdyYNJOIjSRpHVp8s8YqxJCiHUkSYZGr8rtQ==}
@@ -14002,6 +14024,8 @@ snapshots:
 
   expand-template@2.0.3:
     optional: true
+
+  expect-type@1.4.0: {}
 
   expect@30.0.5:
     dependencies:

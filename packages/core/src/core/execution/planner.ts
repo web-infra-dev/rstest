@@ -1,3 +1,4 @@
+import { discoverTypeTests, type TypecheckProject } from '../typecheck/plan';
 import type { RsbuildInstance } from '@rsbuild/core';
 import type { InternalProjectContext } from '../../types';
 import { filterFiles, type TraceEvent } from '../../utils';
@@ -64,6 +65,8 @@ export type NodeBuild = {
  * nothing can catch it half-applied.
  */
 export interface TestPlanner extends BrowserRunPlan {
+  readonly typecheckProjects: TypecheckProject[];
+  discoverTypeTests(fileFilters?: string[]): Promise<TypecheckProject[]>;
   /** The resolved plan: browser + node runnable subsets and their entries. */
   getPlan(): ProjectPlan;
   hasNodeTestsToRun(): boolean;
@@ -92,6 +95,7 @@ export async function createTestPlanner(
     onTraceEvents,
   }: CreateTestPlannerOptions,
 ): Promise<TestPlanner> {
+  const configuredProjects = [...context.projects];
   const projectPlanState = createProjectPlanState({
     context,
     isWatchMode,
@@ -152,7 +156,9 @@ export async function createTestPlanner(
       },
       getSetupFileProjects: () => ({
         setupProjects: projectPlanState.getPlan().nodeProjectsToRun,
-        globalSetupProjects: context.projects,
+        globalSetupProjects: context.projects.filter(
+          (project) => !project.normalizedConfig.typecheck.only,
+        ),
       }),
       onModifyRstestConfigApplied: () => resyncPlan(),
       onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
@@ -198,7 +204,30 @@ export async function createTestPlanner(
     return filters ? filterFiles(entries, filters, context.rootPath) : entries;
   };
 
+  const typeProjects = configuredProjects.map((original) => {
+    const settled =
+      getPlan().projects.find(
+        (project) => project.environmentName === original.environmentName,
+      ) ??
+      getPlan().projects.find(
+        (project) =>
+          project._environmentGroup?.sourceEnvironmentName ===
+          original.environmentName,
+      );
+    return settled
+      ? {
+          ...settled,
+          name: original.name,
+          environmentName: original.environmentName,
+        }
+      : original;
+  });
+  const typecheckProjects = await discoverTypeTests(context, typeProjects);
+
   return {
+    typecheckProjects,
+    discoverTypeTests: (fileFilters = context.fileFilters) =>
+      discoverTypeTests(context, typeProjects, fileFilters),
     ...browserPlan,
     getPlan,
     hasNodeTestsToRun: () => getPlan().nodeProjectsToRun.length > 0,

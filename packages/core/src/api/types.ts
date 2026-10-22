@@ -55,6 +55,7 @@ export interface RstestContext {
 
 /** @experimental Subject to change until 1.0.0. */
 export interface RunOptions {
+  typecheck?: boolean | import('../types').TypecheckOptions;
   filters?: string[];
   related?: boolean;
   changed?: boolean | string;

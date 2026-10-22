@@ -1,0 +1,39 @@
+---
+description: Assert TypeScript type equality and assignability with expectTypeOf and assertType.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Type assertions
+
+<ApiMeta addedVersion="0.12.5" />
+
+## expectTypeOf
+
+- **Type:** `typeof import('expect-type').expectTypeOf`
+
+`expectTypeOf` and `ExpectTypeOf` are re-exported from [expect-type](https://github.com/mmkal/expect-type). The API accepts a value or a type argument and checks equality, assignability, function parameters, return types, and other type properties through compiler constraints.
+
+```ts
+import { expectTypeOf } from '@rstest/core';
+
+expectTypeOf(123).toEqualTypeOf<number>();
+expectTypeOf<{ name: string }>().toExtend<{ name: string }>();
+expectTypeOf<(value: string) => number>().returns.toEqualTypeOf<number>();
+```
+
+## assertType
+
+- **Type:** `<T>(value: T) => void`
+
+Checks that a value is assignable to `T`. It does nothing at runtime.
+
+```ts
+import { assertType } from '@rstest/core';
+
+assertType<number>(123);
+// @ts-expect-error A string cannot be assigned to number.
+assertType<number>('123');
+```
+
+Both APIs are also available with `globals: true` and `@rstest/core/globals` in your tsconfig's `types`. Follow the [type testing guide](/guide/advanced/type-testing) to run the compiler and report failures; calling a type assertion in a runtime test alone does not verify types.

@@ -1,3 +1,4 @@
+import { discoverTypeTests } from '../typecheck/plan';
 import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import type { CommonOptions } from '../../cli/init';
@@ -242,11 +243,24 @@ const resolveEffectiveFilters = async ({
   }
 
   const { resolveRelatedTestFiles } = await import('./related');
-  const relatedFiles = await resolveRelatedTestFiles(rstest.context, {
-    sourceFilters,
-    filterLabel: changedRun ? '--changed' : '--related',
-    allowEmpty: changedRun,
-  });
+  const relatedFiles = rstest.context.projects.some(
+    (project) => !project.normalizedConfig.typecheck.only,
+  )
+    ? await resolveRelatedTestFiles(rstest.context, {
+        sourceFilters,
+        filterLabel: changedRun ? '--changed' : '--related',
+        allowEmpty: changedRun,
+      })
+    : [];
+  // Bundler graphs omit type-only imports and ambient declarations. Conservatively
+  // include every type test when a related/changed run has changed sources.
+  if (sourceFilters.length) {
+    const typePlans = await discoverTypeTests(
+      rstest.context,
+      rstest.context.projects,
+    );
+    relatedFiles.push(...typePlans.flatMap(({ testPaths }) => testPaths));
+  }
 
   return {
     // Fuzzy absolute paths also match .tsx siblings and same-suffix paths in other packages.

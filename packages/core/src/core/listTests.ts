@@ -394,7 +394,9 @@ export async function listTests(
   // run path, which skips the check when node tests exist (see the empty-run
   // branch in `runTests.ts` for the divergence and its e2e pin).
   if (
-    browserProjects.length &&
+    browserProjects.some(
+      (project) => !project.normalizedConfig.typecheck.only,
+    ) &&
     !planner.hasValidatedBrowserConfig() &&
     (filesOnly || !planner.hasBrowserTestsToRun())
   ) {
@@ -418,6 +420,35 @@ export async function listTests(
       await runGlobalTeardown(context);
     }
   };
+
+  try {
+    if (planner.typecheckProjects.length) {
+      const { createTypecheckExecutor } = await import('./typecheck/executor');
+      const executor = createTypecheckExecutor(
+        context,
+        planner.typecheckProjects,
+        planner.discoverTypeTests,
+      );
+      try {
+        list.push(
+          ...(filesOnly
+            ? planner.typecheckProjects.flatMap(({ project, testPaths }) =>
+                testPaths.map((testPath) => ({
+                  testPath,
+                  project: project.name,
+                  tests: [],
+                })),
+              )
+            : (await executor.collect!({})).list),
+        );
+      } finally {
+        await executor.close();
+      }
+    }
+  } catch (error) {
+    await closeCollection();
+    throw error;
+  }
 
   const hasError = list.some((file) => file.errors?.length) || errors.length;
   if (hasError) {
