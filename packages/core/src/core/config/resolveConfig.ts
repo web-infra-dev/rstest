@@ -6,6 +6,7 @@ import {
   resolveProjects,
 } from '../../cli/init';
 import { clonePlainConfig, resolveExtends } from '../../config';
+import { getProjectLoader } from '../../projectLoader';
 import type { Project, RstestConfig } from '../../types';
 import { filterProjects, getAbsolutePath } from '../../utils';
 
@@ -58,8 +59,10 @@ export async function resolveRunnerInputs({
   options: CommonOptions;
   cwd: string;
 }): Promise<ResolvedRunnerInputs> {
+  // `clonePlainConfig` drops symbol keys, so read the loader first.
+  const projectLoader = getProjectLoader(result.content);
   // Cloning must preserve exclude.override until defaults are applied.
-  const config = await resolveExtends(clonePlainConfig(result.content));
+  const config = await resolveExtends(clonePlainConfig(result.content), result);
 
   mergeWithCLIOptions(config, options);
   config.root = config.root ? getAbsolutePath(cwd, config.root) : cwd;
@@ -68,6 +71,7 @@ export async function resolveRunnerInputs({
     config,
     root: config.root,
     options,
+    projectLoader,
   });
 
   const names = new Set<string>();

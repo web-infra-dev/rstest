@@ -3,6 +3,7 @@ import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from '@rstest/core';
 import { loadConfig } from '../src/config';
+import { withTempDir } from './helpers/tempDir';
 
 describe('Config Extends Mechanism', () => {
   let testConfigPath: string;
@@ -244,5 +245,35 @@ export default defineConfig({
     expect(config.globals).toBe(true);
     expect(config.testTimeout).toBe(10000);
     expect(config.retry).toBe(2);
+  });
+});
+
+describe('config file force rerun triggers', () => {
+  const loadCustomConfig = (config: string) =>
+    withTempDir('rstest-config-triggers-', async (dir) => {
+      writeFileSync(join(dir, 'custom.config.mts'), config);
+      const { content, filePath } = await loadConfig({
+        cwd: dir,
+        path: 'custom.config.mts',
+      });
+      return { triggers: content.forceRerunTriggers, filePath };
+    });
+
+  it('adds the config file after the default triggers', async () => {
+    const { triggers, filePath } = await loadCustomConfig('export default {};');
+
+    expect(triggers).toEqual([
+      '**/package.json/**',
+      '**/rstest.config.*',
+      filePath,
+    ]);
+  });
+
+  it('keeps explicit forceRerunTriggers', async () => {
+    const { triggers } = await loadCustomConfig(
+      'export default { forceRerunTriggers: [] };',
+    );
+
+    expect(triggers).toEqual([]);
   });
 });

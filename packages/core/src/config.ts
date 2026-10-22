@@ -71,9 +71,16 @@ export async function loadConfig({
     logger.debug('no rstest config file found');
   }
 
-  result.content = await resolveExtends(result.content);
+  result.content = await resolveExtends(result.content, result);
   return result;
 }
+
+/** Appends `triggers` to `base`, or to the defaults when `base` is unset. */
+export const mergeForceRerunTriggers = (
+  base: string[] | undefined,
+  triggers: string[],
+): string[] =>
+  Array.from(new Set([...(base ?? DEFAULT_FORCE_RERUN_TRIGGERS), ...triggers]));
 
 const resolveExtendEntry = async (
   entry: ResolvedExtendEntry,
@@ -90,35 +97,47 @@ const resolveExtendEntry = async (
   return resolved;
 };
 
+/**
+ * Resolves `extends`, then appends adapter triggers and the `source` config
+ * files to `forceRerunTriggers` unless the config sets that option. A filled-in
+ * `forceRerunTriggers` counts as explicit, so resolving a `loadConfig` result
+ * again is a no-op; `resolveRunnerInputs` relies on that.
+ */
 export const resolveExtends = async (
   config: RstestConfig,
+  source?: Pick<LoadConfigResult<RstestConfig>, 'filePath' | 'dependencies'>,
 ): Promise<RstestConfig> => {
-  if (!config.extends) {
-    return config;
-  }
+  const hasOwnTriggers = config.forceRerunTriggers !== undefined;
+  let merged = config;
+  let extendedTriggers: string[] = [];
 
-  const userConfig = Object.freeze({ ...config });
-  const extendsEntries = castArray(config.extends);
-  const resolvedExtends = await Promise.all(
-    extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
-  );
-
-  const merged = mergeRstestConfig(...resolvedExtends, config);
-  merged.extends = undefined;
-
-  if (config.forceRerunTriggers === undefined) {
-    const extendedForceRerunTriggers = resolvedExtends.flatMap(
-      (entry) => entry.forceRerunTriggers || [],
+  if (config.extends) {
+    const userConfig = Object.freeze({ ...config });
+    const extendsEntries = castArray(config.extends);
+    const resolvedExtends = await Promise.all(
+      extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
     );
 
-    if (extendedForceRerunTriggers.length) {
-      merged.forceRerunTriggers = Array.from(
-        new Set([
-          ...DEFAULT_FORCE_RERUN_TRIGGERS,
-          ...extendedForceRerunTriggers,
-        ]),
-      );
+    merged = mergeRstestConfig(...resolvedExtends, config);
+    merged.extends = undefined;
+    // Keep the user layer's symbol keys, such as a host's `PROJECT_LOADER`.
+    for (const key of Object.getOwnPropertySymbols(config)) {
+      Reflect.set(merged, key, Reflect.get(config, key));
     }
+    extendedTriggers = resolvedExtends.flatMap(
+      (entry) => entry.forceRerunTriggers || [],
+    );
+  }
+
+  const configFiles = source
+    ? source.filePath
+      ? [source.filePath, ...source.dependencies]
+      : source.dependencies
+    : [];
+  const appended = [...extendedTriggers, ...configFiles];
+
+  if (!hasOwnTriggers && appended.length) {
+    merged.forceRerunTriggers = mergeForceRerunTriggers(undefined, appended);
   }
 
   return merged;
