@@ -165,6 +165,11 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--restoreMocks',
     'Automatically restore spied object methods before every test',
   ],
+  ['--typecheck', 'Enable static type tests'],
+  ['--typecheck.enabled', 'Enable static type tests'],
+  ['--typecheck.only', 'Run only static type tests'],
+  ['--typecheck.checker <name>', 'Type checker (tsc | vue-tsc)'],
+  ['--typecheck.tsconfig <path>', 'Type test tsconfig path'],
   ['--browser', 'Run tests in browser mode'],
   ['--browser.enabled', 'Run tests in browser mode'],
   [
@@ -494,6 +499,7 @@ const normalizeCliArgs = (argv: string[]): string[] =>
   normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
 const allowedWildcardOptions = {
+  typecheck: new Set(['enabled', 'only', 'checker', 'tsconfig']),
   browser: new Set([
     'enabled',
     'name',

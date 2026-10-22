@@ -278,9 +278,11 @@ const collectProjectEntries = async (
       entries.set(
         project.environmentName,
         await getTestEntries({
-          include,
+          include: project.normalizedConfig.typecheck.only ? [] : include,
           exclude: exclude.patterns,
-          includeSource,
+          includeSource: project.normalizedConfig.typecheck.only
+            ? []
+            : includeSource,
           rootPath: context.rootPath,
           projectRoot: root,
           fileFilters: undefined,

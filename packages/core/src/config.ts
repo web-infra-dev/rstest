@@ -186,6 +186,7 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
       ...config,
       // Plain-merged below instead of via mergeRsbuildConfig; see plainDeepMerge.
       browser: undefined,
+      typecheck: undefined,
       exclude: Array.isArray(config.exclude)
         ? {
             patterns: config.exclude,
@@ -198,6 +199,10 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
       merged.exclude = {
         patterns: config.exclude.patterns,
       };
+    }
+
+    if (config.typecheck) {
+      merged.typecheck = plainDeepMerge(result.typecheck, config.typecheck);
     }
 
     if (config.browser) {
@@ -262,6 +267,14 @@ const createDefaultConfig = (): NormalizedConfig => ({
   globals: false,
   passWithNoTests: false,
   onlyFailures: false,
+  typecheck: {
+    enabled: false,
+    only: false,
+    include: ['**/*.{test,spec}-d.{ts,tsx,mts,cts}'],
+    exclude: [],
+    checker: 'tsc',
+    tsconfig: 'tsconfig.json',
+  },
   update: false,
   testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
@@ -341,6 +354,11 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     createDefaultConfig(),
     config,
   ) as NormalizedConfig;
+
+  if (merged.typecheck.only) merged.typecheck.enabled = true;
+  if (!['tsc', 'vue-tsc'].includes(merged.typecheck.checker)) {
+    throw new Error('typecheck.checker must be "tsc" or "vue-tsc".');
+  }
 
   merged.setupFiles = castArray(merged.setupFiles);
   merged.globalSetup = castArray(merged.globalSetup);

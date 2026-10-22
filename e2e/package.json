@@ -18,6 +18,7 @@
     "@rstest/core": "workspace:*",
     "@rstest/coverage-v8": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
+    "@rstest/typecheck": "workspace:*",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",

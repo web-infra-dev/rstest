@@ -1,15 +1,62 @@
 import { color, logger } from '../../utils';
-import { type ResultsCacheData, sequenceKey } from './resultsCache';
+import type { InternalContext } from '../../types';
+import type { TestPlanner } from './planner';
+import {
+  type ResultsCacheData,
+  readResultsCache,
+  sequenceKey,
+} from './resultsCache';
 import { filterFailedEntries, type SequenceHints } from './testSequencer';
 
 const NO_FAILURES_NOTICE =
   'No failed tests found from the previous run. Running all tests.';
 
+export async function selectFailedTestFiles(
+  context: InternalContext,
+  planner: TestPlanner,
+): Promise<ReadonlySet<string> | undefined> {
+  if (
+    !context.normalizedConfig.onlyFailures ||
+    context.command === 'watch' ||
+    context.relatedMode ||
+    context.fileFilters !== undefined ||
+    context.normalizedConfig.testNamePattern
+  )
+    return;
+
+  const { nodeProjectsToRun, entriesCache } = planner.getPlan();
+  const plans = [
+    ...nodeProjectsToRun.map((p) => ({
+      p,
+      finalEntries: Object.values(
+        entriesCache.get(p.environmentName)!.entries,
+      ).map((testPath) => ({ testPath })),
+    })),
+    ...planner.typecheckProjects.map(({ project: p, testPaths }) => ({
+      p,
+      finalEntries: testPaths.map((testPath) => ({ testPath })),
+    })),
+  ];
+  const resultsCache = await readResultsCache(context.rootPath);
+  applyOnlyFailuresSelection(plans, {
+    resultsCache,
+    sequenceHints: new Map(Object.entries(resultsCache?.files ?? {})),
+    rootPath: context.rootPath,
+  });
+  return new Set(
+    plans.flatMap(({ p, finalEntries }) =>
+      finalEntries.map(({ testPath }) =>
+        sequenceKey(p.name, context.rootPath, testPath),
+      ),
+    ),
+  );
+}
+
 /**
  * `--onlyFailures` file-level selection across all projects. Mutates each plan's
  * `finalEntries` in place to the set of files that should run, and emits the
- * user-facing notices. Extracted from `runTests` so that hot path holds only the
- * mode/scope guard and a single call site.
+ * user-facing notices. The input includes both node and type-test plans so the
+ * run-everything fallback is decided across executors.
  *
  * Semantics (per-project rule lives in {@link filterFailedEntries}):
  *   - no results cache yet → keep everything and print the "no failures" notice;

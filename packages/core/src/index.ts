@@ -160,6 +160,7 @@ export type {
   TestFileInfo,
   TestFileResult,
   TestInfo,
+  TypecheckOptions,
   TestOptions,
   TestResult,
   TestSuiteInfo,

@@ -10,6 +10,21 @@ import type {
 import type { ConsoleStreamType, MaybePromise } from './utils';
 import type { BrowserProvider } from '../utils/constants';
 
+export interface TypecheckOptions {
+  /** Enable static type tests. @default false */
+  enabled?: boolean;
+  /** Run type tests without runtime tests. @default false */
+  only?: boolean;
+  /** Type test file patterns. Defaults to TS files named *.test-d or *.spec-d. */
+  include?: string[];
+  /** Additional exclusions, combined with the project's exclusions. @default [] */
+  exclude?: string[];
+  /** Compiler to resolve from the project. @default 'tsc' */
+  checker?: 'tsc' | 'vue-tsc';
+  /** Project-relative tsconfig path. @default 'tsconfig.json' */
+  tsconfig?: string;
+}
+
 export type ModifyRstestConfigCallback = (
   config: RstestConfig,
 ) => MaybePromise<RstestConfig | void>;
@@ -492,6 +507,8 @@ export interface RstestConfig {
    * @default false
    */
   onlyFailures?: boolean;
+  /** Static type testing, checked by the project's compiler. @default {} */
+  typecheck?: TypecheckOptions;
   /**
    * Pool used to run tests in.
    */
@@ -796,6 +813,7 @@ export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
     | OptionalKeys
+    | 'typecheck'
     | 'pool'
     | 'projects'
     | 'coverage'
@@ -809,6 +827,7 @@ export type NormalizedConfig = Required<
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
+    typecheck: Required<TypecheckOptions>;
     shard?: ShardConfig;
     pool: RstestPoolOptions;
     testEnvironment: EnvironmentWithOptions;

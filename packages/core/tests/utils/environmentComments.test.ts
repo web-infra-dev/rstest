@@ -1,3 +1,4 @@
+import { withDefaultConfig } from '../../src/config';
 import { withTempDir } from '../helpers/tempDir';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -20,6 +21,7 @@ const createProject = (): InternalProjectContext => ({
   outputModule: true,
   _globalSetups: false,
   normalizedConfig: {
+    typecheck: withDefaultConfig({}).typecheck,
     name: 'default',
     root: fixturesRoot,
     setupFiles: [],

@@ -25,6 +25,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'projects',
       'passWithNoTests',
       'onlyFailures',
+      'typecheck',
       'includeSource',
       'forceRerunTriggers',
       'testNamePattern',

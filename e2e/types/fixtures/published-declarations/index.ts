@@ -1,3 +1,4 @@
+import { expectTypeOf } from '@rstest/typecheck';
 import { expect, test, type FixtureLifecycle } from '@rstest/core';
 
 expect(true).toBe(true);
@@ -14,8 +15,8 @@ const namedFixtureTest = test
 namedFixtureTest(
   'exposes inferred named fixture types',
   async ({ count, createLabel }) => {
-    expect(count).toBeTypeOf('number');
-    expect(await createLabel()).toBeTypeOf('string');
+    expectTypeOf(count).toEqualTypeOf<number>();
+    expectTypeOf(await createLabel()).toEqualTypeOf<string>();
   },
 );
 
@@ -37,7 +38,7 @@ const fileFixtureTest = test
   .extend('testValue', ({ fileValue, task }) => `${task.name}:${fileValue}`);
 
 fileFixtureTest('exposes inferred file fixture types', ({ fileValue }) => {
-  expect(fileValue).toBeTypeOf('number');
+  expectTypeOf(fileValue).toEqualTypeOf<number>();
 });
 
 // @ts-expect-error file-scoped fixtures cannot be overridden
@@ -74,8 +75,8 @@ const workerFixtureTest = test
 workerFixtureTest(
   'exposes inferred worker fixture types',
   ({ workerValue, workerFileValue }) => {
-    expect(workerValue).toBeTypeOf('number');
-    expect(workerFileValue).toBeTypeOf('number');
+    expectTypeOf(workerValue).toEqualTypeOf<number>();
+    expectTypeOf(workerFileValue).toEqualTypeOf<number>();
   },
 );
 

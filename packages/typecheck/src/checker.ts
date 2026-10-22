@@ -1,0 +1,215 @@
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { dirname, isAbsolute, normalize, resolve } from 'pathe';
+import { isFileIncluded, readTsconfig } from 'get-tsconfig';
+import type {
+  InternalProjectContext,
+  SerializedError,
+} from '@rstest/core/internal/typecheck';
+
+export interface TypeDiagnostic {
+  file?: string;
+  line?: number;
+  column?: number;
+  error: SerializedError;
+}
+
+export function parseDiagnostics(
+  output: string,
+  cwd: string,
+): {
+  diagnostics: TypeDiagnostic[];
+  unparsed: string[];
+  files: string[];
+} {
+  const diagnostics: TypeDiagnostic[] = [];
+  const unparsed: string[] = [];
+  const files: string[] = [];
+  let current: TypeDiagnostic | undefined;
+  for (const line of output.replace(/\r\n/g, '\n').split('\n')) {
+    if (!line.trim()) continue;
+    const match = /^(?:(.+)\((\d+),(\d+)\):\s*)?error TS(\d+):\s*(.*)$/.exec(
+      line,
+    );
+    if (match) {
+      const file = match[1]
+        ? normalize(isAbsolute(match[1]) ? match[1] : resolve(cwd, match[1]))
+        : undefined;
+      current = {
+        file,
+        line: match[2] ? Number(match[2]) : undefined,
+        column: match[3] ? Number(match[3]) : undefined,
+        error: {
+          name: `TS${match[4]}`,
+          message: match[5]!,
+          ...(file
+            ? {
+                stack: `TS${match[4]}: ${match[5]}\n    at ${file}:${match[2]}:${match[3]}`,
+              }
+            : {}),
+        },
+      };
+      diagnostics.push(current);
+    } else if (/^\s/.test(line) && current) {
+      current.error.message += `\n${line}`;
+    } else if (isAbsolute(line)) {
+      current = undefined;
+      files.push(normalize(line));
+    } else {
+      current = undefined;
+      unparsed.push(line);
+    }
+  }
+  return { diagnostics, unparsed, files };
+}
+
+export function createTypeChecker(project: InternalProjectContext): {
+  check(testPaths: string[]): Promise<TypeDiagnostic[]>;
+  close(): Promise<void>;
+  readonly version: string;
+} {
+  const { root, typecheck } = project.normalizedConfig;
+  const configPath = resolve(root, typecheck.tsconfig);
+  const cacheFile = resolve(
+    root,
+    'node_modules/.cache/rstest/typecheck',
+    `${createHash('sha256').update(`${configPath}:${typecheck.checker}`).digest('hex')}.tsbuildinfo`,
+  );
+  const require = createRequire(resolve(root, 'package.json'));
+  let child: ChildProcess | undefined;
+  let pending: Promise<unknown> | undefined;
+  let closed = false;
+  let compiler: string;
+  let version: string;
+  try {
+    const packagePath = require.resolve(
+      `${typecheck.checker === 'vue-tsc' ? 'vue-tsc' : 'typescript'}/package.json`,
+    );
+    const metadata: { version: string; bin: string | Record<string, string> } =
+      JSON.parse(readFileSync(packagePath, 'utf8'));
+    const bin =
+      typeof metadata.bin === 'string'
+        ? metadata.bin
+        : metadata.bin[typecheck.checker];
+    if (!bin)
+      throw new Error(
+        `Package does not expose the ${typecheck.checker} command.`,
+      );
+    compiler = resolve(dirname(packagePath), bin);
+    version = metadata.version;
+  } catch (cause) {
+    throw new Error(
+      `Type testing requires ${typecheck.checker === 'vue-tsc' ? 'vue-tsc' : 'typescript'} in project "${project.name}". Install it as a dev dependency.`,
+      { cause },
+    );
+  }
+  const run = async (args: string[]) => {
+    if (closed) throw new Error('Type checker was interrupted.');
+    const promise = new Promise<{ output: string; code: number | null }>(
+      (done, reject) => {
+        child = spawn(
+          process.execPath,
+          [compiler, '--project', configPath, '--pretty', 'false', ...args],
+          {
+            cwd: root,
+            detached: process.platform !== 'win32',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          },
+        );
+        let output = '';
+        child.stdout!.setEncoding('utf8').on('data', (chunk: string) => {
+          output += chunk;
+        });
+        child.stderr!.setEncoding('utf8').on('data', (chunk: string) => {
+          output += chunk;
+        });
+        child.once('error', reject);
+        child.once('close', (code, signal) => {
+          child = undefined;
+          if (signal || closed)
+            reject(
+              new Error(
+                `Type checker interrupted${signal ? ` (${signal})` : ''}.`,
+              ),
+            );
+          else done({ output, code });
+        });
+      },
+    );
+    pending = promise;
+    return promise;
+  };
+  return {
+    version,
+    async check(testPaths: string[]) {
+      const config = readTsconfig(configPath, { typescriptVersion: false });
+      const missing = testPaths.filter((file) => !isFileIncluded(config, file));
+      if (missing.length)
+        throw new Error(
+          `Type test files are not included in ${configPath}:\n${missing.join('\n')}`,
+        );
+      await mkdir(dirname(cacheFile), { recursive: true });
+      const { output, code } = await run([
+        '--noEmit',
+        ...(config.config.compilerOptions?.noCheck
+          ? ['--noCheck', 'false']
+          : []),
+        '--listFiles',
+        '--locale',
+        'en',
+        '--incremental',
+        '--tsBuildInfoFile',
+        cacheFile,
+      ]);
+      const { diagnostics, unparsed, files } = parseDiagnostics(output, root);
+      if (unparsed.length || (code !== 0 && !diagnostics.length)) {
+        throw new Error(
+          `Type checker failed (exit ${code}):\n${output || 'No diagnostics were produced.'}`,
+        );
+      }
+      // The compiler is authoritative: an included file can still be omitted,
+      // for example when a .ts sibling takes precedence over a .tsx file.
+      const inputs = new Set(files);
+      const unchecked = testPaths.filter(
+        (file) => !inputs.has(normalize(file)),
+      );
+      if (!diagnostics.length && unchecked.length)
+        throw new Error(
+          `Type test files were not checked by ${typecheck.checker}:\n${unchecked.join('\n')}`,
+        );
+      return diagnostics;
+    },
+    async close() {
+      closed = true;
+      if (child?.pid) {
+        if (process.platform === 'win32') {
+          const killer = spawn(
+            // cspell:ignore taskkill
+            'taskkill',
+            ['/pid', String(child.pid), '/t', '/f'],
+            { stdio: 'ignore' },
+          );
+          await new Promise<void>((resolve, reject) => {
+            killer.once('error', reject);
+            killer.once('close', () => resolve());
+          });
+        } else {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch (error) {
+            if (!(
+              error instanceof Error &&
+              'code' in error &&
+              error.code === 'ESRCH'
+            ))
+              throw error;
+          }
+        }
+      }
+      await pending?.catch(() => undefined);
+    },
+  };
+}

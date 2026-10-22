@@ -132,6 +132,7 @@ export default defineConfig({
           'api/index': './src/api/index.ts',
           adapter: './src/adapter.ts',
           browser: './src/browser.ts',
+          typecheck: './src/typecheck.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },

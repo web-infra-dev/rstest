@@ -21,14 +21,9 @@ import {
   shouldRunGlobalSetup,
   runGlobalSetup,
 } from './globalSetup';
-import { applyOnlyFailuresSelection } from './onlyFailures';
 import type { ProjectPlan } from './projectPlan';
 import { CompileFailedError, createRsbuildServer } from '../build/rsbuild';
-import {
-  readResultsCache,
-  sequenceKey,
-  writeResultsCache,
-} from './resultsCache';
+import { readResultsCache, sequenceKey } from './resultsCache';
 import type { Rstest } from '../rstest';
 import type { SetupFileState } from '../config/setupFileState';
 import { prepareTestEnvironmentModules } from '../environment/testEnvironmentModule';
@@ -540,21 +535,13 @@ export function createNodeExecutor(
       };
     }
 
-    const isExplicitlyScoped =
-      fileFilters !== undefined || context.fileFilters !== undefined;
-    if (
-      context.normalizedConfig.onlyFailures &&
-      !isWatchMode &&
-      !context.relatedMode &&
-      !context.normalizedConfig.testNamePattern &&
-      mode !== 'on-demand' &&
-      !isExplicitlyScoped
-    ) {
-      applyOnlyFailuresSelection(projectPlans, {
-        resultsCache,
-        sequenceHints,
-        rootPath,
-      });
+    const { failedTestFiles } = opts;
+    if (failedTestFiles) {
+      for (const plan of projectPlans) {
+        plan.finalEntries = plan.finalEntries.filter(({ testPath }) =>
+          failedTestFiles.has(sequenceKey(plan.p.name, rootPath, testPath)),
+        );
+      }
     }
 
     const returns = await Promise.all(
@@ -580,28 +567,9 @@ export function createNodeExecutor(
 
     const coverageResourceLoaders = createCoverageResourceLoaders(returns);
 
-    // Persist node results for next-run ordering. Skip partial runs
-    // (cancellation closes the executor; filters and bail omit tests)
-    // so the perf-first cache is never poisoned. This is node-internal and does
-    // not depend on the shared finalize, so it stays here.
-    const bailLimit = context.normalizedConfig.bail;
-    const bailAborted =
-      bailLimit > 0 &&
-      context.stateManager.getCountOfFailedTests() >= bailLimit;
-    if (
-      !didClose &&
-      !context.normalizedConfig.testNamePattern &&
-      !bailAborted
-    ) {
-      await writeResultsCache(
-        rootPath,
-        returns.flatMap((r) => r.results),
-        currentDeletedEntries,
-      );
-    }
-
     return {
       results: returns.flatMap((r) => r.results),
+      cacheResults: !didClose,
       testResults: returns.flatMap((r) => r.testResults),
       errors: [
         ...returns.flatMap((r) => ('errors' in r ? r.errors : [])),
