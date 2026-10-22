@@ -60,7 +60,9 @@ export type SchedulerRunResult = {
  */
 export type DispatchPageResolver = (
   target?: BrowserDispatchRequest['target'],
+  runId?: string,
 ) => {
   runnerPage?: BrowserProviderPage;
   containerPage?: BrowserProviderPage;
+  isRunCurrent?: () => boolean;
 };

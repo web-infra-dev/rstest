@@ -56,9 +56,11 @@ import { parse as parseShellWords } from 'shell-quote';
 
 const asJson = argv.slice(2).includes('--json');
 
-const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-  encoding: 'utf8',
-}).trim();
+const repoRoot = resolve(
+  execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+  }).trim(),
+);
 
 function git(args) {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' });

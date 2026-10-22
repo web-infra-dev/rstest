@@ -7,8 +7,6 @@ import type {
 } from '@rstest/core';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
-import { createContext } from 'istanbul-lib-report';
-import reports from 'istanbul-reports';
 import {
   createFastCoverageMap,
   type IstanbulFileCoverageData,
@@ -209,6 +207,8 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   async generateReports(coverageMap: CoverageMap): Promise<void> {
+    // Workers collect coverage but never need the reporting dependencies.
+    const { createContext } = await import('istanbul-lib-report');
     const context = createContext({
       dir: this.options.reportsDirectory,
       coverageMap: await transformCoverage(coverageMap, this.sourcemapUrlCache),
@@ -243,6 +243,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       return new Reporter(reporterOptions);
     }
 
+    const { default: reports } = await import('istanbul-reports');
     try {
       return reports.create(
         resolvedReporterName as Parameters<typeof reports.create>[0],

@@ -56,8 +56,12 @@ const transformWithSwc = (
 
   return transform(code, {
     ...swcOptions,
+    // Compact the temporary code retained by each coverage VM.
+    minify: true,
     jsc: {
       ...swcOptions.jsc,
+      // Coverage needs source map comments even when output comments are disabled.
+      preserveAllComments: true,
       parser: isTypeScript
         ? {
             syntax: 'typescript',

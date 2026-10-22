@@ -153,6 +153,10 @@ export const createHeadedRunRegistry = () => {
       return true;
     },
 
+    isCurrent(runId: string): boolean {
+      return runsById.get(runId)?.phase === 'open';
+    },
+
     /**
      * A run whose fixture cleanup never finishes will never send its
      * terminal message — a way to go silent that no other deadline covers,

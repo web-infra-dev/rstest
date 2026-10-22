@@ -66,6 +66,12 @@ class FakeLocator {
 }
 
 class FakePage {
+  keyboardCalls: unknown[][] = [];
+  keyboard = {
+    press: async (...args: unknown[]) => {
+      this.keyboardCalls.push(args);
+    },
+  };
   constructor(private readonly locatorImpl: FakeLocator) {}
 
   locator(): FakeLocator {
@@ -76,10 +82,31 @@ class FakePage {
 class FakeContainerPage {
   selector = '';
   readonly frame = new FakeLocator();
+  keyboardCalls: unknown[][] = [];
+  focusChecks = 0;
+  readonly keyboardEvents: string[] = [];
+  onFocus?: (selector: string) => Promise<void>;
+  onPress?: (key: string) => Promise<void>;
+  keyboard = {
+    press: async (...args: unknown[]) => {
+      this.keyboardCalls.push(args);
+      const key = String(args[0]);
+      this.keyboardEvents.push(`press:start:${key}`);
+      await this.onPress?.(key);
+      this.keyboardEvents.push(`press:end:${key}`);
+    },
+  };
 
   locator(selector: string) {
     this.selector = selector;
-    return { count: async () => 1 };
+    return {
+      count: async () => 1,
+      evaluate: async () => {
+        this.focusChecks++;
+        this.keyboardEvents.push(`focus:${selector}`);
+        await this.onFocus?.(selector);
+      },
+    };
   }
 
   frameLocator(selector: string) {
@@ -104,6 +131,211 @@ const createRequest = (
 };
 
 describe('dispatchPlaywrightBrowserRpc', () => {
+  it('dispatches keyboard presses without resolving a locator', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    fakePage.locator = () => {
+      throw new Error('Keyboard must not resolve a locator');
+    };
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: fakePage as any,
+      request: createRequest({
+        kind: 'keyboard',
+        method: 'press',
+        args: ['ControlOrMeta+A', { delay: 10 }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    expect(fakePage.keyboardCalls).toEqual([
+      ['ControlOrMeta+A', { delay: 10 }],
+    ]);
+  });
+
+  it('routes headed keyboard presses through the requested runner frame', async () => {
+    const fakePage = new FakeContainerPage();
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: fakePage as any,
+      request: createRequest({
+        kind: 'keyboard',
+        method: 'press',
+        args: ['Tab'],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    expect(fakePage.selector).toContain("data-test-project='default'");
+    expect(fakePage.selector).toContain(
+      "data-test-file='/tests/example.test.ts'",
+    );
+    expect(fakePage.focusChecks).toBe(1);
+    expect(fakePage.keyboardCalls).toEqual([['Tab', undefined]]);
+  });
+
+  it('serializes headed focus and keyboard presses per page', async () => {
+    const fakePage = new FakeContainerPage();
+    let releaseFirstFocus = () => {};
+    const firstFocus = new Promise<void>((resolve) => {
+      releaseFirstFocus = resolve;
+    });
+    let firstFocusStarted = () => {};
+    const firstFocusStartedPromise = new Promise<void>((resolve) => {
+      firstFocusStarted = resolve;
+    });
+    let releaseFirstPress = () => {};
+    const firstPress = new Promise<void>((resolve) => {
+      releaseFirstPress = resolve;
+    });
+    let firstPressStarted = () => {};
+    const firstPressStartedPromise = new Promise<void>((resolve) => {
+      firstPressStarted = resolve;
+    });
+    let secondFocusStarted = () => {};
+    const secondFocusStartedPromise = new Promise<void>((resolve) => {
+      secondFocusStarted = resolve;
+    });
+    fakePage.onFocus = async (selector) => {
+      if (selector.includes('first.test.ts')) {
+        firstFocusStarted();
+        await firstFocus;
+      } else {
+        secondFocusStarted();
+      }
+    };
+    fakePage.onPress = async (key) => {
+      if (key === 'a') {
+        firstPressStarted();
+        await firstPress;
+      }
+    };
+
+    const dispatch = (testPath: string, key: string) =>
+      dispatchPlaywrightBrowserRpc({
+        containerPage: fakePage as any,
+        request: createRequest({
+          testPath,
+          kind: 'keyboard',
+          method: 'press',
+          args: [key],
+        }),
+        timeoutFallbackMs: 500,
+      });
+    const first = dispatch('/tests/first.test.ts', 'a');
+    await firstFocusStartedPromise;
+    const second = dispatch('/tests/second.test.ts', 'b');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fakePage.keyboardEvents).toHaveLength(1);
+
+    releaseFirstFocus();
+    await firstPressStartedPromise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fakePage.keyboardEvents).toEqual([
+      expect.stringContaining(
+        "focus:iframe[data-test-file='/tests/first.test.ts']",
+      ),
+      'press:start:a',
+    ]);
+
+    releaseFirstPress();
+    await secondFocusStartedPromise;
+    await Promise.all([first, second]);
+    expect(fakePage.keyboardEvents).toEqual([
+      expect.stringContaining(
+        "focus:iframe[data-test-file='/tests/first.test.ts']",
+      ),
+      'press:start:a',
+      'press:end:a',
+      expect.stringContaining(
+        "focus:iframe[data-test-file='/tests/second.test.ts']",
+      ),
+      'press:start:b',
+      'press:end:b',
+    ]);
+  });
+
+  it('does not send a key if the headed run expires while focusing its iframe', async () => {
+    const fakePage = new FakeContainerPage();
+    let runCurrent = true;
+    fakePage.onFocus = async () => {
+      runCurrent = false;
+    };
+    await dispatchPlaywrightBrowserRpc({
+      containerPage: fakePage as any,
+      request: createRequest({
+        kind: 'keyboard',
+        method: 'press',
+        args: ['a'],
+      }),
+      isRequestCurrent: () => runCurrent,
+      timeoutFallbackMs: 500,
+    });
+    expect(fakePage.focusChecks).toBe(1);
+    expect(fakePage.keyboardCalls).toEqual([]);
+  });
+
+  it('drops a queued keyboard press after its headed run expires', async () => {
+    const fakePage = new FakeContainerPage();
+    let releaseFirstPress = () => {};
+    const firstPress = new Promise<void>((resolve) => {
+      releaseFirstPress = resolve;
+    });
+    let firstPressStarted = () => {};
+    const firstPressStartedPromise = new Promise<void>((resolve) => {
+      firstPressStarted = resolve;
+    });
+    fakePage.onPress = async (key) => {
+      if (key === 'a') {
+        firstPressStarted();
+        await firstPress;
+      }
+    };
+    let secondRunCurrent = true;
+
+    const first = dispatchPlaywrightBrowserRpc({
+      containerPage: fakePage as any,
+      request: createRequest({
+        kind: 'keyboard',
+        method: 'press',
+        args: ['a'],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await firstPressStartedPromise;
+    const second = dispatchPlaywrightBrowserRpc({
+      containerPage: fakePage as any,
+      request: createRequest({
+        testPath: '/tests/next.test.ts',
+        kind: 'keyboard',
+        method: 'press',
+        args: ['b'],
+      }),
+      isRequestCurrent: () => secondRunCurrent,
+      timeoutFallbackMs: 500,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    secondRunCurrent = false;
+
+    releaseFirstPress();
+    await Promise.all([first, second]);
+    expect(fakePage.keyboardCalls).toEqual([['a', undefined]]);
+    expect(fakePage.focusChecks).toBe(1);
+  });
+
+  it('rejects unsupported keyboard methods and invalid keys', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    for (const [method, args, message] of [
+      ['down', ['Shift'], 'Keyboard method not supported: down'],
+      ['press', [''], 'keyboard.press expects a key'],
+      ['press', [42], 'keyboard.press expects a key'],
+    ] as const) {
+      await expect(
+        dispatchPlaywrightBrowserRpc({
+          runnerPage: fakePage as any,
+          request: createRequest({ kind: 'keyboard', method, args: [...args] }),
+          timeoutFallbackMs: 500,
+        }),
+      ).rejects.toThrow(message);
+    }
+    expect(fakePage.keyboardCalls).toEqual([]);
+  });
+
   it('dispatches supported locator actions', async () => {
     const fakeLocator = new FakeLocator();
     const result = await dispatchPlaywrightBrowserRpc({

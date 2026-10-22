@@ -8,5 +8,6 @@
  */
 export { createRstest } from './createRstest';
 export { ListTestsError } from './listTestsError';
+export { PROJECT_LOADER } from '../projectLoader';
 export { runCLI, type RunCLIOptions } from '../cli';
 export type * from './types';

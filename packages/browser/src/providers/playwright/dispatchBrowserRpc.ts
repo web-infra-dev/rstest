@@ -16,10 +16,15 @@ import type {
   BrowserLocatorText,
   BrowserRpcRequest,
 } from '../../rpcProtocol';
+import { createSerialTaskQueue } from '../../serialTaskQueue';
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
 
 const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
+const keyboardQueues = new WeakMap<
+  Page,
+  ReturnType<typeof createSerialTaskQueue>
+>();
 
 // ---------------------------------------------------------------------------
 // Iframe lookup
@@ -571,11 +576,13 @@ export async function dispatchPlaywrightBrowserRpc({
   containerPage,
   runnerPage,
   request,
+  isRequestCurrent,
   timeoutFallbackMs,
 }: {
   containerPage?: Page;
   runnerPage?: Page;
   request: BrowserRpcRequest;
+  isRequestCurrent?: () => boolean;
   timeoutFallbackMs: number;
 }): Promise<unknown> {
   // Config operations don't need a locator or runner frame.
@@ -592,22 +599,68 @@ export async function dispatchPlaywrightBrowserRpc({
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
   const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
+  const keyboardPage = runnerPage ?? containerPage;
+  if (!keyboardPage) {
+    throw new Error('Browser container page is not initialized');
+  }
+
+  if (request.kind === 'keyboard') {
+    if (request.method !== 'press') {
+      throw new Error(`Keyboard method not supported: ${request.method}`);
+    }
+    const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
+    let queue = keyboardQueues.get(keyboardPage);
+    if (!queue) {
+      queue = createSerialTaskQueue();
+      keyboardQueues.set(keyboardPage, queue);
+    }
+    return queue.enqueue(async () => {
+      if (isRequestCurrent && !isRequestCurrent()) {
+        return;
+      }
+      if (!runnerPage) {
+        const { iframe } = await getRunnerFrame(
+          keyboardPage,
+          testPath,
+          request.projectName,
+          timeout > 0 ? timeout : 0,
+        );
+        await iframe.evaluate((element) => {
+          // Focusing an already active iframe would reset native Tab navigation.
+          if (
+            element instanceof HTMLIFrameElement &&
+            document.activeElement !== element
+          ) {
+            element.focus({ preventScroll: true });
+          }
+        });
+        // Frame lookup and focus yield to watch invalidation before input starts.
+        if (isRequestCurrent && !isRequestCurrent()) {
+          return;
+        }
+      }
+      await keyboardPage.keyboard.press(
+        key,
+        // RPC arguments cross the untyped transport boundary.
+        request.args[1] as Parameters<Page['keyboard']['press']>[1],
+      );
+    });
+  }
+
   let locatorRoot: FrameLocator | Page;
   let headedRunner: Awaited<ReturnType<typeof getRunnerFrame>> | undefined;
   if (runnerPage) {
     locatorRoot = runnerPage;
   } else {
     headedRunner = await getRunnerFrame(
-      containerPage ??
-        (() => {
-          throw new Error('Browser container page is not initialized');
-        })(),
+      keyboardPage,
       testPath,
       request.projectName,
       timeout > 0 ? timeout : 0,
     );
     locatorRoot = headedRunner.frame;
   }
+
   const locator = compilePlaywrightLocator(
     locatorRoot,
     request.locator as BrowserLocatorIR,
