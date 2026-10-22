@@ -66,5 +66,3 @@ export const onTestFinished: Rstest['onTestFinished'] =
   wrapRstestAPI('onTestFinished');
 export const onTestFailed: Rstest['onTestFailed'] =
   wrapRstestAPI('onTestFailed');
-
-export { expectTypeOf, assertType, type ExpectTypeOf } from './typeAssertions';

@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile, cp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { mkdtemp, readFile, rm, writeFile, cp, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { expect, test } from '@rstest/core';
@@ -13,7 +14,7 @@ async function setup(onTestFinished: (cleanup: () => Promise<void>) => void) {
   return cwd;
 }
 
-const source = `import { test, expectTypeOf } from '@rstest/core';\ntest('broken assertion', () => { expectTypeOf<number>().toEqualTypeOf<string>(); });\n`;
+const source = `import { test, expectTypeOf } from '@rstest/typecheck';\ntest('broken assertion', () => { expectTypeOf<number>().toEqualTypeOf<string>(); });\n`;
 
 test('runs static assertions and runtime tests together without executing type files', async () => {
   const { expectExecSuccess, expectLog } = await runRstestCli({
@@ -243,7 +244,6 @@ test('fails a checker that exits unsuccessfully without diagnostics', async ({
   onTestFinished,
 }) => {
   const cwd = await setup(onTestFinished);
-  const { mkdir } = await import('node:fs/promises');
   const packageDir = join(cwd, 'node_modules/typescript');
   await mkdir(packageDir, { recursive: true });
   await writeFile(
@@ -342,7 +342,6 @@ test('checks once per run and invalidates incremental results after edits', asyn
   const metadataPath = require.resolve('typescript/package.json');
   const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
   const compiler = join(dirname(metadataPath), metadata.bin.tsc);
-  const { mkdir } = await import('node:fs/promises');
   const packageDir = join(cwd, 'node_modules/typescript');
   await mkdir(packageDir, { recursive: true });
   await writeFile(
@@ -408,4 +407,119 @@ test('fails a discovered file omitted by the compiler due to extension precedenc
   await expectExecFailed();
   expect(cli.log).toContain('Type test files were not checked by tsc');
   expect(cli.log).toContain('basic.test-d.tsx');
+});
+
+test('loads type testing only when enabled and explains a missing package', async ({
+  onTestFinished,
+}) => {
+  const cwd = await mkdtemp(join(tmpdir(), 'rstest-type-package-'));
+  onTestFinished(() => rm(cwd, { recursive: true, force: true }));
+  await writeFile(
+    join(cwd, 'rstest.config.mjs'),
+    'export default { globals: true };',
+  );
+  await writeFile(
+    join(cwd, 'basic.test.ts'),
+    "test('runtime without typecheck package', () => {});",
+  );
+  await writeFile(join(cwd, 'basic.test-d.ts'), 'const value: number = 1;');
+  const require = createRequire(import.meta.url);
+  const cliPath = join(
+    dirname(require.resolve('@rstest/core/package.json')),
+    'bin/rstest.js',
+  );
+  const runtime = await runRstestCli({
+    command: process.execPath,
+    options: { nodeOptions: { cwd } },
+    args: [cliPath, 'run'],
+  });
+  await runtime.expectExecSuccess();
+  for (const command of ['run', 'list']) {
+    const run = await runRstestCli({
+      command: process.execPath,
+      options: { nodeOptions: { cwd } },
+      args: [cliPath, command, '--typecheck.only'],
+    });
+    await run.expectExecFailed();
+    expect(run.cli.log).toContain('Type testing requires @rstest/typecheck');
+    expect(run.cli.log).toContain('npm install -D @rstest/typecheck@');
+  }
+});
+
+test('rejects a mismatched typecheck package before importing it', async ({
+  onTestFinished,
+}) => {
+  const cwd = await setup(onTestFinished);
+  const dir = join(cwd, 'node_modules/@rstest/typecheck');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, 'package.json'),
+    JSON.stringify({
+      name: '@rstest/typecheck',
+      version: '0.0.0',
+      exports: {
+        './internal': './internal.mjs',
+        './package.json': './package.json',
+      },
+    }),
+  );
+  await writeFile(
+    join(dir, 'internal.mjs'),
+    "throw new Error('wrong package loaded');",
+  );
+  const run = await runRstestCli({
+    command: 'rstest',
+    options: { nodeOptions: { cwd } },
+    args: ['list', '--typecheck.only'],
+  });
+  await run.expectExecFailed();
+  expect(run.cli.log).toContain('Version mismatch between @rstest/core');
+  expect(run.cli.log).toContain('@rstest/typecheck (0.0.0)');
+  expect(run.cli.log).not.toContain('wrong package loaded');
+});
+
+test('checks the lightweight entry without loading core or bundler declarations', async () => {
+  const require = createRequire(join(fixture, 'package.json'));
+  const packagePath = require.resolve('typescript/package.json');
+  const metadata = JSON.parse(await readFile(packagePath, 'utf8'));
+  const run = await runRstestCli({
+    command: process.execPath,
+    options: { nodeOptions: { cwd: fixture } },
+    args: [
+      join(dirname(packagePath), metadata.bin.tsc),
+      '--noEmit',
+      '--listFiles',
+      '--pretty',
+      'false',
+    ],
+  });
+  await run.expectExecSuccess();
+  const inputs = run.cli.stdout.replaceAll('\\', '/');
+  expect(inputs).toContain('/typecheck/dist/index.d.ts');
+  expect(inputs).not.toContain('/core/dist/index.d.ts');
+  expect(inputs).not.toContain('/@rsbuild/');
+  expect(inputs).not.toContain('/@rspack/');
+});
+
+test('attributes diagnostics after Chinese text and emoji to a nested case', async ({
+  onTestFinished,
+}) => {
+  const cwd = await setup(onTestFinished);
+  await writeFile(
+    join(cwd, 'basic.test-d.ts'),
+    `import {describe, test, assertType} from '@rstest/typecheck';\r\nconst label = '中文😀'; describe('套件', () => { test('错误用例', () => { assertType<number>('bad'); }); test('正确用例', () => { assertType<string>(label); }); });`,
+  );
+  const run = await runRstestCli({
+    command: 'rstest',
+    options: { nodeOptions: { cwd } },
+    args: ['run', '--typecheck.only', '--reporter', 'json'],
+  });
+  await run.expectExecFailed();
+  const report = JSON.parse(run.cli.stdout.slice(run.cli.stdout.indexOf('{')));
+  expect(report.tests).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: '错误用例', status: 'fail' }),
+      expect.objectContaining({ name: '正确用例', status: 'pass' }),
+    ]),
+  );
 });

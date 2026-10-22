@@ -23,6 +23,8 @@ interface TypecheckOptions {
 }
 ```
 
+需要安装与 `@rstest/core` 版本一致的 [@rstest/typecheck](https://github.com/web-infra-dev/rstest/tree/main/packages/typecheck)。
+
 `enabled` 将静态类型测试加入运行。`only` 启用类型测试并排除运行时测试。`include` 和 `exclude` 相对项目根目录解析，项目级排除规则也会生效。嵌套选项按字段合并，后面的数组替换前面的数组。
 
 `checker` 解析项目安装的 `typescript` 或 `vue-tsc` 可执行文件。`tsconfig` 相对项目根目录解析，默认为 `tsconfig.json`。Rstest 使用 `noEmit` 检查，并覆盖 `noCheck: true`，确保类型断言生效。所有发现的类型测试都必须是该配置的根文件。只有项目引用的 solution-style 配置，需要另建包含 `files` 或 `include` 的测试 tsconfig。

@@ -5,7 +5,10 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, normalize, resolve } from 'pathe';
 import { isFileIncluded, readTsconfig } from 'get-tsconfig';
-import type { InternalProjectContext, SerializedError } from '../../types';
+import type {
+  InternalProjectContext,
+  SerializedError,
+} from '@rstest/core/internal/typecheck';
 
 export interface TypeDiagnostic {
   file?: string;

@@ -1,6 +1,4 @@
 declare global {
-  const expectTypeOf: (typeof import('@rstest/core'))['expectTypeOf'];
-  const assertType: (typeof import('@rstest/core'))['assertType'];
   const test: (typeof import('@rstest/core'))['test'];
   const describe: (typeof import('@rstest/core'))['describe'];
   const it: (typeof import('@rstest/core'))['it'];

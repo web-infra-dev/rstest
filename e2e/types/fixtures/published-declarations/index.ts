@@ -1,9 +1,5 @@
-import {
-  expect,
-  expectTypeOf,
-  test,
-  type FixtureLifecycle,
-} from '@rstest/core';
+import { expectTypeOf } from '@rstest/typecheck';
+import { expect, test, type FixtureLifecycle } from '@rstest/core';
 
 expect(true).toBe(true);
 

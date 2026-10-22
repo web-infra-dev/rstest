@@ -1,3 +1,4 @@
+import { loadTypecheckExecutor } from './typecheck/loader';
 import { BlobReporter } from '../reporter/blob';
 import { exitReporters } from '../reporter';
 import {
@@ -134,6 +135,10 @@ export async function runTests(context: Rstest): Promise<void> {
     onTraceEvents: forwardBrowserTraceEvents,
   });
 
+  const typecheckExecutor = planner.typecheckProjects.length
+    ? await loadTypecheckExecutor(context, planner.typecheckProjects)
+    : undefined;
+
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
 
@@ -182,12 +187,6 @@ export async function runTests(context: Rstest): Promise<void> {
     : undefined;
   await nodeExecutor?.init();
 
-  const typecheckExecutor = planner.typecheckProjects.length
-    ? (await import('./typecheck/executor')).createTypecheckExecutor(
-        context,
-        planner.typecheckProjects,
-      )
-    : undefined;
   const hasTypeTests = planner.typecheckProjects.some(
     ({ testPaths }) => testPaths.length > 0,
   );

@@ -1,4 +1,5 @@
-import { describe, expect, expectTypeOf, assertType, it } from '@rstest/core';
+import { expectTypeOf, assertType } from '@rstest/typecheck';
+import { describe, expect, it } from '@rstest/core';
 
 describe('DOM operations', () => {
   it('should create elements correctly', () => {

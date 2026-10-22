@@ -1,4 +1,3 @@
-import { expectTypeOf, assertType } from './typeAssertions';
 import { normalize } from 'pathe';
 import type {
   Rstest,
@@ -98,8 +97,6 @@ export const createRstestRuntime = async (
     api: {
       ...runnerAPI,
       expect,
-      expectTypeOf,
-      assertType,
       assert,
       rstest,
       rs: rstest,

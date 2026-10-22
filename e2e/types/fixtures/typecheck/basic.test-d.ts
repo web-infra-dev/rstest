@@ -3,7 +3,7 @@ import {
   describe,
   expectTypeOf,
   test as check,
-} from '@rstest/core';
+} from '@rstest/typecheck';
 import { twice } from './source.js';
 
 function mustNotExecute(): void {

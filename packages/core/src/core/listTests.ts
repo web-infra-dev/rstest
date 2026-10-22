@@ -1,3 +1,4 @@
+import { loadTypecheckExecutor } from './typecheck/loader';
 import { createPool } from '../pool';
 import { toSerializedError } from '../utils/error';
 import type {
@@ -423,8 +424,7 @@ export async function listTests(
 
   try {
     if (planner.typecheckProjects.length) {
-      const { createTypecheckExecutor } = await import('./typecheck/executor');
-      const executor = createTypecheckExecutor(
+      const executor = await loadTypecheckExecutor(
         context,
         planner.typecheckProjects,
       );

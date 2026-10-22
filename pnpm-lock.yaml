@@ -321,6 +321,9 @@ importers:
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../scripts/tsconfig
+      '@rstest/typecheck':
+        specifier: workspace:*
+        version: link:../packages/typecheck
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -1432,9 +1435,6 @@ importers:
       cjs-module-lexer:
         specifier: ^2.3.0
         version: 2.3.0
-      expect-type:
-        specifier: ^1.4.0
-        version: 1.4.0
     devDependencies:
       '@antfu/install-pkg':
         specifier: ^1.1.0
@@ -1442,15 +1442,6 @@ importers:
       '@babel/code-frame':
         specifier: ^7.29.7
         version: 7.29.7
-      '@babel/parser':
-        specifier: 7.29.9
-        version: 7.29.9
-      '@babel/traverse':
-        specifier: 7.29.7
-        version: 7.29.7(supports-color@8.1.1)
-      '@babel/types':
-        specifier: ^7.29.8
-        version: 7.29.8
       '@clack/prompts':
         specifier: ^1.8.1
         version: 1.8.1
@@ -1481,9 +1472,6 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.27.0
         version: 7.27.0
-      '@types/babel__traverse':
-        specifier: ^7.28.0
-        version: 7.28.0
       '@types/istanbul-lib-coverage':
         specifier: ^2.0.6
         version: 2.0.6
@@ -1529,9 +1517,6 @@ importers:
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
-      get-tsconfig:
-        specifier: 5.0.0-beta.6
-        version: 5.0.0-beta.6
       happy-dom:
         specifier: ^21.0.3
         version: 21.0.3
@@ -1710,6 +1695,34 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  packages/typecheck:
+    dependencies:
+      expect-type:
+        specifier: ^1.4.0
+        version: 1.4.0
+      get-tsconfig:
+        specifier: 5.0.0-beta.6
+        version: 5.0.0-beta.6
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      yuku-ast:
+        specifier: ^0.19.0
+        version: 0.19.0
+      yuku-parser:
+        specifier: ^0.19.0
+        version: 0.19.0
+    devDependencies:
+      '@rslib/core':
+        specifier: 'catalog:'
+        version: 1.0.3(@microsoft/api-extractor@7.59.4(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
 
   packages/vscode:
     devDependencies:

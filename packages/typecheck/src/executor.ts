@@ -3,21 +3,24 @@ import { normalize } from 'pathe';
 import type {
   ExecutorCycleOutcome,
   SerializedError,
-  TestExecutor,
+  TypecheckExecutor,
+  InternalContext,
+  TypecheckProject,
   TestInfo,
   TestResult,
-} from '../../types';
-import { toError, getFileTaskId } from '../../utils';
-import type { Rstest } from '../rstest';
-import { createRunnerEventSink } from '../execution/runnerEventSink';
+} from '@rstest/core/internal/typecheck';
+import {
+  toError,
+  getFileTaskId,
+  createRunnerEventSink,
+} from '@rstest/core/internal/typecheck';
 import { collectTypeTests } from './collect';
 import { createTypeChecker } from './checker';
-import type { TypecheckProject } from './plan';
 
 export function createTypecheckExecutor(
-  context: Rstest,
+  context: InternalContext,
   initialPlans: TypecheckProject[],
-): TestExecutor {
+): TypecheckExecutor {
   const projects = initialPlans.map(({ project }) => project);
   const checkers = new Map<string, ReturnType<typeof createTypeChecker>>();
   let closed = false;

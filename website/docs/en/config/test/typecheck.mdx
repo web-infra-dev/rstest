@@ -23,6 +23,8 @@ interface TypecheckOptions {
 }
 ```
 
+Requires [@rstest/typecheck](https://github.com/web-infra-dev/rstest/tree/main/packages/typecheck) installed at the same version as `@rstest/core`.
+
 `enabled` adds static type tests to a run. `only` enables type tests and excludes runtime tests. `include` and `exclude` are resolved relative to the project root; project-level exclusions also apply. Nested options merge by field, and later arrays replace earlier arrays.
 
 `checker` resolves the project's installed `typescript` or `vue-tsc` executable. `tsconfig` is relative to the project root and defaults to `tsconfig.json`. Rstest checks with `noEmit` and overrides `noCheck: true` to keep assertions active. Every discovered type test must be a root file of that config. Solution-style configs containing only project references need a dedicated test tsconfig with `files` or `include`.

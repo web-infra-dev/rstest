@@ -1,4 +1,3 @@
-import type { expectTypeOf, assertType } from '../runtime/api/typeAssertions';
 import type { assert } from 'chai';
 import type { ExpectStatic } from './expect';
 import type { RstestUtilities } from './mock';
@@ -437,8 +436,6 @@ export type RunnerAPI = {
 export type RstestExpect = ExpectStatic;
 
 export type Rstest = RunnerAPI & {
-  expectTypeOf: typeof expectTypeOf;
-  assertType: typeof assertType;
   expect: RstestExpect;
   assert: typeof assert;
   rstest: RstestUtilities;
