@@ -1,12 +1,12 @@
 import { join } from 'node:path';
-import { describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 import { coverageProviders } from './providers';
 
 for (const provider of coverageProviders) {
   describe(`coverage thresholds (${provider})`, () => {
     it('checks global thresholds', async () => {
-      const { expectStderrLog, expectExecFailed } = await runRstestCli({
+      const { cli, expectStderrLog, expectExecFailed } = await runRstestCli({
         command: 'rstest',
         args: [
           'run',
@@ -27,6 +27,11 @@ for (const provider of coverageProviders) {
       });
 
       await expectExecFailed();
+
+      expect(cli.exec.process?.exitCode).toBe(1);
+      expect(cli.stdout).toContain('RUN_END_STATUS:failed:FAILED_TESTS:0');
+      // Both the JSON and Markdown summaries must use the final host verdict.
+      expect(cli.stdout.match(/"status": "failed"/g)).toHaveLength(2);
 
       expectStderrLog(
         /Coverage for statements .* does not meet global threshold/i,

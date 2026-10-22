@@ -1,4 +1,7 @@
-import type { ExecutorCycleOutcome } from '@rstest/core/internal/browser';
+import type {
+  ExecutorCycleOutcome,
+  ExecutorRunCycleOptions,
+} from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { BrowserDispatchRequest } from './protocol';
 import type { BrowserProviderPage } from './providers';
@@ -23,6 +26,7 @@ export type BrowserWatchSession = {
   runCycle: (
     testPaths: string[],
     updateSnapshot: SnapshotUpdateState,
+    onSelected?: ExecutorRunCycleOptions['onSelected'],
   ) => Promise<ExecutorCycleOutcome>;
   /** Explicit path-scoped rerun request (a CLI shortcut's browser fanout). */
   requestRerun: (

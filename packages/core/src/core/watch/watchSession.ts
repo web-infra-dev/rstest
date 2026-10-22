@@ -1,6 +1,10 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { exitReporters } from '../../reporter';
-import type { ExecutorCycleOutcome, TestExecutor } from '../../types';
+import type {
+  ExecutorCycleOutcome,
+  SelectedTestFile,
+  TestExecutor,
+} from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import {
   clearScreen,
@@ -262,17 +266,20 @@ export function createWatchCycleDriver({
     // The run opens lazily — see `InternalContext.openReporterRun`. A rebuild
     // that reaches no test then opens nothing and leaves the screen as it was.
     let runOpened: Promise<void> | undefined;
+    let selectedFiles: SelectedTestFile[] = [];
     const openRun = () =>
       (runOpened ??= (async () => {
         // The first cycle and every shortcut clear on their own terms; only a
         // rebuild-driven rerun clears here, once it is known to be one.
         if (mode === 'on-demand') clearScreen();
-        await notifyReportersOnTestRunStart(context);
+        await notifyReportersOnTestRunStart(context, selectedFiles);
       })());
     context.openReporterRun = openRun;
     try {
-      // A scope the user chose reports even when empty ("No test files found.").
-      if (mode === 'all') await openRun();
+      const onSelected = async (files: SelectedTestFile[]) => {
+        selectedFiles = files;
+        if (files.length || mode === 'all') await openRun();
+      };
       let outcome: ExecutorCycleOutcome;
       try {
         outcome =
@@ -285,6 +292,7 @@ export function createWatchCycleDriver({
             updateSnapshot,
             env,
             onTraceEvents,
+            onSelected,
           }));
       } catch (error) {
         outcome = cycleFailureOutcome([toError(error)]);
@@ -295,6 +303,7 @@ export function createWatchCycleDriver({
       // A cycle that ran nothing may still have something to report: an
       // error, or a retired file the summary must stop counting.
       if (
+        mode === 'all' ||
         outcome.results.length ||
         outcome.errors.length ||
         outcome.deletedTestPaths?.length

@@ -155,7 +155,7 @@ const createInFlightOneShotWorker = (shouldReject = false) => {
         if (shouldReject) {
           throw new Error('test run failed');
         }
-        return { status: 'pass', unhandledErrors: [] };
+        return { status: 'passed', unhandledErrors: [] };
       },
     },
   });
@@ -580,7 +580,7 @@ describe('RstestApi test-run completion', () => {
   ])('forwards the $kind path without a filter mode', async ({ filter }) => {
     const api = createApi();
     const engineRun = rs.fn(async () => ({
-      status: 'pass',
+      status: 'passed',
       unhandledErrors: [],
     }));
     const coreWorker = new Worker();
@@ -658,7 +658,7 @@ describe('RstestApi test-run completion', () => {
       fileFilters: undefined,
       rstest: {
         run: async () => ({
-          status: 'fail',
+          status: 'failed',
           summary: {
             tests: { total: 1, passed: 0, failed: 1, skipped: 0, todo: 0 },
             files: { total: 1, failed: 1 },
@@ -726,7 +726,7 @@ describe('RstestApi test-run completion', () => {
           coverageReported.resolve();
           await thresholdChecked.promise;
           return {
-            status: 'fail',
+            status: 'failed',
             summary: {
               tests: {
                 total: 1,

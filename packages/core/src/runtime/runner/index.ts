@@ -3,9 +3,9 @@ import type {
   Rstest,
   RunnerAPI,
   RunnerHooks,
+  RawTestFileResult,
+  RawTestInfo,
   Test,
-  TestFileResult,
-  TestInfo,
   WorkerState,
 } from '../../types';
 import { getFileTaskId } from '../../utils/helper';
@@ -20,7 +20,7 @@ import { traverseUpdateTest } from './task';
 const currentRunner = (): TestRunner => fileContext().testRunner;
 
 export type FileCleanupHooks = {
-  onFileCleanupStart?: (result?: TestFileResult) => MaybePromise<void>;
+  onFileCleanupStart?: (result?: RawTestFileResult) => MaybePromise<void>;
   onFileCleanupEnd?: () => MaybePromise<void>;
 };
 
@@ -59,8 +59,8 @@ export function createRunner({
       testFilePath: string,
       hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
-    ) => Promise<TestFileResult>;
-    collectTests: () => Promise<TestInfo[]>;
+    ) => Promise<RawTestFileResult>;
+    collectTests: () => Promise<RawTestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
     getRootSuiteListeners: () => RootSuiteListeners;
     setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
@@ -163,7 +163,7 @@ export function createRunner({
   };
 }
 
-function toTestInfo(test: Test): TestInfo {
+function toTestInfo(test: Test): RawTestInfo {
   return {
     testId: test.testId,
     name: test.name,

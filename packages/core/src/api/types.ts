@@ -15,6 +15,7 @@ export type {
   SnapshotSummary,
   TaskMeta,
   TestResultStatus,
+  TestRunStatus,
 } from '../types';
 
 /** @experimental Subject to change until 1.0.0. */
@@ -181,14 +182,8 @@ export interface MergeReportsOptions {
   cleanup?: boolean;
 }
 
-// Status literals match TestResultStatus; summary count keys stay past tense.
-/** @experimental Subject to change until 1.0.0. */
-export type TestRunStatus = 'pass' | 'fail' | 'error';
-
 /** @experimental Subject to change until 1.0.0. */
 export interface TestRunResult extends Omit<TestRunEndPayload, 'getSourcemap'> {
-  /** Overall status of the run. */
-  status: TestRunStatus;
   /** Present only when the run was started with `trace`. */
   trace?: { tracePath: string; summaryPath: string };
 }

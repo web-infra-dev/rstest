@@ -99,6 +99,12 @@ export type {
   ListBrowserTestsOptions,
   ListCommandResult,
   Reporter,
+  RawTestCaseInfo,
+  RawTestFileInfo,
+  RawTestFileResult,
+  RawTestResult,
+  RawTestSuiteInfo,
+  RawUserConsoleLog,
   RunnerHooks,
   RuntimeConfig,
   SerializedError,
@@ -129,4 +135,5 @@ export {
 } from './utils/getSetupFiles';
 export { resolveShardedEntries } from './utils/shard';
 export { getTestEntries } from './utils/testFiles';
+export { getFileSummary } from './utils/testSummary';
 export { rsbuild };

@@ -84,19 +84,39 @@ describe('GithubActionsReporter step summary', () => {
         results: [
           {
             testId: 'file-a',
-            status: 'pass',
+            status: 'passed',
             name: 'file-a',
+            fullName: 'file-a',
             testPath: path.join(tempDir, 'packages/a/a.test.ts'),
+            relativeTestPath: 'packages/a/a.test.ts',
             project: 'pkg-a',
             results: [],
+            summary: {
+              total: 0,
+              passed: 0,
+              failed: 0,
+              skipped: 0,
+              todo: 0,
+              flaky: 0,
+            },
           },
           {
             testId: 'file-b',
-            status: 'pass',
+            status: 'passed',
             name: 'file-b',
+            fullName: 'file-b',
             testPath: path.join(tempDir, 'packages/b/b.test.ts'),
+            relativeTestPath: 'packages/b/b.test.ts',
             project: 'pkg-b',
             results: [],
+            summary: {
+              total: 0,
+              passed: 0,
+              failed: 0,
+              skipped: 0,
+              todo: 0,
+              flaky: 0,
+            },
           },
         ],
         testResults: [],
@@ -187,6 +207,7 @@ describe('GithubActionsReporter step summary', () => {
 
       await reporter.onTestRunEnd({
         ...emptyRunEndPayload,
+        status: 'error',
         unhandledErrors: [{ name: 'Error', message: 'global setup failed' }],
       });
 
@@ -249,23 +270,36 @@ describe('GithubActionsReporter step summary', () => {
         GithubActionsReporter['onTestRunEnd']
       >[0] = {
         ...emptyRunEndPayload,
+        status: 'failed',
         results: [
           {
             testId: 'file-1',
-            status: 'fail',
+            status: 'failed',
             name: 'long-diff.test.ts',
+            fullName: 'long-diff.test.ts',
             testPath,
+            relativeTestPath: 'tests/long-diff.test.ts',
             project: 'rstest',
             results: [],
+            summary: {
+              total: 1,
+              passed: 0,
+              failed: 1,
+              skipped: 0,
+              todo: 0,
+              flaky: 0,
+            },
           },
         ],
         testResults: [
           {
             testId: 'test-1',
-            status: 'fail',
+            status: 'failed',
             name: 'shows the useful diff',
+            fullName: 'shows the useful diff',
             parentNames: [],
             testPath,
+            relativeTestPath: 'tests/long-diff.test.ts',
             project: 'rstest',
             errors: [
               {
@@ -337,23 +371,46 @@ describe('GithubActionsReporter step summary', () => {
 
       await reporter.onTestRunEnd({
         ...emptyRunEndPayload,
+        summary: {
+          files: { total: 1, failed: 0 },
+          tests: {
+            total: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            todo: 0,
+            flaky: 1,
+          },
+        },
         results: [
           {
             testId: 'file-1',
-            status: 'pass',
+            status: 'passed',
             name: 'flaky.test.ts',
+            fullName: 'flaky.test.ts',
             testPath,
+            relativeTestPath: 'tests/flaky.test.ts',
             project: 'rstest',
             results: [],
+            summary: {
+              total: 1,
+              passed: 1,
+              failed: 0,
+              skipped: 0,
+              todo: 0,
+              flaky: 1,
+            },
           },
         ],
         testResults: [
           {
             testId: 'test-1',
-            status: 'pass',
+            status: 'passed',
             name: 'retries then passes',
+            fullName: 'describe flaky > retries then passes',
             parentNames: ['describe flaky'],
             testPath,
+            relativeTestPath: 'tests/flaky.test.ts',
             project: 'rstest',
             retryCount: 2,
             errors: [
@@ -418,23 +475,36 @@ describe('GithubActionsReporter step summary', () => {
 
       await reporter.onTestRunEnd({
         ...emptyRunEndPayload,
+        status: 'failed',
         results: [
           {
             testId: 'file-1',
-            status: 'fail',
+            status: 'failed',
             name: 'retry.test.ts',
+            fullName: 'retry.test.ts',
             testPath,
+            relativeTestPath: 'tests/retry.test.ts',
             project: 'rstest',
             results: [],
+            summary: {
+              total: 1,
+              passed: 0,
+              failed: 1,
+              skipped: 0,
+              todo: 0,
+              flaky: 0,
+            },
           },
         ],
         testResults: [
           {
             testId: 'test-1',
-            status: 'fail',
+            status: 'failed',
             name: 'fails after retries',
+            fullName: 'describe retry > fails after retries',
             parentNames: ['describe retry'],
             testPath,
+            relativeTestPath: 'tests/retry.test.ts',
             project: 'rstest',
             retryCount: 1,
             errors: [

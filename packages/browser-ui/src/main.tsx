@@ -282,9 +282,9 @@ const BrowserRunner: React.FC<{
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
-      if (status === 'pass') return 'pass';
-      if (status === 'fail') return 'fail';
-      if (status === 'skip' || status === 'todo') return 'skip';
+      if (status === 'passed') return 'passed';
+      if (status === 'failed') return 'failed';
+      if (status === 'skipped' || status === 'todo') return 'skipped';
       return 'running';
     },
     [],
@@ -482,10 +482,11 @@ const BrowserRunner: React.FC<{
         const payload = message.payload as BrowserClientFileResult;
         const testPath = payload.testPath;
         if (typeof testPath === 'string') {
-          const passed = payload.status === 'pass' || payload.status === 'skip';
+          const passed =
+            payload.status === 'passed' || payload.status === 'skipped';
           setStatusMap((prev) => ({
             ...prev,
-            [testPath]: passed ? 'pass' : 'fail',
+            [testPath]: passed ? 'passed' : 'failed',
           }));
           setCaseMap((prev) => {
             const newCases: Record<string, CaseInfo> = {};
@@ -506,7 +507,7 @@ const BrowserRunner: React.FC<{
         }
       } else if (message.type === 'fatal') {
         if (active) {
-          setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
+          setStatusMap((prev) => ({ ...prev, [active]: 'failed' }));
         }
       }
 
@@ -536,9 +537,9 @@ const BrowserRunner: React.FC<{
     return {
       idle: allCases.filter((c) => c.status === 'idle').length,
       running: allCases.filter((c) => c.status === 'running').length,
-      pass: allCases.filter((c) => c.status === 'pass').length,
-      fail: allCases.filter((c) => c.status === 'fail').length,
-      skip: allCases.filter((c) => c.status === 'skip').length,
+      pass: allCases.filter((c) => c.status === 'passed').length,
+      fail: allCases.filter((c) => c.status === 'failed').length,
+      skip: allCases.filter((c) => c.status === 'skipped').length,
     };
   }, [caseMap]);
 

@@ -4,6 +4,7 @@ import type {
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestRunStartPayload,
   TestSuiteInfo,
 } from '@rstest/core';
 
@@ -22,8 +23,9 @@ export class LifecycleRecorder implements Reporter {
     this.events.push([hook, ...detail].join(' | '));
   }
 
-  onTestRunStart(): void {
+  onTestRunStart(payload: TestRunStartPayload): void {
     this.record('onTestRunStart');
+    console.log(`__RSTEST_SELECTION__${JSON.stringify(payload)}__END__`);
   }
 
   onTestFileStart(file: TestFileInfo): void {
@@ -61,6 +63,7 @@ export class LifecycleRecorder implements Reporter {
 
   onTestFileResult(result: TestFileResult): void {
     this.record('onTestFileResult', result.testId, result.status);
+    console.log(`__RSTEST_FILE_RESULT__${JSON.stringify(result)}__END__`);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {

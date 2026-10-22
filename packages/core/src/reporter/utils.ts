@@ -11,40 +11,34 @@ import type {
   TestRunSummary,
   UserConsoleLog,
 } from '../types';
-import {
-  color,
-  getTaskNameWithPrefix,
-  logger,
-  prettyTestPath,
-  prettyTime,
-} from '../utils';
-
-const testStatusSummaryKeys = {
-  pass: 'passed',
-  fail: 'failed',
-  skip: 'skipped',
-  todo: 'todo',
-} satisfies Record<
-  TestResult['status'],
-  Exclude<keyof TestRunSummary['tests'], 'total'>
->;
+import { color, logger, prettyTestPath, prettyTime } from '../utils';
+import { getFileSummary } from '../utils/testSummary';
 
 export const computeSummary = (
   results: readonly TestFileResult[],
 ): TestRunSummary => {
   const summary: TestRunSummary = {
-    tests: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0 },
+    tests: {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      todo: 0,
+      flaky: 0,
+    },
     files: { total: results.length, failed: 0 },
   };
 
   for (const file of results) {
-    if (file.status === 'fail') {
+    if (file.status === 'failed') {
       summary.files.failed++;
     }
-    for (const test of file.results) {
-      summary.tests.total++;
-      summary.tests[testStatusSummaryKeys[test.status]]++;
-    }
+    summary.tests.total += file.summary.total;
+    summary.tests.passed += file.summary.passed;
+    summary.tests.failed += file.summary.failed;
+    summary.tests.skipped += file.summary.skipped;
+    summary.tests.todo += file.summary.todo;
+    summary.tests.flaky += file.summary.flaky;
   }
   return summary;
 };
@@ -92,22 +86,75 @@ export const toReportDuration = (duration: Duration): ReportDuration => ({
 export const reporterFileKey = (project: string, testPath: string): string =>
   `${project}\u0000${testPath}`;
 
-/**
- * Collects the project and path keys for files a run reports, so a reporter can retire buffered per-file
- * state. Buffers are replaced per file on `onTestFileStart`, but a deleted file
- * never starts again — only the run-end result set (already purged of deleted
- * paths by `updateReporterResultState`) can retire it.
- */
-export const reportedFileKeys = (results: TestFileResult[]): Set<string> =>
-  new Set(
-    results.map((result) => reporterFileKey(result.project, result.testPath)),
-  );
+type FileIdentity = { project: string; testPath: string };
+
+export class PerFileEventBuffer<T> {
+  private files = new Map<
+    string,
+    { file: FileIdentity; events: { seq: number; event: T }[] }
+  >();
+  private sequence = 0;
+
+  reset(file: FileIdentity): void {
+    this.files.delete(reporterFileKey(file.project, file.testPath));
+  }
+
+  push(event: T, file: FileIdentity): void {
+    const key = reporterFileKey(file.project, file.testPath);
+    let entry = this.files.get(key);
+    if (!entry) {
+      entry = { file, events: [] };
+      this.files.set(key, entry);
+    }
+    entry.events.push({ seq: this.sequence++, event });
+  }
+
+  get(file?: FileIdentity): T[] {
+    const events = file
+      ? (this.files.get(reporterFileKey(file.project, file.testPath))?.events ??
+        [])
+      : Array.from(this.files.values())
+          .flatMap(({ events }) => events)
+          .sort((a, b) => a.seq - b.seq);
+    return events.map(({ event }) => event);
+  }
+
+  entries(): Array<[FileIdentity, T[]]> {
+    return Array.from(this.files.values(), ({ file, events }) => [
+      file,
+      events.map(({ event }) => event),
+    ]);
+  }
+
+  prune(files: FileIdentity[]): void {
+    const keys = new Set(
+      files.map((file) => reporterFileKey(file.project, file.testPath)),
+    );
+    for (const key of this.files.keys()) {
+      if (!keys.has(key)) this.files.delete(key);
+    }
+  }
+}
+
+export type StatusCounts = TestFileResult['summary'];
+export { getFileSummary };
+
+export const truncateString = (
+  value: string,
+  maxChars: number,
+  suffix: string,
+): string => {
+  if (maxChars <= 0) return '';
+  if (value.length <= maxChars) return value;
+  if (maxChars <= suffix.length) return suffix.slice(0, maxChars);
+  return `${value.slice(0, maxChars - suffix.length)}${suffix}`;
+};
 
 const statusStr = {
-  fail: '✗',
-  pass: '✓',
+  failed: '✗',
+  passed: '✓',
   todo: '-',
-  skip: '-',
+  skipped: '-',
 };
 
 export type FailureItem = {
@@ -120,22 +167,22 @@ export const createUnknownFailure = (): SerializedError => ({
 });
 
 const statusColor: Record<keyof typeof statusStr, (str: string) => string> = {
-  fail: color.red,
-  pass: color.green,
+  failed: color.red,
+  passed: color.green,
   todo: color.gray,
-  skip: color.gray,
+  skipped: color.gray,
 };
 
 const statusColorfulStr: {
-  fail: string;
-  pass: string;
+  failed: string;
+  passed: string;
   todo: string;
-  skip: string;
+  skipped: string;
 } = {
-  fail: statusColor.fail(statusStr.fail),
-  pass: statusColor.pass(statusStr.pass),
+  failed: statusColor.failed(statusStr.failed),
+  passed: statusColor.passed(statusStr.passed),
   todo: statusColor.todo(statusStr.todo),
-  skip: statusColor.skip(statusStr.skip),
+  skipped: statusColor.skipped(statusStr.skipped),
 };
 
 export const logCase = (
@@ -147,15 +194,15 @@ export const logCase = (
 ): void => {
   const isSlowCase = (result.duration || 0) > options.slowTestThreshold;
 
-  if (options.hideSkippedTests && result.status === 'skip') {
+  if (options.hideSkippedTests && result.status === 'skipped') {
     return;
   }
 
   const icon =
-    isSlowCase && result.status === 'pass'
+    isSlowCase && result.status === 'passed'
       ? color.yellow(statusStr[result.status])
       : statusColorfulStr[result.status];
-  const nameStr = getTaskNameWithPrefix(result);
+  const nameStr = result.fullName;
   const duration =
     typeof result.duration !== 'undefined'
       ? ` (${prettyTime(result.duration)})`
@@ -169,23 +216,17 @@ export const logCase = (
 
   logger.log(`  ${icon} ${nameStr}${color.gray(duration)}${retry}${heap}`);
 
-  const errors = result.status === 'pass' ? result.retryErrors : result.errors;
+  const errors =
+    result.status === 'passed' ? result.retryErrors : result.errors;
   if (errors) {
     for (const error of errors) {
       const message =
-        result.status === 'pass'
+        result.status === 'passed'
           ? `Previous failure: ${error.message}`
           : error.message;
       logger.log(color.red(`    ${message}`));
     }
   }
-};
-
-export const formatFullTestName = (
-  test: Pick<TestResult, 'name' | 'parentNames'>,
-): string => {
-  const names = (test.parentNames || []).concat(test.name).filter(Boolean);
-  return names.join(' > ');
 };
 
 export const getErrorType = (
@@ -224,7 +265,7 @@ export const collectFailures = ({
   const failures: FailureItem[] = [];
 
   for (const result of results) {
-    if (result.status === 'fail' && result.errors?.length) {
+    if (result.status === 'failed' && result.errors?.length) {
       failures.push({
         test: result,
         errors: result.errors,
@@ -233,7 +274,7 @@ export const collectFailures = ({
   }
 
   for (const result of testResults) {
-    if (result.status === 'fail') {
+    if (result.status === 'failed') {
       failures.push({
         test: result,
         errors: result.errors || [],
@@ -332,7 +373,7 @@ export const logUserConsoleLog = (
   log: UserConsoleLog,
 ): void => {
   const titles = [];
-  const testPath = relative(rootPath, log.testPath);
+  const testPath = log.relativeTestPath;
   const taskName = [
     ...(log.taskParentNames || []),
     ...(log.taskName ? [log.taskName] : []),

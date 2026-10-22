@@ -319,6 +319,7 @@ export async function buildResolvedRunner<Instance extends RstestInstance>({
   );
 
   try {
+    await rstest.context.initializeReporters();
     rstest.context.relatedFilters = selection.relatedFilters;
     rstest.context.relatedMode = selection.relatedMode;
     rstest.context.relatedResolutionEmpty = selection.relatedResolutionEmpty;

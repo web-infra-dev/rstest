@@ -1,4 +1,4 @@
-import type { TestFileResult } from '../types';
+import type { RawTestFileResult } from '../types';
 import { PoolRunner, WorkerOomKillError } from './poolRunner';
 import type {
   CollectTaskResult,
@@ -76,8 +76,8 @@ export class Pool {
     this.options.onTestEnvironmentFallback?.(fallback);
   };
 
-  async runTest(task: PoolTask): Promise<TestFileResult> {
-    return this.dispatch(task, 'run') as Promise<TestFileResult>;
+  async runTest(task: PoolTask): Promise<RawTestFileResult> {
+    return this.dispatch(task, 'run') as Promise<RawTestFileResult>;
   }
 
   async cleanupWorkerFixtures(): Promise<Error[]> {
@@ -118,7 +118,7 @@ export class Pool {
   private async dispatch(
     task: PoolTask,
     op: 'run' | 'collect',
-  ): Promise<TestFileResult | CollectTaskResult> {
+  ): Promise<RawTestFileResult | CollectTaskResult> {
     if (this.isClosing || this.isClosed) {
       throw new Error('[rstest-pool]: pool is closed');
     }
