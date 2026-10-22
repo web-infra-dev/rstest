@@ -64,6 +64,10 @@ The entire selected tsconfig is checked. A diagnostic inside a collected case fa
 
 `--related` and `--changed` conservatively include all type tests when sources change: bundler dependency graphs omit type-only imports and ambient declarations.
 
+`--onlyFailures` selects previously failed files across runtime and type tests using shared failure records. Explicit file or name filters take precedence. Each selected type-test project still checks its entire tsconfig, so errors in unselected files remain visible. Name-filtered, interrupted, and bail-aborted runs do not overwrite complete failure records.
+
+`bail` stops reporting subsequent type cases and checking subsequent projects once the run-wide failure limit is reached. The compiler checks each project in one invocation, so bail cannot stop that invocation at an individual assertion. Project diagnostics already returned by the compiler remain errors.
+
 ## Compiler and declarations
 
 Rstest invokes the project's `tsc` or `vue-tsc` CLI once per project, with emission disabled. Both TypeScript 6 and TypeScript 7 are supported. Compiler input files and diagnostics come from the same invocation, and incremental results are cached under `node_modules/.cache/rstest/typecheck` between runs. A `noCheck` setting is overridden so assertions are always checked.

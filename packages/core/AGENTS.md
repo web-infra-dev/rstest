@@ -51,6 +51,7 @@ Contracts between modules or processes — not readable from any single file.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchCycleState` ahead of every watch cycle, a session's first included) — executors never reset it, so bail reads stay cycle-scoped even where two executors' first cycles bracket one startup. The snapshot summary is the one half a first cycle keeps, because the update-snapshot shortcut reads whatever the last cycle produced and the browser's first cycle would otherwise clear what the node's just left.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
+- Failure-history selection must consider node and type tests together before dispatch; independently applying the no-failures fallback would reselect a passing executor. Executors opt into cache persistence through their outcomes, and `finalizeRunCycle` writes those results once so concurrent executors cannot overwrite each other's records.
 
 ### Watch mode
 

@@ -19,6 +19,8 @@ export interface ExecutorRunCycleOptions {
   buildId: number;
   mode: 'all' | 'on-demand';
   fileFilters?: string[];
+  /** Core's shared onlyFailures selection, keyed with sequenceKey across executors. */
+  failedTestFiles?: ReadonlySet<string>;
   /**
    * Watch only: whether this cycle was queued by the executor's own invalidation
    * signal rather than by a CLI shortcut or the session's initial trigger. It is
@@ -92,6 +94,8 @@ export type ExecutorInvalidationCallback = (hint: {
  */
 export interface ExecutorCycleOutcome {
   results: TestFileResult[];
+  /** Opt into persisting completed file results for sequencing and onlyFailures. */
+  cacheResults?: boolean;
   testResults: TestResult[];
   /** Errors outside individual tests, including launch, globalSetup, and executor rejections. */
   errors: Error[];

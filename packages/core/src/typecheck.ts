@@ -14,3 +14,4 @@ export type {
 export { createRunnerEventSink } from './core/execution/runnerEventSink';
 export { toError, getFileTaskId } from './utils';
 export { toSerializedError } from './utils/error';
+export { sequenceKey } from './core/execution/resultsCache';

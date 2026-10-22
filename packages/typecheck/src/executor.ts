@@ -13,6 +13,7 @@ import {
   toError,
   getFileTaskId,
   createRunnerEventSink,
+  sequenceKey,
 } from '@rstest/core/internal/typecheck';
 import { collectTypeTests } from './collect';
 import { createTypeChecker } from './checker';
@@ -49,7 +50,7 @@ export function createTypecheckExecutor(
         ),
       };
     },
-    async runCycle() {
+    async runCycle({ failedTestFiles }) {
       const started = performance.now();
       const outcome: ExecutorCycleOutcome = {
         results: [],
@@ -58,8 +59,20 @@ export function createTypecheckExecutor(
         testPaths: [],
         duration: { buildTime: 0, testTime: 0 },
       };
-      for (const { project, testPaths } of initialPlans) {
-        if (closed || !testPaths.length) continue;
+      const hasBailed = () =>
+        context.normalizedConfig.bail > 0 &&
+        context.stateManager.getCountOfFailedTests() >=
+          context.normalizedConfig.bail;
+      for (const { project, testPaths: discoveredPaths } of initialPlans) {
+        if (closed || hasBailed()) break;
+        const testPaths = failedTestFiles
+          ? discoveredPaths.filter((testPath) =>
+              failedTestFiles.has(
+                sequenceKey(project.name, context.rootPath, testPath),
+              ),
+            )
+          : discoveredPaths;
+        if (!testPaths.length) continue;
         try {
           let checker = checkers.get(project.environmentName);
           if (!checker) {
@@ -127,6 +140,7 @@ export function createTypecheckExecutor(
           }
           for (const file of files) {
             if (closed) return outcome;
+            if (hasBailed()) break;
             const fileInfo = {
               testId: getFileTaskId(file.testPath),
               testPath: file.testPath,
@@ -137,6 +151,7 @@ export function createTypecheckExecutor(
             await sink.onTestFileReady(fileInfo);
             const results: TestResult[] = [];
             const report = async (test: TestInfo): Promise<void> => {
+              if (hasBailed()) return;
               if (test.type === 'suite') {
                 await sink.onTestSuiteStart(test);
                 const start = results.length;
@@ -192,6 +207,7 @@ export function createTypecheckExecutor(
         }
       }
       outcome.duration.testTime = performance.now() - started;
+      outcome.cacheResults = !closed;
       return outcome;
     },
     interrupt: close,

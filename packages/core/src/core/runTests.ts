@@ -32,6 +32,7 @@ import {
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import { createNodeExecutor } from './execution/nodeExecutor';
+import { selectFailedTestFiles } from './execution/onlyFailures';
 import {
   cycleFailureOutcome,
   runGlobalTeardown,
@@ -138,6 +139,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const typecheckExecutor = planner.typecheckProjects.length
     ? await loadTypecheckExecutor(context, planner.typecheckProjects)
     : undefined;
+  const failedTestFiles = await selectFailedTestFiles(context, planner);
 
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
@@ -377,6 +379,7 @@ export async function runTests(context: Rstest): Promise<void> {
               : executor.runCycle({
                   buildId: 1,
                   mode: 'all',
+                  failedTestFiles,
                   updateSnapshot: snapshotManager.options.updateSnapshot,
                   env: browserStage.env,
                   onTraceEvents: forwardBrowserTraceEvents,

@@ -523,3 +523,150 @@ test('attributes diagnostics after Chinese text and emoji to a nested case', asy
     ]),
   );
 });
+
+test.for([true, false])(
+  'onlyFailures shares failure history with runtime tests (typecheck.only: %s)',
+  async (only, { onTestFinished }) => {
+    const cwd = await setup(onTestFinished);
+    await rm(join(cwd, 'node_modules/.cache/.rstest-results'), {
+      recursive: true,
+      force: true,
+    });
+    const failedFile = join(cwd, 'failed.test-d.ts');
+    await writeFile(failedFile, source);
+    const run = (args: string[] = []) =>
+      runRstestCli({
+        command: 'rstest',
+        options: { nodeOptions: { cwd } },
+        args: [
+          'run',
+          '--reporter',
+          'verbose',
+          ...(only ? ['--typecheck.only'] : []),
+          ...args,
+        ],
+      });
+    await (await run()).expectExecFailed();
+    await writeFile(
+      failedFile,
+      source.replace('toEqualTypeOf<string>', 'toEqualTypeOf<number>'),
+    );
+    const fixed = await run(['--onlyFailures']);
+    await fixed.expectExecSuccess();
+    fixed.expectLog(/Tests\s+1 passed$/);
+    expect(fixed.cli.log).not.toContain('return type');
+    expect(fixed.cli.log).not.toContain('runtime assertions remain callable');
+    const clean = await run(['--onlyFailures']);
+    await clean.expectExecSuccess();
+    clean.expectLog('No failed tests found from the previous run');
+    clean.expectLog('return type');
+    if (!only) clean.expectLog('runtime assertions remain callable');
+  },
+);
+
+test('bail stops subsequent type cases and projects without overwriting failure history', async ({
+  onTestFinished,
+}) => {
+  const cwd = await setup(onTestFinished);
+  await writeFile(
+    join(cwd, 'basic.test-d.ts'),
+    source + `test('after failure', () => {});`,
+  );
+  const run = (args: string[] = []) =>
+    runRstestCli({
+      command: 'rstest',
+      options: { nodeOptions: { cwd } },
+      args: ['run', '--typecheck.only', '--reporter', 'verbose', ...args],
+    });
+  await (await run()).expectExecFailed();
+  const cacheFile = join(
+    cwd,
+    'node_modules/.cache/.rstest-results/results.json',
+  );
+  const before = await readFile(cacheFile, 'utf8');
+  await writeFile(
+    join(cwd, 'rstest.config.mts'),
+    `export default { projects: [
+    { name: 'first', root: '.', typecheck: { only: true } },
+    { name: 'later', root: '.', typecheck: { only: true, tsconfig: 'missing.json' } },
+  ] };`,
+  );
+  const bailed = await run(['--bail', '1']);
+  await bailed.expectExecFailed();
+  bailed.expectLog('bail limit of 1');
+  expect(bailed.cli.log).not.toContain('✓ after failure');
+  expect(bailed.cli.log).not.toContain('missing.json');
+  expect(await readFile(cacheFile, 'utf8')).toBe(before);
+  const full = await run(['--bail', '0']);
+  await full.expectExecFailed();
+  full.expectLog('after failure');
+  expect(full.cli.log).toContain('missing.json');
+});
+
+test('onlyFailures selects runtime failures while leaving passing type files out', async ({
+  onTestFinished,
+}) => {
+  const cwd = await setup(onTestFinished);
+  await rm(join(cwd, 'node_modules/.cache/.rstest-results'), {
+    recursive: true,
+    force: true,
+  });
+  const runtime = join(cwd, 'runtime.test.ts');
+  await writeFile(
+    runtime,
+    `import {test, expect} from '@rstest/core'; test('runtime failure', () => { expect(1).toBe(2); });`,
+  );
+  const run = (args: string[] = []) =>
+    runRstestCli({
+      command: 'rstest',
+      options: { nodeOptions: { cwd } },
+      args: ['run', '--reporter', 'verbose', ...args],
+    });
+  await (await run()).expectExecFailed();
+  await writeFile(
+    runtime,
+    `import {test} from '@rstest/core'; test('runtime fixed', () => {});`,
+  );
+  const fixed = await run(['--onlyFailures']);
+  await fixed.expectExecSuccess();
+  fixed.expectLog('runtime fixed');
+  expect(fixed.cli.log).not.toContain('return type');
+});
+
+test('type failure selection respects explicit scope and preserves diagnostics and history', async ({
+  onTestFinished,
+}) => {
+  const cwd = await setup(onTestFinished);
+  await rm(join(cwd, 'node_modules/.cache/.rstest-results'), {
+    recursive: true,
+    force: true,
+  });
+  await writeFile(join(cwd, 'failed.test-d.ts'), source);
+  const run = (args: string[] = []) =>
+    runRstestCli({
+      command: 'rstest',
+      options: { nodeOptions: { cwd } },
+      args: ['run', '--typecheck.only', '--reporter', 'verbose', ...args],
+    });
+  await (await run()).expectExecFailed();
+  const cacheFile = join(
+    cwd,
+    'node_modules/.cache/.rstest-results/results.json',
+  );
+  const before = await readFile(cacheFile, 'utf8');
+  const named = await run(['--onlyFailures', '-t', 'return type']);
+  await named.expectExecFailed();
+  named.expectLog('return type');
+  expect(named.cli.log).toContain('TS2344');
+  expect(named.cli.log).toContain(
+    'onlyFailures is ignored when a test name pattern is provided',
+  );
+  expect(await readFile(cacheFile, 'utf8')).toBe(before);
+  const scoped = await run(['--onlyFailures', 'basic.test-d.ts']);
+  await scoped.expectExecFailed();
+  scoped.expectLog('return type');
+  expect(scoped.cli.log).toContain('TS2344');
+  expect(scoped.cli.log).toContain(
+    'onlyFailures is ignored when explicit file filters are provided',
+  );
+});
