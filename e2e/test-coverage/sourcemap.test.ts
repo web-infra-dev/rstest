@@ -1,8 +1,9 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
+import { normalize } from 'pathe';
 import { x } from 'tinyexec';
-import { runRstestCli } from '../scripts';
+import { getCoverageSummaryEntry, runRstestCli } from '../scripts';
 import { coverageProviders } from './providers';
 
 const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
@@ -106,6 +107,86 @@ for (const provider of coverageProviders) {
           ?.replaceAll(' ', '');
 
         expect(allFilesLog).toMatch(expectedSummary[provider].allFiles);
+
+        if (provider === 'istanbul') {
+          for (const inlineSourceMap of [false, true]) {
+            if (inlineSourceMap) {
+              const generatedFile = join(generatedPath, 'dist/sourcemap.js');
+              const code = fs.readFileSync(generatedFile, 'utf8');
+              const sourceMap = fs.readFileSync(
+                `${generatedFile}.map`,
+                'base64',
+              );
+              const externalUrl = '//# sourceMappingURL=sourcemap.js.map';
+              expect(code).toContain(externalUrl);
+              fs.writeFileSync(
+                generatedFile,
+                code.replace(
+                  externalUrl,
+                  `//# sourceMappingURL=data:application/json;base64,${sourceMap}`,
+                ),
+              );
+            }
+            const untested = await runRstestCli({
+              command: 'rstest',
+              args: [
+                'run',
+                '-c',
+                'rstest.untested.config.ts',
+                '--pool',
+                pool,
+                ...(pool === 'vmThreads'
+                  ? ['--pool.memoryLimit', '256MB']
+                  : []),
+                '--coverage.reportsDirectory',
+                reportsDirectory,
+                'test/date.test.ts',
+              ],
+              options: { nodeOptions: { cwd: fixturePath } },
+            });
+            await untested.expectExecSuccess();
+
+            const summary: Record<
+              string,
+              Record<string, { total: number; covered: number }>
+            > = fs.readJsonSync(
+              join(fixturePath, reportsDirectory, 'coverage-summary.json'),
+            );
+            const sourcePath = normalize(join(fixturePath, 'src/sourcemap.ts'));
+            const ignoredPath = normalize(
+              join(fixturePath, 'src/untested.jsx'),
+            );
+            expect(Object.keys(summary).map(normalize).sort()).toEqual(
+              ['total', sourcePath, ignoredPath].sort(),
+            );
+            const sourceSummary = getCoverageSummaryEntry(summary, sourcePath);
+            expect(sourceSummary).toMatchObject({
+              lines: { covered: 0 },
+              statements: { covered: 0 },
+              functions: { covered: 0 },
+              branches: { covered: 0 },
+            });
+            expect(sourceSummary?.statements?.total).toBeGreaterThan(0);
+            expect(getCoverageSummaryEntry(summary, ignoredPath)).toMatchObject(
+              {
+                statements: { covered: 0 },
+                functions: { total: 0, covered: 0 },
+                branches: { total: 0, covered: 0 },
+              },
+            );
+            const report = fs.readJsonSync(
+              join(fixturePath, reportsDirectory, 'coverage-final.json'),
+            );
+            expect(report[ignoredPath].fnMap).toEqual({});
+            expect(report[ignoredPath].branchMap).toEqual({});
+            const statements: { start: { line: number } }[] = Object.values(
+              report[ignoredPath].statementMap,
+            );
+            expect(new Set(statements.map(({ start }) => start.line))).toEqual(
+              new Set([1]),
+            );
+          }
+        }
       },
     );
   });
