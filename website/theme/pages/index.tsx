@@ -6,6 +6,7 @@ import { AdaptersPatchFigure } from '../ui/AdaptersPatchFigure';
 import { BrowserStackFigure } from '../ui/BrowserStackFigure';
 import { JestMigrateFigure } from '../ui/JestMigrateFigure';
 import { PipelineStackFigure } from '../ui/PipelineStackFigure';
+import { PlaywrightBeltFigure } from '../ui/PlaywrightBeltFigure';
 import {
   Button,
   Cell,
@@ -71,69 +72,129 @@ const ADAPTER_DESC = {
   zh: '适配器允许你将来自其他工具（如构建工具或 CLI）的配置转换为 Rstest 支持的配置格式',
 };
 
-const ADAPTER_BODY = {
-  en: 'Point Rstest at your Rsbuild, Rslib, or Rspack config and keep one source of truth.',
-  zh: '让 Rstest 直接复用 Rsbuild、Rslib 或 Rspack 的配置，只维护一份。',
+// Each feature block reads like the rstack-cli homepage: a short title, one
+// sentence on what it does, then three short points.
+type Feature = { title: string; body: string; points: string[] };
+
+const PIPELINE: Record<'en' | 'zh', Feature> = {
+  en: {
+    title: 'Test it the way you ship it',
+    body: 'Compile and run tests with Rspack and Rsbuild, the same toolchain your app builds with',
+    points: [
+      'Use Rsbuild plugins and Rspack loaders in tests',
+      'Tests run against the code you build for production',
+      'Tree-shaking and lazy barrel skip unused code in large projects',
+    ],
+  },
+  zh: {
+    title: '怎么构建，就怎么测试',
+    body: '使用 Rspack 和 Rsbuild 编译并运行测试，与应用构建共用同一套工具链',
+    points: [
+      '在测试中使用 Rsbuild 插件和 Rspack loader',
+      '测试运行的就是生产构建出的代码',
+      'tree-shaking 与 lazy barrel 跳过大型项目中的未使用代码',
+    ],
+  },
 };
 
-const ADAPTER_POINTS = {
-  en: [
-    'Reuse path aliases and global variables from your build config',
-    'Let frameworks preset setup files and test defaults',
-    'No more syncing settings by hand across tools',
-  ],
-  zh: [
-    '复用构建配置中的路径别名和全局变量',
-    '由框架预设 setup 脚本、超时时间和测试环境',
-    '无需在不同工具之间手动同步配置',
-  ],
+const BROWSER: Record<'en' | 'zh', Feature> = {
+  en: {
+    title: 'Real browsers, real DOM',
+    body: 'Run tests in Chromium, Firefox, and WebKit through Playwright, instead of simulating the DOM with jsdom',
+    points: [
+      'Test real layout, computed styles, Canvas, and Web Workers',
+      'Query the page with a Playwright-style Locator API',
+      'Assert with the auto-waiting expect.element',
+    ],
+  },
+  zh: {
+    title: '真实浏览器，真实 DOM',
+    body: '通过 Playwright 在 Chromium、Firefox 和 WebKit 中运行测试，不再用 jsdom 模拟 DOM',
+    points: [
+      '覆盖真实的布局、computed style、Canvas 和 Web Worker',
+      '使用 Playwright 风格的 Locator API 查询页面',
+      '使用自动等待的 expect.element 断言',
+    ],
+  },
 };
 
-const PIPELINE_BODY = {
-  en: 'Rstest is built on Rsbuild, which is built on Rspack — the same toolchain your app ships with. Tests compile and run through that exact pipeline, so what passes in a test is what you build for production.',
-  zh: 'Rstest 构建于 Rsbuild，而 Rsbuild 构建于 Rspack —— 和你应用打包用的是同一套工具链。测试会经由这条完全相同的链路编译和运行，所以测试里通过的，就是你为生产构建出的产物。',
+const ADAPTER: Record<'en' | 'zh', Feature> = {
+  en: {
+    title: 'Reuse the config you already have',
+    body: 'Point Rstest at your Rsbuild, Rslib, or Rspack config and keep one source of truth',
+    points: [
+      'Reuse path aliases and global variables from your build config',
+      'Let frameworks preset setup files and test defaults',
+      'No more syncing settings by hand across tools',
+    ],
+  },
+  zh: {
+    title: '复用你已有的配置',
+    body: '让 Rstest 直接复用 Rsbuild、Rslib 或 Rspack 的配置，只维护一份',
+    points: [
+      '复用构建配置中的路径别名和全局变量',
+      '由框架预设 setup 脚本、超时时间和测试环境',
+      '无需在不同工具之间手动同步配置',
+    ],
+  },
 };
 
-const PLAYWRIGHT = {
+const JEST: Record<'en' | 'zh', Feature> = {
+  en: {
+    title: 'Your Jest tests, unchanged',
+    body: 'Switch the runner and keep your existing suites, with a Jest-compatible API and CLI',
+    points: [
+      'Familiar describe, test, expect, and snapshot APIs',
+      'Enable globals and run existing suites as-is',
+      'Add browser mode and adapters when you need them',
+    ],
+  },
+  zh: {
+    title: '沿用 Jest 测试，无需改写',
+    body: '切换 runner 即可沿用现有用例，API 与 CLI 均兼容 Jest',
+    points: [
+      '熟悉的 describe、test、expect 和 snapshot API',
+      '开启 globals，现有用例原样运行',
+      '需要时再启用 browser mode 和 adapter',
+    ],
+  },
+};
+
+const PLAYWRIGHT: Record<'en' | 'zh', Feature> = {
   en: {
     title: 'End-to-end, in the same runner',
-    desc: 'Drive a real app with Playwright from Node workers — one runner, one report.',
-    body: 'With @rstest/playwright, write E2E specs that drive a dev server, preview, or deployed URL through Playwright. Import test and expect from @rstest/playwright, take the page fixture, and your end-to-end runs share the same Rstest config, workers, and reports as your unit tests.',
+    body: 'Drive a dev server, preview, or deployed URL with Playwright through @rstest/playwright',
+    points: [
+      'Ready-to-use browser, context, page, and request fixtures',
+      'Playwright-style assertions on pages and locators',
+      'One config and one report for unit and E2E tests',
+    ],
   },
   zh: {
     title: '端到端测试，同一个 runner',
-    desc: '在 Node worker 里用 Playwright 驱动真实 app —— 同一套 runner、同一份 report。',
-    body: '通过 @rstest/playwright，编写驱动 dev server、preview 或部署 URL 的 E2E 用例。从 @rstest/playwright 引入 test 和 expect，拿到 page fixture，端到端测试就与你的单元测试共享同一套 Rstest config、worker 和 report。',
+    body: '通过 @rstest/playwright 使用 Playwright 驱动 dev server、preview 或已部署的 URL',
+    points: [
+      '开箱即用的 browser、context、page 和 request fixture',
+      'Playwright 风格的 page 与 locator 断言',
+      '单元测试与 E2E 共用一份配置和报告',
+    ],
   },
 };
 
-const JEST_COMPAT = {
-  en: {
-    title: 'Bring your Jest tests, unchanged',
-    desc: 'A Jest-compatible API and CLI, so most suites migrate by switching the runner.',
-    body: "Rstest mirrors Jest's describe / test / expect and snapshot APIs. Point your test script at rstest, keep globals on, and existing suites run as-is — then pick up Rspack-powered speed and Rstest features when you want them.",
-  },
-  zh: {
-    title: '原样沿用你的 Jest 测试',
-    desc: 'Jest 兼容的 API 与 CLI，大多数用例只需切换 runner 即可迁移。',
-    body: 'Rstest 对齐 Jest 的 describe / test / expect 与 snapshot API。把测试脚本指向 rstest、保持 globals 开启，现有用例即可原样运行 —— 之后再按需享受 Rspack 驱动的速度和 Rstest 的能力。',
-  },
+const JEST_DESC = {
+  en: 'A Jest-compatible API and CLI, so most suites migrate by switching the runner.',
+  zh: 'Jest 兼容的 API 与 CLI，大多数用例只需切换 runner 即可迁移。',
 };
 
-const BROWSER_MODE_BODY = {
-  en: 'Browser mode runs your tests in real Chromium, Firefox, and WebKit through Playwright — real DOM, computed styles, Canvas, and Web Workers. Query the page with a Playwright-style Locator API and assert with auto-waiting expect.element, instead of guessing against jsdom.',
-  zh: 'Browser mode 通过 Playwright 在真实的 Chromium、Firefox、WebKit 中运行测试 —— 真实的 DOM、computed style、Canvas 和 Web Worker。用 Playwright 风格的 Locator API 查询页面，配合自动等待的 expect.element 断言，而不必对着 jsdom 猜测。',
+const PLAYWRIGHT_DESC = {
+  en: 'Drive a real app with Playwright from Node workers — one runner, one report.',
+  zh: '在 Node worker 里用 Playwright 驱动真实 app —— 同一套 runner、同一份 report。',
 };
 
 const RSTACK_DESC = {
   en: 'A unified JavaScript toolchain centered on Rspack, with high performance and consistent architecture',
   zh: '以 Rspack 为核心的 JavaScript 统一工具链，具有优秀的性能和一致的架构',
 };
-
-// Placeholder for a feature block's visual; each one gets redrawn.
-function FeatureVisual({ className = '' }: { className?: string }) {
-  return <div className={`min-h-72 min-w-0 bg-surface ${className}`} />;
-}
 
 // The `subtitle` i18n entry split over two lines, around the accented "Rspack".
 const HERO_TITLE = {
@@ -149,12 +210,25 @@ const LATEST_RELEASE = { en: 'Latest release', zh: '最新版本' };
 
 const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
 
-const ADAPTER_TITLE = {
-  en: 'Reuse the config you already have',
-  zh: '复用你已有的配置',
-};
-
 const BODY = 'mt-3 text-[15px]/[1.7] text-fg-muted';
+
+function FeatureCopy({ body, points }: Feature) {
+  return (
+    <>
+      <p className={BODY}>{body}</p>
+      <ul className="mt-5 space-y-2.5">
+        {points.map((point) => (
+          <li
+            key={point}
+            className="flex gap-3 text-[15px]/[1.5] text-fg before:mt-[0.6em] before:size-1 before:shrink-0 before:rounded-full before:bg-fg-subtle"
+          >
+            {point}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 export function HomeLayout() {
   const t = useI18n<typeof import('i18n')>();
@@ -204,12 +278,12 @@ export function HomeLayout() {
       >
         <Grid columns="lg:grid-cols-2">
           <FeatureText
-            title={t('productionAccurateTesting')}
+            title={PIPELINE[lang].title}
             href={tUrl('/guide/start/')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
           >
-            <p className={BODY}>{PIPELINE_BODY[lang]}</p>
+            <FeatureCopy {...PIPELINE[lang]} />
           </FeatureText>
           <PipelineStackFigure />
         </Grid>
@@ -224,13 +298,13 @@ export function HomeLayout() {
             DOM keeps text first so mobile still reads copy before the visual. */}
         <Grid columns="lg:grid-cols-2">
           <FeatureText
-            title={t('realBrowserTesting')}
+            title={BROWSER[lang].title}
             href={tUrl('/guide/browser-testing/')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
             className="lg:order-2"
           >
-            <p className={BODY}>{BROWSER_MODE_BODY[lang]}</p>
+            <FeatureCopy {...BROWSER[lang]} />
           </FeatureText>
           <BrowserStackFigure className="lg:order-1" />
         </Grid>
@@ -239,22 +313,12 @@ export function HomeLayout() {
       <Section index="03" eyebrow="Adapters" description={ADAPTER_DESC[lang]}>
         <Grid columns="lg:grid-cols-2">
           <FeatureText
-            title={ADAPTER_TITLE[lang]}
+            title={ADAPTER[lang].title}
             href={tUrl('/guide/advanced/adapters')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
           >
-            <p className={BODY}>{ADAPTER_BODY[lang]}</p>
-            <ul className="mt-5 space-y-2.5">
-              {ADAPTER_POINTS[lang].map((point) => (
-                <li
-                  key={point}
-                  className="flex gap-3 text-[15px]/[1.5] text-fg before:mt-[0.6em] before:size-1 before:shrink-0 before:rounded-full before:bg-fg-subtle"
-                >
-                  {point}
-                </li>
-              ))}
-            </ul>
+            <FeatureCopy {...ADAPTER[lang]} />
           </FeatureText>
           <AdaptersPatchFigure />
         </Grid>
@@ -263,18 +327,18 @@ export function HomeLayout() {
       <Section
         index="04"
         eyebrow="Jest compatible"
-        description={JEST_COMPAT[lang].desc}
+        description={JEST_DESC[lang]}
       >
         {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
         <Grid columns="lg:grid-cols-2">
           <FeatureText
-            title={JEST_COMPAT[lang].title}
+            title={JEST[lang].title}
             href={tUrl('/guide/migration/jest')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
             className="lg:order-2"
           >
-            <p className={BODY}>{JEST_COMPAT[lang].body}</p>
+            <FeatureCopy {...JEST[lang]} />
           </FeatureText>
           <JestMigrateFigure className="lg:order-1" />
         </Grid>
@@ -283,7 +347,7 @@ export function HomeLayout() {
       <Section
         index="05"
         eyebrow="Playwright E2E"
-        description={PLAYWRIGHT[lang].desc}
+        description={PLAYWRIGHT_DESC[lang]}
       >
         <Grid columns="lg:grid-cols-2">
           <FeatureText
@@ -292,9 +356,9 @@ export function HomeLayout() {
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
           >
-            <p className={BODY}>{PLAYWRIGHT[lang].body}</p>
+            <FeatureCopy {...PLAYWRIGHT[lang]} />
           </FeatureText>
-          <FeatureVisual />
+          <PlaywrightBeltFigure />
         </Grid>
       </Section>
 
