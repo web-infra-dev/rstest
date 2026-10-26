@@ -285,7 +285,7 @@ export const loadModule = (specifier) => import(specifier);
         {
           name: 'happy-dom',
           packageExports: { '.': './index.js' },
-          version: '21.0.0',
+          version: '22.0.0',
         },
       );
 
@@ -467,7 +467,7 @@ exports.canvasInstalled = canvasInstalled;
     await withTempDir('rstest-env-unsupported-happy-dom-', async (root) => {
       createPackage(root, 'export class Window {}', {
         name: 'happy-dom',
-        version: '21.0.0',
+        version: '22.0.0',
       });
 
       const result = await prepareTestEnvironmentModules({
@@ -490,44 +490,47 @@ exports.canvasInstalled = canvasInstalled;
     });
   });
 
-  it('automatically creates a bundle for supported happy-dom 20', async () => {
-    await withTempDir('rstest-env-supported-happy-dom-', async (root) => {
-      createPackage(root, 'export class Window {}', {
-        name: 'happy-dom',
-        version: '20.11.1',
-      });
+  it.for(['20.11.1', '21.0.0'])(
+    'automatically creates a bundle for supported happy-dom %s',
+    async (version) => {
+      await withTempDir('rstest-env-supported-happy-dom-', async (root) => {
+        createPackage(root, 'export class Window {}', {
+          name: 'happy-dom',
+          version,
+        });
 
-      const result = await prepareTestEnvironmentModules({
-        projects: [
-          createProject(root, {
-            environmentName: 'happy-dom',
-            prebundle: 'auto',
-          }),
-        ],
-        rootPath: root,
-      });
+        const result = await prepareTestEnvironmentModules({
+          projects: [
+            createProject(root, {
+              environmentName: 'happy-dom',
+              prebundle: 'auto',
+            }),
+          ],
+          rootPath: root,
+        });
 
-      try {
-        const moduleReference = result.modules.get('happy-dom');
-        expect(moduleReference?.bundlePath).toBeTruthy();
-        if (!moduleReference?.bundlePath) {
-          throw new Error('Expected happy-dom to be bundled.');
+        try {
+          const moduleReference = result.modules.get('happy-dom');
+          expect(moduleReference?.bundlePath).toBeTruthy();
+          if (!moduleReference?.bundlePath) {
+            throw new Error('Expected happy-dom to be bundled.');
+          }
+          const bundled = await import(
+            pathToFileURL(moduleReference.bundlePath).href
+          );
+          expect(typeof bundled.Window).toBe('function');
+        } finally {
+          await result.cleanup();
         }
-        const bundled = await import(
-          pathToFileURL(moduleReference.bundlePath).href
-        );
-        expect(typeof bundled.Window).toBe('function');
-      } finally {
-        await result.cleanup();
-      }
-    });
-  });
+      });
+    },
+  );
 
   it('forces the happy-dom prebundle outside the automatic version matrix', async () => {
     await withTempDir('rstest-env-force-happy-dom-', async (root) => {
       createPackage(root, 'export class Window {}', {
         name: 'happy-dom',
-        version: '21.0.0',
+        version: '22.0.0',
       });
 
       const result = await prepareTestEnvironmentModules({

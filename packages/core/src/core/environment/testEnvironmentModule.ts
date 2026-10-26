@@ -113,7 +113,7 @@ const autoPrebundleMajorRanges: Record<
     { from: 15, to: 26 },
     { from: 29, to: 30 },
   ],
-  'happy-dom': [{ from: 20, to: 20 }],
+  'happy-dom': [{ from: 20, to: 21 }],
 };
 
 const getPackageMajorVersion = async ({
