@@ -54,6 +54,8 @@ minimumReleaseAgeExclude:
   - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
+  # Renovate security update: happy-dom@21.0.4
+  - happy-dom@21.0.4
 
 packageExtensions:
   '@vue/test-utils':
