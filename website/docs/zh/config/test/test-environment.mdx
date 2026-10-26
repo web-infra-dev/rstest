@@ -107,7 +107,7 @@ Rstest 可以在 worker 加载测试环境前对其进行预打包。当大量�
 - `true`：强制预打包选中的内置环境。
 - `false`：关闭预打包，原生加载环境。
 
-当前自动兼容矩阵覆盖 jsdom 15–26、29–30 和 happy-dom 20。其他大版本默认保留原生加载路径，除非显式设置 `prebundle: true`。
+当前自动兼容矩阵覆盖 jsdom 15–26、29–30 和 happy-dom 20–21。其他大版本默认保留原生加载路径，除非显式设置 `prebundle: true`。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

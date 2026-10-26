@@ -32,7 +32,10 @@ describe('module state sharing under isolate: false', () => {
 
     await expectExecSuccess();
     if (supportsJSDOM30) {
-      expect(cli.stdout).toContain('bundled test environment jsdom');
+      expect(cli.stdout).toContain('loaded bundled test environment jsdom');
+      expect(cli.stdout + cli.stderr).not.toContain(
+        'falling back to its native entry',
+      );
     } else {
       expect(cli.stdout).not.toContain('bundled test environment jsdom');
     }
