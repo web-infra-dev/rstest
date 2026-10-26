@@ -261,6 +261,8 @@ const fixtureUrl = resolve('./fixture.json');
 
 Because these runtime path resolutions stay out of the bundler's dependency graph, editing such a sibling file in watch mode does not automatically re-run the tests that read it at runtime.
 
+If you enable Rspack's `module.parser.javascript.importMetaResolve` through `tools.rspack`, `import.meta.resolve()` uses Rspack's bundler behavior instead: it includes the target module in the bundle and returns its module ID. This also applies when `importMetaResolve: true` is set in a matching `module.rules[].parser` configuration.
+
 ### Auto-mocking modules
 
 Both Vitest and Rstest support auto-mocking when the mock call only includes the module path. Rstest first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all function exports with empty mock functions.

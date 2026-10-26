@@ -261,6 +261,8 @@ const fixtureUrl = resolve('./fixture.json');
 
 由于这类运行时路径解析不会进入打包器的依赖图，在 watch 模式下修改此类同级文件不会自动重跑在运行时读取它的测试。
 
+如果通过 `tools.rspack` 开启 Rspack 的 `module.parser.javascript.importMetaResolve`，`import.meta.resolve()` 会采用 Rspack 的打包器行为：将目标模块纳入 bundle，并返回模块 ID。在匹配的 `module.rules[].parser` 中设置 `importMetaResolve: true` 时也一样。
+
 ### 自动模拟模块
 
 Vitest 和 Rstest 都支持在 mock 调用只包含模块路径时自动 mock。Rstest 会先尝试从对应 `__mocks__` 目录加载手写 mock；如果没找到，再自动 mock 整个模块，把函数导出替换为空 mock 函数。
