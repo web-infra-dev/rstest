@@ -5,3 +5,7 @@ export const resolveHelper = () => require.resolve('./exportHelper');
 
 export const resolveWithPaths = (base) =>
   require.resolve('rstest-require-resolve-target', { paths: [base] });
+
+export const resolveImportMeta = (specifier) => import.meta.resolve(specifier);
+
+export const getImportMetaResolve = () => import.meta.resolve;

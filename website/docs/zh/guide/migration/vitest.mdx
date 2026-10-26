@@ -252,7 +252,14 @@ const fixtureUrl = new URL('./fixture.json', import.meta.url);
 
 Rstest 会保留这类表达式，而不会将其改写成打包后的资源路径，因此解析得到的 URL 指向磁盘上的源文件。
 
-由于这类表达式不会进入打包器的依赖图，在 watch 模式下修改此类同级文件不会自动重跑在运行时读取它的测试。
+在 Node 模式下，`import.meta.resolve(specifier)` 也会相对于所在的源码模块解析，包括测试导入的 helper 模块。它遵循 Node 的 ESM 解析规则，返回 URL 字符串。将解析函数存入变量后，解析基准仍是原来的源码模块：
+
+```ts
+const resolve = import.meta.resolve;
+const fixtureUrl = resolve('./fixture.json');
+```
+
+由于这类运行时路径解析不会进入打包器的依赖图，在 watch 模式下修改此类同级文件不会自动重跑在运行时读取它的测试。
 
 ### 自动模拟模块
 

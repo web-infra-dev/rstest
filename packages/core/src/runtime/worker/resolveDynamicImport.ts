@@ -57,6 +57,27 @@ const resolveModule = (specifier: string, resolveBase: string): string => {
   return importMetaResolve(specifier, parentURL);
 };
 
+type ImportMetaResolver = (specifier: string, parent?: string | URL) => string;
+
+export const createImportMetaResolve = () => {
+  // The factory belongs to the loaded bundle, so resolver identity survives
+  // repeated reads without retaining source modules across bundle reloads.
+  const resolvers = new Map<string, ImportMetaResolver>();
+  return (origin: string): ImportMetaResolver => {
+    let resolve = resolvers.get(origin);
+    if (!resolve) {
+      const parentURL = pathToFileURL(origin).href;
+      resolve = (specifier, parent = parentURL) =>
+        import.meta.resolve(
+          specifier,
+          typeof parent === 'string' ? parent : parent.href,
+        );
+      resolvers.set(origin, resolve);
+    }
+    return resolve;
+  };
+};
+
 /**
  * Resolve a dynamic-import specifier to the module path that Node's loader (or
  * the interop tail below) should consume.

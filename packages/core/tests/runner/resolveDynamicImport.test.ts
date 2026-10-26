@@ -11,6 +11,7 @@ import {
   loadModule as loadCjsModule,
 } from '../../src/runtime/worker/loadModule';
 import {
+  createImportMetaResolve,
   finalizeDynamicImport,
   resolveImportSpecifier,
 } from '../../src/runtime/worker/resolveDynamicImport';
@@ -29,6 +30,21 @@ const getFederationFallbackCode = () => {
 
   return source.slice(start, end + '//#endregion'.length);
 };
+
+describe('createImportMetaResolve', () => {
+  it('keeps resolver identity local to each loaded bundle', async () => {
+    await withTempDir('rstest-meta-resolve-', async (dir) => {
+      const origin = join(dir, 'source.mjs');
+      const getResolve = createImportMetaResolve();
+      const resolve = getResolve(origin);
+      expect(getResolve(origin)).toBe(resolve);
+      expect(createImportMetaResolve()(origin)).not.toBe(resolve);
+      expect(resolve('./not-created.json')).toBe(
+        pathToFileURL(join(dir, 'not-created.json')).href,
+      );
+    });
+  });
+});
 
 describe('resolveImportSpecifier', () => {
   const testPath = '/virtual/tests/runtime.test.ts';
