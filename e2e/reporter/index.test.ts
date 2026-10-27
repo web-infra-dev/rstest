@@ -71,6 +71,28 @@ describe.concurrent('reporters', () => {
     },
   );
 
+  it.skipIf(!process.features.typescript)(
+    'loads a TypeScript reporter module on runtimes with type stripping',
+    async ({ onTestFinished }) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '-c', 'fixtures/ts-reporter.config.mjs'],
+        onTestFinished,
+        options: {
+          nodeOptions: { cwd: __dirname },
+        },
+      });
+      await expectExecSuccess();
+      expect(
+        parseMarkerPayload<{
+          marker: string;
+          status: string;
+          rootPath: string;
+        }>(cli.stdout, '__RSTEST_TS_REPORTER__'),
+      ).toEqual({ marker: 'ts', status: 'passed', rootPath: __dirname });
+    },
+  );
+
   it('rejects a bare reporter class through the CLI', async ({
     onTestFinished,
   }) => {
