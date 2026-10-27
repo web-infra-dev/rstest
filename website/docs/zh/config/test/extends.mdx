@@ -110,7 +110,7 @@ extends[0] < extends[1] < ... < extends[n] < local config
 - `setupFiles`、`globalSetup` 和 `plugins` 会拼接，方便多个预设共同追加配置。
 - `include`、`reporters` 和 `coverage.reporters` 会被后者整体替换。
 - `source`、`resolve`、`output`、`tools`、`env` 和 `coverage` 等对象字段会执行深度合并。
-- `browser` 会执行浅合并，后者的同名属性覆盖前者。
+- `browser` 中的普通对象会执行深度合并，包括嵌套的 `providerOptions`。数组、函数和类实例由后者整体替换。例如，覆盖 `providerOptions.launch.args` 会替换整个参数数组，同时保留先前的 `launch.timeout` 和 `context.locale`。
 - 每个扩展配置中的 `projects` 都会被忽略。
 
 ```ts
@@ -187,10 +187,12 @@ export default defineConfig({
 export default defineConfig({
   projects: [
     {
+      name: 'node',
       extends: withRslibConfig({ libId: 'node' }),
       include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
+      name: 'react',
       extends: withRslibConfig({ libId: 'react' }),
       include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },

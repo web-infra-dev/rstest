@@ -14,25 +14,25 @@ Run all tests:
 rstest
 ```
 
-Run a specific test file:
+Match an exact test file path. The shell removes one layer of quotes, so use two layers:
 
 ```bash
-rstest test/foo.test.ts
+rstest '"test/foo.test.ts"'
 ```
 
-Use glob patterns:
+Use `--include` for glob patterns, with quotes to prevent shell expansion:
 
 ```bash
-rstest test/**/*.test.ts
+rstest --include "test/**/*.test.ts"
 ```
 
-Run test files with `foo` in the name, such as `foo.test.ts`, `foo/index.test.ts`, `foo-bar/index.test.ts`, etc.:
+Positional filters use case-insensitive substring matching by default. Run test files with `foo` in the path, such as `foo.test.ts`, `foo/index.test.ts`, `foo-bar/index.test.ts`, etc.:
 
 ```bash
 rstest foo
 ```
 
-You can also specify multiple test files or glob patterns:
+You can also specify multiple file filters:
 
 ```bash
 rstest test/foo.test.ts test/bar.test.ts
@@ -40,9 +40,11 @@ rstest test/foo.test.ts test/bar.test.ts
 
 ### Filter by file path
 
+Rstest does not interpret positional filters as glob patterns. An unquoted pattern may be expanded by your shell, but this behavior varies between shells; use `--include` for glob matching.
+
 This method also applies to filtering by file path.
 
-When filtering by file path, it can be either an absolute path or a relative path based on the current working directory (also called the project root directory or workspace root directory)
+File paths can be absolute or relative to the Rstest root directory.
 
 ```bash
 # Filtering by absolute path
@@ -57,19 +59,19 @@ rstest packages/core
 
 ### include/exclude
 
-When you filter files directly with `rstest **/*.test.ts`, rstest will further filter files based on the [include](/config/test/include) and [exclude](/config/test/exclude) configuration.
+When you pass positional filters, such as `rstest foo`, Rstest applies them to the files selected by the [include](/config/test/include) and [exclude](/config/test/exclude) configuration.
 You can modify the test file scope using the `include` and `exclude` options.
 
 For example, to match test files named `index` in the `test/a` directory:
 
 ```bash
-rstest index --include test/a/*.test.ts
+rstest index --include "test/a/*.test.ts"
 ```
 
 To match test files in `test/a` or `test/b` directories:
 
 ```bash
-rstest --include test/a/*.test.ts --include test/b/*.test.ts
+rstest --include "test/a/*.test.ts" --include "test/b/*.test.ts"
 ```
 
 ## Filter by test name
@@ -172,22 +174,22 @@ rstest --project '!@test/a'
 All filtering methods can be combined. For example:
 
 ```bash
-rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login
+rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login
 ```
 
 In this case, rstest will only run test cases whose names contain login in all `.test.ts` files under the `test` directory, while excluding the `test/legacy` directory.
 
 ## Common usage
 
-- **Run a specific file only**: `rstest test/foo.test.ts`
+- **Run a specific file only**: `rstest '"test/foo.test.ts"'`
 
-- **Run tests in a specific directory only**: `rstest test/api/*.test.ts`
+- **Run tests in a specific directory only**: `rstest --include "test/api/*.test.ts"`
 
-- **Exclude certain tests**: `rstest --exclude test/legacy/**`
+- **Exclude certain tests**: `rstest --exclude "test/legacy/**"`
 
 - **Run only tests whose names contain login**: `rstest -t login`
 
-- **Combined filtering**: `rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login`
+- **Combined filtering**: `rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login`
 
 ## Filter via test API
 

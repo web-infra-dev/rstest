@@ -60,7 +60,7 @@ export default defineConfig({
 如果你偏好 Playwright 风格写法，也可以结合 `@rstest/browser` 的 `page` 与 `expect.element`，详见 [浏览器交互](/guide/browser-testing/user-interactions#locator-api)。
 
 ```tsx title="src/Counter.test.tsx"
-import { render } from '@rstest/browser-react';
+import { act, render } from '@rstest/browser-react';
 import { expect, test } from '@rstest/core';
 import { Counter } from './Counter';
 
@@ -71,7 +71,9 @@ test('renders and increments', async () => {
     '0',
   );
 
-  container.querySelector('button')!.click();
+  await act(() => {
+    container.querySelector('button')!.click();
+  });
   expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
     '1',
   );

@@ -111,7 +111,7 @@ Important merge rules:
 - `setupFiles`, `globalSetup`, and `plugins` are concatenated so multiple presets can contribute entries.
 - `include`, `reporters`, and `coverage.reporters` are replaced by the later value.
 - Object fields like `source`, `resolve`, `output`, `tools`, `env`, and `coverage` are deep-merged.
-- `browser` is shallow-merged, so later keys override earlier keys.
+- `browser` deep-merges plain objects, including nested `providerOptions`. Arrays, functions, and class instances are replaced by the later value. For example, overriding `providerOptions.launch.args` replaces the argument array while preserving an earlier `launch.timeout` and `context.locale`.
 - `projects` is ignored in every extended config.
 
 Example:
@@ -190,10 +190,12 @@ The `extends` configuration cannot include the `projects` field. To define multi
 export default defineConfig({
   projects: [
     {
+      name: 'node',
       extends: withRslibConfig({ libId: 'node' }),
       include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
+      name: 'react',
       extends: withRslibConfig({ libId: 'react' }),
       include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },

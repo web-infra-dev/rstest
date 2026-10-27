@@ -7,12 +7,11 @@ description: 定义多个测试项目，可以是一个目录、配置文件或 
 - **类型：**
 
 ```ts
-type ProjectConfig = Omit<
-  RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage' | 'bail'
->;
+import type { ProjectConfig } from '@rstest/core';
 
-type Projects = (string | ProjectConfig)[];
+type InlineProjectConfig = ProjectConfig & { name: string };
+
+type Projects = (string | InlineProjectConfig)[];
 ```
 
 - **默认值：** `[<rootDir>]`
