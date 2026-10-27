@@ -11,27 +11,6 @@ Reporter API 允许你创建自定义测试结果处理器和输出格式器。
 
 > **注意**：使用示例和配置指南，请参阅 [报告器指南](/guide/basic/reporters)。
 
-## 稳定性 \{#stability}
-
-<ApiMeta addedVersion="0.13.0" />
-
-Hook 集合、payload 字段名和 status 字面量属于 **Stable**。`getSourcemap`、`snapshotSummary`、`coverage`、`heap` 和 `meta` 的语义属于 **Best-effort**，可能独立于稳定 contract 发生变化。
-
-## Dispatch 语义 \{#dispatch-semantics}
-
-Runner hooks 按事件到达顺序开始执行，不串联 Promise，因此后一个事件的 hooks 可以在前一个事件的 hooks 完成前开始。调用 `onTestFileResult` 前，Rstest 会等待该文件尚未完成的 start、ready、suite、case 和 console hooks；调用 `onTestRunEnd` 前，会等待本轮所有尚未完成的 hooks。无论只跑 Node、只跑 browser 还是混合运行，`onTestRunStart` 和 `onTestRunEnd` 每轮都只派发一次。
-
-每个 reporter 的 hook 失败都是隔离的：其余 reporter 仍会收到该事件，失败记为 `Reporter <name> (#<index>) <hook> failed: <message>`；没有类名的 reporter（例如对象字面量）显示为 `<anonymous>`。每次失败的 hook 调用都会单独记录一条错误，所以同一个 reporter 在混合运行里报出的错误数量，与只在 Node 里运行时一致。
-
-之后如何处理取决于钩子：
-
-- `onTestRunStart` 失败会在任何测试执行前中止本轮。所有 reporter 仍会收到该钩子，`onTestRunEnd` 照常触发，错误出现在 `unhandledErrors` 里，运行状态为 `error`，进程退出码非零。
-- 文件、suite、case 和 console 钩子失败不会中止运行。错误会被记录下来，并在 `onTestRunEnd` 的 `unhandledErrors` 中上报；运行状态为 `error`，退出码非零。
-- `onTestRunEnd` 失败无法写回它正在派发的 payload。其余 reporter 仍会收到 `onTestRunEnd`；带归因的错误会作为 unhandled reporter error 打印，退出码非零，而 payload 里的 status 保持派发前算出的值。
-- `onExit` 行为不变。
-
-blob replay 遵循相同规则。
-
 ## 使用自定义报告器
 
 通过实现 `Reporter` 接口来创建自定义报告器：
@@ -145,7 +124,7 @@ Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写�
 
 <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。文件在执行前选定，因此即使 bail 阻止了后续执行，这些文件仍会出现在列表中。`TestRunStartPayload` 可从 `@rstest/core` 导入。
+`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。`TestRunStartPayload` 可从 `@rstest/core` 导入。
 
 - **类型：**
 
@@ -167,7 +146,7 @@ interface TestRunStartPayload {
 
 <ApiMeta addedVersion="0.13.0" />
 
-Coverage 生成和 threshold 检查会在 `onTestRunEnd` 前完成，因此 coverage 表格现在先于运行摘要打印。Host 统一计算一次 `status`：有 unhandled errors 时为 `'error'`；否则，exit code 非零或有失败文件时为 `'failed'`；其余情况为 `'passed'`。Public API 的 `TestRunResult` 去掉了 `getSourcemap`，并增加可选的 `trace` 输出路径。
+从 v0.13.0 开始，payload 还会带上本次运行的 `status`；每个取值的含义见 [`rstest.run`](/api/javascript-api/instance#rstestrun)。
 
 watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累计结果：每个文件只保留最新一次的结果，删除的文件会移出。`rerunTestPaths` 是这一轮实际执行的文件，一次性运行没有这个字段。`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON。
 
