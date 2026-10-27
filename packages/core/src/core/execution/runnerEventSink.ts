@@ -70,8 +70,12 @@ export const recordReporterError = (
   getPendingHooks(context).errors.push(error);
 };
 
-const joinHooks = async (pending: Set<Promise<void>>): Promise<void> => {
-  while (pending.size) {
+const joinHooks = async (
+  hooksOf: () => Iterable<Set<Promise<void>>>,
+): Promise<void> => {
+  for (;;) {
+    const pending = [...hooksOf()].flatMap((hooks) => [...hooks]);
+    if (!pending.length) return;
     await Promise.all(pending);
   }
 };
@@ -83,11 +87,7 @@ export async function drainReporterHooks(
   if (!pending) {
     return [];
   }
-  for (;;) {
-    const all = [...pending.files.values()].flatMap((file) => [...file]);
-    if (!all.length) break;
-    await Promise.all(all);
-  }
+  await joinHooks(() => pending.files.values());
   pending.files.clear();
   return pending.errors.splice(0);
 }
@@ -110,8 +110,6 @@ export async function drainReporterHooks(
  */
 interface HostDrivenEvents {
   discardAttempt(testPath: string): void;
-  /** Drain queued case-result reporter delivery for deterministic replay. */
-  awaitTestCaseResults(testPath: string): Promise<void>;
   /**
    * AWAITED by both transports, and ingests `result.snapshotResult`. The pool
    * calls it after `pool.runTest` returns, the browser host after a client
@@ -153,17 +151,26 @@ export function createRunnerEventSink(
 ): RunnerEventSink {
   const { reporters } = context;
   const attempts = new Map<string, number>();
-  const pendingCaseResultDeliveries = new Map<string, Promise<void>>();
 
   const run = getPendingHooks(context);
 
   // Blob replay already carries enrichment from the recording run's root.
   // Defaults precede the payload so replay preserves those recorded values.
-  const enrichTask = <T extends RawTestCaseInfo | RawTestSuiteInfo>(
+  const relativeTestPathCache = new Map<string, string>();
+  const relativeTestPathFor = (testPath: string): string => {
+    const cached = relativeTestPathCache.get(testPath);
+    if (cached !== undefined) return cached;
+    const relativeTestPath = relative(context.rootPath, testPath);
+    relativeTestPathCache.set(testPath, relativeTestPath);
+    return relativeTestPath;
+  };
+  const enrichTask = <
+    T extends RawTestCaseInfo | RawTestSuiteInfo | RawTestResult,
+  >(
     task: T,
   ): T & { fullName: string; relativeTestPath: string } => ({
     fullName: getTaskNameWithPrefix(task),
-    relativeTestPath: relative(context.rootPath, task.testPath),
+    relativeTestPath: relativeTestPathFor(task.testPath),
     ...task,
   });
   const enrichInfo = (test: RawTestInfo): TestInfo =>
@@ -171,17 +178,12 @@ export function createRunnerEventSink(
       ? { ...enrichTask(test), tests: test.tests.map(enrichInfo) }
       : enrichTask(test);
   const enrichFileInfo = (test: RawTestFileInfo): TestFileInfo => ({
-    relativeTestPath: relative(context.rootPath, test.testPath),
+    relativeTestPath: relativeTestPathFor(test.testPath),
     ...test,
     tests: test.tests.map(enrichInfo),
   });
-  const enrichResult = (result: RawTestResult): TestResult => ({
-    fullName: getTaskNameWithPrefix(result),
-    relativeTestPath: relative(context.rootPath, result.testPath),
-    ...result,
-  });
   const enrichLog = (log: RawUserConsoleLog): UserConsoleLog => ({
-    relativeTestPath: relative(context.rootPath, log.testPath),
+    relativeTestPath: relativeTestPathFor(log.testPath),
     ...log,
   });
 
@@ -195,45 +197,43 @@ export function createRunnerEventSink(
     return hooks;
   };
 
-  const invokeHooks = async <
-    K extends Exclude<
-      keyof Reporter,
-      'flushOutputStreams' | 'onTestRunStart' | 'onTestRunEnd' | 'onExit'
-    >,
-  >(
+  type FileScopedReporterHook = Exclude<
+    keyof Reporter,
+    'flushOutputStreams' | 'onTestRunStart' | 'onTestRunEnd' | 'onExit'
+  >;
+  type HookPayload<K extends FileScopedReporterHook> = Parameters<
+    NonNullable<Reporter[K]>
+  >[0];
+
+  const invokeHooks = async <K extends FileScopedReporterHook>(
     hook: K,
-    payload: Parameters<NonNullable<Reporter[K]>>[0],
+    payload: HookPayload<K>,
   ): Promise<void> => {
     const dispatched: Promise<void>[] = [];
-    for (const [index, reporter] of reporters.entries()) {
-      const recordError = (error: unknown) => {
-        recordReporterError(
-          context,
-          formatReporterError(reporter, index, hook, error),
-        );
-      };
+    for (let index = 0; index < reporters.length; index += 1) {
+      const reporter = reporters[index]!;
       let result: MaybePromise<void>;
       try {
         // The hook key correlates its callback with this payload type.
         const invoke = reporter[hook] as
-          | ((
-              payload: Parameters<NonNullable<Reporter[K]>>[0],
-            ) => MaybePromise<void>)
-          | undefined;
+          ((payload: HookPayload<K>) => MaybePromise<void>) | undefined;
         result = invoke?.call(reporter, payload);
       } catch (error) {
-        recordError(error);
+        recordReporterError(
+          context,
+          formatReporterError(reporter, index, hook, error),
+        );
         continue;
       }
       if (!result?.then) continue;
-      const hooks = fileHooks(payload);
-      const promise = Promise.resolve(result)
-        .catch(recordError)
-        .finally(() => {
-          hooks.delete(promise);
-        });
-      hooks.add(promise);
-      dispatched.push(promise);
+      dispatched.push(
+        Promise.resolve(result).catch((error) => {
+          recordReporterError(
+            context,
+            formatReporterError(reporter, index, hook, error),
+          );
+        }),
+      );
     }
     await Promise.all(dispatched);
   };
@@ -243,14 +243,9 @@ export function createRunnerEventSink(
   // transport awaits its file-start send, so a later event can reach here
   // while the file-start handler is still opening the run — gating every
   // fanout, not just the first, is what keeps `onTestRunStart` ahead of all.
-  const dispatch = <
-    K extends Exclude<
-      keyof Reporter,
-      'flushOutputStreams' | 'onTestRunStart' | 'onTestRunEnd' | 'onExit'
-    >,
-  >(
+  const dispatch = <K extends FileScopedReporterHook>(
     hook: K,
-    payload: Parameters<NonNullable<Reporter[K]>>[0],
+    payload: HookPayload<K>,
   ): Promise<void> => {
     const expectedAttempt = attempts.get(payload.testPath);
     const opened = context.openReporterRun?.();
@@ -274,13 +269,13 @@ export function createRunnerEventSink(
     hooks.add(tracked);
     return tracked;
   };
-  const awaitTestCaseResults = async (testPath: string): Promise<void> => {
-    await pendingCaseResultDeliveries.get(testPath);
-  };
 
   return {
     discardAttempt(testPath) {
       attempts.set(testPath, (attempts.get(testPath) ?? 0) + 1);
+      // A discarded attempt is the one point where the per-path cache can be
+      // bounded without walking it.
+      relativeTestPathCache.clear();
       context.stateManager.onTestFileStart({
         testPath,
         relativeTestPath: relative(context.rootPath, testPath),
@@ -291,7 +286,6 @@ export function createRunnerEventSink(
         }
       }
     },
-    awaitTestCaseResults,
     onTestCaseStart(test) {
       const enriched = enrichTask(test);
       context.stateManager.onTestCaseStart(enriched);
@@ -299,20 +293,12 @@ export function createRunnerEventSink(
     },
     async onTestCaseFailure() {},
     async onTestCaseResult(result) {
-      const enriched = enrichResult(result);
+      const enriched = enrichTask(result);
       context.stateManager.onTestCaseResult(enriched);
-      const previous =
-        pendingCaseResultDeliveries.get(result.testPath) ?? Promise.resolve();
-      const delivery = Promise.all([
-        previous,
-        dispatch('onTestCaseResult', enriched),
-      ]).then(() => {});
-      pendingCaseResultDeliveries.set(result.testPath, delivery);
-      void delivery.then(() => {
-        if (pendingCaseResultDeliveries.get(result.testPath) === delivery) {
-          pendingCaseResultDeliveries.delete(result.testPath);
-        }
-      });
+      // Reporter delivery is joined per file before `onTestFileResult` (and by
+      // `drainReporterHooks` at finalize), so the transport reply never waits
+      // for a hook body.
+      void dispatch('onTestCaseResult', enriched);
       return enriched;
     },
     async onTestFileStart(test) {
@@ -329,18 +315,18 @@ export function createRunnerEventSink(
       await dispatch('onTestSuiteStart', enriched);
     },
     async onTestSuiteResult(result) {
-      const enriched = enrichResult(result);
+      const enriched = enrichTask(result);
       await dispatch('onTestSuiteResult', enriched);
     },
     async onTestFileResult(result) {
       const pending = run.files.get(
         reporterFileKey(result.project, result.testPath),
       );
-      if (pending) await joinHooks(pending);
-      const results = result.results.map(enrichResult);
+      if (pending) await joinHooks(() => [pending]);
+      const results = result.results.map(enrichTask);
       const enriched: TestFileResult = {
         summary: getFileSummary(results),
-        ...enrichResult(result),
+        ...enrichTask(result),
         results,
       };
       context.stateManager.onTestFileResult(enriched);
@@ -374,7 +360,7 @@ export function createRunnerEventSink(
       return dispatch('onUserConsoleLog', enriched);
     },
     async emitTestCaseResult(result) {
-      const enriched = enrichResult(result);
+      const enriched = enrichTask(result);
       await dispatch('onTestCaseResult', enriched);
       return enriched;
     },
