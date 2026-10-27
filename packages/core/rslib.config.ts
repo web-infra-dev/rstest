@@ -53,7 +53,7 @@ const readableMinifyConfig = {
 } satisfies Rsbuild.Minify;
 
 const fullyMinifiedNodeChunks =
-  /(?:^|\/)(?:@babel\/code-frame|@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~0\.js$/;
+  /(?:^|\/)(?:@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~0\.js$/;
 const fullyMinifiedBrowserChunks =
   /(?:^|\/)(?:browser-runtime-vendor|fake-timers|magic-string\.es)~1\.js$/;
 

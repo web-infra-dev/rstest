@@ -76,7 +76,6 @@
   },
   "devDependencies": {
     "@antfu/install-pkg": "^1.1.0",
-    "@babel/code-frame": "^7.29.7",
     "@clack/prompts": "^1.8.1",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.59.4",
@@ -86,7 +85,6 @@
     "@rslib/core": "catalog:",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.4.0",
-    "@types/babel__code-frame": "^7.27.0",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/istanbul-reports": "^3.0.4",

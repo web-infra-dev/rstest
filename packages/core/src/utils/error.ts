@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { SerializedError, GetSourcemap } from '../types';
+import { generateCodeFrame } from './codeFrame';
 import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
@@ -118,14 +119,14 @@ export async function printError(
     }
 
     if (stackFrames[0]) {
-      await printCodeFrame(stackFrames[0]);
+      printCodeFrame(stackFrames[0]);
     }
 
     printStack(stackFrames, rootPath);
   }
 }
 
-async function printCodeFrame(frame: StackFrame) {
+function printCodeFrame(frame: StackFrame) {
   const filePath = frame.file?.startsWith('file')
     ? new URL(frame.file)
     : frame.file;
@@ -141,19 +142,11 @@ async function printCodeFrame(frame: StackFrame) {
   if (!source) {
     return;
   }
-  const { codeFrameColumns } = await import('@babel/code-frame');
-  const result = codeFrameColumns(
+  const result = generateCodeFrame(
     source,
-    {
-      start: {
-        line: frame.lineNumber!,
-        column: frame.column!,
-      },
-    },
-    {
-      forceColor: color.isColorSupported,
-      linesBelow: 2,
-    },
+    frame.lineNumber,
+    frame.column,
+    color,
   );
 
   logger.stderr(result);
