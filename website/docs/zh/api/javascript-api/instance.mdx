@@ -209,7 +209,7 @@ interface TestRunResult {
 
 其余字段（`results`、`testResults`、`summary`、`duration`、`snapshotSummary`、`unhandledErrors`、`coverage`、`rerunTestPaths`）的说明见 Reporter API 的 [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend)。
 
-当 `unhandledErrors` 不为空时，`status` 为 `'error'`。在 `onTestRunEnd` 时 exit status 非零，`status` 就是 `'failed'`，例如测试或测试文件失败、coverage 未达 threshold，或未设置 `passWithNoTests` 时没有找到测试。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'failed'`。其他情况下，`status` 为 `'passed'`。`onTestRunEnd` 的 payload 保留派发时的 status；如果之后的 global teardown 报错（或 reporter 收尾 hook 失败）让 exit status 非零，`run()` 返回的结果会变成 `'failed'`，embedded 调用方因此仍能观察到失败。
+当 `unhandledErrors` 不为空时，`status` 为 `'error'`。测试或测试文件失败、coverage 未达 threshold，或未设置 `passWithNoTests` 时没有找到测试，`status` 为 `'failed'`。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'failed'`。其他情况下，`status` 为 `'passed'`。之后再发生 global teardown 错误不会影响 `onTestRunEnd` 收到的 payload，但 `run()` 仍会返回 `'failed'`。
 
 `unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
 

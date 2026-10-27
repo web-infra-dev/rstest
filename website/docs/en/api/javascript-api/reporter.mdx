@@ -11,27 +11,6 @@ The Reporter API allows you to create custom test result processors and output f
 
 > **Note**: For usage examples and configuration guidance, see the [Reporters guide](/guide/basic/reporters).
 
-## Stability
-
-<ApiMeta addedVersion="0.13.0" />
-
-The hook set, payload field names, and status literals are **Stable**. The semantics of `getSourcemap`, `snapshotSummary`, `coverage`, `heap`, and `meta` are **Best-effort** and may change independently of the stable contract.
-
-## Dispatch semantics
-
-Runner hooks start in event arrival order, without chaining promises, so a later event's hooks can start before an earlier event's hooks resolve. Before `onTestFileResult`, Rstest waits for all pending start, ready, suite, case, and console hooks belonging to that file; before `onTestRunEnd`, it waits for all pending hooks in the run. `onTestRunStart` and `onTestRunEnd` are each dispatched once per run, whether the run is Node-only, browser-only, or mixed.
-
-Each reporter hook failure is isolated: the remaining reporters still receive the event, and the failure is recorded as `Reporter <name> (#<index>) <hook> failed: <message>`. Reporters without a class name, such as object literals, are labeled `<anonymous>`. Every failing hook call records its own error, so the same reporter reports the same number of errors in a mixed run as it does in a Node-only run.
-
-What happens to the run depends on the hook:
-
-- A failed `onTestRunStart` aborts the run before any test executes. Every reporter still receives the hook, `onTestRunEnd` still fires with the recorded errors in `unhandledErrors`, the run status becomes `error`, and the process exits with a non-zero code.
-- A failed file, suite, case, or console hook does not stop the run. The error is recorded and surfaces in `unhandledErrors` on `onTestRunEnd`; the run status becomes `error` and the exit code is non-zero.
-- A failed `onTestRunEnd` cannot be added to the payload it belongs to. The remaining reporters still receive `onTestRunEnd`; the attributed error is printed as an unhandled reporter error and the exit code is non-zero, while the payload status keeps the value computed before dispatch.
-- `onExit` remains unchanged.
-
-The same rules apply to blob replay.
-
 ## Using custom reporter
 
 Create a custom reporter by implementing the `Reporter` interface:
@@ -145,7 +124,7 @@ Metadata result fields are available on reporter results. JSON-serializable runt
 
 <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Selection happens before execution, so files remain listed even if bail prevents them from running. Import `TestRunStartPayload` from `@rstest/core`.
+`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Import `TestRunStartPayload` from `@rstest/core`.
 
 - **Type:**
 
@@ -167,7 +146,7 @@ interface TestRunStartPayload {
 
 <ApiMeta addedVersion="0.13.0" />
 
-Coverage generation and threshold checks finish before `onTestRunEnd`, so the coverage table now prints before the run summary. The host computes `status` once: unhandled errors produce `'error'`; otherwise a non-zero exit code or failed files produce `'failed'`; otherwise the status is `'passed'`. The public API's `TestRunResult` omits `getSourcemap` and adds the optional `trace` output paths.
+Starting in v0.13.0, the payload also includes the run's `status`. See [`rstest.run`](/api/javascript-api/instance#rstestrun) for what each status value means.
 
 In watch mode, `results`, `testResults`, and `summary` accumulate over the whole session: each file keeps its latest result, and deleted files are removed. `rerunTestPaths` lists the files executed in the current cycle and is absent for one-shot runs. Every entry in `unhandledErrors` is a plain object that can be serialized to JSON.
 
