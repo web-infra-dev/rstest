@@ -308,7 +308,15 @@ export function createWatchCycleDriver({
         outcome.errors.length ||
         outcome.deletedTestPaths?.length
       ) {
-        await openRun();
+        try {
+          await openRun();
+        } catch (error) {
+          // Opening the run failed after the executor settled, which only a
+          // reporter `onTestRunStart` failure can do. The attributed error is
+          // already recorded for the run; carry it to finalize as the cycle
+          // failure instead of rejecting past it.
+          outcome = cycleFailureOutcome([toError(error)]);
+        }
       }
       let sessionEndingError: Error | undefined;
       if (outcome.failure === 'fatal') {

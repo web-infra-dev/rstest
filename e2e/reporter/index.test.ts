@@ -88,6 +88,60 @@ describe.concurrent('reporters', () => {
     );
   });
 
+  it('aborts before any test runs and attributes a run-start hook failure', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'fixtures/contract.config.mjs'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: { RSTEST_THROW_RUN_START: '1' },
+        },
+      },
+    });
+    await expectExecFailed();
+
+    const payload = parseMarkerPayload<{
+      status: string;
+      unhandledErrors: { message: string }[];
+      events: { event: string }[];
+    }>(cli.stdout, '__RSTEST_REPORTER_CONTRACT__');
+    expect(payload.status).toBe('error');
+    expect(payload.unhandledErrors.map(({ message }) => message)).toEqual([
+      'Reporter ContractReporter (#1) onTestRunStart failed: run-start rejected',
+    ]);
+    // The run aborts before tests execute, but the reporter still receives its
+    // `onTestRunEnd` to close the cycle.
+    expect(payload.events).toEqual([{ event: 'run-end' }]);
+  });
+
+  it('surfaces a run-end hook failure after the payload is dispatched', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'fixtures/contract.config.mjs'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: { RSTEST_THROW_RUN_END: '1' },
+        },
+      },
+    });
+    await expectExecFailed();
+
+    // The payload was already dispatched, so the failure is printed as an
+    // unhandled reporter error instead of joining `unhandledErrors`.
+    expect(cli.stderr).toContain('Unhandled Reporter Error');
+    expect(cli.stderr).toContain(
+      'Reporter ContractReporter (#1) onTestRunEnd failed: run-end rejected',
+    );
+  });
+
   it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

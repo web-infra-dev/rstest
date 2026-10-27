@@ -14,17 +14,23 @@ import type {
 } from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import {
+  bgColor,
   color,
   getNoTestFilesMessage,
   isDebug,
   flushOutputStreams,
+  keepEventLoopAlive,
   logger,
   type TraceRun,
 } from '../../utils';
 import type { InternalContext } from '../../types';
 import { toSerializedError } from '../../utils/error';
 import { getFileTaskId } from '../../utils/helper';
-import { drainReporterHooks } from './runnerEventSink';
+import {
+  drainReporterHooks,
+  formatReporterError,
+  recordReporterError,
+} from './runnerEventSink';
 
 const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
   if (context.command === 'watch') {
@@ -86,14 +92,32 @@ export const notifyReportersOnTestRunStart = async (
       testId: getFileTaskId(file.testPath),
     })),
   };
-  // Selection can finish before workers exist; signal-only hooks need a referenced handle until they settle.
-  const keepAlive = setInterval(() => {}, 2 ** 30);
-  try {
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunStart?.(payload);
+  const failure = await keepEventLoopAlive(async () => {
+    let firstFailure: Error | undefined;
+    // Every reporter is notified even when an earlier one fails: a broken
+    // reporter must not swallow the hook for the rest of the run.
+    for (const [index, reporter] of context.reporters.entries()) {
+      try {
+        await reporter.onTestRunStart?.(payload);
+      } catch (error) {
+        const reporterError = formatReporterError(
+          reporter,
+          index,
+          'onTestRunStart',
+          error,
+        );
+        recordReporterError(context, reporterError);
+        // The run cannot produce trustworthy results once a reporter failed
+        // before it started, so the cycle aborts after this loop. The rejected
+        // value is the recorded error itself, which keeps the failure a single
+        // entry when every executor observes the same rejection.
+        firstFailure ??= reporterError;
+      }
     }
-  } finally {
-    clearInterval(keepAlive);
+    return firstFailure;
+  });
+  if (failure) {
+    throw failure;
   }
 };
 
@@ -137,11 +161,35 @@ export const notifyReportersOnTestRunEnd = async ({
   context: InternalContext;
   payload: TestRunEndPayload;
 }): Promise<void> => {
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunEnd?.(payload);
-    if (reporter.flushOutputStreams !== false) {
-      await flushOutputStreams();
+  const failures: Error[] = [];
+  for (const [index, reporter] of context.reporters.entries()) {
+    try {
+      await reporter.onTestRunEnd?.(payload);
+    } catch (error) {
+      failures.push(
+        formatReporterError(reporter, index, 'onTestRunEnd', error),
+      );
+    } finally {
+      if (reporter.flushOutputStreams !== false) {
+        await flushOutputStreams();
+      }
     }
+  }
+  if (!failures.length) {
+    return;
+  }
+  // The payload has already been dispatched, so these failures cannot join its
+  // `unhandledErrors`. Surface them here and fail the process instead.
+  context.exitCode.raise(1);
+  const { printError } = await import('../../utils/error');
+  for (const failure of failures) {
+    logger.stderr('');
+    logger.stderr(bgColor('bgRed', ' Unhandled Reporter Error '));
+    await printError(
+      toSerializedError(failure),
+      payload.getSourcemap,
+      context.rootPath,
+    );
   }
 };
 
@@ -254,9 +302,16 @@ export async function finalizeRunCycle(
 
   const results = outcomes.flatMap((o) => o.results);
   const testResults = outcomes.flatMap((o) => o.testResults);
+  // A reporter failure before the run starts aborts every executor with the
+  // same recorded error instance, and the same instance is also recorded for
+  // the run, so identity dedupes the fan-out instead of counting one failure
+  // once per executor. Distinct failures stay distinct because every reporter
+  // hook call records its own error object.
   const errors = [
-    ...outcomes.flatMap((o) => o.errors),
-    ...(await drainReporterHooks(context)),
+    ...new Set([
+      ...outcomes.flatMap((o) => o.errors),
+      ...(await drainReporterHooks(context)),
+    ]),
   ];
 
   // Coverage flows through the outcome contract: merge every executor's istanbul

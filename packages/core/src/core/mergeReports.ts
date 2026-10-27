@@ -34,6 +34,7 @@ import { color, logger, prettyTime } from '../utils';
 import { toSerializedError } from '../utils/error';
 import {
   notifyReportersOnTestRunEnd,
+  notifyReportersOnTestRunStart,
   resolveRunStatus,
 } from './execution/finalizeRun';
 import type { Rstest } from './rstest';
@@ -345,10 +346,17 @@ export async function mergeReports(
     context.exitCode.raise(1);
   }
 
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunStart?.({
-      files: blobs.flatMap((blob) => blob.runStart.files),
-    });
+  let replayStarted = false;
+  try {
+    await notifyReportersOnTestRunStart(
+      context,
+      blobs.flatMap((blob) => blob.runStart.files),
+    );
+    replayStarted = true;
+  } catch {
+    // A reporter failed before the run started. A live run aborts before any
+    // test executes in that case, so the replay is skipped too; the attributed
+    // errors are recorded on the context and drained below.
   }
 
   // Print per-shard durations
@@ -378,8 +386,10 @@ export async function mergeReports(
   // run-level context today, so any sink serves such a file.
   const [fallbackSink] = sinks.values();
 
-  for (const file of replayFiles) {
-    await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
+  if (replayStarted) {
+    for (const file of replayFiles) {
+      await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
+    }
   }
 
   const reporterErrors = await drainReporterHooks(context);
@@ -389,6 +399,7 @@ export async function mergeReports(
   }
 
   const shouldGenerateCoverage =
+    replayStarted &&
     coverageProvider &&
     mergedCoverageMap &&
     (!hasFailure || coverageOptions.reportOnFailure);
@@ -397,13 +408,17 @@ export async function mergeReports(
     await generateCoverage(context, mergedCoverageMap, coverageProvider);
   }
 
-  const summary = computeSummary(allResults);
+  // An aborted replay reports no results, matching a live run aborted by the
+  // same reporter failure before any test executed.
+  const reportedResults = replayStarted ? allResults : [];
+  const reportedTestResults = replayStarted ? allTestResults : [];
+  const summary = computeSummary(reportedResults);
   await notifyReportersOnTestRunEnd({
     context,
     payload: {
-      results: allResults,
-      coverage: mergedCoverage,
-      testResults: allTestResults,
+      results: reportedResults,
+      coverage: replayStarted ? mergedCoverage : undefined,
+      testResults: reportedTestResults,
       summary,
       status: resolveRunStatus({
         exitCode: context.exitCode.current,

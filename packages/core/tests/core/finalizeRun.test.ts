@@ -1,14 +1,27 @@
 import { withDefaultConfig } from '../../src/config';
 import { createExitCode } from '../../src/core/execution/exitCode';
-import { finalizeRunCycle } from '../../src/core/execution/finalizeRun';
+import {
+  finalizeRunCycle,
+  notifyReportersOnTestRunEnd,
+  notifyReportersOnTestRunStart,
+} from '../../src/core/execution/finalizeRun';
+import {
+  drainReporterHooks,
+  recordReporterError,
+} from '../../src/core/execution/runnerEventSink';
 import { BlobReporter } from '../../src/reporter/blob';
-import type { InternalContext } from '../../src/types';
+import type {
+  InternalContext,
+  Reporter,
+  TestRunEndPayload,
+} from '../../src/types';
 import type {
   CoverageMap,
   CoverageMapData,
   CoverageProvider,
 } from '../../src/types/coverage';
-import { noopTraceSpan } from '../../src/utils';
+import { logger, noopTraceSpan } from '../../src/utils';
+import { emptyRunEndPayload } from '../reporter/helpers';
 
 describe('finalizeRunCycle', () => {
   it.for(['none', 'pre-start', 'before', 'reporter', 'raw', 'coverage'])(
@@ -131,4 +144,137 @@ describe('finalizeRunCycle', () => {
       );
     },
   );
+});
+
+describe('run-level reporter hook failures', () => {
+  const makeReporterContext = (reporters: Reporter[]): InternalContext =>
+    ({
+      command: 'run',
+      rootPath: process.cwd(),
+      normalizedConfig: withDefaultConfig({ passWithNoTests: true }),
+      projects: [],
+      reporters,
+      reporterResults: { results: [], testResults: [] },
+      snapshotManager: { summary: {} },
+      exitCode: createExitCode(),
+      updateReporterResultState: rs.fn(),
+    }) as unknown as InternalContext;
+
+  it('notifies every reporter on run start and records each failure with attribution', async () => {
+    const calls: string[] = [];
+    class BrokenReporter {
+      onTestRunStart() {
+        calls.push('broken');
+        throw new Error('run-start boom');
+      }
+    }
+    const context = makeReporterContext([
+      new BrokenReporter(),
+      {
+        onTestRunStart() {
+          calls.push('anonymous');
+          throw new Error('anonymous boom');
+        },
+      },
+      {
+        onTestRunStart() {
+          calls.push('healthy');
+        },
+      },
+    ]);
+
+    await expect(
+      notifyReportersOnTestRunStart(context, [
+        { testPath: '/root/a.test.ts', project: 'default' },
+      ]),
+    ).rejects.toThrow(
+      'Reporter BrokenReporter (#1) onTestRunStart failed: run-start boom',
+    );
+    expect(calls).toEqual(['broken', 'anonymous', 'healthy']);
+    expect(
+      (await drainReporterHooks(context)).map((error) => error.message),
+    ).toEqual([
+      'Reporter BrokenReporter (#1) onTestRunStart failed: run-start boom',
+      'Reporter <anonymous> (#2) onTestRunStart failed: anonymous boom',
+    ]);
+  });
+
+  it('keeps notifying reporters on run end and fails the process after the payload', async () => {
+    const calls: string[] = [];
+    class BrokenReporter {
+      onTestRunEnd() {
+        calls.push('broken');
+        throw new Error('run-end boom');
+      }
+    }
+    const context = makeReporterContext([
+      new BrokenReporter(),
+      {
+        onTestRunEnd() {
+          calls.push('healthy');
+        },
+      },
+    ]);
+    const stderr = rs
+      .spyOn(logger, 'stderr')
+      .mockImplementation(() => undefined);
+    onTestFinished(() => {
+      stderr.mockRestore();
+    });
+
+    await notifyReportersOnTestRunEnd({
+      context,
+      payload: { ...emptyRunEndPayload },
+    });
+
+    expect(calls).toEqual(['broken', 'healthy']);
+    expect(context.exitCode.current).toBe(1);
+    expect(stderr).toHaveBeenCalledWith(
+      expect.stringContaining('Unhandled Reporter Error'),
+    );
+  });
+
+  it('counts one reporter failure once when every executor observes it', async () => {
+    const recordedError = new Error(
+      'Reporter BrokenReporter (#1) onTestRunStart failed: run-start boom',
+    );
+    const payloads: TestRunEndPayload[] = [];
+    const context = makeReporterContext([
+      {
+        onTestRunEnd(payload) {
+          payloads.push(payload);
+        },
+      },
+    ]);
+    recordReporterError(context, recordedError);
+    const outcome = {
+      results: [],
+      testResults: [],
+      errors: [recordedError],
+      testPaths: [],
+      duration: { buildTime: 0, testTime: 0 },
+    };
+
+    await finalizeRunCycle(context, {
+      outcomes: [outcome, { ...outcome }],
+      mode: 'all',
+      isWatchMode: false,
+      isInterrupted: () => false,
+      reportersStarted: true,
+      coverageProvider: null,
+      reportOnFailure: false,
+      traceRun: {
+        onEvents: undefined,
+        span: noopTraceSpan,
+        finalize: async () => {},
+      },
+    });
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]!.unhandledErrors.map((error) => error.message)).toEqual([
+      recordedError.message,
+    ]);
+    expect(payloads[0]!.status).toBe('error');
+    expect(context.exitCode.current).toBe(1);
+  });
 });

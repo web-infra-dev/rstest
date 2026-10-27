@@ -21,12 +21,11 @@ describe('browser mode - reporter lifecycle hooks', () => {
       events: { event: string }[];
     }>(cli.stdout, '__RSTEST_REPORTER_CONTRACT__');
     expect(payload.status).toBe('error');
-    expect(payload.unhandledErrors.length).toBeGreaterThan(0);
-    expect(
-      payload.unhandledErrors.every(
-        ({ message }) => message === 'run-start rejected',
-      ),
-    ).toBe(true);
+    // Every executor observes the same run-start dispatch, so a mixed run
+    // reports the failure once, attributed to the reporter and hook.
+    expect(payload.unhandledErrors.map(({ message }) => message)).toEqual([
+      'Reporter ContractReporter (#2) onTestRunStart failed: run-start rejected',
+    ]);
     expect(payload.events).toEqual([{ event: 'run-end' }]);
     expect(getHookCount(cli.stdout, 'onTestRunStart')).toBe(1);
     expect(getHookCount(cli.stdout, 'onTestRunEnd')).toBe(1);

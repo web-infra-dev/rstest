@@ -31,6 +31,45 @@ type PendingReporterHooks = {
 
 const pendingHooks = new WeakMap<InternalContext, PendingReporterHooks>();
 
+// `constructor.name` only names class reporters. Object literals, bound
+// functions, and defaults all resolve to a built-in constructor name, which
+// would read as a class name in the error message.
+const unnamedReporterConstructors = new Set(['Object', 'Function', '']);
+
+const reporterLabel = (reporter: Reporter): string => {
+  const name = reporter.constructor?.name;
+  return name && !unnamedReporterConstructors.has(name) ? name : '<anonymous>';
+};
+
+/** Builds the attributed error every reporter hook failure is reported as. */
+export const formatReporterError = (
+  reporter: Reporter,
+  index: number,
+  hook: string,
+  error: unknown,
+): Error =>
+  new Error(
+    `Reporter ${reporterLabel(reporter)} (#${index + 1}) ${hook} failed: ${toError(error).message}`,
+    { cause: error },
+  );
+
+const getPendingHooks = (context: InternalContext): PendingReporterHooks => {
+  let pending = pendingHooks.get(context);
+  if (!pending) {
+    pending = { files: new Map(), errors: [] };
+    pendingHooks.set(context, pending);
+  }
+  return pending;
+};
+
+/** Records an attributed reporter failure under the owning run, in call order. */
+export const recordReporterError = (
+  context: InternalContext,
+  error: Error,
+): void => {
+  getPendingHooks(context).errors.push(error);
+};
+
 const joinHooks = async (pending: Set<Promise<void>>): Promise<void> => {
   while (pending.size) {
     await Promise.all(pending);
@@ -116,12 +155,7 @@ export function createRunnerEventSink(
   const attempts = new Map<string, number>();
   const pendingCaseResultDeliveries = new Map<string, Promise<void>>();
 
-  let pending = pendingHooks.get(context);
-  if (!pending) {
-    pending = { files: new Map(), errors: [] };
-    pendingHooks.set(context, pending);
-  }
-  const run = pending;
+  const run = getPendingHooks(context);
 
   // Blob replay already carries enrichment from the recording run's root.
   // Defaults precede the payload so replay preserves those recorded values.
@@ -173,11 +207,9 @@ export function createRunnerEventSink(
     const dispatched: Promise<void>[] = [];
     for (const [index, reporter] of reporters.entries()) {
       const recordError = (error: unknown) => {
-        run.errors.push(
-          new Error(
-            `Reporter ${reporter.constructor.name} (#${index + 1}) ${hook} failed: ${toError(error).message}`,
-            { cause: error },
-          ),
+        recordReporterError(
+          context,
+          formatReporterError(reporter, index, hook, error),
         );
       };
       let result: MaybePromise<void>;

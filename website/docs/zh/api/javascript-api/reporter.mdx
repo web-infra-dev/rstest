@@ -19,7 +19,18 @@ Hook 集合、payload 字段名和 status 字面量属于 **Stable**。`getSourc
 
 ## Dispatch 语义 \{#dispatch-semantics}
 
-Runner hooks 按事件到达顺序开始执行，不串联 Promise，因此后一个事件的 hooks 可以在前一个事件的 hooks 完成前开始。调用 `onTestFileResult` 前，Rstest 会等待该文件尚未完成的 start、ready、suite、case 和 console hooks；调用 `onTestRunEnd` 前，会等待本轮所有尚未完成的 hooks。Hook 失败会作为 reporter error 上报，并注明 reporter 和 hook 名称；Node、browser mode 和 blob replay 遵循相同规则，`onExit` 行为不变。
+Runner hooks 按事件到达顺序开始执行，不串联 Promise，因此后一个事件的 hooks 可以在前一个事件的 hooks 完成前开始。调用 `onTestFileResult` 前，Rstest 会等待该文件尚未完成的 start、ready、suite、case 和 console hooks；调用 `onTestRunEnd` 前，会等待本轮所有尚未完成的 hooks。无论只跑 Node、只跑 browser 还是混合运行，`onTestRunStart` 和 `onTestRunEnd` 每轮都只派发一次。
+
+每个 reporter 的 hook 失败都是隔离的：其余 reporter 仍会收到该事件，失败记为 `Reporter <name> (#<index>) <hook> failed: <message>`；没有类名的 reporter（例如对象字面量）显示为 `<anonymous>`。每次失败的 hook 调用都会单独记录一条错误，所以同一个 reporter 在混合运行里报出的错误数量，与只在 Node 里运行时一致。
+
+之后如何处理取决于钩子：
+
+- `onTestRunStart` 失败会在任何测试执行前中止本轮。所有 reporter 仍会收到该钩子，`onTestRunEnd` 照常触发，错误出现在 `unhandledErrors` 里，运行状态为 `error`，进程退出码非零。
+- 文件、suite、case 和 console 钩子失败不会中止运行。错误会被记录下来，并在 `onTestRunEnd` 的 `unhandledErrors` 中上报；运行状态为 `error`，退出码非零。
+- `onTestRunEnd` 失败无法写回它正在派发的 payload。其余 reporter 仍会收到 `onTestRunEnd`；带归因的错误会作为 unhandled reporter error 打印，退出码非零，而 payload 里的 status 保持派发前算出的值。
+- `onExit` 行为不变。
+
+blob replay 遵循相同规则。
 
 ## 使用自定义报告器
 
