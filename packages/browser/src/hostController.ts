@@ -31,6 +31,7 @@ import {
   type RawUserConsoleLog,
   resolveSnapshotPathDefault,
   serializableConfig,
+  toSelectedTestFile,
   type TestFileResult,
   type TestResult,
 } from '@rstest/core/internal/browser';
@@ -738,10 +739,7 @@ export const runBrowserController = async (
       await onSelected?.(
         watchState.lastTestFiles
           .filter((file) => selectedPaths.has(getTestPathKey(file.testPath)))
-          .map((file) => ({
-            testPath: file.testPath,
-            project: file.projectName,
-          })),
+          .map((file) => toSelectedTestFile(file.testPath, file.projectName)),
       );
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
@@ -826,10 +824,9 @@ export const runBrowserController = async (
   );
   try {
     await options?.onSelected?.(
-      allTestFiles.map((file) => ({
-        testPath: file.testPath,
-        project: file.projectName,
-      })),
+      allTestFiles.map((file) =>
+        toSelectedTestFile(file.testPath, file.projectName),
+      ),
     );
   } catch (error) {
     await destroyBrowserRuntime(runtime);

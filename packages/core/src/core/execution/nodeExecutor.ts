@@ -13,7 +13,7 @@ import type {
   CoverageProvider,
   RawCoverageResolveOptions,
 } from '../../types/coverage';
-import { color, logger, type TraceRun } from '../../utils';
+import { color, logger, toSelectedTestFile, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
@@ -559,7 +559,9 @@ export function createNodeExecutor(
 
     await opts.onSelected?.(
       projectPlans.flatMap(({ p, finalEntries }) =>
-        finalEntries.map(({ testPath }) => ({ testPath, project: p.name })),
+        finalEntries.map(({ testPath }) =>
+          toSelectedTestFile(testPath, p.name),
+        ),
       ),
     );
 

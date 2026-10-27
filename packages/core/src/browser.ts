@@ -44,6 +44,9 @@ export {
   resolveSnapshotPathDefault,
   SNAPSHOT_HEADER,
 } from './utils/snapshotPath';
+// Shared selection projection so the browser host's `onSelected` entries carry
+// the same shape as the node executor's.
+export { toSelectedTestFile } from './utils/selectedTestFile';
 // Shared watch-ready banner so the browser host prints the same hint text as
 // the node watch loop.
 export { logWatchReadyMessage } from './core/watch/cliShortcuts';

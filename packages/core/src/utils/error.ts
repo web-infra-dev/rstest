@@ -258,7 +258,7 @@ export async function parseErrorStacktrace({
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
 
-  return fullStack || ignore !== stackIgnores
+  return fullStack
     ? stackFrames
     : stackFrames.filter((frame) => {
         if (!frame.file) {

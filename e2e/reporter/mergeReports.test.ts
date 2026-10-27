@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
 import {
+  expectReporterHookJoins,
   getCoverageSummaryEntry,
   parseMarkerPayload,
   runRstestCli,
@@ -566,6 +567,33 @@ describe('merge-reports lifecycle replay', () => {
   const parseLifecycle = (stdout: string): string[] =>
     parseMarkerPayload<string[]>(stdout, '__RSTEST_LIFECYCLE__');
 
+  type ContractEvent = {
+    event: string;
+    testId?: string;
+    testPath?: string;
+  };
+
+  const parseContract = (stdout: string) =>
+    parseMarkerPayload<{ events: ContractEvent[] }>(
+      stdout,
+      '__RSTEST_REPORTER_CONTRACT__',
+    );
+
+  /**
+   * Per-test hook order only. Which test's `start-exit` fires first depends on
+   * transport timing that a replay cannot reproduce (replayed hooks dispatch in
+   * one tick), so cross-test interleaving is not part of the contract; each
+   * test's own sequence is.
+   */
+  const eventsByTest = (events: ContractEvent[]): Record<string, string[]> => {
+    const byTest: Record<string, string[]> = {};
+    for (const { event, testId } of events) {
+      if (!testId) continue;
+      (byTest[testId] ??= []).push(event);
+    }
+    return byTest;
+  };
+
   /**
    * Records one fixture run live and replays that same run's blob, so the two
    * event sequences can be compared. Every fixture config carries both the
@@ -595,11 +623,16 @@ describe('merge-reports lifecycle replay', () => {
     );
     const live = parseLifecycle(liveOutput);
     const merged = parseLifecycle(mergedOutput);
-    return { live, merged };
+    return { live, merged, liveOutput, mergedOutput };
   };
 
   it('replays every reporter hook a live run fires, in live order', async () => {
-    const { live: liveEvents, merged: mergedEvents } = await captureReplay([]);
+    const {
+      live: liveEvents,
+      merged: mergedEvents,
+      liveOutput,
+      mergedOutput,
+    } = await captureReplay([]);
 
     // Every hook the fixture can exercise must show up in the live baseline,
     // otherwise the comparison below would pass on an empty sequence.
@@ -636,6 +669,17 @@ describe('merge-reports lifecycle replay', () => {
     );
 
     expect(mergedEvents).toEqual(liveEvents);
+
+    // The default fixture config also loads the async contract reporter. The
+    // sync recorder above cannot prove hook joins, so run the per-test join
+    // assertions on both the live dispatch and its replay.
+    const liveContract = parseContract(liveOutput);
+    const mergedContract = parseContract(mergedOutput);
+    await expectReporterHookJoins(liveContract.events);
+    await expectReporterHookJoins(mergedContract.events);
+    expect(eventsByTest(mergedContract.events)).toEqual(
+      eventsByTest(liveContract.events),
+    );
   });
 
   it('preserves recorded file payloads when merging from a different root', async () => {

@@ -570,6 +570,7 @@ export interface RstestConfig {
         | BuiltInReporterNames
         | (string & {})
         | ReporterWithOptions
+        | [string]
         | [string, Record<string, unknown>]
       )[];
   /**

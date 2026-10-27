@@ -11,6 +11,7 @@ import type {
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestFileSummary,
   TestResult,
   TestSuiteInfo,
   UserConsoleLog,
@@ -33,14 +34,7 @@ export interface TestRunStartPayload {
 }
 
 export interface TestRunSummary {
-  tests: {
-    total: number;
-    passed: number;
-    failed: number;
-    skipped: number;
-    todo: number;
-    flaky: number;
-  };
+  tests: TestFileSummary;
   files: { total: number; failed: number };
 }
 

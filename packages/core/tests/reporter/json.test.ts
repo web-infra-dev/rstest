@@ -134,6 +134,11 @@ describe('JsonReporter', () => {
     });
     expect(report.files[0].testPath).toBe('test1.test.ts');
     expect(report.tests[0].testPath).toBe('test1.test.ts');
+    // Entries keep the pre-1.0 shape: `testPath` is the only path field, and
+    // per-file counts stay out of the report.
+    expect(report.files[0].relativeTestPath).toBeUndefined();
+    expect(report.files[0].summary).toBeUndefined();
+    expect(report.tests[0].relativeTestPath).toBeUndefined();
     expect(report.tests[1].errors[0].message).toBe('Test failed');
   });
 
