@@ -278,4 +278,45 @@ describe('run-level reporter hook failures', () => {
     expect(payloads[0]!.status).toBe('error');
     expect(context.exitCode.current).toBe(1);
   });
+
+  it('dispatches run end before surfacing a trace finalization failure', async () => {
+    const payloads: TestRunEndPayload[] = [];
+    const context = makeReporterContext([
+      {
+        onTestRunEnd(payload) {
+          payloads.push(payload);
+        },
+      },
+    ]);
+    const traceError = new Error('trace write failed');
+    const outcome = {
+      results: [],
+      testResults: [],
+      errors: [],
+      testPaths: [],
+      duration: { buildTime: 0, testTime: 0 },
+    };
+
+    await expect(
+      finalizeRunCycle(context, {
+        outcomes: [outcome],
+        mode: 'all',
+        isWatchMode: false,
+        isInterrupted: () => false,
+        reportersStarted: true,
+        coverageProvider: null,
+        reportOnFailure: false,
+        traceRun: {
+          onEvents: undefined,
+          span: noopTraceSpan,
+          finalize: async () => {
+            throw traceError;
+          },
+        },
+      }),
+    ).rejects.toThrow('trace write failed');
+
+    // The start/end hooks stay paired even when finalization fails.
+    expect(payloads).toHaveLength(1);
+  });
 });
