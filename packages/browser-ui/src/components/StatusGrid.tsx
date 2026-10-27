@@ -2,7 +2,13 @@ import { Tag } from 'antd';
 import React, { memo } from 'react';
 
 /* cspell:ignore nums */
-export type StatusCounts = Record<string, number>;
+export type StatusCounts = {
+  idle: number;
+  running: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+};
 
 /**
  * Status indicator with Vercel-inspired design.
@@ -12,10 +18,10 @@ export const StatusGrid: React.FC<{
   isRunning: boolean;
 }> = memo(({ counts, isRunning }) => {
   const items = [
-    { key: 'pass', label: 'passed', color: 'green' },
-    { key: 'fail', label: 'failed', color: 'red' },
+    { key: 'passed', label: 'passed', color: 'green' },
+    { key: 'failed', label: 'failed', color: 'red' },
     { key: 'running', label: 'running', color: 'amber' },
-  ];
+  ] as const;
 
   // If some files are running but no test cases have reported yet
   const isFileLoading = isRunning && counts.running === 0;
@@ -24,7 +30,7 @@ export const StatusGrid: React.FC<{
     <div className="flex h-6 cursor-default select-none items-center">
       <div className="flex items-center gap-1.5">
         {items.map((item) => {
-          const count = counts[item.key as keyof StatusCounts] || 0;
+          const count = counts[item.key];
           const isRunningItem = item.key === 'running';
 
           return (

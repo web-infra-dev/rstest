@@ -807,7 +807,7 @@ export class MdReporter implements Reporter {
                   stack: error.stack,
                   getSourcemap,
                   fullStack: false,
-                  ignore: [...stackIgnores, /\/node_modules\//, /\/chai/],
+                  ignore: [...stackIgnores, /\/node_modules\//],
                 })
               : [];
 
@@ -898,6 +898,7 @@ export class MdReporter implements Reporter {
         }
 
         if (this.options.codeFrame.enabled) {
+          const { renderCodeFrame } = await import('../utils/codeFrame');
           for (
             let errorIndex = 0;
             errorIndex < errorEntries.length;
@@ -907,7 +908,6 @@ export class MdReporter implements Reporter {
             if (!entry?.topFrame?.file || !entry.topFrame.lineNumber) {
               continue;
             }
-            const { renderCodeFrame } = await import('../utils/codeFrame');
             const codeFrame = await renderCodeFrame(entry.topFrame, {
               ansi: false,
               linesAbove: this.options.codeFrame.linesAbove,

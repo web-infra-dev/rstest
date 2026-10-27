@@ -537,9 +537,9 @@ const BrowserRunner: React.FC<{
     return {
       idle: allCases.filter((c) => c.status === 'idle').length,
       running: allCases.filter((c) => c.status === 'running').length,
-      pass: allCases.filter((c) => c.status === 'passed').length,
-      fail: allCases.filter((c) => c.status === 'failed').length,
-      skip: allCases.filter((c) => c.status === 'skipped').length,
+      passed: allCases.filter((c) => c.status === 'passed').length,
+      failed: allCases.filter((c) => c.status === 'failed').length,
+      skipped: allCases.filter((c) => c.status === 'skipped').length,
     };
   }, [caseMap]);
 

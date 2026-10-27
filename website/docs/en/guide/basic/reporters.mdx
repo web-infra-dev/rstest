@@ -306,9 +306,9 @@ The JUnit reporter generates XML format as follows:
 
 The JUnit reporter maps test case execution status to JUnit test status:
 
-- `pass`: Test passed
-- `fail`: Test failed, generates `<failure>` tag
-- `skip`: Test skipped, generates `<skipped>` tag
+- `passed`: Test passed
+- `failed`: Test failed, generates `<failure>` tag
+- `skipped`: Test skipped, generates `<skipped>` tag
 - `todo`: Test todo, generates `<skipped>` tag
 
 ### JSON reporter
@@ -340,7 +340,7 @@ export default defineConfig({
 
 **Output shape:**
 
-- `status`: Overall run status (`pass` or `fail`)
+- `status`: Overall run status (`passed`, `failed`, or `error`)
 - `summary`: Counts for files and tests
 - `durationMs`: Total, build, and test durations in milliseconds
 - `snapshot`: Snapshot summary from the run

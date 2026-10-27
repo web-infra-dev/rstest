@@ -14,6 +14,10 @@ import type {
 import { logger } from '../utils';
 import { PerFileEventBuffer, toReportCounts, toReportDuration } from './utils';
 
+type JsonTestResult = Omit<TestResult, 'testPath' | 'relativeTestPath'> & {
+  testPath: string;
+};
+
 type JsonReport = {
   tool: 'rstest';
   version: string;
@@ -34,23 +38,15 @@ type JsonReport = {
   };
   snapshot: SnapshotSummary;
   files: Array<
-    Omit<TestFileResult, 'results' | 'testPath'> & {
+    Omit<
+      TestFileResult,
+      'results' | 'testPath' | 'relativeTestPath' | 'summary'
+    > & {
       testPath: string;
-      fullName: string;
-      results: Array<
-        Omit<TestResult, 'testPath'> & {
-          testPath: string;
-          fullName: string;
-        }
-      >;
+      results: JsonTestResult[];
     }
   >;
-  tests: Array<
-    Omit<TestResult, 'testPath'> & {
-      testPath: string;
-      fullName: string;
-    }
-  >;
+  tests: JsonTestResult[];
   consoleLogs?: Array<
     Omit<UserConsoleLog, 'relativeTestPath'> & { testPath: string }
   >;
@@ -82,10 +78,11 @@ export class JsonReporter implements Reporter {
     this.logs.push(log, log);
   }
 
-  private normalizeTest(test: TestResult): JsonReport['tests'][number] {
+  private normalizeTest(test: TestResult): JsonTestResult {
+    const { relativeTestPath, ...result } = test;
     return {
-      ...test,
-      testPath: test.relativeTestPath,
+      ...result,
+      testPath: relativeTestPath,
     };
   }
 
@@ -106,11 +103,17 @@ export class JsonReporter implements Reporter {
       summary: toReportCounts(summary),
       durationMs: toReportDuration(duration),
       snapshot: snapshotSummary,
-      files: results.map((fileResult) => ({
-        ...fileResult,
-        testPath: fileResult.relativeTestPath,
-        results: fileResult.results.map((test) => this.normalizeTest(test)),
-      })),
+      // File entries keep their pre-1.0 shape: `testPath` is the only path
+      // field the report exposes, and per-file counts stay out because the
+      // run-level `summary` already carries them.
+      files: results.map((fileResult) => {
+        const { relativeTestPath, summary: _summary, ...file } = fileResult;
+        return {
+          ...file,
+          testPath: relativeTestPath,
+          results: fileResult.results.map((test) => this.normalizeTest(test)),
+        };
+      }),
       tests: testResults.map((test) => this.normalizeTest(test)),
       consoleLogs: logs.length
         ? logs.map(({ relativeTestPath, ...log }) => ({

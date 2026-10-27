@@ -48,6 +48,9 @@ describe('json reporter', () => {
     });
     expect(report.files[0].testPath).toBe('fixtures/junit.test.ts');
     expect(report.tests[0].testPath).toBe('fixtures/junit.test.ts');
+    expect(report.files[0].relativeTestPath).toBeUndefined();
+    expect(report.files[0].summary).toBeUndefined();
+    expect(report.tests[0].relativeTestPath).toBeUndefined();
     expect(report.tests[0].fullName).toBe('Junit test > should pass');
     expect(report.tests[1].errors[0].message).toContain("expected 'hi' to be");
   });
