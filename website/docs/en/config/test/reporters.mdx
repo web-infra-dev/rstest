@@ -94,7 +94,7 @@ export default defineConfig({
 
 #### Using custom reporters
 
-You can use a custom reporter module by passing its module specifier, or a tuple with options. The module must default export a reporter class. Rstest constructs it with the options (an empty object for the string form) and a context containing `rootPath` and the resolved `config`:
+You can use a custom reporter module by passing its module specifier, or a tuple with options. The module must default export a reporter class. Rstest constructs it with the options (an empty object for the string form) and a context containing `rootPath` and the resolved `config`. The module can be JavaScript or TypeScript; `.ts` and `.mts` modules load directly on Node runtimes with type stripping enabled (Node 22.18+ or 24):
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';

@@ -108,7 +108,7 @@ export default defineConfig({
 
 #### 使用自定义报告器
 
-你可以传入自定义 Reporter module 的 module specifier，也可以用 tuple 传入 options。该 module 必须 default export 一个 Reporter class。Rstest 会使用 options（字符串形式对应空对象）和包含 `rootPath`、resolved `config` 的 context 创建实例：
+你可以传入自定义 Reporter module 的 module specifier，也可以用 tuple 传入 options。该 module 必须 default export 一个 Reporter class。Rstest 会使用 options（字符串形式对应空对象）和包含 `rootPath`、resolved `config` 的 context 创建实例。module 可以是 JavaScript 或 TypeScript；在启用了类型擦除的 Node 版本（Node 22.18+ 或 24）上，`.ts`、`.mts` 模块可以直接加载：
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
@@ -117,7 +117,7 @@ export default defineConfig({
   reporters: './custom-reporter.js',
 });
 
-// To pass options:
+// 传入 options：
 export const configWithOptions = defineConfig({
   reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
 });

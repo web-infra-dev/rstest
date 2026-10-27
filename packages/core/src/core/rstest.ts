@@ -444,7 +444,9 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
           // Dynamic import must not select tryResolve's require condition.
           resolver = new rspack.experiments.resolver.ResolverFactory({
             conditionNames: ['node', 'import'],
-            extensions: ['.js', '.json', '.node'],
+            // `.ts`/`.mts` resolve here so a reporter module can be loaded
+            // directly on runtimes with Node's type stripping enabled.
+            extensions: ['.js', '.mjs', '.mts', '.ts', '.json', '.node'],
           });
         }
         let modulePath: string;
