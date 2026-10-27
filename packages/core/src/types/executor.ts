@@ -49,8 +49,13 @@ export interface ExecutorRunCycleOptions {
    */
   env?: Record<string, string | undefined>;
   onTraceEvents?: (events: TraceEvent[]) => void;
-  /** Await core's run-start barrier after selection, before runner events. */
-  onSelected?: (files: SelectedTestFile[]) => Promise<void>;
+  /**
+   * Awaits core's run-start barrier after selection, before runner events.
+   * Resolves to the attributed run-start failure (already recorded for the run)
+   * when reporter notification aborted the run; the executor then skips its
+   * cycle and must not report the failure again.
+   */
+  onSelected?: (files: SelectedTestFile[]) => Promise<Error | undefined>;
 }
 
 /**

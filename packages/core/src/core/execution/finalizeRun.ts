@@ -82,17 +82,24 @@ const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
   });
 };
 
+/**
+ * Notifies every reporter of the run start and records each failure once.
+ * Resolves to the first attributed failure when the run must abort; callers
+ * propagate the abort (barrier, watch open) instead of the error itself, so
+ * each failure has exactly one owner: the pending-hooks record drained by
+ * finalize.
+ */
 export const notifyReportersOnTestRunStart = async (
   context: InternalContext,
   files: SelectedTestFile[],
-): Promise<void> => {
+): Promise<Error | undefined> => {
   const payload: TestRunStartPayload = {
     files: files.map((file) => ({
       ...file,
       testId: getFileTaskId(file.testPath),
     })),
   };
-  const failure = await keepEventLoopAlive(async () => {
+  return keepEventLoopAlive(async () => {
     let firstFailure: Error | undefined;
     // Every reporter is notified even when an earlier one fails: a broken
     // reporter must not swallow the hook for the rest of the run.
@@ -108,23 +115,18 @@ export const notifyReportersOnTestRunStart = async (
         );
         recordReporterError(context, reporterError);
         // The run cannot produce trustworthy results once a reporter failed
-        // before it started, so the cycle aborts after this loop. The rejected
-        // value is the recorded error itself, which keeps the failure a single
-        // entry when every executor observes the same rejection.
+        // before it started, so the cycle aborts after this loop.
         firstFailure ??= reporterError;
       }
     }
     return firstFailure;
   });
-  if (failure) {
-    throw failure;
-  }
 };
 
 export const createRunStartBarrier = (
   context: InternalContext,
   executorCount: number,
-): Array<(files: SelectedTestFile[]) => Promise<void>> => {
+): Array<(files: SelectedTestFile[]) => Promise<Error | undefined>> => {
   const selections = Array.from({ length: executorCount }, () => {
     let resolve!: (files: SelectedTestFile[]) => void;
     const promise = new Promise<SelectedTestFile[]>((accept) => {
@@ -302,16 +304,11 @@ export async function finalizeRunCycle(
 
   const results = outcomes.flatMap((o) => o.results);
   const testResults = outcomes.flatMap((o) => o.testResults);
-  // A reporter failure before the run starts aborts every executor with the
-  // same recorded error instance, and the same instance is also recorded for
-  // the run, so identity dedupes the fan-out instead of counting one failure
-  // once per executor. Distinct failures stay distinct because every reporter
-  // hook call records its own error object.
+  // The run-start failure has a single owner: it is recorded once by
+  // `notifyReportersOnTestRunStart` and aborted consumers contribute nothing.
   const errors = [
-    ...new Set([
-      ...outcomes.flatMap((o) => o.errors),
-      ...(await drainReporterHooks(context)),
-    ]),
+    ...outcomes.flatMap((o) => o.errors),
+    ...(await drainReporterHooks(context)),
   ];
 
   // Coverage flows through the outcome contract: merge every executor's istanbul

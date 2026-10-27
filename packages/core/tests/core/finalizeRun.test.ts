@@ -183,11 +183,10 @@ describe('run-level reporter hook failures', () => {
       },
     ]);
 
-    await expect(
-      notifyReportersOnTestRunStart(context, [
-        { testPath: '/root/a.test.ts', project: 'default' },
-      ]),
-    ).rejects.toThrow(
+    const firstFailure = await notifyReportersOnTestRunStart(context, [
+      { testPath: '/root/a.test.ts', project: 'default' },
+    ]);
+    expect(firstFailure?.message).toBe(
       'Reporter BrokenReporter (#1) onTestRunStart failed: run-start boom',
     );
     expect(calls).toEqual(['broken', 'anonymous', 'healthy']);
@@ -234,7 +233,7 @@ describe('run-level reporter hook failures', () => {
     );
   });
 
-  it('counts one reporter failure once when every executor observes it', async () => {
+  it('records one reporter failure once when the run start aborts every executor', async () => {
     const recordedError = new Error(
       'Reporter BrokenReporter (#1) onTestRunStart failed: run-start boom',
     );
@@ -247,10 +246,12 @@ describe('run-level reporter hook failures', () => {
       },
     ]);
     recordReporterError(context, recordedError);
+    // Aborted executors contribute empty outcomes; the recorded failure has a
+    // single owner and must not be duplicated per executor.
     const outcome = {
       results: [],
       testResults: [],
-      errors: [recordedError],
+      errors: [],
       testPaths: [],
       duration: { buildTime: 0, testTime: 0 },
     };

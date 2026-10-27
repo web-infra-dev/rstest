@@ -255,7 +255,10 @@ export function createRunnerEventSink(
     const expectedAttempt = attempts.get(payload.testPath);
     const opened = context.openReporterRun?.();
     const delivery = opened
-      ? opened.then(() => {
+      ? opened.then((runStartFailure) => {
+          // The failed run start is recorded once and reported as the run
+          // failure; gated events are dropped rather than duplicating it.
+          if (runStartFailure) return;
           if (expectedAttempt === attempts.get(payload.testPath)) {
             return invokeHooks(hook, payload);
           }

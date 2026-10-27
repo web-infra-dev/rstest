@@ -346,18 +346,14 @@ export async function mergeReports(
     context.exitCode.raise(1);
   }
 
-  let replayStarted = false;
-  try {
-    await notifyReportersOnTestRunStart(
+  // A reporter failure before the run started aborts a live run before any test
+  // executes; the replay is skipped too. The attributed error is recorded once
+  // on the context and drained below.
+  const replayStarted =
+    (await notifyReportersOnTestRunStart(
       context,
       blobs.flatMap((blob) => blob.runStart.files),
-    );
-    replayStarted = true;
-  } catch {
-    // A reporter failed before the run started. A live run aborts before any
-    // test executes in that case, so the replay is skipped too; the attributed
-    // errors are recorded on the context and drained below.
-  }
+    )) === undefined;
 
   // Print per-shard durations
   for (const { label, duration } of shardDurations) {

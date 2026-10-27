@@ -114,7 +114,7 @@ export class Rstest implements InternalContext {
   public packageInstallerConfirm?: PackageInstallerConfirm;
   public closeWatchSession?: () => Promise<void>;
   public onFatalWatchFailure?: (error: Error) => void;
-  public openReporterRun?: () => Promise<void>;
+  public openReporterRun?: () => Promise<Error | undefined>;
   public reporters: Reporter[] = [];
   public snapshotManager: SnapshotManager;
   public trace: boolean;

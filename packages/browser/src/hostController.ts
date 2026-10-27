@@ -736,11 +736,21 @@ export const runBrowserController = async (
         };
       }
       const selectedPaths = new Set(testPaths.map(getTestPathKey));
-      await onSelected?.(
+      const runStartFailure = await onSelected?.(
         watchState.lastTestFiles
           .filter((file) => selectedPaths.has(getTestPathKey(file.testPath)))
           .map((file) => toSelectedTestFile(file.testPath, file.projectName)),
       );
+      // A reporter run-start failure aborts the cycle; core records it once,
+      // so the rerun reports nothing of its own.
+      if (runStartFailure) {
+        fatalErrorRef.current = null;
+        return buildRerunOutcome({
+          rerunTestPaths: [],
+          testTime: 0,
+          rawCoverage: [],
+        });
+      }
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
       // headed scheduler also uses this ref to stop the rest of a failed cycle,
@@ -822,8 +832,9 @@ export const runBrowserController = async (
       projectName: entry.project.name,
     })),
   );
+  let runStartFailure: Error | undefined;
   try {
-    await options?.onSelected?.(
+    runStartFailure = await options?.onSelected?.(
       allTestFiles.map((file) =>
         toSelectedTestFile(file.testPath, file.projectName),
       ),
@@ -831,6 +842,12 @@ export const runBrowserController = async (
   } catch (error) {
     await destroyBrowserRuntime(runtime);
     throw error;
+  }
+  // A reporter failure aborted the run: core already recorded it, so this
+  // cycle contributes an empty result instead of repeating the error.
+  if (runStartFailure) {
+    await closeRuntime();
+    return createEmptyRunResult();
   }
 
   // Only include browser mode projects in runtime configs
