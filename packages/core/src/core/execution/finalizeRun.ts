@@ -18,6 +18,7 @@ import {
 } from '../../utils';
 import type { InternalContext } from '../../types';
 import { toSerializedError } from '../../utils/error';
+import { writeResultsCache } from './resultsCache';
 
 const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
   if (context.command === 'watch') {
@@ -264,6 +265,25 @@ export async function finalizeRunCycle(
   const testPaths = outcomes.flatMap((o) => o.testPaths);
   const deletedTestPaths = outcomes.flatMap((o) => o.deletedTestPaths ?? []);
 
+  const bail = context.normalizedConfig.bail;
+  const bailAborted = Boolean(
+    bail && context.stateManager.getCountOfFailedTests() >= bail,
+  );
+  // One writer merges executor results; separate writes can lose sibling failures.
+  if (
+    !isInterrupted() &&
+    !context.normalizedConfig.testNamePattern &&
+    !bailAborted
+  ) {
+    const cacheable = outcomes.filter((outcome) => outcome.cacheResults);
+    if (cacheable.length)
+      await writeResultsCache(
+        context.rootPath,
+        cacheable.flatMap((outcome) => outcome.results),
+        cacheable.flatMap((outcome) => outcome.deletedTestPaths ?? []),
+      );
+  }
+
   context.updateReporterResultState(results, testResults, deletedTestPaths);
 
   // Only a scope the user chose says so; a rebuild's empty scope is not a run
@@ -327,8 +347,7 @@ export async function finalizeRunCycle(
   await runLifecycleStep('trace run finalize', () => traceRun.finalize());
 
   if (!isInterrupted() && isFailure) {
-    const bail = context.normalizedConfig.bail;
-    if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+    if (bailAborted) {
       logger.log(
         color.yellow(
           `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,

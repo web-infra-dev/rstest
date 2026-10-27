@@ -7,6 +7,7 @@ Rstest is an Rsbuild-based testing framework for JavaScript/TypeScript projects.
 When working on code in a specific package, read that package's `AGENTS.md` file for package-specific guidelines:
 
 - For @rstest/core: `packages/core/AGENTS.md`
+- For @rstest/typecheck: `packages/typecheck/AGENTS.md`
 - For @rstest/browser: `packages/browser/AGENTS.md`
 - For @rstest/browser-ui: `packages/browser-ui/AGENTS.md`
 - For @rstest/browser-react: `packages/browser-react/AGENTS.md`
@@ -27,6 +28,7 @@ If a package does not have its own `AGENTS.md`, follow this root file and copy t
 ## Monorepo structure
 
 - `packages/core/` — @rstest/core: core testing framework (CLI, runtime, reporter, pool)
+- `packages/typecheck/` — @rstest/typecheck: static type tests and compiler integration
 - `packages/browser/` — @rstest/browser: browser mode support (Playwright, WebSocket RPC)
 - `packages/browser-ui/` — @rstest/browser-ui: prebuilt browser container UI (React + Tailwind + Ant Design)
 - `packages/browser-react/` — @rstest/browser-react: React component testing utilities for browser mode

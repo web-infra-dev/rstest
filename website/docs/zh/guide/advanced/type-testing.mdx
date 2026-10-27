@@ -1,0 +1,79 @@
+---
+description: 使用静态断言检查 TypeScript API，并与运行时测试一起报告结果。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# 类型测试
+
+<ApiMeta addedVersion="0.12.5" />
+
+类型测试使用项目安装的 TypeScript 编译器验证类型推导和公开声明。Rstest 静态收集用例，不执行测试文件；编译器检查原始 TypeScript，诊断结果与运行时测试一起报告。
+
+将 [@rstest/typecheck](https://github.com/web-infra-dev/rstest/tree/main/packages/typecheck) 和 `typescript` 安装为开发依赖。typecheck 包提供静态收集和类型断言，TypeScript 负责类型检查。`@rstest/typecheck` 与 `@rstest/core` 的版本必须一致。Rstest 仅在启用类型测试时加载该包。
+
+```sh
+npm install -D @rstest/typecheck typescript
+```
+
+启用 [typecheck](/config/test/typecheck)：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  typecheck: { enabled: true },
+});
+```
+
+创建以 `.test-d.ts` 或 `.spec-d.ts` 结尾的文件，并将其纳入 `tsconfig.json`：
+
+```ts title="add.test-d.ts"
+import { assertType, describe, expectTypeOf, test } from '@rstest/typecheck';
+import { add } from './add';
+
+describe('add', () => {
+  test('returns a number', () => {
+    expectTypeOf(add).returns.toEqualTypeOf<number>();
+    assertType<number>(add(1, 2));
+    // @ts-expect-error 字符串参数必须被拒绝。
+    add('1', '2');
+  });
+});
+```
+
+运行 `rstest run --typecheck`，同时检查类型和运行时测试；运行 `rstest run --typecheck.only`，仅检查类型。类型测试支持 `run`、`list`、多项目和 JavaScript 实例 API。浏览器项目的类型测试也在 host 执行。纯类型运行不执行 setup 文件，也不启动测试 worker 或浏览器。
+
+## 断言 \{#assertions}
+
+`expectTypeOf` 及其 `ExpectTypeOf` 类型转出自 [expect-type](https://github.com/mmkal/expect-type)。它通过泛型签名让错误断言产生编译错误。常用检查包括验证相等的 `.toEqualTypeOf<T>()`、验证可赋值性的 `.toExtend<T>()`，以及 `.returns`、`.parameters`、`.not`、`.toBeAny()` 和 `.toBeNever()`。
+
+`assertType<T>(value)` 检查 `value` 能否赋值给 `T`，没有运行时效果。`@ts-expect-error` 检查下一行是否产生编译错误；如果错误消失，TypeScript 会报告该指令未被使用。
+
+这些断言可以在普通运行时测试中调用，但只有编译器检查对应文件时才会验证类型。普通的 `expect(...).toEqual(...)` 是运行时断言，不提供类型测试保证。
+
+## 收集与筛选 \{#collection-and-filtering}
+
+`@rstest/typecheck` 导出的 `test`、`it` 和 `describe` 接收字符串名称与不带参数的内联回调，其声明不加载 core 或打包器配置类型。这些注册函数仅用于静态类型测试，作为运行时测试执行时会抛出错误。
+
+类型测试也能识别从 `@rstest/core` 导入的直接 `test`、`it` 和嵌套 `describe` 调用。支持导入别名、命名空间导入和配置启用的全局 API。字符串名称直接显示；表达式名称显示源码文本，不求值。
+
+不支持 `.only`、`.skip`、`.todo`、`.each`、`.for` 和条件修饰符，使用时会报收集错误。循环、条件注册和通过引用传入的回调同样不支持。间接注册（包括 fixture 工厂）按普通 TypeScript 检查，Rstest 不会将其展开为用例。没有识别到静态用例的文件按一个 `[typecheck]` 用例报告。
+
+检查范围是选定的整个 tsconfig。用例内的诊断使该用例失败；用例外的诊断使文件或项目失败。文件和名称筛选缩小报告的用例范围，但不会隐藏同一 tsconfig 中其他位置的编译错误。同一项目的运行时测试和类型测试发现规则不能覆盖同一个文件。
+
+`--related` 和 `--changed` 在源码变化时保守地纳入所有类型测试，因为打包器的依赖图不包含纯类型导入和全局声明。
+
+`--onlyFailures` 使用共享的失败记录，在运行时测试和类型测试中筛选上次失败的文件。显式文件或名称筛选优先。每个选中的类型测试项目仍会检查整个 tsconfig，因此未选中文件中的类型错误仍会报告。名称筛选、中断和 bail 提前终止的运行不会覆盖完整的失败记录。
+
+`bail` 达到本轮运行的失败阈值后，会停止报告后续类型用例，并跳过后续项目的检查。编译器通过一次调用检查整个项目，因此 bail 无法在单个断言处终止这次编译。编译器已经返回的项目诊断仍会作为错误报告。
+
+## 编译器与声明产物 \{#compiler-and-declarations}
+
+Rstest 为每个项目调用一次项目安装的 `tsc` 或 `vue-tsc` CLI，并禁用文件输出。支持 TypeScript 6 和 TypeScript 7。编译器输入文件与诊断来自同一次调用，增量结果缓存在 `node_modules/.cache/rstest/typecheck`，供后续运行复用。即使配置了 `noCheck`，也会覆盖该选项，确保断言得到检查。
+
+类型测试暂不支持 watch 模式。请运行 `rstest run --typecheck` 或 `rstest run --typecheck.only`。类型测试不执行运行时 Hook、Mock、快照、重试或覆盖率收集。
+
+测试库的声明产物时，先构建声明，再运行消费方类型测试。从发布的包入口导入，避免通过 `paths` 映射回源码，确保检查的是用户收到的声明。需要验证不同模块解析环境时，使用独立项目和对应的 tsconfig。
+
+Rspack alias 不会自动配置 TypeScript 解析。请在测试 tsconfig 中配置 `paths`、`types` 和资源声明。Vue 项目需安装 `vue-tsc`，并设置 `checker: 'vue-tsc'`。

@@ -64,6 +64,8 @@
       "ignoreDependencies": [
         // rslib.config.ts aliases this import to @vitest/utils' bundled instance.
         "tinyrainbow",
+        // Optional executor installed by consumers, resolved dynamically like browser mode.
+        "@rstest/typecheck",
       ],
       "entry": [
         // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
@@ -80,6 +82,12 @@
         // Fixtures loaded by path at runtime, not imported by tests.
         "tests/**/fixtures/**",
       ],
+    },
+    "packages/typecheck": {
+      "ignoreIssues": {
+        // Static test registration aliases intentionally share one implementation.
+        "src/index.ts": ["duplicates"],
+      },
     },
     "packages/browser": {
       "ignoreUnresolved": [

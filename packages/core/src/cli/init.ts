@@ -72,6 +72,14 @@ export function mergeWithCLIOptions(
   config: ResolvedRstestConfig,
   options: CommonOptions,
 ): ResolvedRstestConfig {
+  if (options.typecheck !== undefined) {
+    config.typecheck = plainDeepMerge(
+      config.typecheck,
+      typeof options.typecheck === 'boolean'
+        ? { enabled: options.typecheck }
+        : { enabled: true, ...options.typecheck },
+    );
+  }
   const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
     'root',
     'globals',

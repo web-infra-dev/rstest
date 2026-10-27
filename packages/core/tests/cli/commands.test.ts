@@ -72,6 +72,8 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--shard',
         '--silent',
         '--source.tsconfigPath',
+        '--typecheck.checker',
+        '--typecheck.tsconfig',
         '--slowTestThreshold',
         '--testEnvironment',
         '--testNamePattern',
@@ -106,6 +108,8 @@ describe('requiredDotOptions (derived from option definitions)', () => {
         '--pool.maxWorkers',
         '--pool.type',
         '--source.tsconfigPath',
+        '--typecheck.checker',
+        '--typecheck.tsconfig',
       ].sort(),
     );
   });

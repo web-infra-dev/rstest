@@ -49,6 +49,10 @@
     },
     "./importMeta": {
       "types": "./importMeta.d.ts"
+    },
+    "./internal/typecheck": {
+      "types": "./dist/typecheck.d.ts",
+      "default": "./dist/typecheck.js"
     }
   },
   "main": "./dist/index.js",

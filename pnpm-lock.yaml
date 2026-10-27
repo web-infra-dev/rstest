@@ -321,6 +321,9 @@ importers:
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../scripts/tsconfig
+      '@rstest/typecheck':
+        specifier: workspace:*
+        version: link:../packages/typecheck
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -1692,6 +1695,34 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  packages/typecheck:
+    dependencies:
+      expect-type:
+        specifier: ^1.4.0
+        version: 1.4.0
+      get-tsconfig:
+        specifier: 5.0.0-beta.6
+        version: 5.0.0-beta.6
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      yuku-ast:
+        specifier: ^0.19.0
+        version: 0.19.0
+      yuku-parser:
+        specifier: ^0.19.0
+        version: 0.19.0
+    devDependencies:
+      '@rslib/core':
+        specifier: 'catalog:'
+        version: 1.0.3(@microsoft/api-extractor@7.59.4(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
 
   packages/vscode:
     devDependencies:
@@ -6100,6 +6131,10 @@ packages:
   expand-template@2.0.3:
     resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
     engines: {node: '>=6'}
+
+  expect-type@1.4.0:
+    resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
+    engines: {node: '>=12.0.0'}
 
   expect@30.0.5:
     resolution: {integrity: sha512-P0te2pt+hHI5qLJkIR+iMvS+lYUZml8rKKsohVHAGY+uClp9XVbdyYNJOIjSRpHVp8s8YqxJCiHUkSYZGr8rtQ==}
@@ -14002,6 +14037,8 @@ snapshots:
 
   expand-template@2.0.3:
     optional: true
+
+  expect-type@1.4.0: {}
 
   expect@30.0.5:
     dependencies:

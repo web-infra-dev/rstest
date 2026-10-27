@@ -1,8 +1,11 @@
+import { expectTypeOf, assertType } from '@rstest/typecheck';
 import { describe, expect, it } from '@rstest/core';
 
 describe('DOM operations', () => {
   it('should create elements correctly', () => {
     const div = document.createElement('div');
+    expectTypeOf(div).toEqualTypeOf<HTMLDivElement>();
+    assertType<HTMLElement>(div);
     div.textContent = 'Hello Browser';
     document.body.appendChild(div);
 

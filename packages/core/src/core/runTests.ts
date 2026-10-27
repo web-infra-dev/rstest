@@ -1,3 +1,4 @@
+import { loadTypecheckExecutor } from './typecheck/loader';
 import { BlobReporter } from '../reporter/blob';
 import { exitReporters } from '../reporter';
 import {
@@ -31,6 +32,7 @@ import {
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import { createNodeExecutor } from './execution/nodeExecutor';
+import { selectFailedTestFiles } from './execution/onlyFailures';
 import {
   cycleFailureOutcome,
   runGlobalTeardown,
@@ -134,6 +136,11 @@ export async function runTests(context: Rstest): Promise<void> {
     onTraceEvents: forwardBrowserTraceEvents,
   });
 
+  const typecheckExecutor = planner.typecheckProjects.length
+    ? await loadTypecheckExecutor(context, planner.typecheckProjects)
+    : undefined;
+  const failedTestFiles = await selectFailedTestFiles(context, planner);
+
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
 
@@ -182,7 +189,11 @@ export async function runTests(context: Rstest): Promise<void> {
     : undefined;
   await nodeExecutor?.init();
 
-  const isEmptyRun = !hasNodeTestsToRun && !hasBrowserTestsToRun;
+  const hasTypeTests = planner.typecheckProjects.some(
+    ({ testPaths }) => testPaths.length > 0,
+  );
+  const isEmptyRun =
+    !hasNodeTestsToRun && !hasBrowserTestsToRun && !hasTypeTests;
 
   // `hasNodeTestsToRun` implies the planner brought up a node build, so this is
   // the single handle every node-side gate below reads — carrying the narrowing
@@ -202,10 +213,14 @@ export async function runTests(context: Rstest): Promise<void> {
       await nodeExecutorToRun.ensureRunResources();
     }
 
-    const executors: TestExecutor[] = nodeExecutor ? [nodeExecutor] : [];
+    const executors: TestExecutor[] = [
+      ...(nodeExecutor ? [nodeExecutor] : []),
+      ...(typecheckExecutor ? [typecheckExecutor] : []),
+    ];
     const executorsToRun: TestExecutor[] = nodeExecutorToRun
       ? [nodeExecutorToRun]
       : [];
+    if (typecheckExecutor) executorsToRun.push(typecheckExecutor);
 
     // A signal can close existing executors while another is still loading.
     // Memoize per executor so the final drain also closes late arrivals once.
@@ -318,7 +333,9 @@ export async function runTests(context: Rstest): Promise<void> {
       // pinned in e2e/filter/related.test.ts.
       if (
         isEmptyRun &&
-        browserProjects.length &&
+        browserProjects.some(
+          (project) => !project.normalizedConfig.typecheck.only,
+        ) &&
         !planner.hasValidatedBrowserConfig()
       ) {
         await validateBrowserRunConfig(context, browserProjects);
@@ -362,6 +379,7 @@ export async function runTests(context: Rstest): Promise<void> {
               : executor.runCycle({
                   buildId: 1,
                   mode: 'all',
+                  failedTestFiles,
                   updateSnapshot: snapshotManager.options.updateSnapshot,
                   env: browserStage.env,
                   onTraceEvents: forwardBrowserTraceEvents,

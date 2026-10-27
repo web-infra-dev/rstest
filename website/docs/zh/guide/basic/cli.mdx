@@ -310,6 +310,10 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | 参数                                | 说明                                                                                                                                                                     |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--bail [number]`                   | 指定个数的测试失败后停止运行，详见 [bail](/config/test/bail)                                                                                                             |
+| `--typecheck, --typecheck.enabled`  | 启用静态类型测试，详见 [typecheck](/config/test/typecheck)                                                                                                               |
+| `--typecheck.only`                  | 仅运行类型测试                                                                                                                                                           |
+| `--typecheck.checker <name>`        | 选择 `tsc` 或 `vue-tsc`                                                                                                                                                  |
+| `--typecheck.tsconfig <path>`       | 设置类型测试的 tsconfig 路径                                                                                                                                             |
 | `--browser, --browser.enabled`      | 在浏览器模式下运行测试，详见 [browser](/config/test/browser)                                                                                                             |
 | `--browser.headless`                | 在无头模式下运行浏览器（CI 环境默认：`true`），详见 [browser](/config/test/browser)                                                                                      |
 | `--browser.screenshotFailures`      | 为每个失败的浏览器测试保存截图，详见 [browser](/config/test/browser#screenshotfailures)                                                                                  |

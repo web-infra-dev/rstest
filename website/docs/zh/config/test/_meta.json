@@ -10,11 +10,11 @@
   "globals",
   "pass-with-no-tests",
   "only-failures",
+  "typecheck",
   "include-source",
   "force-rerun-triggers",
   "test-name-pattern",
   "extends",
-
   "env",
   "bail",
   "retry",
@@ -23,7 +23,6 @@
   "teardown-timeout",
   "max-concurrency",
   "expect",
-
   "pool",
   "isolate",
   "test-environment",
@@ -34,7 +33,6 @@
   "restore-mocks",
   "unstub-envs",
   "unstub-globals",
-
   "coverage",
   "reporters",
   "include-task-location",
