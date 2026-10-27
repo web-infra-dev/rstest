@@ -17,6 +17,53 @@ const collectRunTestFileLogs = (stdout: string) =>
     .sort();
 
 describe('related test filtering', () => {
+  it.each([
+    ['loader-inputs/prefix.txt', ['index.test.ts']],
+    ['loader-inputs/parts/suffix.txt', ['index.test.ts']],
+    ['loader-inputs/parts/new.txt', ['index.test.ts']],
+    ['loader-inputs/optional.txt', ['index.test.ts']],
+    ['loader-inputs/parts-extra/suffix.txt', []],
+  ])(
+    'should select tests for the loader input %s',
+    async (source, expected) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'list',
+          '--filesOnly',
+          '--config',
+          'rstest.loader.config.mts',
+          '--related',
+          source,
+        ],
+        options: { nodeOptions: { cwd: relatedFixturePath } },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout.split('\n').filter(Boolean)).toEqual(expected);
+    },
+  );
+
+  it.each(['rstest.loader.config.mts', 'rstest.loader-optimized.config.mts'])(
+    'should run tests selected through a loader dependency with %s',
+    async (config) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--config',
+          config,
+          '--related',
+          'loader-inputs/prefix.txt',
+        ],
+        options: { nodeOptions: { cwd: relatedFixturePath } },
+      });
+      await expectExecSuccess();
+      expect(collectRunTestFileLogs(cli.stdout)).toEqual([
+        ' ✓ index.test.ts (1)',
+      ]);
+    },
+  );
+
   it('should run only tests related to a leaf source file', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

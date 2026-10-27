@@ -9,6 +9,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - related', () => {
+  it('should run browser tests selected through a loader dependency', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'related'),
+      {
+        args: [
+          '--config',
+          'rstest.loader.config.mts',
+          '--related',
+          '../../../filter/fixtures-related/loader-inputs/prefix.txt',
+        ],
+      },
+    );
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('tests/index.test.ts');
+    expect(cli.stdout).not.toContain('tests/other.test.ts');
+    expect(cli.stdout).toContain('1 passed');
+  });
+
   it('should list matched files without starting the browser server', async () => {
     const server = createServer();
     await new Promise<void>((resolve, reject) => {

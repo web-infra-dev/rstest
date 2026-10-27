@@ -93,6 +93,8 @@ npx rstest list --related src/button.ts --filesOnly
 
 `--related` and `--findRelatedTests` are not supported in watch mode, which already reruns the tests affected by your file changes.
 
+Selection also follows files, directories, and missing files that loaders declare through `addDependency`, `addContextDependency`, and `addMissingDependency`. For example, a loader can declare the source files used to generate a compiled module, allowing source changes to select tests that import that module. This selects tests; it does not rebuild the compiled files.
+
 ### Run changed tests
 
 <ApiMeta addedVersion="0.10.0" />

@@ -93,6 +93,8 @@ npx rstest list --related src/button.ts --filesOnly
 
 `--related` 和 `--findRelatedTests` 不支持在 watch 模式下使用，watch 模式本身已经会重跑受文件变更影响的测试。
 
+选择过程还会追踪 loader 通过 `addDependency`、`addContextDependency` 和 `addMissingDependency` 声明的文件、目录及缺失文件。例如，loader 可以声明生成编译后模块所使用的源码文件，使源码变更能够选中导入该模块的测试。这只会选择测试，不会重新构建编译后的文件。
+
 ### 运行变更相关测试
 
 <ApiMeta addedVersion="0.10.0" />

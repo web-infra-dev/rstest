@@ -1,5 +1,10 @@
 import { existsSync } from 'node:fs';
-import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
+import {
+  rspack,
+  type RsbuildInstance,
+  type RsbuildPlugin,
+  type Rspack,
+} from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
   InternalContext,
@@ -180,15 +185,26 @@ const normalizeStatsReasonPath = ({
 
 const collectModuleGraph = ({
   modules,
+  compilation,
   projectRoot,
   virtualModulePaths,
+  sourcePaths,
 }: {
   modules: Rspack.StatsModule[] | undefined;
+  compilation: Rspack.Compilation;
   projectRoot: string;
   virtualModulePaths?: ReadonlySet<string>;
+  sourcePaths: string[];
 }): ModuleGraph => {
   const allSources = new Set<string>();
   const dependentsBySource = new Map<string, Set<string>>();
+  const addDependency = (source: string, dependent: string) => {
+    allSources.add(source);
+    allSources.add(dependent);
+    const dependents = dependentsBySource.get(source) || new Set<string>();
+    dependents.add(dependent);
+    dependentsBySource.set(source, dependents);
+  };
 
   const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
     for (const module of statsModules || []) {
@@ -212,11 +228,7 @@ const collectModuleGraph = ({
             continue;
           }
 
-          allSources.add(dependentPath);
-
-          const dependents = dependentsBySource.get(sourcePath) || new Set();
-          dependents.add(dependentPath);
-          dependentsBySource.set(sourcePath, dependents);
+          addDependency(sourcePath, dependentPath);
         }
       }
 
@@ -227,6 +239,45 @@ const collectModuleGraph = ({
   };
 
   visitModules(modules);
+
+  for (const module of compilation.modules) {
+    // Context modules already filter their dependencies through their expression.
+    // Only normal modules can declare additional loader directory inputs.
+    const resource = module.nameForCondition();
+    if (!resource) continue;
+    const dependent = normalizeStatsPathCandidate({
+      candidate: resource,
+      projectRoot,
+      virtualModulePaths,
+    });
+    if (!dependent) continue;
+
+    // Concatenation moves the importing edges to the root module, while
+    // loader inputs remain on each original module's build info.
+    const inputModules =
+      module instanceof rspack.ConcatenatedModule ? module.modules : [module];
+    for (const input of inputModules) {
+      const { fileDependencies, missingDependencies, contextDependencies } =
+        input.buildInfo;
+      for (const file of [
+        ...(fileDependencies || []),
+        ...(missingDependencies || []),
+      ]) {
+        addDependency(normalize(file), dependent);
+      }
+      for (const directory of contextDependencies || []) {
+        for (const source of sourcePaths) {
+          const path = relative(directory, source);
+          if (
+            path === '' ||
+            (path !== '..' && !path.startsWith('../') && !isAbsolute(path))
+          ) {
+            addDependency(source, dependent);
+          }
+        }
+      }
+    }
+  }
 
   return {
     allSources,
@@ -434,7 +485,11 @@ export async function resolveRelatedTestFiles(
 
       const moduleGraph = collectModuleGraph({
         modules,
+        compilation: stats.compilation,
         projectRoot: project.rootPath,
+        sourcePaths: sourceFilters.map((source) =>
+          normalize(resolve(context.rootPath, source)),
+        ),
         virtualModulePaths: new Set(
           Object.keys(
             setupFileState.virtualModules[project.environmentName] || {},
