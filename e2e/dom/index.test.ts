@@ -291,3 +291,25 @@ describe('happy-dom 20 compatibility', () => {
     await expectExecSuccess();
   });
 });
+
+describe('jsdom 30 compatibility', () => {
+  it('keeps Node BroadcastChannel working with jsdom 30', async () => {
+    const cwd = fileURLToPath(new URL('./fixtures-jsdom-30', import.meta.url));
+    const { cli, expectExecSuccess } = await runCli(
+      ['broadcastChannel', 'version'],
+      'jsdom',
+      { cwd },
+    );
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.stdout, 'the jsdom 30 version fixture passes').toMatch(
+      /✓ version\.test\.ts/,
+    );
+    expect(
+      cli.stdout,
+      'Node BroadcastChannel delivers messages under jsdom 30',
+    ).toMatch(/✓ broadcastChannel\.test\.ts/);
+    await expectExecSuccess();
+  });
+});

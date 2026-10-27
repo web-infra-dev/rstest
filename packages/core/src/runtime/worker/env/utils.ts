@@ -151,13 +151,12 @@ export function installGlobal(
   const originals = new Map<string | symbol, PropertyDescriptor>();
 
   const overrides = new Map<string | symbol, any>();
+  // Capture every original before overriding any key. Reading a descriptor
+  // initializes Node's lazy web globals such as `MessageEvent`, whose class
+  // extends whatever `Event` is at that moment; it must still be Node's own,
+  // or Node's `BroadcastChannel` and `MessagePort` reject the events they
+  // create once `Event` points at the DOM implementation.
   for (const key of keys) {
-    const boundFunction =
-      bindFunctions &&
-      typeof win[key] === 'function' &&
-      !isClassLike(key) &&
-      win[key].bind(win);
-
     if (key in global) {
       // capture the descriptor rather than the value, so that lazy native getters
       // such as Node's `localStorage` are not invoked (accessing it without
@@ -172,6 +171,14 @@ export function installGlobal(
         },
       );
     }
+  }
+
+  for (const key of keys) {
+    const boundFunction =
+      bindFunctions &&
+      typeof win[key] === 'function' &&
+      !isClassLike(key) &&
+      win[key].bind(win);
 
     Object.defineProperty(global, key, {
       get() {
