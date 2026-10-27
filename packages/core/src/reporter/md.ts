@@ -74,7 +74,9 @@
  * - The user provided a name filter (`config.testNamePattern`).
  * - Heuristic: small result set (`testResults.length > 0 && testResults.length <= FOCUSED_RUN_MAX_TESTS`).
  */
+import fs from 'node:fs';
 import { relative, resolve } from 'pathe';
+import { createColors } from 'picocolors';
 import stripAnsi from 'strip-ansi';
 import type {
   MdReporterOptions,
@@ -88,6 +90,7 @@ import type {
   TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
+import { generateCodeFrame } from '../utils/codeFrame';
 import { parseErrorStacktrace, stackIgnores } from '../utils/error';
 import {
   buildPackageManagerReproCommand,
@@ -105,6 +108,10 @@ import {
   toReportDuration,
   truncateString,
 } from './utils';
+
+// Markdown output is a spec'd plain-text contract, so code frames never carry
+// ANSI escapes even when the terminal supports color.
+const plainColors = createColors(false);
 
 type HeaderOptions = {
   env: boolean;
@@ -898,21 +905,32 @@ export class MdReporter implements Reporter {
         }
 
         if (this.options.codeFrame.enabled) {
-          const { renderCodeFrame } = await import('../utils/codeFrame');
           for (
             let errorIndex = 0;
             errorIndex < errorEntries.length;
             errorIndex += 1
           ) {
             const entry = errorEntries[errorIndex];
-            if (!entry?.topFrame?.file || !entry.topFrame.lineNumber) {
+            const frame = entry?.topFrame;
+            if (!frame?.file || !frame.lineNumber) {
               continue;
             }
-            const codeFrame = await renderCodeFrame(entry.topFrame, {
-              ansi: false,
-              linesAbove: this.options.codeFrame.linesAbove,
-              linesBelow: this.options.codeFrame.linesBelow,
-            });
+            const source = fs.existsSync(frame.file)
+              ? fs.readFileSync(frame.file, 'utf-8')
+              : undefined;
+            if (!source) {
+              continue;
+            }
+            const codeFrame = generateCodeFrame(
+              source,
+              frame.lineNumber,
+              frame.column ?? null,
+              plainColors,
+              {
+                linesAbove: this.options.codeFrame.linesAbove,
+                linesBelow: this.options.codeFrame.linesBelow,
+              },
+            );
             if (codeFrame) {
               lines.push(`codeFrame (error ${errorIndex + 1}):`);
               pushFencedBlock(lines, 'text', codeFrame);
