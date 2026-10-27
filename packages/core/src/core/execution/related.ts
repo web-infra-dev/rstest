@@ -383,7 +383,9 @@ const collectProjectEntries = async (
   return entries;
 };
 
-const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
+const createRelatedBuildSafeguardsPlugin = (
+  missingSources: string[],
+): RsbuildPlugin => ({
   name: 'rstest:related-build-safeguards',
   setup(api) {
     api.modifyRsbuildConfig((config) => ({
@@ -397,12 +399,21 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
         buildCache: false,
       },
     }));
-    api.modifyRspackConfig((rspackConfig) => {
+    api.modifyRspackConfig((rspackConfig, { rspack }) => {
       // Related-file graph collection needs a complete, fresh graph.
       // Keep it independent from user-enabled lazy compilation and
       // persistent cache settings.
       rspackConfig.lazyCompilation = false;
       rspackConfig.cache = false;
+      // Keep incoming edges to deleted files in this analysis-only build.
+      // The execution build still resolves against the real filesystem.
+      if (missingSources.length) {
+        rspackConfig.plugins.push(
+          new rspack.experiments.VirtualModulesPlugin(
+            Object.fromEntries(missingSources.map((file) => [file, ''])),
+          ),
+        );
+      }
     });
   },
 });
@@ -501,6 +512,9 @@ export async function resolveRelatedTestFiles(
     projectEntries.get(environmentName) ?? {};
 
   const setupFileState = createSetupFileState();
+  const missingSources = sourceFilters
+    .map((source) => normalize(resolve(context.rootPath, source)))
+    .filter((source) => !existsSync(source));
   projectEntries = await collectProjectEntries(context);
 
   const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
@@ -514,7 +528,7 @@ export async function resolveRelatedTestFiles(
       setupFileState,
       targetProjects: context.projects,
       exposeRstestAPIProjects: context.projects,
-      extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      extraPlugins: [createRelatedBuildSafeguardsPlugin(missingSources)],
       logLevel: 'silent',
       getSetupFileProjects: () => ({
         setupProjects: context.projects,
@@ -571,11 +585,12 @@ export async function resolveRelatedTestFiles(
         reasons: true,
       });
 
-      const virtualModulePaths = new Set(
-        Object.keys(
+      const virtualModulePaths = new Set([
+        ...missingSources,
+        ...Object.keys(
           setupFileState.virtualModules[project.environmentName] || {},
         ),
-      );
+      ]);
       const moduleGraph = collectModuleGraph({
         modules,
         projectRoot: project.rootPath,

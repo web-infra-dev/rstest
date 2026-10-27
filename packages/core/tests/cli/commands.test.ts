@@ -846,6 +846,32 @@ describe('related CLI options', () => {
     );
   });
 
+  it('includes deleted files before staging, after staging, and after committing', async () => {
+    const cwd = await createGitFixture();
+    const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);
+    const deletedFile = join(cwd, 'base.ts');
+    await rm(deletedFile);
+    await expect(resolveChangedFiles(cwd)).resolves.toEqual([
+      normalize(deletedFile),
+    ]);
+    await runGit(cwd, ['add', '-u']);
+    await expect(resolveChangedFiles(cwd)).resolves.toEqual([
+      normalize(deletedFile),
+    ]);
+    await runGit(cwd, [
+      '-c',
+      'user.name=rstest',
+      '-c',
+      'user.email=rstest@example.com',
+      'commit',
+      '-m',
+      'delete base',
+    ]);
+    await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toEqual([
+      normalize(deletedFile),
+    ]);
+  });
+
   it('combines committed, staged, and unstaged files since a commit', async () => {
     const cwd = await createGitFixture();
     const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);

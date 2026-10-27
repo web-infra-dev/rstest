@@ -142,22 +142,8 @@ export const resolveChangedFiles = async (
   try {
     const root = await gitRoot();
     const [committed, staged, unstaged] = await Promise.all([
-      since
-        ? git(
-            [
-              'diff',
-              '--name-only',
-              '-z',
-              '--diff-filter=ACMRTUXB',
-              `${since}...HEAD`,
-            ],
-            root,
-          )
-        : [],
-      git(
-        ['diff', '--name-only', '-z', '--cached', '--diff-filter=ACMRTUXB'],
-        root,
-      ),
+      since ? git(['diff', '--name-only', '-z', `${since}...HEAD`], root) : [],
+      git(['diff', '--name-only', '-z', '--cached'], root),
       git(
         ['ls-files', '-z', '--others', '--modified', '--exclude-standard'],
         root,

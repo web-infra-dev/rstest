@@ -1,7 +1,8 @@
 import { dirname, join } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, onTestFinished } from '@rstest/core';
+import { prepareFixtures } from '../scripts';
 import { BROWSER_PORTS } from './fixtures/ports';
 import { runBrowserCliWithCwd } from './utils';
 
@@ -9,6 +10,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - related', () => {
+  it('should select browser importers of a deleted source', async () => {
+    const fixturesTargetPath = join(
+      __dirname,
+      'fixtures',
+      'test-temp-related-deletion',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures', 'related'),
+      fixturesTargetPath,
+    });
+    onTestFinished(() => fs.delete(fixturesTargetPath));
+    await fs.delete(join(fixturesTargetPath, 'tests/src/index.ts'));
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      fixturesTargetPath,
+      {
+        command: 'list',
+        args: ['--filesOnly', '--related', 'tests/src/index.ts'],
+      },
+    );
+    await expectExecSuccess();
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual([
+      'tests/index.test.ts',
+    ]);
+  });
+
   it('should list matched files without starting the browser server', async () => {
     const server = createServer();
     await new Promise<void>((resolve, reject) => {
