@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+import type { Colors } from 'picocolors/types';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { SerializedError, GetSourcemap } from '../types';
-import { generateCodeFrame } from './codeFrame';
+import { type CodeFrameWindow, generateCodeFrame } from './codeFrame';
 import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
@@ -127,29 +128,35 @@ export async function printError(
   }
 }
 
-function printCodeFrame(frame: StackFrame) {
+/**
+ * Renders a frame's source into a code frame. The file read, `file://` unwrap,
+ * and formatter call are shared by the CLI error printer and the md reporter.
+ */
+export const renderFrameCodeFrame = (
+  frame: StackFrame,
+  colors: Colors,
+  window?: CodeFrameWindow,
+): string | undefined => {
   const filePath = frame.file?.startsWith('file')
     ? new URL(frame.file)
     : frame.file;
-
-  if (!filePath) {
-    return;
-  }
-
+  if (!filePath) return undefined;
   const source = fs.existsSync(filePath)
     ? fs.readFileSync(filePath, 'utf-8')
     : undefined;
-
-  if (!source) {
-    return;
-  }
-  const result = generateCodeFrame(
+  if (!source) return undefined;
+  return generateCodeFrame(
     source,
     frame.lineNumber,
     frame.column,
-    color,
+    colors,
+    window,
   );
+};
 
+function printCodeFrame(frame: StackFrame) {
+  const result = renderFrameCodeFrame(frame, color);
+  if (!result) return;
   logger.stderr(result);
   logger.stderr('');
 }

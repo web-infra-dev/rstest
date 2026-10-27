@@ -19,13 +19,12 @@ import {
   getNoTestFilesMessage,
   isDebug,
   flushOutputStreams,
-  keepEventLoopAlive,
   logger,
   type TraceRun,
 } from '../../utils';
 import type { InternalContext } from '../../types';
 import { toSerializedError } from '../../utils/error';
-import { getFileTaskId } from '../../utils/helper';
+import { createDeferred, getFileTaskId } from '../../utils/helper';
 import {
   drainReporterHooks,
   formatReporterError,
@@ -99,7 +98,11 @@ export const notifyReportersOnTestRunStart = async (
       testId: getFileTaskId(file.testPath),
     })),
   };
-  return keepEventLoopAlive(async () => {
+  // Selection can finish before workers exist; hold a referenced handle so a
+  // hook that settles from a signal or unref'd timer is not cut off when the
+  // event loop would otherwise be empty.
+  const keepAlive = setInterval(() => {}, 2 ** 30);
+  try {
     let firstFailure: Error | undefined;
     // Every reporter is notified even when an earlier one fails: a broken
     // reporter must not swallow the hook for the rest of the run.
@@ -120,20 +123,18 @@ export const notifyReportersOnTestRunStart = async (
       }
     }
     return firstFailure;
-  });
+  } finally {
+    clearInterval(keepAlive);
+  }
 };
 
 export const createRunStartBarrier = (
   context: InternalContext,
   executorCount: number,
 ): Array<(files: SelectedTestFile[]) => Promise<Error | undefined>> => {
-  const selections = Array.from({ length: executorCount }, () => {
-    let resolve!: (files: SelectedTestFile[]) => void;
-    const promise = new Promise<SelectedTestFile[]>((accept) => {
-      resolve = accept;
-    });
-    return { promise, resolve };
-  });
+  const selections = Array.from({ length: executorCount }, () =>
+    createDeferred<SelectedTestFile[]>(),
+  );
   const started = Promise.all(selections.map(({ promise }) => promise)).then(
     (files) => notifyReportersOnTestRunStart(context, files.flat()),
   );
@@ -384,8 +385,9 @@ export async function finalizeRunCycle(
     context.exitCode.raise(1);
   }
 
+  // Only a dispatched payload can hand coverage to reporters.
   const collectedCoverage =
-    !isInterrupted() && mergedCoverageMap
+    !isInterrupted() && reportersStarted && mergedCoverageMap
       ? cloneCoverageMapData(mergedCoverageMap)
       : undefined;
 

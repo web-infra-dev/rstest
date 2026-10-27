@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { computeSummary } from '../../src/reporter/utils';
 import type { TestFileResult, TestResult } from '../../src/types';
+import { emptyFileSummary } from './helpers';
 
 const test = (status: TestResult['status'], id: string): TestResult => ({
   status,
@@ -22,7 +23,7 @@ const file = (
   testPath: `/root/file-${id}.test.ts`,
   relativeTestPath: `file-${id}.test.ts`,
   results: [],
-  summary: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0, flaky: 0 },
+  summary: emptyFileSummary,
   project: 'default',
   testId: id,
 });

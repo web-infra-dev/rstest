@@ -138,5 +138,4 @@ export {
 } from './utils/getSetupFiles';
 export { resolveShardedEntries } from './utils/shard';
 export { getTestEntries } from './utils/testFiles';
-export { getFileSummary } from './utils/testSummary';
 export { rsbuild };

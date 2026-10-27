@@ -11,6 +11,7 @@ import {
   emptyDuration,
   emptyRunEndPayload,
   emptySnapshotSummary,
+  emptyFileSummary,
 } from './helpers';
 
 describe('getStepSummaryDisplayPath', () => {
@@ -92,14 +93,7 @@ describe('GithubActionsReporter step summary', () => {
             relativeTestPath: 'packages/a/a.test.ts',
             project: 'pkg-a',
             results: [],
-            summary: {
-              total: 0,
-              passed: 0,
-              failed: 0,
-              skipped: 0,
-              todo: 0,
-              flaky: 0,
-            },
+            summary: emptyFileSummary,
           },
           {
             testId: 'file-b',
@@ -110,14 +104,7 @@ describe('GithubActionsReporter step summary', () => {
             relativeTestPath: 'packages/b/b.test.ts',
             project: 'pkg-b',
             results: [],
-            summary: {
-              total: 0,
-              passed: 0,
-              failed: 0,
-              skipped: 0,
-              todo: 0,
-              flaky: 0,
-            },
+            summary: emptyFileSummary,
           },
         ],
         testResults: [],

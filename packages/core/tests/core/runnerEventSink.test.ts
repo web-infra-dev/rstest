@@ -13,6 +13,7 @@ import type {
   TestCaseInfo,
   TestFileResult,
 } from '../../src/types';
+import { emptyFileSummary } from '../reporter/helpers';
 
 const makeContext = (
   overrides: {
@@ -93,7 +94,7 @@ const fileResult: TestFileResult = {
   fullName: '',
   status: 'passed',
   results: [],
-  summary: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0, flaky: 0 },
+  summary: emptyFileSummary,
 };
 
 const gate = () => {

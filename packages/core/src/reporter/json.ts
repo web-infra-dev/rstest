@@ -14,9 +14,7 @@ import type {
 import { logger } from '../utils';
 import { PerFileEventBuffer, toReportCounts, toReportDuration } from './utils';
 
-type JsonTestResult = Omit<TestResult, 'testPath' | 'relativeTestPath'> & {
-  testPath: string;
-};
+type JsonTestResult = Omit<TestResult, 'relativeTestPath'>;
 
 type JsonReport = {
   tool: 'rstest';
@@ -38,11 +36,7 @@ type JsonReport = {
   };
   snapshot: SnapshotSummary;
   files: Array<
-    Omit<
-      TestFileResult,
-      'results' | 'testPath' | 'relativeTestPath' | 'summary'
-    > & {
-      testPath: string;
+    Omit<TestFileResult, 'results' | 'relativeTestPath' | 'summary'> & {
       results: JsonTestResult[];
     }
   >;

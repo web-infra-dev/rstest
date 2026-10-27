@@ -74,9 +74,9 @@
  * - The user provided a name filter (`config.testNamePattern`).
  * - Heuristic: small result set (`testResults.length > 0 && testResults.length <= FOCUSED_RUN_MAX_TESTS`).
  */
-import fs from 'node:fs';
 import { relative, resolve } from 'pathe';
 import { createColors } from 'picocolors';
+import type { StackFrame } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
 import type {
   MdReporterOptions,
@@ -90,8 +90,11 @@ import type {
   TestRunEndPayload,
   UserConsoleLog,
 } from '../types';
-import { generateCodeFrame } from '../utils/codeFrame';
-import { parseErrorStacktrace, stackIgnores } from '../utils/error';
+import {
+  parseErrorStacktrace,
+  renderFrameCodeFrame,
+  stackIgnores,
+} from '../utils/error';
 import {
   buildPackageManagerReproCommand,
   collectFailures,
@@ -112,6 +115,10 @@ import {
 // Markdown output is a spec'd plain-text contract, so code frames never carry
 // ANSI escapes even when the terminal supports color.
 const plainColors = createColors(false);
+
+// Candidate frames are only useful when they point at user code; unlike the
+// default ignores, node_modules frames never qualify.
+const candidateFrameIgnores = [...stackIgnores, /\/node_modules\//];
 
 type HeaderOptions = {
   env: boolean;
@@ -161,13 +168,6 @@ type ResolvedOptions = {
 
 const DEFAULT_TEST_LIST_MAX_ITEMS = 50;
 const FOCUSED_RUN_MAX_TESTS = 10;
-
-type StackFrame = {
-  file?: string | null;
-  methodName?: string | null;
-  lineNumber?: number | null;
-  column?: number | null;
-};
 
 type FormattedStackFrame = {
   file?: string;
@@ -422,10 +422,10 @@ const resolveStackPayload = ({
     return {
       topFrame: topFrame
         ? {
-            file: formatPath(rootPath, topFrame.file) ?? undefined,
+            file: formatPath(rootPath, topFrame.file),
             line: topFrame.lineNumber ?? null,
             column: topFrame.column ?? null,
-            method: topFrame.methodName ?? null,
+            method: topFrame.methodName,
           }
         : null,
       stackFrames: [],
@@ -814,7 +814,7 @@ export class MdReporter implements Reporter {
                   stack: error.stack,
                   getSourcemap,
                   fullStack: false,
-                  ignore: [...stackIgnores, /\/node_modules\//],
+                  ignore: candidateFrameIgnores,
                 })
               : [];
 
@@ -915,22 +915,10 @@ export class MdReporter implements Reporter {
             if (!frame?.file || !frame.lineNumber) {
               continue;
             }
-            const source = fs.existsSync(frame.file)
-              ? fs.readFileSync(frame.file, 'utf-8')
-              : undefined;
-            if (!source) {
-              continue;
-            }
-            const codeFrame = generateCodeFrame(
-              source,
-              frame.lineNumber,
-              frame.column ?? null,
-              plainColors,
-              {
-                linesAbove: this.options.codeFrame.linesAbove,
-                linesBelow: this.options.codeFrame.linesBelow,
-              },
-            );
+            const codeFrame = renderFrameCodeFrame(frame, plainColors, {
+              linesAbove: this.options.codeFrame.linesAbove,
+              linesBelow: this.options.codeFrame.linesBelow,
+            });
             if (codeFrame) {
               lines.push(`codeFrame (error ${errorIndex + 1}):`);
               pushFencedBlock(lines, 'text', codeFrame);

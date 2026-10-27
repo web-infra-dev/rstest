@@ -15,6 +15,7 @@ import type {
   TestExecutor,
 } from '../../src/types';
 import type { TraceController, TraceRun } from '../../src/utils';
+import { emptyFileSummary } from '../reporter/helpers';
 
 const rootPath = join(__dirname, 'fixtures/watch-session');
 
@@ -271,14 +272,7 @@ describe('createWatchCycleDriver', () => {
         relativeTestPath: 'fail.test.ts',
         project: 'node-a',
         results: [],
-        summary: {
-          total: 0,
-          passed: 0,
-          failed: 0,
-          skipped: 0,
-          todo: 0,
-          flaky: 0,
-        },
+        summary: emptyFileSummary,
       });
     });
     const seen: number[] = [];
@@ -694,14 +688,7 @@ describe('createWatchCycleDriver', () => {
         relativeTestPath: 'failed.test.ts',
         project: 'node-a',
         results: [],
-        summary: {
-          total: 0,
-          passed: 0,
-          failed: 0,
-          skipped: 0,
-          todo: 0,
-          flaky: 0,
-        },
+        summary: emptyFileSummary,
       },
       {
         testId: '/passed.test.ts',
@@ -712,14 +699,7 @@ describe('createWatchCycleDriver', () => {
         relativeTestPath: 'passed.test.ts',
         project: 'node-a',
         results: [],
-        summary: {
-          total: 0,
-          passed: 0,
-          failed: 0,
-          skipped: 0,
-          todo: 0,
-          flaky: 0,
-        },
+        summary: emptyFileSummary,
       },
     ];
     let cycle = 0;

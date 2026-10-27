@@ -230,9 +230,8 @@ describe('JUnitReporter', () => {
     const xml = logs.join('\n');
     expect(xml).toContain('errors="1"');
     expect(xml).toContain('<testsuite name="rstest unhandled errors"');
-    expect(xml).toContain(
-      '<system-err>UnhandledError: crashed &lt;before&gt; &amp; after',
-    );
+    expect(xml).toContain('<system-err>crashed &lt;before&gt; &amp; after');
+    expect(xml).toContain('at setup.ts:1:1');
     expect(xml).not.toContain('crashed <before> & after');
   });
 
