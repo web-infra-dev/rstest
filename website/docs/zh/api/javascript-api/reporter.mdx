@@ -13,7 +13,7 @@ Reporter API 允许你创建自定义测试结果处理器和输出格式器。
 
 ## 稳定性 \{#stability}
 
-<ApiMeta addedVersion="1.0.0" />
+<ApiMeta addedVersion="0.13.0" />
 
 Hook 集合、payload 字段名和 status 字面量属于 **Stable**。`getSourcemap`、`snapshotSummary`、`coverage`、`heap` 和 `meta` 的语义属于 **Best-effort**，可能独立于稳定 contract 发生变化。
 
@@ -143,7 +143,7 @@ Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写�
 
 ### onTestRunStart
 
-<ApiMeta addedVersion="1.0.0" />
+<ApiMeta addedVersion="0.13.0" />
 
 `onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。文件在执行前选定，因此即使 bail 阻止了后续执行，这些文件仍会出现在列表中。`TestRunStartPayload` 可从 `@rstest/core` 导入。
 
@@ -165,7 +165,7 @@ interface TestRunStartPayload {
 
 每轮运行结束时调用 `onTestRunEnd`，参数里是这一轮结束时的结果和汇总。从 v0.12.0 开始，参数带上了 `summary` 和 `rerunTestPaths`，`unhandledErrors` 固定是序列化后的错误数组。
 
-<ApiMeta addedVersion="1.0.0" />
+<ApiMeta addedVersion="0.13.0" />
 
 Coverage 生成和 threshold 检查会在 `onTestRunEnd` 前完成，因此 coverage 表格现在先于运行摘要打印。Host 统一计算一次 `status`：有 unhandled errors 时为 `'error'`；否则，exit code 非零或有失败文件时为 `'failed'`；其余情况为 `'passed'`。Public API 的 `TestRunResult` 去掉了 `getSourcemap`，并增加可选的 `trace` 输出路径。
 
