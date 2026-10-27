@@ -189,7 +189,7 @@ async function replayTestFile(
   sink: RunnerEventSink,
   { result: fileResult, data }: ReplayFile,
 ): Promise<void> {
-  const pending: Promise<void>[] = [];
+  const pending: Promise<unknown>[] = [];
   for (const event of data.events) {
     switch (event.h) {
       case 'start':
@@ -208,11 +208,7 @@ async function replayTestFile(
         pending.push(sink.onTestCaseStart(event.test));
         break;
       case 'caseResult':
-        pending.push(
-          sink
-            .onTestCaseResult(event.result)
-            .then(() => sink.awaitTestCaseResults(event.result.testPath)),
-        );
+        pending.push(sink.onTestCaseResult(event.result));
         break;
       case 'log':
         pending.push(sink.emitConsoleLog(event.log));
