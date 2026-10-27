@@ -202,6 +202,10 @@ export type TestFileInfo = RawTestFileInfo<TestInfo> & {
 
 export type Test = TestSuite | TestCase;
 
+// Past-tense results follow Vitest's reported test states (`passed`, `failed`,
+// `skipped`); `todo` carries over from the pre-1.0 contract and is also part of
+// Jest's status union. `skipped` is Vitest's spelling: Jest reserves it in the
+// type but its default runner reports `pending` for intentional skips.
 export type TestResultStatus = 'skipped' | 'passed' | 'failed' | 'todo';
 
 export interface SerializedError {
