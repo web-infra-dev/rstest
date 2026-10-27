@@ -395,31 +395,39 @@ export async function finalizeRunCycle(
     coverageProvider?.supportsDeferredCoverageFinalization === true &&
     context.reporters.some((reporter) => reporter instanceof BlobReporter);
 
-  // Blob output is a merge input, so final filtering, untested-file backfill,
-  // reports, and thresholds belong to the merge-reports process that sees the
-  // complete coverage map rather than to every partial shard.
-  if (
-    !isInterrupted() &&
-    reportersStarted &&
-    coverageProvider &&
-    !defersCoverageReport &&
-    (!isFailure || reportOnFailure)
-  ) {
-    const { generateCoverage } = await import('../../coverage/generate');
-    await runLifecycleStep(
-      'coverage report generation',
-      async () =>
-        !isInterrupted() &&
-        generateCoverage(
-          context,
-          mergedCoverageMap!,
-          coverageProvider,
-          traceRun.span,
-        ),
-    );
-  }
+  // Coverage and trace finalization run before the payload so it carries the
+  // final verdict. A failure in either must not break the run-start/run-end
+  // pair: remember it, dispatch run end, then surface it.
+  let finalizeError: unknown;
+  try {
+    // Blob output is a merge input, so final filtering, untested-file
+    // backfill, reports, and thresholds belong to the merge-reports process
+    // that sees the complete coverage map rather than to every partial shard.
+    if (
+      !isInterrupted() &&
+      reportersStarted &&
+      coverageProvider &&
+      !defersCoverageReport &&
+      (!isFailure || reportOnFailure)
+    ) {
+      const { generateCoverage } = await import('../../coverage/generate');
+      await runLifecycleStep(
+        'coverage report generation',
+        async () =>
+          !isInterrupted() &&
+          generateCoverage(
+            context,
+            mergedCoverageMap!,
+            coverageProvider,
+            traceRun.span,
+          ),
+      );
+    }
 
-  await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+    await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+  } catch (error) {
+    finalizeError = error;
+  }
 
   if (reportersStarted) {
     const reporterResults = context.reporterResults.results;
@@ -446,6 +454,10 @@ export async function finalizeRunCycle(
         },
       }),
     );
+  }
+
+  if (finalizeError) {
+    throw finalizeError;
   }
 
   if (!isInterrupted() && isFailure) {
