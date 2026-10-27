@@ -1,0 +1,143 @@
+---
+title: React
+description: 使用 @rstest/browser-react 渲染 React 组件和 Hook、等待状态更新并清理 Browser 测试。
+overviewHeaders: [2, 3]
+---
+
+# React
+
+[@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) 用于在 Browser Mode 中渲染 React 组件和 Hook。安装和项目配置请参考 [React 指南](/guide/browser-testing/framework-guides#react)。
+
+以下函数均从 `@rstest/browser-react` 导入。查询元素和模拟交互请使用单独的 [`page` API](/api/runtime-api/browser-mode/locator#page)。
+
+## render
+
+- **类型：** `(ui: ReactNode, options?: RenderOptions) => Promise<RenderResult>`
+
+渲染 React 元素并等待 React 完成更新。`render`、`rerender` 和 `unmount` 已在内部使用 [`act`](#act) 包裹更新；每次调用都应先 `await`，再断言结果。
+
+```tsx
+import { render } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+
+test('updates the greeting', async () => {
+  const view = await render(<p>Hello, Alice</p>);
+  expect(view.container.textContent).toBe('Hello, Alice');
+
+  await view.rerender(<p>Hello, Bob</p>);
+  expect(view.container.textContent).toBe('Hello, Bob');
+
+  await view.unmount();
+  expect(view.container.childElementCount).toBe(0);
+});
+```
+
+### RenderOptions
+
+所有选项均为可选项。`RenderOptions` 从 `@rstest/browser-react` 导出。
+
+| 选项                | 类型                                                        | 行为                                                                                                                                                                                        |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `container`         | `HTMLElement`                                               | 渲染到指定元素中。省略时，会在 `baseElement` 下添加一个新的 `div`。                                                                                                                         |
+| `baseElement`       | `HTMLElement`                                               | 自动创建的 container 的父元素，也会包含在返回结果中。默认为 `document.body`。                                                                                                               |
+| `wrapper`           | `JSXElementConstructor<{ children: ReactNode }>`            | 包裹渲染的 UI，例如添加 Context Provider。                                                                                                                                                  |
+| `hydrate`           | `boolean`                                                   | 默认为 `false`。设为 `true` 并提供含服务端渲染 HTML 的 container，可以对其进行 hydration。参见 [hydration 指南](/guide/browser-testing/framework-guides#hydrating-server-rendered-markup)。 |
+| `createRootOptions` | `react-dom/client` 中的 `RootOptions` 或 `HydrationOptions` | 默认传给 React 的 `createRoot`；`hydrate: true` 时传给 `hydrateRoot`。                                                                                                                      |
+
+`ReactNode` 和 `JSXElementConstructor` 是 React 的类型。`createRootOptions` 的类型由 `hydrate` 决定：为 `true` 时使用 `HydrationOptions`，为 `false` 或省略时使用 `RootOptions`。
+
+### RenderResult
+
+`RenderResult` 从 `@rstest/browser-react` 导出。
+
+| 属性          | 类型                               | 行为                                              |
+| ------------- | ---------------------------------- | ------------------------------------------------- |
+| `container`   | `HTMLElement`                      | 包含已渲染 UI 的元素。                            |
+| `baseElement` | `HTMLElement`                      | 渲染选项指定的 base element。                     |
+| `rerender`    | `(ui: ReactNode) => Promise<void>` | 使用同一个 root 和 wrapper 更新 UI。              |
+| `unmount`     | `() => Promise<void>`              | 卸载组件，保留 container 元素。                   |
+| `asFragment`  | `() => DocumentFragment`           | 返回 container 当前 HTML 的副本，可用于快照断言。 |
+
+## renderHook
+
+- **类型：** `<Props, Result>(renderCallback: (props?: Props) => Result, options?: RenderHookOptions<Props>) => Promise<RenderHookResult<Result, Props>>`
+
+在测试组件中运行 Hook。通过 `result.current` 读取最近一次提交的返回值，并使用 [`act`](#act) 包裹手动触发的状态更新。
+
+```tsx
+import { act, renderHook } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+import { useState } from 'react';
+
+test('updates hook state', async () => {
+  const { result } = await renderHook(() => useState(0));
+
+  await act(() => {
+    result.current[1](1);
+  });
+
+  expect(result.current[0]).toBe(1);
+});
+```
+
+### RenderHookOptions
+
+`RenderHookOptions<Props>` 接受所有 [`RenderOptions`](#renderoptions)，还可以通过 `initialProps?: Props` 指定首次调用 `renderCallback` 时的 props。这些 props 不会传给 `wrapper` 组件。该类型从 `@rstest/browser-react` 导出。
+
+### RenderHookResult
+
+`RenderHookResult<Result, Props>` 从 `@rstest/browser-react` 导出。
+
+| 属性       | 类型                                         | 行为                                                                             |
+| ---------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
+| `result`   | `{ current: Result }`                        | 引用不变的对象，其 `current` 属性保存最近一次提交的 Hook 返回值。                |
+| `rerender` | `(props?: Props) => Promise<void>`           | 使用新 props 调用 Hook。省略 props 时传入 `undefined`，不会复用 `initialProps`。 |
+| `unmount`  | `() => Promise<void>`                        | 卸载测试组件。                                                                   |
+| `act`      | `(callback: () => unknown) => Promise<void>` | 与包导出的 [`act`](#act) 相同。                                                  |
+
+## act
+
+- **类型：** `(callback: () => unknown) => Promise<void>`
+
+包裹会触发 React 更新的操作，例如调用 Hook 的 state setter 或原生元素的 `.click()`。检查更新后的 UI 或 Hook 返回值前，应先等待返回的 Promise。回调可以是同步或异步函数。
+
+用法参见上方的 [`renderHook` 示例](#renderhook)和[组件测试示例](/guide/browser-testing/framework-guides#component-testing)。
+
+## cleanup
+
+- **类型：** `() => Promise<void>`
+
+卸载所有已记录的 React root。如果 container 是 `document.body` 的直接子元素，还会移除该 container。挂载在其他位置的 container 会保留在 DOM 中，如需移除，应自行处理。
+
+导入 `@rstest/browser-react` 会在 `beforeEach` 中注册自动清理。因此，在下一个测试开始前，仍可以查看上一个测试留下的 DOM。
+
+如果需要控制清理时机，请从 `@rstest/browser-react/pure` 导入。该入口导出相同的函数和类型，但不会注册自动清理。例如，可以在每个测试结束后清理：
+
+```ts title="rstest.setup.ts"
+import { cleanup } from '@rstest/browser-react/pure';
+import { afterEach } from '@rstest/core';
+
+afterEach(async () => {
+  await cleanup();
+});
+```
+
+将该文件加入 [`setupFiles`](/config/test/setup-files)，并在测试中也从 `@rstest/browser-react/pure` 导入渲染工具。
+
+## configure
+
+- **类型：** `(customConfig: Partial<RenderConfiguration>) => void`
+
+设置后续渲染使用的默认配置。`RenderConfiguration` 从 `@rstest/browser-react` 导出，包含一个字段：
+
+- `reactStrictMode: boolean`：使用 React `StrictMode` 包裹渲染的 UI。默认为 `false`。
+
+例如，在 [setup 文件](/config/test/setup-files)中启用 StrictMode：
+
+```ts title="rstest.setup.ts"
+import { configure } from '@rstest/browser-react';
+
+configure({ reactStrictMode: true });
+```
+
+`cleanup()` 不会重置这项配置。如果某个测试临时修改了配置，应在结束后显式恢复。

@@ -111,6 +111,23 @@ Next, you can execute the test by using the command configured in [Using Rstest]
    Duration 140 ms (build 17 ms, tests 123 ms)
 ```
 
+## Type checking
+
+Rstest transforms TypeScript so tests can run, but does not check types. A passing test run does not mean the project has no type errors.
+
+Run your project's type check separately. For a project with TypeScript and a `tsconfig.json`, you can add a script:
+
+```json title="package.json"
+{
+  "scripts": {
+    "test": "rstest",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+Run both `test` and `typecheck` in CI to check runtime behavior and types.
+
 ## Next steps
 
 If you want to see complete project structures, refer to these common examples:

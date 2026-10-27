@@ -1,0 +1,143 @@
+---
+title: React
+description: Render React components and hooks, flush state updates, and clean up browser tests with @rstest/browser-react.
+overviewHeaders: [2, 3]
+---
+
+# React
+
+[@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) renders React components and hooks in Browser Mode. For installation and project configuration, see the [React guide](/guide/browser-testing/framework-guides#react).
+
+Import these functions from `@rstest/browser-react`. For element queries and interactions, use the separate [`page` API](/api/runtime-api/browser-mode/locator#page).
+
+## render
+
+- **Type:** `(ui: ReactNode, options?: RenderOptions) => Promise<RenderResult>`
+
+Render a React element and wait for React to finish the update. `render`, `rerender`, and `unmount` already wrap their updates in [`act`](#act); await each call before asserting the result.
+
+```tsx
+import { render } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+
+test('updates the greeting', async () => {
+  const view = await render(<p>Hello, Alice</p>);
+  expect(view.container.textContent).toBe('Hello, Alice');
+
+  await view.rerender(<p>Hello, Bob</p>);
+  expect(view.container.textContent).toBe('Hello, Bob');
+
+  await view.unmount();
+  expect(view.container.childElementCount).toBe(0);
+});
+```
+
+### RenderOptions
+
+All options are optional. `RenderOptions` is exported from `@rstest/browser-react`.
+
+| Option              | Type                                                        | Behavior                                                                                                                                                                                                 |
+| ------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `container`         | `HTMLElement`                                               | Render into this element. If omitted, append a new `div` to `baseElement`.                                                                                                                               |
+| `baseElement`       | `HTMLElement`                                               | Parent for an automatically created container; also returned in the result. Defaults to `document.body`.                                                                                                 |
+| `wrapper`           | `JSXElementConstructor<{ children: ReactNode }>`            | Wrap the rendered UI, for example with Context Providers.                                                                                                                                                |
+| `hydrate`           | `boolean`                                                   | Defaults to `false`. Set to `true` and provide a container with server-rendered HTML to hydrate it. See the [hydration guide](/guide/browser-testing/framework-guides#hydrating-server-rendered-markup). |
+| `createRootOptions` | `RootOptions` or `HydrationOptions` from `react-dom/client` | Passed to React's `createRoot` by default, or `hydrateRoot` when `hydrate: true`.                                                                                                                        |
+
+`ReactNode` and `JSXElementConstructor` are React types. The type of `createRootOptions` depends on `hydrate`: `HydrationOptions` for `true`, and `RootOptions` for `false` or an omitted value.
+
+### RenderResult
+
+`RenderResult` is exported from `@rstest/browser-react`.
+
+| Property      | Type                               | Behavior                                                                             |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `container`   | `HTMLElement`                      | The element containing the rendered UI.                                              |
+| `baseElement` | `HTMLElement`                      | The base element selected by the render options.                                     |
+| `rerender`    | `(ui: ReactNode) => Promise<void>` | Update the UI using the same root and wrapper.                                       |
+| `unmount`     | `() => Promise<void>`              | Unmount the component; the container element remains.                                |
+| `asFragment`  | `() => DocumentFragment`           | Return a copy of the container's current HTML, for example for a snapshot assertion. |
+
+## renderHook
+
+- **Type:** `<Props, Result>(renderCallback: (props?: Props) => Result, options?: RenderHookOptions<Props>) => Promise<RenderHookResult<Result, Props>>`
+
+Run a hook inside a test component. Read its latest committed return value through `result.current`, and wrap manual state updates in [`act`](#act).
+
+```tsx
+import { act, renderHook } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+import { useState } from 'react';
+
+test('updates hook state', async () => {
+  const { result } = await renderHook(() => useState(0));
+
+  await act(() => {
+    result.current[1](1);
+  });
+
+  expect(result.current[0]).toBe(1);
+});
+```
+
+### RenderHookOptions
+
+`RenderHookOptions<Props>` accepts all [`RenderOptions`](#renderoptions), plus `initialProps?: Props` for the first call to `renderCallback`. These props are not passed to the `wrapper` component. The type is exported from `@rstest/browser-react`.
+
+### RenderHookResult
+
+`RenderHookResult<Result, Props>` is exported from `@rstest/browser-react`.
+
+| Property   | Type                                         | Behavior                                                                                             |
+| ---------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `result`   | `{ current: Result }`                        | A stable object whose `current` property holds the latest committed hook value.                      |
+| `rerender` | `(props?: Props) => Promise<void>`           | Call the hook with new props. Omitting props passes `undefined`, rather than reusing `initialProps`. |
+| `unmount`  | `() => Promise<void>`                        | Unmount the test component.                                                                          |
+| `act`      | `(callback: () => unknown) => Promise<void>` | The same [`act`](#act) helper exported by the package.                                               |
+
+## act
+
+- **Type:** `(callback: () => unknown) => Promise<void>`
+
+Wrap actions that trigger React updates, such as calling a hook's state setter or a native element's `.click()`. Await the returned promise before checking the updated UI or hook value. The callback can be synchronous or asynchronous.
+
+See the [`renderHook` example](#renderhook) above and the [component testing example](/guide/browser-testing/framework-guides#component-testing).
+
+## cleanup
+
+- **Type:** `() => Promise<void>`
+
+Unmount all tracked React roots. Containers that are direct children of `document.body` are also removed. Containers mounted elsewhere remain in the DOM; remove those yourself if needed.
+
+Importing `@rstest/browser-react` registers automatic cleanup in `beforeEach`. The previous test's DOM therefore remains available for inspection until the next test starts.
+
+To control cleanup timing, import from `@rstest/browser-react/pure`, which exports the same functions and types without registering automatic cleanup. For example, clean up after each test:
+
+```ts title="rstest.setup.ts"
+import { cleanup } from '@rstest/browser-react/pure';
+import { afterEach } from '@rstest/core';
+
+afterEach(async () => {
+  await cleanup();
+});
+```
+
+Add this file to [`setupFiles`](/config/test/setup-files), and import rendering helpers from `@rstest/browser-react/pure` in your tests as well.
+
+## configure
+
+- **Type:** `(customConfig: Partial<RenderConfiguration>) => void`
+
+Set defaults used by subsequent renders. `RenderConfiguration` is exported from `@rstest/browser-react` and has one field:
+
+- `reactStrictMode: boolean`: wrap the rendered UI in React `StrictMode`. Defaults to `false`.
+
+For example, enable StrictMode in a [setup file](/config/test/setup-files):
+
+```ts title="rstest.setup.ts"
+import { configure } from '@rstest/browser-react';
+
+configure({ reactStrictMode: true });
+```
+
+`cleanup()` does not reset this configuration. If a test changes it temporarily, restore it explicitly afterward.

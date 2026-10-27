@@ -16,3 +16,19 @@ export default defineConfig({
   setupFiles: ['./scripts/rstest.setup.ts'],
 });
 ```
+
+## Registering hooks
+
+Setup files run in the test environment before the test file is loaded, so you can import Rstest APIs to register hooks or extend matchers. For example, restore spies after each test:
+
+```ts title="scripts/rstest.setup.ts"
+import { afterEach, rs } from '@rstest/core';
+
+afterEach(() => {
+  rs.restoreAllMocks();
+});
+```
+
+The setup file's top-level code runs once per test file; the `afterEach` callback runs after each test. This also applies when [`isolate`](/config/test/isolate) is `false`.
+
+Unlike [`globalSetup`](/config/test/global-setup), setup files do not use exported `setup` or `teardown` functions. Register `beforeAll`, `beforeEach`, `afterAll`, or `afterEach` to control initialization and cleanup. See the [execution scope comparison](/config/test/global-setup#differences-from-setupfiles) to choose between them.

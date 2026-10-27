@@ -8,9 +8,17 @@ description: 使用 test.concurrent 或 describe.concurrent 时允许同时运�
 - **默认值：** `5`
 - **CLI：** `--maxConcurrency=10`
 
-使用 `test.concurrent` 或 `describe.concurrent` 时允许同时运行的最大测试用例数量。
+使用 `test.concurrent` 或 `describe.concurrent` 时，限制**单个测试文件内**同时运行的测试用例数量。超过限制的用例会等待空位后再运行。
 
-超过此限制数量的测试将在前序测试完成后排队运行。
+增大这个值不会让普通的 `test()` 用例并发执行。需要先将测试或其所属 suite 标记为 concurrent。
+
+| 配置                                                  | 控制什么                                | 不控制什么           |
+| ----------------------------------------------------- | --------------------------------------- | -------------------- |
+| [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) | 并行运行 Node.js 测试文件的 worker 数量 | 文件内的并发用例数量 |
+| `maxConcurrency`                                      | 每个测试文件内的并发用例数量            | 并行运行的文件数量   |
+| [`isolate`](/config/test/isolate)                     | 文件之间是否共享模块状态和测试环境      | 同时运行的测试数量   |
+
+例如，`pool.maxWorkers: 1` 会让 Node.js 测试文件逐个运行，但每个文件内仍然可以并发执行多个 `test.concurrent` 用例。如果这些用例也需要逐个执行，还应设置 `maxConcurrency: 1`。
 
 import { Tab, Tabs } from '@theme';
 
