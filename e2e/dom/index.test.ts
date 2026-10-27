@@ -293,23 +293,31 @@ describe('happy-dom 20 compatibility', () => {
 });
 
 describe('jsdom 30 compatibility', () => {
-  it('keeps Node BroadcastChannel working with jsdom 30', async () => {
-    const cwd = fileURLToPath(new URL('./fixtures-jsdom-30', import.meta.url));
-    const { cli, expectExecSuccess } = await runCli(
-      ['broadcastChannel', 'version'],
-      'jsdom',
-      { cwd },
-    );
+  // jsdom 30 requires Node 22.22+, so the Node 20 row of the e2e matrix
+  // cannot run this fixture.
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  it.skipIf(nodeMajor < 22)(
+    'keeps Node BroadcastChannel working with jsdom 30',
+    async () => {
+      const cwd = fileURLToPath(
+        new URL('./fixtures-jsdom-30', import.meta.url),
+      );
+      const { cli, expectExecSuccess } = await runCli(
+        ['broadcastChannel', 'version'],
+        'jsdom',
+        { cwd },
+      );
 
-    await cli.exec;
-    await cli.waitForStreamsEnd();
-    expect(cli.stdout, 'the jsdom 30 version fixture passes').toMatch(
-      /✓ version\.test\.ts/,
-    );
-    expect(
-      cli.stdout,
-      'Node BroadcastChannel delivers messages under jsdom 30',
-    ).toMatch(/✓ broadcastChannel\.test\.ts/);
-    await expectExecSuccess();
-  });
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.stdout, 'the jsdom 30 version fixture passes').toMatch(
+        /✓ version\.test\.ts/,
+      );
+      expect(
+        cli.stdout,
+        'Node BroadcastChannel delivers messages under jsdom 30',
+      ).toMatch(/✓ broadcastChannel\.test\.ts/);
+      await expectExecSuccess();
+    },
+  );
 });
