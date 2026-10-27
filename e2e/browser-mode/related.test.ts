@@ -9,6 +9,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - related', () => {
+  it('should run browser tests related through a computed import', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'related'),
+      { args: ['--related', 'tests/src/messages/en.js'] },
+    );
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('tests/index.test.ts');
+    expect(cli.stdout).not.toContain('tests/other.test.ts');
+    expect(cli.stdout).toContain('1 passed');
+  });
+
   it('should list matched files without starting the browser server', async () => {
     const server = createServer();
     await new Promise<void>((resolve, reject) => {

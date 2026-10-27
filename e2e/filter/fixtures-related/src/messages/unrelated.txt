@@ -1,0 +1,1 @@
+This extension is excluded by the import and require expressions.

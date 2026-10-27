@@ -10,8 +10,6 @@ import { getTestEntries, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
 
-type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
-
 type ModuleGraph = {
   allSources: Set<string>;
   dependentsBySource: Map<string, Set<string>>;
@@ -138,95 +136,53 @@ const normalizeStatsPathCandidate = ({
     : null;
 };
 
-const normalizeStatsModulePath = ({
-  module,
-  projectRoot,
-  virtualModulePaths,
-}: {
-  module: Rspack.StatsModule;
-  projectRoot: string;
-  virtualModulePaths?: ReadonlySet<string>;
-}): string | null => {
-  const candidate =
-    typeof module.nameForCondition === 'string' && module.nameForCondition
-      ? module.nameForCondition
-      : module.identifier || '';
-
-  return normalizeStatsPathCandidate({
-    candidate,
-    projectRoot,
-    virtualModulePaths,
-  });
-};
-
-const normalizeStatsReasonPath = ({
-  reason,
-  projectRoot,
-  virtualModulePaths,
-}: {
-  reason: StatsModuleReason;
-  projectRoot: string;
-  virtualModulePaths?: ReadonlySet<string>;
-}): string | null => {
-  const candidate =
-    reason.moduleIdentifier || reason.moduleName || reason.module || '';
-
-  return normalizeStatsPathCandidate({
-    candidate,
-    projectRoot,
-    virtualModulePaths,
-  });
-};
-
 const collectModuleGraph = ({
-  modules,
+  compilation,
   projectRoot,
   virtualModulePaths,
 }: {
-  modules: Rspack.StatsModule[] | undefined;
+  compilation: Rspack.Compilation;
   projectRoot: string;
   virtualModulePaths?: ReadonlySet<string>;
 }): ModuleGraph => {
   const allSources = new Set<string>();
   const dependentsBySource = new Map<string, Set<string>>();
-
-  const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
-    for (const module of statsModules || []) {
-      const sourcePath = normalizeStatsModulePath({
-        module,
-        projectRoot,
-        virtualModulePaths,
-      });
-
-      if (sourcePath) {
-        allSources.add(sourcePath);
-
-        for (const reason of module.reasons || []) {
-          const dependentPath = normalizeStatsReasonPath({
-            reason,
-            projectRoot,
-            virtualModulePaths,
-          });
-
-          if (!dependentPath) {
-            continue;
-          }
-
-          allSources.add(dependentPath);
-
-          const dependents = dependentsBySource.get(sourcePath) || new Set();
-          dependents.add(dependentPath);
-          dependentsBySource.set(sourcePath, dependents);
-        }
-      }
-
-      if (module.modules?.length) {
-        visitModules(module.modules);
-      }
+  const pathsByIdentifier = new Map<string, string>();
+  const pathOf = (module: Rspack.Module): string => {
+    const identifier = module.identifier();
+    let path = pathsByIdentifier.get(identifier);
+    if (!path) {
+      // Context modules have synthetic identifiers. Keep them as intermediate
+      // nodes so dependencies can reach the source file that imports the context.
+      path =
+        normalizeStatsPathCandidate({
+          candidate: module.nameForCondition() || identifier,
+          projectRoot,
+          virtualModulePaths,
+        }) || identifier;
+      pathsByIdentifier.set(identifier, path);
+      allSources.add(path);
     }
+    return path;
+  };
+  const addEdge = (source: string, dependent: string) => {
+    allSources.add(source);
+    const dependents = dependentsBySource.get(source) || new Set<string>();
+    dependents.add(dependent);
+    dependentsBySource.set(source, dependents);
   };
 
-  visitModules(modules);
+  for (const module of compilation.modules) {
+    const dependent = pathOf(module);
+    for (const connection of compilation.moduleGraph.getOutgoingConnections(
+      module,
+    )) {
+      // Concatenation can redirect the target; retain the original source too.
+      if (connection.module) addEdge(pathOf(connection.module), dependent);
+      if (connection.resolvedModule)
+        addEdge(pathOf(connection.resolvedModule), dependent);
+    }
+  }
 
   return {
     allSources,
@@ -390,6 +346,7 @@ export async function resolveRelatedTestFiles(
       targetProjects: context.projects,
       exposeRstestAPIProjects: context.projects,
       extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      collectDependencies: true,
       getSetupFileProjects: () => ({
         setupProjects: context.projects,
         globalSetupProjects: context.projects,
@@ -425,15 +382,8 @@ export async function resolveRelatedTestFiles(
 
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
-      const { modules } = stats.toJson({
-        all: false,
-        modules: true,
-        nestedModules: true,
-        reasons: true,
-      });
-
       const moduleGraph = collectModuleGraph({
-        modules,
+        compilation: stats.compilation,
         projectRoot: project.rootPath,
         virtualModulePaths: new Set(
           Object.keys(

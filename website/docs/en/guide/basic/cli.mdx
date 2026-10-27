@@ -93,6 +93,8 @@ npx rstest list --related src/button.ts --filesOnly
 
 `--related` and `--findRelatedTests` are not supported in watch mode, which already reruns the tests affected by your file changes.
 
+Selection follows static imports, literal dynamic imports, `require.resolve`, and computed `import()` or `require()` calls that Rspack can resolve to a directory context, such as `import('./locales/' + locale + '.js')`. Files excluded by the expression do not select its consumers. Arbitrary runtime paths and filesystem reads are not automatically inferred; use [`forceRerunTriggers`](/config/test/force-rerun-triggers) with `--changed` for known inputs outside the build graph.
+
 ### Run changed tests
 
 <ApiMeta addedVersion="0.10.0" />

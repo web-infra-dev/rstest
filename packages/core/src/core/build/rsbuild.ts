@@ -120,6 +120,7 @@ type PrepareRsbuildOptions = {
   targetProjects?: InternalProjectContext[];
   exposeRstestAPIProjects?: InternalProjectContext[];
   extraPlugins?: RsbuildPlugin[];
+  collectDependencies?: boolean;
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: () => Promise<void>;
   onCoveragePluginLoadError?: (error: unknown) => void;
@@ -166,6 +167,7 @@ export const prepareRsbuild = async ({
   targetProjects,
   exposeRstestAPIProjects,
   extraPlugins = [],
+  collectDependencies = false,
   onModifyRstestConfigApplied,
   onRsbuildConfigResolved,
   onCoveragePluginLoadError,
@@ -217,7 +219,7 @@ export const prepareRsbuild = async ({
         ]),
       ),
       plugins: [
-        pluginBasic(context),
+        pluginBasic(context, collectDependencies),
         pluginIgnoreResolveError,
         pluginMockRuntime,
         pluginEntryWatch({

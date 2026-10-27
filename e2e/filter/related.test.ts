@@ -17,6 +17,74 @@ const collectRunTestFileLogs = (stdout: string) =>
     .sort();
 
 describe('related test filtering', () => {
+  it.each([
+    'src/messages/en.mjs',
+    'src/messages/fr.mjs',
+    'src/messages/required.json',
+    'src/manifests/standard.json',
+    'src/resolved.json',
+  ])(
+    'should run tests related through computed dependencies: %s',
+    async (source) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '--related', source],
+        options: { nodeOptions: { cwd: relatedFixturePath } },
+      });
+      await expectExecSuccess();
+      expect(collectRunTestFileLogs(cli.stdout)).toEqual([
+        ' ✓ index.test.ts (1)',
+      ]);
+    },
+  );
+
+  it('should exclude files outside the computed import expression', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly', '--related', 'src/messages/unrelated.txt'],
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await expectExecSuccess();
+    expect(cli.stdout.trim()).toBe('');
+  });
+
+  it('should preserve computed dependencies with explicit parser options', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--filesOnly',
+        '--config',
+        'rstest.parser.config.mts',
+        '--related',
+        'src/messages/en.mjs',
+      ],
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await expectExecSuccess();
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['index.test.ts']);
+  });
+
+  it('should preserve dependencies when module concatenation is enabled', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--filesOnly',
+        '--config',
+        'rstest.optimized.config.mts',
+        '--related',
+        'src/shared.ts',
+      ],
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await expectExecSuccess();
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual([
+      'index.test.ts',
+      'other.test.ts',
+    ]);
+  });
+
   it('should run only tests related to a leaf source file', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

@@ -32,9 +32,10 @@ require.cache = __rstest_native_require.cache;
 require.extensions = __rstest_native_require.extensions;
 `;
 
-export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
-  context,
-) => ({
+export const pluginBasic = (
+  context: InternalContext,
+  collectDependencies = false,
+): RsbuildPlugin => ({
   name: 'rstest:basic',
   setup: (api) => {
     api.modifyBundlerChain((chain, { CHAIN_ID }) => {
@@ -192,18 +193,22 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
 
               const rstestPluginOptions = {
                 ...getMockRstestPluginOptions({ rootPath }),
+                // Graph collection must leave these calls for Rspack's parser;
+                // the runtime origin rewrites intentionally bypass bundling.
                 // The runtime hook below resolves relative dynamic-import
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #1207.
-                injectDynamicImportOrigin: true,
+                injectDynamicImportOrigin: !collectDependencies,
                 // The runtime hook below resolves relative require.resolve
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #848.
-                injectRequireResolveOrigin: {
-                  functionName: outputModule
-                    ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
-                    : RSTEST_REQUIRE_RESOLVE_HOOK,
-                },
+                injectRequireResolveOrigin: collectDependencies
+                  ? false
+                  : {
+                      functionName: outputModule
+                        ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
+                        : RSTEST_REQUIRE_RESOLVE_HOOK,
+                    },
                 updateImportMockAPI: true,
                 updateRequireMockAPI: true,
               };
@@ -246,15 +251,15 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
 
               config.module.parser ??= {};
               config.module.parser.javascript = {
-                // Keep dynamic import expressions.
+                // Keep dynamic import expressions during execution.
                 // eg. (modulePath) => import(modulePath)
-                importDynamic: false,
-                // Keep dynamic require expressions.
+                importDynamic: collectDependencies,
+                // Keep dynamic require expressions during execution.
                 // eg. (modulePath) => require(modulePath)
-                requireDynamic: false,
+                requireDynamic: collectDependencies,
                 requireAsExpression: false,
-                // Keep require.resolve expressions.
-                requireResolve: false,
+                // Keep require.resolve expressions during execution.
+                requireResolve: collectDependencies,
                 // Keep `new URL(<literal>, import.meta.url)` expressions instead
                 // of rewriting them into hashed bundled asset paths. Tests run
                 // against on-disk source, so this must resolve at runtime

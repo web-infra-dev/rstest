@@ -93,6 +93,8 @@ npx rstest list --related src/button.ts --filesOnly
 
 `--related` 和 `--findRelatedTests` 不支持在 watch 模式下使用，watch 模式本身已经会重跑受文件变更影响的测试。
 
+选择过程会追踪静态 import、使用字面量的动态 import、`require.resolve`，以及 Rspack 能解析为目录 Context 的计算式 `import()` 或 `require()` 调用，例如 `import('./locales/' + locale + '.js')`。被表达式排除的文件不会选中其使用方。任意运行时路径和文件系统读取不会被自动推断；对于 build graph 之外的已知输入，可将 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 与 `--changed` 配合使用。
+
 ### 运行变更相关测试
 
 <ApiMeta addedVersion="0.10.0" />
