@@ -425,6 +425,11 @@ export async function resolveRelatedTestFiles(
 
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
+      if (stats.hasErrors()) {
+        throw new Error(
+          `Cannot select related tests because compilation failed:\n${stats.toString({ all: false, errors: true, errorDetails: true })}`,
+        );
+      }
       const { modules } = stats.toJson({
         all: false,
         modules: true,

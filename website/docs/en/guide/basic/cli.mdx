@@ -85,6 +85,8 @@ Rstest resolves related tests from the build module graph, so the same filter wo
 npx rstest run --findRelatedTests src/button.ts
 ```
 
+If the dependency-analysis build fails, `--related` and `--changed` stop with an error instead of selecting tests from an incomplete graph. `passWithNoTests` permits an empty selection; it does not ignore compilation errors during selection.
+
 If you only want to inspect the affected test files, combine it with `rstest list`:
 
 ```bash
