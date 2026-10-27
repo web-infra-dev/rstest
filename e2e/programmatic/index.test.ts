@@ -203,6 +203,29 @@ describe('programmatic createRstest', () => {
     expect(result.teardownEntries).toEqual(['context-a', 'context-b']);
   });
 
+  it('reports a global teardown failure through the run result status', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-teardown-failure.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // Embedded runs do not mirror the internal exit code, so the resolved
+    // result is the only structured failure signal the caller gets. The
+    // `onTestRunEnd` payload already dispatched with its pre-teardown status.
+    expect(execution.exitCode).toBe(0);
+    expect(result.hostExitCode).toBeNull();
+    expect(result.status).toBe('failed');
+    expect(result.unhandledErrors).toEqual([]);
+    expect(result.summary.tests.failed).toBe(0);
+  });
+
   it('reports missing dependencies without prompting embedded callers', async ({
     onTestFinished,
   }) => {

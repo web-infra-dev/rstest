@@ -20,6 +20,13 @@ export function createResultReporter(
     const trace = context.getTraceOutput?.();
     const result: TestRunResult = {
       ...captured,
+      // Global teardown (or a reporter closing hook) can raise the exit code
+      // after the payload was dispatched, so the resolved result still reports
+      // the failure even though `onTestRunEnd` kept its captured status.
+      status:
+        captured.status === 'passed' && context.exitCode.current !== 0
+          ? 'failed'
+          : captured.status,
       ...(trace && { trace }),
     };
     captured = undefined;
