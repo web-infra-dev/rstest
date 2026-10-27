@@ -51,9 +51,6 @@ export default class ContractReporter {
   }
 
   onTestRunEnd({ status, unhandledErrors }) {
-    if (process.env.RSTEST_THROW_RUN_END) {
-      throw new Error('run-end rejected');
-    }
     this.events.push({ event: 'run-end' });
     console.log(
       '__RSTEST_REPORTER_CONTRACT__' +
@@ -69,5 +66,9 @@ export default class ContractReporter {
         }) +
         '__END__',
     );
+    // Printed first so a run-end failure can still assert the payload it saw.
+    if (process.env.RSTEST_THROW_RUN_END) {
+      throw new Error('run-end rejected');
+    }
   }
 }
