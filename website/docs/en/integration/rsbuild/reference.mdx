@@ -127,10 +127,12 @@ When you need to test multiple parts of your application with different configur
 export default defineConfig({
   projects: [
     {
+      name: 'node',
       extends: withRsbuildConfig({ environmentName: 'node' }),
       include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
+      name: 'react',
       extends: withRsbuildConfig({ environmentName: 'react' }),
       include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },

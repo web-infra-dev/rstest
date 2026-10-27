@@ -172,7 +172,7 @@ console.log(result.summary.tests);
 
 ### RunOptions
 
-`RunOptions` 接受除 `config`、`configLoader` 和 `root` 之外的所有 `rstest run` flag。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
+`RunOptions` 支持 `testTimeout`、`coverage`、`reporters` 等运行周期选项，不接受创建阶段的选项（`config`、`configLoader`、`root`）以及仅用于 CLI 的 `teardownTimeout`。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
 
 `filters` 仅用于 API；CLI 通过位置参数传入 filter。它默认使用不区分大小写的子字符串匹配。用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径，例如 `filters: ['"src/foo.test.ts"', 'utils']`；带引号和不带引号的 filter 可以混用。省略 `filters` 时选择所有文件；显式传入空数组时不会选择任何文件。
 
@@ -184,7 +184,7 @@ console.log(result.summary.tests);
 interface RunOptions {
   filters?: string[];
   trace?: boolean;
-  // ……以及其余所有 `rstest run` flag，用于覆盖同名配置项，
+  // ……以及其他支持的运行选项，用于覆盖同名配置项，
   // 例如 `testTimeout`、`coverage`、`reporters`。
 }
 

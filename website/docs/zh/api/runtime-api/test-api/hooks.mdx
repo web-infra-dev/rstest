@@ -11,7 +11,7 @@ Hooks 允许你在测试或测试套件执行之前或之后运行初始化和�
 
 ## beforeAll
 
-- **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(fn: (ctx: SuiteContext) => void | ((ctx: SuiteContext) => void | Promise<void>) | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>, timeout?: number) => void`
 
 在当前套件的所有测试之前运行。
 

@@ -13,7 +13,7 @@ Specify the project root directory. Can be an absolute path, or a path relative 
 Using `<rootDir>` in any path-based configuration settings will reference this value.
 
 ```ts title="rstest.config.ts"
-import { defineConfig } from 'rstest';
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   setupFiles: ['<rootDir>/setup.js'],

@@ -58,7 +58,7 @@ export default defineConfig({
 After the `render` function renders a component to the DOM, it returns `container` (the component's container element). You can use native DOM APIs or Testing Library to query elements and make assertions:
 
 ```tsx title="src/Counter.test.tsx"
-import { render } from '@rstest/browser-react';
+import { act, render } from '@rstest/browser-react';
 import { expect, test } from '@rstest/core';
 import { Counter } from './Counter';
 
@@ -69,7 +69,9 @@ test('renders and increments', async () => {
     '0',
   );
 
-  container.querySelector('button')!.click();
+  await act(() => {
+    container.querySelector('button')!.click();
+  });
   expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
     '1',
   );

@@ -11,7 +11,7 @@ Hooks allow you to run setup and teardown logic before or after your tests or te
 
 ## beforeAll
 
-- **Type:** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: SuiteContext) => void | ((ctx: SuiteContext) => void | Promise<void>) | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>, timeout?: number) => void`
 
 Runs once before all tests in the current suite.
 
