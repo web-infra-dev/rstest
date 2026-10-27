@@ -1,7 +1,7 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RawTestFileResult, RuntimeRPC, ServerRPC } from '../types';
 import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
-import { toError } from '../utils';
+import { createDeferred, type Deferred, toError } from '../utils';
 import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   WORKER_CLEANUP_TIMEOUT_MS,
@@ -44,22 +44,6 @@ type PendingTask = {
   provisionalResult?: RawTestFileResult;
   resolve: (result: RawTestFileResult | CollectTaskResult) => void;
   reject: (err: Error) => void;
-};
-
-type Deferred<T = void> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (err: Error) => void;
-};
-
-const createDeferred = <T = void>(): Deferred<T> => {
-  let resolve!: (value: T) => void;
-  let reject!: (err: Error) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 };
 
 let nextTaskSeq = 0;

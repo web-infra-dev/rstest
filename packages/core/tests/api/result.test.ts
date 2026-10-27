@@ -4,7 +4,7 @@ import type { TestRunResult } from '@rstest/core/api';
 import { join } from 'pathe';
 import { createResultReporter } from '../../src/api/result';
 import { Rstest } from '../../src/core/rstest';
-import { emptyRunEndPayload } from '../reporter/helpers';
+import { emptyFileSummary, emptyRunEndPayload } from '../reporter/helpers';
 
 type TestFileResult = TestRunResult['results'][number];
 type TestRunEndPayload = Parameters<NonNullable<Reporter['onTestRunEnd']>>[0];
@@ -30,7 +30,7 @@ const createFileResult = (status: 'passed' | 'failed'): TestFileResult => ({
   relativeTestPath: 'first.test.ts',
   project: 'node-a',
   results: [],
-  summary: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0, flaky: 0 },
+  summary: emptyFileSummary,
 });
 
 const createPayload = (

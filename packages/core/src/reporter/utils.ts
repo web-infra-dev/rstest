@@ -7,12 +7,12 @@ import type {
   Duration,
   SerializedError,
   TestFileResult,
+  TestFileSummary,
   TestResult,
   TestRunSummary,
   UserConsoleLog,
 } from '../types';
 import { color, logger, prettyTestPath, prettyTime } from '../utils';
-import { getFileSummary } from '../utils/testSummary';
 
 export const computeSummary = (
   results: readonly TestFileResult[],
@@ -33,12 +33,11 @@ export const computeSummary = (
     if (file.status === 'failed') {
       summary.files.failed++;
     }
-    summary.tests.total += file.summary.total;
-    summary.tests.passed += file.summary.passed;
-    summary.tests.failed += file.summary.failed;
-    summary.tests.skipped += file.summary.skipped;
-    summary.tests.todo += file.summary.todo;
-    summary.tests.flaky += file.summary.flaky;
+    for (const counter of Object.keys(
+      summary.tests,
+    ) as (keyof TestFileSummary)[]) {
+      summary.tests[counter] += file.summary[counter];
+    }
   }
   return summary;
 };
@@ -135,9 +134,6 @@ export class PerFileEventBuffer<T> {
     }
   }
 }
-
-export type StatusCounts = TestFileResult['summary'];
-export { getFileSummary };
 
 export const truncateString = (
   value: string,

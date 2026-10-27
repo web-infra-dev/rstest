@@ -4,6 +4,7 @@ import stripAnsi from 'strip-ansi';
 import type {
   GetSourcemap,
   Reporter,
+  SerializedError,
   TestFileResult,
   TestResult,
   TestRunEndPayload,
@@ -94,6 +95,28 @@ export class JUnitReporter implements Reporter {
       .replace(/'/g, '&apos;');
   }
 
+  private async formatError(
+    error: SerializedError,
+    getSourcemap: GetSourcemap,
+  ): Promise<{ message: string; type: string; details: string }> {
+    let details = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
+    const stackFrames = error.stack
+      ? await parseErrorStacktrace({
+          stack: error.stack,
+          fullStack: error.fullStack,
+          getSourcemap,
+        })
+      : [];
+    if (stackFrames[0]) {
+      details += `\n${formatStack(stackFrames[0], this.rootPath)}`;
+    }
+    return {
+      message: this.escapeXml(error.message),
+      type: error.name || 'Error',
+      details: this.escapeXml(details),
+    };
+  }
+
   private async createJUnitTestCase(
     test: TestResult,
     getSourcemap: GetSourcemap,
@@ -107,26 +130,7 @@ export class JUnitReporter implements Reporter {
 
     if (test.errors && test.errors.length > 0) {
       testCase.errors = await Promise.all(
-        test.errors.map(async (error) => {
-          let details = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
-          const stackFrames = error.stack
-            ? await parseErrorStacktrace({
-                stack: error.stack,
-                fullStack: error.fullStack,
-                getSourcemap,
-              })
-            : [];
-
-          if (stackFrames[0]) {
-            details += `\n${formatStack(stackFrames[0], this.rootPath)}`;
-          }
-
-          return {
-            message: this.escapeXml(error.message),
-            type: error.name || 'Error',
-            details: this.escapeXml(details),
-          };
-        }),
+        test.errors.map((error) => this.formatError(error, getSourcemap)),
       );
     }
 
@@ -232,6 +236,9 @@ export class JUnitReporter implements Reporter {
     );
 
     if (unhandledErrors.length > 0) {
+      const unhandledDetails = await Promise.all(
+        unhandledErrors.map((error) => this.formatError(error, getSourcemap)),
+      );
       testSuites.push({
         name: 'rstest unhandled errors',
         tests: 0,
@@ -241,14 +248,7 @@ export class JUnitReporter implements Reporter {
         time: 0,
         timestamp: new Date().toISOString(),
         testcases: [],
-        systemErr: this.escapeXml(
-          unhandledErrors
-            .map(
-              (error) =>
-                error.stack || `${error.name ?? 'Error'}: ${error.message}`,
-            )
-            .join('\n\n'),
-        ),
+        systemErr: unhandledDetails.map(({ details }) => details).join('\n\n'),
       });
     }
 

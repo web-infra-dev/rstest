@@ -9,6 +9,7 @@ import {
   writeResultsCache,
 } from '../../src/core/execution/resultsCache';
 import type { TestFileResult, TestResultStatus } from '../../src/types';
+import { emptyFileSummary } from '../reporter/helpers';
 
 const CACHE_REL = 'node_modules/.cache/.rstest-results/results.json';
 
@@ -37,7 +38,7 @@ const fileResult = (
   project,
   duration,
   results: [],
-  summary: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0, flaky: 0 },
+  summary: emptyFileSummary,
 });
 
 const seed = async (data: ResultsCacheData): Promise<void> => {

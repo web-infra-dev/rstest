@@ -6,7 +6,11 @@ import type {
   TestFileResult,
   TestResult,
 } from '../../src/types';
-import { emptyRunEndPayload, emptySnapshotSummary } from './helpers';
+import {
+  emptyFileSummary,
+  emptyRunEndPayload,
+  emptySnapshotSummary,
+} from './helpers';
 
 const baseConfig = {
   passWithNoTests: false,
@@ -186,14 +190,7 @@ describe('JsonReporter', () => {
       relativeTestPath: testPath.slice('/test/root/'.length),
       project,
       results: [],
-      summary: {
-        total: 0,
-        passed: 0,
-        failed: 0,
-        skipped: 0,
-        todo: 0,
-        flaky: 0,
-      },
+      summary: emptyFileSummary,
     });
 
     const setup = () => {

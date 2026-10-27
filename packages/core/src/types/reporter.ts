@@ -6,6 +6,7 @@ import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
 import type { NormalizedConfig } from './config';
+import type { SelectedTestFile } from './executor';
 import type {
   SerializedError,
   TestCaseInfo,
@@ -30,7 +31,7 @@ export type TestRunStatus = 'passed' | 'failed' | 'error';
 
 export interface TestRunStartPayload {
   /** Files selected for this run, or this watch cycle, before execution. */
-  files: Pick<TestFileInfo, 'testPath' | 'project' | 'testId'>[];
+  files: (SelectedTestFile & Pick<TestFileInfo, 'testId'>)[];
 }
 
 export interface TestRunSummary {

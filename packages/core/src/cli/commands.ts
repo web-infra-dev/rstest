@@ -904,13 +904,12 @@ export function createCli(): CAC {
           { embedded: false, ...cliHostRuntime() },
         );
 
-        const result = await rstest.mergeReports({
+        // No payload-status check: `onExitCodeChange` already mirrored every
+        // exit-code raise (including reporter failures after the payload).
+        await rstest.mergeReports({
           path,
           cleanup: options.cleanup,
         });
-        if (result.status !== 'passed') {
-          setHostExitCode(1);
-        }
       } catch (err) {
         logger.error('Failed to merge reports.');
         logger.error(formatError(err));

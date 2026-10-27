@@ -22,13 +22,13 @@ import {
   detectPackageManagerAgent,
   escapeMarkdownTableCell,
   type FailureItem,
-  getFileSummary,
   getErrorType,
   getRetryErrorLabel,
   pushFencedBlock,
   pushHeading,
   truncateString,
 } from './utils';
+import { getFileSummary } from '../utils/testSummary';
 
 export class GithubActionsReporter {
   readonly flushOutputStreams = true;

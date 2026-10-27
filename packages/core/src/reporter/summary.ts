@@ -19,6 +19,7 @@ import type {
   GetSourcemap,
   SerializedError,
   TestFileResult,
+  TestFileSummary,
   TestResult,
 } from '../types';
 import {
@@ -31,10 +32,30 @@ import {
   prettyTime,
   TEST_DELIMITER,
 } from '../utils';
-import { getFileSummary, getRetryErrorLabel, type StatusCounts } from './utils';
+import { getFileSummary } from '../utils/testSummary';
+import { getRetryErrorLabel } from './utils';
+
+const identity = (text: string): string => text;
+
+const statusCountKeys = ['failed', 'passed', 'skipped', 'todo'] as const;
+
+const statusCountStyle = {
+  ansi: {
+    failed: (text: string) => color.bold(color.red(text)),
+    passed: (text: string) => color.bold(color.green(text)),
+    skipped: color.yellow,
+    todo: color.gray,
+  },
+  plain: {
+    failed: identity,
+    passed: identity,
+    skipped: identity,
+    todo: identity,
+  },
+} as const;
 
 export const formatStatusCounts = (
-  counts: StatusCounts,
+  counts: TestFileSummary,
   style: 'ansi' | 'plain',
   name = 'tests',
   showTotal = true,
@@ -43,22 +64,14 @@ export const formatStatusCounts = (
     return style === 'ansi' ? color.dim(`no ${name}`) : `no ${name}`;
   }
 
-  const plainParts = [
-    counts.failed ? `${counts.failed} failed` : null,
-    counts.passed ? `${counts.passed} passed` : null,
-    counts.skipped ? `${counts.skipped} skipped` : null,
-    counts.todo ? `${counts.todo} todo` : null,
-  ].filter(Boolean);
-  const total = showTotal && plainParts.length > 1 ? ` (${counts.total})` : '';
+  const paint = statusCountStyle[style];
+  const parts = statusCountKeys
+    .filter((key) => counts[key] > 0)
+    .map((key) => paint[key](`${counts[key]} ${key}`));
+  const total = showTotal && parts.length > 1 ? ` (${counts.total})` : '';
   if (style === 'plain') {
-    return `${counts.failed ? '❌' : '✅'} ${plainParts.join(' | ')}${total}`;
+    return `${counts.failed ? '❌' : '✅'} ${parts.join(' | ')}${total}`;
   }
-  const parts = [
-    counts.failed ? color.bold(color.red(`${counts.failed} failed`)) : null,
-    counts.passed ? color.bold(color.green(`${counts.passed} passed`)) : null,
-    counts.skipped ? color.yellow(`${counts.skipped} skipped`) : null,
-    counts.todo ? color.gray(`${counts.todo} todo`) : null,
-  ].filter(Boolean);
   return `${parts.join(color.dim(' | '))}${color.gray(total)}`;
 };
 
@@ -142,7 +155,7 @@ export const printSummaryLog = ({
   results: TestFileResult[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
-  summary: { tests: StatusCounts };
+  summary: { tests: TestFileSummary };
   rootPath: string;
 }): void => {
   logger.log('');

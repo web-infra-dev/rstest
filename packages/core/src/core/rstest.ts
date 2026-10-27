@@ -407,6 +407,10 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
         typeof import('@rsbuild/core').rspack.experiments.resolver.ResolverFactory
       >
     | undefined;
+  const reporterContext: ReporterContext = {
+    rootPath: initConfig.rootPath,
+    config: initConfig.config,
+  };
   try {
     for (const reporter of castArray(context.normalizedConfig.reporters)) {
       if (typeof reporter === 'function') {
@@ -459,10 +463,6 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
             `Reporter module "${name}" must have a reporter class as its default export.`,
           );
         }
-        const reporterContext: ReporterContext = {
-          rootPath: initConfig.rootPath,
-          config: initConfig.config,
-        };
         result.push(new loaded.default(options, reporterContext));
       } else {
         result.push(reporter);

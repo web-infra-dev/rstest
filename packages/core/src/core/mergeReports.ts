@@ -329,10 +329,6 @@ export async function mergeReports(
     .filter((result) => result !== undefined);
   const mergedDuration = mergeDurations(allDurations);
   const mergedSnapshotSummary = mergeSnapshots(allSnapshotSummaries);
-  const mergedCoverage =
-    hasCoverage && mergedCoverageMap
-      ? cloneCoverageMapData(mergedCoverageMap)
-      : undefined;
 
   const hasFailure =
     allResults.some((r) => r.status === 'failed') ||
@@ -350,6 +346,12 @@ export async function mergeReports(
       context,
       blobs.flatMap((blob) => blob.runStart.files),
     )) === undefined;
+  // An aborted replay never dispatches a payload, so its coverage map is not
+  // cloned for reporters in the first place.
+  const mergedCoverage =
+    replayStarted && hasCoverage && mergedCoverageMap
+      ? cloneCoverageMapData(mergedCoverageMap)
+      : undefined;
 
   // Print per-shard durations
   for (const { label, duration } of shardDurations) {
@@ -409,7 +411,7 @@ export async function mergeReports(
     context,
     payload: {
       results: reportedResults,
-      coverage: replayStarted ? mergedCoverage : undefined,
+      coverage: mergedCoverage,
       testResults: reportedTestResults,
       summary,
       status: resolveRunStatus({

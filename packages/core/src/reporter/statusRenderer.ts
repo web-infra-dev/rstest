@@ -6,7 +6,7 @@ import {
   TestFileSummaryLabel,
   TestSummaryLabel,
 } from './summary';
-import { getFileSummary } from './utils';
+import { getFileSummary } from '../utils/testSummary';
 import {
   WindowRenderer,
   type Options as WindowRendererOptions,
