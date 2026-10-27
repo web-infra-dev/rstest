@@ -139,7 +139,7 @@ export class GithubActionsReporter {
           }
 
           logs.push(
-            `::${type} file=${this.onWritePath?.(file) || file},line=${line},col=${column},title=${escapeData(title)}::${escapeData(message)}`,
+            `::${type} file=${this.onWritePath?.(file) || file},line=${line},col=${column},title=${escapeProperty(title)}::${escapeData(message)}`,
           );
         }
       }
@@ -172,12 +172,12 @@ export class GithubActionsReporter {
 }
 
 function escapeData(s: string): string {
-  return s
-    .replace(/%/g, '%25')
-    .replace(/\r/g, '%0D')
-    .replace(/\n/g, '%0A')
-    .replace(/:/g, '%3A')
-    .replace(/,/g, '%2C');
+  return s.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+// GitHub only unescapes `%3A` and `%2C` in properties, not in the message
+function escapeProperty(s: string): string {
+  return escapeData(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
 }
 
 const STEP_SUMMARY_MAX_FAILURES = 20;

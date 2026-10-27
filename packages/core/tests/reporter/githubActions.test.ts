@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
 import {
   GithubActionsReporter,
   getStepSummaryDisplayPath,
 } from '../../src/reporter/githubActions';
+import { logger } from '../../src/utils';
 import {
   emptyDuration,
   emptyRunEndPayload,
@@ -478,5 +479,38 @@ describe('GithubActionsReporter step summary', () => {
 
       await fs.rm(tempDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('GithubActionsReporter annotations', () => {
+  it('only escapes `:` and `,` in properties, not in the message', async () => {
+    const log = rs.spyOn(logger, 'log').mockImplementation(() => {});
+    const reporter = new GithubActionsReporter({
+      rootPath: os.tmpdir(),
+      options: { onWritePath: () => 'a.test.ts', summary: false },
+    });
+
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      testResults: [
+        {
+          testId: 'test-1',
+          status: 'fail',
+          name: 'a, b: c',
+          testPath: path.join(os.tmpdir(), 'a.test.ts'),
+          project: 'rstest',
+          errors: [
+            { name: 'AssertionError', message: 'expected [ 1, 2 ]: 1%' },
+          ],
+        },
+      ],
+      getSourcemap: async () => null,
+    });
+
+    const lines = log.mock.calls.map(([message]) => message);
+    log.mockRestore();
+    expect(lines).toContain(
+      '::error file=a.test.ts,line=1,col=1,title=a.test.ts > a%2C b%3A c::expected [ 1, 2 ]: 1%25\n',
+    );
   });
 });
