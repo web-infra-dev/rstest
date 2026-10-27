@@ -16,3 +16,19 @@ export default defineConfig({
   setupFiles: ['./scripts/rstest.setup.ts'],
 });
 ```
+
+## 注册 hook \{#registering-hooks}
+
+setup 文件在测试文件加载前、在测试环境中执行，因此可以导入 Rstest API 来注册 hook 或扩展 matcher。例如，在每个测试结束后恢复 spy：
+
+```ts title="scripts/rstest.setup.ts"
+import { afterEach, rs } from '@rstest/core';
+
+afterEach(() => {
+  rs.restoreAllMocks();
+});
+```
+
+setup 文件的顶层代码每个测试文件执行一次；`afterEach` 回调则在每个测试结束后执行。即使 [`isolate`](/config/test/isolate) 为 `false`，也遵循这一规则。
+
+与 [`globalSetup`](/config/test/global-setup) 不同，setup 文件不使用导出的 `setup` 或 `teardown` 函数。请注册 `beforeAll`、`beforeEach`、`afterAll` 或 `afterEach` 来控制初始化和清理时机。可以参考[执行范围对照](/config/test/global-setup#differences-from-setupfiles)来选择。

@@ -111,6 +111,23 @@ test('should sayHi correctly', () => {
    Duration 140 ms (build 17 ms, tests 123 ms)
 ```
 
+## 类型检查 \{#type-checking}
+
+Rstest 会转换 TypeScript 代码以运行测试，但不会检查类型。测试通过并不代表项目没有类型错误。
+
+请单独运行项目的类型检查。对于已安装 TypeScript 并包含 `tsconfig.json` 的项目，可以添加以下脚本：
+
+```json title="package.json"
+{
+  "scripts": {
+    "test": "rstest",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+在 CI 中同时运行 `test` 和 `typecheck`，分别检查运行时行为和类型。
+
 ## 下一步
 
 如果你想查看完整项目结构，可以参考以下常用示例：

@@ -18,11 +18,21 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   globalSetup: ['./global-setup.ts'],
-  // or multiple files
-  globalSetup: ['./setup-db.ts', './setup-server.ts'],
-  // your other config...
 });
 ```
+
+## Differences from setupFiles
+
+Choose the scope that matches the resource you need:
+
+| Mechanism                                                  | When it runs                                                    | Where it runs                 | Cleanup                                        | Typical use                                |
+| ---------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------ |
+| `globalSetup`                                              | Once before a project's tests                                   | Separate setup worker         | Export `teardown` or return a cleanup function | Start a database or test server            |
+| [`setupFiles`](/config/test/setup-files)                   | Before each test file                                           | That file's test environment  | Register `afterAll` or `afterEach` hooks       | Install matchers and register shared hooks |
+| [`beforeAll`](/api/runtime-api/test-api/hooks#beforeall)   | Once before tests in its suite, or file when outside `describe` | Same environment as the tests | `afterAll` or a returned cleanup function      | Prepare data shared by a suite             |
+| [`beforeEach`](/api/runtime-api/test-api/hooks#beforeeach) | Before each test in its scope                                   | Same environment as the test  | `afterEach` or a returned cleanup function     | Reset state for each test                  |
+
+`setupFiles` does not recognize exported `setup` or `teardown` functions. Its top-level code runs before each file and can register hooks for later cleanup.
 
 ## Global setup file formats
 
@@ -70,9 +80,25 @@ export default async function globalSetup() {
 }
 ```
 
-:::note
-Global setup runs in an isolated setup worker: module-scope variables defined in the setup file are not accessible from tests. Environment changes made there are stored on the Rstest context and composed into each node test worker's environment without changing the host's `process.env` — setting environment variables here is a supported way to share values with node tests. For browser-mode tests, the environment variable changes made in the **browser project's own** `globalSetup` are propagated too: they are injected into the browser runtime env store (readable via `process.env` / `import.meta.env`), on top of the built-in `NODE_ENV` / `RSTEST` values, with explicit `test.env` config still taking precedence. Other host environment variables are not forwarded to browser tests, and in mixed projects the env changes from Node-side `globalSetup` are not merged into browser tests. `globalSetup` entries added or modified by browser provider hooks (`modifyRstestConfig`) are picked up too: those hooks are applied during test discovery, before the setup stage reads the project config. In watch mode, each browser project's `globalSetup` runs once before the initial test cycle; reruns do not execute it again, and its teardown runs when the watch session closes.
-:::
+## Sharing values with tests
+
+Global setup runs in a separate setup worker. Tests cannot access its module-scope variables, such as a database connection. Share connection details through environment variables, then create the connection in the test environment.
+
+Environment variable changes made in global setup are passed to Node.js test workers without changing the host process's `process.env`.
+
+### Browser projects
+
+For Browser Mode, environment sharing follows these rules:
+
+- Changes from the **browser project's own** `globalSetup` are available through `process.env` and `import.meta.env`, alongside the built-in `NODE_ENV` and `RSTEST` values.
+- Explicit [`env`](/config/test/env) configuration takes precedence over values from global setup.
+- Other host environment variables are not forwarded automatically. In mixed Node.js and browser projects, Node.js projects' global setup changes are not merged into browser tests.
+
+Browser provider hooks (`modifyRstestConfig`) run during test discovery, before the setup stage. Any `globalSetup` entries they add or change are therefore included.
+
+### Watch mode
+
+Once a project's global setup succeeds, watch reruns reuse it. The teardown runs when the watch session closes. Put initialization that must repeat for each test file in [`setupFiles`](/config/test/setup-files).
 
 ## Multiple global setup files
 
@@ -81,14 +107,6 @@ When using multiple global setup files:
 - Setup functions execute sequentially in the order provided
 - Teardown functions execute in reverse order (LIFO - Last In, First Out)
 - If any setup fails, the entire test run fails
-
-## Differences from setupFiles
-
-| Feature   | globalSetup                           | setupFiles                |
-| --------- | ------------------------------------- | ------------------------- |
-| Execution | Once before all tests                 | Before each test file     |
-| Teardown  | Supported                             | Not supported             |
-| Use Case  | Global resources, databases, services | Per-test utilities, mocks |
 
 ## Example: database setup
 

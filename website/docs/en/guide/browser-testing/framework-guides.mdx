@@ -91,6 +91,8 @@ test('renders with theme context', async () => {
 });
 ```
 
+#### Hydrating server-rendered markup
+
 <ApiMeta addedVersion="0.12.4" />
 
 For a focused hydration test, Browser Mode can create matching markup with `renderToString` and hydrate it without starting a Node server. This exercises React's hydration path, but not Node-specific SSR behavior. To test your app's actual server output, load that output into the container instead. React root options such as `onRecoverableError` go in `createRootOptions`:
@@ -156,7 +158,7 @@ test('hook reacts to prop changes', async () => {
 - **React Strict Mode**: Enable with `configure({ reactStrictMode: true })` to help catch potential issues
 - **Manual cleanup**: Automatic cleanup runs before each test by default. For manual control, import from `@rstest/browser-react/pure` and call `cleanup()`
 
-See the package documentation for the complete API.
+See the [React API reference](/api/runtime-api/browser-mode/react) for `render`, `renderHook`, `act`, `cleanup`, and `configure`, including their options and return values.
 
 ## Vanilla JS/TS
 
