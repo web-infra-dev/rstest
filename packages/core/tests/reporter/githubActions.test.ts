@@ -565,9 +565,11 @@ describe('GithubActionsReporter annotations', () => {
       testResults: [
         {
           testId: 'test-1',
-          status: 'fail',
+          status: 'failed',
           name: 'a, b: c',
+          fullName: 'a, b: c',
           testPath: path.join(os.tmpdir(), 'a.test.ts'),
+          relativeTestPath: 'a.test.ts',
           project: 'rstest',
           errors: [
             { name: 'AssertionError', message: 'expected [ 1, 2 ]: 1%' },
