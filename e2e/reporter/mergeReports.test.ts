@@ -557,11 +557,14 @@ describe('merge-reports', () => {
 describe('merge-reports lifecycle replay', () => {
   const blobDir = join(replayFixturesDir, '.rstest-reports');
 
-  const runFixture = (args: string[]) =>
+  const runFixture = (
+    args: string[],
+    env?: Record<string, string | undefined>,
+  ) =>
     runRstestCli({
       command: 'rstest',
       args,
-      options: { nodeOptions: { cwd: replayFixturesDir } },
+      options: { nodeOptions: { cwd: replayFixturesDir, env } },
     });
 
   const parseLifecycle = (stdout: string): string[] =>
@@ -574,7 +577,7 @@ describe('merge-reports lifecycle replay', () => {
   };
 
   const parseContract = (stdout: string) =>
-    parseMarkerPayload<{ events: ContractEvent[] }>(
+    parseMarkerPayload<{ status: string; events: ContractEvent[] }>(
       stdout,
       '__RSTEST_REPORTER_CONTRACT__',
     );
@@ -836,6 +839,27 @@ describe('merge-reports lifecycle replay', () => {
       expect.stringContaining('log before the fatal'),
       'onTestRunEnd',
     ]);
+  });
+
+  it('fails the merge when a run-end hook throws after the payload', async () => {
+    // The payload is dispatched before run-end hooks settle, so a throwing hook
+    // cannot join `unhandledErrors`; it must still fail CI through the CLI's
+    // internal exit-code mirroring, not by changing the payload status.
+    fs.removeSync(blobDir);
+    const live = await runFixture(['run']);
+    await live.expectExecSuccess();
+
+    const merged = await runFixture(['merge-reports', '--cleanup'], {
+      RSTEST_THROW_RUN_END: '1',
+    });
+    await merged.expectExecFailed();
+
+    // The fixture prints the payload it received before throwing.
+    expect(parseContract(merged.cli.stdout).status).toBe('passed');
+    expect(merged.cli.stderr).toContain('Unhandled Reporter Error');
+    expect(merged.cli.stderr).toContain(
+      'Reporter ContractReporter (#2) onTestRunEnd failed: run-end rejected',
+    );
   });
 
   it('rejects the blob reporter in watch mode', async () => {
