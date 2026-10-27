@@ -150,9 +150,10 @@ export type InternalContext = {
    * idempotently. Set per cycle by the watch driver and awaited by the runner
    * event sink ahead of its first reporter fanout, so the run opens exactly
    * when the cycle is known to run a file — a rebuild that reaches no test
-   * never opens one, and no executor has to say whether it will.
+   * never opens one, and no executor has to say whether it will. Resolves to
+   * the recorded failure when `onTestRunStart` aborted the run.
    */
-  openReporterRun?: () => Promise<void>;
+  openReporterRun?: () => Promise<Error | undefined>;
   reporters: Reporter[];
   /** Resolve and construct configured third-party reporters. */
   initializeReporters: () => Promise<void>;

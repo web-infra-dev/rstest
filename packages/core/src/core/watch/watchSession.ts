@@ -265,20 +265,26 @@ export function createWatchCycleDriver({
     prepareWatchCycleState(context, { isFirstCycle });
     // The run opens lazily — see `InternalContext.openReporterRun`. A rebuild
     // that reaches no test then opens nothing and leaves the screen as it was.
-    let runOpened: Promise<void> | undefined;
+    let runOpened: Promise<Error | undefined> | undefined;
     let selectedFiles: SelectedTestFile[] = [];
+    let runStartFailure: Error | undefined;
     const openRun = () =>
       (runOpened ??= (async () => {
         // The first cycle and every shortcut clear on their own terms; only a
         // rebuild-driven rerun clears here, once it is known to be one.
         if (mode === 'on-demand') clearScreen();
-        await notifyReportersOnTestRunStart(context, selectedFiles);
+        const failure = await notifyReportersOnTestRunStart(
+          context,
+          selectedFiles,
+        );
+        runStartFailure ??= failure;
+        return failure;
       })());
     context.openReporterRun = openRun;
     try {
       const onSelected = async (files: SelectedTestFile[]) => {
         selectedFiles = files;
-        if (files.length || mode === 'all') await openRun();
+        return files.length || mode === 'all' ? await openRun() : undefined;
       };
       let outcome: ExecutorCycleOutcome;
       try {
@@ -308,18 +314,14 @@ export function createWatchCycleDriver({
         outcome.errors.length ||
         outcome.deletedTestPaths?.length
       ) {
-        try {
-          await openRun();
-        } catch (error) {
-          // Opening the run failed after the executor settled, which only a
-          // reporter `onTestRunStart` failure can do. The attributed error is
-          // already recorded for the run; carry it to finalize as the cycle
-          // failure instead of rejecting past it.
-          outcome = cycleFailureOutcome([toError(error)]);
-        }
+        await openRun();
       }
       let sessionEndingError: Error | undefined;
-      if (outcome.failure === 'fatal') {
+      if (runStartFailure && isFirstCycle) {
+        // The failure is already recorded for the run; the first cycle only
+        // ends the session with it, without adding it to the outcome again.
+        sessionEndingError = runStartFailure;
+      } else if (outcome.failure === 'fatal') {
         sessionEndingError = outcome.errors[0];
       } else if (isFirstCycle && outcome.failure === 'setup') {
         sessionEndingError =

@@ -557,7 +557,7 @@ export function createNodeExecutor(
       });
     }
 
-    await opts.onSelected?.(
+    const runStartFailure = await opts.onSelected?.(
       projectPlans.flatMap(({ p, finalEntries }) =>
         finalEntries.map(({ testPath }) =>
           toSelectedTestFile(testPath, p.name),
@@ -565,8 +565,10 @@ export function createNodeExecutor(
       ),
     );
 
-    // A run-start hook can yield to cancellation before setup or workers begin.
-    if (didClose) {
+    // A run-start hook can yield to cancellation before setup or workers begin;
+    // a reporter failure aborts the run and is already recorded, so this cycle
+    // contributes no error of its own.
+    if (runStartFailure || didClose) {
       return {
         results: [],
         testResults: [],

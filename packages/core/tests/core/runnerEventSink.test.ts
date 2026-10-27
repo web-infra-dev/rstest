@@ -172,8 +172,8 @@ describe('createRunnerEventSink', () => {
     const { context, projectConfig } = makeContext();
     context.stateManager = new TestStateManager();
     let open!: () => void;
-    const opened = new Promise<void>((resolve) => {
-      open = resolve;
+    const opened = new Promise<Error | undefined>((resolve) => {
+      open = () => resolve(undefined);
     });
     context.openReporterRun = () => opened;
     const onTestCaseResult = rs.fn();
@@ -361,6 +361,7 @@ describe('createRunnerEventSink', () => {
     const order: string[] = [];
     context.openReporterRun = async () => {
       order.push('open');
+      return undefined;
     };
     context.reporters.push({
       onTestFileStart: () => {
