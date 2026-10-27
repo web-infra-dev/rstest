@@ -209,7 +209,7 @@ interface TestRunResult {
 
 The remaining fields (`results`, `testResults`, `summary`, `duration`, `snapshotSummary`, `unhandledErrors`, `coverage`, `rerunTestPaths`) are documented under [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend) in the Reporter API.
 
-`status` is `'error'` when `unhandledErrors` is non-empty. It is `'failed'` when the exit status is non-zero at `onTestRunEnd`, such as from failing tests or test files, a coverage threshold violation, or no tests being found without `passWithNoTests`. In watch mode, it is also `'failed'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'passed'`. Later teardown failures do not change the captured status.
+`status` is `'error'` when `unhandledErrors` is non-empty. It is `'failed'` when the exit status is non-zero at `onTestRunEnd`, such as from failing tests or test files, a coverage threshold violation, or no tests being found without `passWithNoTests`. In watch mode, it is also `'failed'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'passed'`. The `onTestRunEnd` payload keeps the status it was dispatched with; if a later global teardown error (or a closing reporter hook) raises the exit status, the result resolved by `run()` reports `'failed'` instead, so embedded callers still observe the failure.
 
 Every entry in `unhandledErrors` is a plain object that can be serialized to JSON, not an `Error` instance.
 
