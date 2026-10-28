@@ -1,0 +1,122 @@
+---
+description: 了解 Rstest 如何处理模块副作用、sideEffects 声明和初始化导入，以及如何避免注册代码被优化移除。
+---
+
+# 模块副作用 \{#module-side-effects}
+
+Rstest 使用 Rspack 打包测试代码，可以在构建阶段跳过未使用的模块，减少需要构建和执行的依赖。像 lazyBarrel 这样的优化能加快测试启动，但前提是被跳过的模块没有必须执行的初始化代码。
+
+`sideEffects` 声明告诉构建工具哪些模块的执行可以被跳过。本页介绍它与模块副作用、lazyBarrel 的关系，以及如何保留测试需要的初始化代码。
+
+## 什么是模块副作用 \{#what-counts-as-a-side-effect}
+
+模块加载时，除了提供导出值，还会改变外部状态的行为，就是这里所说的副作用。例如：
+
+```ts title="test/register-mocks.ts"
+import { rs } from '@rstest/core';
+
+rs.mock('../src/api', () => ({
+  fetchUser: () => ({ name: 'Alice' }),
+}));
+```
+
+这个模块没有导出值，但执行它会注册 mock。其他常见的副作用还包括修改全局变量、安装 polyfill 和注册事件监听器。
+
+下面的 bare import 用来执行模块的初始化代码：
+
+```ts title="test/user.test.ts"
+import './register-mocks';
+```
+
+## sideEffects 如何影响模块执行 \{#how-sideeffects-affects-module-execution}
+
+`package.json` 中的 `sideEffects: false` 告诉 bundler：这个包中的文件可以在不使用其导出值时跳过执行。
+
+```json title="package.json"
+{
+  "name": "my-project",
+  "sideEffects": false
+}
+```
+
+启用相应优化后，即使源码写了 `import './register-mocks'`，这个导入仍可能被移除。`sideEffects` 是构建工具会信任的声明；文件中实际包含注册代码，并不意味着它一定会被保留。
+
+详见 Rspack 的 [tree shaking 文档](https://rspack.rs/zh/guide/optimization/tree-shaking)。
+
+## lazyBarrel 与 sideEffects 的关系 \{#how-lazybarrel-relates-to-sideeffects}
+
+barrel 文件是集中重导出其他模块的入口，例如：
+
+```ts title="src/utils/index.ts"
+export { sum } from './sum';
+export { formatDate } from './format-date';
+```
+
+```ts title="test/sum.test.ts"
+import { expect, test } from '@rstest/core';
+import { sum } from '../src/utils';
+
+test('sum', () => {
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
+当 barrel 声明为无副作用时，lazyBarrel 可以根据使用的导出，只构建需要的重导出分支。这个例子中，`format-date.ts` 分支可以被跳过，从而省下它及其依赖的构建开销。
+
+**`sideEffects` 是模块的声明，lazyBarrel 是利用这个声明的优化。** lazyBarrel 在构建早期就要决定跳过哪些分支，因此依赖 `package.json` 或 `module.rules` 中的显式声明，无需先构建整条依赖链来分析副作用。
+
+如果被跳过的分支中实际包含初始化代码，错误的 `sideEffects: false` 声明就会让这些代码不执行。应为这些模块及必要的中间导入模块正确声明副作用。
+
+此外，Rspack 还可以跳过声明为无副作用的 bare import 的构建，例如 `import './register-mocks'`。这是相关的独立优化，不属于 lazyBarrel；即使没有 barrel 文件，错误的声明也可能让初始化导入被跳过。
+
+详见 Rspack 的 [barrel 文件优化](https://rspack.rs/zh/guide/advanced/lazy-barrel)。
+
+## 声明需要执行的模块 \{#declare-modules-with-side-effects}
+
+### 在 package.json 中声明 \{#declare-side-effects-in-packagejson}
+
+如果包中大部分文件没有副作用，可以用数组列出需要保留初始化的文件：
+
+```json title="package.json"
+{
+  "name": "my-project",
+  "sideEffects": ["./src/polyfills.ts", "./test/support/**"]
+}
+```
+
+路径相对于这个 `package.json`。数组以外的文件仍然按无副作用处理。修改已有数组时，要保留其中其他仍有副作用的文件。
+
+如果初始化通过多层导入触发，例如 `test → bootstrap → helper → register-mocks`，需要确保路径上的中间模块也不会被跳过。只把最后的注册模块标为有副作用，可能仍无法保留整条导入链。将这类文件集中到 `test/support` 目录，再按目录声明，是一种方便维护的方式。
+
+### 在 Rstest 配置中声明 \{#declare-side-effects-in-rstest-config}
+
+如果只想调整测试构建，可以通过 [tools.rspack](/config/build/tools) 为指定目录设置 `sideEffects: true`：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      module: {
+        rules: [
+          {
+            test: /[\\/]test[\\/]support[\\/]/,
+            sideEffects: true,
+          },
+        ],
+      },
+    },
+  },
+});
+```
+
+规则匹配的是被导入模块的路径。`sideEffects: true` 表示保留它的副作用；设为 `false` 则允许跳过它。这个配置不会主动加载目录中的所有文件，文件仍然需要被导入。
+
+精确匹配初始化目录，可以继续让其他模块参与 barrel 优化。规则语法详见 Rspack 的 [module.rules](https://rspack.rs/zh/config/module-rules#rulessideeffects)。
+
+## 第三方依赖的范围 \{#third-party-dependencies}
+
+以上优化作用于参与打包的模块。交给 Node.js 在运行时加载的 external 依赖，不会被 Rspack 按这些规则裁剪。
+
+第三方依赖是否参与打包由 [output.bundleDependencies](/config/build/output#outputbundledependencies) 等配置决定。调整打包范围会改变哪些模块受到 `sideEffects` 声明影响。

@@ -1,0 +1,122 @@
+---
+description: Learn how Rstest handles module side effects, sideEffects declarations, and initialization imports, and how to prevent registration code from being optimized away.
+---
+
+# Module side effects
+
+Rstest bundles tests with Rspack, which can skip unused modules during the build to reduce the dependencies that need to be built and executed. Optimizations such as lazyBarrel speed up test startup, provided the skipped modules contain no required initialization code.
+
+The `sideEffects` declaration tells build tools which modules can be skipped. This page explains its relationship to module side effects and lazyBarrel, and how to retain initialization that your tests need.
+
+## What counts as a side effect
+
+A side effect here is a change to external state when a module loads, beyond providing exported values. For example:
+
+```ts title="test/register-mocks.ts"
+import { rs } from '@rstest/core';
+
+rs.mock('../src/api', () => ({
+  fetchUser: () => ({ name: 'Alice' }),
+}));
+```
+
+This module exports nothing, but evaluating it registers a mock. Other common side effects include modifying globals, installing polyfills, and registering event listeners.
+
+The following bare import runs the module's initialization code:
+
+```ts title="test/user.test.ts"
+import './register-mocks';
+```
+
+## How sideEffects affects module execution
+
+Setting `sideEffects: false` in `package.json` tells the bundler that files in the package can be skipped when their exports are unused.
+
+```json title="package.json"
+{
+  "name": "my-project",
+  "sideEffects": false
+}
+```
+
+With the relevant optimizations enabled, even an explicit `import './register-mocks'` can be removed. Build tools trust the `sideEffects` declaration; registration code in a file does not guarantee that the file will be retained.
+
+See Rspack's [tree shaking documentation](https://rspack.rs/guide/optimization/tree-shaking).
+
+## How lazyBarrel relates to sideEffects
+
+A barrel file is an entry point that re-exports other modules:
+
+```ts title="src/utils/index.ts"
+export { sum } from './sum';
+export { formatDate } from './format-date';
+```
+
+```ts title="test/sum.test.ts"
+import { expect, test } from '@rstest/core';
+import { sum } from '../src/utils';
+
+test('sum', () => {
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
+With a side-effect-free barrel, lazyBarrel can build only the re-export branches needed by the consumer. Here, it can skip the `format-date.ts` branch and its dependencies.
+
+**`sideEffects` declares module behavior; lazyBarrel uses that declaration to optimize builds.** It relies on explicit package or module-rule declarations to skip branches before building their dependencies.
+
+An incorrect `sideEffects: false` declaration can therefore drop required initialization. Declare side effects for those modules and any necessary intermediate importers.
+
+Rspack can also skip building side-effect-free bare imports such as `import './register-mocks'`. This is a separate related optimization, so initialization can be skipped even without a barrel file.
+
+See Rspack's [barrel file optimization](https://rspack.rs/guide/advanced/lazy-barrel) guide.
+
+## Declare modules with side effects
+
+### Declare side effects in package.json
+
+If most files in a package have no side effects, use an array to list files whose initialization needs to be retained:
+
+```json title="package.json"
+{
+  "name": "my-project",
+  "sideEffects": ["./src/polyfills.ts", "./test/support/**"]
+}
+```
+
+Paths are relative to this `package.json`. Files outside the array are still treated as side-effect-free. When editing an existing array, retain any other files that still have side effects.
+
+If initialization passes through several imports, such as `test → bootstrap → helper → register-mocks`, make sure intermediate modules cannot be skipped either. Marking only the final registration module may not preserve the whole import chain. Keeping these files under `test/support` and declaring that directory is one maintainable approach.
+
+### Declare side effects in Rstest config
+
+To adjust only the test build, use [tools.rspack](/config/build/tools) to set `sideEffects: true` for a specific directory:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      module: {
+        rules: [
+          {
+            test: /[\\/]test[\\/]support[\\/]/,
+            sideEffects: true,
+          },
+        ],
+      },
+    },
+  },
+});
+```
+
+The rule matches the imported module's path. `sideEffects: true` preserves its side effects; `false` allows it to be skipped. This setting does not load every file in the directory: files still need to be imported.
+
+Matching initialization directories precisely lets other modules continue to benefit from barrel optimization. See Rspack's [module.rules](https://rspack.rs/config/module-rules#rulessideeffects) for rule syntax.
+
+## Third-party dependencies
+
+These optimizations apply to bundled modules. External dependencies loaded by Node.js at runtime are not pruned by Rspack under these rules.
+
+Settings such as [output.bundleDependencies](/config/build/output#outputbundledependencies) control whether third-party dependencies are bundled. Changing that scope changes which modules are affected by `sideEffects` declarations.
