@@ -272,11 +272,12 @@ const declaresBuildInput = (
 
 /**
  * Map requested source paths to the modules whose loaders declared them as
- * build inputs. The result is used as extra traversal roots, never as edges of
- * the module graph: a build input affects the module that declared it, not the
- * modules that depend on that module. Concatenated modules expose the inner
- * modules that hold the loader metadata, so the match is attributed to the
- * wrapper that the import edges point at.
+ * build inputs. Each match becomes an extra traversal root for reverse import
+ * reachability; build-input relations are never added as graph edges, otherwise
+ * they would chain with import edges and select consumers that do not actually
+ * read the requested file. Concatenated modules expose the inner modules that
+ * hold the loader metadata, so the match is attributed to the wrapper that the
+ * import edges point at.
  *
  * Only exact file declarations are considered. A directory dependency tells
  * Rspack to watch a directory, not which files under it the loader reads, so
@@ -545,16 +546,13 @@ export async function resolveRelatedTestFiles(
       matchedTestFiles.add(file);
     }
 
+    // Source filters are filesystem paths, not stats identifiers: keep `!`,
+    // `#`, `?` and whitespace that are part of the name. `resolveStatsPathCandidate`
+    // strips those for loader/query identifiers and must not be used here.
     const buildInputSources = new Set(
-      sourceFilters
-        .map((source) =>
-          resolveStatsPathCandidate({
-            candidate: source,
-            projectRoot: context.rootPath,
-          }),
-        )
-        .filter((source): source is string => source !== null)
-        .map(normalizeExactPathMatch),
+      sourceFilters.map((source) =>
+        normalizeExactPathMatch(resolve(context.rootPath, source)),
+      ),
     );
 
     for (const project of context.projects) {
