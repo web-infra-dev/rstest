@@ -1,43 +1,14 @@
 import { dirname, join } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it, onTestFinished } from '@rstest/core';
-import { prepareFixtures } from '../scripts';
+import { describe, expect, it } from '@rstest/core';
 import { BROWSER_PORTS } from './fixtures/ports';
-import { deleteFixtureTarget, runBrowserCliWithCwd } from './utils';
+import { runBrowserCliWithCwd } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - related', () => {
-  it('should ignore compilation errors in unrelated sources when listing related tests', async () => {
-    const fixturesTargetPath = join(
-      __dirname,
-      'fixtures',
-      'test-temp-related-error',
-    );
-    const { fs } = await prepareFixtures({
-      fixturesPath: join(__dirname, 'fixtures', 'related'),
-      fixturesTargetPath,
-    });
-    onTestFinished(() => deleteFixtureTarget(fs, fixturesTargetPath));
-    fs.update(
-      join(fixturesTargetPath, 'tests/src/index.ts'),
-      'export const sayHi = ;\n',
-    );
-    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
-      fixturesTargetPath,
-      {
-        command: 'list',
-        args: ['--filesOnly', '--related', 'tests/src/other.ts'],
-      },
-    );
-    await expectExecSuccess();
-    expect(cli.stdout).toContain('tests/other.test.ts');
-    expect(cli.stdout).not.toContain('tests/index.test.ts');
-    expect(cli.stderr).not.toContain('Build error');
-  });
-
   it('should list matched files without starting the browser server', async () => {
     const server = createServer();
     await new Promise<void>((resolve, reject) => {

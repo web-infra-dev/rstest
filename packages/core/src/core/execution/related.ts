@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { dirname, isAbsolute, normalize, relative, resolve } from 'pathe';
@@ -7,7 +7,7 @@ import type {
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../../types';
-import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
+import { getTestEntries, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
 
@@ -317,14 +317,6 @@ const resolveLocalImportPath = ({
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
 };
 
-const normalizeFsPath = (filePath: string): string => {
-  try {
-    return normalize(realpathSync(filePath));
-  } catch {
-    return normalize(filePath);
-  }
-};
-
 /**
  * Collect the module paths reported by the analysis build errors. Only these
  * test entries lost their module graph edges during the build.
@@ -353,7 +345,6 @@ const collectErrorModulePaths = ({
 
     if (absolutePath) {
       errorModulePaths.add(normalize(absolutePath));
-      errorModulePaths.add(normalizeFsPath(absolutePath));
     }
   }
 
@@ -368,10 +359,7 @@ const recoverTestDependencies = ({
   testPath: string;
   source: string;
   moduleGraph: ModuleGraph;
-}): { recovered: boolean; unresolvedImportCount: number } => {
-  let recovered = false;
-  let unresolvedImportCount = 0;
-
+}): void => {
   for (const specifier of collectStaticImportSpecifiers(
     stripSourceComments(source),
   )) {
@@ -381,13 +369,9 @@ const recoverTestDependencies = ({
     });
 
     if (!resolvedPath) {
-      if (specifier.startsWith('.') || isAbsolute(specifier)) {
-        unresolvedImportCount += 1;
-      }
       continue;
     }
 
-    recovered = true;
     addDependent({
       moduleGraph,
       sourcePath: resolvedPath,
@@ -396,8 +380,6 @@ const recoverTestDependencies = ({
   }
 
   moduleGraph.allSources.add(testPath);
-
-  return { recovered, unresolvedImportCount };
 };
 
 /**
@@ -412,13 +394,7 @@ const recoverMissingTestDependencies = async ({
 }: {
   testPaths: string[];
   moduleGraph: ModuleGraph;
-}): Promise<{
-  recoveredTestCount: number;
-  unresolvedImportCount: number;
-}> => {
-  let recoveredTestCount = 0;
-  let unresolvedImportCount = 0;
-
+}): Promise<void> => {
   const readResults = await Promise.allSettled(
     testPaths.map((testPath) => readFile(testPath, 'utf8')),
   );
@@ -428,19 +404,12 @@ const recoverMissingTestDependencies = async ({
       continue;
     }
 
-    const recovery = recoverTestDependencies({
+    recoverTestDependencies({
       testPath: testPaths[index]!,
       source: result.value,
       moduleGraph,
     });
-
-    if (recovery.recovered) {
-      recoveredTestCount += 1;
-    }
-    unresolvedImportCount += recovery.unresolvedImportCount;
   }
-
-  return { recoveredTestCount, unresolvedImportCount };
 };
 
 const collectReachableDependents = ({
@@ -614,8 +583,6 @@ export async function resolveRelatedTestFiles(
     });
 
     const matchedTestFiles = new Set<string>();
-    let recoveredTestCount = 0;
-    let unresolvedImportCount = 0;
 
     projectEntries = projectEntries.size
       ? projectEntries
@@ -665,26 +632,15 @@ export async function resolveRelatedTestFiles(
           errors,
           projectRoot: project.rootPath,
         });
-        const projectRootIsSymlinked =
-          normalize(project.rootPath) !== normalizeFsPath(project.rootPath);
-        const failedTestPaths = testPaths.filter((testPath) => {
-          if (errorModulePaths.has(normalize(testPath))) {
-            return true;
-          }
-
-          return (
-            projectRootIsSymlinked &&
-            errorModulePaths.has(normalizeFsPath(testPath))
-          );
-        });
+        const failedTestPaths = testPaths.filter((testPath) =>
+          errorModulePaths.has(normalize(testPath)),
+        );
 
         if (failedTestPaths.length) {
-          const recovery = await recoverMissingTestDependencies({
+          await recoverMissingTestDependencies({
             testPaths: failedTestPaths,
             moduleGraph,
           });
-          recoveredTestCount += recovery.recoveredTestCount;
-          unresolvedImportCount += recovery.unresolvedImportCount;
         }
       }
 
@@ -727,12 +683,6 @@ export async function resolveRelatedTestFiles(
           matchedTestFiles.add(testPath);
         }
       }
-    }
-
-    if (unresolvedImportCount > 0) {
-      logger.warn(
-        `Related test selection may be incomplete: recovered dependencies of ${recoveredTestCount} test file(s) that failed to build, but ${unresolvedImportCount} local import(s) could not be resolved.`,
-      );
     }
 
     return Array.from(matchedTestFiles).sort();

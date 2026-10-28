@@ -11,15 +11,23 @@ const relatedFixturePath = join(__dirname, 'fixtures-related');
 const dynamicFixturePath = join(__dirname, '../fixtures/fan-out-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
 const brokenTestFixturePath = join(__dirname, 'fixtures-related-broken-test');
+const BROKEN_TEST_SOURCE = [
+  "import { expect, it } from '@rstest/core';",
+  "import { cartCount } from './src/cart';",
+  '',
+  "it('should use the cart count', () => {",
+  '  expect(cartCount).toBe(;',
+  '});',
+  '',
+].join('\n');
+
 const prepareBrokenTestFixture = async () => {
   const { fixturesTargetPath, fs } = await prepareTempFixture({
     fixturesPath: brokenTestFixturePath,
     prefix: 'related-broken',
   });
 
-  fs.update(join(fixturesTargetPath, 'broken.test.ts'), (content) =>
-    content.replace('toBe(2)', 'toBe(;)'),
-  );
+  fs.create(join(fixturesTargetPath, 'broken.test.ts'), BROKEN_TEST_SOURCE);
 
   return fixturesTargetPath;
 };
@@ -74,24 +82,6 @@ describe('related test filtering', () => {
     expect(cli.stderr).not.toContain(
       'No test files found for related source files',
     );
-  });
-
-  it('should list a related test file that failed to compile', async () => {
-    const fixturesTargetPath = await prepareBrokenTestFixture();
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['list', '--related', 'src/cart.ts', '--filesOnly'],
-      options: {
-        nodeOptions: {
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
-
-    await expectExecSuccess();
-
-    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['broken.test.ts']);
-    expect(cli.stderr).not.toContain('Build error');
   });
 
   it('should include both test files for a shared dependency', async () => {

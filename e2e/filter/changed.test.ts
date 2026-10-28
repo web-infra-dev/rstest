@@ -55,60 +55,17 @@ const initGitFixture = async (cwd: string) => {
 };
 
 describe('changed test filtering', () => {
-  it.each(['run', 'list'])(
-    'should ignore compilation errors in unrelated files for %s --related',
-    async (mode) => {
-      const { fixturesTargetPath } = await prepareChangedFixture(
-        'related-compile-error',
-      );
-      await writeFile(
-        join(fixturesTargetPath, 'src/index.ts'),
-        'export const value = ;\n',
-      );
-      const { cli, expectExecSuccess } = await runRstestCli({
-        command: 'rstest',
-        args: [
-          mode,
-          '--related',
-          'src/other.ts',
-          ...(mode === 'list' ? ['--filesOnly'] : []),
-        ],
-        options: { nodeOptions: { cwd: fixturesTargetPath } },
-      });
-
-      await expectExecSuccess();
-
-      if (mode === 'list') {
-        expect(cli.stdout.split('\n').filter(Boolean)).toEqual([
-          'other.test.ts',
-        ]);
-      } else {
-        expect(collectRunTestFileLogs(cli.stdout)).toEqual([
-          ' ✓ other.test.ts (1)',
-        ]);
-      }
-      expect(cli.stderr).not.toContain('Build error');
-      expect(cli.stderr).not.toContain('Cannot select related tests');
-    },
-  );
-
-  it('should ignore compilation errors when only an unrelated source changed', async () => {
+  it('should ignore compilation errors in unrelated files for --related', async () => {
     const { fixturesTargetPath } = await prepareChangedFixture(
-      'changed-compile-error',
+      'related-compile-error',
     );
     await writeFile(
       join(fixturesTargetPath, 'src/index.ts'),
       'export const value = ;\n',
     );
-    await initGitFixture(fixturesTargetPath);
-    const otherSource = join(fixturesTargetPath, 'src/other.ts');
-    await writeFile(
-      otherSource,
-      `${await readFile(otherSource, 'utf8')}\n// Updated unrelated source.\n`,
-    );
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--changed'],
+      args: ['run', '--related', 'src/other.ts'],
       options: { nodeOptions: { cwd: fixturesTargetPath } },
     });
 

@@ -85,7 +85,7 @@ Rstest resolves related tests from the build module graph, so the same filter wo
 npx rstest run --findRelatedTests src/button.ts
 ```
 
-Compilation errors in files that are unrelated to the requested source do not fail `--related` or `--changed`. If a test file itself fails to compile, its local static imports are recovered from the source so that the test is still selected when it is related; a warning is printed when the recovered dependency graph is incomplete. `passWithNoTests` only permits an empty selection.
+Compilation errors in files that are unrelated to the requested source do not fail `--related` or `--changed`. If a test file itself fails to compile, its local static imports are recovered from the source so that the test is still selected when it is related. `passWithNoTests` only permits an empty selection.
 
 If you only want to inspect the affected test files, combine it with `rstest list`:
 
