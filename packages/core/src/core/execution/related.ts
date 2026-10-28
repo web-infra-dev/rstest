@@ -178,23 +178,6 @@ const normalizeStatsReasonPath = ({
   });
 };
 
-/**
- * Depth-first walk over a module tree, including the inner modules Rspack keeps
- * for a concatenated module. Stops early when `visit` returns true.
- */
-const walkNestedModules = <T extends { modules?: readonly T[] }>(
-  modules: Iterable<T> | undefined,
-  visit: (module: T) => boolean | void,
-): boolean => {
-  for (const module of modules ?? []) {
-    if (visit(module) || walkNestedModules(module.modules, visit)) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
 const collectModuleGraph = ({
   modules,
   projectRoot,
@@ -207,37 +190,43 @@ const collectModuleGraph = ({
   const allSources = new Set<string>();
   const dependentsBySource = new Map<string, Set<string>>();
 
-  walkNestedModules(modules, (module) => {
-    const sourcePath = normalizeStatsModulePath({
-      module,
-      projectRoot,
-      virtualModulePaths,
-    });
-
-    if (!sourcePath) {
-      return;
-    }
-
-    allSources.add(sourcePath);
-
-    for (const reason of module.reasons || []) {
-      const dependentPath = normalizeStatsReasonPath({
-        reason,
+  const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
+    for (const module of statsModules || []) {
+      const sourcePath = normalizeStatsModulePath({
+        module,
         projectRoot,
         virtualModulePaths,
       });
 
-      if (!dependentPath) {
-        continue;
+      if (sourcePath) {
+        allSources.add(sourcePath);
+
+        for (const reason of module.reasons || []) {
+          const dependentPath = normalizeStatsReasonPath({
+            reason,
+            projectRoot,
+            virtualModulePaths,
+          });
+
+          if (!dependentPath) {
+            continue;
+          }
+
+          allSources.add(dependentPath);
+
+          const dependents = dependentsBySource.get(sourcePath) || new Set();
+          dependents.add(dependentPath);
+          dependentsBySource.set(sourcePath, dependents);
+        }
       }
 
-      allSources.add(dependentPath);
-
-      const dependents = dependentsBySource.get(sourcePath) || new Set();
-      dependents.add(dependentPath);
-      dependentsBySource.set(sourcePath, dependents);
+      if (module.modules?.length) {
+        visitModules(module.modules);
+      }
     }
-  });
+  };
+
+  visitModules(modules);
 
   return {
     allSources,
@@ -251,7 +240,7 @@ const collectModuleGraph = ({
  * dependencies of the module but never become modules themselves, so the
  * module graph built from stats cannot see them.
  */
-export type BuildInputModule = {
+type BuildInputModule = {
   nameForCondition?: () => string | undefined;
   buildInfo?: {
     fileDependencies?: Iterable<string>;
@@ -260,31 +249,26 @@ export type BuildInputModule = {
   modules?: readonly BuildInputModule[];
 };
 
-const includesDeclaredInput = (
-  dependencies: Iterable<string> | undefined,
-  exactSources: ReadonlySet<string>,
+const declaresBuildInput = (
+  module: BuildInputModule,
+  sources: ReadonlySet<string>,
 ): boolean => {
-  for (const dependency of dependencies ?? []) {
-    if (exactSources.has(normalizeExactPathMatch(dependency))) {
-      return true;
+  const { fileDependencies, missingDependencies } = module.buildInfo ?? {};
+
+  for (const dependencies of [fileDependencies, missingDependencies]) {
+    for (const dependency of dependencies ?? []) {
+      if (sources.has(normalizeExactPathMatch(dependency))) {
+        return true;
+      }
     }
   }
 
-  return false;
+  // Concatenation keeps the loader metadata on the inner modules, while imports
+  // point at the wrapper.
+  return (module.modules ?? []).some((innerModule) =>
+    declaresBuildInput(innerModule, sources),
+  );
 };
-
-const declaresBuildInput = (
-  module: BuildInputModule,
-  exactSources: ReadonlySet<string>,
-): boolean =>
-  walkNestedModules([module], (current) => {
-    const { fileDependencies, missingDependencies } = current.buildInfo ?? {};
-
-    return (
-      includesDeclaredInput(fileDependencies, exactSources) ||
-      includesDeclaredInput(missingDependencies, exactSources)
-    );
-  });
 
 /**
  * Map requested source paths to the modules whose loaders declared them as
@@ -299,7 +283,7 @@ const declaresBuildInput = (
  * expanding it to `directory + every file` would invent dependencies the build
  * never declared.
  */
-export const collectBuildInputConsumers = ({
+const collectBuildInputConsumers = ({
   modules,
   sources,
   projectRoot,
