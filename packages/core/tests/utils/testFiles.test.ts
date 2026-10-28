@@ -194,4 +194,15 @@ test('filterProjects', () => {
       relativeRoot: 'example/react',
     },
   ]);
+
+  // A negated name excludes only that project, not the names it prefixes.
+  const prefixedProjects = [
+    { config: { name: 'node' }, relativeRoot: 'packages/node' },
+    { config: { name: 'node-legacy' }, relativeRoot: 'packages/node-legacy' },
+  ];
+  expect(
+    filterProjects(prefixedProjects, {
+      project: ['!node'],
+    }),
+  ).toEqual([prefixedProjects[1]]);
 });
