@@ -6,7 +6,7 @@ import type {
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../../types';
-import { getTestEntries, normalizeExactPathMatch } from '../../utils';
+import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
 
@@ -316,6 +316,40 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
   },
 });
 
+/**
+ * Collect the module paths reported by the analysis build errors. Test files
+ * in this set could not be analyzed, so they cannot be matched reliably.
+ */
+const collectErrorModulePaths = ({
+  errors,
+  projectRoot,
+}: {
+  errors:
+    readonly { moduleIdentifier?: string; moduleName?: string }[] | undefined;
+  projectRoot: string;
+}): Set<string> => {
+  const errorModulePaths = new Set<string>();
+
+  for (const error of errors || []) {
+    const candidate = error.moduleIdentifier || error.moduleName;
+
+    if (!candidate) {
+      continue;
+    }
+
+    const absolutePath = resolveStatsPathCandidate({
+      candidate,
+      projectRoot,
+    });
+
+    if (absolutePath) {
+      errorModulePaths.add(normalize(absolutePath));
+    }
+  }
+
+  return errorModulePaths;
+};
+
 const collectDirectlyMatchedFiles = ({
   files,
   sourceFilters,
@@ -390,6 +424,7 @@ export async function resolveRelatedTestFiles(
       targetProjects: context.projects,
       exposeRstestAPIProjects: context.projects,
       extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      logLevel: 'silent',
       getSetupFileProjects: () => ({
         setupProjects: context.projects,
         globalSetupProjects: context.projects,
@@ -404,6 +439,8 @@ export async function resolveRelatedTestFiles(
     });
 
     const matchedTestFiles = new Set<string>();
+    let failedTestFileCount = 0;
+
     projectEntries = projectEntries.size
       ? projectEntries
       : await collectProjectEntries(context);
@@ -425,9 +462,11 @@ export async function resolveRelatedTestFiles(
 
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
-      const { modules } = stats.toJson({
+      const analysisHasErrors = stats.hasErrors();
+      const { modules, errors } = stats.toJson({
         all: false,
         modules: true,
+        errors: true,
         nestedModules: true,
         reasons: true,
       });
@@ -444,6 +483,17 @@ export async function resolveRelatedTestFiles(
       const testPaths = Object.values(
         projectEntries.get(project.environmentName) || {},
       );
+
+      if (analysisHasErrors) {
+        const errorModulePaths = collectErrorModulePaths({
+          errors,
+          projectRoot: project.rootPath,
+        });
+        failedTestFileCount += testPaths.filter((testPath) =>
+          errorModulePaths.has(normalize(testPath)),
+        ).length;
+      }
+
       const setupPaths = Object.values(
         setupFileState.setupFiles[project.environmentName] || {},
       );
@@ -483,6 +533,12 @@ export async function resolveRelatedTestFiles(
           matchedTestFiles.add(testPath);
         }
       }
+    }
+
+    if (failedTestFileCount > 0) {
+      logger.warn(
+        `Related test selection may be incomplete: ${failedTestFileCount} test file(s) failed to build and could not be analyzed.`,
+      );
     }
 
     return Array.from(matchedTestFiles).sort();

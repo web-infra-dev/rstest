@@ -35,13 +35,7 @@ test('returns the fetched user name', async () => {
 });
 ```
 
-将 mock 注册放在单独的模块中时，请在测试文件或配置的 `setupFiles` 入口中直接导入它：
-
-```ts
-import './register-mocks';
-```
-
-即使导入模块所属的包声明了 `sideEffects: false`，Rstest 也会保留这些直接的副作用导入。这既适用于本地模块，也适用于参与打包的第三方模块。保护范围不会递归扩展到 helper 内部的导入，也不会改变其他测试对同一模块的具名导入优化。间接导入的注册模块仍需声明为有副作用。
+将 mock 注册放在单独模块中时，可以在测试文件或配置的 `setupFiles` 入口中通过 `import './register-mocks'` 直接导入。Rstest 会保留这类直接导入；helper 内部的间接导入若被声明为无副作用，仍需正确配置。详见[测试和 setup 文件的直接导入](/guide/advanced/side-effects#direct-imports-in-test-and-setup-files)。
 
 #### 使用 `rs.doMock()`
 

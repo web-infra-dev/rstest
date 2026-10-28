@@ -6,6 +6,10 @@ description: Common Rstest troubleshooting notes for migration and runtime diffe
 
 This page explains common problems that come from Rstest's execution model. They are often not test failures caused by your assertions, but differences between Rstest, Jest, Vitest, and native Node.js runtime behavior.
 
+## Initialization or mock registration does not run
+
+If a polyfill, plugin registration, or mock registration in a separate file does not run, check whether the project or dependency package marks the imported module or an intermediate importer as side-effect-free through `sideEffects: false`, a `sideEffects` array, or module rules. See [Module side effects](/guide/advanced/side-effects) for declarations and import-chain examples.
+
 ## Code outside the bundle graph uses native Node.js behavior
 
 Rstest runs tests with a bundle-based execution model. Files that are part of the bundle graph are transformed by Rstest's build pipeline, so TypeScript, JSX, aliases, and selected dependency transforms can work before the test worker executes them.
