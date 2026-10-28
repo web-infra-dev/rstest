@@ -8,7 +8,7 @@ This page explains common problems that come from Rstest's execution model. They
 
 ## Initialization or mock registration does not run
 
-If a polyfill, plugin registration, or mock registration in a separate file does not run, check whether `sideEffects: false` allows the imported module or an intermediate importer to be skipped. See [Module side effects](/guide/advanced/side-effects) for declarations and import-chain examples.
+If a polyfill, plugin registration, or mock registration in a separate file does not run, check whether the project or dependency package marks the imported module or an intermediate importer as side-effect-free through `sideEffects: false`, a `sideEffects` array, or module rules. See [Module side effects](/guide/advanced/side-effects) for declarations and import-chain examples.
 
 ## Code outside the bundle graph uses native Node.js behavior
 

@@ -8,7 +8,7 @@ description: Rstest 常见问题排查，包括迁移和运行时差异。
 
 ## 初始化或 mock 注册没有执行 \{#initialization-or-mock-registration-does-not-run}
 
-如果 polyfill、插件注册或单独文件中的 mock 注册没有执行，请检查 `sideEffects: false` 是否让被导入模块或导入链中的中间模块被跳过。声明方式和导入链示例见[模块副作用](/guide/advanced/side-effects)。
+如果 polyfill、插件注册或单独文件中的 mock 注册没有执行，请检查项目或依赖包是否通过 `sideEffects: false`、`sideEffects` 数组或模块规则，将被导入模块或导入链中的中间模块标记为无副作用。声明方式和导入链示例见[模块副作用](/guide/advanced/side-effects)。
 
 ## Bundle graph 之外的代码使用 Node.js 原生行为
 

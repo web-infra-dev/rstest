@@ -39,7 +39,7 @@ Setting `sideEffects: false` in `package.json` tells the bundler that files in t
 }
 ```
 
-With the relevant optimizations enabled, even an explicit `import './register-mocks'` can be removed. Build tools trust the `sideEffects` declaration; registration code in a file does not guarantee that the file will be retained.
+When this declaration applies to the registration module and the relevant optimizations are enabled, even an explicit `import './register-mocks'` can be removed. Build tools trust the `sideEffects` declaration; registration code in a file does not guarantee that the file will be retained.
 
 See Rspack's [tree shaking documentation](https://rspack.rs/guide/optimization/tree-shaking).
 
@@ -84,9 +84,11 @@ See Rspack's [barrel file optimization](https://rspack.rs/guide/advanced/lazy-ba
 
 ## Declare modules with side effects
 
+Only adjust these declarations when initialization modules have been incorrectly marked as side-effect-free. Omitting `sideEffects` is not equivalent to setting `sideEffects: false`. Using Rstest or putting registration code in a separate file does not by itself require additional side-effect configuration.
+
 ### Declare side effects for a package
 
-If most files in a package have no side effects, use an array to list files whose initialization needs to be retained:
+If your project declares `sideEffects: false` but some files need to run initialization, replace it with an array listing those files:
 
 ```json title="package.json"
 {
@@ -97,11 +99,11 @@ If most files in a package have no side effects, use an array to list files whos
 
 Paths are relative to this `package.json`. Files outside the array are still treated as side-effect-free. When editing an existing array, retain any other files that still have side effects.
 
-If initialization passes through several imports, such as `test → bootstrap → helper → register-mocks`, make sure intermediate modules cannot be skipped either. Marking only the final registration module may not preserve the whole import chain. Keeping these files under `test/support` and declaring that directory is one maintainable approach.
+With the array declaration above, if initialization passes through several imports, such as `test → bootstrap → helper → register-mocks`, make sure intermediate modules cannot be skipped either. Marking only the final registration module may not preserve the whole import chain. Keeping these files under `test/support` and declaring that directory is one maintainable approach.
 
 ### Declare side effects in Rstest config
 
-To adjust only the test build, use [tools.rspack](/config/build/tools) to set `sideEffects: true` for a specific directory:
+To override side-effect-free declarations only in the test build, use [tools.rspack](/config/build/tools) to set `sideEffects: true` for a specific directory:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

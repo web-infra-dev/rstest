@@ -39,7 +39,7 @@ import './register-mocks';
 }
 ```
 
-启用相应优化后，即使源码写了 `import './register-mocks'`，这个导入仍可能被移除。`sideEffects` 是构建工具会信任的声明；文件中实际包含注册代码，并不意味着它一定会被保留。
+当这个声明适用于注册模块，且启用相应优化时，即使源码写了 `import './register-mocks'`，这个导入仍可能被移除。`sideEffects` 是构建工具会信任的声明；文件中实际包含注册代码，并不意味着它一定会被保留。
 
 详见 Rspack 的 [tree shaking 文档](https://rspack.rs/zh/guide/optimization/tree-shaking)。
 
@@ -84,9 +84,11 @@ test('sum', () => {
 
 ## 声明需要执行的模块 \{#declare-modules-with-side-effects}
 
+只有初始化模块被错误地标记为无副作用时，才需要修正相关声明。未设置 `sideEffects` 不等于设置了 `sideEffects: false`，无需仅因为使用 Rstest 或把注册代码放在单独文件中，就额外添加副作用配置。
+
 ### 在 package.json 中声明 \{#declare-side-effects-for-a-package}
 
-如果包中大部分文件没有副作用，可以用数组列出需要保留初始化的文件：
+如果项目原来声明了 `sideEffects: false`，但部分文件需要执行初始化，可以改用数组列出这些文件：
 
 ```json title="package.json"
 {
@@ -97,11 +99,11 @@ test('sum', () => {
 
 路径相对于这个 `package.json`。数组以外的文件仍然按无副作用处理。修改已有数组时，要保留其中其他仍有副作用的文件。
 
-如果初始化通过多层导入触发，例如 `test → bootstrap → helper → register-mocks`，需要确保路径上的中间模块也不会被跳过。只把最后的注册模块标为有副作用，可能仍无法保留整条导入链。将这类文件集中到 `test/support` 目录，再按目录声明，是一种方便维护的方式。
+在上述数组声明下，如果初始化通过多层导入触发，例如 `test → bootstrap → helper → register-mocks`，需要确保路径上的中间模块也不会被跳过。只把最后的注册模块标为有副作用，可能仍无法保留整条导入链。将这类文件集中到 `test/support` 目录，再按目录声明，是一种方便维护的方式。
 
 ### 在 Rstest 配置中声明 \{#declare-side-effects-in-rstest-config}
 
-如果只想调整测试构建，可以通过 [tools.rspack](/config/build/tools) 为指定目录设置 `sideEffects: true`：
+如果只想在测试构建中覆盖无副作用声明，可以通过 [tools.rspack](/config/build/tools) 为指定目录设置 `sideEffects: true`：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

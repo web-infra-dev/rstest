@@ -35,7 +35,7 @@ test('returns the fetched user name', async () => {
 });
 ```
 
-将 mock 注册放在单独模块中时，需要声明模块副作用，避免注册代码被构建优化移除。配置方式详见[模块副作用](/guide/advanced/side-effects)。
+将 mock 注册放在单独模块中时，如果项目声明了 `sideEffects: false`，需要将注册模块标记为有副作用，避免注册代码被构建优化移除。配置方式详见[模块副作用](/guide/advanced/side-effects)。
 
 #### 使用 `rs.doMock()`
 
