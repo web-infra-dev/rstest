@@ -85,8 +85,6 @@ Rstest 会基于构建得到的 module graph 解析相关测试，因此同一�
 npx rstest run --findRelatedTests src/button.ts
 ```
 
-选择逻辑也会追踪 loader 声明的精确文件依赖和缺失文件依赖，例如样式表引用的 Sass partial。仅声明为目录的依赖不会被展开成具体文件；使用 `--changed` 时，可将这些输入加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)。
-
 与请求源无关的文件出现编译错误时，`--related` 和 `--changed` 不会失败退出。如果测试文件自身编译失败，Rstest 无法分析它的依赖，可能漏选并打印警告。`passWithNoTests` 只允许选择结果为空。
 
 如果你只想查看受影响的测试文件，可以配合 `rstest list` 使用：

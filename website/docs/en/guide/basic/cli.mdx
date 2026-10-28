@@ -85,8 +85,6 @@ Rstest resolves related tests from the build module graph, so the same filter wo
 npx rstest run --findRelatedTests src/button.ts
 ```
 
-Selection also follows the exact file and missing-file dependencies that loaders declare, such as the Sass partials imported by a stylesheet. Directory-only dependencies are not expanded into their files; with `--changed`, add those inputs to [`forceRerunTriggers`](/config/test/force-rerun-triggers) instead.
-
 Compilation errors in files that are unrelated to the requested source do not fail `--related` or `--changed`. If a test file itself fails to compile it cannot be analyzed, so it may be missed by the selection and a warning is printed. `passWithNoTests` only permits an empty selection.
 
 If you only want to inspect the affected test files, combine it with `rstest list`:
