@@ -205,7 +205,7 @@ export class TestRunner {
   }): Promise<TestFileResult> {
     this.workerState = state;
     const {
-      runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail },
+      runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail, sequence },
       project,
     } = state;
     const results: TestResult[] = [];
@@ -531,9 +531,7 @@ export class TestRunner {
 
       test.startTime = undefined;
 
-      const afterEachFns = [...(parentHooks.afterEachListeners || [])]
-        .reverse()
-        .concat(cleanups);
+      const afterEachFns = parentHooks.afterEachListeners.concat(cleanups);
 
       test.context.task.result = result;
       for (const fn of afterEachFns) {
@@ -757,18 +755,26 @@ export class TestRunner {
               markAllTestAsSkipped(test.tests);
             }
 
+            // Keep child-suite teardown before parent teardown in both modes.
+            const afterEachListeners = [...(test.afterEachListeners || [])];
+            if (sequence.hooks === 'stack') {
+              afterEachListeners.reverse();
+            }
+
             const results = await runTests(test.tests, {
               beforeEachListeners: parentHooks.beforeEachListeners.concat(
                 test.beforeEachListeners || [],
               ),
-              afterEachListeners: parentHooks.afterEachListeners.concat(
-                test.afterEachListeners || [],
+              afterEachListeners: afterEachListeners.concat(
+                parentHooks.afterEachListeners,
               ),
             });
 
-            const afterAllFns = [...(test.afterAllListeners || [])]
-              .reverse()
-              .concat(cleanups);
+            const afterAllListeners = [...(test.afterAllListeners || [])];
+            if (sequence.hooks === 'stack') {
+              afterAllListeners.reverse();
+            }
+            const afterAllFns = afterAllListeners.concat(cleanups);
 
             if (shouldRunSuiteHooks && afterAllFns.length) {
               try {

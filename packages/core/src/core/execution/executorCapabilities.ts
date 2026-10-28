@@ -47,6 +47,7 @@ export const executorCapabilities: Record<
   testEnvironment: { node: 'supported', browser: 'stripped' },
   isolate: { node: 'supported', browser: 'supported' },
   hookTimeout: { node: 'supported', browser: 'supported' },
+  sequence: { node: 'supported', browser: 'supported' },
   // Browser coverage is host-wired, not client-read.
   coverage: { node: 'supported', browser: 'stripped' },
   snapshotFormat: { node: 'supported', browser: 'supported' },

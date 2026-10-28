@@ -23,6 +23,7 @@ describe('snapshot lifecycle hooks', () => {
       rootPath: process.cwd(),
       runtimeConfig: {
         passWithNoTests: true,
+        sequence: { hooks: 'stack' },
       } as RuntimeConfig,
       taskId: 0,
       buildId: 0,

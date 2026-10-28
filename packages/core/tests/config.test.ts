@@ -29,6 +29,21 @@ describe('mergeRstestConfig', () => {
     expect(merged).toMatchSnapshot();
   });
 
+  it('defaults hook order and preserves overrides through config merging', () => {
+    expect(withDefaultConfig({}).sequence).toEqual({ hooks: 'stack' });
+    expect(withDefaultConfig({ sequence: {} }).sequence).toEqual({
+      hooks: 'stack',
+    });
+    expect(
+      withDefaultConfig(
+        mergeRstestConfig(
+          { sequence: { hooks: 'stack' } },
+          { sequence: { hooks: 'list' } },
+        ),
+      ).sequence,
+    ).toEqual({ hooks: 'list' });
+  });
+
   it('should handle globalSetup array conversion', () => {
     const merged = withDefaultConfig({
       globalSetup: './single-global-setup.ts',
