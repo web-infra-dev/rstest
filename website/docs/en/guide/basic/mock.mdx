@@ -35,6 +35,14 @@ test('returns the fetched user name', async () => {
 });
 ```
 
+When sharing mock registration through a module, import it directly from a test file or a configured `setupFiles` entry:
+
+```ts
+import './register-mocks';
+```
+
+Rstest preserves these direct side-effect imports even if the imported package declares `sideEffects: false`. This applies to local modules and bundled third-party modules. It does not recursively preserve imports inside helpers, or change how other tests optimize named imports of the same module. Indirect registration modules must still be declared as having side effects.
+
 #### Use `rs.doMock()`
 
 Note that `rs.doMock()` is not hoisted and only takes effect after it runs. It is useful when earlier `import` statements should keep the real implementation and later ones should use the mock.

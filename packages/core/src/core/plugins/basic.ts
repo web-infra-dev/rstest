@@ -32,9 +32,10 @@ require.cache = __rstest_native_require.cache;
 require.extensions = __rstest_native_require.extensions;
 `;
 
-export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
-  context,
-) => ({
+export const pluginBasic: (
+  context: InternalContext,
+  getTestAndSetupFiles?: (environmentName: string) => Promise<string[]>,
+) => RsbuildPlugin = (context, getTestAndSetupFiles) => ({
   name: 'rstest:basic',
   setup: (api) => {
     api.modifyBundlerChain((chain, { CHAIN_ID }) => {
@@ -191,7 +192,12 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
               }
 
               const rstestPluginOptions = {
-                ...getMockRstestPluginOptions({ rootPath }),
+                ...getMockRstestPluginOptions({
+                  rootPath,
+                  preserveSideEffectImports: getTestAndSetupFiles
+                    ? () => getTestAndSetupFiles(project.environmentName)
+                    : undefined,
+                }),
                 // The runtime hook below resolves relative dynamic-import
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #1207.

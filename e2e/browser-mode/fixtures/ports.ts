@@ -69,6 +69,7 @@ export const BROWSER_PORTS = {
   'browser-global-setup-empty-watch': 5296,
   'browser-federation-global-setup': 5298,
   'browser-federation-global-setup-remote': 5300,
+  'bare-imports': 5302,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);
