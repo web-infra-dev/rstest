@@ -268,7 +268,11 @@ export const buildPackageManagerReproCommand = (
   const args = ['rstest', relativePath];
 
   if (includeTestName && fullName) {
-    args.push('--testNamePattern', fullName);
+    // `--testNamePattern` is a RegExp, so escape the name to match it literally.
+    args.push(
+      '--testNamePattern',
+      fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    );
   }
 
   const resolved = resolveCommand(agent, 'execute-local', args);
