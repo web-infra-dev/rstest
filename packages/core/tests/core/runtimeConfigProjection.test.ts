@@ -19,6 +19,7 @@ const baseNormalizedConfig = {
   disableConsoleIntercept: false,
   testEnvironment: { name: 'node' },
   hookTimeout: 10000,
+  sequence: { hooks: 'list' },
   isolate: true,
   coverage: { enabled: false, reporters: [] as unknown[] },
   snapshotFormat: {},
@@ -41,6 +42,16 @@ const makeProject = (
   }) as unknown as InternalProjectContext;
 
 describe('projectRuntimeConfig', () => {
+  it('preserves hook order for node and browser workers', () => {
+    const project = makeProject();
+    expect(
+      projectRuntimeConfig(project, { envMode: 'inherit' }).sequence,
+    ).toEqual({ hooks: 'list' });
+    expect(
+      projectRuntimeConfig(project, { envMode: 'static' }).sequence,
+    ).toEqual({ hooks: 'list' });
+  });
+
   it('preserves federation mode for node and browser workers', () => {
     const project = makeProject({ federation: true });
 

@@ -27,7 +27,7 @@ beforeAll(async (ctx) => {
 });
 ```
 
-`beforeAll` 也支持返回一个函数，在所有测试之后运行，用于清理操作（等价于 `afterAll`）：
+`beforeAll` 也支持返回一个清理函数，在所属 suite 的 `afterAll` Hook 之后运行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 配置：
 
 ```ts
 import { beforeAll } from '@rstest/core';
@@ -79,7 +79,7 @@ beforeEach(async () => {
 });
 ```
 
-`beforeEach` 也支持返回一个函数，在每个测试之后运行，用于清理操作（等价于 `afterEach`）：
+`beforeEach` 也支持返回一个清理函数，在该测试的所有 `afterEach` Hook 之后运行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 配置：
 
 ```ts
 import { beforeEach } from '@rstest/core';

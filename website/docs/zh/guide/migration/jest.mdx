@@ -293,6 +293,8 @@ Rstest 不支持 `done` 回调。作为替代，你可以返回一个 Promise �
 
 ### Hooks
 
+Rstest 默认按声明的逆序执行 `afterEach` 和 `afterAll` Hook。设置 [`sequence.hooks: 'list'`](/config/test/sequence) 后，每个 suite 内的 Hook 会按声明顺序执行，与 Jest 一致。如果多个库的清理逻辑有先后依赖，例如需要先卸载组件再重置 store，可以使用此选项。
+
 Rstest 中 `beforeEach` 和 `beforeAll` 钩子的返回函数用于执行测试后的清理工作。
 
 ```diff

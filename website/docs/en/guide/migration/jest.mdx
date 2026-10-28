@@ -293,6 +293,8 @@ If you need to handle errors, you can modify it as follows:
 
 ### Hooks
 
+Rstest runs `afterEach` and `afterAll` hooks in reverse declaration order by default. Set [`sequence.hooks: 'list'`](/config/test/sequence) to run hooks within each suite in declaration order, matching Jest. This matters when one library's cleanup must run before another, such as unmounting components before resetting stores.
+
 The return functions of the `beforeEach` and `beforeAll` hooks in Rstest are used to perform cleaning work after testing.
 
 ```diff

@@ -27,7 +27,7 @@ beforeAll(async (ctx) => {
 });
 ```
 
-`beforeAll` also supports returning a function that runs after all tests for cleanup (equivalent to `afterAll`):
+`beforeAll` also supports returning a cleanup function. It runs after the suite's `afterAll` hooks, in the order configured by [`sequence.hooks`](/config/test/sequence#sequencehooks):
 
 ```ts
 import { beforeAll } from '@rstest/core';
@@ -79,7 +79,7 @@ beforeEach(async () => {
 });
 ```
 
-`beforeEach` also supports returning a function that runs after each test for cleanup (equivalent to `afterEach`):
+`beforeEach` also supports returning a cleanup function. It runs after all `afterEach` hooks for the test, in the order configured by [`sequence.hooks`](/config/test/sequence#sequencehooks):
 
 ```ts
 import { beforeEach } from '@rstest/core';

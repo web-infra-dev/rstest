@@ -6,8 +6,8 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-it('cleanup function should be invoked in the correct order', async () => {
-  const { cli } = await runRstestCli({
+it('cleanup functions should run in reverse setup order by default', async () => {
+  const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'cleanup.test'],
     options: {
@@ -17,28 +17,28 @@ it('cleanup function should be invoked in the correct order', async () => {
     },
   });
 
-  await cli.exec;
+  await expectExecSuccess();
   const logs = cli.stdout.split('\n').filter(Boolean);
 
   expect(
     logs.filter((log) => log.startsWith('[before') || log.startsWith('[after')),
   ).toEqual([
-    '[beforeEach] cleanup root',
     '[beforeEach] cleanup in level A',
+    '[beforeEach] cleanup root',
 
-    '[beforeEach] cleanup root',
     '[beforeEach] cleanup in level A',
+    '[beforeEach] cleanup root',
     '[beforeAll] cleanup in level B-A',
 
-    '[beforeEach] cleanup root',
     '[beforeEach] cleanup in level A',
+    '[beforeEach] cleanup root',
     '[beforeAll] cleanup in level B-B',
 
     '[beforeAll] cleanup in level A',
 
     '[afterAll] root',
-    '[beforeAll] cleanup root',
     '[beforeAll] cleanup root1',
+    '[beforeAll] cleanup root',
   ]);
 });
 

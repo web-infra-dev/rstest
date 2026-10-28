@@ -80,6 +80,7 @@ export type RuntimeConfig = Pick<
   | 'federation'
   | 'isolate'
   | 'hookTimeout'
+  | 'sequence'
   | 'coverage'
   | 'snapshotFormat'
   | 'expect'
