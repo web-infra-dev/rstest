@@ -28,7 +28,7 @@ rs.mock('../src/api', () => ({
 import './register-mocks';
 ```
 
-## sideEffects 如何影响模块执行 \{#how-sideeffects-affects-module-execution}
+## sideEffects 如何影响模块执行 \{#how-side-effect-declarations-affect-module-execution}
 
 `package.json` 中的 `sideEffects: false` 告诉 bundler：这个包中的文件可以在不使用其导出值时跳过执行。
 
@@ -43,7 +43,7 @@ import './register-mocks';
 
 详见 Rspack 的 [tree shaking 文档](https://rspack.rs/zh/guide/optimization/tree-shaking)。
 
-## lazyBarrel 与 sideEffects 的关系 \{#how-lazybarrel-relates-to-sideeffects}
+## lazyBarrel 与 sideEffects 的关系 \{#barrel-optimization-and-side-effects}
 
 barrel 文件是集中重导出其他模块的入口，例如：
 
@@ -73,7 +73,7 @@ test('sum', () => {
 
 ## 声明需要执行的模块 \{#declare-modules-with-side-effects}
 
-### 在 package.json 中声明 \{#declare-side-effects-in-packagejson}
+### 在 package.json 中声明 \{#declare-side-effects-for-a-package}
 
 如果包中大部分文件没有副作用，可以用数组列出需要保留初始化的文件：
 

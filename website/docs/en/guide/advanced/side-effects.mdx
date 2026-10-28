@@ -28,7 +28,7 @@ The following bare import runs the module's initialization code:
 import './register-mocks';
 ```
 
-## How sideEffects affects module execution
+## How side-effect declarations affect module execution
 
 Setting `sideEffects: false` in `package.json` tells the bundler that files in the package can be skipped when their exports are unused.
 
@@ -43,7 +43,7 @@ With the relevant optimizations enabled, even an explicit `import './register-mo
 
 See Rspack's [tree shaking documentation](https://rspack.rs/guide/optimization/tree-shaking).
 
-## How lazyBarrel relates to sideEffects
+## Barrel optimization and side effects
 
 A barrel file is an entry point that re-exports other modules:
 
@@ -73,7 +73,7 @@ See Rspack's [barrel file optimization](https://rspack.rs/guide/advanced/lazy-ba
 
 ## Declare modules with side effects
 
-### Declare side effects in package.json
+### Declare side effects for a package
 
 If most files in a package have no side effects, use an array to list files whose initialization needs to be retained:
 
