@@ -178,6 +178,23 @@ const normalizeStatsReasonPath = ({
   });
 };
 
+/**
+ * Depth-first walk over a module tree, including the inner modules Rspack keeps
+ * for a concatenated module. Stops early when `visit` returns true.
+ */
+const walkNestedModules = <T extends { modules?: readonly T[] }>(
+  modules: Iterable<T> | undefined,
+  visit: (module: T) => boolean | void,
+): boolean => {
+  for (const module of modules ?? []) {
+    if (visit(module) || walkNestedModules(module.modules, visit)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const collectModuleGraph = ({
   modules,
   projectRoot,
@@ -190,43 +207,37 @@ const collectModuleGraph = ({
   const allSources = new Set<string>();
   const dependentsBySource = new Map<string, Set<string>>();
 
-  const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
-    for (const module of statsModules || []) {
-      const sourcePath = normalizeStatsModulePath({
-        module,
+  walkNestedModules(modules, (module) => {
+    const sourcePath = normalizeStatsModulePath({
+      module,
+      projectRoot,
+      virtualModulePaths,
+    });
+
+    if (!sourcePath) {
+      return;
+    }
+
+    allSources.add(sourcePath);
+
+    for (const reason of module.reasons || []) {
+      const dependentPath = normalizeStatsReasonPath({
+        reason,
         projectRoot,
         virtualModulePaths,
       });
 
-      if (sourcePath) {
-        allSources.add(sourcePath);
-
-        for (const reason of module.reasons || []) {
-          const dependentPath = normalizeStatsReasonPath({
-            reason,
-            projectRoot,
-            virtualModulePaths,
-          });
-
-          if (!dependentPath) {
-            continue;
-          }
-
-          allSources.add(dependentPath);
-
-          const dependents = dependentsBySource.get(sourcePath) || new Set();
-          dependents.add(dependentPath);
-          dependentsBySource.set(sourcePath, dependents);
-        }
+      if (!dependentPath) {
+        continue;
       }
 
-      if (module.modules?.length) {
-        visitModules(module.modules);
-      }
+      allSources.add(dependentPath);
+
+      const dependents = dependentsBySource.get(sourcePath) || new Set();
+      dependents.add(dependentPath);
+      dependentsBySource.set(sourcePath, dependents);
     }
-  };
-
-  visitModules(modules);
+  });
 
   return {
     allSources,
@@ -240,7 +251,7 @@ const collectModuleGraph = ({
  * dependencies of the module but never become modules themselves, so the
  * module graph built from stats cannot see them.
  */
-type BuildInputModule = {
+export type BuildInputModule = {
   nameForCondition?: () => string | undefined;
   buildInfo?: {
     fileDependencies?: Iterable<string>;
@@ -249,22 +260,11 @@ type BuildInputModule = {
   modules?: readonly BuildInputModule[];
 };
 
-const matchesBuildInput = ({
-  module,
-  exactSources,
-}: {
-  module: BuildInputModule;
-  exactSources: ReadonlySet<string>;
-}): boolean => {
-  const { fileDependencies, missingDependencies } = module.buildInfo ?? {};
-
-  for (const dependency of fileDependencies ?? []) {
-    if (exactSources.has(normalizeExactPathMatch(dependency))) {
-      return true;
-    }
-  }
-
-  for (const dependency of missingDependencies ?? []) {
+const includesDeclaredInput = (
+  dependencies: Iterable<string> | undefined,
+  exactSources: ReadonlySet<string>,
+): boolean => {
+  for (const dependency of dependencies ?? []) {
     if (exactSources.has(normalizeExactPathMatch(dependency))) {
       return true;
     }
@@ -277,10 +277,14 @@ const declaresBuildInput = (
   module: BuildInputModule,
   exactSources: ReadonlySet<string>,
 ): boolean =>
-  matchesBuildInput({ module, exactSources }) ||
-  (module.modules ?? []).some((innerModule) =>
-    declaresBuildInput(innerModule, exactSources),
-  );
+  walkNestedModules([module], (current) => {
+    const { fileDependencies, missingDependencies } = current.buildInfo ?? {};
+
+    return (
+      includesDeclaredInput(fileDependencies, exactSources) ||
+      includesDeclaredInput(missingDependencies, exactSources)
+    );
+  });
 
 /**
  * Map requested source paths to the modules whose loaders declared them as
@@ -297,24 +301,23 @@ const declaresBuildInput = (
  */
 export const collectBuildInputConsumers = ({
   modules,
-  sourcePaths,
+  sources,
   projectRoot,
   virtualModulePaths,
 }: {
   modules: Iterable<BuildInputModule>;
-  sourcePaths: string[];
+  /** Absolute source paths, normalized with `normalizeExactPathMatch`. */
+  sources: ReadonlySet<string>;
   projectRoot: string;
   virtualModulePaths?: ReadonlySet<string>;
 }): Set<string> => {
   const consumers = new Set<string>();
-  if (sourcePaths.length === 0) {
+  if (sources.size === 0) {
     return consumers;
   }
 
-  const exactSources = new Set(sourcePaths.map(normalizeExactPathMatch));
-
   for (const module of modules) {
-    if (!declaresBuildInput(module, exactSources)) {
+    if (!declaresBuildInput(module, sources)) {
       continue;
     }
 
@@ -558,6 +561,18 @@ export async function resolveRelatedTestFiles(
       matchedTestFiles.add(file);
     }
 
+    const buildInputSources = new Set(
+      sourceFilters
+        .map((source) =>
+          resolveStatsPathCandidate({
+            candidate: source,
+            projectRoot: context.rootPath,
+          }),
+        )
+        .filter((source): source is string => source !== null)
+        .map(normalizeExactPathMatch),
+    );
+
     for (const project of context.projects) {
       if (!projectEntries.has(project.environmentName)) {
         continue;
@@ -611,23 +626,13 @@ export async function resolveRelatedTestFiles(
       });
       const buildInputConsumers = collectBuildInputConsumers({
         modules: stats.compilation.modules,
-        sourcePaths: sourceFilters
-          .map((source) =>
-            resolveStatsPathCandidate({
-              candidate: source,
-              projectRoot: context.rootPath,
-            }),
-          )
-          .filter((source): source is string => source !== null),
+        sources: buildInputSources,
         projectRoot: project.rootPath,
         virtualModulePaths,
       });
-      const initialSources = new Set([
-        ...matchedSources,
-        ...buildInputConsumers,
-      ]);
+      const initialSources = [...matchedSources, ...buildInputConsumers];
 
-      if (initialSources.size === 0) {
+      if (initialSources.length === 0) {
         continue;
       }
 

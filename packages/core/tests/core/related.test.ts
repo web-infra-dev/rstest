@@ -1,6 +1,7 @@
 import {
   collectBuildInputConsumers,
   resolveStatsPathCandidate,
+  type BuildInputModule,
 } from '../../src/core/execution/related';
 import { filterFiles } from '../../src/utils/testFiles';
 
@@ -89,11 +90,9 @@ describe('filterFiles', () => {
   });
 });
 
-type BuildInputModuleFixture = {
-  nameForCondition: () => string | undefined;
-  buildInfo: {
-    fileDependencies?: string[];
-    missingDependencies?: string[];
+// Extends the production shape so a renamed field keeps the tests honest.
+type BuildInputModuleFixture = BuildInputModule & {
+  buildInfo: NonNullable<BuildInputModule['buildInfo']> & {
     contextDependencies?: string[];
   };
   modules?: BuildInputModuleFixture[];
@@ -138,7 +137,7 @@ describe('collectBuildInputConsumers', () => {
           missingDependencies: ['/repo/src/optional.txt'],
         }),
       ],
-      sourcePaths: ['/repo/src/style.scss', '/repo/src/optional.txt'],
+      sources: new Set(['/repo/src/style.scss', '/repo/src/optional.txt']),
       projectRoot,
       virtualModulePaths,
     });
@@ -154,7 +153,7 @@ describe('collectBuildInputConsumers', () => {
           contextDependencies: ['/repo/src/styles'],
         }),
       ],
-      sourcePaths: ['/repo/src/styles/nested/new.scss'],
+      sources: new Set(['/repo/src/styles/nested/new.scss']),
       projectRoot,
       virtualModulePaths,
     });
@@ -175,7 +174,7 @@ describe('collectBuildInputConsumers', () => {
           ],
         }),
       ],
-      sourcePaths: ['/repo/src/style.scss'],
+      sources: new Set(['/repo/src/style.scss']),
       projectRoot,
       virtualModulePaths,
     });
@@ -190,7 +189,7 @@ describe('collectBuildInputConsumers', () => {
           fileDependencies: ['/repo/src/style.scss'],
         }),
       ],
-      sourcePaths: ['/repo/src/style.scss'],
+      sources: new Set(['/repo/src/style.scss']),
       projectRoot,
       virtualModulePaths,
     });

@@ -16,6 +16,9 @@ const collectRunTestFileLogs = (stdout: string) =>
     .filter((log) => log.includes('.test.ts'))
     .sort();
 
+const collectListedFiles = (stdout: string) =>
+  stdout.split('\n').filter(Boolean);
+
 describe('related test filtering', () => {
   it('should select tests for a loader-declared build input', async () => {
     const args = [
@@ -31,7 +34,7 @@ describe('related test filtering', () => {
       options: { nodeOptions: { cwd: relatedFixturePath } },
     });
     await withoutLoader.expectExecSuccess();
-    expect(withoutLoader.cli.stdout.trim()).toBe('');
+    expect(collectListedFiles(withoutLoader.cli.stdout)).toEqual([]);
 
     const withLoader = await runRstestCli({
       command: 'rstest',
@@ -39,7 +42,7 @@ describe('related test filtering', () => {
       options: { nodeOptions: { cwd: relatedFixturePath } },
     });
     await withLoader.expectExecSuccess();
-    expect(withLoader.cli.stdout.split('\n').filter(Boolean)).toEqual([
+    expect(collectListedFiles(withLoader.cli.stdout)).toEqual([
       'index.test.ts',
     ]);
   });
