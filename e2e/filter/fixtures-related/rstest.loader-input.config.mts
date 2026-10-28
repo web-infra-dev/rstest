@@ -17,6 +17,9 @@ export default defineConfig({
                 input: fileURLToPath(
                   new URL('./loader-inputs/manifest.txt', import.meta.url),
                 ),
+                missing: fileURLToPath(
+                  new URL('./loader-inputs/optional.txt', import.meta.url),
+                ),
               },
             },
           },

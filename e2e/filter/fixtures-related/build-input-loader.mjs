@@ -1,6 +1,12 @@
-// Declares a build input without importing it. The module output stays the
-// same; the dependency only exists in the module's build info.
+// Declares build inputs without importing them. The module output stays the
+// same; the dependencies only exist in the module's build info.
 export default function buildInputLoader(source) {
-  this.addDependency(this.getOptions().input);
+  const { input, missing } = this.getOptions();
+
+  this.addDependency(input);
+  if (missing) {
+    this.addMissingDependency(missing);
+  }
+
   return source;
 }
