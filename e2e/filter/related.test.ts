@@ -17,6 +17,33 @@ const collectRunTestFileLogs = (stdout: string) =>
     .sort();
 
 describe('related test filtering', () => {
+  it('should select tests for a loader-declared build input', async () => {
+    const args = [
+      'list',
+      '--filesOnly',
+      '--related',
+      'loader-inputs/manifest.txt',
+    ];
+
+    const withoutLoader = await runRstestCli({
+      command: 'rstest',
+      args,
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await withoutLoader.expectExecSuccess();
+    expect(withoutLoader.cli.stdout.trim()).toBe('');
+
+    const withLoader = await runRstestCli({
+      command: 'rstest',
+      args: ['--config', 'rstest.loader-input.config.mts', ...args],
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await withLoader.expectExecSuccess();
+    expect(withLoader.cli.stdout.split('\n').filter(Boolean)).toEqual([
+      'index.test.ts',
+    ]);
+  });
+
   it('should run only tests related to a leaf source file', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

@@ -234,6 +234,109 @@ const collectModuleGraph = ({
   };
 };
 
+/**
+ * Shape of the build-time dependency metadata Rspack records on a module.
+ * Loaders report the files they read through `buildInfo`; those files are
+ * dependencies of the module but never become modules themselves, so the
+ * module graph built from stats cannot see them.
+ */
+type BuildInputModule = {
+  nameForCondition?: () => string | undefined;
+  buildInfo?: {
+    fileDependencies?: Iterable<string>;
+    missingDependencies?: Iterable<string>;
+  };
+  modules?: readonly BuildInputModule[];
+};
+
+const matchesBuildInput = ({
+  module,
+  exactSources,
+}: {
+  module: BuildInputModule;
+  exactSources: ReadonlySet<string>;
+}): boolean => {
+  const { fileDependencies, missingDependencies } = module.buildInfo ?? {};
+
+  for (const dependency of fileDependencies ?? []) {
+    if (exactSources.has(normalizeExactPathMatch(dependency))) {
+      return true;
+    }
+  }
+
+  for (const dependency of missingDependencies ?? []) {
+    if (exactSources.has(normalizeExactPathMatch(dependency))) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const declaresBuildInput = (
+  module: BuildInputModule,
+  exactSources: ReadonlySet<string>,
+): boolean =>
+  matchesBuildInput({ module, exactSources }) ||
+  (module.modules ?? []).some((innerModule) =>
+    declaresBuildInput(innerModule, exactSources),
+  );
+
+/**
+ * Map requested source paths to the modules whose loaders declared them as
+ * build inputs. The result is used as extra traversal roots, never as edges of
+ * the module graph: a build input affects the module that declared it, not the
+ * modules that depend on that module. Concatenated modules expose the inner
+ * modules that hold the loader metadata, so the match is attributed to the
+ * wrapper that the import edges point at.
+ *
+ * Only exact file declarations are considered. A directory dependency tells
+ * Rspack to watch a directory, not which files under it the loader reads, so
+ * expanding it to `directory + every file` would invent dependencies the build
+ * never declared.
+ */
+export const collectBuildInputConsumers = ({
+  modules,
+  sourcePaths,
+  projectRoot,
+  virtualModulePaths,
+}: {
+  modules: Iterable<BuildInputModule>;
+  sourcePaths: string[];
+  projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
+}): Set<string> => {
+  const consumers = new Set<string>();
+  if (sourcePaths.length === 0) {
+    return consumers;
+  }
+
+  const exactSources = new Set(sourcePaths.map(normalizeExactPathMatch));
+
+  for (const module of modules) {
+    if (!declaresBuildInput(module, exactSources)) {
+      continue;
+    }
+
+    const candidate = module.nameForCondition?.();
+    if (!candidate) {
+      continue;
+    }
+
+    const consumer = normalizeStatsPathCandidate({
+      candidate,
+      projectRoot,
+      virtualModulePaths,
+    });
+
+    if (consumer) {
+      consumers.add(consumer);
+    }
+  }
+
+  return consumers;
+};
+
 const collectReachableDependents = ({
   dependentsBySource,
   initialSources,
@@ -471,14 +574,15 @@ export async function resolveRelatedTestFiles(
         reasons: true,
       });
 
+      const virtualModulePaths = new Set(
+        Object.keys(
+          setupFileState.virtualModules[project.environmentName] || {},
+        ),
+      );
       const moduleGraph = collectModuleGraph({
         modules,
         projectRoot: project.rootPath,
-        virtualModulePaths: new Set(
-          Object.keys(
-            setupFileState.virtualModules[project.environmentName] || {},
-          ),
-        ),
+        virtualModulePaths,
       });
       const testPaths = Object.values(
         projectEntries.get(project.environmentName) || {},
@@ -505,14 +609,31 @@ export async function resolveRelatedTestFiles(
         sourceFilters,
         rootPath: context.rootPath,
       });
+      const buildInputConsumers = collectBuildInputConsumers({
+        modules: stats.compilation.modules,
+        sourcePaths: sourceFilters
+          .map((source) =>
+            resolveStatsPathCandidate({
+              candidate: source,
+              projectRoot: context.rootPath,
+            }),
+          )
+          .filter((source): source is string => source !== null),
+        projectRoot: project.rootPath,
+        virtualModulePaths,
+      });
+      const initialSources = new Set([
+        ...matchedSources,
+        ...buildInputConsumers,
+      ]);
 
-      if (matchedSources.length === 0) {
+      if (initialSources.size === 0) {
         continue;
       }
 
       const reachableDependents = collectReachableDependents({
         dependentsBySource: moduleGraph.dependentsBySource,
-        initialSources: matchedSources,
+        initialSources,
       });
 
       const shouldRerunWholeProject =
