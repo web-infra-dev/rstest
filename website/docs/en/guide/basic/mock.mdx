@@ -35,6 +35,8 @@ test('returns the fetched user name', async () => {
 });
 ```
 
+If you share mock registration through a separate module and your project declares `sideEffects: false`, mark the registration module as having side effects so the build retains it. See [Module side effects](/guide/advanced/side-effects) for configuration examples.
+
 #### Use `rs.doMock()`
 
 Note that `rs.doMock()` is not hoisted and only takes effect after it runs. It is useful when earlier `import` statements should keep the real implementation and later ones should use the mock.
