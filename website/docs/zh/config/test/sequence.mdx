@@ -27,7 +27,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 `beforeEach` 返回的清理函数在所有 `afterEach` Hook 之后执行；`beforeAll` 返回的清理函数在所属 suite 的 `afterAll` Hook 之后执行。它们也跟随此配置：`'stack'` 按对应 setup Hook 执行的逆序清理，`'list'` 按相同顺序清理。对于嵌套的 `beforeEach` Hook，此顺序涵盖父、子 suite 返回的所有清理函数。
 
-在 v0.12.6 之前，返回的清理函数按 setup 顺序执行。现在默认按 setup 的逆序执行；设置 `sequence.hooks: 'list'` 可以保留原来的清理顺序。
+v0.12.6 修复了清理顺序不一致的问题：此前，返回的清理函数按 setup 顺序执行，而 `afterEach` 和 `afterAll` 按逆序执行。现在，返回的清理函数默认也按 setup 的逆序执行，其执行顺序与旧版本有所不同。
 
 此选项不影响 fixture 清理、`onTestFinished` 或 `onTestFailed`。
 
