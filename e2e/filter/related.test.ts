@@ -1,9 +1,8 @@
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it, onTestFinished } from '@rstest/core';
-import { prepareFixtures, runRstestCli } from '../scripts';
+import { describe, expect, it } from '@rstest/core';
+import { runRstestCli } from '../scripts';
+import { prepareTempFixture } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,42 +11,14 @@ const relatedFixturePath = join(__dirname, 'fixtures-related');
 const dynamicFixturePath = join(__dirname, '../fixtures/fan-out-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
 const brokenTestFixturePath = join(__dirname, 'fixtures-related-broken-test');
-const coverageFixturePath = join(__dirname, '../test-coverage/fixtures');
-
 const prepareBrokenTestFixture = async () => {
-  const fixturesTargetPath = await mkdtemp(
-    join(tmpdir(), 'rstest-related-broken-'),
-  );
-
-  onTestFinished(() =>
-    rm(fixturesTargetPath, {
-      recursive: true,
-      force: true,
-      maxRetries: 10,
-      retryDelay: 500,
-    }),
-  );
-
-  await prepareFixtures({
+  const { fixturesTargetPath, fs } = await prepareTempFixture({
     fixturesPath: brokenTestFixturePath,
-    fixturesTargetPath,
+    prefix: 'related-broken',
   });
-  await symlink(
-    join(coverageFixturePath, 'node_modules'),
-    join(fixturesTargetPath, 'node_modules'),
-    'dir',
-  );
-  await writeFile(
-    join(fixturesTargetPath, 'broken.test.ts'),
-    [
-      "import { expect, it } from '@rstest/core';",
-      "import { cartCount } from './src/cart';",
-      '',
-      "it('should use the cart count', () => {",
-      '  expect(cartCount).toBe(;',
-      '});',
-      '',
-    ].join('\n'),
+
+  fs.update(join(fixturesTargetPath, 'broken.test.ts'), (content) =>
+    content.replace('toBe(2)', 'toBe(;)'),
   );
 
   return fixturesTargetPath;

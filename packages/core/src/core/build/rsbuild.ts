@@ -124,6 +124,10 @@ type PrepareRsbuildOptions = {
    * Override the Rsbuild log level for this instance. Related-test selection
    * inspects compilation errors itself and silences the duplicate compiler
    * output of its analysis-only build.
+   *
+   * This must be applied at create time: Rsbuild builds its logger from the
+   * initial config, so setting it from a `modifyRsbuildConfig` hook is too
+   * late to take effect.
    */
   logLevel?: RsbuildConfig['logLevel'];
   onModifyRstestConfigApplied?: () => Promise<void>;
@@ -212,7 +216,7 @@ export const prepareRsbuild = async ({
     callerName: 'rstest',
     config: {
       root: context.rootPath,
-      ...(logLevel ? { logLevel } : {}),
+      logLevel,
       server: { ...hostServerConfig },
       dev: {
         hmr: false,

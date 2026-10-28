@@ -179,6 +179,24 @@ const normalizeStatsReasonPath = ({
   });
 };
 
+const addDependent = ({
+  moduleGraph,
+  sourcePath,
+  dependentPath,
+}: {
+  moduleGraph: ModuleGraph;
+  sourcePath: string;
+  dependentPath: string;
+}): void => {
+  moduleGraph.allSources.add(sourcePath);
+  moduleGraph.allSources.add(dependentPath);
+
+  const dependents =
+    moduleGraph.dependentsBySource.get(sourcePath) || new Set<string>();
+  dependents.add(dependentPath);
+  moduleGraph.dependentsBySource.set(sourcePath, dependents);
+};
+
 const collectModuleGraph = ({
   modules,
   projectRoot,
@@ -188,8 +206,10 @@ const collectModuleGraph = ({
   projectRoot: string;
   virtualModulePaths?: ReadonlySet<string>;
 }): ModuleGraph => {
-  const allSources = new Set<string>();
-  const dependentsBySource = new Map<string, Set<string>>();
+  const moduleGraph: ModuleGraph = {
+    allSources: new Set(),
+    dependentsBySource: new Map(),
+  };
 
   const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
     for (const module of statsModules || []) {
@@ -200,7 +220,7 @@ const collectModuleGraph = ({
       });
 
       if (sourcePath) {
-        allSources.add(sourcePath);
+        moduleGraph.allSources.add(sourcePath);
 
         for (const reason of module.reasons || []) {
           const dependentPath = normalizeStatsReasonPath({
@@ -213,11 +233,11 @@ const collectModuleGraph = ({
             continue;
           }
 
-          allSources.add(dependentPath);
-
-          const dependents = dependentsBySource.get(sourcePath) || new Set();
-          dependents.add(dependentPath);
-          dependentsBySource.set(sourcePath, dependents);
+          addDependent({
+            moduleGraph,
+            sourcePath,
+            dependentPath,
+          });
         }
       }
 
@@ -229,10 +249,7 @@ const collectModuleGraph = ({
 
   visitModules(modules);
 
-  return {
-    allSources,
-    dependentsBySource,
-  };
+  return moduleGraph;
 };
 
 const MODULE_FILE_EXTENSIONS = [
@@ -264,8 +281,6 @@ const collectStaticImportSpecifiers = (source: string): string[] => {
   const specifiers = new Set<string>();
 
   for (const pattern of STATIC_IMPORT_PATTERNS) {
-    pattern.lastIndex = 0;
-
     for (const match of source.matchAll(pattern)) {
       if (match[1]) {
         specifiers.add(match[1]);
@@ -315,13 +330,13 @@ const normalizeFsPath = (filePath: string): string => {
  * test entries lost their module graph edges during the build.
  */
 const collectErrorModulePaths = ({
-  stats,
+  errors,
   projectRoot,
 }: {
-  stats: Rspack.Stats;
+  errors:
+    readonly { moduleIdentifier?: string; moduleName?: string }[] | undefined;
   projectRoot: string;
 }): Set<string> => {
-  const { errors } = stats.toJson({ all: false, errors: true });
   const errorModulePaths = new Set<string>();
 
   for (const error of errors || []) {
@@ -337,11 +352,52 @@ const collectErrorModulePaths = ({
     });
 
     if (absolutePath) {
+      errorModulePaths.add(normalize(absolutePath));
       errorModulePaths.add(normalizeFsPath(absolutePath));
     }
   }
 
   return errorModulePaths;
+};
+
+const recoverTestDependencies = ({
+  testPath,
+  source,
+  moduleGraph,
+}: {
+  testPath: string;
+  source: string;
+  moduleGraph: ModuleGraph;
+}): { recovered: boolean; unresolvedImportCount: number } => {
+  let recovered = false;
+  let unresolvedImportCount = 0;
+
+  for (const specifier of collectStaticImportSpecifiers(
+    stripSourceComments(source),
+  )) {
+    const resolvedPath = resolveLocalImportPath({
+      specifier,
+      importerPath: testPath,
+    });
+
+    if (!resolvedPath) {
+      if (specifier.startsWith('.') || isAbsolute(specifier)) {
+        unresolvedImportCount += 1;
+      }
+      continue;
+    }
+
+    recovered = true;
+    addDependent({
+      moduleGraph,
+      sourcePath: resolvedPath,
+      dependentPath: testPath,
+    });
+  }
+
+  moduleGraph.allSources.add(testPath);
+
+  return { recovered, unresolvedImportCount };
 };
 
 /**
@@ -363,46 +419,25 @@ const recoverMissingTestDependencies = async ({
   let recoveredTestCount = 0;
   let unresolvedImportCount = 0;
 
-  for (const testPath of testPaths) {
-    let source: string;
+  const readResults = await Promise.allSettled(
+    testPaths.map((testPath) => readFile(testPath, 'utf8')),
+  );
 
-    try {
-      source = await readFile(testPath, 'utf8');
-    } catch {
+  for (const [index, result] of readResults.entries()) {
+    if (result.status !== 'fulfilled') {
       continue;
     }
 
-    let hasRecoveredDependency = false;
+    const recovery = recoverTestDependencies({
+      testPath: testPaths[index]!,
+      source: result.value,
+      moduleGraph,
+    });
 
-    for (const specifier of collectStaticImportSpecifiers(
-      stripSourceComments(source),
-    )) {
-      const resolvedPath = resolveLocalImportPath({
-        specifier,
-        importerPath: testPath,
-      });
-
-      if (!resolvedPath) {
-        if (specifier.startsWith('.') || isAbsolute(specifier)) {
-          unresolvedImportCount += 1;
-        }
-        continue;
-      }
-
-      hasRecoveredDependency = true;
-      moduleGraph.allSources.add(resolvedPath);
-
-      const dependents =
-        moduleGraph.dependentsBySource.get(resolvedPath) || new Set<string>();
-      dependents.add(testPath);
-      moduleGraph.dependentsBySource.set(resolvedPath, dependents);
-    }
-
-    moduleGraph.allSources.add(testPath);
-
-    if (hasRecoveredDependency) {
+    if (recovery.recovered) {
       recoveredTestCount += 1;
     }
+    unresolvedImportCount += recovery.unresolvedImportCount;
   }
 
   return { recoveredTestCount, unresolvedImportCount };
@@ -604,9 +639,10 @@ export async function resolveRelatedTestFiles(
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
       const analysisHasErrors = stats.hasErrors();
-      const { modules } = stats.toJson({
+      const { modules, errors } = stats.toJson({
         all: false,
         modules: true,
+        errors: true,
         nestedModules: true,
         reasons: true,
       });
@@ -626,12 +662,21 @@ export async function resolveRelatedTestFiles(
 
       if (analysisHasErrors) {
         const errorModulePaths = collectErrorModulePaths({
-          stats,
+          errors,
           projectRoot: project.rootPath,
         });
-        const failedTestPaths = testPaths.filter((testPath) =>
-          errorModulePaths.has(normalizeFsPath(testPath)),
-        );
+        const projectRootIsSymlinked =
+          normalize(project.rootPath) !== normalizeFsPath(project.rootPath);
+        const failedTestPaths = testPaths.filter((testPath) => {
+          if (errorModulePaths.has(normalize(testPath))) {
+            return true;
+          }
+
+          return (
+            projectRootIsSymlinked &&
+            errorModulePaths.has(normalizeFsPath(testPath))
+          );
+        });
 
         if (failedTestPaths.length) {
           const recovery = await recoverMissingTestDependencies({
