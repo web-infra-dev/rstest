@@ -75,41 +75,50 @@ const initGitFixture = async (cwd: string) => {
 };
 
 describe('changed test filtering', () => {
-  it.each([
-    ['run', 'src/unmatched.ts'],
-    ['run', 'src/other.ts'],
-    ['list', 'src/other.ts'],
-  ])(
-    'should reject an invalid dependency graph for %s --related %s',
-    async (mode, source) => {
-      const { fixturesTargetPath } = await prepareChangedFixture(
-        'related-compile-error',
-      );
-      await writeFile(
-        join(fixturesTargetPath, 'src/index.ts'),
-        'export const value = ;\n',
-      );
-      const { cli, expectExecFailed } = await runRstestCli({
-        command: 'rstest',
-        args: [
-          mode,
-          '--related',
-          source,
-          '--passWithNoTests',
-          ...(mode === 'list' ? ['--filesOnly'] : []),
-        ],
-        options: { nodeOptions: { cwd: fixturesTargetPath } },
-      });
-      await expectExecFailed();
-      expect(cli.stderr).toContain(
-        'Cannot select related tests because compilation failed',
-      );
-      expect(cli.stderr).toContain('src/index.ts');
-      expect(collectRunTestFileLogs(cli.stdout)).toEqual([]);
-    },
-  );
+  it('should ignore compilation errors in unrelated files for related selection', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture(
+      'related-compile-error',
+    );
+    await writeFile(
+      join(fixturesTargetPath, 'src/index.ts'),
+      'export const value = ;\n',
+    );
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--related', 'src/other.ts'],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
 
-  it('should reject an invalid dependency graph when only an unrelated source changed', async () => {
+    await expectExecSuccess();
+
+    expect(collectRunTestFileLogs(cli.stdout)).toEqual([
+      ' ✓ other.test.ts (1)',
+    ]);
+    expect(cli.stderr).not.toContain('Build error');
+    expect(cli.stderr).not.toContain('Cannot select related tests');
+  });
+
+  it('should ignore compilation errors in unrelated files for list --related', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture(
+      'related-compile-error-list',
+    );
+    await writeFile(
+      join(fixturesTargetPath, 'src/index.ts'),
+      'export const value = ;\n',
+    );
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--related', 'src/other.ts', '--filesOnly'],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['other.test.ts']);
+    expect(cli.stderr).not.toContain('Build error');
+  });
+
+  it('should ignore compilation errors when only an unrelated source changed', async () => {
     const { fixturesTargetPath } = await prepareChangedFixture(
       'changed-compile-error',
     );
@@ -123,17 +132,18 @@ describe('changed test filtering', () => {
       otherSource,
       `${await readFile(otherSource, 'utf8')}\n// Updated unrelated source.\n`,
     );
-    const { cli, expectExecFailed } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--changed', '--passWithNoTests'],
+      args: ['run', '--changed'],
       options: { nodeOptions: { cwd: fixturesTargetPath } },
     });
-    await expectExecFailed();
-    expect(cli.stderr).toContain(
-      'Cannot select related tests because compilation failed',
-    );
-    expect(cli.stderr).toContain('src/index.ts');
-    expect(collectRunTestFileLogs(cli.stdout)).toEqual([]);
+
+    await expectExecSuccess();
+
+    expect(collectRunTestFileLogs(cli.stdout)).toEqual([
+      ' ✓ other.test.ts (1)',
+    ]);
+    expect(cli.stderr).not.toContain('Build error');
   });
 
   it('should reject changed with positional filters', async () => {

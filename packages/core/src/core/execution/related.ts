@@ -1,12 +1,13 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { isAbsolute, normalize, relative, resolve } from 'pathe';
+import { dirname, isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
   InternalContext,
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../../types';
-import { getTestEntries, normalizeExactPathMatch } from '../../utils';
+import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
 
@@ -234,6 +235,179 @@ const collectModuleGraph = ({
   };
 };
 
+const MODULE_FILE_EXTENSIONS = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.json',
+];
+
+const MODULE_INDEX_FILES = MODULE_FILE_EXTENSIONS.filter(
+  (extension) => extension !== '.json',
+).map((extension) => `index${extension}`);
+
+const stripSourceComments = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+const STATIC_IMPORT_PATTERNS = [
+  /\b(?:import|export)\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g,
+  /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+];
+
+const collectStaticImportSpecifiers = (source: string): string[] => {
+  const specifiers = new Set<string>();
+
+  for (const pattern of STATIC_IMPORT_PATTERNS) {
+    pattern.lastIndex = 0;
+
+    for (const match of source.matchAll(pattern)) {
+      if (match[1]) {
+        specifiers.add(match[1]);
+      }
+    }
+  }
+
+  return Array.from(specifiers);
+};
+
+const resolveLocalImportPath = ({
+  specifier,
+  importerPath,
+}: {
+  specifier: string;
+  importerPath: string;
+}): string | null => {
+  const cleanSpecifier = specifier.split(/[?#]/)[0]!;
+
+  if (
+    !cleanSpecifier ||
+    (!cleanSpecifier.startsWith('.') && !isAbsolute(cleanSpecifier))
+  ) {
+    return null;
+  }
+
+  const basePath = normalize(resolve(dirname(importerPath), cleanSpecifier));
+  const candidates = [
+    basePath,
+    ...MODULE_FILE_EXTENSIONS.map((extension) => `${basePath}${extension}`),
+    ...MODULE_INDEX_FILES.map((file) => normalize(resolve(basePath, file))),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+};
+
+const normalizeFsPath = (filePath: string): string => {
+  try {
+    return normalize(realpathSync(filePath));
+  } catch {
+    return normalize(filePath);
+  }
+};
+
+/**
+ * Collect the module paths reported by the analysis build errors. Only these
+ * test entries lost their module graph edges during the build.
+ */
+const collectErrorModulePaths = ({
+  stats,
+  projectRoot,
+}: {
+  stats: Rspack.Stats;
+  projectRoot: string;
+}): Set<string> => {
+  const { errors } = stats.toJson({ all: false, errors: true });
+  const errorModulePaths = new Set<string>();
+
+  for (const error of errors || []) {
+    const candidate = error.moduleIdentifier || error.moduleName;
+
+    if (!candidate) {
+      continue;
+    }
+
+    const absolutePath = resolveStatsPathCandidate({
+      candidate,
+      projectRoot,
+    });
+
+    if (absolutePath) {
+      errorModulePaths.add(normalizeFsPath(absolutePath));
+    }
+  }
+
+  return errorModulePaths;
+};
+
+/**
+ * A test file that fails to compile does not contribute any module graph
+ * edges. Recover its local static imports from the source text so that a test
+ * which is related to the requested source is still selected instead of being
+ * reported as "no related tests".
+ */
+const recoverMissingTestDependencies = async ({
+  testPaths,
+  moduleGraph,
+}: {
+  testPaths: string[];
+  moduleGraph: ModuleGraph;
+}): Promise<{
+  recoveredTestCount: number;
+  unresolvedImportCount: number;
+}> => {
+  let recoveredTestCount = 0;
+  let unresolvedImportCount = 0;
+
+  for (const testPath of testPaths) {
+    let source: string;
+
+    try {
+      source = await readFile(testPath, 'utf8');
+    } catch {
+      continue;
+    }
+
+    let hasRecoveredDependency = false;
+
+    for (const specifier of collectStaticImportSpecifiers(
+      stripSourceComments(source),
+    )) {
+      const resolvedPath = resolveLocalImportPath({
+        specifier,
+        importerPath: testPath,
+      });
+
+      if (!resolvedPath) {
+        if (specifier.startsWith('.') || isAbsolute(specifier)) {
+          unresolvedImportCount += 1;
+        }
+        continue;
+      }
+
+      hasRecoveredDependency = true;
+      moduleGraph.allSources.add(resolvedPath);
+
+      const dependents =
+        moduleGraph.dependentsBySource.get(resolvedPath) || new Set<string>();
+      dependents.add(testPath);
+      moduleGraph.dependentsBySource.set(resolvedPath, dependents);
+    }
+
+    moduleGraph.allSources.add(testPath);
+
+    if (hasRecoveredDependency) {
+      recoveredTestCount += 1;
+    }
+  }
+
+  return { recoveredTestCount, unresolvedImportCount };
+};
+
 const collectReachableDependents = ({
   dependentsBySource,
   initialSources,
@@ -390,6 +564,7 @@ export async function resolveRelatedTestFiles(
       targetProjects: context.projects,
       exposeRstestAPIProjects: context.projects,
       extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      logLevel: 'silent',
       getSetupFileProjects: () => ({
         setupProjects: context.projects,
         globalSetupProjects: context.projects,
@@ -404,6 +579,9 @@ export async function resolveRelatedTestFiles(
     });
 
     const matchedTestFiles = new Set<string>();
+    let recoveredTestCount = 0;
+    let unresolvedImportCount = 0;
+
     projectEntries = projectEntries.size
       ? projectEntries
       : await collectProjectEntries(context);
@@ -425,11 +603,7 @@ export async function resolveRelatedTestFiles(
 
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
-      if (stats.hasErrors()) {
-        throw new Error(
-          `Cannot select related tests because compilation failed:\n${stats.toString({ all: false, errors: true, errorDetails: true })}`,
-        );
-      }
+      const analysisHasErrors = stats.hasErrors();
       const { modules } = stats.toJson({
         all: false,
         modules: true,
@@ -449,6 +623,26 @@ export async function resolveRelatedTestFiles(
       const testPaths = Object.values(
         projectEntries.get(project.environmentName) || {},
       );
+
+      if (analysisHasErrors) {
+        const errorModulePaths = collectErrorModulePaths({
+          stats,
+          projectRoot: project.rootPath,
+        });
+        const failedTestPaths = testPaths.filter((testPath) =>
+          errorModulePaths.has(normalizeFsPath(testPath)),
+        );
+
+        if (failedTestPaths.length) {
+          const recovery = await recoverMissingTestDependencies({
+            testPaths: failedTestPaths,
+            moduleGraph,
+          });
+          recoveredTestCount += recovery.recoveredTestCount;
+          unresolvedImportCount += recovery.unresolvedImportCount;
+        }
+      }
+
       const setupPaths = Object.values(
         setupFileState.setupFiles[project.environmentName] || {},
       );
@@ -488,6 +682,12 @@ export async function resolveRelatedTestFiles(
           matchedTestFiles.add(testPath);
         }
       }
+    }
+
+    if (unresolvedImportCount > 0) {
+      logger.warn(
+        `Related test selection may be incomplete: recovered dependencies of ${recoveredTestCount} test file(s) that failed to build, but ${unresolvedImportCount} local import(s) could not be resolved.`,
+      );
     }
 
     return Array.from(matchedTestFiles).sort();

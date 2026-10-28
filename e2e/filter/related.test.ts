@@ -1,7 +1,9 @@
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { describe, expect, it, onTestFinished } from '@rstest/core';
+import { prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -9,6 +11,47 @@ const __dirname = dirname(__filename);
 const relatedFixturePath = join(__dirname, 'fixtures-related');
 const dynamicFixturePath = join(__dirname, '../fixtures/fan-out-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
+const brokenTestFixturePath = join(__dirname, 'fixtures-related-broken-test');
+const coverageFixturePath = join(__dirname, '../test-coverage/fixtures');
+
+const prepareBrokenTestFixture = async () => {
+  const fixturesTargetPath = await mkdtemp(
+    join(tmpdir(), 'rstest-related-broken-'),
+  );
+
+  onTestFinished(() =>
+    rm(fixturesTargetPath, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 500,
+    }),
+  );
+
+  await prepareFixtures({
+    fixturesPath: brokenTestFixturePath,
+    fixturesTargetPath,
+  });
+  await symlink(
+    join(coverageFixturePath, 'node_modules'),
+    join(fixturesTargetPath, 'node_modules'),
+    'dir',
+  );
+  await writeFile(
+    join(fixturesTargetPath, 'broken.test.ts'),
+    [
+      "import { expect, it } from '@rstest/core';",
+      "import { cartCount } from './src/cart';",
+      '',
+      "it('should use the cart count', () => {",
+      '  expect(cartCount).toBe(;',
+      '});',
+      '',
+    ].join('\n'),
+  );
+
+  return fixturesTargetPath;
+};
 
 const collectRunTestFileLogs = (stdout: string) =>
   stdout
@@ -37,6 +80,47 @@ describe('related test filtering', () => {
         " ✓ index.test.ts (1)",
       ]
     `);
+  });
+
+  it('should select a related test file that failed to compile', async () => {
+    const fixturesTargetPath = await prepareBrokenTestFixture();
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--related', 'src/cart.ts', '--passWithNoTests'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    // The test is selected (and fails to compile) instead of being reported as
+    // an empty related selection.
+    expect(cli.stderr).toContain('Syntax Error');
+    expect(cli.stderr).toContain('broken.test.ts');
+    expect(cli.stderr).not.toContain(
+      'No test files found for related source files',
+    );
+  });
+
+  it('should list a related test file that failed to compile', async () => {
+    const fixturesTargetPath = await prepareBrokenTestFixture();
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--related', 'src/cart.ts', '--filesOnly'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['broken.test.ts']);
+    expect(cli.stderr).not.toContain('Build error');
   });
 
   it('should include both test files for a shared dependency', async () => {

@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - related', () => {
-  it('should reject an invalid browser dependency graph before listing tests', async () => {
+  it('should ignore compilation errors in unrelated sources when listing related tests', async () => {
     const fixturesTargetPath = join(
       __dirname,
       'fixtures',
@@ -25,23 +25,17 @@ describe('browser mode - related', () => {
       join(fixturesTargetPath, 'tests/src/index.ts'),
       'export const sayHi = ;\n',
     );
-    const { cli, expectExecFailed } = await runBrowserCliWithCwd(
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
       fixturesTargetPath,
       {
         command: 'list',
-        args: [
-          '--filesOnly',
-          '--related',
-          'tests/src/other.ts',
-          '--passWithNoTests',
-        ],
+        args: ['--filesOnly', '--related', 'tests/src/other.ts'],
       },
     );
-    await expectExecFailed();
-    expect(cli.stderr).toContain(
-      'Cannot select related tests because compilation failed',
-    );
-    expect(cli.stdout).not.toContain('tests/other.test.ts');
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('tests/other.test.ts');
+    expect(cli.stdout).not.toContain('tests/index.test.ts');
+    expect(cli.stderr).not.toContain('Build error');
   });
 
   it('should list matched files without starting the browser server', async () => {

@@ -120,6 +120,12 @@ type PrepareRsbuildOptions = {
   targetProjects?: InternalProjectContext[];
   exposeRstestAPIProjects?: InternalProjectContext[];
   extraPlugins?: RsbuildPlugin[];
+  /**
+   * Override the Rsbuild log level for this instance. Related-test selection
+   * inspects compilation errors itself and silences the duplicate compiler
+   * output of its analysis-only build.
+   */
+  logLevel?: RsbuildConfig['logLevel'];
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: () => Promise<void>;
   onCoveragePluginLoadError?: (error: unknown) => void;
@@ -166,6 +172,7 @@ export const prepareRsbuild = async ({
   targetProjects,
   exposeRstestAPIProjects,
   extraPlugins = [],
+  logLevel,
   onModifyRstestConfigApplied,
   onRsbuildConfigResolved,
   onCoveragePluginLoadError,
@@ -205,6 +212,7 @@ export const prepareRsbuild = async ({
     callerName: 'rstest',
     config: {
       root: context.rootPath,
+      ...(logLevel ? { logLevel } : {}),
       server: { ...hostServerConfig },
       dev: {
         hmr: false,
