@@ -606,6 +606,7 @@ export interface RstestConfig {
   sequence?: {
     /**
      * Run afterEach and afterAll hooks within each suite in reverse declaration order (`stack`) or declaration order (`list`).
+     * Cleanup functions returned by beforeEach and beforeAll follow the same order.
      * @default 'stack'
      */
     hooks?: 'stack' | 'list';

@@ -23,7 +23,13 @@ Controls the order of hooks within each suite:
 - `'stack'`: `beforeAll` and `beforeEach` run in declaration order; `afterAll` and `afterEach` run in reverse declaration order.
 - `'list'`: all four hooks run in declaration order. Use this when migrating from Jest if cleanup depends on hook registration order, such as unmounting components before resetting stores.
 
-For nested suites, `beforeEach` still runs from parent to child, and `afterEach` still runs from child to parent. This option does not change cleanup callbacks returned by `beforeAll` or `beforeEach`, fixture teardown, `onTestFinished`, or `onTestFailed`.
+For nested suites, `beforeEach` still runs from parent to child, and `afterEach` still runs from child to parent.
+
+Cleanup functions returned by `beforeEach` run after all `afterEach` hooks; those returned by `beforeAll` run after the suite's `afterAll` hooks. They also follow this option: `'stack'` runs them in reverse order of their corresponding setup hooks, while `'list'` runs them in the same order. For nested `beforeEach` hooks, this includes cleanup from both parent and child suites.
+
+Before v0.12.6, returned cleanup functions ran in setup order. They now run in reverse setup order by default; set `sequence.hooks: 'list'` to retain their previous order.
+
+This option does not change fixture teardown, `onTestFinished`, or `onTestFailed`.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

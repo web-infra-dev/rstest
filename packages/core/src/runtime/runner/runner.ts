@@ -531,6 +531,9 @@ export class TestRunner {
 
       test.startTime = undefined;
 
+      if (sequence.hooks === 'stack') {
+        cleanups.reverse();
+      }
       const afterEachFns = parentHooks.afterEachListeners.concat(cleanups);
 
       test.context.task.result = result;
@@ -773,6 +776,7 @@ export class TestRunner {
             const afterAllListeners = [...(test.afterAllListeners || [])];
             if (sequence.hooks === 'stack') {
               afterAllListeners.reverse();
+              cleanups.reverse();
             }
             const afterAllFns = afterAllListeners.concat(cleanups);
 

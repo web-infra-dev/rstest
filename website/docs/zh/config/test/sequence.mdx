@@ -23,7 +23,13 @@ import { ApiMeta } from '@components/ApiMeta';
 - `'stack'`：`beforeAll` 和 `beforeEach` 按声明顺序执行；`afterAll` 和 `afterEach` 按声明的逆序执行。
 - `'list'`：这四种 Hook 都按声明顺序执行。从 Jest 迁移时，如果清理逻辑依赖 Hook 的注册顺序，例如先卸载组件再重置 store，可以使用此选项。
 
-嵌套 suite 中，`beforeEach` 仍从父 suite 到子 suite 执行，`afterEach` 仍从子 suite 到父 suite 执行。此选项不影响 `beforeAll` 或 `beforeEach` 返回的清理函数、fixture 清理、`onTestFinished` 或 `onTestFailed`。
+嵌套 suite 中，`beforeEach` 仍从父 suite 到子 suite 执行，`afterEach` 仍从子 suite 到父 suite 执行。
+
+`beforeEach` 返回的清理函数在所有 `afterEach` Hook 之后执行；`beforeAll` 返回的清理函数在所属 suite 的 `afterAll` Hook 之后执行。它们也跟随此配置：`'stack'` 按对应 setup Hook 执行的逆序清理，`'list'` 按相同顺序清理。对于嵌套的 `beforeEach` Hook，此顺序涵盖父、子 suite 返回的所有清理函数。
+
+在 v0.12.6 之前，返回的清理函数按 setup 顺序执行。现在默认按 setup 的逆序执行；设置 `sequence.hooks: 'list'` 可以保留原来的清理顺序。
+
+此选项不影响 fixture 清理、`onTestFinished` 或 `onTestFailed`。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
