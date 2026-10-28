@@ -1,14 +1,15 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
-import { prepareTempFixture } from './helpers';
+import { describe, expect, it, onTestFinished } from '@rstest/core';
+import { prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const changedFixturePath = join(__dirname, 'fixtures-changed');
+const coverageFixturePath = join(__dirname, '../test-coverage/fixtures');
 
 const collectRunTestFileLogs = (stdout: string) =>
   stdout
@@ -16,11 +17,30 @@ const collectRunTestFileLogs = (stdout: string) =>
     .filter((log) => log.includes('.test.ts') && !log.startsWith('::error'))
     .sort();
 
-const prepareChangedFixture = (name: string) =>
-  prepareTempFixture({
+const prepareChangedFixture = async (name: string) => {
+  const fixturesTargetPath = await mkdtemp(join(tmpdir(), `rstest-${name}-`));
+
+  onTestFinished(() =>
+    rm(fixturesTargetPath, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 500,
+    }),
+  );
+
+  const { fs } = await prepareFixtures({
     fixturesPath: changedFixturePath,
-    prefix: name,
+    fixturesTargetPath,
   });
+  await symlink(
+    join(coverageFixturePath, 'node_modules'),
+    join(fixturesTargetPath, 'node_modules'),
+    'dir',
+  );
+
+  return { fixturesTargetPath, fs };
+};
 
 const readCoverageFiles = async (cwd: string): Promise<string[]> => {
   const coverage = JSON.parse(
@@ -74,6 +94,29 @@ describe('changed test filtering', () => {
     expect(collectRunTestFileLogs(cli.stdout)).toEqual([
       ' ✓ other.test.ts (1)',
     ]);
+    expect(cli.stderr).not.toContain('Build error');
+  });
+
+  it('should warn when a test file that failed to build cannot be analyzed', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture(
+      'related-broken-test',
+    );
+    await writeFile(
+      join(fixturesTargetPath, 'index.test.ts'),
+      "import { sayHi } from './src/index';\n\nexport const broken = ;\n",
+    );
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--related', 'src/other.ts'],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
+
+    await expectExecSuccess();
+
+    expect(collectRunTestFileLogs(cli.stdout)).toEqual([
+      ' ✓ other.test.ts (1)',
+    ]);
+    expect(cli.stderr).toContain('Related test selection may be incomplete');
     expect(cli.stderr).not.toContain('Build error');
   });
 

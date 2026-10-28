@@ -1,13 +1,12 @@
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { dirname, isAbsolute, normalize, relative, resolve } from 'pathe';
+import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
   InternalContext,
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../../types';
-import { getTestEntries, normalizeExactPathMatch } from '../../utils';
+import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
 
@@ -179,24 +178,6 @@ const normalizeStatsReasonPath = ({
   });
 };
 
-const addDependent = ({
-  moduleGraph,
-  sourcePath,
-  dependentPath,
-}: {
-  moduleGraph: ModuleGraph;
-  sourcePath: string;
-  dependentPath: string;
-}): void => {
-  moduleGraph.allSources.add(sourcePath);
-  moduleGraph.allSources.add(dependentPath);
-
-  const dependents =
-    moduleGraph.dependentsBySource.get(sourcePath) || new Set<string>();
-  dependents.add(dependentPath);
-  moduleGraph.dependentsBySource.set(sourcePath, dependents);
-};
-
 const collectModuleGraph = ({
   modules,
   projectRoot,
@@ -206,10 +187,8 @@ const collectModuleGraph = ({
   projectRoot: string;
   virtualModulePaths?: ReadonlySet<string>;
 }): ModuleGraph => {
-  const moduleGraph: ModuleGraph = {
-    allSources: new Set(),
-    dependentsBySource: new Map(),
-  };
+  const allSources = new Set<string>();
+  const dependentsBySource = new Map<string, Set<string>>();
 
   const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
     for (const module of statsModules || []) {
@@ -220,7 +199,7 @@ const collectModuleGraph = ({
       });
 
       if (sourcePath) {
-        moduleGraph.allSources.add(sourcePath);
+        allSources.add(sourcePath);
 
         for (const reason of module.reasons || []) {
           const dependentPath = normalizeStatsReasonPath({
@@ -233,11 +212,11 @@ const collectModuleGraph = ({
             continue;
           }
 
-          addDependent({
-            moduleGraph,
-            sourcePath,
-            dependentPath,
-          });
+          allSources.add(dependentPath);
+
+          const dependents = dependentsBySource.get(sourcePath) || new Set();
+          dependents.add(dependentPath);
+          dependentsBySource.set(sourcePath, dependents);
         }
       }
 
@@ -249,167 +228,10 @@ const collectModuleGraph = ({
 
   visitModules(modules);
 
-  return moduleGraph;
-};
-
-const MODULE_FILE_EXTENSIONS = [
-  '.ts',
-  '.tsx',
-  '.mts',
-  '.cts',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.cjs',
-  '.json',
-];
-
-const MODULE_INDEX_FILES = MODULE_FILE_EXTENSIONS.filter(
-  (extension) => extension !== '.json',
-).map((extension) => `index${extension}`);
-
-const stripSourceComments = (source: string): string =>
-  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-
-const STATIC_IMPORT_PATTERNS = [
-  /\b(?:import|export)\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/g,
-  /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-];
-
-const collectStaticImportSpecifiers = (source: string): string[] => {
-  const specifiers = new Set<string>();
-
-  for (const pattern of STATIC_IMPORT_PATTERNS) {
-    for (const match of source.matchAll(pattern)) {
-      if (match[1]) {
-        specifiers.add(match[1]);
-      }
-    }
-  }
-
-  return Array.from(specifiers);
-};
-
-const resolveLocalImportPath = ({
-  specifier,
-  importerPath,
-}: {
-  specifier: string;
-  importerPath: string;
-}): string | null => {
-  const cleanSpecifier = specifier.split(/[?#]/)[0]!;
-
-  if (
-    !cleanSpecifier ||
-    (!cleanSpecifier.startsWith('.') && !isAbsolute(cleanSpecifier))
-  ) {
-    return null;
-  }
-
-  const basePath = normalize(resolve(dirname(importerPath), cleanSpecifier));
-  const candidates = [
-    basePath,
-    ...MODULE_FILE_EXTENSIONS.map((extension) => `${basePath}${extension}`),
-    ...MODULE_INDEX_FILES.map((file) => normalize(resolve(basePath, file))),
-  ];
-
-  return candidates.find((candidate) => existsSync(candidate)) ?? null;
-};
-
-/**
- * Collect the module paths reported by the analysis build errors. Only these
- * test entries lost their module graph edges during the build.
- */
-const collectErrorModulePaths = ({
-  errors,
-  projectRoot,
-}: {
-  errors:
-    readonly { moduleIdentifier?: string; moduleName?: string }[] | undefined;
-  projectRoot: string;
-}): Set<string> => {
-  const errorModulePaths = new Set<string>();
-
-  for (const error of errors || []) {
-    const candidate = error.moduleIdentifier || error.moduleName;
-
-    if (!candidate) {
-      continue;
-    }
-
-    const absolutePath = resolveStatsPathCandidate({
-      candidate,
-      projectRoot,
-    });
-
-    if (absolutePath) {
-      errorModulePaths.add(normalize(absolutePath));
-    }
-  }
-
-  return errorModulePaths;
-};
-
-const recoverTestDependencies = ({
-  testPath,
-  source,
-  moduleGraph,
-}: {
-  testPath: string;
-  source: string;
-  moduleGraph: ModuleGraph;
-}): void => {
-  for (const specifier of collectStaticImportSpecifiers(
-    stripSourceComments(source),
-  )) {
-    const resolvedPath = resolveLocalImportPath({
-      specifier,
-      importerPath: testPath,
-    });
-
-    if (!resolvedPath) {
-      continue;
-    }
-
-    addDependent({
-      moduleGraph,
-      sourcePath: resolvedPath,
-      dependentPath: testPath,
-    });
-  }
-
-  moduleGraph.allSources.add(testPath);
-};
-
-/**
- * A test file that fails to compile does not contribute any module graph
- * edges. Recover its local static imports from the source text so that a test
- * which is related to the requested source is still selected instead of being
- * reported as "no related tests".
- */
-const recoverMissingTestDependencies = async ({
-  testPaths,
-  moduleGraph,
-}: {
-  testPaths: string[];
-  moduleGraph: ModuleGraph;
-}): Promise<void> => {
-  const readResults = await Promise.allSettled(
-    testPaths.map((testPath) => readFile(testPath, 'utf8')),
-  );
-
-  for (const [index, result] of readResults.entries()) {
-    if (result.status !== 'fulfilled') {
-      continue;
-    }
-
-    recoverTestDependencies({
-      testPath: testPaths[index]!,
-      source: result.value,
-      moduleGraph,
-    });
-  }
+  return {
+    allSources,
+    dependentsBySource,
+  };
 };
 
 const collectReachableDependents = ({
@@ -493,6 +315,40 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
     });
   },
 });
+
+/**
+ * Collect the module paths reported by the analysis build errors. Test files
+ * in this set could not be analyzed, so they cannot be matched reliably.
+ */
+const collectErrorModulePaths = ({
+  errors,
+  projectRoot,
+}: {
+  errors:
+    readonly { moduleIdentifier?: string; moduleName?: string }[] | undefined;
+  projectRoot: string;
+}): Set<string> => {
+  const errorModulePaths = new Set<string>();
+
+  for (const error of errors || []) {
+    const candidate = error.moduleIdentifier || error.moduleName;
+
+    if (!candidate) {
+      continue;
+    }
+
+    const absolutePath = resolveStatsPathCandidate({
+      candidate,
+      projectRoot,
+    });
+
+    if (absolutePath) {
+      errorModulePaths.add(normalize(absolutePath));
+    }
+  }
+
+  return errorModulePaths;
+};
 
 const collectDirectlyMatchedFiles = ({
   files,
@@ -583,6 +439,7 @@ export async function resolveRelatedTestFiles(
     });
 
     const matchedTestFiles = new Set<string>();
+    let failedTestFileCount = 0;
 
     projectEntries = projectEntries.size
       ? projectEntries
@@ -632,16 +489,9 @@ export async function resolveRelatedTestFiles(
           errors,
           projectRoot: project.rootPath,
         });
-        const failedTestPaths = testPaths.filter((testPath) =>
+        failedTestFileCount += testPaths.filter((testPath) =>
           errorModulePaths.has(normalize(testPath)),
-        );
-
-        if (failedTestPaths.length) {
-          await recoverMissingTestDependencies({
-            testPaths: failedTestPaths,
-            moduleGraph,
-          });
-        }
+        ).length;
       }
 
       const setupPaths = Object.values(
@@ -683,6 +533,12 @@ export async function resolveRelatedTestFiles(
           matchedTestFiles.add(testPath);
         }
       }
+    }
+
+    if (failedTestFileCount > 0) {
+      logger.warn(
+        `Related test selection may be incomplete: ${failedTestFileCount} test file(s) failed to build and could not be analyzed.`,
+      );
     }
 
     return Array.from(matchedTestFiles).sort();

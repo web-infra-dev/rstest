@@ -85,7 +85,7 @@ Rstest 会基于构建得到的 module graph 解析相关测试，因此同一�
 npx rstest run --findRelatedTests src/button.ts
 ```
 
-与请求源无关的文件出现编译错误时，`--related` 和 `--changed` 不会失败退出。如果测试文件自身编译失败，Rstest 会从源码中恢复它的本地静态 import，使其在相关时仍能被选中。`passWithNoTests` 只允许选择结果为空。
+与请求源无关的文件出现编译错误时，`--related` 和 `--changed` 不会失败退出。如果测试文件自身编译失败，Rstest 无法分析它的依赖，可能漏选并打印警告。`passWithNoTests` 只允许选择结果为空。
 
 如果你只想查看受影响的测试文件，可以配合 `rstest list` 使用：
 
