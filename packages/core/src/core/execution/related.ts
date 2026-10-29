@@ -506,18 +506,19 @@ export async function resolveRelatedTestFiles(
     filterLabel?: string;
     allowEmpty?: boolean;
     /**
-     * Source filters come from `--changed`, so a path that still exists as a
-     * directory is a replaced file target rather than a real directory filter.
+     * Paths Git reports as deleted. One that exists again as something other
+     * than a file (a file replaced by a same-name directory) is still a
+     * missing import target.
      */
-    changedSourceFilters?: boolean;
+    deletedFiles?: string[];
   },
 ): Promise<string[]> {
   const {
     sourceFilters,
     filterLabel = '--related',
     allowEmpty = false,
-    changedSourceFilters = false,
   } = options;
+  const deletedFiles = new Set(options.deletedFiles);
 
   if (sourceFilters.length === 0) {
     if (allowEmpty) {
@@ -541,10 +542,9 @@ export async function resolveRelatedTestFiles(
     await Promise.all(
       Array.from(sourcePaths).map(async (source) => {
         const stats = await stat(source).catch(() => undefined);
+        const missing = deletedFiles.has(source) ? !stats?.isFile() : !stats;
 
-        return !stats || (changedSourceFilters && stats.isDirectory())
-          ? source
-          : undefined;
+        return missing ? source : undefined;
       }),
     )
   ).filter((source): source is string => source !== undefined);

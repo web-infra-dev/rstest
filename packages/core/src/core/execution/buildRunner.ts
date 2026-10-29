@@ -114,7 +114,7 @@ export const hasForceRerunTrigger = ({
 export const resolveChangedFiles = async (
   cwd: string,
   since?: string,
-): Promise<string[]> => {
+): Promise<{ files: string[]; deletedFiles: string[] }> => {
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
   const execFileAsync = promisify(execFile);
@@ -141,23 +141,29 @@ export const resolveChangedFiles = async (
 
   try {
     const root = await gitRoot();
-    const [committed, staged, unstaged] = await Promise.all([
-      // Deletions must stay in the change set, and rename detection must be
-      // off: `--name-only` reports a rename as its destination only, which
-      // would drop the old path that remaining importers still reference.
-      since
-        ? git(
-            ['diff', '--name-only', '-z', '--no-renames', `${since}...HEAD`],
-            root,
-          )
-        : [],
-      git(['diff', '--name-only', '-z', '--no-renames', '--cached'], root),
+    // Deletions must stay in the change set, and rename detection must be
+    // off: `--name-only` reports a rename as its destination only, which
+    // would drop the old path that remaining importers still reference.
+    const diff = (args: string[]) =>
+      git(['diff', '--name-only', '-z', '--no-renames', ...args], root);
+    const range = since ? [`${since}...HEAD`] : undefined;
+    const [committed, staged, unstaged, ...deleted] = await Promise.all([
+      range ? diff(range) : [],
+      diff(['--cached']),
       git(
         ['ls-files', '-z', '--others', '--modified', '--exclude-standard'],
         root,
       ),
+      range ? diff(['--diff-filter=D', ...range]) : [],
+      diff(['--cached', '--diff-filter=D']),
+      // Unlike `ls-files --deleted`, this also reports a tracked file that
+      // was replaced by a directory of the same name.
+      diff(['--diff-filter=D']),
     ]);
-    return Array.from(new Set([...committed, ...staged, ...unstaged])).sort();
+    return {
+      files: Array.from(new Set([...committed, ...staged, ...unstaged])).sort(),
+      deletedFiles: Array.from(new Set(deleted.flat())).sort(),
+    };
   } catch (error) {
     const reason = formatGitError(error);
     throw new Error(
@@ -205,12 +211,13 @@ const resolveEffectiveFilters = async ({
     'list',
     undefined,
   );
-  const sourceFilters = changedRun
+  const changes = changedRun
     ? await resolveChangedFiles(
         rstest.context.rootPath,
         typeof options.changed === 'string' ? options.changed : undefined,
       )
-    : (normalizedFilters ?? []);
+    : undefined;
+  const sourceFilters = changes?.files ?? normalizedFilters ?? [];
   const forceRerunFiles = changedRun
     ? getForceRerunTriggerFiles({
         changedFiles: sourceFilters,
@@ -240,7 +247,7 @@ const resolveEffectiveFilters = async ({
     sourceFilters,
     filterLabel: changedRun ? '--changed' : '--related',
     allowEmpty: changedRun,
-    changedSourceFilters: changedRun,
+    deletedFiles: changes?.deletedFiles,
   });
 
   return {
@@ -268,10 +275,11 @@ const resolveCoverageChangedFilters = async (
   }
 
   try {
-    return await resolveChangedFiles(
+    const { files } = await resolveChangedFiles(
       rstest.context.rootPath,
       typeof changed === 'string' ? changed : undefined,
     );
+    return files;
   } catch (error) {
     const reason = formatGitError(error);
     logger.warn(
