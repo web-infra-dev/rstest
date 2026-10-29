@@ -252,7 +252,7 @@ describe('Pool - isolate', () => {
       // worker. If releaseRunner/acquireRunner recycled the crashed
       // runner, this would hang or throw an IPC error.
       const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
+      expect(result.status).toBe('passed');
     } finally {
       await pool.close();
     }
@@ -298,8 +298,8 @@ describe('Pool - exit-based lifecycle (not close)', () => {
       const r2 = await pool.runTest(createTask());
       const elapsed = Date.now() - start;
 
-      expect(r1.status).toBe('pass');
-      expect(r2.status).toBe('pass');
+      expect(r1.status).toBe('passed');
+      expect(r2.status).toBe('passed');
       // If slot reclaim were stuck on `close`, elapsed would be >= 30s.
       // With `exit`-based reclaim it should be well under 5s.
       expect(elapsed).toBeLessThan(5000);
@@ -341,7 +341,7 @@ describe('Pool - failure recovery', () => {
       // With maxWorkers=1, this task would deadlock if the crashed slot
       // was not released. A successful result proves scheduler recovery.
       const result = await pool.runTest(createTask());
-      expect(result.status).toBe('pass');
+      expect(result.status).toBe('passed');
     } finally {
       await pool.close();
     }
@@ -500,7 +500,7 @@ describe('Pool - capacity', () => {
 
     expect(results).toHaveLength(taskCount);
     for (const r of results) {
-      expect(r.status).toBe('pass');
+      expect(r.status).toBe('passed');
     }
 
     // Each slow-mode result carries _startedAt / _finishedAt timestamps

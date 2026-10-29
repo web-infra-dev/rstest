@@ -564,11 +564,14 @@ export interface RstestConfig {
   reporters?:
     | Reporter
     | BuiltInReporterNames
+    | (string & {})
     | (
         | Reporter
         | BuiltInReporterNames
-        | [BuiltInReporterNames]
+        | (string & {})
         | ReporterWithOptions
+        | [string]
+        | [string, Record<string, unknown>]
       )[];
   /**
    * Hide skipped tests logs.

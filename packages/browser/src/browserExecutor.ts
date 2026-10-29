@@ -111,6 +111,7 @@ export async function createBrowserExecutor(
         const cycle = watchSession.runCycle(
           opts.fileFilters ?? [],
           opts.updateSnapshot,
+          opts.onSelected,
         );
         inFlightCycle = cycle;
         try {
@@ -128,6 +129,7 @@ export async function createBrowserExecutor(
         appliedModifyRstestConfigEnvironments,
         onTraceEvents: opts.onTraceEvents,
         signal: abortController.signal,
+        onSelected: opts.onSelected,
         env: opts.env,
         updateSnapshot: opts.updateSnapshot,
         onInvalidate: isWatchMode

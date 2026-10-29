@@ -182,7 +182,7 @@ describe('createRstest', () => {
       const project = ['missing'];
 
       await expect(rstest.run({ project })).resolves.toMatchObject({
-        status: 'pass',
+        status: 'passed',
         results: [
           expect.objectContaining({
             project: 'rstest',
@@ -273,10 +273,10 @@ describe('createRstest', () => {
         },
       });
 
-      await expect(rstest.run()).resolves.toMatchObject({ status: 'fail' });
+      await expect(rstest.run()).resolves.toMatchObject({ status: 'failed' });
       await expect(
         rstest.run({ passWithNoTests: true }),
-      ).resolves.toMatchObject({ status: 'pass' });
+      ).resolves.toMatchObject({ status: 'passed' });
 
       let initialWatchStatus;
       const watcher = await rstest.watch({
@@ -284,7 +284,7 @@ describe('createRstest', () => {
           initialWatchStatus = result.status;
         },
       });
-      expect(initialWatchStatus).toBe('pass');
+      expect(initialWatchStatus).toBe('passed');
       await watcher.close();
     });
   });
@@ -313,7 +313,7 @@ describe('createRstest', () => {
 
           for (let index = 0; index < 2; index++) {
             await expect(rstest.run()).resolves.toMatchObject({
-              status: 'pass',
+              status: 'passed',
             });
             expect(process.stdout.write).toBe(state.stdoutWrite);
             expect(process.stderr.write).toBe(state.stderrWrite);
@@ -341,7 +341,8 @@ describe('createRstest', () => {
       writeFileSync(
         join(root, '.rstest-reports/blob.json'),
         JSON.stringify({
-          version: RSTEST_VERSION,
+          version: `${RSTEST_VERSION}:2`,
+          runStart: { files: [] },
           results: [],
           testResults: [],
           summary: emptyRunSummary,
@@ -396,7 +397,7 @@ describe('createRstest', () => {
         },
       });
 
-      await expect(rstest.run()).resolves.toMatchObject({ status: 'pass' });
+      await expect(rstest.run()).resolves.toMatchObject({ status: 'passed' });
     });
   });
 

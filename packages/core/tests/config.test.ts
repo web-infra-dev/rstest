@@ -52,6 +52,14 @@ describe('mergeRstestConfig', () => {
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
   });
 
+  it('accepts a single-element reporter tuple', () => {
+    // `[name]` is a valid runtime form (options default to `{}`); pin it at the
+    // type level so the union cannot silently drop it again.
+    const reporters: NonNullable<RstestConfig['reporters']> = [['default']];
+
+    expect(withDefaultConfig({ reporters }).reporters).toEqual([['default']]);
+  });
+
   it('should merge expect.poll with its defaults', () => {
     expect(
       withDefaultConfig({

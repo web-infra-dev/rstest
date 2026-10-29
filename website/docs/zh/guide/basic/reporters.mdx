@@ -304,9 +304,9 @@ JUnit 报告器生成如下 XML 格式：
 
 JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
 
-- `pass`：测试通过
-- `fail`：测试失败，生成 `<failure>` 标签
-- `skip`：测试跳过，生成 `<skipped>` 标签
+- `passed`：测试通过
+- `failed`：测试失败，生成 `<failure>` 标签
+- `skipped`：测试跳过，生成 `<skipped>` 标签
 - `todo`：测试待办，生成 `<skipped>` 标签
 
 ### JSON 报告器
@@ -338,7 +338,7 @@ export default defineConfig({
 
 **输出结构：**
 
-- `status`：本次运行的整体状态（`pass` 或 `fail`）
+- `status`：本次运行的整体状态（`passed`、`failed` 或 `error`）
 - `summary`：文件和测试的聚合计数
 - `durationMs`：总耗时、构建耗时和测试耗时（毫秒）
 - `snapshot`：本次运行的 snapshot 汇总
@@ -398,7 +398,7 @@ export default defineConfig({
 
 ```json
 {
-  "status": "pass",
+  "status": "passed",
   "counts": {
     "testFiles": 2,
     "failedFiles": 0,
@@ -425,7 +425,7 @@ Note: all tests passed. Lists omitted for brevity.
 
 ```json
 {
-  "status": "fail",
+  "status": "failed",
   "counts": {
     "testFiles": 1,
     "failedFiles": 1,
@@ -448,7 +448,7 @@ details:
 {
   "testPath": "fixtures/agent-md/index.test.ts",
   "fullName": "agent-md > fails with diff",
-  "status": "fail"
+  "status": "failed"
 }
 ```
 

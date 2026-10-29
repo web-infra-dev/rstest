@@ -1,4 +1,21 @@
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig, js, ts } from '@rslint/core';
+
+// packages/vscode is frozen on the @rstest/core 0.12 line
+// (rstackjs/rstack-editor#75): its source keeps that reporter contract and must
+// not be type-checked against the current core types. Discover the other package
+// projects instead of globbing so a new package cannot silently escape type
+// checking; restore the `./packages/*/tsconfig.json` glob once the extension is
+// deleted.
+const packageProjects = readdirSync(join(import.meta.dirname, 'packages'), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory() && entry.name !== 'vscode')
+  .map((entry) => entry.name)
+  .sort()
+  .map((name) => `./packages/${name}/tsconfig.json`)
+  .filter((project) => existsSync(join(import.meta.dirname, project)));
 
 // Unit tests must be OS-agnostic: CI runs the ut job on ubuntu only, so a test
 // whose behavior branches on the host platform silently loses its non-Linux
@@ -243,7 +260,7 @@ export default defineConfig([
         // lint rules and tsc itself.
         project: [
           './e2e/tsconfig.json',
-          './packages/*/tsconfig.json',
+          ...packageProjects,
           './packages/*/tests/tsconfig.json',
         ],
       },

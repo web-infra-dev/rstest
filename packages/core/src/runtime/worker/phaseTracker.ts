@@ -1,7 +1,7 @@
 import type {
-  TestCaseInfo,
-  TestResult,
-  TestSuiteInfo,
+  RawTestCaseInfo,
+  RawTestResult,
+  RawTestSuiteInfo,
 } from '../../types/testSuite';
 import type { TraceEvent } from '../../utils/trace';
 import { getRealNow } from '../util';
@@ -109,12 +109,12 @@ export class PhaseTracker {
     this.currentPhase = null;
   }
 
-  recordSuiteStart(info: TestSuiteInfo): void {
+  recordSuiteStart(info: RawTestSuiteInfo): void {
     if (!this.trace) return;
     this.trace.suiteStarts.set(info.testId, getRealNow());
   }
 
-  recordSuiteResult(result: TestResult): void {
+  recordSuiteResult(result: RawTestResult): void {
     if (!this.trace) return;
     const start = this.trace.suiteStarts.get(result.testId);
     this.trace.suiteStarts.delete(result.testId);
@@ -125,7 +125,7 @@ export class PhaseTracker {
     });
   }
 
-  recordCaseStart(info: TestCaseInfo): void {
+  recordCaseStart(info: RawTestCaseInfo): void {
     if (!this.trace) return;
     // Prefer the runner's authoritative start time when present so the slice
     // aligns exactly with the case's reported duration.
@@ -134,7 +134,7 @@ export class PhaseTracker {
     this.trace.caseStarts.set(info.testId, start);
   }
 
-  recordCaseResult(result: TestResult): void {
+  recordCaseResult(result: RawTestResult): void {
     if (!this.trace) return;
     const start = this.trace.caseStarts.get(result.testId);
     this.trace.caseStarts.delete(result.testId);

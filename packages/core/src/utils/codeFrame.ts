@@ -4,19 +4,26 @@
 // MIT license; see the Vue entry in LICENSE.md.
 import type { Colors } from 'picocolors/types';
 
+/** Lines rendered around the target line; callers may narrow the window. */
+export interface CodeFrameWindow {
+  linesAbove?: number;
+  linesBelow?: number;
+}
+
 export function generateCodeFrame(
   source: string,
   line: number | null,
   column: number | null,
   colors: Colors,
+  { linesAbove = 2, linesBelow = 2 }: CodeFrameWindow = {},
 ): string {
   const lines = source.split(/\r\n|[\n\r\u2028\u2029]/);
   if (!line || line < 1 || line > lines.length) {
     return '';
   }
 
-  const start = Math.max(1, line - 2);
-  const end = Math.min(lines.length, line + 2);
+  const start = Math.max(1, line - linesAbove);
+  const end = Math.min(lines.length, line + linesBelow);
   const width = String(end).length;
   const frame: string[] = [];
 

@@ -29,11 +29,11 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   const prevCountsRef = useRef(counts);
 
   useEffect(() => {
-    // Trigger flash if counts change (specifically pass, fail, or running)
+    // Trigger flash if counts change (specifically passed, failed, or running)
     const prev = prevCountsRef.current;
     if (
-      prev.pass !== counts.pass ||
-      prev.fail !== counts.fail ||
+      prev.passed !== counts.passed ||
+      prev.failed !== counts.failed ||
       prev.running !== counts.running
     ) {
       // Debounce the flash key update to avoid hectic animations
@@ -46,13 +46,17 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   }, [counts]);
 
   const total =
-    counts.idle + counts.running + counts.pass + counts.fail + counts.skip;
+    counts.idle +
+    counts.running +
+    counts.passed +
+    counts.failed +
+    counts.skipped;
 
   const getPercent = (count: number) =>
     total === 0 ? 0 : (count / total) * 100;
 
-  const passPercent = getPercent(counts.pass);
-  const failPercent = getPercent(counts.fail);
+  const passPercent = getPercent(counts.passed);
+  const failPercent = getPercent(counts.failed);
   const runningPercent = getPercent(counts.running);
 
   const handleCycleTheme = () => {

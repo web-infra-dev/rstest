@@ -28,6 +28,7 @@ rs.mock('../../src/reporter/blob', () => ({
   blobFileKeyProject: rs.fn(),
   isBlobFile: () => true,
   parseBlobFile: () => ({
+    runStart: { files: [] },
     duration: { buildTime: 0, testTime: 0, totalTime: 0 },
     files: {},
     results: [],

@@ -27,6 +27,7 @@ export type TaskMetaValue =
 
 export type TaskMeta = Record<string, TaskMetaValue>;
 
+// Mirrors @vitest/expect's TaskResult.state literals, deliberately not the public TestResultStatus.
 export type TaskState = 'pass' | 'fail';
 
 export interface TaskResult {
@@ -49,7 +50,7 @@ export type Location = {
   column: number;
 };
 
-export type TestCaseInfo = {
+export type RawTestCaseInfo = {
   testId: string;
   testPath: TestPath;
   name: string;
@@ -61,12 +62,18 @@ export type TestCaseInfo = {
   startTime?: number;
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   meta?: TaskMeta;
   type: 'case';
   runMode: TestRunMode;
 };
 
-export type TestCase = TestCaseInfo & {
+export type TestCaseInfo = RawTestCaseInfo & {
+  fullName: string;
+  relativeTestPath: string;
+};
+
+export type TestCase = RawTestCaseInfo & {
   originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
   fails?: boolean;
@@ -124,7 +131,7 @@ export type BeforeEachListener<ExtraContext = object> = (
   ctx: TestContext & ExtraContext,
 ) => MaybePromise<void | AfterEachListener<ExtraContext>>;
 
-export type TestSuiteInfo = {
+export type RawTestSuiteInfo = {
   testId: string;
   name: string;
   parentNames?: string[];
@@ -133,11 +140,17 @@ export type TestSuiteInfo = {
   type: 'suite';
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   meta?: TaskMeta;
   runMode: TestRunMode;
 };
 
-export type TestSuite = TestSuiteInfo & {
+export type TestSuiteInfo = RawTestSuiteInfo & {
+  fullName: string;
+  relativeTestPath: string;
+};
+
+export type TestSuite = RawTestSuiteInfo & {
   /** @internal */
   hasRunnableTests?: boolean;
   each?: boolean;
@@ -171,18 +184,29 @@ export type TestSuiteListeners = keyof Pick<
   | 'beforeEachListeners'
 >;
 
+export type RawTestInfo =
+  RawTestCaseInfo | (RawTestSuiteInfo & { tests: RawTestInfo[] });
+
 export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
 
-export type TestFileInfo = {
+export type RawTestFileInfo<Info extends RawTestInfo = RawTestInfo> = {
   testId: string;
   testPath: TestPath;
   project: string;
-  tests: TestInfo[];
+  tests: Info[];
+};
+
+export type TestFileInfo = RawTestFileInfo<TestInfo> & {
+  relativeTestPath: string;
 };
 
 export type Test = TestSuite | TestCase;
 
-export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
+// Past-tense results follow Vitest's reported test states (`passed`, `failed`,
+// `skipped`); `todo` carries over from the pre-1.0 contract and is also part of
+// Jest's status union. `skipped` is Vitest's spelling: Jest reserves it in the
+// type but its default runner reports `pending` for intentional skips.
+export type TestResultStatus = 'skipped' | 'passed' | 'failed' | 'todo';
 
 export interface SerializedError {
   fullStack?: boolean;
@@ -195,7 +219,7 @@ export interface SerializedError {
   retryCount?: number;
 }
 
-export type TestResult = {
+export type RawTestResult = {
   testId: string;
   status: TestResultStatus;
   name: string;
@@ -206,30 +230,53 @@ export type TestResult = {
   retryErrors?: SerializedError[];
   retryCount?: number;
   project: string;
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   meta?: TaskMeta;
+  /** Best-effort: semantics may change independently of the stable reporter contract. */
   heap?: number;
 };
 
-export type TestFileResult = TestResult & {
-  results: TestResult[];
-  snapshotResult?: SnapshotResult;
-  coverage?: Record<string, FileCoverageData>;
-  /**
-   * Raw coverage payload used internally between workers and the pool.
-   * Stripped at the pool boundary before results are exposed to reporters.
-   *
-   * @internal
-   */
-  coverageRaw?: unknown;
-  /**
-   * Perfetto-compatible trace events. Stripped at the pool boundary.
-   *
-   * @internal
-   */
-  traceEvents?: import('../utils/trace').TraceEvent[];
+export type TestResult = RawTestResult & {
+  fullName: string;
+  relativeTestPath: string;
 };
 
-export interface UserConsoleLog {
+export type TestFileSummary = {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  todo: number;
+  flaky: number;
+};
+
+export type RawTestFileResult<Result extends RawTestResult = RawTestResult> =
+  RawTestResult & {
+    results: Result[];
+    snapshotResult?: SnapshotResult;
+    /** Best-effort: semantics may change independently of the stable reporter contract. */
+    coverage?: Record<string, FileCoverageData>;
+    /**
+     * Raw coverage payload used internally between workers and the pool.
+     * Stripped at the pool boundary before results are exposed to reporters.
+     *
+     * @internal
+     */
+    coverageRaw?: unknown;
+    /**
+     * Perfetto-compatible trace events. Stripped at the pool boundary.
+     *
+     * @internal
+     */
+    traceEvents?: import('../utils/trace').TraceEvent[];
+  };
+
+export type TestFileResult = RawTestFileResult<TestResult> &
+  TestResult & {
+    summary: TestFileSummary;
+  };
+
+export interface RawUserConsoleLog {
   content: string;
   name: string;
   taskId?: string;
@@ -247,3 +294,5 @@ export interface UserConsoleLog {
   project: string;
   type: ConsoleStreamType;
 }
+
+export type UserConsoleLog = RawUserConsoleLog & { relativeTestPath: string };

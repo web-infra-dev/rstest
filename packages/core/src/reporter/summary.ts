@@ -14,84 +14,65 @@
  * copies or substantial portions of the Software.
  */
 import type { SnapshotSummary } from '@vitest/snapshot';
-import path from 'pathe';
 import type {
   Duration,
   GetSourcemap,
   SerializedError,
   TestFileResult,
+  TestFileSummary,
   TestResult,
 } from '../types';
 import {
   bgColor,
   color,
   formatTestPath,
-  getTaskNameWithPrefix,
   logger,
   POINTER,
   prettyTestPath,
   prettyTime,
   TEST_DELIMITER,
 } from '../utils';
+import { getFileSummary } from '../utils/testSummary';
 import { getRetryErrorLabel } from './utils';
 
-export const getSummaryStatusString = (
-  tasks: TestResult[],
+const identity = (text: string): string => text;
+
+const statusCountKeys = ['failed', 'passed', 'skipped', 'todo'] as const;
+
+const statusCountStyle = {
+  ansi: {
+    failed: (text: string) => color.bold(color.red(text)),
+    passed: (text: string) => color.bold(color.green(text)),
+    skipped: color.yellow,
+    todo: color.gray,
+  },
+  plain: {
+    failed: identity,
+    passed: identity,
+    skipped: identity,
+    todo: identity,
+  },
+} as const;
+
+export const formatStatusCounts = (
+  counts: TestFileSummary,
+  style: 'ansi' | 'plain',
   name = 'tests',
   showTotal = true,
 ): string => {
-  if (tasks.length === 0) {
-    return color.dim(`no ${name}`);
+  if (counts.total === 0) {
+    return style === 'ansi' ? color.dim(`no ${name}`) : `no ${name}`;
   }
 
-  const passed = tasks.filter((result) => result.status === 'pass');
-  const failed = tasks.filter((result) => result.status === 'fail');
-  const skipped = tasks.filter((result) => result.status === 'skip');
-  const todo = tasks.filter((result) => result.status === 'todo');
-
-  const status = [
-    failed.length ? color.bold(color.red(`${failed.length} failed`)) : null,
-    passed.length ? color.bold(color.green(`${passed.length} passed`)) : null,
-    skipped.length ? color.yellow(`${skipped.length} skipped`) : null,
-    todo.length ? color.gray(`${todo.length} todo`) : null,
-  ].filter(Boolean);
-
-  return (
-    status.join(color.dim(' | ')) +
-    (showTotal && status.length > 1 ? color.gray(` (${tasks.length})`) : '')
-  );
-};
-
-/**
- * Plain-text version of getSummaryStatusString (no ANSI codes).
- * Suitable for markdown / GitHub step summary output.
- */
-export const getPlainSummaryStatusString = (
-  tasks: TestResult[],
-  name = 'tests',
-  showTotal = true,
-): string => {
-  if (tasks.length === 0) {
-    return `no ${name}`;
+  const paint = statusCountStyle[style];
+  const parts = statusCountKeys
+    .filter((key) => counts[key] > 0)
+    .map((key) => paint[key](`${counts[key]} ${key}`));
+  const total = showTotal && parts.length > 1 ? ` (${counts.total})` : '';
+  if (style === 'plain') {
+    return `${counts.failed ? '❌' : '✅'} ${parts.join(' | ')}${total}`;
   }
-
-  const failed = tasks.filter((result) => result.status === 'fail');
-  const passed = tasks.filter((result) => result.status === 'pass');
-  const skipped = tasks.filter((result) => result.status === 'skip');
-  const todo = tasks.filter((result) => result.status === 'todo');
-
-  const icon = failed.length > 0 ? '❌' : '✅';
-  const parts = [
-    failed.length ? `${failed.length} failed` : null,
-    passed.length ? `${passed.length} passed` : null,
-    skipped.length ? `${skipped.length} skipped` : null,
-    todo.length ? `${todo.length} todo` : null,
-  ].filter(Boolean);
-
-  return (
-    `${icon} ${parts.join(' | ')}` +
-    (showTotal && parts.length > 1 ? ` (${tasks.length})` : '')
-  );
+  return `${parts.join(color.dim(' | '))}${color.gray(total)}`;
 };
 
 /**
@@ -166,21 +147,25 @@ export const DurationLabel: string = color.gray('Duration'.padStart(11));
 
 export const printSummaryLog = ({
   results,
-  testResults,
   snapshotSummary,
   duration,
+  summary,
   rootPath,
 }: {
   results: TestFileResult[];
-  testResults: TestResult[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
+  summary: { tests: TestFileSummary };
   rootPath: string;
 }): void => {
   logger.log('');
   printSnapshotSummaryLog(snapshotSummary, rootPath);
-  logger.log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
-  logger.log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
+  logger.log(
+    `${TestFileSummaryLabel} ${formatStatusCounts(getFileSummary(results), 'ansi')}`,
+  );
+  logger.log(
+    `${TestSummaryLabel} ${formatStatusCounts(summary.tests, 'ansi')}`,
+  );
 
   logger.log(
     `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
@@ -208,12 +193,12 @@ export const printSummaryErrorLogs = async ({
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
-        i.status === 'fail' &&
+        i.status === 'failed' &&
         i.errors?.length &&
         (rerun ? rerun.has(i.testPath) : true),
     ),
     ...testResults.filter(
-      (i) => i.status === 'fail' && (rerun ? rerun.has(i.testPath) : true),
+      (i) => i.status === 'failed' && (rerun ? rerun.has(i.testPath) : true),
     ),
   ];
 
@@ -232,8 +217,8 @@ export const printSummaryErrorLogs = async ({
   }
 
   for (const test of failedTests) {
-    const relativePath = path.relative(rootPath, test.testPath);
-    const nameStr = getTaskNameWithPrefix(test);
+    const relativePath = test.relativeTestPath;
+    const nameStr = test.fullName;
 
     //  FAIL  tests/index.test.ts > suite name > test case name
     logger.stderr(

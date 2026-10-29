@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
 import {
+  expectReporterHookJoins,
   getCoverageSummaryEntry,
   parseMarkerPayload,
   runRstestCli,
@@ -556,15 +557,45 @@ describe('merge-reports', () => {
 describe('merge-reports lifecycle replay', () => {
   const blobDir = join(replayFixturesDir, '.rstest-reports');
 
-  const runFixture = (args: string[]) =>
+  const runFixture = (
+    args: string[],
+    env?: Record<string, string | undefined>,
+  ) =>
     runRstestCli({
       command: 'rstest',
       args,
-      options: { nodeOptions: { cwd: replayFixturesDir } },
+      options: { nodeOptions: { cwd: replayFixturesDir, env } },
     });
 
   const parseLifecycle = (stdout: string): string[] =>
     parseMarkerPayload<string[]>(stdout, '__RSTEST_LIFECYCLE__');
+
+  type ContractEvent = {
+    event: string;
+    testId?: string;
+    testPath?: string;
+  };
+
+  const parseContract = (stdout: string) =>
+    parseMarkerPayload<{ status: string; events: ContractEvent[] }>(
+      stdout,
+      '__RSTEST_REPORTER_CONTRACT__',
+    );
+
+  /**
+   * Per-test hook order only. Which test's `start-exit` fires first depends on
+   * transport timing that a replay cannot reproduce (replayed hooks dispatch in
+   * one tick), so cross-test interleaving is not part of the contract; each
+   * test's own sequence is.
+   */
+  const eventsByTest = (events: ContractEvent[]): Record<string, string[]> => {
+    const byTest: Record<string, string[]> = {};
+    for (const { event, testId } of events) {
+      if (!testId) continue;
+      (byTest[testId] ??= []).push(event);
+    }
+    return byTest;
+  };
 
   /**
    * Records one fixture run live and replays that same run's blob, so the two
@@ -588,13 +619,23 @@ describe('merge-reports lifecycle replay', () => {
       return cli.stdout;
     };
 
-    const live = parseLifecycle(await run(['run']));
-    const merged = parseLifecycle(await run(['merge-reports', '--cleanup']));
-    return { live, merged };
+    const liveOutput = await run(['run']);
+    const mergedOutput = await run(['merge-reports', '--cleanup']);
+    expect(parseMarkerPayload(mergedOutput, '__RSTEST_SELECTION__')).toEqual(
+      parseMarkerPayload(liveOutput, '__RSTEST_SELECTION__'),
+    );
+    const live = parseLifecycle(liveOutput);
+    const merged = parseLifecycle(mergedOutput);
+    return { live, merged, liveOutput, mergedOutput };
   };
 
   it('replays every reporter hook a live run fires, in live order', async () => {
-    const { live: liveEvents, merged: mergedEvents } = await captureReplay([]);
+    const {
+      live: liveEvents,
+      merged: mergedEvents,
+      liveOutput,
+      mergedOutput,
+    } = await captureReplay([]);
 
     // Every hook the fixture can exercise must show up in the live baseline,
     // otherwise the comparison below would pass on an empty sequence.
@@ -621,16 +662,48 @@ describe('merge-reports lifecycle replay', () => {
     expect(names.filter((n) => n.startsWith('concurrent'))).toEqual([
       expect.stringMatching(/^concurrent slow \| startTime=/),
       expect.stringMatching(/^concurrent fast \| startTime=/),
-      'concurrent fast | pass',
-      'concurrent slow | pass',
+      'concurrent fast | passed',
+      'concurrent slow | passed',
     ]);
     // `afterAll` output carries the suite's task id but is written after the
     // child results, so it cannot be flushed at suite start.
     expect(names.indexOf('afterAll log')).toBeGreaterThan(
-      names.indexOf('concurrent slow | pass'),
+      names.indexOf('concurrent slow | passed'),
     );
 
     expect(mergedEvents).toEqual(liveEvents);
+
+    // The default fixture config also loads the async contract reporter. The
+    // sync recorder above cannot prove hook joins, so run the per-test join
+    // assertions on both the live dispatch and its replay.
+    const liveContract = parseContract(liveOutput);
+    const mergedContract = parseContract(mergedOutput);
+    await expectReporterHookJoins(liveContract.events);
+    await expectReporterHookJoins(mergedContract.events);
+    expect(eventsByTest(mergedContract.events)).toEqual(
+      eventsByTest(liveContract.events),
+    );
+  });
+
+  it('preserves recorded file payloads when merging from a different root', async () => {
+    fs.removeSync(blobDir);
+    const config = join(replayFixturesDir, 'rstest.empty.config.mts');
+    const live = await runFixture(['run']);
+    await live.expectExecSuccess();
+    const merged = await runFixture([
+      'merge-reports',
+      'fixtures-replay/.rstest-reports',
+      '--root',
+      '..',
+      '-c',
+      config,
+      '--cleanup',
+    ]);
+    await merged.expectExecSuccess();
+
+    expect(
+      parseMarkerPayload(merged.cli.stdout, '__RSTEST_FILE_RESULT__'),
+    ).toEqual(parseMarkerPayload(live.cli.stdout, '__RSTEST_FILE_RESULT__'));
   });
 
   it('replays bail elision and a bail-skipped file as the live run reported them', async () => {
@@ -659,7 +732,7 @@ describe('merge-reports lifecycle replay', () => {
     // file window.
     const skipped = liveEvents.filter((event) => event.includes('bailSecond'));
     expect(skipped).toEqual([
-      expect.stringMatching(/^onTestFileResult \| .* \| skip$/),
+      expect.stringMatching(/^onTestFileResult \| .* \| skipped$/),
     ]);
 
     expect(mergedEvents).toEqual(liveEvents);
@@ -693,14 +766,16 @@ describe('merge-reports lifecycle replay', () => {
     const { createRequire } = await import('node:module');
     const { version } = createRequire(import.meta.url)(
       '@rstest/core/package.json',
-    ) as { version: string };
-
+    );
     const testPath = join(replayFixturesDir, 'fatal.test.ts');
     fs.removeSync(blobDir);
     fs.outputFileSync(
       join(blobDir, 'blob.json'),
       JSON.stringify({
-        version,
+        version: `${version}:2`,
+        runStart: {
+          files: [{ testPath, project: 'rstest', testId: `file:${testPath}` }],
+        },
         results: [],
         testResults: [],
         // The real fatal outcome always carries the error here — it is what
@@ -731,6 +806,7 @@ describe('merge-reports lifecycle replay', () => {
                 test: {
                   testId: `file:${testPath}`,
                   testPath,
+                  relativeTestPath: 'fatal.test.ts',
                   project: 'rstest',
                   tests: [],
                 },
@@ -765,6 +841,27 @@ describe('merge-reports lifecycle replay', () => {
     ]);
   });
 
+  it('fails the merge when a run-end hook throws after the payload', async () => {
+    // The payload is dispatched before run-end hooks settle, so a throwing hook
+    // cannot join `unhandledErrors`; it must still fail CI through the CLI's
+    // internal exit-code mirroring, not by changing the payload status.
+    fs.removeSync(blobDir);
+    const live = await runFixture(['run']);
+    await live.expectExecSuccess();
+
+    const merged = await runFixture(['merge-reports', '--cleanup'], {
+      RSTEST_THROW_RUN_END: '1',
+    });
+    await merged.expectExecFailed();
+
+    // The fixture prints the payload it received before throwing.
+    expect(parseContract(merged.cli.stdout).status).toBe('passed');
+    expect(merged.cli.stderr).toContain('Unhandled Reporter Error');
+    expect(merged.cli.stderr).toContain(
+      'Reporter ContractReporter (#2) onTestRunEnd failed: run-end rejected',
+    );
+  });
+
   it('rejects the blob reporter in watch mode', async () => {
     // Blob reports feed the one-shot merge workflow; recording across watch
     // reruns has no coherent semantics, so the reporter is rejected outright.
@@ -773,12 +870,12 @@ describe('merge-reports lifecycle replay', () => {
     expectStderrLog(/Blob reporter is not supported in watch mode/);
   });
 
-  it('refuses to merge blob reports from another Rstest version', async () => {
+  it('refuses to merge reports from another blob format version', async () => {
     // The gate rejects before any payload is read, so a hand-written stub is
     // enough — no need to spend a fixture run producing a real blob.
     fs.outputFileSync(
       join(blobDir, 'blob.json'),
-      JSON.stringify({ version: '0.0.0-other' }),
+      JSON.stringify({ version: 1 }),
     );
 
     const { expectExecFailed, expectStderrLog } = await runFixture([
@@ -786,7 +883,7 @@ describe('merge-reports lifecycle replay', () => {
     ]);
     await expectExecFailed();
     expectStderrLog(
-      /blob\.json was generated by Rstest 0\.0\.0-other, but this is Rstest/,
+      /blob\.json uses format 1, but this Rstest version requires format .*:2/,
     );
 
     fs.removeSync(blobDir);

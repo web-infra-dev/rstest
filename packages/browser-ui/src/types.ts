@@ -9,9 +9,9 @@ import type {
 } from '@rstest/browser/protocol';
 
 import type {
-  TestFileResult,
-  TestInfo,
-  TestResult,
+  RawTestFileResult,
+  RawTestInfo,
+  RawTestResult,
 } from '@rstest/core/internal/browser-runtime';
 
 /**
@@ -22,11 +22,11 @@ import type {
  */
 
 export type BrowserClientTestResult = {
-  testId: TestResult['testId'];
-  status: TestResult['status'];
-  name: TestResult['name'];
-  testPath: TestResult['testPath'];
-  parentNames?: TestResult['parentNames'];
+  testId: RawTestResult['testId'];
+  status: RawTestResult['status'];
+  name: RawTestResult['name'];
+  testPath: RawTestResult['testPath'];
+  parentNames?: RawTestResult['parentNames'];
   location?: {
     line: number;
     column?: number;
@@ -35,11 +35,11 @@ export type BrowserClientTestResult = {
 };
 
 export type BrowserClientFileResult = {
-  testId: TestFileResult['testId'];
-  status: TestFileResult['status'];
-  name: TestFileResult['name'];
-  testPath: TestFileResult['testPath'];
-  parentNames?: TestFileResult['parentNames'];
+  testId: RawTestFileResult['testId'];
+  status: RawTestFileResult['status'];
+  name: RawTestFileResult['name'];
+  testPath: RawTestFileResult['testPath'];
+  parentNames?: RawTestFileResult['parentNames'];
   location?: {
     line: number;
     column?: number;
@@ -50,10 +50,10 @@ export type BrowserClientFileResult = {
 
 export type TestFileReadyPayload = {
   testPath: string;
-  tests: TestInfo[];
+  tests: RawTestInfo[];
 };
 
-export type TestCaseStartPayload = Extract<TestInfo, { type: 'case' }>;
+export type TestCaseStartPayload = Extract<RawTestInfo, { type: 'case' }>;
 
 /**
  * Host RPC surface. Runner lifecycle events have no dedicated methods: the

@@ -1,21 +1,5 @@
 import type { InternalContext, Reporter } from '../types';
-import type { TestRunResult, TestRunStatus, WatchOptions } from './types';
-
-type CapturedCycle = Omit<TestRunResult, 'status'>;
-
-const getStatus = (
-  context: InternalContext,
-  captured: CapturedCycle,
-): TestRunStatus => {
-  if (captured.unhandledErrors.length > 0) {
-    return 'error';
-  }
-  // Watch resets exitCode each cycle, but the session summary retains earlier failures.
-  if (context.exitCode.current !== 0 || captured.summary.files.failed > 0) {
-    return 'fail';
-  }
-  return 'pass';
-};
+import type { TestRunResult, WatchOptions } from './types';
 
 export type ResultReporter = {
   reporter: Reporter;
@@ -26,7 +10,7 @@ export function createResultReporter(
   context: InternalContext,
   { onResult }: Pick<WatchOptions, 'onResult'> = {},
 ): ResultReporter {
-  let captured: CapturedCycle | undefined;
+  let captured: TestRunResult | undefined;
   let resolveResult: ((result: TestRunResult) => void) | undefined;
 
   const removeCycleEndListener = context.exitCode.onCycleEnd(() => {
@@ -36,7 +20,13 @@ export function createResultReporter(
     const trace = context.getTraceOutput?.();
     const result: TestRunResult = {
       ...captured,
-      status: getStatus(context, captured),
+      // Global teardown (or a reporter closing hook) can raise the exit code
+      // after the payload was dispatched, so the resolved result still reports
+      // the failure even though `onTestRunEnd` kept its captured status.
+      status:
+        captured.status === 'passed' && context.exitCode.current !== 0
+          ? 'failed'
+          : captured.status,
       ...(trace && { trace }),
     };
     captured = undefined;

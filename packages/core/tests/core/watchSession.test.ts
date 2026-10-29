@@ -15,6 +15,7 @@ import type {
   TestExecutor,
 } from '../../src/types';
 import type { TraceController, TraceRun } from '../../src/utils';
+import { emptyFileSummary } from '../reporter/helpers';
 
 const rootPath = join(__dirname, 'fixtures/watch-session');
 
@@ -64,6 +65,7 @@ const createFakeExecutor = (
     init: async () => {},
     close: async () => {},
     runCycle: async (options) => {
+      await options.onSelected?.([]);
       cycles.push(options);
       return (await onCycle?.(options)) ?? emptyOutcome();
     },
@@ -264,10 +266,13 @@ describe('createWatchCycleDriver', () => {
       context.stateManager.onTestFileResult({
         testId: '/fail.test.ts',
         name: '/fail.test.ts',
-        status: 'fail',
+        fullName: '/fail.test.ts',
+        status: 'failed',
         testPath: '/fail.test.ts',
+        relativeTestPath: 'fail.test.ts',
         project: 'node-a',
         results: [],
+        summary: emptyFileSummary,
       });
     });
     const seen: number[] = [];
@@ -603,6 +608,12 @@ describe('createWatchCycleDriver', () => {
 
   it('drops a queued cycle when teardown finishes before it starts', async () => {
     const context = createContext();
+    let runStarts = 0;
+    context.reporters.push({
+      onTestRunStart() {
+        runStarts++;
+      },
+    });
     const { executor, release, started } = createGatedExecutor('node');
     const teardown = createWatchTeardown({
       context,
@@ -623,6 +634,41 @@ describe('createWatchCycleDriver', () => {
     await Promise.all([inFlight, queued]);
 
     expect(executor.cycles).toHaveLength(1);
+    expect(runStarts).toBe(1);
+  });
+
+  it('delivers a rejected rerun as an error result and keeps the queue live', async () => {
+    const context = createContext();
+    const onResult = rs.fn();
+    context.reporters.push(
+      createResultReporter(context, { onResult }).reporter,
+    );
+    const driver = createDriver(context);
+    const executor = createFakeExecutor('node', (options) => {
+      if (options.mode === 'on-demand') {
+        throw new Error('cycle blew up');
+      }
+    });
+
+    await driver.runCycle(executor, { mode: 'all' });
+    await driver.runCycle(executor, { mode: 'on-demand' });
+    expect(onResult).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        status: 'error',
+        unhandledErrors: [
+          expect.objectContaining({ message: 'cycle blew up' }),
+        ],
+      }),
+    );
+
+    // The next trigger still runs.
+    await driver.runCycle(executor, { mode: 'all' });
+    expect(executor.cycles).toHaveLength(3);
+    expect(onResult).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ status: 'passed' }),
+    );
   });
 
   it('reports the session snapshot and identifies the files rerun this cycle', async () => {
@@ -636,18 +682,24 @@ describe('createWatchCycleDriver', () => {
       {
         testId: '/failed.test.ts',
         name: '/failed.test.ts',
-        status: 'fail' as const,
+        fullName: '/failed.test.ts',
+        status: 'failed' as const,
         testPath: '/failed.test.ts',
+        relativeTestPath: 'failed.test.ts',
         project: 'node-a',
         results: [],
+        summary: emptyFileSummary,
       },
       {
         testId: '/passed.test.ts',
         name: '/passed.test.ts',
-        status: 'pass' as const,
+        fullName: '/passed.test.ts',
+        status: 'passed' as const,
         testPath: '/passed.test.ts',
+        relativeTestPath: 'passed.test.ts',
         project: 'node-a',
         results: [],
+        summary: emptyFileSummary,
       },
     ];
     let cycle = 0;
@@ -666,7 +718,7 @@ describe('createWatchCycleDriver', () => {
     expect(onResult).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        status: 'fail',
+        status: 'failed',
         results: cycleResults,
         summary: expect.objectContaining({ files: { total: 2, failed: 1 } }),
         rerunTestPaths: ['/passed.test.ts'],

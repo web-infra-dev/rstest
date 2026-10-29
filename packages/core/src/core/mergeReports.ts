@@ -9,6 +9,7 @@ import {
 import { isAbsolute, join, relative } from 'pathe';
 import {
   cleanCoverageReports,
+  cloneCoverageMapData,
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../coverage';
@@ -22,7 +23,6 @@ import {
 } from '../reporter/blob';
 import { computeSummary } from '../reporter/utils';
 import type {
-  CoverageMapData,
   Duration,
   SerializedError,
   SnapshotSummary,
@@ -31,10 +31,16 @@ import type {
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
 import { color, logger, prettyTime } from '../utils';
-import { notifyReportersOnTestRunEnd } from './execution/finalizeRun';
+import { toSerializedError } from '../utils/error';
+import {
+  notifyReportersOnTestRunEnd,
+  notifyReportersOnTestRunStart,
+  resolveRunStatus,
+} from './execution/finalizeRun';
 import type { Rstest } from './rstest';
 import {
   createRunnerEventSink,
+  drainReporterHooks,
   type RunnerEventSink,
 } from './execution/runnerEventSink';
 
@@ -183,35 +189,36 @@ async function replayTestFile(
   sink: RunnerEventSink,
   { result: fileResult, data }: ReplayFile,
 ): Promise<void> {
+  const pending: Promise<unknown>[] = [];
   for (const event of data.events) {
     switch (event.h) {
       case 'start':
-        await sink.onTestFileStart(event.test);
+        pending.push(sink.onTestFileStart(event.test));
         break;
       case 'ready':
-        await sink.onTestFileReady(event.test);
+        pending.push(sink.onTestFileReady(event.test));
         break;
       case 'suiteStart':
-        await sink.onTestSuiteStart(event.test);
+        pending.push(sink.onTestSuiteStart(event.test));
         break;
       case 'suiteResult':
-        await sink.onTestSuiteResult(event.result);
+        pending.push(sink.onTestSuiteResult(event.result));
         break;
       case 'caseStart':
-        sink.onTestCaseStart(event.test);
+        pending.push(sink.onTestCaseStart(event.test));
         break;
       case 'caseResult':
-        await sink.onTestCaseResult(event.result);
-        await sink.awaitTestCaseResults(event.result.testPath);
+        pending.push(sink.onTestCaseResult(event.result));
         break;
       case 'log':
-        await sink.emitConsoleLog(event.log);
+        pending.push(sink.emitConsoleLog(event.log));
         break;
       default:
         event satisfies never;
     }
   }
 
+  await Promise.all(pending);
   if (fileResult) {
     await sink.onTestFileResult(fileResult);
   }
@@ -322,20 +329,29 @@ export async function mergeReports(
     .filter((result) => result !== undefined);
   const mergedDuration = mergeDurations(allDurations);
   const mergedSnapshotSummary = mergeSnapshots(allSnapshotSummaries);
-  const mergedCoverage: CoverageMapData | undefined =
-    hasCoverage && mergedCoverageMap ? mergedCoverageMap.toJSON() : undefined;
 
   const hasFailure =
-    allResults.some((r) => r.status === 'fail') ||
+    allResults.some((r) => r.status === 'failed') ||
     allUnhandledErrors.length > 0;
 
   if (hasFailure) {
     context.exitCode.raise(1);
   }
 
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunStart?.();
-  }
+  // A reporter failure before the run started aborts a live run before any test
+  // executes; the replay is skipped too. The attributed error is recorded once
+  // on the context and drained below.
+  const replayStarted =
+    (await notifyReportersOnTestRunStart(
+      context,
+      blobs.flatMap((blob) => blob.runStart.files),
+    )) === undefined;
+  // An aborted replay never dispatches a payload, so its coverage map is not
+  // cloned for reporters in the first place.
+  const mergedCoverage =
+    replayStarted && hasCoverage && mergedCoverageMap
+      ? cloneCoverageMapData(mergedCoverageMap)
+      : undefined;
 
   // Print per-shard durations
   for (const { label, duration } of shardDurations) {
@@ -364,25 +380,20 @@ export async function mergeReports(
   // run-level context today, so any sink serves such a file.
   const [fallbackSink] = sinks.values();
 
-  for (const file of replayFiles) {
-    await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
+  if (replayStarted) {
+    for (const file of replayFiles) {
+      await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
+    }
   }
 
-  await notifyReportersOnTestRunEnd({
-    context,
-    payload: {
-      results: allResults,
-      coverage: mergedCoverage,
-      testResults: allTestResults,
-      summary: computeSummary(allResults),
-      duration: mergedDuration,
-      snapshotSummary: mergedSnapshotSummary,
-      unhandledErrors: allUnhandledErrors,
-      getSourcemap: async () => null,
-    },
-  });
+  const reporterErrors = await drainReporterHooks(context);
+  if (reporterErrors.length) {
+    context.exitCode.raise(1);
+    allUnhandledErrors.push(...reporterErrors.map(toSerializedError));
+  }
 
   const shouldGenerateCoverage =
+    replayStarted &&
     coverageProvider &&
     mergedCoverageMap &&
     (!hasFailure || coverageOptions.reportOnFailure);
@@ -390,6 +401,30 @@ export async function mergeReports(
     const { generateCoverage } = await import('../coverage/generate');
     await generateCoverage(context, mergedCoverageMap, coverageProvider);
   }
+
+  // An aborted replay reports no results, matching a live run aborted by the
+  // same reporter failure before any test executed.
+  const reportedResults = replayStarted ? allResults : [];
+  const reportedTestResults = replayStarted ? allTestResults : [];
+  const summary = computeSummary(reportedResults);
+  await notifyReportersOnTestRunEnd({
+    context,
+    payload: {
+      results: reportedResults,
+      coverage: mergedCoverage,
+      testResults: reportedTestResults,
+      summary,
+      status: resolveRunStatus({
+        exitCode: context.exitCode.current,
+        summary,
+        unhandledErrors: allUnhandledErrors,
+      }),
+      duration: mergedDuration,
+      snapshotSummary: mergedSnapshotSummary,
+      unhandledErrors: allUnhandledErrors,
+      getSourcemap: async () => null,
+    },
+  });
 
   if (cleanup && existsSync(blobDir)) {
     if (shouldGenerateCoverage) {

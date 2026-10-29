@@ -4,10 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRstest } from '@rstest/core/api';
 
-const require = createRequire(import.meta.url);
-const { version } = require('@rstest/core/package.json');
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
 const root = join(fixtureDir, `.missing-deps-${process.pid}`);
+const { version } = createRequire(import.meta.url)('@rstest/core/package.json');
 
 Object.defineProperty(process.stdin, 'isTTY', {
   configurable: true,
@@ -21,7 +20,7 @@ try {
   await writeFile(
     join(root, '.rstest-reports/blob.json'),
     JSON.stringify({
-      version,
+      version: `${version}:2`,
       results: [],
       testResults: [],
       duration: { totalTime: 0, buildTime: 0, testTime: 0 },

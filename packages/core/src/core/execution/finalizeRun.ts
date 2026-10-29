@@ -1,14 +1,20 @@
-import { resolveAndMergeRawCoverage } from '../../coverage';
+import {
+  cloneCoverageMapData,
+  resolveAndMergeRawCoverage,
+} from '../../coverage';
 import { BlobReporter } from '../../reporter/blob';
 import { computeSummary } from '../../reporter/utils';
 import type {
   Duration,
   ExecutorCycleOutcome,
+  SelectedTestFile,
   SourceMapInput,
   TestRunEndPayload,
+  TestRunStartPayload,
 } from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import {
+  bgColor,
   color,
   getNoTestFilesMessage,
   isDebug,
@@ -18,6 +24,12 @@ import {
 } from '../../utils';
 import type { InternalContext } from '../../types';
 import { toSerializedError } from '../../utils/error';
+import { createDeferred, getFileTaskId } from '../../utils/helper';
+import {
+  drainReporterHooks,
+  formatReporterError,
+  recordReporterError,
+} from './runnerEventSink';
 
 const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
   if (context.command === 'watch') {
@@ -69,13 +81,81 @@ const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
   });
 };
 
+/**
+ * Notifies every reporter of the run start and records each failure once.
+ * Resolves to the first attributed failure when the run must abort; callers
+ * propagate the abort (barrier, watch open) instead of the error itself, so
+ * each failure has exactly one owner: the pending-hooks record drained by
+ * finalize.
+ */
 export const notifyReportersOnTestRunStart = async (
   context: InternalContext,
-): Promise<void> => {
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunStart?.();
+  files: SelectedTestFile[],
+): Promise<Error | undefined> => {
+  const payload: TestRunStartPayload = {
+    files: files.map((file) => ({
+      ...file,
+      testId: getFileTaskId(file.testPath),
+    })),
+  };
+  // Selection can finish before workers exist; hold a referenced handle so a
+  // hook that settles from a signal or unref'd timer is not cut off when the
+  // event loop would otherwise be empty.
+  const keepAlive = setInterval(() => {}, 2 ** 30);
+  try {
+    let firstFailure: Error | undefined;
+    // Every reporter is notified even when an earlier one fails: a broken
+    // reporter must not swallow the hook for the rest of the run.
+    for (const [index, reporter] of context.reporters.entries()) {
+      try {
+        await reporter.onTestRunStart?.(payload);
+      } catch (error) {
+        const reporterError = formatReporterError(
+          reporter,
+          index,
+          'onTestRunStart',
+          error,
+        );
+        recordReporterError(context, reporterError);
+        // The run cannot produce trustworthy results once a reporter failed
+        // before it started, so the cycle aborts after this loop.
+        firstFailure ??= reporterError;
+      }
+    }
+    return firstFailure;
+  } finally {
+    clearInterval(keepAlive);
   }
 };
+
+export const createRunStartBarrier = (
+  context: InternalContext,
+  executorCount: number,
+): Array<(files: SelectedTestFile[]) => Promise<Error | undefined>> => {
+  const selections = Array.from({ length: executorCount }, () =>
+    createDeferred<SelectedTestFile[]>(),
+  );
+  const started = Promise.all(selections.map(({ promise }) => promise)).then(
+    (files) => notifyReportersOnTestRunStart(context, files.flat()),
+  );
+  return selections.map(({ resolve }) => (files) => {
+    resolve(files);
+    return started;
+  });
+};
+
+export const resolveRunStatus = ({
+  exitCode,
+  summary,
+  unhandledErrors,
+}: Pick<TestRunEndPayload, 'summary' | 'unhandledErrors'> & {
+  exitCode: number;
+}): TestRunEndPayload['status'] =>
+  unhandledErrors.length
+    ? 'error'
+    : exitCode !== 0 || summary.files.failed > 0
+      ? 'failed'
+      : 'passed';
 
 export const notifyReportersOnTestRunEnd = async ({
   context,
@@ -84,11 +164,35 @@ export const notifyReportersOnTestRunEnd = async ({
   context: InternalContext;
   payload: TestRunEndPayload;
 }): Promise<void> => {
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunEnd?.(payload);
-    if (reporter.flushOutputStreams !== false) {
-      await flushOutputStreams();
+  const failures: Error[] = [];
+  for (const [index, reporter] of context.reporters.entries()) {
+    try {
+      await reporter.onTestRunEnd?.(payload);
+    } catch (error) {
+      failures.push(
+        formatReporterError(reporter, index, 'onTestRunEnd', error),
+      );
+    } finally {
+      if (reporter.flushOutputStreams !== false) {
+        await flushOutputStreams();
+      }
     }
+  }
+  if (!failures.length) {
+    return;
+  }
+  // The payload has already been dispatched, so these failures cannot join its
+  // `unhandledErrors`. Surface them here and fail the process instead.
+  context.exitCode.raise(1);
+  const { printError } = await import('../../utils/error');
+  for (const failure of failures) {
+    logger.stderr('');
+    logger.stderr(bgColor('bgRed', ' Unhandled Reporter Error '));
+    await printError(
+      toSerializedError(failure),
+      payload.getSourcemap,
+      context.rootPath,
+    );
   }
 };
 
@@ -201,7 +305,12 @@ export async function finalizeRunCycle(
 
   const results = outcomes.flatMap((o) => o.results);
   const testResults = outcomes.flatMap((o) => o.testResults);
-  const errors = outcomes.flatMap((o) => o.errors);
+  // The run-start failure has a single owner: it is recorded once by
+  // `notifyReportersOnTestRunStart` and aborted consumers contribute nothing.
+  const errors = [
+    ...outcomes.flatMap((o) => o.errors),
+    ...(await drainReporterHooks(context)),
+  ];
 
   // Coverage flows through the outcome contract: merge every executor's istanbul
   // `map` into the run's map, then resolve the concatenated v8 `raw` batches.
@@ -259,7 +368,7 @@ export async function finalizeRunCycle(
   };
 
   const isFailure =
-    results.some((r) => r.status === 'fail') || errors.length > 0;
+    results.some((r) => r.status === 'failed') || errors.length > 0;
   const noTestsDiscovered = results.length === 0 && errors.length === 0;
   const testPaths = outcomes.flatMap((o) => o.testPaths);
   const deletedTestPaths = outcomes.flatMap((o) => o.deletedTestPaths ?? []);
@@ -276,19 +385,70 @@ export async function finalizeRunCycle(
     context.exitCode.raise(1);
   }
 
+  // Only a dispatched payload can hand coverage to reporters.
+  const collectedCoverage =
+    !isInterrupted() && reportersStarted && mergedCoverageMap
+      ? cloneCoverageMapData(mergedCoverageMap)
+      : undefined;
+
+  const defersCoverageReport =
+    coverageProvider?.supportsDeferredCoverageFinalization === true &&
+    context.reporters.some((reporter) => reporter instanceof BlobReporter);
+
+  // Coverage and trace finalization run before the payload so it carries the
+  // final verdict. A failure in either must not break the run-start/run-end
+  // pair: remember it, dispatch run end, then surface it.
+  let finalizeError: unknown;
+  try {
+    // Blob output is a merge input, so final filtering, untested-file
+    // backfill, reports, and thresholds belong to the merge-reports process
+    // that sees the complete coverage map rather than to every partial shard.
+    if (
+      !isInterrupted() &&
+      reportersStarted &&
+      coverageProvider &&
+      !defersCoverageReport &&
+      (!isFailure || reportOnFailure)
+    ) {
+      const { generateCoverage } = await import('../../coverage/generate');
+      await runLifecycleStep(
+        'coverage report generation',
+        async () =>
+          !isInterrupted() &&
+          generateCoverage(
+            context,
+            mergedCoverageMap!,
+            coverageProvider,
+            traceRun.span,
+          ),
+      );
+    }
+
+    await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+  } catch (error) {
+    finalizeError = error;
+  }
+
   if (reportersStarted) {
     const reporterResults = context.reporterResults.results;
+    const summary = computeSummary(reporterResults);
+    const unhandledErrors = errors.map(toSerializedError);
     await runLifecycleStep('reporter onTestRunEnd', () =>
       notifyReportersOnTestRunEnd({
         context,
         payload: {
           results: reporterResults,
           testResults: context.reporterResults.testResults,
-          summary: computeSummary(reporterResults),
-          coverage: isInterrupted() ? undefined : mergedCoverageMap?.toJSON(),
+          summary,
+          status: resolveRunStatus({
+            exitCode: context.exitCode.current,
+            summary,
+            unhandledErrors,
+          }),
+          coverage: collectedCoverage,
           duration,
           getSourcemap,
-          unhandledErrors: errors.map((error) => toSerializedError(error)),
+          unhandledErrors,
           snapshotSummary: context.snapshotManager.summary,
           rerunTestPaths: isWatchMode ? testPaths : undefined,
         },
@@ -296,35 +456,9 @@ export async function finalizeRunCycle(
     );
   }
 
-  const defersCoverageReport =
-    coverageProvider?.supportsDeferredCoverageFinalization === true &&
-    context.reporters.some((reporter) => reporter instanceof BlobReporter);
-
-  // Blob output is a merge input, so final filtering, untested-file backfill,
-  // reports, and thresholds belong to the merge-reports process that sees the
-  // complete coverage map rather than to every partial shard.
-  if (
-    !isInterrupted() &&
-    reportersStarted &&
-    coverageProvider &&
-    !defersCoverageReport &&
-    (!isFailure || reportOnFailure)
-  ) {
-    const { generateCoverage } = await import('../../coverage/generate');
-    await runLifecycleStep(
-      'coverage report generation',
-      async () =>
-        !isInterrupted() &&
-        generateCoverage(
-          context,
-          mergedCoverageMap!,
-          coverageProvider,
-          traceRun.span,
-        ),
-    );
+  if (finalizeError) {
+    throw finalizeError;
   }
-
-  await runLifecycleStep('trace run finalize', () => traceRun.finalize());
 
   if (!isInterrupted() && isFailure) {
     const bail = context.normalizedConfig.bail;

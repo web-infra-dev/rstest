@@ -58,7 +58,7 @@ test.sequential('verifies Playwright trace debug artifacts', async () => {
 
   const summary = JSON.parse(await readFile(summaryPath, 'utf-8'));
   expect(summary.test.name).toBe('writes Playwright trace debug artifacts');
-  expect(summary.test.status).toBe('pass');
+  expect(summary.test.status).toBe('passed');
   expect(
     summary.command.showTrace.startsWith(
       `npx playwright show-trace ${process.platform === 'win32' ? '"' : "'"}`,
