@@ -241,10 +241,10 @@ const resolveEffectiveFilters = async ({
     sourceFilters,
     filterLabel: changedRun ? '--changed' : '--related',
     allowEmpty: changedRun,
-    // A tracked file can be replaced by a directory of the same name in the
-    // same change. Git reports the file as deleted, but the path exists again,
-    // so it must be passed explicitly instead of being detected by `existsSync`.
-    deletedSources: changedRun
+    // The change set can contain a path that no longer resolves to a file: a
+    // deleted source, or a tracked file replaced by a directory of the same
+    // name (the path exists again, which `existsSync` cannot tell apart).
+    missingSourceFiles: changedRun
       ? sourceFilters.filter((file) => {
           const stats = statSync(file, { throwIfNoEntry: false });
           return !stats || stats.isDirectory();

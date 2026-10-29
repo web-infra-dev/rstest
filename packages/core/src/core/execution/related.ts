@@ -515,14 +515,19 @@ export async function resolveRelatedTestFiles(
     sourceFilters: string[];
     filterLabel?: string;
     allowEmpty?: boolean;
-    deletedSources?: string[];
+    /**
+     * Absolute paths the caller knows no longer resolve to a file: a deleted
+     * source, or a tracked file replaced by a directory of the same name (which
+     * `existsSync` cannot detect).
+     */
+    missingSourceFiles?: string[];
   },
 ): Promise<string[]> {
   const {
     sourceFilters,
     filterLabel = '--related',
     allowEmpty = false,
-    deletedSources,
+    missingSourceFiles,
   } = options;
 
   if (sourceFilters.length === 0) {
@@ -542,8 +547,8 @@ export async function resolveRelatedTestFiles(
   const setupFileState = createSetupFileState();
   const missingSources = Array.from(
     new Set(
-      deletedSources
-        ? deletedSources.map((source) => normalize(source))
+      missingSourceFiles
+        ? missingSourceFiles.map((source) => normalize(source))
         : sourceFilters
             .map((source) => normalize(resolve(context.rootPath, source)))
             .filter((source) => !existsSync(source)),

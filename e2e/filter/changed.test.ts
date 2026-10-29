@@ -166,6 +166,9 @@ describe('changed test filtering', () => {
       expect(run.cli.log).toContain('index.test.ts');
       expect(run.cli.log).not.toContain('No changed files found');
       expect(run.cli.log).not.toContain('other.test.ts');
+      expect(run.cli.stderr).not.toContain(
+        'Related test selection may be incomplete',
+      );
     },
   );
 
