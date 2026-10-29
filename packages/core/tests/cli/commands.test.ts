@@ -874,9 +874,24 @@ describe('related CLI options', () => {
 
   it('includes both paths when Git detects a rename', async () => {
     const cwd = await createGitFixture();
+    const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);
     await runGit(cwd, ['mv', 'base.ts', 'renamed-base.ts']);
 
     await expect(resolveChangedFiles(cwd)).resolves.toEqual([
+      normalize(join(cwd, 'base.ts')),
+      normalize(join(cwd, 'renamed-base.ts')),
+    ]);
+
+    await runGit(cwd, [
+      '-c',
+      'user.name=rstest',
+      '-c',
+      'user.email=rstest@example.com',
+      'commit',
+      '-m',
+      'rename base',
+    ]);
+    await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toEqual([
       normalize(join(cwd, 'base.ts')),
       normalize(join(cwd, 'renamed-base.ts')),
     ]);

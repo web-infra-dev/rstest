@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import type { CommonOptions } from '../../cli/init';
@@ -240,6 +241,15 @@ const resolveEffectiveFilters = async ({
     sourceFilters,
     filterLabel: changedRun ? '--changed' : '--related',
     allowEmpty: changedRun,
+    // A tracked file can be replaced by a directory of the same name in the
+    // same change. Git reports the file as deleted, but the path exists again,
+    // so it must be passed explicitly instead of being detected by `existsSync`.
+    deletedSources: changedRun
+      ? sourceFilters.filter((file) => {
+          const stats = statSync(file, { throwIfNoEntry: false });
+          return !stats || stats.isDirectory();
+        })
+      : undefined,
   });
 
   return {

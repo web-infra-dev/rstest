@@ -515,12 +515,14 @@ export async function resolveRelatedTestFiles(
     sourceFilters: string[];
     filterLabel?: string;
     allowEmpty?: boolean;
+    deletedSources?: string[];
   },
 ): Promise<string[]> {
   const {
     sourceFilters,
     filterLabel = '--related',
     allowEmpty = false,
+    deletedSources,
   } = options;
 
   if (sourceFilters.length === 0) {
@@ -540,9 +542,11 @@ export async function resolveRelatedTestFiles(
   const setupFileState = createSetupFileState();
   const missingSources = Array.from(
     new Set(
-      sourceFilters
-        .map((source) => normalize(resolve(context.rootPath, source)))
-        .filter((source) => !existsSync(source)),
+      deletedSources
+        ? deletedSources.map((source) => normalize(source))
+        : sourceFilters
+            .map((source) => normalize(resolve(context.rootPath, source)))
+            .filter((source) => !existsSync(source)),
     ),
   );
   projectEntries = await collectProjectEntries(context);
