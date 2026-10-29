@@ -68,11 +68,6 @@
       matchDepTypes: ['peerDependencies'],
       enabled: false,
     },
-    // The standalone VS Code extension is frozen.
-    {
-      matchFileNames: ['packages/vscode/package.json'],
-      enabled: false,
-    },
     // Environment module affinity fixtures intentionally pin legacy jsdom versions.
     {
       matchFileNames: [
@@ -94,8 +89,6 @@
     'node',
     // umd tests need to lock this version
     'react-aliased',
-    'vscode',
-    '@types/vscode',
   ],
   postUpdateOptions: ['pnpmDedupe'],
 }

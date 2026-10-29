@@ -103,7 +103,7 @@ the user in the next step.
   always warrant a highlight section.
 - Within `feat`, rank by user-facing significance:
   - **Scope priority**: `core` > `browser`/`browser-react`/`coverage-istanbul` >
-    `adapter-*`/`vscode` > internal/tooling scopes.
+    `adapter-*` > internal/tooling scopes.
   - **PR weight** (signal of size): `gh pr view <N> --json additions,deletions,files`; bigger
     user-facing diffs outrank tiny ones. Discount lockfiles, generated code, and fixture-only
     diffs.
