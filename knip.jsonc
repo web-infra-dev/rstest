@@ -87,23 +87,6 @@
         "__rstest_virtual_browser_manifest__",
       ],
     },
-    "packages/vscode": {
-      "entry": [
-        // Only `tests/unit` runs on Rstest; the Mocha suite in VS Code and its
-        // fixture workspaces are outside the Rstest config.
-        "tests/**/*.ts",
-        // Test fixture files (read by parser at runtime, not imported)
-        "tests/fixtures/**/test/*.{jsx,tsx}",
-        // Sample project for e2e testing
-        "sample/**/*.ts",
-      ],
-      "ignoreDependencies": [
-        // CLI tool used in CI/release scripts, not in code
-        "ovsx",
-        // Used in sample/rsbuild.config.ts for testing the extension
-        "@rsbuild/plugin-react",
-      ],
-    },
   },
   "ignoreWorkspaces": ["e2e/**", "website"],
 }

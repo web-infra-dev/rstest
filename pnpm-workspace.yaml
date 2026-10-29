@@ -28,7 +28,6 @@ catalog:
 allowBuilds:
   '@parcel/watcher': false
   '@swc/core': false
-  '@vscode/vsce-sign': false
   core-js-pure: false
   keytar: false
   lefthook: true
@@ -36,8 +35,12 @@ allowBuilds:
 
 autoInstallPeers: false
 
-# for vsce
-hoistPattern: ['@secretlint/*']
+# Keep the virtual store free of hoisted packages: pnpm's bin shims put
+# node_modules/.pnpm/node_modules on NODE_PATH, so hoisting would make every
+# workspace dependency resolvable from any project and defeat install checks
+# such as the coverage provider flow. Nothing needs hoisting after the
+# standalone extension was removed.
+hoist: false
 
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
