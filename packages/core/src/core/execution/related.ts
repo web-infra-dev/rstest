@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { isAbsolute, normalize, relative, resolve } from 'pathe';
+import { extname, isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
   InternalContext,
   InternalProjectContext,
@@ -383,6 +383,27 @@ const collectProjectEntries = async (
   return entries;
 };
 
+/**
+ * Missing source files are materialized as empty modules in the analysis build
+ * so imports that still reference them keep their module-graph edges. The
+ * placeholder has to parse as the module type its extension implies: JSON needs
+ * valid JSON and ESM needs ESM syntax. The execution build always uses the real
+ * filesystem, so a selected test still fails on the missing import.
+ */
+const createMissingSourcePlaceholder = (filePath: string): string => {
+  const extension = extname(filePath).toLowerCase();
+
+  if (extension === '.json') {
+    return '{}';
+  }
+
+  if (extension === '.mjs' || extension === '.mts') {
+    return 'export {};';
+  }
+
+  return '';
+};
+
 const createRelatedBuildSafeguardsPlugin = (
   missingSources: string[],
 ): RsbuildPlugin => ({
@@ -410,7 +431,12 @@ const createRelatedBuildSafeguardsPlugin = (
       if (missingSources.length) {
         rspackConfig.plugins.push(
           new rspack.experiments.VirtualModulesPlugin(
-            Object.fromEntries(missingSources.map((file) => [file, ''])),
+            Object.fromEntries(
+              missingSources.map((file) => [
+                file,
+                createMissingSourcePlaceholder(file),
+              ]),
+            ),
           ),
         );
       }
@@ -512,9 +538,13 @@ export async function resolveRelatedTestFiles(
     projectEntries.get(environmentName) ?? {};
 
   const setupFileState = createSetupFileState();
-  const missingSources = sourceFilters
-    .map((source) => normalize(resolve(context.rootPath, source)))
-    .filter((source) => !existsSync(source));
+  const missingSources = Array.from(
+    new Set(
+      sourceFilters
+        .map((source) => normalize(resolve(context.rootPath, source)))
+        .filter((source) => !existsSync(source)),
+    ),
+  );
   projectEntries = await collectProjectEntries(context);
 
   const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
