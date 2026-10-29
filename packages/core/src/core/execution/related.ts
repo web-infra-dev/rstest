@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { extname, isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
@@ -385,24 +386,13 @@ const collectProjectEntries = async (
 
 /**
  * Missing source files are materialized as empty modules in the analysis build
- * so imports that still reference them keep their module-graph edges. The
- * placeholder has to parse as the module type its extension implies: JSON needs
- * valid JSON and ESM needs ESM syntax. The execution build always uses the real
- * filesystem, so a selected test still fails on the missing import.
+ * so imports that still reference them keep their module-graph edges. Only JSON
+ * needs non-empty content to parse; an empty source is a valid JS/ESM module.
+ * The execution build always uses the real filesystem, so a selected test still
+ * fails on the missing import.
  */
-const createMissingSourcePlaceholder = (filePath: string): string => {
-  const extension = extname(filePath).toLowerCase();
-
-  if (extension === '.json') {
-    return '{}';
-  }
-
-  if (extension === '.mjs' || extension === '.mts') {
-    return 'export {};';
-  }
-
-  return '';
-};
+const createMissingSourcePlaceholder = (filePath: string): string =>
+  extname(filePath).toLowerCase() === '.json' ? '{}' : '';
 
 const createRelatedBuildSafeguardsPlugin = (
   missingSources: string[],
@@ -516,18 +506,17 @@ export async function resolveRelatedTestFiles(
     filterLabel?: string;
     allowEmpty?: boolean;
     /**
-     * Absolute paths the caller knows no longer resolve to a file: a deleted
-     * source, or a tracked file replaced by a directory of the same name (which
-     * `existsSync` cannot detect).
+     * Source filters come from `--changed`, so a path that still exists as a
+     * directory is a replaced file target rather than a real directory filter.
      */
-    missingSourceFiles?: string[];
+    changedSourceFilters?: boolean;
   },
 ): Promise<string[]> {
   const {
     sourceFilters,
     filterLabel = '--related',
     allowEmpty = false,
-    missingSourceFiles,
+    changedSourceFilters = false,
   } = options;
 
   if (sourceFilters.length === 0) {
@@ -545,15 +534,20 @@ export async function resolveRelatedTestFiles(
     projectEntries.get(environmentName) ?? {};
 
   const setupFileState = createSetupFileState();
-  const missingSources = Array.from(
-    new Set(
-      missingSourceFiles
-        ? missingSourceFiles.map((source) => normalize(source))
-        : sourceFilters
-            .map((source) => normalize(resolve(context.rootPath, source)))
-            .filter((source) => !existsSync(source)),
-    ),
+  const sourcePaths = new Set(
+    sourceFilters.map((source) => normalize(resolve(context.rootPath, source))),
   );
+  const missingSources = (
+    await Promise.all(
+      Array.from(sourcePaths).map(async (source) => {
+        const stats = await stat(source).catch(() => undefined);
+
+        return !stats || (changedSourceFilters && stats.isDirectory())
+          ? source
+          : undefined;
+      }),
+    )
+  ).filter((source): source is string => source !== undefined);
   projectEntries = await collectProjectEntries(context);
 
   const projectConfigSnapshots = snapshotProjectConfigs(context.projects);

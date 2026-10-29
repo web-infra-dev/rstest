@@ -67,18 +67,24 @@ const runGit = async (cwd: string, args: string[]) => {
   await execFileAsync('git', args, { cwd });
 };
 
-const initGitFixture = async (cwd: string) => {
-  await runGit(cwd, ['-c', 'init.defaultBranch=main', 'init']);
-  await runGit(cwd, ['add', '.']);
-  await runGit(cwd, [
+const commitFixture = (cwd: string, message: string) =>
+  runGit(cwd, [
     '-c',
     'user.name=rstest',
     '-c',
     'user.email=rstest@example.com',
     'commit',
     '-m',
-    'init',
+    message,
   ]);
+
+const changedArgsFor = (state: string) =>
+  state === 'committed' ? '--changed=HEAD~1' : '--changed';
+
+const initGitFixture = async (cwd: string) => {
+  await runGit(cwd, ['-c', 'init.defaultBranch=main', 'init']);
+  await runGit(cwd, ['add', '.']);
+  await commitFixture(cwd, 'init');
 };
 
 describe('changed test filtering', () => {
@@ -137,18 +143,10 @@ describe('changed test filtering', () => {
       await rm(join(fixturesTargetPath, 'src/index.ts'));
       if (state !== 'unstaged') await runGit(fixturesTargetPath, ['add', '-u']);
       if (state === 'committed') {
-        await runGit(fixturesTargetPath, [
-          '-c',
-          'user.name=rstest',
-          '-c',
-          'user.email=rstest@example.com',
-          'commit',
-          '-m',
-          'delete source',
-        ]);
+        await commitFixture(fixturesTargetPath, 'delete source');
       }
 
-      const changed = state === 'committed' ? '--changed=HEAD~1' : '--changed';
+      const changed = changedArgsFor(state);
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
         args: ['list', '--filesOnly', changed],
@@ -245,18 +243,10 @@ describe('changed test filtering', () => {
         'src/renamed.ts',
       ]);
       if (state === 'committed') {
-        await runGit(fixturesTargetPath, [
-          '-c',
-          'user.name=rstest',
-          '-c',
-          'user.email=rstest@example.com',
-          'commit',
-          '-m',
-          'rename source',
-        ]);
+        await commitFixture(fixturesTargetPath, 'rename source');
       }
 
-      const changed = state === 'committed' ? '--changed=HEAD~1' : '--changed';
+      const changed = changedArgsFor(state);
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
         args: ['list', '--filesOnly', changed],
@@ -286,19 +276,11 @@ describe('changed test filtering', () => {
       await rm(join(fixturesTargetPath, 'package.json'));
       await runGit(fixturesTargetPath, ['add', '-u']);
       if (state === 'committed') {
-        await runGit(fixturesTargetPath, [
-          '-c',
-          'user.name=rstest',
-          '-c',
-          'user.email=rstest@example.com',
-          'commit',
-          '-m',
-          'delete trigger',
-        ]);
+        await commitFixture(fixturesTargetPath, 'delete trigger');
       }
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: ['run', state === 'committed' ? '--changed=HEAD~1' : '--changed'],
+        args: ['run', changedArgsFor(state)],
         options: { nodeOptions: { cwd: fixturesTargetPath } },
       });
       await expectExecSuccess();

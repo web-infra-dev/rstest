@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from '@rstest/core';
 import { prepareFixtures } from '../scripts';
 import { BROWSER_PORTS } from './fixtures/ports';
-import { runBrowserCliWithCwd } from './utils';
+import { deleteFixtureTarget, runBrowserCliWithCwd } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,7 +20,7 @@ describe('browser mode - related', () => {
       fixturesPath: join(__dirname, 'fixtures', 'related'),
       fixturesTargetPath,
     });
-    onTestFinished(() => fs.delete(fixturesTargetPath));
+    onTestFinished(() => deleteFixtureTarget(fs, fixturesTargetPath));
     await fs.delete(join(fixturesTargetPath, 'tests/src/index.ts'));
     const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
       fixturesTargetPath,

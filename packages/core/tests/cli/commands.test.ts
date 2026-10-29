@@ -689,6 +689,17 @@ const runGit = async (cwd: string, args: string[]) => {
   return stdout.trim();
 };
 
+const commitGitFixture = (cwd: string, message: string) =>
+  runGit(cwd, [
+    '-c',
+    'user.name=rstest',
+    '-c',
+    'user.email=rstest@example.com',
+    'commit',
+    '-m',
+    message,
+  ]);
+
 const createGitFixture = async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'rstest-changed-'));
 
@@ -858,15 +869,7 @@ describe('related CLI options', () => {
     await expect(resolveChangedFiles(cwd)).resolves.toEqual([
       normalize(deletedFile),
     ]);
-    await runGit(cwd, [
-      '-c',
-      'user.name=rstest',
-      '-c',
-      'user.email=rstest@example.com',
-      'commit',
-      '-m',
-      'delete base',
-    ]);
+    await commitGitFixture(cwd, 'delete base');
     await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toEqual([
       normalize(deletedFile),
     ]);
@@ -882,15 +885,7 @@ describe('related CLI options', () => {
       normalize(join(cwd, 'renamed-base.ts')),
     ]);
 
-    await runGit(cwd, [
-      '-c',
-      'user.name=rstest',
-      '-c',
-      'user.email=rstest@example.com',
-      'commit',
-      '-m',
-      'rename base',
-    ]);
+    await commitGitFixture(cwd, 'rename base');
     await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toEqual([
       normalize(join(cwd, 'base.ts')),
       normalize(join(cwd, 'renamed-base.ts')),

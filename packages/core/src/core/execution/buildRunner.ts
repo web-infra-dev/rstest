@@ -1,4 +1,3 @@
-import { statSync } from 'node:fs';
 import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import type { CommonOptions } from '../../cli/init';
@@ -241,15 +240,7 @@ const resolveEffectiveFilters = async ({
     sourceFilters,
     filterLabel: changedRun ? '--changed' : '--related',
     allowEmpty: changedRun,
-    // The change set can contain a path that no longer resolves to a file: a
-    // deleted source, or a tracked file replaced by a directory of the same
-    // name (the path exists again, which `existsSync` cannot tell apart).
-    missingSourceFiles: changedRun
-      ? sourceFilters.filter((file) => {
-          const stats = statSync(file, { throwIfNoEntry: false });
-          return !stats || stats.isDirectory();
-        })
-      : undefined,
+    changedSourceFilters: changedRun,
   });
 
   return {
