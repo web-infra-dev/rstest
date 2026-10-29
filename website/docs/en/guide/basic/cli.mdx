@@ -114,7 +114,7 @@ npx rstest run --changed=origin/main
 
 When a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite instead of only related tests.
 
-Deleted files are included in local and committed changes. Rstest selects tests that still import a deleted file; executing those tests still fails on the missing import. A deleted file that matches `forceRerunTriggers` also reruns the full suite.
+Deleted files are included in local and committed changes, and renames are reported as a deletion plus an addition. Rstest selects tests that still import a deleted file; executing those tests still fails on the missing import. A deleted file that matches `forceRerunTriggers` also reruns the full suite.
 
 When coverage is enabled and [`coverage.changed`](/config/test/coverage#changed) is not configured, `--changed` also limits coverage reports to changed source files. If a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite and reports full coverage unless `coverage.changed` is explicitly enabled.
 

@@ -872,6 +872,16 @@ describe('related CLI options', () => {
     ]);
   });
 
+  it('includes both paths when Git detects a rename', async () => {
+    const cwd = await createGitFixture();
+    await runGit(cwd, ['mv', 'base.ts', 'renamed-base.ts']);
+
+    await expect(resolveChangedFiles(cwd)).resolves.toEqual([
+      normalize(join(cwd, 'base.ts')),
+      normalize(join(cwd, 'renamed-base.ts')),
+    ]);
+  });
+
   it('combines committed, staged, and unstaged files since a commit', async () => {
     const cwd = await createGitFixture();
     const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);

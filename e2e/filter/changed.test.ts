@@ -162,6 +162,69 @@ describe('changed test filtering', () => {
     },
   );
 
+  it.each([
+    [
+      'json',
+      'src/data.json',
+      '{"value": 1}\n',
+      "import data from './src/data.json';\nimport { expect, it } from '@rstest/core';\nit('x', () => { expect(data.value).toBe(1); });\n",
+    ],
+    [
+      'mjs',
+      'src/data.mjs',
+      'export const value = 1;\n',
+      "import { value } from './src/data.mjs';\nimport { expect, it } from '@rstest/core';\nit('x', () => { expect(value).toBe(1); });\n",
+    ],
+  ])(
+    'should keep importers of a deleted %s source',
+    async (name, deletedFile, content, testSource) => {
+      const { fixturesTargetPath } = await prepareChangedFixture(
+        `deleted-${name}`,
+      );
+      await writeFile(join(fixturesTargetPath, deletedFile), content);
+      await writeFile(
+        join(fixturesTargetPath, `deleted-${name}.test.ts`),
+        testSource,
+      );
+      await initGitFixture(fixturesTargetPath);
+      await rm(join(fixturesTargetPath, deletedFile));
+      await runGit(fixturesTargetPath, ['add', '-u']);
+
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['list', '--filesOnly', '--changed'],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout.split('\n').filter(Boolean)).toEqual([
+        `deleted-${name}.test.ts`,
+      ]);
+    },
+  );
+
+  it('should keep both paths when a changed source is renamed', async () => {
+    const { fixturesTargetPath } =
+      await prepareChangedFixture('renamed-source');
+    await initGitFixture(fixturesTargetPath);
+    await runGit(fixturesTargetPath, ['mv', 'src/index.ts', 'src/renamed.ts']);
+
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly', '--changed'],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
+    await expectExecSuccess();
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['index.test.ts']);
+
+    const run = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--changed', '--passWithNoTests'],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
+    await run.expectExecFailed();
+    expect(run.cli.log).toContain('index.test.ts');
+  });
+
   it.each(['staged', 'committed'])(
     'should run all tests for a %s deleted force rerun trigger',
     async (state) => {

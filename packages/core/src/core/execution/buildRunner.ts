@@ -142,8 +142,16 @@ export const resolveChangedFiles = async (
   try {
     const root = await gitRoot();
     const [committed, staged, unstaged] = await Promise.all([
-      since ? git(['diff', '--name-only', '-z', `${since}...HEAD`], root) : [],
-      git(['diff', '--name-only', '-z', '--cached'], root),
+      // Deletions must stay in the change set, and rename detection must be
+      // off: `--name-only` reports a rename as its destination only, which
+      // would drop the old path that remaining importers still reference.
+      since
+        ? git(
+            ['diff', '--name-only', '-z', '--no-renames', `${since}...HEAD`],
+            root,
+          )
+        : [],
+      git(['diff', '--name-only', '-z', '--no-renames', '--cached'], root),
       git(
         ['ls-files', '-z', '--others', '--modified', '--exclude-standard'],
         root,
