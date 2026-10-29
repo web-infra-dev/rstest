@@ -114,7 +114,7 @@ npx rstest run --changed=origin/main
 
 当变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 时，Rstest 会运行完整测试套件，而不是只运行相关测试。
 
-本地和已提交的变更都包含被删除的文件；重命名会按“删除 + 新增”处理。Rstest 会选择仍然导入被删除文件的测试；执行这些测试时，缺失的 import 仍会导致失败。被删除的文件命中 `forceRerunTriggers` 时，也会重跑完整测试套件。
+本地和已提交的变更都包含被删除的文件；重命名会按“删除 + 新增”处理。Rstest 会选择仍然导入被删除文件的测试；执行这些测试时，缺失的 import 仍会导致失败。该选择是 best-effort：通过 `package.json` 元数据解析的目录入口、以及 loader 直接从磁盘读取的文件不会被还原。被删除的文件命中 `forceRerunTriggers` 时也会重跑完整测试套件；`--related` 不检查 `forceRerunTriggers`，因此在 `--related` 下没有这个兜底。
 
 开启覆盖率且未配置 [`coverage.changed`](/config/test/coverage#changed) 时，`--changed` 也会将覆盖率报告限制在变更的源文件范围内。如果变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 会运行完整测试套件，并生成完整覆盖率报告，除非显式启用了 `coverage.changed`。
 
