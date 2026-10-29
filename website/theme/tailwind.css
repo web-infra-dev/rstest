@@ -11,6 +11,7 @@
   --color-brand: var(--rp-c-brand);
   --color-brand-light: var(--rp-c-brand-light);
   --color-brand-tint: var(--rp-c-brand-tint);
+  --color-on-brand: var(--rstest-on-brand);
 
   --color-fg: var(--rp-c-text-1);
   --color-fg-muted: var(--rp-c-text-2);

@@ -26,13 +26,13 @@ export function Button({
   const className = [
     'inline-flex h-[38px] items-center justify-center rounded-lg px-4 text-[15px] font-medium transition-colors',
     variant === 'primary'
-      ? 'bg-brand text-white hover:bg-brand-dark dark:text-[#012b20]'
+      ? 'bg-brand text-on-brand hover:bg-brand-dark'
       : 'border border-line-strong text-fg hover:bg-surface-soft',
   ].join(' ');
 
   const Comp = LinkComp ?? 'a';
   return (
-    <Comp href={href} className={className}>
+    <Comp href={href} className={className} target="_blank" rel="noreferrer">
       {children}
     </Comp>
   );
@@ -40,23 +40,20 @@ export function Button({
 
 export function Section({
   index,
-  eyebrow,
   description,
   children,
 }: {
   index?: string;
-  eyebrow?: string;
   description?: string;
   children: ReactNode;
 }) {
   return (
     <section className="mx-auto w-full max-w-6xl px-6 py-10 lg:py-14">
-      {(eyebrow || description) && (
+      {(index || description) && (
         <div className="mb-5 flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
-          {eyebrow && (
-            <h2 className="font-mono text-xs tracking-widest text-fg-muted uppercase">
-              {index && <span className="mr-2 text-brand">{index}</span>}
-              {eyebrow}
+          {index && (
+            <h2 className="font-mono text-xs tracking-widest text-brand">
+              {index}
             </h2>
           )}
           {description && (
@@ -125,6 +122,8 @@ export function FeatureText({
       {children}
       <LinkComp
         href={href}
+        target="_blank"
+        rel="noreferrer"
         className="group mt-6 inline-flex w-fit items-center gap-1 text-[13px] font-medium text-brand"
       >
         {linkLabel}
