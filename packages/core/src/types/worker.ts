@@ -1,7 +1,10 @@
 import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
-import type { EnvironmentName } from './config';
-import type { RstestPoolType } from './config';
+import type {
+  EnvironmentName,
+  NormalizedConfig,
+  RstestPoolType,
+} from './config';
 import type { InternalContext, InternalProjectContext } from './core';
 import type { KnownCoverageStructure } from './coverage';
 import type {
@@ -62,7 +65,7 @@ export type RuntimeRPC = {
 };
 
 export type RuntimeConfig = Pick<
-  InternalContext['normalizedConfig'],
+  NormalizedConfig,
   | 'testTimeout'
   | 'testNamePattern'
   | 'globals'
