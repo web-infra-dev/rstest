@@ -40,7 +40,7 @@ type TraceState = {
   caseStarts: Map<string, number>;
 };
 
-type SliceCat = 'phase' | 'suite' | 'case';
+type SliceCat = 'phase' | 'suite' | 'case' | 'file';
 
 /**
  * Records phase transitions for a single test file as Perfetto-compatible
@@ -80,9 +80,9 @@ export class PhaseTracker {
       : null;
   }
 
-  transition(phase: PhaseName): void {
+  transition(phase: PhaseName, timestamp?: number): void {
     if (!this.trace) return;
-    const now = getRealNow();
+    const now = timestamp ?? getRealNow();
     if (this.currentPhase) {
       this.pushSlice(
         this.currentPhase,
@@ -96,9 +96,9 @@ export class PhaseTracker {
     this.currentStart = now;
   }
 
-  end(): void {
+  end(timestamp?: number): void {
     if (!this.trace || !this.currentPhase) return;
-    const now = getRealNow();
+    const now = timestamp ?? getRealNow();
     this.pushSlice(
       this.currentPhase,
       'phase',
@@ -107,6 +107,10 @@ export class PhaseTracker {
     );
     this.sampleHeap(now);
     this.currentPhase = null;
+  }
+
+  recordFileLoad(startMs: number, durationMs: number): void {
+    this.pushSlice('file:load', 'file', startMs, durationMs);
   }
 
   recordSuiteStart(info: TestSuiteInfo): void {

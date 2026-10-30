@@ -16,7 +16,8 @@ import { logger, RESULTS_CACHE_DIR } from '../../utils';
  * cache — see the constant's definition for why the dot is load-bearing.
  */
 const CACHE_FILE = 'results.json';
-const CACHE_VERSION = 1;
+// Version 1 stored execution duration, which omitted module loading.
+const CACHE_VERSION = 2;
 
 /** Entries untouched for longer than this are pruned on write. */
 const MAX_ENTRY_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -30,7 +31,7 @@ const MAX_ENTRY_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DURATION_WEIGHT = 0.7;
 
 export type CachedFileResult = {
-  /** EWMA-smoothed duration in ms. Absent until the file has run at least once. */
+  /** EWMA-smoothed loading and execution duration in milliseconds. */
   duration?: number;
   /** Whether the last completed run of this file failed. */
   failed?: boolean;
@@ -106,21 +107,23 @@ export const writeResultsCache = async (
       // `skip`, and `todo` clear it (a quarantined file whose failing tests were
       // converted to skip/todo must stop stealing the front of the queue).
       //
-      // Only a completed pass/fail with a real `duration` feeds the EWMA. A
-      // worker crash yields `fail` with no `duration` (see `workerErrorToResult`),
-      // and skip/todo carry no meaningful timing — both preserve the previous
-      // smoothed duration instead of poisoning the average with a missing or
-      // near-zero sample.
+      // Loading failures have loadDuration but no execution duration. Crashes
+      // without either timing, and skip/todo results, preserve the old estimate.
       const isPassFail = result.status === 'pass' || result.status === 'fail';
       let duration = prev?.duration;
-      if (isPassFail && result.duration != null) {
+      if (
+        isPassFail &&
+        (result.duration != null || result.loadDuration != null)
+      ) {
+        const measuredDuration =
+          (result.loadDuration ?? 0) + (result.duration ?? 0);
         duration =
           prev?.duration != null
             ? Math.round(
-                result.duration * DURATION_WEIGHT +
+                measuredDuration * DURATION_WEIGHT +
                   prev.duration * (1 - DURATION_WEIGHT),
               )
-            : result.duration;
+            : measuredDuration;
       }
 
       files[key] = {

@@ -152,6 +152,8 @@ npx rstest run --trace
 - `coverage`：从 provider 收集覆盖率数据。未启用覆盖率，或该文件在此之前 bail 或抛错时，不会出现。
 - `teardown`：清理 coverage provider 和 worker 状态；启用 `isolate` 时还会清理 test environment。
 
+Node pool 还会记录 `file:load` 区间（`cat: "file"`），其耗时与 `TestFileResult.loadDuration` 完全一致，加载失败时也会记录。它覆盖 worker 内的产物加载、setup 文件执行和测试模块求值。该区间与加载阶段的明细重叠，不会再次计入阶段或 host 汇总。Trace 区间耗时以微秒为单位，`loadDuration` 以毫秒为单位。
+
 浏览器模式只记录 `prepare` 和 `tests` 两个 phase，由 host 根据页面发来的消息计时。
 
 Rstest 会向 `<rootPath>/.rstest/` 写入两个文件，并在 watch 模式每次重新运行时替换它们：

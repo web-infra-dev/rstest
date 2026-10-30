@@ -61,9 +61,14 @@ describe('readResultsCache', () => {
   });
 
   it('reads back a valid cache', async () => {
-    await seed({ version: 1, files: { a: { duration: 5, at: Date.now() } } });
+    await seed({ version: 2, files: { a: { duration: 5, at: Date.now() } } });
     const cache = await readResultsCache(root);
     expect(cache?.files.a?.duration).toBe(5);
+  });
+
+  it('ignores legacy test-body timings when estimating scheduling cost', async () => {
+    await seed({ version: 1, files: { a: { duration: 5, at: Date.now() } } });
+    expect(await readResultsCache(root)).toBeUndefined();
   });
 });
 
@@ -78,6 +83,36 @@ describe('writeResultsCache', () => {
     const keyB = sequenceKey('default', root, join(root, 'b.test.ts'));
     expect(cache?.files[keyA]).toMatchObject({ duration: 100, failed: false });
     expect(cache?.files[keyB]).toMatchObject({ duration: 200, failed: true });
+  });
+
+  it('smooths the sum of loading and execution time', async () => {
+    await writeResultsCache(root, [
+      {
+        ...fileResult('a.test.ts', 'pass', 10),
+        loadDuration: 90,
+      },
+    ]);
+    await writeResultsCache(root, [
+      {
+        ...fileResult('a.test.ts', 'pass', 20),
+        loadDuration: 180,
+      },
+    ]);
+    const cache = await readResultsCache(root);
+    const key = sequenceKey('default', root, join(root, 'a.test.ts'));
+    expect(cache?.files[key]?.duration).toBe(170);
+  });
+
+  it('records loading failures even without execution time', async () => {
+    await writeResultsCache(root, [
+      {
+        ...fileResult('a.test.ts', 'fail', undefined),
+        loadDuration: 120,
+      },
+    ]);
+    const cache = await readResultsCache(root);
+    const key = sequenceKey('default', root, join(root, 'a.test.ts'));
+    expect(cache?.files[key]).toMatchObject({ duration: 120, failed: true });
   });
 
   it('smooths duration via EWMA on subsequent runs', async () => {
@@ -174,7 +209,7 @@ describe('writeResultsCache', () => {
     const stale = Date.now() - 31 * 24 * 60 * 60 * 1000;
     const staleKey = sequenceKey('default', root, join(root, 'old.test.ts'));
     await seed({
-      version: 1,
+      version: 2,
       files: { [staleKey]: { duration: 100, at: stale } },
     });
     await writeResultsCache(root, [fileResult('fresh.test.ts', 'pass', 10)]);

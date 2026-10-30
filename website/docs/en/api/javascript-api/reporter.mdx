@@ -156,11 +156,18 @@ interface TestResult {
 
 ```ts
 interface TestFileResult extends TestResult {
+  loadDuration?: number;
   results: TestResult[]; // Results of the tests declared in this file.
   snapshotResult?: SnapshotResult; // Snapshot statistics of this file.
   coverage?: Record<string, FileCoverageData>; // Per-file coverage data when coverage is enabled.
 }
 ```
+
+#### File timing
+
+<ApiMeta addedVersion="0.12.6" />
+
+In Node pools, `loadDuration` measures worker-side asset loading, setup file execution, and test module evaluation and collection, in milliseconds. It is recorded even if loading fails, and is absent when loading did not start or in browser mode. The existing `duration` measures test execution, including hooks and snapshot finalization. Their sum is used for Node test file scheduling; it excludes worker startup, environment initialization, queue wait, and worker teardown.
 
 `SerializedError` has the same shape as the entries of `unhandledErrors` in the `onTestRunEnd` payload. `SnapshotResult` comes from `@vitest/snapshot` and `FileCoverageData` from `istanbul-lib-coverage`.
 

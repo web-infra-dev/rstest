@@ -152,6 +152,8 @@ The flag is opt-in. Each run records per-suite and per-case slices annotated wit
 - `coverage`: collect coverage data from the provider. Absent when coverage is disabled, or when the file bailed or threw before this point.
 - `teardown`: clean up the coverage provider and the worker state, plus the test environment when `isolate` is enabled.
 
+Node pools also emit a `file:load` slice (`cat: "file"`) whose duration exactly matches `TestFileResult.loadDuration`, including when loading fails. It covers worker-side asset loading, setup files, and test module evaluation. This overlaps the detailed loading phases and is excluded from phase and host totals to avoid double-counting. Trace slice durations use microseconds; `loadDuration` uses milliseconds.
+
 Browser Mode records only `prepare` and `tests`, measured on the host from the messages the page sends.
 
 Rstest writes two files to `<rootPath>/.rstest/`, and replaces them on every watch rerun:

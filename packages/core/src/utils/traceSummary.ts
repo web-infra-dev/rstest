@@ -12,7 +12,7 @@ const isSlice = (ev: TraceEvent): ev is Slice =>
  * else carried on a `ph: 'X'` slice (`host:*`, `coverage:*`, and any future
  * host-side category) is a host-side span — see {@link summarizeTrace}.
  */
-const WORKER_SLICE_CATS = new Set(['phase', 'suite', 'case']);
+const WORKER_SLICE_CATS = new Set(['phase', 'suite', 'case', 'file']);
 
 // ---------------------------------------------------------------------------
 // Summary model
