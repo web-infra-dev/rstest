@@ -66,13 +66,68 @@ describe('readResultsCache', () => {
     expect(cache?.files.a?.duration).toBe(5);
   });
 
-  it('ignores legacy test-body timings when estimating scheduling cost', async () => {
-    await seed({ version: 1, files: { a: { duration: 5, at: Date.now() } } });
-    expect(await readResultsCache(root)).toBeUndefined();
+  it('migrates v1 without losing failure history or refreshing timestamps', async () => {
+    const legacy = {
+      version: 1,
+      files: {
+        failed: { duration: 5, failed: true, at: 123 },
+        passed: { duration: 0, failed: false, at: 456 },
+        crashed: { failed: true, at: 789 },
+      },
+    };
+    await seed(legacy);
+    expect(await readResultsCache(root)).toEqual({
+      version: 2,
+      files: {
+        failed: { failed: true, at: 123 },
+        passed: { failed: false, at: 456 },
+        crashed: { failed: true, at: 789 },
+      },
+    });
+    expect(JSON.parse(await readFile(join(root, CACHE_REL), 'utf-8'))).toEqual(
+      legacy,
+    );
   });
 });
 
 describe('writeResultsCache', () => {
+  it('persists migrated v1 entries and starts timing estimates from the new sample', async () => {
+    const at = Date.now() - 1000;
+    const staleAt = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    const key = (name: string) =>
+      sequenceKey('default', root, join(root, name));
+    await seed({
+      version: 1,
+      files: {
+        [key('rerun.test.ts')]: { duration: 1000, failed: true, at },
+        [key('failed.test.ts')]: { duration: 200, failed: true, at },
+        [key('passed.test.ts')]: { duration: 100, failed: false, at },
+        [key('stale.test.ts')]: { duration: 500, failed: true, at: staleAt },
+      },
+    });
+    await writeResultsCache(root, [
+      { ...fileResult('rerun.test.ts', 'pass', 20), loadDuration: 80 },
+    ]);
+    const persisted: ResultsCacheData = JSON.parse(
+      await readFile(join(root, CACHE_REL), 'utf-8'),
+    );
+    expect(persisted.version).toBe(2);
+    expect(persisted.files[key('rerun.test.ts')]).toEqual({
+      duration: 100,
+      failed: false,
+      at: expect.any(Number),
+    });
+    expect(persisted.files[key('failed.test.ts')]).toEqual({
+      failed: true,
+      at,
+    });
+    expect(persisted.files[key('passed.test.ts')]).toEqual({
+      failed: false,
+      at,
+    });
+    expect(persisted.files[key('stale.test.ts')]).toBeUndefined();
+  });
+
   it('records duration and failure state for pass/fail files', async () => {
     await writeResultsCache(root, [
       fileResult('a.test.ts', 'pass', 100),

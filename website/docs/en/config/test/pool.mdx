@@ -69,7 +69,7 @@ VM pools reuse workers and compilation resources, which can benefit suites with 
 
 Node pools prioritize files that failed on the previous run, then files without recorded timings. New files are ordered by bundle size; files with recorded timings are ordered by their estimated loading and execution time, longest first. The estimate uses `TestFileResult.loadDuration + TestFileResult.duration`: worker-side asset loading, setup files, test module evaluation and collection, followed by test execution. It excludes worker startup, environment initialization, queue wait, and teardown.
 
-Rstest retains these estimates in `node_modules/.cache/.rstest-results/results.json` and updates them after full runs. This cache is independent of Node compile cache. Test files should not depend on their execution order, which can change as timings are updated.
+Rstest retains these estimates in `node_modules/.cache/.rstest-results/results.json` and updates them after full runs. When reading a v1 cache, Rstest preserves failure history and timestamps but discards execution-only timings. The next cache write saves v2 data with fresh loading and execution estimates for the files that ran. This cache is independent of Node compile cache. Test files should not depend on their execution order, which can change as timings are updated.
 
 ## Pool types
 

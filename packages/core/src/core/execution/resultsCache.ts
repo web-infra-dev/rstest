@@ -60,7 +60,7 @@ const cachePath = (rootPath: string): string =>
 
 /**
  * Read the sequencing cache. Returns `undefined` on any failure — a missing
- * file, invalid JSON, or version mismatch all degrade to a cold start.
+ * file, invalid JSON, or unsupported version all degrade to a cold start.
  */
 export const readResultsCache = async (
   rootPath: string,
@@ -70,11 +70,19 @@ export const readResultsCache = async (
     const parsed = JSON.parse(content) as ResultsCacheData;
     if (
       !parsed ||
-      parsed.version !== CACHE_VERSION ||
+      (parsed.version !== 1 && parsed.version !== CACHE_VERSION) ||
       typeof parsed.files !== 'object' ||
       parsed.files === null
     ) {
       return undefined;
+    }
+    if (parsed.version === 1) {
+      // Failure history still applies, but execution-only estimates must not
+      // be mixed with loading + execution samples. Preserve ages for pruning.
+      for (const entry of Object.values(parsed.files)) {
+        delete entry.duration;
+      }
+      parsed.version = CACHE_VERSION;
     }
     return parsed;
   } catch {

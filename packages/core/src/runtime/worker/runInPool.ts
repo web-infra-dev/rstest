@@ -1019,6 +1019,10 @@ export const runInPool = async (
         runtimeGlobal: rstestContext.global,
         tracker,
       });
+      taskContext.setFallback(undefined);
+      // Module evaluation queues describe callbacks; drain them while the
+      // collect phase and file loading interval are still open.
+      await runner.collectTests();
     } finally {
       const loadEnd = getRealNow();
       loadDuration = loadEnd - loadStart;
