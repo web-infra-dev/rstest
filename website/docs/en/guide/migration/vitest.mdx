@@ -252,7 +252,16 @@ const fixtureUrl = new URL('./fixture.json', import.meta.url);
 
 Rstest keeps these expressions as-is instead of rewriting them into bundled asset paths, so the resolved URL points at the on-disk source file.
 
-Because these expressions stay out of the bundler's dependency graph, editing such a sibling file in watch mode does not automatically re-run the tests that read it at runtime.
+In Node mode, `import.meta.resolve(specifier)` also resolves relative to the source module, including in helpers imported by a test. It returns a URL string using Node's ESM resolution rules. You can save the resolver in a variable without changing its source-relative base:
+
+```ts
+const resolve = import.meta.resolve;
+const fixtureUrl = resolve('./fixture.json');
+```
+
+Because these runtime path resolutions stay out of the bundler's dependency graph, editing such a sibling file in watch mode does not automatically re-run the tests that read it at runtime.
+
+If you enable Rspack's `module.parser.javascript.importMetaResolve` through `tools.rspack`, `import.meta.resolve()` uses Rspack's bundler behavior instead: it includes the target module in the bundle and returns its module ID. This also applies when `importMetaResolve: true` is set in a matching `module.rules[].parser` configuration.
 
 ### Auto-mocking modules
 

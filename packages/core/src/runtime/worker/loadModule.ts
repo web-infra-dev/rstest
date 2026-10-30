@@ -9,12 +9,14 @@ import { getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
+  createImportMetaResolve,
   finalizeDynamicImport,
   loadWasm,
   resolveImportSpecifier,
 } from './resolveDynamicImport';
 import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_IMPORT_META_RESOLVE_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
 import { workerCache } from './vm/cache';
@@ -275,6 +277,7 @@ export const loadModule = ({
       distPath,
       assetFiles,
     }),
+    [RSTEST_IMPORT_META_RESOLVE_HOOK]: createImportMetaResolve(),
     __dirname: fileDir,
     __filename: testPath,
     ...rstestContext,
