@@ -23,7 +23,7 @@ describe('outer', () => {
 
 // Both orderings here are unrepresentable in a tree walk: `concurrent` siblings
 // overlap their start/result events, and the `afterAll` log carries the suite's
-// task id yet is written after the child results.
+// task id yet is written after its cases start, rather than at suite start.
 describe('ordering', () => {
   beforeAll(() => {
     console.log('beforeAll log');
