@@ -35,7 +35,7 @@ test('interacts with a form using locator', async () => {
 
 `page` is the starting point in tests: first use `page` to locate elements, then execute interactions and assertions on the returned `Locator`.
 
-`page` is a query-only object: it only creates `Locator` instances and does not directly execute interaction actions.
+Use query methods to create `Locator` instances. For keyboard input at the current focus, use [`page.keyboard`](/api/runtime-api/browser-mode/keyboard).
 
 ```ts
 const submitButton = page.getByRole('button', { name: 'Submit' });
@@ -45,9 +45,9 @@ The `submitButton` above is a `Locator`. You can continue chaining calls on it (
 
 ## BrowserPage
 
-- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator }`
+- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard }`
 
-`BrowserPage` is the type definition for `page`. It exposes query entry points and DOM-to-Locator conversion, and does not include interaction methods like `click`, `fill`, etc.
+`BrowserPage` is the type definition for `page`. It exposes query entry points, DOM-to-Locator conversion, and [`keyboard`](/api/runtime-api/browser-mode/keyboard) with the `BrowserKeyboard` type. Element actions such as `click` and `fill` are available on `Locator`.
 
 This means you need to first obtain a `Locator` through `page`, then call interactions and assertions on the `Locator`.
 

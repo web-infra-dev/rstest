@@ -53,14 +53,16 @@ export default defineConfig({
 });
 ```
 
-### 组件测试
+<span id="组件测试" />
+
+### 组件测试 \{#component-testing}
 
 `render` 函数将组件渲染到 DOM 后，返回 `container`（组件的容器元素）。你可以用原生 DOM API 或 Testing Library 查询元素并进行断言：
 
 如果你偏好 Playwright 风格写法，也可以结合 `@rstest/browser` 的 `page` 与 `expect.element`，详见 [浏览器交互](/guide/browser-testing/user-interactions#locator-api)。
 
 ```tsx title="src/Counter.test.tsx"
-import { render } from '@rstest/browser-react';
+import { act, render } from '@rstest/browser-react';
 import { expect, test } from '@rstest/core';
 import { Counter } from './Counter';
 
@@ -71,7 +73,9 @@ test('renders and increments', async () => {
     '0',
   );
 
-  container.querySelector('button')!.click();
+  await act(() => {
+    container.querySelector('button')!.click();
+  });
   expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
     '1',
   );
@@ -90,6 +94,8 @@ test('renders with theme context', async () => {
   // ...
 });
 ```
+
+#### 对服务端渲染内容进行 hydration \{#hydrating-server-rendered-markup}
 
 <ApiMeta addedVersion="0.12.4" />
 
@@ -156,7 +162,7 @@ test('hook reacts to prop changes', async () => {
 - **React Strict Mode**：使用 `configure({ reactStrictMode: true })` 启用，帮助发现潜在问题
 - **手动清理**：默认每个测试前自动清理。如需手动控制清理时机，从 `@rstest/browser-react/pure` 导入并调用 `cleanup()`
 
-完整 API 请参考包文档。
+完整用法请参考 [React API 文档](/api/runtime-api/browser-mode/react)，其中包含 `render`、`renderHook`、`act`、`cleanup` 和 `configure` 的参数及返回值。
 
 ## Vanilla JS/TS
 

@@ -18,11 +18,25 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   globalSetup: ['./global-setup.ts'],
-  // 或多个文件
-  globalSetup: ['./setup-db.ts', './setup-server.ts'],
-  // 其他配置...
 });
 ```
+
+{/* cspell:ignore setupfiles */}
+
+<span id="与-setupfiles-的区别" />
+
+## 与 setupFiles 的区别 \{#differences-from-setupfiles}
+
+根据资源需要的作用范围选择：
+
+| 方式                                                       | 执行时机                                                              | 执行环境            | 清理方式                            | 典型用途                    |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- | ------------------- | ----------------------------------- | --------------------------- |
+| `globalSetup`                                              | 项目的测试开始前执行一次                                              | 独立的 setup worker | 导出 `teardown` 或返回清理函数      | 启动数据库或测试服务        |
+| [`setupFiles`](/config/test/setup-files)                   | 每个测试文件执行前                                                    | 该文件的测试环境    | 注册 `afterAll` 或 `afterEach` hook | 扩展 matcher、注册共用 hook |
+| [`beforeAll`](/api/runtime-api/test-api/hooks#beforeall)   | 所属 suite 的测试开始前执行一次；在 `describe` 外注册时作用于整个文件 | 与测试相同的环境    | `afterAll` 或返回的清理函数         | 准备 suite 共用的数据       |
+| [`beforeEach`](/api/runtime-api/test-api/hooks#beforeeach) | 作用范围内的每个测试执行前                                            | 与测试相同的环境    | `afterEach` 或返回的清理函数        | 为每个测试重置状态          |
+
+`setupFiles` 不会识别导出的 `setup` 或 `teardown` 函数。文件顶层代码会在每个测试文件执行前运行，可以在其中注册 hook 来清理资源。
 
 ## 全局设置文件格式
 
@@ -70,9 +84,25 @@ export default async function globalSetup() {
 }
 ```
 
-:::note
-globalSetup 文件在隔离的 setup worker 中运行：setup 文件里模块作用域的变量在测试中无法访问。其中产生的环境变量变更会存储在 Rstest context 上，并被组合到每个 node 测试 worker 的环境中，而不会修改宿主的 `process.env`——所以通过在此处修改环境变量把值传给 node 测试是被支持的用法。对于 browser 模式测试，**browser 项目自身**的 `globalSetup` 中所做的环境变量变更也会被传递：它们会被注入到 browser 运行时的 env 存储中（可通过 `process.env` / `import.meta.env` 读取），叠加在内置的 `NODE_ENV` / `RSTEST` 之上，且显式的 `test.env` 配置仍然优先。其他宿主环境变量不会被转发到 browser 测试；在混合项目中，Node 侧 `globalSetup` 的环境变量变更不会合并进 browser 测试。由 browser provider hook（`modifyRstestConfig`）新增或修改的 `globalSetup` 条目同样会被识别：这些 hook 会在测试发现阶段被应用，早于 setup 阶段读取项目配置。在 watch 模式下，每个 browser 项目的 `globalSetup` 会在初始测试周期前执行一次；后续 rerun 不会再次执行，watch session 关闭时会执行对应的 teardown。
-:::
+## 向测试传递值 \{#sharing-values-with-tests}
+
+globalSetup 在独立的 setup worker 中运行。测试无法访问其中的模块作用域变量，例如数据库连接。可以通过环境变量传递连接信息，再在测试环境中创建连接。
+
+globalSetup 中的环境变量变更会传递给 Node.js 测试 worker，不会修改宿主进程的 `process.env`。
+
+### Browser 项目 \{#browser-projects}
+
+Browser Mode 的环境变量共享遵循以下规则：
+
+- **Browser 项目自身**的 `globalSetup` 所产生的变更，可以通过 `process.env` 和 `import.meta.env` 读取，与内置的 `NODE_ENV`、`RSTEST` 一起生效。
+- 显式的 [`env`](/config/test/env) 配置优先于 globalSetup 中设置的值。
+- 其他宿主环境变量不会自动传递给 Browser 测试。在混合 Node.js 和 Browser 项目中，Node.js 项目 globalSetup 中的变更不会合并到 Browser 测试中。
+
+Browser provider hook（`modifyRstestConfig`）在测试发现阶段执行，早于 setup 阶段，因此其中新增或修改的 `globalSetup` 条目也会生效。
+
+### Watch 模式 \{#watch-mode}
+
+项目的 globalSetup 成功执行后，watch 模式下的重新运行会复用这次初始化结果，直到 watch 会话关闭时才执行 teardown。需要在每个测试文件执行前重复运行的初始化逻辑，应放在 [`setupFiles`](/config/test/setup-files) 中。
 
 ## 多个全局设置文件
 
@@ -81,14 +111,6 @@ globalSetup 文件在隔离的 setup worker 中运行：setup 文件里模块作
 - 设置函数按提供的顺序顺序执行
 - teardown 函数按相反顺序执行（LIFO - 后进先出）
 - 如果任何设置失败，整个测试运行都会失败
-
-## 与 setupFiles 的区别
-
-| 特性          | globalSetup                | setupFiles                 |
-| ------------- | -------------------------- | -------------------------- |
-| 执行时机      | 在**所有测试**之前执行一次 | 在**每个测试文件**之前执行 |
-| teardown 支持 | 支持                       | 不支持                     |
-| 使用场景      | 全局资源、数据库、服务     | 每个测试的工具方法、mock   |
 
 ## 示例：数据库设置
 

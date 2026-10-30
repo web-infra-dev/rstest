@@ -1,5 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
-import { computeSummary } from '../../src/reporter/utils';
+import {
+  buildPackageManagerReproCommand,
+  computeSummary,
+} from '../../src/reporter/utils';
 import type { TestFileResult, TestResult } from '../../src/types';
 
 const test = (status: TestResult['status'], id: string): TestResult =>
@@ -37,5 +40,19 @@ describe('computeSummary', () => {
       tests: { total: 5, passed: 2, failed: 1, skipped: 1, todo: 1 },
       files: { total: 2, failed: 1 },
     });
+  });
+});
+
+describe('buildPackageManagerReproCommand', () => {
+  it('escapes RegExp characters in the test name pattern', () => {
+    expect(
+      buildPackageManagerReproCommand(
+        'src/index.test.ts',
+        'parser > parses foo(bar) [a] + $1',
+        'pnpm',
+      ),
+    ).toBe(
+      "pnpm exec rstest 'src/index.test.ts' --testNamePattern 'parser > parses foo\\(bar\\) \\[a\\] \\+ \\$1'",
+    );
   });
 });

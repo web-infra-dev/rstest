@@ -95,6 +95,9 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "restoreMocks": false,
   "retry": 0,
   "root": "<ROOT>/packages/core",
+  "sequence": {
+    "hooks": "stack",
+  },
   "setupFiles": [],
   "silent": false,
   "slowTestThreshold": 300,
@@ -209,6 +212,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "restoreMocks": false,
   "retry": 0,
   "root": "<ROOT>/packages/core/test-project",
+  "sequence": {
+    "hooks": "stack",
+  },
   "setupFiles": [
     "<ROOT>/packages/core/test-project/scripts/rstest.setup.ts",
   ],
@@ -326,6 +332,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "restoreMocks": false,
   "retry": 0,
   "root": "<ROOT>/packages/core/test-project1",
+  "sequence": {
+    "hooks": "stack",
+  },
   "setupFiles": [
     "<ROOT>/packages/core/test-project1/scripts/rstest.setup.ts",
   ],

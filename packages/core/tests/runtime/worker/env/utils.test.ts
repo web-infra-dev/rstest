@@ -9,6 +9,7 @@ import {
 } from 'node:timers';
 import { promisify } from 'node:util';
 import {
+  installGlobal,
   installObjectURLTracker,
   installTimerTracking,
   type NodeTimerPrimitives,
@@ -209,4 +210,36 @@ test('should not track object URLs for a worker-scoped environment', () => {
   // (#1644).
   expect(TestURL.createObjectURL).toBe(originalCreateObjectURL);
   expect(revoked).toEqual([]);
+});
+
+test('captures every original global before overriding any of them', () => {
+  class NodeEvent {}
+  class DomEvent {}
+  class DomMessageEvent {}
+  const target: Record<string, unknown> = { Event: NodeEvent };
+  // Node's web globals are lazy data properties: reading their descriptor
+  // materializes the class, which extends whatever `Event` is at that moment.
+  const testGlobal = new Proxy(target, {
+    getOwnPropertyDescriptor(object, key) {
+      if (key === 'MessageEvent' && !Object.hasOwn(object, key)) {
+        object[key] = class extends (object.Event as typeof NodeEvent) {};
+      }
+      return Reflect.getOwnPropertyDescriptor(object, key);
+    },
+    has(object, key) {
+      return key === 'MessageEvent' || Reflect.has(object, key);
+    },
+  });
+  const win = { Event: DomEvent, MessageEvent: DomMessageEvent };
+
+  const cleanup = installGlobal(testGlobal, win);
+  try {
+    expect(testGlobal.Event).toBe(DomEvent);
+    expect(testGlobal.MessageEvent).toBe(DomMessageEvent);
+  } finally {
+    cleanup();
+  }
+
+  expect(testGlobal.Event).toBe(NodeEvent);
+  expect(Object.getPrototypeOf(testGlobal.MessageEvent)).toBe(NodeEvent);
 });

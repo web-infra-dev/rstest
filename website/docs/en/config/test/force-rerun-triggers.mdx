@@ -15,7 +15,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 This is useful for files that can affect many tests but are not always represented in the module graph, such as package manifests, test configs, or generated files executed by child processes.
 
-If you extend config from an adapter such as `withRsbuildConfig`, `withRslibConfig`, or `withRspackConfig`, Rstest also treats the loaded Rsbuild, Rslib, or Rspack config file as a force-rerun trigger. This adapter-provided trigger is appended to the defaults unless you explicitly configure `forceRerunTriggers` in your Rstest config.
+If you extend config from an adapter such as `withRsbuildConfig`, `withRslibConfig`, or `withRspackConfig`, Rstest also treats the loaded Rsbuild, Rslib, or Rspack config file as a force-rerun trigger. This adapter-provided trigger is appended to the defaults unless you explicitly configure `forceRerunTriggers` in your Rstest config. Rstest treats the loaded config file itself and the local files it imports the same way: they are appended only when `forceRerunTriggers` is not explicitly configured.
 
 ```ts
 import { defineConfig } from '@rstest/core';

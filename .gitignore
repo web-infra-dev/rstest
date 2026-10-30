@@ -26,10 +26,6 @@ test-temp-*
 .vscode/**/*
 !.vscode/settings.json
 !.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/tasks.json
-!.vscode/extensions/
-!.vscode/extensions/**
 .idea/
 .nx/
 .history/
@@ -49,9 +45,6 @@ fixtures-test-*/
 !packages/core/src/coverage
 !packages/core/tests/coverage
 tests-dist/
-.vscode-test/
-packages/vscode/*.vsix
-packages/vscode/icon.png
 
 .rstest-temp/
 .rstest/

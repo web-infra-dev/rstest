@@ -122,7 +122,7 @@ export const filterProjects = (
         .split('*')
         .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
         .join('.*');
-      return new RegExp(isNeg ? `^(?!${escaped})` : `^${escaped}$`);
+      return new RegExp(isNeg ? `^(?!${escaped}$)` : `^${escaped}$`);
     });
 
     return projects.filter((proj) =>

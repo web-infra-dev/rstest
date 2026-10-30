@@ -624,10 +624,16 @@ describe('merge-reports lifecycle replay', () => {
       'concurrent fast | pass',
       'concurrent slow | pass',
     ]);
-    // `afterAll` output carries the suite's task id but is written after the
-    // child results, so it cannot be flushed at suite start.
+    // `afterAll` output carries the suite's task id but occurs after its cases
+    // start, so replay cannot flush it at suite start. Case-result reporter
+    // delivery is queued and may finish after this log.
     expect(names.indexOf('afterAll log')).toBeGreaterThan(
-      names.indexOf('concurrent slow | pass'),
+      names.findIndex((name) =>
+        name.startsWith('concurrent fast | startTime='),
+      ),
+    );
+    expect(names.indexOf('afterAll log')).toBeLessThan(
+      names.indexOf('ordering | pass'),
     );
 
     expect(mergedEvents).toEqual(liveEvents);

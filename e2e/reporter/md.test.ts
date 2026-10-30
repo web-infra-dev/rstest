@@ -889,4 +889,26 @@ describe('md', () => {
     expect(normalized).toContain('"type": "uncaughtException"');
     expect(normalized).toContain('unhandled async error');
   });
+
+  it('escapes RegExp characters in the repro test name pattern', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'agent-md/reproPattern', '--reporters', 'md'],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain(
+      "--testNamePattern 'agent-md > parses foo\\(bar\\)'",
+    );
+  });
 });

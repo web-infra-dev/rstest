@@ -63,10 +63,11 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 **示例：**
 
 ```ts
-rs.stubEnv('NODE_ENV', 'test');
+const originalNodeEnv = process.env.NODE_ENV;
+rs.stubEnv('NODE_ENV', 'production');
 // ... 执行相关代码
 rs.unstubAllEnvs();
-expect(process.env.NODE_ENV).not.toBe('test');
+expect(process.env.NODE_ENV).toBe(originalNodeEnv);
 ```
 
 在多个测试中模拟环境变量时，可以在 [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) Hook 中调用 `rs.unstubAllEnvs()`，以便在每个测试结束后恢复环境变量：

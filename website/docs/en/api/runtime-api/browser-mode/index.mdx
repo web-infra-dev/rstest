@@ -11,11 +11,11 @@ The Browser Mode API is provided by [@rstest/browser](https://github.com/web-inf
 
 `@rstest/browser` provides the runtime entry for Browser Mode. Its core responsibility is **locating elements and driving interactions**.
 
-`page` is the query entry point, `Locator` handles chaining and action execution, `BrowserPage` describes the query APIs supported by `page`, and `setTestIdAttribute` configures the test id attribute name.
+`page` provides queries and keyboard input, `Locator` handles chaining and action execution, `BrowserPage` describes the APIs supported by `page`, and `setTestIdAttribute` configures the test id attribute name.
 
 The following are the APIs currently exported by `@rstest/browser`:
 
-- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` query and DOM conversion entry
+- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` query, DOM conversion, and keyboard entry
 - [`Locator`](/api/runtime-api/browser-mode/locator) - Core class for chained queries and interactions
 - [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage) - Type definition for `page`
 - [`setTestIdAttribute`](/api/runtime-api/browser-mode/locator#settestidattribute) - Configure the attribute name used by `getByTestId()`
@@ -50,4 +50,6 @@ In this example, `page` first creates a `Locator`, the `Locator` executes `fill/
 ## Detailed reference
 
 - [Locator](/api/runtime-api/browser-mode/locator)
+- [Keyboard](/api/runtime-api/browser-mode/keyboard)
 - [Assertion](/api/runtime-api/browser-mode/assertion)
+- [React](/api/runtime-api/browser-mode/react) - Render components and hooks with `@rstest/browser-react`.

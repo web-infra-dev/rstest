@@ -28,6 +28,8 @@ describe('browser mode - error handling', () => {
     expect(cli.stdout).toMatch(/fail|timeout/i);
     expect(cli.stdout).toMatch(/nonExistent|Cannot read/);
     expect(cli.stdout).toMatch(/expected.*to.*be/i);
+    expect(cli.stderr).toContain('> 5 |     expect(1).toBe(2);');
+    expect(cli.stderr).toMatch(/\n\s+\|\s+\^/);
   });
 
   it('reports an expect.element mismatch before the test timeout', async () => {

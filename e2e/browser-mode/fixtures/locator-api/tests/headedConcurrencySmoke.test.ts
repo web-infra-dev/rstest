@@ -12,7 +12,8 @@ test('headed concurrency smoke', async () => {
     button.textContent = 'Frame clicked';
   };
   document.body.appendChild(button);
-  await page.elementLocator(button).click();
+  await page.elementLocator(button).focus();
+  await page.keyboard.press('Enter');
   await expect.element(button).toHaveText('Frame clicked');
   button.remove();
 });

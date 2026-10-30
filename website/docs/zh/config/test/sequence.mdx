@@ -1,0 +1,42 @@
+---
+description: 配置生命周期 Hook 的执行顺序。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# sequence
+
+<ApiMeta addedVersion="0.12.6" />
+
+- **类型：** `{ hooks?: 'stack' | 'list' }`
+- **默认值：** `{ hooks: 'stack' }`
+
+配置 Rstest 生命周期 Hook 的执行顺序。
+
+## sequence.hooks
+
+- **类型：** `'stack' | 'list'`
+- **默认值：** `'stack'`
+
+控制每个 suite 内 Hook 的执行顺序：
+
+- `'stack'`：`beforeAll` 和 `beforeEach` 按声明顺序执行；`afterAll` 和 `afterEach` 按声明的逆序执行。
+- `'list'`：这四种 Hook 都按声明顺序执行。从 Jest 迁移时，如果清理逻辑依赖 Hook 的注册顺序，例如先卸载组件再重置 store，可以使用此选项。
+
+嵌套 suite 中，`beforeEach` 仍从父 suite 到子 suite 执行，`afterEach` 仍从子 suite 到父 suite 执行。
+
+`beforeEach` 返回的清理函数在所有 `afterEach` Hook 之后执行；`beforeAll` 返回的清理函数在所属 suite 的 `afterAll` Hook 之后执行。它们也跟随此配置：`'stack'` 按对应 setup Hook 执行的逆序清理，`'list'` 按相同顺序清理。对于嵌套的 `beforeEach` Hook，此顺序涵盖父、子 suite 返回的所有清理函数。
+
+v0.12.6 修复了清理顺序不一致的问题：此前，返回的清理函数按 setup 顺序执行，而 `afterEach` 和 `afterAll` 按逆序执行。现在，返回的清理函数默认也按 setup 的逆序执行，其执行顺序与旧版本有所不同。
+
+此选项不影响 fixture 清理、`onTestFinished` 或 `onTestFailed`。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  sequence: {
+    hooks: 'list',
+  },
+});
+```

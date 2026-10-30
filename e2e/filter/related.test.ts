@@ -9,6 +9,7 @@ const __dirname = dirname(__filename);
 const relatedFixturePath = join(__dirname, 'fixtures-related');
 const dynamicFixturePath = join(__dirname, '../fixtures/fan-out-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
+const transitiveFixturePath = join(__dirname, 'fixtures-transitive');
 
 const collectRunTestFileLogs = (stdout: string) =>
   stdout
@@ -16,7 +17,76 @@ const collectRunTestFileLogs = (stdout: string) =>
     .filter((log) => log.includes('.test.ts'))
     .sort();
 
+const collectListedFiles = (stdout: string) =>
+  stdout.split('\n').filter(Boolean);
+
 describe('related test filtering', () => {
+  it('should select tests for a loader-declared build input', async () => {
+    const args = [
+      'list',
+      '--filesOnly',
+      '--related',
+      'loader-inputs/manifest.txt',
+    ];
+
+    const withoutLoader = await runRstestCli({
+      command: 'rstest',
+      args,
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await withoutLoader.expectExecSuccess();
+    expect(collectListedFiles(withoutLoader.cli.stdout)).toEqual([]);
+
+    const withLoader = await runRstestCli({
+      command: 'rstest',
+      args: ['--config', 'rstest.loader-input.config.mts', ...args],
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await withLoader.expectExecSuccess();
+    expect(collectListedFiles(withLoader.cli.stdout)).toEqual([
+      'index.test.ts',
+    ]);
+
+    const missingInput = await runRstestCli({
+      command: 'rstest',
+      args: [
+        '--config',
+        'rstest.loader-input.config.mts',
+        'list',
+        '--filesOnly',
+        '--related',
+        'loader-inputs/optional.txt',
+      ],
+      options: { nodeOptions: { cwd: relatedFixturePath } },
+    });
+    await missingInput.expectExecSuccess();
+    expect(collectListedFiles(missingInput.cli.stdout)).toEqual([
+      'index.test.ts',
+    ]);
+  });
+
+  it('should not chain build-input dependencies through imports', async () => {
+    const listRelated = async (source: string) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['list', '--filesOnly', '--related', source],
+        options: { nodeOptions: { cwd: transitiveFixturePath } },
+      });
+      await expectExecSuccess();
+      return collectListedFiles(cli.stdout).sort();
+    };
+
+    // `a` only reaches `b` through an import; `c`'s loader reads `b`'s source,
+    // so changing `a` must not select the consumer of `b`.
+    expect(await listRelated('src/transitive-a.ts')).toEqual([
+      'transitive-b.test.ts',
+    ]);
+    expect(await listRelated('src/transitive-b.ts')).toEqual([
+      'transitive-b.test.ts',
+      'transitive-c.test.ts',
+    ]);
+  });
+
   it('should run only tests related to a leaf source file', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

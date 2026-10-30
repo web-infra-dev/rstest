@@ -25,6 +25,7 @@ const makeProject = (): InternalProjectContext =>
       disableConsoleIntercept: false,
       testEnvironment: { name: 'node' },
       hookTimeout: 10000,
+      sequence: { hooks: 'stack' },
       isolate: true,
       coverage: { enabled: false, reporters: [] },
       snapshotFormat: {},

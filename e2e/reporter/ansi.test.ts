@@ -15,6 +15,12 @@ const vtControlSequenceRegex = new RegExp(
 describe('ansi', () => {
   it.for([
     {
+      name: 'colors code frame gutters and pointers without highlighting source',
+      env: { FORCE_COLOR: '1', RSTEST_NO_AGENT: '1' },
+      unsetEnv: ['NO_COLOR'],
+      expectAnsi: true,
+    },
+    {
       name: 'disables ansi output when NO_COLOR is set',
       env: { NO_COLOR: '1' },
       unsetEnv: ['FORCE_COLOR'],
@@ -62,6 +68,21 @@ describe('ansi', () => {
       expect(output).toContain('hi222');
       expect(output.includes(escapeChar)).toBe(expectAnsi);
       expect(vtControlSequenceRegex.test(output)).toBe(expectAnsi);
+
+      const sourceLine = output
+        .split('\n')
+        .find((line) => line.includes('expect(message).toMatchInlineSnapshot'));
+      expect(sourceLine).toBeDefined();
+      expect(sourceLine).toContain(
+        `expect(message).toMatchInlineSnapshot('"hi222"');`,
+      );
+      if (expectAnsi) {
+        expect(sourceLine).toContain(`${escapeChar}[90m7 |${escapeChar}[39m`);
+        expect(output).toContain(`${escapeChar}[1m^${escapeChar}[22m`);
+      } else {
+        expect(sourceLine).toContain('7 |');
+        expect(output).toMatch(/\n\s+\|\s+\^/);
+      }
     },
   );
 });

@@ -33,6 +33,53 @@ it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   },
 );
 
+it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
+  'loads default and forced DOM prebundles without fallback under %s',
+  async (pool, { onTestFinished }) => {
+    const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
+    const run = (config?: string) =>
+      runRstestCli({
+        command: 'rstest',
+        args: ['run', '--pool', pool, ...(config ? ['--config', config] : [])],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd,
+            env: { DEBUG: 'rstest' },
+          },
+        },
+      });
+
+    const defaultConfig = await run();
+    await defaultConfig.expectExecSuccess();
+    for (const environment of ['jsdom', 'happy-dom']) {
+      expect(defaultConfig.cli.stdout).toContain(
+        `loaded bundled test environment ${environment}`,
+      );
+    }
+    expect(defaultConfig.cli.stdout + defaultConfig.cli.stderr).not.toContain(
+      'falling back to its native entry',
+    );
+
+    const native = await run('rstest.native.config.mts');
+    await native.expectExecSuccess();
+    expect(native.cli.stdout + native.cli.stderr).not.toContain(
+      'bundled test environment',
+    );
+
+    const forcedPrebundle = await run('rstest.prebundle.config.mts');
+    await forcedPrebundle.expectExecSuccess();
+    for (const environment of ['jsdom', 'happy-dom']) {
+      expect(forcedPrebundle.cli.stdout).toContain(
+        `loaded bundled test environment ${environment}`,
+      );
+    }
+    expect(
+      forcedPrebundle.cli.stdout + forcedPrebundle.cli.stderr,
+    ).not.toContain('falling back to its native entry');
+  },
+);
+
 describe('jsdom', () => {
   it('should keep automatic JSX runtime with an environment comment', async () => {
     const { cli, expectExecSuccess } = await runCli(
@@ -136,40 +183,6 @@ describe('jsdom', () => {
       /✓ test\/timers\.test\.ts/,
     );
     await expectExecSuccess();
-  });
-
-  it('should prebundle by default, force prebundling, and allow opting out', async ({
-    onTestFinished,
-  }) => {
-    const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
-    const run = (config?: string) =>
-      runRstestCli({
-        command: 'rstest',
-        args: ['run', ...(config ? ['--config', config] : [])],
-        onTestFinished,
-        options: {
-          nodeOptions: {
-            cwd,
-            env: { DEBUG: 'rstest' },
-          },
-        },
-      });
-
-    const defaultConfig = await run();
-    await defaultConfig.expectExecSuccess();
-    expect(defaultConfig.cli.stdout).toContain(
-      'bundled test environment jsdom',
-    );
-
-    const native = await run('rstest.native.config.mts');
-    await native.expectExecSuccess();
-    expect(native.cli.stdout).not.toContain('bundled test environment jsdom');
-
-    const forcedPrebundle = await run('rstest.prebundle.config.mts');
-    await forcedPrebundle.expectExecSuccess();
-    expect(forcedPrebundle.cli.stdout).toContain(
-      'bundled test environment jsdom',
-    );
   });
 
   it('should run test correctly with custom externals', async () => {
@@ -277,4 +290,34 @@ describe('happy-dom 20 compatibility', () => {
     );
     await expectExecSuccess();
   });
+});
+
+describe('jsdom 30 compatibility', () => {
+  // jsdom 30 requires Node 22.22+, so the Node 20 row of the e2e matrix
+  // cannot run this fixture.
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  it.skipIf(nodeMajor < 22)(
+    'keeps Node BroadcastChannel working with jsdom 30',
+    async () => {
+      const cwd = fileURLToPath(
+        new URL('./fixtures-jsdom-30', import.meta.url),
+      );
+      const { cli, expectExecSuccess } = await runCli(
+        ['broadcastChannel', 'version'],
+        'jsdom',
+        { cwd },
+      );
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.stdout, 'the jsdom 30 version fixture passes').toMatch(
+        /✓ version\.test\.ts/,
+      );
+      expect(
+        cli.stdout,
+        'Node BroadcastChannel delivers messages under jsdom 30',
+      ).toMatch(/✓ broadcastChannel\.test\.ts/);
+      await expectExecSuccess();
+    },
+  );
 });

@@ -11,7 +11,7 @@ Hooks 允许你在测试或测试套件执行之前或之后运行初始化和�
 
 ## beforeAll
 
-- **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(fn: (ctx: SuiteContext) => void | ((ctx: SuiteContext) => void | Promise<void>) | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>, timeout?: number) => void`
 
 在当前套件的所有测试之前运行。
 
@@ -27,7 +27,7 @@ beforeAll(async (ctx) => {
 });
 ```
 
-`beforeAll` 也支持返回一个函数，在所有测试之后运行，用于清理操作（等价于 `afterAll`）：
+`beforeAll` 也支持返回一个清理函数，在所属 suite 的 `afterAll` Hook 之后运行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 配置：
 
 ```ts
 import { beforeAll } from '@rstest/core';
@@ -79,7 +79,7 @@ beforeEach(async () => {
 });
 ```
 
-`beforeEach` 也支持返回一个函数，在每个测试之后运行，用于清理操作（等价于 `afterEach`）：
+`beforeEach` 也支持返回一个清理函数，在该测试的所有 `afterEach` Hook 之后运行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 配置：
 
 ```ts
 import { beforeEach } from '@rstest/core';

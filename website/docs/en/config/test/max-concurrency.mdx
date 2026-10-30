@@ -8,9 +8,17 @@ description: A number limiting the number of test cases that are allowed to run 
 - **Default:** `5`
 - **CLI:** `--maxConcurrency=10`
 
-A number limiting the number of test cases that are allowed to run at the same time when using `test.concurrent` or wrapped in `describe.concurrent`.
+Limit the number of test cases running at the same time **within a test file** when using `test.concurrent` or `describe.concurrent`. Cases above the limit wait until a slot is released.
 
-Any test above this limit will be queued and executed once a slot is released.
+Increasing this value does not make ordinary `test()` cases concurrent. Mark the tests or their suite as concurrent to opt in.
+
+| Setting                                               | Controls                                                    | Does not control               |
+| ----------------------------------------------------- | ----------------------------------------------------------- | ------------------------------ |
+| [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) | Workers running Node.js test files in parallel              | Concurrent cases within a file |
+| `maxConcurrency`                                      | Concurrent cases within each test file                      | How many files run in parallel |
+| [`isolate`](/config/test/isolate)                     | Whether files share module state and their test environment | How many tests run at once     |
+
+For example, `pool.maxWorkers: 1` runs Node.js test files one at a time, but each file can still run multiple `test.concurrent` cases. Set `maxConcurrency: 1` as well if those cases must also run one at a time.
 
 import { Tab, Tabs } from '@theme';
 

@@ -98,6 +98,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "restoreMocks": false,
   "retry": 0,
   "root": "<ROOT>/packages/core/tests",
+  "sequence": {
+    "hooks": "stack",
+  },
   "setupFiles": [
     "./setup.ts",
   ],

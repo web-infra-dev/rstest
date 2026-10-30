@@ -16,6 +16,8 @@ For projects already using the Rstack toolchain (Rspack, Rsbuild, Rslib, etc.), 
 
 In terms of execution model, Rstest runs tests using a dependency graph–based **bundle model**, rather than the traditional per-file transform-and-execute approach. This enables it to fully leverage build-time optimizations—such as tree-shaking and skipping unused re-exports in side-effect-free barrel files—bringing test behavior closer to real production output. As a result, Rstest reduces redundant module transformations and executions in large-scale projects, improving both performance and stability.
 
+See [Module side effects](/guide/advanced/side-effects) for how `sideEffects` declarations affect initialization imports.
+
 By integrating testing into the build pipeline, Rstest simplifies the overall toolchain, reduces the duplicated cost of maintaining separate configuration and plugin systems, and allows testing to fit more naturally into modern engineering architectures such as monorepos and complex applications.
 
 In the future, Rstest will continue evolving around a unified “build + test” model—exploring more efficient approaches to quality assurance, and integrating more deeply with CI systems and AI-driven workflows.
@@ -47,6 +49,7 @@ Rstack includes the following tools:
 | [Rsdoctor](https://github.com/web-infra-dev/rsdoctor) | Build analyzer           | <a href="https://npmjs.com/package/@rsdoctor/core"><img src="https://img.shields.io/npm/v/@rsdoctor/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a> |
 | [Rstest](https://github.com/web-infra-dev/rstest)     | Testing framework        | <a href="https://npmjs.com/package/@rstest/core"><img src="https://img.shields.io/npm/v/@rstest/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
 | [Rslint](https://github.com/web-infra-dev/rslint)     | Linter                   | <a href="https://npmjs.com/package/@rslint/core"><img src="https://img.shields.io/npm/v/@rslint/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
+| [Rstack CLI](https://github.com/rstackjs/rstack-cli)  | Unified CLI              | <a href="https://npmjs.com/package/rstack"><img src="https://img.shields.io/npm/v/rstack?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>                 |
 
 ## 📦 Core packages
 

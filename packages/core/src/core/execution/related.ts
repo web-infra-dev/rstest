@@ -6,7 +6,7 @@ import type {
   InternalProjectContext,
   NormalizedProjectConfig,
 } from '../../types';
-import { getTestEntries, normalizeExactPathMatch } from '../../utils';
+import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
 
@@ -234,6 +234,97 @@ const collectModuleGraph = ({
   };
 };
 
+/**
+ * Shape of the build-time dependency metadata Rspack records on a module.
+ * Loaders report the files they read through `buildInfo`; those files are
+ * dependencies of the module but never become modules themselves, so the
+ * module graph built from stats cannot see them.
+ */
+type BuildInputModule = {
+  nameForCondition?: () => string | undefined;
+  buildInfo?: {
+    fileDependencies?: Iterable<string>;
+    missingDependencies?: Iterable<string>;
+  };
+  modules?: readonly BuildInputModule[];
+};
+
+const declaresBuildInput = (
+  module: BuildInputModule,
+  sources: ReadonlySet<string>,
+): boolean => {
+  const { fileDependencies, missingDependencies } = module.buildInfo ?? {};
+
+  for (const dependencies of [fileDependencies, missingDependencies]) {
+    for (const dependency of dependencies ?? []) {
+      if (sources.has(normalizeExactPathMatch(dependency))) {
+        return true;
+      }
+    }
+  }
+
+  // Concatenation keeps the loader metadata on the inner modules, while imports
+  // point at the wrapper.
+  return (module.modules ?? []).some((innerModule) =>
+    declaresBuildInput(innerModule, sources),
+  );
+};
+
+/**
+ * Map requested source paths to the modules whose loaders declared them as
+ * build inputs. Each match becomes an extra traversal root for reverse import
+ * reachability; build-input relations are never added as graph edges, otherwise
+ * they would chain with import edges and select consumers that do not actually
+ * read the requested file. Concatenated modules expose the inner modules that
+ * hold the loader metadata, so the match is attributed to the wrapper that the
+ * import edges point at.
+ *
+ * Only exact file declarations are considered. A directory dependency tells
+ * Rspack to watch a directory, not which files under it the loader reads, so
+ * expanding it to `directory + every file` would invent dependencies the build
+ * never declared.
+ */
+const collectBuildInputConsumers = ({
+  modules,
+  sources,
+  projectRoot,
+  virtualModulePaths,
+}: {
+  modules: Iterable<BuildInputModule>;
+  /** Absolute source paths, normalized with `normalizeExactPathMatch`. */
+  sources: ReadonlySet<string>;
+  projectRoot: string;
+  virtualModulePaths?: ReadonlySet<string>;
+}): Set<string> => {
+  const consumers = new Set<string>();
+  if (sources.size === 0) {
+    return consumers;
+  }
+
+  for (const module of modules) {
+    if (!declaresBuildInput(module, sources)) {
+      continue;
+    }
+
+    const candidate = module.nameForCondition?.();
+    if (!candidate) {
+      continue;
+    }
+
+    const consumer = normalizeStatsPathCandidate({
+      candidate,
+      projectRoot,
+      virtualModulePaths,
+    });
+
+    if (consumer) {
+      consumers.add(consumer);
+    }
+  }
+
+  return consumers;
+};
+
 const collectReachableDependents = ({
   dependentsBySource,
   initialSources,
@@ -316,6 +407,40 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
   },
 });
 
+/**
+ * Collect the module paths reported by the analysis build errors. Test files
+ * in this set could not be analyzed, so they cannot be matched reliably.
+ */
+const collectErrorModulePaths = ({
+  errors,
+  projectRoot,
+}: {
+  errors:
+    readonly { moduleIdentifier?: string; moduleName?: string }[] | undefined;
+  projectRoot: string;
+}): Set<string> => {
+  const errorModulePaths = new Set<string>();
+
+  for (const error of errors || []) {
+    const candidate = error.moduleIdentifier || error.moduleName;
+
+    if (!candidate) {
+      continue;
+    }
+
+    const absolutePath = resolveStatsPathCandidate({
+      candidate,
+      projectRoot,
+    });
+
+    if (absolutePath) {
+      errorModulePaths.add(normalize(absolutePath));
+    }
+  }
+
+  return errorModulePaths;
+};
+
 const collectDirectlyMatchedFiles = ({
   files,
   sourceFilters,
@@ -390,6 +515,7 @@ export async function resolveRelatedTestFiles(
       targetProjects: context.projects,
       exposeRstestAPIProjects: context.projects,
       extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      logLevel: 'silent',
       getSetupFileProjects: () => ({
         setupProjects: context.projects,
         globalSetupProjects: context.projects,
@@ -404,6 +530,8 @@ export async function resolveRelatedTestFiles(
     });
 
     const matchedTestFiles = new Set<string>();
+    let failedTestFileCount = 0;
+
     projectEntries = projectEntries.size
       ? projectEntries
       : await collectProjectEntries(context);
@@ -418,6 +546,15 @@ export async function resolveRelatedTestFiles(
       matchedTestFiles.add(file);
     }
 
+    // Source filters are filesystem paths, not stats identifiers: keep `!`,
+    // `#`, `?` and whitespace that are part of the name. `resolveStatsPathCandidate`
+    // strips those for loader/query identifiers and must not be used here.
+    const buildInputSources = new Set(
+      sourceFilters.map((source) =>
+        normalizeExactPathMatch(resolve(context.rootPath, source)),
+      ),
+    );
+
     for (const project of context.projects) {
       if (!projectEntries.has(project.environmentName)) {
         continue;
@@ -425,25 +562,39 @@ export async function resolveRelatedTestFiles(
 
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
-      const { modules } = stats.toJson({
+      const analysisHasErrors = stats.hasErrors();
+      const { modules, errors } = stats.toJson({
         all: false,
         modules: true,
+        errors: true,
         nestedModules: true,
         reasons: true,
       });
 
+      const virtualModulePaths = new Set(
+        Object.keys(
+          setupFileState.virtualModules[project.environmentName] || {},
+        ),
+      );
       const moduleGraph = collectModuleGraph({
         modules,
         projectRoot: project.rootPath,
-        virtualModulePaths: new Set(
-          Object.keys(
-            setupFileState.virtualModules[project.environmentName] || {},
-          ),
-        ),
+        virtualModulePaths,
       });
       const testPaths = Object.values(
         projectEntries.get(project.environmentName) || {},
       );
+
+      if (analysisHasErrors) {
+        const errorModulePaths = collectErrorModulePaths({
+          errors,
+          projectRoot: project.rootPath,
+        });
+        failedTestFileCount += testPaths.filter((testPath) =>
+          errorModulePaths.has(normalize(testPath)),
+        ).length;
+      }
+
       const setupPaths = Object.values(
         setupFileState.setupFiles[project.environmentName] || {},
       );
@@ -455,14 +606,21 @@ export async function resolveRelatedTestFiles(
         sourceFilters,
         rootPath: context.rootPath,
       });
+      const buildInputConsumers = collectBuildInputConsumers({
+        modules: stats.compilation.modules,
+        sources: buildInputSources,
+        projectRoot: project.rootPath,
+        virtualModulePaths,
+      });
+      const initialSources = [...matchedSources, ...buildInputConsumers];
 
-      if (matchedSources.length === 0) {
+      if (initialSources.length === 0) {
         continue;
       }
 
       const reachableDependents = collectReachableDependents({
         dependentsBySource: moduleGraph.dependentsBySource,
-        initialSources: matchedSources,
+        initialSources,
       });
 
       const shouldRerunWholeProject =
@@ -483,6 +641,12 @@ export async function resolveRelatedTestFiles(
           matchedTestFiles.add(testPath);
         }
       }
+    }
+
+    if (failedTestFileCount > 0) {
+      logger.warn(
+        `Related test selection may be incomplete: ${failedTestFileCount} test file(s) failed to build and could not be analyzed.`,
+      );
     }
 
     return Array.from(matchedTestFiles).sort();

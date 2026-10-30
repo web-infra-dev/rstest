@@ -35,7 +35,7 @@ test('interacts with a form using locator', async () => {
 
 `page` 是测试里的起点：先用 `page` 定位元素，再在返回的 `Locator` 上执行交互和断言。
 
-`page` 是仅用于查询的对象：只负责创建 `Locator`，不直接执行交互动作。
+通过查询方法创建 `Locator`。要向当前焦点发送键盘输入，请使用 [`page.keyboard`](/api/runtime-api/browser-mode/keyboard)。
 
 ```ts
 const submitButton = page.getByRole('button', { name: 'Submit' });
@@ -45,9 +45,9 @@ const submitButton = page.getByRole('button', { name: 'Submit' });
 
 ## BrowserPage
 
-- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator }`
+- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard }`
 
-`BrowserPage` 是 `page` 的类型定义，提供查询入口和 DOM 到 Locator 的转换，不包含 `click`、`fill` 等交互方法。
+`BrowserPage` 是 `page` 的类型定义，提供查询入口、DOM 到 Locator 的转换，以及类型为 `BrowserKeyboard` 的 [`keyboard`](/api/runtime-api/browser-mode/keyboard)。`click`、`fill` 等元素交互方法由 `Locator` 提供。
 
 也就是说，你需要先通过 `page` 拿到 `Locator`，再在 `Locator` 上调用交互和断言。
 

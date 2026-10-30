@@ -9,7 +9,7 @@ packages:
 autoDedupe: true
 
 catalog:
-  '@rsbuild/core': ~2.2.13
+  '@rsbuild/core': ~2.3.0
   '@rsbuild/plugin-babel': ^2.1.0
   '@rsbuild/plugin-less': ^2.0.1
   '@rsbuild/plugin-node-polyfill': ^1.4.6
@@ -20,15 +20,14 @@ catalog:
   '@rsbuild/plugin-vue': ^2.0.1
   '@rsbuild/plugin-vue-jsx': ^2.0.1
   '@rslib/core': ~1.0.3
-  '@rspack/cli': ~2.2.9
-  '@rspack/core': ~2.2.9
-  '@rspack/dev-server': ~2.2.1
+  '@rspack/cli': ~2.3.0
+  '@rspack/core': ~2.3.0
+  '@rspack/dev-server': ~2.2.2
   '@rspack/plugin-react-refresh': ~2.0.2
 
 allowBuilds:
   '@parcel/watcher': false
   '@swc/core': false
-  '@vscode/vsce-sign': false
   core-js-pure: false
   keytar: false
   lefthook: true
@@ -36,13 +35,18 @@ allowBuilds:
 
 autoInstallPeers: false
 
-# for vsce
-hoistPattern: ['@secretlint/*']
+# Keep the virtual store free of hoisted packages: pnpm's bin shims put
+# node_modules/.pnpm/node_modules on NODE_PATH, so hoisting would make every
+# workspace dependency resolvable from any project and defeat install checks
+# such as the coverage provider flow. Nothing needs hoisting after the
+# standalone extension was removed.
+hoist: false
 
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@module-federation/*'
+  - '@swc-next/*'
   - '@rspack/*'
   - '@rsbuild/*'
   - '@rslib/*'
@@ -54,6 +58,8 @@ minimumReleaseAgeExclude:
   - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
+  # Renovate security update: happy-dom@21.0.4
+  - happy-dom@21.0.4
 
 packageExtensions:
   '@vue/test-utils':

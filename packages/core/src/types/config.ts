@@ -600,6 +600,19 @@ export interface RstestConfig {
   hookTimeout?: number;
 
   /**
+   * Control hook execution order.
+   * @default { hooks: 'stack' }
+   */
+  sequence?: {
+    /**
+     * Run afterEach and afterAll hooks within each suite in reverse declaration order (`stack`) or declaration order (`list`).
+     * Cleanup functions returned by beforeEach and beforeAll follow the same order.
+     * @default 'stack'
+     */
+    hooks?: 'stack' | 'list';
+  };
+
+  /**
    * How long to wait for the process to exit after a run finishes, in milliseconds.
    * 0 exits immediately. Infinity never forces the exit. Applies to `rstest run` only.
    * @default 10000
@@ -805,10 +818,12 @@ export type NormalizedConfig = Required<
     | 'testEnvironment'
     | 'browser'
     | 'expect'
+    | 'sequence'
     | 'output'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
+    sequence: Required<NonNullable<RstestConfig['sequence']>>;
     shard?: ShardConfig;
     pool: RstestPoolOptions;
     testEnvironment: EnvironmentWithOptions;

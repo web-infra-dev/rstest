@@ -75,6 +75,41 @@ describe('createRstest', () => {
     });
   });
 
+  it('adds the root config file and its dependencies to forceRerunTriggers', async () => {
+    await withTempDir('rstest-api-triggers-', async (root) => {
+      const rstest = await createRstest({
+        cwd: root,
+        config: {
+          content: {},
+          filePath: join(root, 'custom.config.ts'),
+          dependencies: [join(root, 'shared.ts')],
+        },
+      });
+
+      expect(rstest.context.config.forceRerunTriggers).toEqual([
+        '**/package.json/**',
+        '**/rstest.config.*',
+        join(root, 'custom.config.ts'),
+        join(root, 'shared.ts'),
+      ]);
+    });
+  });
+
+  it('keeps explicit forceRerunTriggers on the root config', async () => {
+    await withTempDir('rstest-api-triggers-', async (root) => {
+      const rstest = await createRstest({
+        cwd: root,
+        config: {
+          content: { forceRerunTriggers: [] },
+          filePath: join(root, 'custom.config.ts'),
+          dependencies: [join(root, 'shared.ts')],
+        },
+      });
+
+      expect(rstest.context.config.forceRerunTriggers).toEqual([]);
+    });
+  });
+
   it('does not instantiate reporters for the metadata snapshot', async () => {
     await withProcessOutputState(async (state) => {
       const config = {

@@ -223,4 +223,5 @@ webp
 worktree
 worktrees
 yuku
+Yuxi
 Zenbook

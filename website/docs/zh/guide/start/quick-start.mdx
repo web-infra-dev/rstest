@@ -21,7 +21,7 @@ import { Prompt } from '@rspress/core/theme';
 
 ## 环境准备
 
-开始之前，需要先安装 [Node.js](https://nodejs.org/) >= 20.19.0 版本，推荐使用 Node.js LTS 版本。
+开始之前，需要先安装 [Node.js](https://nodejs.org/) 20.x 中的 20.19.0 及以上版本，或 22.12.0 及以上版本（`^20.19.0 || >=22.12.0`）。推荐使用 LTS 版本。
 
 通过以下命令检查当前的 Node.js 版本：
 
@@ -110,6 +110,23 @@ test('should sayHi correctly', () => {
       Tests 1 passed
    Duration 140 ms (build 17 ms, tests 123 ms)
 ```
+
+## 类型检查 \{#type-checking}
+
+Rstest 会转换 TypeScript 代码以运行测试，但不会检查类型。测试通过并不代表项目没有类型错误。
+
+请单独运行项目的类型检查。对于已安装 TypeScript 并包含 `tsconfig.json` 的项目，可以添加以下脚本：
+
+```json title="package.json"
+{
+  "scripts": {
+    "test": "rstest",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+在 CI 中同时运行 `test` 和 `typecheck`，分别检查运行时行为和类型。
 
 ## 下一步
 

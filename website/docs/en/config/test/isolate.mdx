@@ -1,5 +1,5 @@
 ---
-description: Run tests in an isolated environment.
+description: Control module and test environment isolation between test files.
 ---
 
 # isolate
@@ -8,18 +8,25 @@ description: Run tests in an isolated environment.
 - **Default:** `true`
 - **CLI:** `--isolate`, `--isolate=false`, `--no-isolate`
 
-Run tests in an isolated environment.
+Control isolation between **test files**. By default, each file gets its own module state and test environment, preventing state from one file from affecting another.
 
-By default, Rstest runs each test in an isolated environment, which avoids the impact of some module side effects and helps improve the stability of the test.
+Tests within the same file still share that file's environment. Use [`beforeEach` and `afterEach`](/api/runtime-api/test-api/hooks) to reset state between individual tests.
 
-If your code has no side effects, turning off this option will help improve performance because module caches can be reused between different test files.
+For `forks` and `threads`, setting `isolate: false` lets files in the same worker reuse module caches and the test environment. This can improve performance if the files do not leave state behind.
+
+Isolation does not control parallelism. Use [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) to limit Node.js test workers and [`maxConcurrency`](/config/test/max-concurrency) to limit concurrent test cases within a file.
 
 :::info `vmForks` and `vmThreads` always isolate test files
 This option has no effect when [`pool.type`](/config/test/pool#vmforks) is `vmForks` or `vmThreads`. Rstest reuses the worker but creates a fresh VM context, module graph, and test environment for every file. Setup files and worker-scoped fixtures therefore also remain file-scoped.
 :::
 
-:::warning Module top-level code runs once per worker
-For `forks` and `threads`, when `isolate` is `false`, a module imported by multiple test files is evaluated **once per worker**, not once per file. Any code at that shared module's top level — including hooks registered there (e.g. a helper that calls `beforeEach` at module scope) — therefore runs only for the first file that loads it, not for every file. For setup that must run per file, use [`setupFiles`](/config/test/setup-files), which Rstest re-runs for each test file even without isolation. The [test environment](/config/test/test-environment) follows the same rule — it is created once per worker, so its state (the DOM, timers you did not clear, installed fake timers) persists across files and can be reset per file in `setupFiles`.
+:::warning Shared state when isolation is disabled
+For `forks` and `threads`, `isolate: false` has these consequences:
+
+- A module imported by several files is evaluated **once per worker**. Hooks registered at the top level of a shared helper are therefore registered only for the first file that imports it.
+- [`setupFiles`](/config/test/setup-files) still runs before every test file. Put shared hook registration and per-file resets there.
+- The [test environment](/config/test/test-environment) is reused within each worker. DOM state, uncleared timers, and installed fake timers can persist across files; reset them explicitly if later files depend on a clean environment.
+
 :::
 
 import { Tab, Tabs } from '@theme';

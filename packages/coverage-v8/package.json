@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-v8",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "description": "V8 coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -34,12 +34,12 @@
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
+    "@swc-next/parser": "0.4.1",
+    "@swc-next/walker": "0.4.1",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
-    "picomatch": "^4.0.7",
-    "yuku-ast": "^0.19.0",
-    "yuku-parser": "^0.19.0"
+    "picomatch": "^4.0.7"
   },
   "devDependencies": {
     "@rsbuild/core": "catalog:",

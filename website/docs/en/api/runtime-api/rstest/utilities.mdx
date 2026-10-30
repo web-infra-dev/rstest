@@ -63,10 +63,11 @@ Restores all environment variables that were changed using [`rs.stubEnv`](#rsstu
 **Example:**
 
 ```ts
-rs.stubEnv('NODE_ENV', 'test');
+const originalNodeEnv = process.env.NODE_ENV;
+rs.stubEnv('NODE_ENV', 'production');
 // ... run some code
 rs.unstubAllEnvs();
-expect(process.env.NODE_ENV).not.toBe('test');
+expect(process.env.NODE_ENV).toBe(originalNodeEnv);
 ```
 
 When stubbing environment variables in multiple tests, call `rs.unstubAllEnvs()` in an [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) hook to restore them after every test:

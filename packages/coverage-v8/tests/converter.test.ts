@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto';
 import type { Profiler } from 'node:inspector';
 import { rspack } from '@rsbuild/core';
 import { decodedMappings, TraceMap } from '@jridgewell/trace-mapping';
+import { parseSync } from '@swc-next/parser';
 import libCoverage from 'istanbul-lib-coverage';
-import { parse } from 'yuku-parser';
 import { createFastCoverageMap } from '../src/utils';
 import {
   addScriptCoverageHits,
@@ -176,7 +176,10 @@ async function prepare(
   return {
     file,
     options: {
-      ast: parse(code, { sourceType: 'module', preserveParens: false }),
+      ast: parseSync(code, {
+        sourceType: 'module',
+        preserveParens: false,
+      }),
       cacheKey: generated,
       code,
       coverage: await collect(code, url),
@@ -353,7 +356,10 @@ f(1, ${take});
         );
         const coverage = (
           await convertV8CoverageWithAst({
-            ast: parse(code, { sourceType: 'module', preserveParens: false }),
+            ast: parseSync(code, {
+              sourceType: 'module',
+              preserveParens: false,
+            }),
             cacheKey: file,
             code,
             coverage: await collect(code, pathToFileURL(file).href),
@@ -383,7 +389,10 @@ f(1, ${take});
     const url = pathToFileURL(file).href;
     for (const count of [0, 1]) {
       const coverage = await convertV8CoverageWithAst({
-        ast: parse(code, { sourceType: 'module', preserveParens: false }),
+        ast: parseSync(code, {
+          sourceType: 'module',
+          preserveParens: false,
+        }),
         cacheKey: file,
         code,
         coverage:
@@ -422,7 +431,10 @@ f(1, ${take});
         `${code.split(' ')[2]}.js`,
       );
       const coverage = await convertV8CoverageWithAst({
-        ast: parse(code, { sourceType: 'module', preserveParens: false }),
+        ast: parseSync(code, {
+          sourceType: 'module',
+          preserveParens: false,
+        }),
         cacheKey: file,
         code,
         coverage: await collect(code, pathToFileURL(file).href),

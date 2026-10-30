@@ -7,12 +7,11 @@ description: Define multiple test projects. It can be an array of directories, c
 - **Type:**
 
 ```ts
-type ProjectConfig = Omit<
-  RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage' | 'bail'
->;
+import type { ProjectConfig } from '@rstest/core';
 
-type Projects = (string | ProjectConfig)[];
+type InlineProjectConfig = ProjectConfig & { name: string };
+
+type Projects = (string | InlineProjectConfig)[];
 ```
 
 - **Default:** `[<rootDir>]`

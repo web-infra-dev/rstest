@@ -16,6 +16,8 @@ Rstest 基于 Rspack 与 Rsbuild 构建，开箱即用，对 TypeScript、ESM、
 
 在执行模型上，Rstest 采用基于依赖图的 **bundle 模型**来运行测试，而不是传统测试框架中基于逐文件转换（transform）的执行方式。这种方式能够直接复用构建阶段的优化能力（如 tree-shaking，以及对无副作用的 barrel file 重导出的按需跳过），使测试结果更加接近真实运行产物，同时在大规模项目中减少重复的模块转换与执行开销，从而提升测试效率与稳定性。
 
+关于 `sideEffects` 声明如何影响初始化导入，详见[模块副作用](/guide/advanced/side-effects)。
+
 通过将测试能力纳入构建流程，Rstest 简化了整体工具链结构，减少了配置与插件系统的重复成本，使测试能够更自然地融入现代工程架构（如 monorepo 和复杂应用架构）中。
 
 未来，Rstest 将持续围绕“构建 + 测试”的一体化方向演进，探索更高效的质量保障方案，并与 CI、Agent 等能力进一步结合。
@@ -47,6 +49,7 @@ Rstack 包含以下工具：
 | [Rsdoctor](https://github.com/web-infra-dev/rsdoctor) | 构建分析工具   | <a href="https://npmjs.com/package/@rsdoctor/core"><img src="https://img.shields.io/npm/v/@rsdoctor/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a> |
 | [Rstest](https://github.com/web-infra-dev/rstest)     | 测试框架       | <a href="https://npmjs.com/package/@rstest/core"><img src="https://img.shields.io/npm/v/@rstest/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
 | [Rslint](https://github.com/web-infra-dev/rslint)     | 代码检查工具   | <a href="https://npmjs.com/package/@rslint/core"><img src="https://img.shields.io/npm/v/@rslint/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
+| [Rstack CLI](https://github.com/rstackjs/rstack-cli)  | 统一命令行工具 | <a href="https://npmjs.com/package/rstack"><img src="https://img.shields.io/npm/v/rstack?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>                 |
 
 ## 📦 核心包
 

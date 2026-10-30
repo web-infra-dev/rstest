@@ -26,6 +26,21 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
+  it.each(['default', 'stack', 'list'])(
+    'runs hooks in %s order',
+    async (hooks) => {
+      const { cli, expectExecSuccess } = await runBrowserCli('basic', {
+        args: ['-c', 'rstest.sequence.config.mts'],
+        env: { HOOK_ORDER: hooks },
+      });
+
+      await expectExecSuccess();
+      expect(cli.stdout).toContain(
+        `HOOK_ORDER_OK:${hooks === 'list' ? 'list' : 'stack'}`,
+      );
+    },
+  );
+
   it('keeps worker fixtures alive across non-isolated browser files', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('basic', {
       args: [

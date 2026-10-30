@@ -58,7 +58,7 @@ export default defineConfig({
 After the `render` function renders a component to the DOM, it returns `container` (the component's container element). You can use native DOM APIs or Testing Library to query elements and make assertions:
 
 ```tsx title="src/Counter.test.tsx"
-import { render } from '@rstest/browser-react';
+import { act, render } from '@rstest/browser-react';
 import { expect, test } from '@rstest/core';
 import { Counter } from './Counter';
 
@@ -69,7 +69,9 @@ test('renders and increments', async () => {
     '0',
   );
 
-  container.querySelector('button')!.click();
+  await act(() => {
+    container.querySelector('button')!.click();
+  });
   expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
     '1',
   );
@@ -88,6 +90,8 @@ test('renders with theme context', async () => {
   // ...
 });
 ```
+
+#### Hydrating server-rendered markup
 
 <ApiMeta addedVersion="0.12.4" />
 
@@ -154,7 +158,7 @@ test('hook reacts to prop changes', async () => {
 - **React Strict Mode**: Enable with `configure({ reactStrictMode: true })` to help catch potential issues
 - **Manual cleanup**: Automatic cleanup runs before each test by default. For manual control, import from `@rstest/browser-react/pure` and call `cleanup()`
 
-See the package documentation for the complete API.
+See the [React API reference](/api/runtime-api/browser-mode/react) for `render`, `renderHook`, `act`, `cleanup`, and `configure`, including their options and return values.
 
 ## Vanilla JS/TS
 

@@ -286,7 +286,10 @@ export const createHeadedScheduler = async ({
     }
   }
 
-  setDispatchPageResolver(() => ({ containerPage }));
+  setDispatchPageResolver((_target, runId) => ({
+    containerPage,
+    isRunCurrent: runId ? () => runs.isCurrent(runId) : undefined,
+  }));
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createSerialTaskQueue();
