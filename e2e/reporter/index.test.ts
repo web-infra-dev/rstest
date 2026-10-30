@@ -13,6 +13,49 @@ const parseReporterMetadata = (stdout: string) =>
   );
 
 describe.concurrent('reporters', () => {
+  it.for(['forks', 'threads'])(
+    'drains pending case results before file and run results in %s',
+    async (pool, { onTestFinished, onTestFailed }) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        onTestFinished,
+        onTestFailed,
+        args: [
+          'run',
+          '-c',
+          'rstest.slow-reporter.config.mts',
+          `--pool=${pool}`,
+          '--pool.maxWorkers=1',
+          '--no-isolate',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures-replay'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const events = parseMarkerPayload<string[]>(
+        cli.stdout,
+        '__RSTEST_SLOW_REPORTER__',
+      );
+      expect(events.slice(0, -2)).toEqual(
+        expect.arrayContaining([
+          'case:case 1',
+          'case:case 2',
+          'case:skipped case',
+          'case:todo case',
+          'case:concurrent fast',
+          'case:concurrent slow',
+        ]),
+      );
+      expect(events).toHaveLength(8);
+      expect(events.slice(-2)).toEqual(['file:0', 'run:0']);
+      expect(cli.stderr).not.toContain('Pending methods while closing rpc');
+    },
+  );
+
   it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
