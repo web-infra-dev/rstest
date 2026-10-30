@@ -1625,6 +1625,12 @@ importers:
       '@jridgewell/trace-mapping':
         specifier: 0.3.31
         version: 0.3.31
+      '@swc-next/parser':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@swc-next/walker':
+        specifier: 0.4.1
+        version: 0.4.1
       istanbul-lib-coverage:
         specifier: ^3.2.2
         version: 3.2.2
@@ -1637,12 +1643,6 @@ importers:
       picomatch:
         specifier: ^4.0.7
         version: 4.0.7
-      yuku-ast:
-        specifier: ^0.19.0
-        version: 0.19.0
-      yuku-parser:
-        specifier: ^0.19.0
-        version: 0.19.0
     devDependencies:
       '@rsbuild/core':
         specifier: 'catalog:'
@@ -3984,6 +3984,96 @@ packages:
     peerDependencies:
       '@svgr/core': '*'
 
+  '@swc-next/decoder@0.4.1':
+    resolution: {integrity: sha512-HkTOvxm923cjLMUc2LsAMoYU9LjJo2r/O3bXMhP1Y4t3Df7ytFgjmYjNnyQBq7biGtmSLI1xnvYcQd+1XypaEg==}
+
+  '@swc-next/parser-binding-darwin-arm64@0.4.1':
+    resolution: {integrity: sha512-cz8M7qF2oWPNMw+ZLWbeL+e6oQW9rwAWEVJXSNR5ddPa475/IhM2S7DrapDl360uFqae0uSvssyYUqa2ZNZ3kQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@swc-next/parser-binding-darwin-x64@0.4.1':
+    resolution: {integrity: sha512-1GW2iO8ejSwHKd5/S1KWwJRMu8kA4ReGsZtmRdHDtxq8RzXK8kglO/+xIkzMJFfyUvPRabEMWyD89u+8ALAjFQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@swc-next/parser-binding-linux-arm64-gnu@0.4.1':
+    resolution: {integrity: sha512-O5SZI82exauaawobbesGZgwchs0mBVxhigWKQyrESl7r2I+BiUpDc/XLW8YGICPUicaDQ4vt3gwIfTBaAqGDew==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@swc-next/parser-binding-linux-arm64-musl@0.4.1':
+    resolution: {integrity: sha512-7YrKRZxJIvHJgLXSncgsC2HNrlsHuC+NfYvno9SRq5IS6gFAbcfBqtnNf7ZJsi382OJNMFhjlZV6TZBxDhXv9Q==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@swc-next/parser-binding-linux-ppc64-gnu@0.4.1':
+    resolution: {integrity: sha512-6fk0zI8NegOeQDStvuKqHEdSwaTa5guq0eU8xbrub2sqTA84T8C5GnCkeybslHzZxedOcWz0NJ5wZ6/I8Ge5mQ==}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [glibc]
+
+  '@swc-next/parser-binding-linux-riscv64-gnu@0.4.1':
+    resolution: {integrity: sha512-i07DnwhN0R2NFH+m698cGR1RT7ayLMXYjCMAeFEOZ5KQmPl+ltxzmXwd9nSO80rFdycKAtnS8SDRVDlGqQFeWg==}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@swc-next/parser-binding-linux-riscv64-musl@0.4.1':
+    resolution: {integrity: sha512-OvFQb+17quQoPLmOD0Mv/qdGnd6+fZL43Krnm6Q2TxHol7g7tLskL4sTtt8BGYybBJeMEcY3DkH2fZwGaRvrMg==}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [musl]
+
+  '@swc-next/parser-binding-linux-s390x-gnu@0.4.1':
+    resolution: {integrity: sha512-KwjEquKRyKRJZT83oZMpjnVi1OUzPV9pUcWFUci7OQDGE6Q4DCljGcZ14R4o3Xgth4T7QvqG7GGAScBuevFIwQ==}
+    cpu: [s390x]
+    os: [linux]
+    libc: [glibc]
+
+  '@swc-next/parser-binding-linux-x64-gnu@0.4.1':
+    resolution: {integrity: sha512-3xsRB/8B4F31CJ3K9VFPlUdlClR0ogPeMRQ8I+JuLyMin9xbhl3zu6CZ34mPoYuynGBt5tGnK0Y2E/e3BH7X7Q==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@swc-next/parser-binding-linux-x64-musl@0.4.1':
+    resolution: {integrity: sha512-QKgpJeuMprp4dodkY4al3QfGKnFuGechwJPi0XwWpcTZBOefK0i0bZof5suSIO1pLQ1+jOc0rKWv51gbC23K/g==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@swc-next/parser-binding-win32-arm64-msvc@0.4.1':
+    resolution: {integrity: sha512-y/DrHfN4k7+/z2DxBnewbqIgFUapXSxQ9gphXiLen8QiQnZLpUUAFCvXRy1XT1HZEgEKwQBo0FTsLH4qMVghbQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@swc-next/parser-binding-win32-ia32-msvc@0.4.1':
+    resolution: {integrity: sha512-lnsgCeACs+mLUKAy6Xd9b9d/ltjqItIHFWze3okGOHY+7+8N+SpOwwGS7Hq7r4LfK1gmCmEpyObiAD67X1zAdg==}
+    cpu: [ia32]
+    os: [win32]
+
+  '@swc-next/parser-binding-win32-x64-msvc@0.4.1':
+    resolution: {integrity: sha512-dOlRVHipLRVHAamFgpKOPttvkSNljI2zhnyPUnZX9nFi+dDsvWO/bx40m0Z/4kIFW3LqLMMcDXP+oq4LciR4Zw==}
+    cpu: [x64]
+    os: [win32]
+
+  '@swc-next/parser@0.4.1':
+    resolution: {integrity: sha512-wTWUe4Tsve70NmsdiLdpae+HP83t9TN3NI03TKcTU0+u5C2U9t+Od/6p9OW3UFDC6jqDirDObK2bfwiXNLtb7Q==}
+    peerDependencies:
+      '@swc-next/parser-binding-wasm': 0.4.1
+    peerDependenciesMeta:
+      '@swc-next/parser-binding-wasm':
+        optional: true
+
+  '@swc-next/types@0.4.1':
+    resolution: {integrity: sha512-cK5oQcZVfLXaTqmty67dAyns7O0rgroray4WR2JhoyoDy9kHCD+cDpfTfStp5sO8WWvFHVqeB46mWwzhXwQljQ==}
+
+  '@swc-next/walker@0.4.1':
+    resolution: {integrity: sha512-2vtAN6PdDSPJCbqh9l6VwIJLPa9iGHLxT4TXMWL5IzitEL6NcwuIDrzd+jhKXy0xe4ffdJuNq/5dtEBoOmIx+Q==}
+
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
 
@@ -4345,75 +4435,6 @@ packages:
     peerDependenciesMeta:
       '@vue/server-renderer':
         optional: true
-
-  '@yuku-core/binding-android-arm64@0.19.0':
-    resolution: {integrity: sha512-wdL2XmTiZixAOaHk9Z0JJZ8u9Qm8d333Zjpc6gaxXFX+UR5BlsfxZ7a2+2Rm71pamppsPYGUGFq2oVLbh6DISw==}
-    cpu: [arm64]
-    os: [android]
-
-  '@yuku-core/binding-darwin-arm64@0.19.0':
-    resolution: {integrity: sha512-7sNJa6XJhyetnTy64jw3NEi4YgUcezHk1G5GH9FSvXAuC8wIlbaOwT9lgq5qo5sspjrZJQlBR1TWflP49uRpMw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@yuku-core/binding-darwin-x64@0.19.0':
-    resolution: {integrity: sha512-pTC7dYEc59isdyizc3nsuyFNBu2LU5wMYZ1be6UMr59PY/AJNtO1aBLWV0MgL/z7C1nv/2sX4TNjGgKLoeevJw==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@yuku-core/binding-freebsd-x64@0.19.0':
-    resolution: {integrity: sha512-xrZjF6XOEwyLOiDIfrwDdRCS6ghxcJeirNC1KivQhVcUwlRonaU79S3/Uiyx3lBylPnT8qKJ3/aMT+H52nGTJQ==}
-    cpu: [x64]
-    os: [freebsd]
-
-  '@yuku-core/binding-linux-arm-gnu@0.19.0':
-    resolution: {integrity: sha512-0OyIH53C0I1CbADHn9FSdCfX5qbpeLwJhmOVhonFJNYheybOnkSJ50qGMfTJIb8y5zrwqvLs7FVBvz6Fk8maZg==}
-    cpu: [arm]
-    os: [linux]
-    libc: [glibc]
-
-  '@yuku-core/binding-linux-arm-musl@0.19.0':
-    resolution: {integrity: sha512-z/iPfkCOCSXE34VXNt0uP1ORSW+4mEa9b5CiJcWZeqZH08g49bFU/jRM2T04f+Wpw5mJ6HIzNBiojxeAbrHjeg==}
-    cpu: [arm]
-    os: [linux]
-    libc: [musl]
-
-  '@yuku-core/binding-linux-arm64-gnu@0.19.0':
-    resolution: {integrity: sha512-jLNTi+gzaRwBJ+gwhCJ+rDb5dmx/8hEBx93UWd7hjMSqPTL1D1wvVSvXVAldV5kALvju7b0/m51EHEhs4+I1fA==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@yuku-core/binding-linux-arm64-musl@0.19.0':
-    resolution: {integrity: sha512-YwyPIdW/rN2Fmv0MTFWi47FaB3F9g+2b+sJISyAw83Yd60RWH4T3Nx6XkAHHVN+uKJNBAd6So7/BVihSiFYvuQ==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@yuku-core/binding-linux-x64-gnu@0.19.0':
-    resolution: {integrity: sha512-/vskaAXVX3ESR43FiTdfiYS7z1b9uoQJwVQ/0RgUHgN2sWoAyCZs+aX4CgU7eKGIHTVfp9VFwv+c+2XchYiEtQ==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@yuku-core/binding-linux-x64-musl@0.19.0':
-    resolution: {integrity: sha512-FuXL5igeSKib9Rye02TdH+D6SQezTyGxIATMu1Qsn/QywrzwpGl35OLpS2C1x5vpGLeVE2XgiLd5mVPFHmIglQ==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@yuku-core/binding-win32-arm64@0.19.0':
-    resolution: {integrity: sha512-YuJAe7zEKT1Xa7LuHlhGJpPnYQeVtvo0rZvNjJRqkH0hQGOw4C8QeP30Tg5VKGzZfo2x8CjhjEhKt4TmLwfmdg==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@yuku-core/binding-win32-x64@0.19.0':
-    resolution: {integrity: sha512-o8iY/mXwlRkedp0LNTr4+TEfXTPQwoNZmv6k+1WIAd1ZXEn8xJJTBCtB0osaVvdZo/x/cNmV16UrWrrGpM5Mvw==}
-    cpu: [x64]
-    os: [win32]
-
-  '@yuku-toolchain/types@0.19.0':
-    resolution: {integrity: sha512-tFkNbsP4WXX9UMUC5syJGdK9dPMLK0PPaIuXCcCYH75sZ8MrebfBZ2XvCILRTw8AgLivSSCfDa4R67iYBDa4Kg==}
 
   '@zeit/schemas@2.36.0':
     resolution: {integrity: sha512-7kjMwcChYEzMKjeex9ZFXkt1AyNov9R5HZtjBKVsmVpw7pa7ZtlCGvCBC2vnnXctaYN+aRI61HjIqeetZW5ROg==}
@@ -8161,18 +8182,6 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  yuku-ast@0.19.0:
-    resolution: {integrity: sha512-PyCsiScaelhxBGzL8dyeJkLqvRZycoh78R31Vrt/WqYrm0hMFoKwIw/X7Dx5mBKLWAMlV9I9HEyBOHnj2gZVyw==}
-    engines: {node: '>=14.18.0'}
-
-  yuku-core@0.19.0:
-    resolution: {integrity: sha512-kYK9e1XdfirNhkipzW0wmMcSWcVF/CWnuugodfVYRCUwvoBefweL9HzB96OiKEhsx78V5WbUxbJqlizMX869Qg==}
-    engines: {node: '>=14.18.0'}
-
-  yuku-parser@0.19.0:
-    resolution: {integrity: sha512-XrBh9ZiQK5mJVRxZBAvD6LwRyAYrK3MFtH3+onyuxFL5hFD44EC3QOmIC1FjTj6H2MMwq46/NAI+NZxLZPZgxg==}
-    engines: {node: '>=14.18.0'}
-
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
 
@@ -10528,6 +10537,72 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
+  '@swc-next/decoder@0.4.1':
+    dependencies:
+      '@swc-next/types': 0.4.1
+
+  '@swc-next/parser-binding-darwin-arm64@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-darwin-x64@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-arm64-gnu@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-arm64-musl@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-ppc64-gnu@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-riscv64-gnu@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-riscv64-musl@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-s390x-gnu@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-x64-gnu@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-linux-x64-musl@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-win32-arm64-msvc@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-win32-ia32-msvc@0.4.1':
+    optional: true
+
+  '@swc-next/parser-binding-win32-x64-msvc@0.4.1':
+    optional: true
+
+  '@swc-next/parser@0.4.1':
+    dependencies:
+      '@swc-next/decoder': 0.4.1
+      '@swc-next/types': 0.4.1
+    optionalDependencies:
+      '@swc-next/parser-binding-darwin-arm64': 0.4.1
+      '@swc-next/parser-binding-darwin-x64': 0.4.1
+      '@swc-next/parser-binding-linux-arm64-gnu': 0.4.1
+      '@swc-next/parser-binding-linux-arm64-musl': 0.4.1
+      '@swc-next/parser-binding-linux-ppc64-gnu': 0.4.1
+      '@swc-next/parser-binding-linux-riscv64-gnu': 0.4.1
+      '@swc-next/parser-binding-linux-riscv64-musl': 0.4.1
+      '@swc-next/parser-binding-linux-s390x-gnu': 0.4.1
+      '@swc-next/parser-binding-linux-x64-gnu': 0.4.1
+      '@swc-next/parser-binding-linux-x64-musl': 0.4.1
+      '@swc-next/parser-binding-win32-arm64-msvc': 0.4.1
+      '@swc-next/parser-binding-win32-ia32-msvc': 0.4.1
+      '@swc-next/parser-binding-win32-x64-msvc': 0.4.1
+
+  '@swc-next/types@0.4.1': {}
+
+  '@swc-next/walker@0.4.1': {}
+
   '@swc/helpers@0.5.23':
     dependencies:
       tslib: 2.8.1
@@ -10965,44 +11040,6 @@ snapshots:
       vue-component-type-helpers: 3.2.7
     optionalDependencies:
       '@vue/server-renderer': 3.5.44
-
-  '@yuku-core/binding-android-arm64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-darwin-arm64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-darwin-x64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-freebsd-x64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm-gnu@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm-musl@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm64-gnu@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm64-musl@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-x64-gnu@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-x64-musl@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-win32-arm64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-win32-x64@0.19.0':
-    optional: true
-
-  '@yuku-toolchain/types@0.19.0': {}
 
   '@zeit/schemas@2.36.0': {}
 
@@ -15230,32 +15267,6 @@ snapshots:
   yocto-queue@1.2.2: {}
 
   yoctocolors@2.1.2: {}
-
-  yuku-ast@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-
-  yuku-core@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-    optionalDependencies:
-      '@yuku-core/binding-android-arm64': 0.19.0
-      '@yuku-core/binding-darwin-arm64': 0.19.0
-      '@yuku-core/binding-darwin-x64': 0.19.0
-      '@yuku-core/binding-freebsd-x64': 0.19.0
-      '@yuku-core/binding-linux-arm-gnu': 0.19.0
-      '@yuku-core/binding-linux-arm-musl': 0.19.0
-      '@yuku-core/binding-linux-arm64-gnu': 0.19.0
-      '@yuku-core/binding-linux-arm64-musl': 0.19.0
-      '@yuku-core/binding-linux-x64-gnu': 0.19.0
-      '@yuku-core/binding-linux-x64-musl': 0.19.0
-      '@yuku-core/binding-win32-arm64': 0.19.0
-      '@yuku-core/binding-win32-x64': 0.19.0
-
-  yuku-parser@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-      yuku-core: 0.19.0
 
   zimmerframe@1.1.4: {}
 

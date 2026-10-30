@@ -7,12 +7,12 @@ import type {
   CoverageProvider as RstestCoverageProvider,
   RawCoverageResolveOptions,
 } from '@rstest/core';
+import { parseSync } from '@swc-next/parser';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
-import { parse } from 'yuku-parser';
 import { createFastCoverageMap, mapWithConcurrency } from './utils';
 import {
   addScriptCoverageHits,
@@ -571,7 +571,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private parseAst(code: string, outputModule: boolean) {
-    return parse(code, {
+    return parseSync(code, {
       preserveParens: false,
       sourceType: outputModule ? 'module' : 'script',
     });
