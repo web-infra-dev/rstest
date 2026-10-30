@@ -11,6 +11,18 @@ pnpm preview  # Preview production build
 pnpm gen:release-image  # Generate a release's banner + og image (see below)
 ```
 
+## Homepage figures
+
+The homepage illustrations live in `theme/ui/hairline/` on a vendored Hairline engine. Edit existing figures in place; the engine stays byte-for-byte, and Prettier and cspell are configured to leave it alone.
+
+Drawing a new figure needs the authoring skill. It is gitignored, so install it once per clone:
+
+```bash
+npx skills add lucasmarkes/hairline --skill hairline-create -y -a claude-code
+```
+
+`npx skills experimental_install` restores every skill listed in `skills-lock.json`.
+
 ## Release image generation
 
 Each release blog needs **two** images, generated together so they share one gradient:

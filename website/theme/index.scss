@@ -1,3 +1,100 @@
+// Rstest's primary color: one mint green (#31a281) for both themes, so a brand
+// surface or accent keeps the same value in light and dark. The darker steps
+// exist for hover and borders, and `--rstest-on-brand` is the ink that sits on
+// a solid brand fill in either theme.
 :root {
+  --rp-c-brand: #31a281;
+  --rp-c-brand-dark: #1f8b6d;
+  --rp-c-brand-darker: #11745a;
+  --rp-c-brand-light: #84c0aa;
+  --rp-c-brand-lighter: #b8e3d2;
+  --rp-c-brand-tint: #31a2811f;
   --rp-c-link: var(--rp-c-brand);
+  --rstest-on-brand: #012b20;
+}
+
+// Rstack tool grid: each card lights up in its own product hue on hover, and
+// its domain label carries the same hue instead of the Rstest brand color. The
+// hue lives on `data-tool`, so the markup stays color-free; the tint, rule and
+// label are derived from it with color-mix so both themes follow.
+.rstack-tool {
+  --tool-accent: var(--rp-c-brand);
+  position: relative;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: var(--tool-accent);
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  &:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--tool-accent) 12%,
+      var(--rp-c-bg)
+    );
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklab, var(--tool-accent) 32%, transparent);
+
+    &::before {
+      opacity: 1;
+    }
+  }
+}
+
+// Mixed toward the text color so a pale accent (Rsdoctor's white, Rspack's
+// yellow) still reads as text on both backgrounds.
+.rstack-tool__domain {
+  color: color-mix(in oklab, var(--tool-accent) 72%, var(--rp-c-text-1));
+}
+
+.rstack-tool:hover .rstack-tool__domain {
+  color: color-mix(in oklab, var(--tool-accent) 88%, var(--rp-c-text-1));
+}
+
+// Mascot colors: the hair bolt, the cape, the wizard hat, the feather, the
+// coat, the lint roller, the claw.
+.rstack-tool[data-tool='rspack'] {
+  --tool-accent: #f2b53d;
+}
+
+.rstack-tool[data-tool='rsbuild'] {
+  --tool-accent: #f27b4a;
+}
+
+.rstack-tool[data-tool='rslib'] {
+  --tool-accent: #9271d9;
+}
+
+.rstack-tool[data-tool='rspress'] {
+  --tool-accent: #4a9eff;
+}
+
+// White only works as an accent on the dark surface; on white it would vanish,
+// so the light theme uses the coat's shadow tone instead.
+.rstack-tool[data-tool='rsdoctor'] {
+  --tool-accent: #b6bcc6;
+}
+
+.dark .rstack-tool[data-tool='rsdoctor'] {
+  --tool-accent: #ffffff;
+}
+
+.rstack-tool[data-tool='rslint'] {
+  --tool-accent: #1371f1;
+}
+
+.rstack-tool[data-tool='rstest'] {
+  --tool-accent: #31a281;
+}
+
+.rstack-tool[data-tool='rstack-cli'] {
+  --tool-accent: #f17453;
 }
