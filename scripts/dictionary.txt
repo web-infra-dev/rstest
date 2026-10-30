@@ -225,4 +225,3 @@ worktrees
 yuku
 Yuxi
 Zenbook
-zimmerframe

@@ -7,7 +7,7 @@ import type {
   CoverageProvider as RstestCoverageProvider,
   RawCoverageResolveOptions,
 } from '@rstest/core';
-import { parseSync, type SourceType } from '@swc-next/parser';
+import { parseSync } from '@swc-next/parser';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
 import { createContext } from 'istanbul-lib-report';
@@ -571,12 +571,9 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private parseAst(code: string, outputModule: boolean) {
-    // SWC Next declares these runtime strings as ambient const enums, which
-    // cannot be referenced when isolatedModules is enabled.
-    const sourceType = (outputModule ? 'module' : 'script') as SourceType;
     return parseSync(code, {
       preserveParens: false,
-      sourceType,
+      sourceType: outputModule ? 'module' : 'script',
     });
   }
 

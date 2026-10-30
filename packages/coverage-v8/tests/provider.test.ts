@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { NormalizedCoverageOptions } from '@rstest/core';
-import { parseSync, type SourceType } from '@swc-next/parser';
+import { parseSync } from '@swc-next/parser';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { CoverageProvider } from '../src/provider';
 import type { IstanbulFileCoverageData } from '../src/utils';
@@ -128,8 +128,7 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 function parseModule(code: string) {
   return parseSync(code, {
     preserveParens: false,
-    // SWC Next's ambient const enum cannot be referenced under isolatedModules.
-    sourceType: 'module' as SourceType,
+    sourceType: 'module',
   });
 }
 

@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import type { Profiler } from 'node:inspector';
 import { rspack } from '@rsbuild/core';
 import { decodedMappings, TraceMap } from '@jridgewell/trace-mapping';
-import { parseSync, type SourceType } from '@swc-next/parser';
+import { parseSync } from '@swc-next/parser';
 import libCoverage from 'istanbul-lib-coverage';
 import { createFastCoverageMap } from '../src/utils';
 import {
@@ -177,7 +177,7 @@ async function prepare(
     file,
     options: {
       ast: parseSync(code, {
-        sourceType: 'module' as SourceType,
+        sourceType: 'module',
         preserveParens: false,
       }),
       cacheKey: generated,
@@ -357,7 +357,7 @@ f(1, ${take});
         const coverage = (
           await convertV8CoverageWithAst({
             ast: parseSync(code, {
-              sourceType: 'module' as SourceType,
+              sourceType: 'module',
               preserveParens: false,
             }),
             cacheKey: file,
@@ -390,7 +390,7 @@ f(1, ${take});
     for (const count of [0, 1]) {
       const coverage = await convertV8CoverageWithAst({
         ast: parseSync(code, {
-          sourceType: 'module' as SourceType,
+          sourceType: 'module',
           preserveParens: false,
         }),
         cacheKey: file,
@@ -432,7 +432,7 @@ f(1, ${take});
       );
       const coverage = await convertV8CoverageWithAst({
         ast: parseSync(code, {
-          sourceType: 'module' as SourceType,
+          sourceType: 'module',
           preserveParens: false,
         }),
         cacheKey: file,

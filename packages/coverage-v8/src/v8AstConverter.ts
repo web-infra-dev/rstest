@@ -43,14 +43,14 @@ import {
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
 import type { Comment, ParseResult } from '@swc-next/parser';
-import { walk } from 'zimmerframe';
+import { walk, type NodeType } from '@swc-next/walker';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 
 type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
   version: number;
 };
 type AstNode = {
-  type: string;
+  type: NodeType;
   start: number;
   end: number;
   [key: string]: unknown;
@@ -270,11 +270,12 @@ async function prepareCoverage(
   const isSkipped = (node: AstNode | null | undefined) =>
     Boolean(node && skippedNodes.has(node));
 
-  walk<AstNode, null>(parseResult.program, null, {
-    _(current, { next, path }) {
+  walk(parseResult.program, {
+    enter(current: AstNode, context) {
       const hint = getIgnoreHint(current);
 
       if (hint === 'next' || isSkipped(current)) {
+        context.skip();
         return;
       }
 
@@ -393,12 +394,7 @@ async function prepareCoverage(
         case 'ClassBody': {
           const children = current.body as AstNode[];
           for (const child of children) {
-            if (
-              (child.type === 'PropertyDefinition' ||
-                child.type === 'ClassProperty' ||
-                child.type === 'ClassPrivateProperty') &&
-              child.value
-            ) {
+            if (child.type === 'PropertyDefinition' && child.value) {
               builder.addStatement(child.value as AstNode);
             }
           }
@@ -428,10 +424,11 @@ async function prepareCoverage(
           }
 
           // An unbraced body's end can already belong to its enclosing region.
-          const parent = path.at(-1);
+          const parent = context.parent;
           const continuationOffset =
             parent &&
             (parent.type === 'BlockStatement' || parent.type === 'Program') &&
+            typeof parent.end === 'number' &&
             current.end < parent.end
               ? current.end
               : undefined;
@@ -500,8 +497,6 @@ async function prepareCoverage(
           break;
         }
       }
-
-      next();
     },
   });
 
