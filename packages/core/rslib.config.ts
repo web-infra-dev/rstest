@@ -162,6 +162,10 @@ export default defineConfig({
                   from: 'src/core/plugins/styleFallbackLoader.mjs',
                   to: 'styleFallbackLoader.mjs',
                 },
+                {
+                  from: 'src/core/execution/runtimeDependenciesWorker.mjs',
+                  to: 'runtimeDependenciesWorker.mjs',
+                },
               ],
             }),
             // only load & apply licensePlugin in lib build
