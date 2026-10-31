@@ -1435,6 +1435,9 @@ importers:
       '@types/chai':
         specifier: ^5.2.3
         version: 5.2.3
+      acorn:
+        specifier: 8.18.0
+        version: 8.18.0
       cjs-module-lexer:
         specifier: ^2.3.0
         version: 2.3.0
