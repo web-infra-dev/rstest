@@ -65,6 +65,12 @@ If performance does not meet your expectations, first identify where the time is
 
 VM pools reuse workers and compilation resources, which can benefit suites with many files or large setup dependencies. Setup files, test environment creation, and module evaluation still run for every file, however. Switching to a VM pool will not eliminate database initialization or network requests performed in setup. Use your project's runtime and memory measurements to make the final choice.
 
+## Test file scheduling
+
+Node pools prioritize files that failed on the previous run, then files without recorded timings. New files are ordered by bundle size; files with recorded timings are ordered by their estimated loading and execution time, longest first. The estimate uses `TestFileResult.loadDuration + TestFileResult.duration`: worker-side asset loading, setup files, test module evaluation and collection, followed by test execution. It excludes worker startup, environment initialization, queue wait, and teardown.
+
+Rstest retains these estimates in `node_modules/.cache/.rstest-results/results.json` and updates them after full runs. When reading a v1 cache, Rstest preserves failure history and timestamps but discards execution-only timings. The next cache write saves v2 data with fresh loading and execution estimates for the files that ran. This cache is independent of Node compile cache. Test files should not depend on their execution order, which can change as timings are updated.
+
 ## Pool types
 
 `forks` and `threads` run tests in child processes and worker threads, respectively. `vmForks` and `vmThreads` reuse those workers while creating a fresh `vm.Context` for each file.

@@ -211,6 +211,12 @@ export type TestResult = {
 };
 
 export type TestFileResult = TestResult & {
+  /**
+   * Node pool loading time in milliseconds: worker-side assets, setup files,
+   * test module evaluation and collection. Excludes worker/environment startup
+   * and teardown. Absent when loading did not start or in browser mode.
+   */
+  loadDuration?: number;
   results: TestResult[];
   snapshotResult?: SnapshotResult;
   coverage?: Record<string, FileCoverageData>;

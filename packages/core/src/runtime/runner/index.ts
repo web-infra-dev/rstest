@@ -86,6 +86,18 @@ export function createRunner({
     testRunner,
   });
 
+  // Node workers collect before closing their loading interval. Reuse the
+  // prepared tree when execution starts, including its resolved run modes.
+  let collectedTests: Test[] | undefined;
+  const collectTests = async (): Promise<Test[]> => {
+    if (!collectedTests) {
+      const tests = await runtimeInstance.getTests();
+      traverseUpdateTest(tests, testNamePattern);
+      collectedTests = tests;
+    }
+    return collectedTests;
+  };
+
   return {
     runner: {
       runTests: async (
@@ -102,8 +114,7 @@ export function createRunner({
           await hooks.onSnapshotSetupEnd?.();
         }
 
-        const tests = await runtimeInstance.getTests();
-        traverseUpdateTest(tests, testNamePattern);
+        const tests = await collectTests();
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
           testPath,
@@ -150,8 +161,7 @@ export function createRunner({
         }
       },
       collectTests: async () => {
-        const tests = await runtimeInstance.getTests();
-        traverseUpdateTest(tests, testNamePattern);
+        const tests = await collectTests();
 
         return tests.map(toTestInfo);
       },

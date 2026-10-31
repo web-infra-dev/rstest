@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -6,6 +6,7 @@ import {
   expect,
   it,
   type onTestFinished as OnTestFinished,
+  type TestFileResult,
 } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
@@ -44,6 +45,138 @@ const runOnce = async (
   });
 
 describe('perf-first test sequencing', () => {
+  for (const phase of ['module evaluation', 'deferred collection']) {
+    for (const pool of ['forks', 'threads', 'vmForks', 'vmThreads']) {
+      it(`includes ${phase} in warm ordering with ${pool}`, async ({
+        onTestFinished,
+      }) => {
+        rmSync(cacheDir, { recursive: true, force: true });
+        const env: Record<string, string> =
+          phase === 'module evaluation'
+            ? { SEQ_SLOW_IMPORT: '1' }
+            : { SEQ_SLOW_COLLECT: '1' };
+        const args = [
+          '--pool.type',
+          pool,
+          '--trace',
+          '--config',
+          join(fixtures, 'rstest.timing.config.mts'),
+        ];
+        await (await runOnce(onTestFinished, env, args)).expectExecSuccess();
+        const warm = await runOnce(onTestFinished, env, args);
+        await warm.expectExecSuccess();
+        expect(seqOrder(warm.cli.stdout)[0]).toBe('beta');
+        if (phase === 'deferred collection') {
+          expect(warm.cli.stdout.match(/COLLECT:beta/g)).toHaveLength(1);
+        }
+        const timings: TestFileResult[] = warm.cli.stdout
+          .split('\n')
+          .filter((line) => line.startsWith('TIMING:'))
+          .map((line) => JSON.parse(line.slice('TIMING:'.length)));
+        const beta = timings.find((result) =>
+          result.testPath.endsWith('beta.test.ts'),
+        )!;
+        expect(beta.loadDuration).toBeGreaterThanOrEqual(1200);
+        expect(beta.duration).toBeLessThan(beta.loadDuration!);
+        const tracePath = warm.cli.stdout.match(
+          /Perfetto trace file:\s*(.*\.json)/,
+        )?.[1];
+        expect(tracePath).toBeTruthy();
+        const trace: {
+          traceEvents: NonNullable<TestFileResult['traceEvents']>;
+        } = JSON.parse(readFileSync(tracePath!, 'utf-8'));
+        const loading = trace.traceEvents.filter(
+          (event) =>
+            event.name === 'file:load' &&
+            event.args?.testPath === beta.testPath,
+        );
+        expect(loading).toHaveLength(1);
+        expect(loading[0]).toMatchObject({
+          cat: 'file',
+          ph: 'X',
+          dur: beta.loadDuration! * 1000,
+        });
+        const details = trace.traceEvents.filter(
+          (event) =>
+            event.cat === 'phase' &&
+            event.args?.testPath === beta.testPath &&
+            ['load', 'setupFiles', 'collect'].includes(event.name),
+        );
+        expect(details.map((event) => event.name)).toEqual([
+          'load',
+          'setupFiles',
+          'collect',
+        ]);
+        for (const event of details) {
+          expect(event.ts).toBeGreaterThanOrEqual(loading[0]!.ts);
+          expect(event.ts + event.dur!).toBeLessThanOrEqual(
+            loading[0]!.ts + loading[0]!.dur!,
+          );
+        }
+      }, 90_000);
+    }
+  }
+
+  for (const phase of ['module evaluation', 'deferred collection']) {
+    it(`reports loading time when ${phase} fails`, async ({
+      onTestFinished,
+    }) => {
+      const failed = await runOnce(
+        onTestFinished,
+        phase === 'module evaluation'
+          ? { SEQ_SLOW_IMPORT: '1', SEQ_IMPORT_FAIL: '1' }
+          : { SEQ_SLOW_COLLECT: '1', SEQ_COLLECT_FAIL: '1' },
+        ['--trace', '--config', join(fixtures, 'rstest.timing.config.mts')],
+      );
+      await failed.expectExecFailed();
+      const timings: TestFileResult[] = failed.cli.stdout
+        .split('\n')
+        .filter((line) => line.startsWith('TIMING:'))
+        .map((line) => JSON.parse(line.slice('TIMING:'.length)));
+      const beta = timings.find((result) =>
+        result.testPath.endsWith('beta.test.ts'),
+      )!;
+      expect(beta.status).toBe('fail');
+      expect(beta.loadDuration).toBeGreaterThanOrEqual(1200);
+      expect(beta.duration).toBeUndefined();
+      const tracePath = failed.cli.stdout.match(
+        /Perfetto trace file:\s*(.*\.json)/,
+      )?.[1];
+      expect(tracePath).toBeTruthy();
+      const trace: { traceEvents: NonNullable<TestFileResult['traceEvents']> } =
+        JSON.parse(readFileSync(tracePath!, 'utf-8'));
+      const loading = trace.traceEvents.filter(
+        (event) =>
+          event.name === 'file:load' && event.args?.testPath === beta.testPath,
+      );
+      expect(loading).toHaveLength(1);
+      expect(loading[0]?.dur).toBe(beta.loadDuration! * 1000);
+    });
+  }
+
+  it('preserves v1 failure history for failed-first ordering and onlyFailures', async ({
+    onTestFinished,
+  }) => {
+    rmSync(cacheDir, { recursive: true, force: true });
+    await (await runOnce(onTestFinished, { SEQ_FAIL: '1' })).expectExecFailed();
+    const cacheFile = join(cacheDir, 'results.json');
+    const legacy = JSON.parse(readFileSync(cacheFile, 'utf-8'));
+    legacy.version = 1;
+    const legacyContent = JSON.stringify(legacy);
+    writeFileSync(cacheFile, legacyContent);
+
+    const only = await runOnce(onTestFinished, undefined, ['--onlyFailures']);
+    await only.expectExecSuccess();
+    expect(seqOrder(only.cli.stdout)).toEqual(['alpha']);
+    expect(JSON.parse(readFileSync(cacheFile, 'utf-8')).version).toBe(2);
+
+    writeFileSync(cacheFile, legacyContent);
+    const full = await runOnce(onTestFinished);
+    await full.expectExecSuccess();
+    expect(seqOrder(full.cli.stdout)[0]).toBe('alpha');
+    expect(seqOrder(full.cli.stdout)).toHaveLength(3);
+  }, 90_000);
+
   it('orders by bundle size (cold), then duration, then failed-first', async ({
     onTestFinished,
   }) => {

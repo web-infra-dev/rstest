@@ -147,10 +147,12 @@ npx rstest run --trace
 - `envSetup`：初始化 test environment。`node` 环境下，以及非 isolate 的 worker 已锁定该环境时，耗时接近 0。
 - `load`：接收该测试入口的构建产物。host 侧生成产物的耗时会记录为 host span。
 - `setupFiles`：执行配置的 setup 文件。
-- `collect`：执行测试文件的顶层代码。`describe` 的函数体会被延迟到 `tests` 中执行。
-- `tests`：构建 suite 与 case 树，然后运行用例及其 hooks。
+- `collect`：执行测试模块并构建 suite 与 case 树，包含延迟执行和异步的 `describe` 回调。
+- `tests`：运行用例及其 hooks。
 - `coverage`：从 provider 收集覆盖率数据。未启用覆盖率，或该文件在此之前 bail 或抛错时，不会出现。
 - `teardown`：清理 coverage provider 和 worker 状态；启用 `isolate` 时还会清理 test environment。
+
+Node pool 还会记录 `file:load` 区间（`cat: "file"`），其耗时与 `TestFileResult.loadDuration` 完全一致，加载失败时也会记录。它覆盖 worker 内的产物加载、setup 文件执行、测试模块求值和 suite 收集。该区间与加载阶段的明细重叠，不会再次计入阶段或 host 汇总。Trace 区间耗时以微秒为单位，`loadDuration` 以毫秒为单位。
 
 浏览器模式只记录 `prepare` 和 `tests` 两个 phase，由 host 根据页面发来的消息计时。
 
