@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@rsdoctor/core": "^2.0.0",
+    "@rsdoctor/core": "^2.0.1",
     "@rstest/core": "workspace:*",
-    "marked": "^18.1.1",
+    "marked": "^18.1.2",
     "path-serializer": "0.7.0",
     "rsbuild-plugin-arethetypeswrong": "^0.4.0",
     "rsbuild-plugin-publint": "^1.0.0",
