@@ -689,6 +689,17 @@ const runGit = async (cwd: string, args: string[]) => {
   return stdout.trim();
 };
 
+const commitGitFixture = (cwd: string, message: string) =>
+  runGit(cwd, [
+    '-c',
+    'user.name=rstest',
+    '-c',
+    'user.email=rstest@example.com',
+    'commit',
+    '-m',
+    message,
+  ]);
+
 const createGitFixture = async () => {
   const cwd = await mkdtemp(join(tmpdir(), 'rstest-changed-'));
 
@@ -824,7 +835,7 @@ describe('related CLI options', () => {
     await mkdir(nestedDir, { recursive: true });
     await runGit(cwd, ['add', 'staged.ts']);
 
-    await expect(resolveChangedFiles(nestedDir)).resolves.toEqual([
+    expect((await resolveChangedFiles(nestedDir)).files).toEqual([
       normalize(join(cwd, 'base.ts')),
       normalize(join(cwd, 'staged.ts')),
       normalize(join(cwd, 'untracked.ts')),
@@ -841,9 +852,72 @@ describe('related CLI options', () => {
       ),
     );
 
-    await expect(resolveChangedFiles(cwd)).resolves.toEqual(
+    expect((await resolveChangedFiles(cwd)).files).toEqual(
       expect.arrayContaining(files.map((file) => normalize(join(cwd, file)))),
     );
+  });
+
+  it('includes deleted files before staging, after staging, and after committing', async () => {
+    const cwd = await createGitFixture();
+    const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);
+    const deletedFile = join(cwd, 'base.ts');
+    await rm(deletedFile);
+    expect((await resolveChangedFiles(cwd)).files).toEqual([
+      normalize(deletedFile),
+    ]);
+    await runGit(cwd, ['add', '-u']);
+    expect((await resolveChangedFiles(cwd)).files).toEqual([
+      normalize(deletedFile),
+    ]);
+    await commitGitFixture(cwd, 'delete base');
+    expect((await resolveChangedFiles(cwd, baseCommit)).files).toEqual([
+      normalize(deletedFile),
+    ]);
+  });
+
+  it('reports Git-deleted paths separately from changed files', async () => {
+    const cwd = await createGitFixture();
+    const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);
+    const deletedFile = normalize(join(cwd, 'base.ts'));
+
+    await writeFile(join(cwd, 'other.ts'), 'export const other = 1;\n');
+    await rm(deletedFile);
+    await mkdir(deletedFile);
+    await writeFile(join(deletedFile, 'readme.txt'), 'replacement\n');
+    await expect(resolveChangedFiles(cwd)).resolves.toMatchObject({
+      deletedFiles: [deletedFile],
+    });
+
+    await runGit(cwd, ['add', '-A']);
+    await expect(resolveChangedFiles(cwd)).resolves.toMatchObject({
+      deletedFiles: [deletedFile],
+    });
+
+    await commitGitFixture(cwd, 'replace base');
+    await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toMatchObject({
+      deletedFiles: [deletedFile],
+    });
+    await expect(resolveChangedFiles(cwd)).resolves.toEqual({
+      files: [],
+      deletedFiles: [],
+    });
+  });
+
+  it('includes both paths when Git detects a rename', async () => {
+    const cwd = await createGitFixture();
+    const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);
+    await runGit(cwd, ['mv', 'base.ts', 'renamed-base.ts']);
+
+    expect((await resolveChangedFiles(cwd)).files).toEqual([
+      normalize(join(cwd, 'base.ts')),
+      normalize(join(cwd, 'renamed-base.ts')),
+    ]);
+
+    await commitGitFixture(cwd, 'rename base');
+    expect((await resolveChangedFiles(cwd, baseCommit)).files).toEqual([
+      normalize(join(cwd, 'base.ts')),
+      normalize(join(cwd, 'renamed-base.ts')),
+    ]);
   });
 
   it('combines committed, staged, and unstaged files since a commit', async () => {
@@ -865,7 +939,7 @@ describe('related CLI options', () => {
     await writeFile(join(cwd, 'unstaged.ts'), 'export const unstaged = 1;\n');
     await runGit(cwd, ['add', 'staged.ts']);
 
-    await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toEqual([
+    expect((await resolveChangedFiles(cwd, baseCommit)).files).toEqual([
       normalize(join(cwd, 'committed.ts')),
       normalize(join(cwd, 'staged.ts')),
       normalize(join(cwd, 'unstaged.ts')),
