@@ -72,6 +72,7 @@ class WebMockChunkInstallGuardPlugin {
 }
 
 export interface MockRstestPluginOptions {
+  preserveSideEffectImports?: () => Promise<string[]>;
   injectModulePathName: true;
   injectImportMetaRstestOrigin: true;
   importMetaPathName: true;
@@ -89,7 +90,9 @@ export interface MockRstestPluginOptions {
  */
 export const getMockRstestPluginOptions = (options: {
   rootPath: string;
+  preserveSideEffectImports?: () => Promise<string[]>;
 }): MockRstestPluginOptions => ({
+  preserveSideEffectImports: options.preserveSideEffectImports,
   injectModulePathName: true,
   injectImportMetaRstestOrigin: true,
   importMetaPathName: true,
@@ -138,13 +141,17 @@ export const applyMockExportsPresence = (
  */
 export const applyWebMockRspackConfig = (
   config: Rspack.Configuration,
-  options: { rspack: RspackInstance; rootPath: string },
+  options: {
+    rspack: RspackInstance;
+    rootPath: string;
+    preserveSideEffectImports?: () => Promise<string[]>;
+  },
 ): void => {
   forceWebpackRuntimeMode(config);
   config.plugins ??= [];
   config.plugins.push(
     new options.rspack.experiments.RstestPlugin(
-      getMockRstestPluginOptions({ rootPath: options.rootPath }),
+      getMockRstestPluginOptions(options),
     ),
     new WebMockChunkInstallGuardPlugin(),
   );

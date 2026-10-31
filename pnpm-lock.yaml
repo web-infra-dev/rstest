@@ -429,6 +429,8 @@ importers:
         specifier: workspace:*
         version: link:../../../../packages/coverage-v8
 
+  e2e/build/fixtures/bareImports: {}
+
   e2e/build/fixtures/runtimeRequire: {}
 
   e2e/build/fixtures/styleFallback:

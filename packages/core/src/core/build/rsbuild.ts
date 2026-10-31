@@ -229,7 +229,10 @@ export const prepareRsbuild = async ({
         ]),
       ),
       plugins: [
-        pluginBasic(context),
+        pluginBasic(context, async (environmentName) => [
+          ...Object.values(await globTestSourceEntries(environmentName)),
+          ...Object.values(setupFiles[environmentName] ?? {}),
+        ]),
         pluginIgnoreResolveError,
         pluginMockRuntime,
         pluginEntryWatch({

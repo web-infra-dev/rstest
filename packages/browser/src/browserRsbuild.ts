@@ -1506,6 +1506,7 @@ export const createBrowserRuntime = async ({
     project: InternalProjectContext,
     isContainerServer: boolean,
   ): Promise<BrowserProjectServer> => {
+    let compilationEntry: BrowserProjectEntries | undefined;
     const manifestPath = join(
       tempDir,
       toSafeVarName(project.environmentName),
@@ -1716,6 +1717,16 @@ export const createBrowserRuntime = async ({
                       applyWebMockRspackConfig(rspackConfig, {
                         rspack,
                         rootPath: project.rootPath,
+                        preserveSideEffectImports: async () => {
+                          [compilationEntry] = await collectProjectEntries(
+                            context,
+                            [project],
+                          );
+                          return [
+                            ...(compilationEntry?.testFiles ?? []),
+                            ...(compilationEntry?.setupFiles ?? []),
+                          ];
+                        },
                       });
                       // lazyCompilation's only delivery transport is the HMR
                       // runtime, so it follows the same gate as HMR (see
@@ -1852,9 +1863,7 @@ export const createBrowserRuntime = async ({
               if (stats) {
                 // This compiler only ever holds this project's entries; the
                 // diff baseline is keyed per project accordingly.
-                const [projectEntry] = await collectProjectEntries(context, [
-                  project,
-                ]);
+                const projectEntry = compilationEntry;
                 const entryTestFiles = new Set<string>(
                   collectWatchTestFiles(projectEntry ? [projectEntry] : []).map(
                     (file) => file.testPath,
