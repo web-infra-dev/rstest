@@ -7,6 +7,7 @@ import {
   withDefaultConfig,
 } from '../src/config';
 import { Rstest } from '../src/core/rstest';
+import { getProjectLoader, PROJECT_LOADER } from '../src/projectLoader';
 import type { RstestConfig } from '../src/types';
 import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
 
@@ -16,6 +17,22 @@ rs.mock('std-env', () => ({
 }));
 
 describe('mergeRstestConfig', () => {
+  it('preserves the project loader and lets later configs override it', () => {
+    const loadProject = rs.fn(() => null);
+    const overrideLoader = rs.fn(() => null);
+    const config = { projects: ['packages/*'], [PROJECT_LOADER]: loadProject };
+    const override = { ...config, [PROJECT_LOADER]: overrideLoader };
+
+    expect(
+      getProjectLoader(mergeRstestConfig(config, { reporters: ['default'] })),
+    ).toBe(loadProject);
+    expect(
+      getProjectLoader(
+        mergeRstestConfig(config, override, { reporters: ['default'] }),
+      ),
+    ).toBe(overrideLoader);
+  });
+
   it('should merge config correctly with default config', () => {
     const merged = withDefaultConfig({
       include: ['tests/**/*.test.ts'],

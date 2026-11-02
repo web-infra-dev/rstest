@@ -120,10 +120,6 @@ export const resolveExtends = async (
 
     merged = mergeRstestConfig(...resolvedExtends, config);
     merged.extends = undefined;
-    // Keep the user layer's symbol keys, such as a host's `PROJECT_LOADER`.
-    for (const key of Object.getOwnPropertySymbols(config)) {
-      Reflect.set(merged, key, Reflect.get(config, key));
-    }
     extendedTriggers = resolvedExtends.flatMap(
       (entry) => entry.forceRerunTriggers || [],
     );
@@ -181,7 +177,7 @@ export const mergeProjectConfig = (
 };
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
-  return configs.reduce<RstestConfig>((result, config) => {
+  const mergedConfig = configs.reduce<RstestConfig>((result, config) => {
     const merged = mergeRsbuildConfig(result, {
       ...config,
       // Plain-merged below instead of via mergeRsbuildConfig; see plainDeepMerge.
@@ -217,6 +213,15 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
 
     return merged;
   }, {});
+
+  // mergeRsbuildConfig drops symbol keys, including a host's PROJECT_LOADER.
+  for (const config of configs) {
+    for (const key of Object.getOwnPropertySymbols(config)) {
+      Reflect.set(mergedConfig, key, Reflect.get(config, key));
+    }
+  }
+
+  return mergedConfig;
 };
 
 /**
