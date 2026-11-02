@@ -8,26 +8,31 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.12.6" />
 
-- **Type:** `{ hooks?: 'stack' | 'list' }`
+- **Type:** `{ hooks?: 'stack' | 'list' | 'parallel' }`
 - **Default:** `{ hooks: 'stack' }`
 
 Configure the execution order of Rstest lifecycle hooks.
 
 ## sequence.hooks
 
-- **Type:** `'stack' | 'list'`
+- **Type:** `'stack' | 'list' | 'parallel'`
 - **Default:** `'stack'`
 
 Controls the order of hooks within each suite:
 
 - `'stack'`: `beforeAll` and `beforeEach` run in declaration order; `afterAll` and `afterEach` run in reverse declaration order.
 - `'list'`: all four hooks run in declaration order. Use this when migrating from Jest if cleanup depends on hook registration order, such as unmounting components before resetting stores.
+- `'parallel'`: hooks of the same kind within each suite run concurrently, limited by [`maxConcurrency`](/config/test/max-concurrency). The runner waits for the whole group to finish and reports all hook failures before continuing.
 
 For nested suites, `beforeEach` still runs from parent to child, and `afterEach` still runs from child to parent.
 
-Cleanup functions returned by `beforeEach` run after all `afterEach` hooks; those returned by `beforeAll` run after the suite's `afterAll` hooks. They also follow this option: `'stack'` runs them in reverse order of their corresponding setup hooks, while `'list'` runs them in the same order. For nested `beforeEach` hooks, this includes cleanup from both parent and child suites.
+Cleanup functions returned by `beforeEach` run after all `afterEach` hooks; those returned by `beforeAll` run after the suite's `afterAll` hooks. They also follow this option: `'stack'` runs them in reverse order of their corresponding setup hooks, while `'list'` runs them in the same order. For nested `beforeEach` hooks, this includes cleanup from both parent and child suites. In `'parallel'` mode, returned cleanup functions also run concurrently, limited by `maxConcurrency`.
 
 v0.12.6 fixes an inconsistency where returned cleanup functions ran in setup order while `afterEach` and `afterAll` ran in reverse order. Returned cleanup functions now also run in reverse setup order by default. This changes their execution order compared with earlier versions.
+
+Use `'parallel'` only when hooks in the same group do not depend on each other's side effects. It applies in both Node Mode and Browser Mode.
+
+In parallel hooks, polling assertions use their configured timeout instead of a shared task deadline. Each hook's own timeout still bounds its execution.
 
 This option does not change fixture teardown, `onTestFinished`, or `onTestFailed`.
 
@@ -36,7 +41,7 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   sequence: {
-    hooks: 'list',
+    hooks: 'parallel',
   },
 });
 ```

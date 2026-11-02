@@ -454,10 +454,51 @@ export const createFixtureResolver = (
   const cancelledFixtures = new Set<string>();
   const failedFixtures = new Set<string>();
   const pendingMap = new Set<string>();
+  const pendingResolutions = new Map<string, Promise<void>>();
+  const validatedDependencies = new Set<string>();
   const cancelFixtureSetups = new Map<string, () => void>();
   const cancelledFixtureTeardownStarts = new Map<string, () => void>();
 
+  const validateDependencies = (
+    name: string,
+    ancestors = new Set<string>(),
+  ) => {
+    if (ancestors.has(name)) {
+      throw new Error(`Circular fixture dependency: ${name}`);
+    }
+    if (validatedDependencies.has(name)) {
+      return;
+    }
+    ancestors.add(name);
+    for (const dependency of fixtures[name]!.deps ?? []) {
+      validateDependencies(dependency, ancestors);
+    }
+    ancestors.delete(name);
+    validatedDependencies.add(name);
+  };
+
   const useFixture = async (
+    name: string,
+    fixture: NormalizedFixture,
+    runNamedFixtureSetup: RunNamedFixtureSetup,
+  ): Promise<void> => {
+    // Validate before awaiting shared setup: concurrent dependency walks can
+    // otherwise wait on each other's pending promises without seeing a cycle.
+    validateDependencies(name);
+    const pending = pendingResolutions.get(name);
+    if (pending) {
+      return pending;
+    }
+    const resolution = initializeFixture(name, fixture, runNamedFixtureSetup);
+    pendingResolutions.set(name, resolution);
+    try {
+      await resolution;
+    } finally {
+      pendingResolutions.delete(name);
+    }
+  };
+
+  const initializeFixture = async (
     name: string,
     fixture: NormalizedFixture,
     runNamedFixtureSetup: RunNamedFixtureSetup,
@@ -468,10 +509,6 @@ export const createFixtureResolver = (
     if (failedFixtures.has(name)) {
       throw new PreviouslyFailedFixtureError(name);
     }
-    if (pendingMap.has(name)) {
-      throw new Error(`Circular fixture dependency: ${name}`);
-    }
-
     if (fixture.scope) {
       const fixtureManager =
         fixture.scope === 'worker'

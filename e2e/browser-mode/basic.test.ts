@@ -26,7 +26,7 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
-  it.each(['default', 'stack', 'list'])(
+  it.each(['default', 'stack', 'list', 'parallel'])(
     'runs hooks in %s order',
     async (hooks) => {
       const { cli, expectExecSuccess } = await runBrowserCli('basic', {
@@ -36,7 +36,7 @@ describe('browser mode - basic', () => {
 
       await expectExecSuccess();
       expect(cli.stdout).toContain(
-        `HOOK_ORDER_OK:${hooks === 'list' ? 'list' : 'stack'}`,
+        `HOOK_ORDER_OK:${hooks === 'default' ? 'stack' : hooks}`,
       );
     },
   );

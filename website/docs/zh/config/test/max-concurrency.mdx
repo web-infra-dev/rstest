@@ -10,6 +10,8 @@ description: 使用 test.concurrent 或 describe.concurrent 时允许同时运�
 
 使用 `test.concurrent` 或 `describe.concurrent` 时，限制**单个测试文件内**同时运行的测试用例数量。超过限制的用例会等待空位后再运行。
 
+设置 [`sequence.hooks: 'parallel'`](/config/test/sequence#sequencehooks) 后，此值也限制单个文件内生命周期 Hook 和返回的清理函数的并发数。Hook 与测试用例分别计数。
+
 增大这个值不会让普通的 `test()` 用例并发执行。需要先将测试或其所属 suite 标记为 concurrent。
 
 | 配置                                                  | 控制什么                                | 不控制什么           |

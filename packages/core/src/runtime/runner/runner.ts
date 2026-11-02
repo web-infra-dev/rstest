@@ -212,11 +212,43 @@ export class TestRunner {
     const errors: SerializedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
 
+    const runHookWithTimeoutContext = <T>(
+      test: TestCase | TestSuite,
+      fn: (...args: any[]) => any,
+      callback: () => T | Promise<T>,
+    ): T | Promise<T> => {
+      // Parallel hooks share a task, so a task-level deadline would belong to
+      // whichever hook started last. Keep each hook's own timeout wrapper and
+      // let polling assertions use their configured timeout in this mode.
+      return sequence.hooks === 'parallel'
+        ? callback()
+        : this.runWithActiveTimeout(test, fn, callback);
+    };
+
+    const limitHooks = limitConcurrency(maxConcurrency);
+    const runHookGroup = async <T>(
+      listeners: T[],
+      run: (listener: T) => Promise<boolean | void>,
+    ): Promise<boolean> => {
+      if (sequence.hooks === 'parallel') {
+        const results = await Promise.all(
+          listeners.map((listener) => limitHooks(() => run(listener))),
+        );
+        return results.every((result) => result !== false);
+      }
+      for (const listener of listeners) {
+        if ((await run(listener)) === false) {
+          return false;
+        }
+      }
+      return true;
+    };
+
     const runTestsCase = async (
       test: TestCase,
       parentHooks: {
-        beforeEachListeners: BeforeEachListener[];
-        afterEachListeners: AfterEachListener[];
+        beforeEachListeners: BeforeEachListener[][];
+        afterEachListeners: AfterEachListener[][];
       },
       retryCount: number,
     ): Promise<TestResult> => {
@@ -325,7 +357,7 @@ export class TestRunner {
         };
         let hookExecution: ReturnType<typeof runHook> | undefined;
         try {
-          return await this.runWithActiveTimeout(test, fn, () =>
+          return await runHookWithTimeoutContext(test, fn, () =>
             runWithTimeout(
               fn,
               (callback) => {
@@ -388,33 +420,43 @@ export class TestRunner {
       };
 
       if (!result) {
-        for (const fn of parentHooks.beforeEachListeners) {
-          const hookResult = await runPerTestHook(fn);
-          if (hookResult.status === 'completed') {
-            if (hookResult.cleanup) {
-              cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+        for (const listeners of parentHooks.beforeEachListeners) {
+          const completed = await runHookGroup(listeners, async (fn) => {
+            const hookResult = await runPerTestHook(fn);
+            if (hookResult.status === 'completed') {
+              if (hookResult.cleanup) {
+                cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+              }
+              return;
             }
-            continue;
+            if (hookResult.status === 'skipped') {
+              return;
+            }
+            if (hookResult.error instanceof TestSkipError) {
+              skipped = true;
+              result ??= skipResult();
+            } else {
+              const errors = await formatTestError(hookResult.error, test);
+              if (result?.status === 'fail') {
+                result.errors?.push(...errors);
+              } else {
+                result = {
+                  testId: test.testId,
+                  status: 'fail',
+                  parentNames: test.parentNames,
+                  name: test.name,
+                  errors,
+                  testPath,
+                  project,
+                  meta: test.meta,
+                };
+              }
+            }
+            return false;
+          });
+          if (!completed) {
+            break;
           }
-          if (hookResult.status === 'skipped') {
-            continue;
-          }
-          if (hookResult.error instanceof TestSkipError) {
-            skipped = true;
-            result = skipResult();
-          } else {
-            result = {
-              testId: test.testId,
-              status: 'fail' as const,
-              parentNames: test.parentNames,
-              name: test.name,
-              errors: await formatTestError(hookResult.error, test),
-              testPath,
-              project,
-              meta: test.meta,
-            };
-          }
-          break;
         }
       }
 
@@ -534,25 +576,29 @@ export class TestRunner {
       if (sequence.hooks === 'stack') {
         cleanups.reverse();
       }
-      const afterEachFns = parentHooks.afterEachListeners.concat(cleanups);
+      const afterEachGroups = [...parentHooks.afterEachListeners, cleanups];
 
-      test.context.task.result = result;
-      for (const fn of afterEachFns) {
-        const hookResult = await runPerTestHook(fn);
-        if (
-          hookResult.status === 'completed' ||
-          hookResult.status === 'skipped'
-        ) {
-          continue;
-        }
-        result.status = 'fail';
-        result.errors ??= [];
-        result.errors.push(...(await formatTestError(hookResult.error)));
-        test.context.task.result = result;
-        if (result.status === 'fail' && !failureScreenshotCaptured) {
-          await captureFailedAttempt();
-        }
-        if (hookResult.phase === 'callback') {
+      const testResult = result;
+      test.context.task.result = testResult;
+      for (const listeners of afterEachGroups) {
+        const completed = await runHookGroup(listeners, async (fn) => {
+          const hookResult = await runPerTestHook(fn);
+          if (
+            hookResult.status === 'completed' ||
+            hookResult.status === 'skipped'
+          ) {
+            return;
+          }
+          testResult.status = 'fail';
+          testResult.errors ??= [];
+          testResult.errors.push(...(await formatTestError(hookResult.error)));
+          test.context.task.result = testResult;
+          if (!failureScreenshotCaptured) {
+            await captureFailedAttempt();
+          }
+          return hookResult.phase !== 'callback';
+        });
+        if (!completed) {
           break;
         }
       }
@@ -617,8 +663,8 @@ export class TestRunner {
     const runTests = async (
       allTest: Test[],
       parentHooks: {
-        beforeEachListeners: BeforeEachListener[];
-        afterEachListeners: AfterEachListener[];
+        beforeEachListeners: BeforeEachListener[][];
+        afterEachListeners: AfterEachListener[][];
       },
     ): Promise<TestResult[]> => {
       const tests = [...allTest];
@@ -656,8 +702,8 @@ export class TestRunner {
     const runTest = async (
       test: Test,
       parentHooks: {
-        beforeEachListeners: BeforeEachListener[];
-        afterEachListeners: AfterEachListener[];
+        beforeEachListeners: BeforeEachListener[][];
+        afterEachListeners: AfterEachListener[][];
       },
     ): Promise<TestResult> => {
       let result: TestResult = {
@@ -737,9 +783,9 @@ export class TestRunner {
             };
 
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
-              try {
-                for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await this.runWithActiveTimeout(
+              await runHookGroup(test.beforeAllListeners, async (fn) => {
+                try {
+                  const cleanupFn = await runHookWithTimeoutContext(
                     test,
                     fn,
                     () => fn(suiteContext),
@@ -747,30 +793,34 @@ export class TestRunner {
                   if (cleanupFn) {
                     cleanups.push(inheritTimeout(fn, cleanupFn));
                   }
+                } catch (error) {
+                  hasBeforeAllError = true;
+                  result.errors?.push(...(await formatTestError(error)));
+                  return false;
                 }
-              } catch (error) {
-                hasBeforeAllError = true;
-                result.errors?.push(...(await formatTestError(error)));
-              }
+                return true;
+              });
             }
 
             if (hasBeforeAllError) {
               markAllTestAsSkipped(test.tests);
             }
 
-            // Keep child-suite teardown before parent teardown in both modes.
+            // Preserve suite boundaries so parallel hooks cannot cross parent/child phases.
             const afterEachListeners = [...(test.afterEachListeners || [])];
             if (sequence.hooks === 'stack') {
               afterEachListeners.reverse();
             }
 
             const results = await runTests(test.tests, {
-              beforeEachListeners: parentHooks.beforeEachListeners.concat(
+              beforeEachListeners: [
+                ...parentHooks.beforeEachListeners,
                 test.beforeEachListeners || [],
-              ),
-              afterEachListeners: afterEachListeners.concat(
-                parentHooks.afterEachListeners,
-              ),
+              ],
+              afterEachListeners: [
+                afterEachListeners,
+                ...parentHooks.afterEachListeners,
+              ],
             });
 
             const afterAllListeners = [...(test.afterAllListeners || [])];
@@ -778,17 +828,22 @@ export class TestRunner {
               afterAllListeners.reverse();
               cleanups.reverse();
             }
-            const afterAllFns = afterAllListeners.concat(cleanups);
-
-            if (shouldRunSuiteHooks && afterAllFns.length) {
-              try {
-                for (const fn of afterAllFns) {
-                  await this.runWithActiveTimeout(test, fn, () =>
-                    fn(suiteContext),
-                  );
+            if (shouldRunSuiteHooks) {
+              for (const listeners of [afterAllListeners, cleanups]) {
+                const completed = await runHookGroup(listeners, async (fn) => {
+                  try {
+                    await runHookWithTimeoutContext(test, fn, () =>
+                      fn(suiteContext),
+                    );
+                  } catch (error) {
+                    result.errors?.push(...(await formatTestError(error)));
+                    return false;
+                  }
+                  return true;
+                });
+                if (!completed) {
+                  break;
                 }
-              } catch (error) {
-                result.errors?.push(...(await formatTestError(error)));
               }
             }
 
