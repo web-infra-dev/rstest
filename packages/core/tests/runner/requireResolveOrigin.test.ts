@@ -13,6 +13,7 @@ import {
   clearCompilationCache as clearCjsCompilationCache,
   clearModuleCache as clearCjsModuleCache,
   loadModule,
+  wrapperLength,
 } from '../../src/runtime/worker/loadModule';
 import { workerCache } from '../../src/runtime/worker/vm/cache';
 
@@ -115,6 +116,9 @@ describe('require.resolve origin runtime helper', () => {
       compileFunctionSpy.mock.lastCall!;
 
     expect(extraParamCode).toBe(baseCode);
+    expect(String(baseCode).indexOf(loadOptions.codeContent)).toBe(
+      wrapperLength,
+    );
     expect(extraParamNames).toContain('__rstest_future_context_param__');
     expect(extraParamOptions?.columnOffset).toBe(baseOptions?.columnOffset);
     expect(extraParamOptions?.columnOffset).toBe(0);

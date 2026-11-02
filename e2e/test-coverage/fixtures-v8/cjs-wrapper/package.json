@@ -1,0 +1,5 @@
+{
+  "name": "@rstest/coverage-v8-cjs-wrapper",
+  "private": true,
+  "type": "module"
+}

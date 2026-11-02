@@ -23,6 +23,9 @@ import { workerCache } from './vm/cache';
 import { getVmExternalModules } from './vm/externalModules';
 import { createVmTimersLoader } from './vm/timers';
 
+const CJS_WRAPPER_PREFIX = "'use strict';return function(){\n";
+export const wrapperLength: number = CJS_WRAPPER_PREFIX.length;
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const getAssetName = (
@@ -287,7 +290,7 @@ export const loadModule = ({
     vmParentModule.require = context.require;
   }
 
-  const code = `'use strict';return function(){\n${codeContent}\n}`;
+  const code = `${CJS_WRAPPER_PREFIX}${codeContent}\n}`;
 
   const params = Object.keys(context);
   const cached = cacheCompilation ? compilationCache.get(distPath) : undefined;

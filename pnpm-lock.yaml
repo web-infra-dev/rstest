@@ -784,6 +784,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/coverage-istanbul
 
+  e2e/test-coverage/fixtures-v8/cjs-wrapper: {}
+
   e2e/test-coverage/fixtures/allow-external:
     devDependencies:
       '@rstest/core':

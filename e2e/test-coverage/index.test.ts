@@ -5,7 +5,6 @@ import { runRstestCli } from '../scripts';
 import { type CoverageProvider, coverageProviders } from './providers';
 
 const fixturePath = join(__dirname, 'fixtures');
-const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
 
 const coverageConfig = {
   istanbul: {
@@ -17,12 +16,8 @@ const coverageConfig = {
   v8: {
     enableConfig: 'rstest.enable.v8.config.ts',
     skipFullConfig: 'rstest.skipFull.v8.config.ts',
-    stringSummary: isCommonJs
-      ? 'string.ts|81.25|50|66.66|78.57|3-6,10'
-      : 'string.ts|75|50|66.66|78.57|2-3,7',
-    allFilesSummary: isCommonJs
-      ? 'Allfiles|95.08|76.92|88.88|94.64|'
-      : 'Allfiles|93.44|84.61|88.88|94.64|',
+    stringSummary: 'string.ts|75|50|66.66|78.57|2-3,7',
+    allFilesSummary: 'Allfiles|93.44|84.61|88.88|94.64|',
   },
 } satisfies Record<CoverageProvider, Record<string, string>>;
 
