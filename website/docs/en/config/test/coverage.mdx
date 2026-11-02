@@ -158,19 +158,14 @@ if (hasNativeFeature()) {
 
 If an ignored snippet still receives an injected `cov_*` call, use `coverage.exclude` for the source file instead.
 
-##### Serialized functions and other realms
+##### Known limitations
 
-Istanbul injects `cov_*` coverage counter calls into instrumented files. Those counters are scoped to the transformed module that Rstest executes. If code from an instrumented file is serialized and executed somewhere else, the new scope or realm may not have the matching `cov_*` helper, and the test can fail with `ReferenceError: cov_... is not defined`.
+The following scenarios may cause inaccurate coverage or failures when running instrumented code:
 
-This can happen when a function is serialized with `fn.toString()` or executed through APIs such as `page.evaluate`, `Worker`, `node:vm`, `eval`, or `new Function`.
-
-To avoid the failure, prefer one of these approaches:
-
-- exclude the source file with `coverage.exclude`;
-- switch to `coverage.provider: 'v8'` for Node or headless, non-watch Chromium Browser Mode tests;
-- avoid serializing Istanbul-instrumented functions.
-
-In headless, non-watch Chromium Browser Mode runs, the `v8` provider avoids injected counters as well. Firefox and WebKit Browser Mode tests should use `coverage.exclude` or avoid serializing instrumented functions.
+- **Legacy decorators and metadata:** Generated statements and branches may be counted as source coverage, lowering reported coverage even when all source branches are tested. See [SWC #5535](https://github.com/swc-project/swc/issues/5535).
+- **TypeScript runtime code:** Enums, namespaces, and constructor parameter properties may introduce generated coverage entries, including locations at line `0`. See [swc-plugin-coverage-instrument #300](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/300).
+- **Module reloading:** Importing a module again after `rs.resetModules()` may reset its coverage counters and lose previously recorded executions. See [swc-plugin-coverage-instrument #295](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/295).
+- **Serialized functions:** Executing a serialized instrumented function in another scope or realm, such as through `page.evaluate` or a `Worker`, may fail with `ReferenceError: cov_... is not defined` because its coverage helper is unavailable.
 
 #### V8 provider
 

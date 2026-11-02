@@ -158,19 +158,14 @@ if (hasNativeFeature()) {
 
 如果被忽略的片段里仍然出现了注入的 `cov_*` 调用，请改用 `coverage.exclude` 排除对应源文件。
 
-##### 序列化函数和其他 realm
+##### 已知限制 \{#known-limitations}
 
-Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这些计数器的作用域属于 Rstest 执行的 transformed module。如果来自插桩文件的代码被序列化后在其他位置执行，新的 scope 或 realm 可能没有对应的 `cov_*` helper，测试就可能以 `ReferenceError: cov_... is not defined` 失败。
+以下场景可能导致覆盖率不准确或插桩代码执行失败：
 
-当函数通过 `fn.toString()` 序列化，或者通过 `page.evaluate`、`Worker`、`node:vm`、`eval`、`new Function` 等 API 执行时，可能触发这个问题。
-
-要避免该错误，优先使用以下方式之一：
-
-- 通过 `coverage.exclude` 排除对应源文件；
-- 在 Node 测试或 headless、非 watch 的 Chromium Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
-- 避免序列化经过 Istanbul 插桩的函数。
-
-在 headless、非 watch 的 Chromium Browser Mode 运行中，`v8` provider 同样不会注入计数器。Firefox 和 WebKit Browser Mode 测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
+- **Legacy decorators 和 metadata**：生成的语句和分支可能被计入源码覆盖率，即使所有源码分支都已测试，报告中的覆盖率仍可能偏低。参见 [SWC #5535](https://github.com/swc-project/swc/issues/5535)。
+- **TypeScript 运行时代码**：`enum`、`namespace` 和构造器参数属性可能引入生成代码的计数，包括位于第 `0` 行的记录。参见 [swc-plugin-coverage-instrument #300](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/300)。
+- **模块重载**：在 `rs.resetModules()` 后重新导入模块，可能重置其覆盖率计数器，丢失此前记录的执行情况。参见 [swc-plugin-coverage-instrument #295](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/295)。
+- **序列化函数**：将插桩后的函数序列化，再通过 `page.evaluate`、`Worker` 等方式在其他作用域或执行环境运行，可能因缺少覆盖率辅助函数而报错 `ReferenceError: cov_... is not defined`。
 
 #### V8 provider
 
