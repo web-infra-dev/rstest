@@ -38,6 +38,77 @@ if (failure === 'cycle') {
     expect(events).toEqual([]);
     console.log('PARALLEL_CYCLE_REJECTED');
   });
+} else if (failure === 'fixture-timeout' || failure === 'fixture-error') {
+  for (const [hook, register] of Object.entries({ beforeEach, afterEach })) {
+    for (const shared of failure === 'fixture-timeout'
+      ? [false, true]
+      : [false]) {
+      const name = `${hook}:${shared ? 'shared' : 'unrelated'}`;
+      describe(name, () => {
+        let startHealthy!: () => void;
+        const healthyStarted = new Promise<void>((resolve) => {
+          startHealthy = resolve;
+        });
+        let releaseFailed!: () => void;
+        const siblingFinished = new Promise<void>((resolve) => {
+          releaseFailed = resolve;
+        });
+        const test = baseTest.extend<{ failed: string; healthy: string }>({
+          failed: async (_context, use) => {
+            await healthyStarted;
+            if (failure === 'fixture-error') {
+              throw new Error(`FIXTURE_SETUP_FAILED:${name}`);
+            }
+            await siblingFinished;
+            await use('failed');
+            events.push(`cleanup:failed:${name}`);
+          },
+          healthy: async (_context, use) => {
+            startHealthy();
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            await use('healthy');
+            events.push(`cleanup:healthy:${name}`);
+          },
+        });
+        const unexpectedCallback = () => {
+          events.push(`unexpected callback:${name}`);
+        };
+        if (shared) {
+          register<{ healthy: string }>(({ healthy }) => {
+            expect(healthy).toBe('healthy');
+            unexpectedCallback();
+          }, 50);
+        } else {
+          register<{ failed: string }>(({ failed }) => {
+            expect(failed).toBe('failed');
+            unexpectedCallback();
+          }, 50);
+        }
+        register<{ healthy: string }>(({ healthy }) => {
+          expect(healthy).toBe('healthy');
+          events.push(`callback:healthy:${name}`);
+          releaseFailed();
+          throw new Error(`SIBLING_HOOK_FAILED:${name}`);
+        }, 1000);
+        test('lets sibling fixture setup finish', () => {
+          if (hook === 'beforeEach') throw new Error('Body must not run');
+        });
+        afterAll(() => {
+          const expected = [
+            `callback:healthy:${name}`,
+            `cleanup:healthy:${name}`,
+          ];
+          if (failure === 'fixture-timeout' && !shared) {
+            expected.push(`cleanup:failed:${name}`);
+          }
+          expect(events.filter((event) => event.endsWith(name)).sort()).toEqual(
+            expected.sort(),
+          );
+          console.log(`PARALLEL_FIXTURES_DRAINED:${name}`);
+        });
+      });
+    }
+  }
 } else if (failure) {
   describe('parallel hook failure', () => {
     const register = { beforeAll, beforeEach, afterEach, afterAll }[

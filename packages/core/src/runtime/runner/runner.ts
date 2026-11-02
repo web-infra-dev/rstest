@@ -305,44 +305,44 @@ export class TestRunner {
 
       if (!result) {
         for (const listeners of parentHooks.beforeEachListeners) {
-          const completed = await hookRunner.runGroup(listeners, async (fn) => {
-            const hookResult = await hookRunner.runPerTestHook(
-              test,
-              fn,
-              fixtureResolver,
-              fixtureCleanups,
-            );
-            if (hookResult.status === 'completed') {
-              if (hookResult.cleanup) {
-                cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+          const completed = await hookRunner.runPerTestGroup(
+            listeners,
+            test,
+            fixtureResolver,
+            fixtureCleanups,
+            async (hookResult, fn) => {
+              if (hookResult.status === 'completed') {
+                if (hookResult.cleanup) {
+                  cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+                }
+                return;
               }
-              return;
-            }
-            if (hookResult.status === 'skipped') {
-              return;
-            }
-            if (hookResult.error instanceof TestSkipError) {
-              skipped = true;
-              result ??= skipResult();
-            } else {
-              const errors = await formatTestError(hookResult.error, test);
-              if (result?.status === 'fail') {
-                result.errors?.push(...errors);
+              if (hookResult.status === 'skipped') {
+                return;
+              }
+              if (hookResult.error instanceof TestSkipError) {
+                skipped = true;
+                result ??= skipResult();
               } else {
-                result = {
-                  testId: test.testId,
-                  status: 'fail',
-                  parentNames: test.parentNames,
-                  name: test.name,
-                  errors,
-                  testPath,
-                  project,
-                  meta: test.meta,
-                };
+                const errors = await formatTestError(hookResult.error, test);
+                if (result?.status === 'fail') {
+                  result.errors?.push(...errors);
+                } else {
+                  result = {
+                    testId: test.testId,
+                    status: 'fail',
+                    parentNames: test.parentNames,
+                    name: test.name,
+                    errors,
+                    testPath,
+                    project,
+                    meta: test.meta,
+                  };
+                }
               }
-            }
-            return false;
-          });
+              return false;
+            },
+          );
           if (!completed) {
             break;
           }
@@ -470,28 +470,30 @@ export class TestRunner {
       const testResult = result;
       test.context.task.result = testResult;
       for (const listeners of afterEachGroups) {
-        const completed = await hookRunner.runGroup(listeners, async (fn) => {
-          const hookResult = await hookRunner.runPerTestHook(
-            test,
-            fn,
-            fixtureResolver,
-            fixtureCleanups,
-          );
-          if (
-            hookResult.status === 'completed' ||
-            hookResult.status === 'skipped'
-          ) {
-            return;
-          }
-          testResult.status = 'fail';
-          testResult.errors ??= [];
-          testResult.errors.push(...(await formatTestError(hookResult.error)));
-          test.context.task.result = testResult;
-          if (!failureScreenshotCaptured) {
-            await captureFailedAttempt();
-          }
-          return hookResult.phase !== 'callback';
-        });
+        const completed = await hookRunner.runPerTestGroup(
+          listeners,
+          test,
+          fixtureResolver,
+          fixtureCleanups,
+          async (hookResult) => {
+            if (
+              hookResult.status === 'completed' ||
+              hookResult.status === 'skipped'
+            ) {
+              return;
+            }
+            testResult.status = 'fail';
+            testResult.errors ??= [];
+            testResult.errors.push(
+              ...(await formatTestError(hookResult.error)),
+            );
+            test.context.task.result = testResult;
+            if (!failureScreenshotCaptured) {
+              await captureFailedAttempt();
+            }
+            return hookResult.phase !== 'callback';
+          },
+        );
         if (!completed) {
           break;
         }

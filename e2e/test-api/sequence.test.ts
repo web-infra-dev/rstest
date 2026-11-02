@@ -76,3 +76,36 @@ it('rejects fixture cycles across parallel hook dependency walks', async () => {
   expect(cli.stderr).not.toContain('hook timed out');
   expect(cli.stdout).toContain('PARALLEL_CYCLE_REJECTED');
 });
+
+it.each(['fixture-error', 'fixture-timeout'])(
+  'preserves sibling hooks after parallel %s',
+  async (failure) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.sequence.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: { HOOK_ORDER: 'parallel', HOOK_FAILURE: failure },
+        },
+      },
+    });
+    await cli.exec;
+    expect(cli.exec.exitCode).toBe(1);
+    for (const hook of ['beforeEach', 'afterEach']) {
+      expect(cli.stderr).toContain(
+        failure === 'fixture-error'
+          ? `FIXTURE_SETUP_FAILED:${hook}:unrelated`
+          : `${hook} hook timed out in 50ms`,
+      );
+      for (const scope of failure === 'fixture-timeout'
+        ? ['unrelated', 'shared']
+        : ['unrelated']) {
+        expect(cli.stderr).toContain(`SIBLING_HOOK_FAILED:${hook}:${scope}`);
+        expect(cli.stdout).toContain(
+          `PARALLEL_FIXTURES_DRAINED:${hook}:${scope}`,
+        );
+      }
+    }
+  },
+);

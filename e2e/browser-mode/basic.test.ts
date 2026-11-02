@@ -41,6 +41,33 @@ describe('browser mode - basic', () => {
     },
   );
 
+  it.each(['fixture-error', 'fixture-timeout'])(
+    'preserves sibling hooks after parallel %s',
+    async (failure) => {
+      const { cli } = await runBrowserCli('basic', {
+        args: ['-c', 'rstest.sequence.config.mts'],
+        env: { HOOK_ORDER: 'parallel', HOOK_FAILURE: failure },
+      });
+      await cli.exec;
+      expect(cli.exec.exitCode).toBe(1);
+      for (const hook of ['beforeEach', 'afterEach']) {
+        expect(cli.stderr).toContain(
+          failure === 'fixture-error'
+            ? `FIXTURE_SETUP_FAILED:${hook}:unrelated`
+            : `${hook} hook timed out in 50ms`,
+        );
+        for (const scope of failure === 'fixture-timeout'
+          ? ['unrelated', 'shared']
+          : ['unrelated']) {
+          expect(cli.stderr).toContain(`SIBLING_HOOK_FAILED:${hook}:${scope}`);
+          expect(cli.stdout).toContain(
+            `PARALLEL_FIXTURES_DRAINED:${hook}:${scope}`,
+          );
+        }
+      }
+    },
+  );
+
   it('keeps worker fixtures alive across non-isolated browser files', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('basic', {
       args: [
