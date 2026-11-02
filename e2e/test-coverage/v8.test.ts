@@ -26,7 +26,16 @@ describe('coverage v8-specific behavior', () => {
 
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', 'rstest.config.ts'],
+      // Fixture assertions require fresh module state for each test file.
+      args: [
+        'run',
+        '-c',
+        'rstest.config.ts',
+        '--isolate',
+        'true',
+        '--pool.maxWorkers',
+        '1',
+      ],
       options: {
         nodeOptions: {
           cwd: cjsFixture,
