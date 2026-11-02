@@ -6,7 +6,6 @@ import type {
 } from '@vitest/snapshot';
 import type {
   AfterEachListener,
-  BeforeEachListener,
   CoverageProvider,
   SerializedError,
   OnTestFailedHandler,
@@ -42,6 +41,7 @@ import {
   workerFixtureManager,
 } from './fixtures';
 import type { FixtureResolver } from './fixtures';
+import { HookRunner, type ParentHooks } from './hooks';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
@@ -49,7 +49,6 @@ import {
   inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
-  runWithTimeout,
   sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
@@ -212,44 +211,15 @@ export class TestRunner {
     const errors: SerializedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
 
-    const runHookWithTimeoutContext = <T>(
-      test: TestCase | TestSuite,
-      fn: (...args: any[]) => any,
-      callback: () => T | Promise<T>,
-    ): T | Promise<T> => {
-      // Parallel hooks share a task, so a task-level deadline would belong to
-      // whichever hook started last. Keep each hook's own timeout wrapper and
-      // let polling assertions use their configured timeout in this mode.
-      return sequence.hooks === 'parallel'
-        ? callback()
-        : this.runWithActiveTimeout(test, fn, callback);
-    };
-
-    const limitHooks = limitConcurrency(maxConcurrency);
-    const runHookGroup = async <T>(
-      listeners: T[],
-      run: (listener: T) => Promise<boolean | void>,
-    ): Promise<boolean> => {
-      if (sequence.hooks === 'parallel') {
-        const results = await Promise.all(
-          listeners.map((listener) => limitHooks(() => run(listener))),
-        );
-        return results.every((result) => result !== false);
-      }
-      for (const listener of listeners) {
-        if ((await run(listener)) === false) {
-          return false;
-        }
-      }
-      return true;
-    };
+    const hookRunner = new HookRunner(
+      { sequence, maxConcurrency },
+      (test, fn, callback) => this.runWithActiveTimeout(test, fn, callback),
+      (context, error) => this.abortContextSignal(context, error),
+    );
 
     const runTestsCase = async (
       test: TestCase,
-      parentHooks: {
-        beforeEachListeners: BeforeEachListener[][];
-        afterEachListeners: AfterEachListener[][];
-      },
+      parentHooks: ParentHooks,
       retryCount: number,
     ): Promise<TestResult> => {
       if (test.runMode === 'skip') {
@@ -333,96 +303,15 @@ export class TestRunner {
         }
       }
 
-      const runPerTestHook = async (
-        fn: BeforeEachListener | AfterEachListener,
-      ): Promise<
-        | { status: 'completed'; cleanup?: AfterEachListener }
-        | { status: 'skipped' }
-        | {
-            status: 'failed';
-            phase: 'fixture' | 'callback';
-            error: unknown;
-          }
-      > => {
-        let callbackStarted = false;
-        const runHook = async (callback: (...args: any[]) => any) => {
-          const resolution =
-            await fixtureResolver.resolveHookFixtures(callback);
-          if (resolution.status === 'skipped') {
-            return { status: 'skipped' as const };
-          }
-          callbackStarted = true;
-          const cleanup = await callback(test.context);
-          return { status: 'completed' as const, cleanup };
-        };
-        let hookExecution: ReturnType<typeof runHook> | undefined;
-        try {
-          return await runHookWithTimeoutContext(test, fn, () =>
-            runWithTimeout(
-              fn,
-              (callback) => {
-                hookExecution = runHook(callback);
-                return hookExecution;
-              },
-              (error) => this.abortContextSignal(test.context, error),
-            ),
-          );
-        } catch (error) {
-          const cancellation =
-            !callbackStarted && fixtureResolver.cancelPendingFixtures();
-          if (cancellation && hookExecution) {
-            const hookCompletion = hookExecution.then(
-              () => ({ status: 'completed' as const }),
-              (fixtureError: unknown) => ({
-                status: 'failed' as const,
-                error: fixtureError,
-              }),
-            );
-            const cancellationProgress = Promise.race([
-              hookCompletion.then((completion) => ({
-                status: 'completed' as const,
-                completion,
-              })),
-              cancellation.teardownStarted.then(() => ({
-                status: 'teardown-started' as const,
-              })),
-            ]);
-            const waitForCancellationProgress = inheritTimeout(
-              fn,
-              () => cancellationProgress,
-            );
-            fixtureCleanups.unshift(async () => {
-              let progress: Awaited<typeof cancellationProgress>;
-              try {
-                progress = await waitForCancellationProgress();
-              } catch {
-                // The original hook timeout is already reported. This timeout
-                // only bounds how long unfinished setup may delay the test.
-                return;
-              }
-              // Once `use` is reached, match normal fixture cleanup semantics:
-              // teardown must finish before the runner continues.
-              const completion =
-                progress.status === 'teardown-started'
-                  ? await hookCompletion
-                  : progress.completion;
-              if (completion.status === 'failed') {
-                throw completion.error;
-              }
-            });
-          }
-          return {
-            status: 'failed',
-            phase: callbackStarted ? 'callback' : 'fixture',
-            error,
-          };
-        }
-      };
-
       if (!result) {
         for (const listeners of parentHooks.beforeEachListeners) {
-          const completed = await runHookGroup(listeners, async (fn) => {
-            const hookResult = await runPerTestHook(fn);
+          const completed = await hookRunner.runGroup(listeners, async (fn) => {
+            const hookResult = await hookRunner.runPerTestHook(
+              test,
+              fn,
+              fixtureResolver,
+              fixtureCleanups,
+            );
             if (hookResult.status === 'completed') {
               if (hookResult.cleanup) {
                 cleanups.push(inheritTimeout(fn, hookResult.cleanup));
@@ -581,8 +470,13 @@ export class TestRunner {
       const testResult = result;
       test.context.task.result = testResult;
       for (const listeners of afterEachGroups) {
-        const completed = await runHookGroup(listeners, async (fn) => {
-          const hookResult = await runPerTestHook(fn);
+        const completed = await hookRunner.runGroup(listeners, async (fn) => {
+          const hookResult = await hookRunner.runPerTestHook(
+            test,
+            fn,
+            fixtureResolver,
+            fixtureCleanups,
+          );
           if (
             hookResult.status === 'completed' ||
             hookResult.status === 'skipped'
@@ -662,10 +556,7 @@ export class TestRunner {
 
     const runTests = async (
       allTest: Test[],
-      parentHooks: {
-        beforeEachListeners: BeforeEachListener[][];
-        afterEachListeners: AfterEachListener[][];
-      },
+      parentHooks: ParentHooks,
     ): Promise<TestResult[]> => {
       const tests = [...allTest];
       const results: TestResult[] = [];
@@ -701,10 +592,7 @@ export class TestRunner {
 
     const runTest = async (
       test: Test,
-      parentHooks: {
-        beforeEachListeners: BeforeEachListener[][];
-        afterEachListeners: AfterEachListener[][];
-      },
+      parentHooks: ParentHooks,
     ): Promise<TestResult> => {
       let result: TestResult = {
         testId: test.testId,
@@ -783,9 +671,9 @@ export class TestRunner {
             };
 
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
-              await runHookGroup(test.beforeAllListeners, async (fn) => {
+              await hookRunner.runGroup(test.beforeAllListeners, async (fn) => {
                 try {
-                  const cleanupFn = await runHookWithTimeoutContext(
+                  const cleanupFn = await hookRunner.runWithTimeoutContext(
                     test,
                     fn,
                     () => fn(suiteContext),
@@ -830,17 +718,20 @@ export class TestRunner {
             }
             if (shouldRunSuiteHooks) {
               for (const listeners of [afterAllListeners, cleanups]) {
-                const completed = await runHookGroup(listeners, async (fn) => {
-                  try {
-                    await runHookWithTimeoutContext(test, fn, () =>
-                      fn(suiteContext),
-                    );
-                  } catch (error) {
-                    result.errors?.push(...(await formatTestError(error)));
-                    return false;
-                  }
-                  return true;
-                });
+                const completed = await hookRunner.runGroup(
+                  listeners,
+                  async (fn) => {
+                    try {
+                      await hookRunner.runWithTimeoutContext(test, fn, () =>
+                        fn(suiteContext),
+                      );
+                    } catch (error) {
+                      result.errors?.push(...(await formatTestError(error)));
+                      return false;
+                    }
+                    return true;
+                  },
+                );
                 if (!completed) {
                   break;
                 }
