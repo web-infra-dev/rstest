@@ -1300,6 +1300,88 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it.for([
+    { name: 'legacy CJS core', outputModule: false, offset: 32 },
+    { name: 'legacy ESM core', outputModule: true, offset: 0 },
+    { name: 'explicit zero', outputModule: false, offset: 0, wrapperLength: 0 },
+    {
+      name: 'custom wrapper',
+      outputModule: false,
+      offset: 64,
+      wrapperLength: 64,
+    },
+  ])(
+    'maps coverage with $name without shifting external files',
+    async (scenario) => {
+      const root = mkdtempSync(join(tmpdir(), 'rstest-wrapper-length-'));
+      const file = join(root, 'bundle.js');
+      const external = join(root, 'external.js');
+      const code = 'function unused() { return 7; }\nconst used = 1;';
+      writeFileSync(file, code);
+      writeFileSync(external, code);
+      const provider = new CoverageProvider(createOptions(), root);
+      const entries = [file, external].map((filePath) => {
+        const offset = filePath === file ? scenario.offset : 0;
+        return {
+          filePath,
+          url: pathToFileURL(filePath).href,
+          scriptId: filePath,
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [
+                { startOffset: 0, endOffset: offset + code.length, count: 1 },
+              ],
+            },
+            {
+              functionName: 'unused',
+              isBlockCoverage: false,
+              ranges: [
+                {
+                  startOffset: offset,
+                  endOffset: offset + code.indexOf('\n'),
+                  count: 0,
+                },
+              ],
+            },
+          ],
+        };
+      });
+      Object.defineProperty(provider, 'session', { value: {} });
+      Object.defineProperty(provider, 'takeRawCoverage', {
+        value: async () => entries,
+      });
+      const options = {
+        assetFiles: { [file]: code },
+        outputModule: scenario.outputModule,
+        ...('wrapperLength' in scenario
+          ? { wrapperLength: scenario.wrapperLength }
+          : {}),
+      };
+      try {
+        const direct = await provider.collect(options);
+        const raw = await provider.collectRaw(options);
+        const original = structuredClone(raw);
+        const payloads: unknown[] = [];
+        provider.foldRawCoverage(payloads, raw);
+        expect(raw).toEqual(original);
+        const folded = await provider.resolveRawCoverage(payloads, {
+          loadAssetFiles: async () => options.assetFiles,
+        });
+        for (const report of [direct, folded]) {
+          for (const filename of [file, external]) {
+            const coverage = report!.fileCoverageFor(filename);
+            expect(Object.values(coverage.f)).toEqual([0]);
+            expect(Object.values(coverage.s)).toEqual([0, 1]);
+          }
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('omits compiled assets from raw coverage payload options', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-raw-null-sourcemap');
     const file = join(root, 'dist', 'covered.js');

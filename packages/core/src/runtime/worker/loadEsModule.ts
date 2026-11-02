@@ -20,6 +20,8 @@ import {
 } from './runtimeHooks';
 import { workerCache } from './vm/cache';
 
+export const wrapperLength = 0;
+
 export enum EsmMode {
   Unknown = 0,
   Evaluated = 1,

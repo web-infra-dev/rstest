@@ -9,14 +9,60 @@ type FileCoverage = {
   s: Record<string, number>;
   f: Record<string, number>;
   b: Record<string, number[]>;
-  statementMap: unknown;
+  statementMap: Record<string, { start: { line: number; column: number } }>;
+  fnMap: Record<string, { name: string }>;
 };
 
 const fixturePath = join(__dirname, 'fixtures');
-const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
 const enableConfig = 'rstest.enable.v8.config.ts';
 
 describe('coverage v8-specific behavior', () => {
+  it('maps CJS VM coverage ranges back to bundled source offsets', async ({
+    onTestFinished,
+  }) => {
+    const cjsFixture = join(__dirname, 'fixtures-v8/cjs-wrapper');
+    const reportPath = join(cjsFixture, 'coverage');
+    onTestFinished(() => fs.removeSync(reportPath));
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: cjsFixture,
+          env: { RSTEST_OUTPUT_MODULE: 'false' },
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const coverage = fs.readJsonSync(
+      join(reportPath, 'coverage-final.json'),
+    ) as Record<string, FileCoverage>;
+    const branchCoverage = Object.values(coverage).find((file) =>
+      normalize(file.path).endsWith('/src/branch.ts'),
+    );
+    const serviceCoverage = Object.values(coverage).find((file) =>
+      normalize(file.path).endsWith('/src/service.ts'),
+    );
+    expect(branchCoverage).toBeDefined();
+    expect(serviceCoverage).toBeDefined();
+
+    const uncoveredReturn = Object.keys(branchCoverage!.statementMap).find(
+      (id) => branchCoverage!.statementMap[id]!.start.line === 5,
+    );
+    expect(uncoveredReturn).toBeDefined();
+    expect(branchCoverage!.s[uncoveredReturn!]).toBe(0);
+    expect(branchCoverage!.b[0]).toEqual([1, 0]);
+
+    const originalMethod = Object.keys(serviceCoverage!.fnMap).find(
+      (id) => serviceCoverage!.fnMap[id]!.name === 'getInfo',
+    );
+    expect(originalMethod).toBeDefined();
+    expect(serviceCoverage!.f[originalMethod!]).toBe(2);
+  });
+
   it.for(['forks', 'vmThreads'] as const)(
     'writes bundle assets alongside raw V8 coverage under %s',
     async (pool, { onTestFinished }) => {
@@ -317,9 +363,7 @@ describe('coverage v8-specific behavior', () => {
   // `isolate: false` is the variant that proves the fix: b.test.ts then calls
   // the `classify` instance a.test.ts loaded, whose code lives in a.test.ts's
   // chunk. `isolate: true` is the reference.
-  // CommonJS chunks are compiled through a wrapper, so V8 offsets are shifted
-  // and per-line counts are unreliable in that mode.
-  it.skipIf(isCommonJs).for([true, false])(
+  it.for([true, false])(
     'counts every test file of a worker with isolate: %s',
     async (isolate, { onTestFinished }) => {
       const sessionFixturePath = join(__dirname, 'fixtures-v8/worker-session');

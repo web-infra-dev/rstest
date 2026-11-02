@@ -36,6 +36,8 @@ type CoverageReporterConstructor = new (
 ) => ReportBase;
 
 const COVERAGE_PROCESSING_CONCURRENCY = 4;
+// Older cores do not pass wrapperLength. Their CJS loader uses this fixed prefix.
+const LEGACY_CJS_WRAPPER_PREFIX = "'use strict';return function(){\n";
 const isWindowsAbsolutePath = (filePath: string): boolean =>
   win32.isAbsolute(filePath) &&
   (!posix.isAbsolute(filePath) || filePath.startsWith('//'));
@@ -47,6 +49,7 @@ const SOURCE_MAP_URL_PATTERN = new RegExp(
 
 type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
+  wrapperLength?: number;
 };
 
 type CollectOptions = NonNullable<
@@ -225,7 +228,9 @@ const isCoverageEntry = (value: unknown): value is CoverageEntry =>
   typeof value.scriptId === 'string' &&
   typeof value.filePath === 'string' &&
   Array.isArray(value.functions) &&
-  value.functions.every(isFunctionCoverage);
+  value.functions.every(isFunctionCoverage) &&
+  (value.wrapperLength === undefined ||
+    (typeof value.wrapperLength === 'number' && value.wrapperLength >= 0));
 
 const isRawCoveragePayload = (value: unknown): value is RawCoveragePayload =>
   isRecord(value) &&
@@ -579,7 +584,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async convertWithAst(
     filePath: string,
-    entry: inspector.Profiler.ScriptCoverage,
+    entry: inspector.Profiler.ScriptCoverage & { wrapperLength?: number },
     options?: CollectOptions,
     transformedSource?: TransformedSource,
     root = this.root,
@@ -611,6 +616,7 @@ export class CoverageProvider implements RstestCoverageProvider {
         this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
       sourceMapUrl,
+      wrapperLength: entry.wrapperLength,
       coverage: {
         url: entry.url,
         functions: entry.functions,
@@ -621,7 +627,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   private async applyWithAst(
     coverageMap: CoverageMap,
     filePath: string,
-    entry: inspector.Profiler.ScriptCoverage,
+    entry: inspector.Profiler.ScriptCoverage & { wrapperLength?: number },
     options?: CollectOptions,
     transformedSource?: TransformedSource,
     root = this.root,
@@ -667,6 +673,7 @@ export class CoverageProvider implements RstestCoverageProvider {
         this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
       sourceMapUrl,
+      wrapperLength: entry.wrapperLength,
       coverage: {
         url: entry.url,
         functions: entry.functions,
@@ -826,6 +833,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           url: entry.url,
           scriptId: entry.scriptId,
           filePath: entry.filePath,
+          wrapperLength: entry.wrapperLength,
           functions: [{ functionName: '', isBlockCoverage: true, ranges: [] }],
         };
         entriesByFilePath.set(entry.filePath, folded);
@@ -842,7 +850,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     if (!this.session) return null;
 
     const filteredEntries = await this.filterRawCoverageEntries(
-      await this.takeRawCoverage(),
+      this.markWrappedAssetEntries(await this.takeRawCoverage(), options),
       options,
     );
 
@@ -869,6 +877,25 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     return entries;
+  }
+
+  private markWrappedAssetEntries(
+    entries: CoverageEntry[],
+    options?: CollectOptions,
+  ): CoverageEntry[] {
+    if (!options?.assetFiles) return entries;
+    const wrapperLength =
+      options.wrapperLength ??
+      (options.outputModule === false ? LEGACY_CJS_WRAPPER_PREFIX.length : 0);
+
+    return entries.map((entry) =>
+      options.assetFiles?.[entry.filePath] === undefined
+        ? entry
+        : {
+            ...entry,
+            wrapperLength,
+          },
+    );
   }
 
   private async filterRawCoverageEntries(
@@ -921,7 +948,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     if (!this.session) return null;
 
     const filteredEntries = await this.filterRawCoverageEntries(
-      await this.takeRawCoverage(),
+      this.markWrappedAssetEntries(await this.takeRawCoverage(), options),
       options,
     );
     const coverageMap = this.createCoverageMap();
