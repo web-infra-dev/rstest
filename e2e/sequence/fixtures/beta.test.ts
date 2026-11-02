@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import { describe, expect, rs, test } from '@rstest/core';
+import { afterAll, describe, expect, rs, test } from '@rstest/core';
 import { bigPayloadSize } from './bigHelper';
 
 if (process.env.SEQ_SLOW_IMPORT === '1') {
@@ -21,6 +21,20 @@ test('beta', () => {
   expect(bigPayloadSize).toBeGreaterThan(0);
 });
 
+if (process.env.SEQ_CLEANUP_TIMEOUT === '1') {
+  const cleanupTest = test.extend(
+    'cleanup',
+    { scope: 'file' },
+    (_context, { onCleanup }) => {
+      onCleanup(() => new Promise<never>(() => {}));
+      return true;
+    },
+  );
+  cleanupTest('file fixture hangs during cleanup', ({ cleanup }) => {
+    expect(cleanup).toBe(true);
+  });
+}
+
 if (process.env.SEQ_SLOW_COLLECT === '1') {
   describe('deferred collection', async () => {
     console.log('COLLECT:beta');
@@ -36,6 +50,18 @@ if (process.env.SEQ_SLOW_COLLECT === '1') {
       test('collected once', () => {
         expect(true).toBe(true);
       });
+    });
+  });
+}
+
+if (process.env.SEQ_FAKE_NEXT_TICK === '1') {
+  describe('fake nextTick during collection', () => {
+    rs.useFakeTimers({ toFake: ['nextTick'] });
+    afterAll(() => {
+      rs.useRealTimers();
+    });
+    test('collects and runs', () => {
+      expect(true).toBe(true);
     });
   });
 }

@@ -177,6 +177,45 @@ describe('perf-first test sequencing', () => {
     expect(seqOrder(full.cli.stdout)).toHaveLength(3);
   }, 90_000);
 
+  it('sets up snapshots before describe fakes nextTick in forks', async ({
+    onTestFinished,
+  }) => {
+    const result = await runOnce(onTestFinished, { SEQ_FAKE_NEXT_TICK: '1' }, [
+      '--pool.type',
+      'forks',
+    ]);
+    await result.expectExecSuccess();
+    expect(seqOrder(result.cli.stdout)).toContain('beta');
+  }, 30_000);
+
+  it('includes loading time in the result used after file cleanup times out', async ({
+    onTestFinished,
+  }) => {
+    rmSync(cacheDir, { recursive: true, force: true });
+    const result = await runOnce(
+      onTestFinished,
+      { SEQ_SLOW_IMPORT: '1', SEQ_CLEANUP_TIMEOUT: '1' },
+      ['--config', join(fixtures, 'rstest.timing.config.mts')],
+    );
+    await result.expectExecFailed();
+    const timings: TestFileResult[] = result.cli.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('TIMING:'))
+      .map((line) => JSON.parse(line.slice('TIMING:'.length)));
+    const beta = timings.find((file) =>
+      file.testPath.endsWith('beta.test.ts'),
+    )!;
+    expect(beta.status).toBe('fail');
+    expect(beta.loadDuration).toBeGreaterThanOrEqual(1200);
+    const cached = JSON.parse(
+      readFileSync(join(cacheDir, 'results.json'), 'utf-8'),
+    );
+    const betaCache = Object.entries(cached.files).find(([key]) =>
+      key.endsWith('beta.test.ts'),
+    )?.[1] as { duration?: number } | undefined;
+    expect(betaCache?.duration).toBeGreaterThanOrEqual(beta.loadDuration!);
+  }, 45_000);
+
   it('orders by bundle size (cold), then duration, then failed-first', async ({
     onTestFinished,
   }) => {

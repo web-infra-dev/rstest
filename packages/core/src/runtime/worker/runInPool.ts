@@ -1020,9 +1020,9 @@ export const runInPool = async (
         tracker,
       });
       taskContext.setFallback(undefined);
-      // Module evaluation queues describe callbacks; drain them while the
-      // collect phase and file loading interval are still open.
-      await runner.collectTests();
+      // Snapshot setup awaits host RPC and must finish before describe callbacks
+      // can replace process.nextTick with fake timers in child processes.
+      await runner.prepareTests(testPath);
     } finally {
       const loadEnd = getRealNow();
       loadDuration = loadEnd - loadStart;
@@ -1130,6 +1130,9 @@ export const runInPool = async (
         ),
       onFileCleanupStart: async (result) => {
         fileCleanupResult = result;
+        if (result && loadDuration !== undefined) {
+          result.loadDuration = loadDuration;
+        }
         await lifecycleHooks.onFileCleanupStart?.(result);
       },
       onFileCleanupEnd: async () => {

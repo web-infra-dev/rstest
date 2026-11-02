@@ -60,6 +60,7 @@ export function createRunner({
       hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
+    prepareTests: (testFilePath: string) => Promise<TestInfo[]>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
     getRootSuiteListeners: () => RootSuiteListeners;
@@ -106,14 +107,12 @@ export function createRunner({
         api: Rstest,
       ) => {
         const snapshotClient = workerState.snapshotClient!;
-
         await hooks.onSnapshotSetupStart?.();
         try {
           await snapshotClient.setup(testPath, workerState.snapshotOptions);
         } finally {
           await hooks.onSnapshotSetupEnd?.();
         }
-
         const tests = await collectTests();
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
@@ -159,6 +158,14 @@ export function createRunner({
           }
           throw error;
         }
+      },
+      prepareTests: async (testPath) => {
+        await workerState.snapshotClient!.setup(
+          testPath,
+          workerState.snapshotOptions,
+        );
+        const tests = await collectTests();
+        return tests.map(toTestInfo);
       },
       collectTests: async () => {
         const tests = await collectTests();
