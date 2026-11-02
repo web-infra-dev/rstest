@@ -605,11 +605,12 @@ export interface RstestConfig {
    */
   sequence?: {
     /**
-     * Run afterEach and afterAll hooks within each suite in reverse declaration order (`stack`) or declaration order (`list`).
-     * Cleanup functions returned by beforeEach and beforeAll follow the same order.
+     * Run hooks within each suite sequentially (`stack` or `list`) or in parallel.
+     * `stack` reverses afterEach, afterAll, and returned cleanup order.
+     * Parallel hook groups are limited by maxConcurrency.
      * @default 'stack'
      */
-    hooks?: 'stack' | 'list';
+    hooks?: 'stack' | 'list' | 'parallel';
   };
 
   /**
@@ -660,7 +661,7 @@ export interface RstestConfig {
   unstubEnvs?: boolean;
 
   /**
-   * Maximum number of concurrent tests
+   * Maximum number of concurrent tests or parallel lifecycle hooks.
    * @default 5
    */
   maxConcurrency?: number;

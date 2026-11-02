@@ -10,6 +10,8 @@ description: A number limiting the number of test cases that are allowed to run 
 
 Limit the number of test cases running at the same time **within a test file** when using `test.concurrent` or `describe.concurrent`. Cases above the limit wait until a slot is released.
 
+With [`sequence.hooks: 'parallel'`](/config/test/sequence#sequencehooks), this value also limits concurrent lifecycle hooks and returned cleanup functions within a file. Hooks use a separate limit from concurrent test cases.
+
 Increasing this value does not make ordinary `test()` cases concurrent. Mark the tests or their suite as concurrent to opt in.
 
 | Setting                                               | Controls                                                    | Does not control               |

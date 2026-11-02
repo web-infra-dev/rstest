@@ -5,5 +5,5 @@ import config from './rstest.config.mts';
 export default defineConfig({
   ...config,
   ...hooksConfig,
-  include: ['../../../test-api/fixtures/hookOrder.test.ts'],
+  include: hooksConfig.include?.map((path) => `../../../test-api/${path}`),
 });
