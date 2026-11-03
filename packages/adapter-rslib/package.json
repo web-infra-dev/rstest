@@ -32,7 +32,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "lint": "rslint .",
+    "lint": "pnpm -w exec rs lint packages/adapter-rslib",
     "test": "rstest"
   },
   "devDependencies": {

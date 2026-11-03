@@ -20,9 +20,9 @@ pre-push:
       run: pnpm prettier --check . && pnpm run check-spell
     # Type-check needs built package .d.ts, so build first. Runs unless the push
     # is entirely markdown, so a docs-only push still skips the build while config
-    # inputs (tsconfig.json, rslint.config.mts, ...) keep gating it. An inclusive
+    # inputs (tsconfig.json, rstack.config.mts, ...) keep gating it. An inclusive
     # extension glob would miss those: lefthook's **/*.x does not match repo-root
-    # files such as rslint.config.mts.
+    # files such as rstack.config.mts.
     typecheck:
       exclude:
         - '*.md'

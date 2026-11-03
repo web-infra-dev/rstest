@@ -31,7 +31,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "lint": "rslint ."
+    "lint": "pnpm -w exec rs lint packages/coverage-istanbul"
   },
   "dependencies": {
     "istanbul-lib-coverage": "^3.2.2",

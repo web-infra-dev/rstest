@@ -24,7 +24,7 @@
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
     "dev": "rsbuild dev --config ./rsbuild.config.ts",
-    "lint": "rslint ."
+    "lint": "pnpm -w exec rs lint packages/browser-ui"
   },
   "dependencies": {
     "antd": "^6.6.8",

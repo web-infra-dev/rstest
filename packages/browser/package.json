@@ -42,7 +42,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "lint": "rslint ."
+    "lint": "pnpm -w exec rs lint packages/browser"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
