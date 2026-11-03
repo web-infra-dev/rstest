@@ -55,10 +55,10 @@ pnpm install                  # Install all workspace dependencies
 pnpm build                    # Build all packages under packages/*
 pnpm test                     # Run unit tests via rstest
 pnpm e2e                      # Run e2e tests
-pnpm lint                     # Prettier + spell check + doc type sync + harness docs + rslint
+pnpm lint                     # Formatting + spell check + doc type sync + harness docs + lint/type check
 pnpm lint:type                # Run rs lint --type-check (needs built package .d.ts)
 pnpm typecheck                # Alias of lint:type
-pnpm format                   # Prettier format + heading-case --write
+pnpm format                   # rs fmt + heading-case --write
 pnpm check-unused             # Run knip
 pnpm test:examples            # Run example tests
 pnpm bench:cpu                # Run CPU benchmarks
@@ -73,7 +73,7 @@ pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts
 # File-scoped / faster feedback (from the repository root)
 pnpm exec rs lint packages/core
 pnpm rstest packages/core/tests/core/rsbuild.test.ts
-pnpm prettier --write path/to/file.ts
+pnpm exec rs fmt path/to/file.ts
 ```
 
 _Note_: E2E tests and examples consume built package output. Rebuild affected packages before running them (for example, `pnpm --filter @rstest/browser build`). For testing workflows, use the `testing` skill.

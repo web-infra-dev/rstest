@@ -128,7 +128,7 @@ Apply fixes to the `.mdx` directly. For each fix:
 ### 4. Re-verify
 
 Re-run step 1 (parity) and step 2 (compile assertions) until both are clean,
-then `pnpm prettier --check` the touched `.mdx` files.
+then `pnpm exec rs fmt --check` the touched `.mdx` files.
 
 ## Notes
 

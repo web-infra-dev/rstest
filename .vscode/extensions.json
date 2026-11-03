@@ -1,7 +1,3 @@
 {
-  "recommendations": [
-    "rstack.rstack",
-    "esbenp.prettier-vscode",
-    "unifiedjs.vscode-mdx"
-  ]
+  "recommendations": ["rstack.rstack", "unifiedjs.vscode-mdx"]
 }
