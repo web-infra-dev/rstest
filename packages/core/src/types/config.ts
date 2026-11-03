@@ -600,8 +600,8 @@ export interface RstestConfig {
   hookTimeout?: number;
 
   /**
-   * Control hook execution order.
-   * @default { hooks: 'stack' }
+   * Control hook and setup file execution order.
+   * @default { hooks: 'stack', setupFiles: 'list' }
    */
   sequence?: {
     /**
@@ -611,6 +611,11 @@ export interface RstestConfig {
      * @default 'stack'
      */
     hooks?: 'stack' | 'list' | 'parallel';
+    /**
+     * Run setup files in declaration order or concurrently before loading each test file.
+     * @default 'list'
+     */
+    setupFiles?: 'list' | 'parallel';
   };
 
   /**

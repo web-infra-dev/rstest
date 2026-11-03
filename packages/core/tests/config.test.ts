@@ -32,9 +32,13 @@ describe('mergeRstestConfig', () => {
   it.each(['stack', 'list', 'parallel'] as const)(
     'preserves %s hook order through config merging',
     (hooks) => {
-      expect(withDefaultConfig({}).sequence).toEqual({ hooks: 'stack' });
+      expect(withDefaultConfig({}).sequence).toEqual({
+        hooks: 'stack',
+        setupFiles: 'list',
+      });
       expect(withDefaultConfig({ sequence: {} }).sequence).toEqual({
         hooks: 'stack',
+        setupFiles: 'list',
       });
       expect(
         withDefaultConfig(
@@ -43,7 +47,21 @@ describe('mergeRstestConfig', () => {
             { sequence: { hooks } },
           ),
         ).sequence,
-      ).toEqual({ hooks });
+      ).toEqual({ hooks, setupFiles: 'list' });
+    },
+  );
+
+  it.each(['list', 'parallel'] as const)(
+    'preserves %s setup order alongside hook order',
+    (setupFiles) => {
+      expect(
+        withDefaultConfig(
+          mergeRstestConfig(
+            { sequence: { hooks: 'list' } },
+            { sequence: { setupFiles } },
+          ),
+        ).sequence,
+      ).toEqual({ hooks: 'list', setupFiles });
     },
   );
 

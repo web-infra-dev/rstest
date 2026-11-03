@@ -1,19 +1,19 @@
 ---
-description: 配置生命周期 Hook 的执行顺序。
+description: 配置生命周期 Hook 和 setup 文件的执行顺序。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # sequence
 
-<ApiMeta addedVersion="0.12.6" />
+- **类型：** `{ hooks?: 'stack' | 'list' | 'parallel'; setupFiles?: 'list' | 'parallel' }`
+- **默认值：** `{ hooks: 'stack', setupFiles: 'list' }`
 
-- **类型：** `{ hooks?: 'stack' | 'list' | 'parallel' }`
-- **默认值：** `{ hooks: 'stack' }`
-
-配置 Rstest 生命周期 Hook 的执行顺序。
+配置 Rstest 生命周期 Hook 和 setup 文件的执行顺序。
 
 ## sequence.hooks
+
+<ApiMeta addedVersion="0.12.6" />
 
 - **类型：** `'stack' | 'list' | 'parallel'`
 - **默认值：** `'stack'`
@@ -42,6 +42,33 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   sequence: {
     hooks: 'parallel',
+  },
+});
+```
+
+## sequence.setupFiles
+
+<ApiMeta addedVersion="0.12.6" />
+
+- **类型：** `'list' | 'parallel'`
+- **默认值：** `'list'`
+
+控制 Node 模式和浏览器模式下，每个测试文件加载前的 [`setupFiles`](/config/test/setup-files) 执行方式：
+
+- `'list'`：按配置顺序逐个执行，等待当前文件的异步初始化完成后，再执行下一个文件。
+- `'parallel'`：启动所有 setup 文件，等待它们的异步初始化完成后，再加载测试文件。此选项不受 `maxConcurrency` 限制。
+
+只有 setup 文件之间不依赖彼此的副作用时，才使用 `'parallel'`。例如，一个 setup 安装 polyfill，另一个 setup 导入依赖该 polyfill 的库，这种情况应保持 `'list'`。Setup 文件仍共享测试文件的运行环境和模块缓存。
+
+如果并行执行的 setup 失败，Rstest 会等待其他已启动的 setup 结束，报告配置顺序中第一个失败的 setup，并且不加载测试文件。此选项不影响 `globalSetup`。Setup 文件中注册的 Hook 按 `sequence.hooks` 执行；并行执行 setup 文件时，Hook 的注册顺序可能改变。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  setupFiles: ['./setup-matchers.ts', './setup-service.ts'],
+  sequence: {
+    setupFiles: 'parallel',
   },
 });
 ```

@@ -17,6 +17,20 @@ export default defineConfig({
   setupFiles: [
     'data:text/javascript;base64,dm9pZCAw?AAAA#v1',
     `data:text/javascript;base64,${Buffer.from(setupSource).toString('base64')}`,
+    '../../../setup/fixtures/basic/sequence-first.ts',
+    '../../../setup/fixtures/basic/sequence-second.ts',
   ],
+  sequence: {
+    setupFiles:
+      process.env.SETUP_SEQUENCE === 'parallel'
+        ? 'parallel'
+        : process.env.SETUP_SEQUENCE === 'list'
+          ? 'list'
+          : undefined,
+  },
+  env: {
+    SETUP_SEQUENCE: process.env.SETUP_SEQUENCE,
+    SETUP_FAILURE: process.env.SETUP_FAILURE,
+  },
   testTimeout: BROWSER_TEST_TIMEOUT,
 });

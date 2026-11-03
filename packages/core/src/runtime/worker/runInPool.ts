@@ -8,6 +8,7 @@ import type {
   AssetFiles,
   MaybePromise,
   RunnerHooks,
+  RuntimeConfig,
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
@@ -29,6 +30,7 @@ import { disposeRstestUtilities } from '../api/utilities';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { takeFileCleanups } from '../runner/fileCleanup';
+import { runSetupFiles } from '../runner/setup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { applyRuntimeColors } from './color';
 import { environmentLoaders } from './env/registry';
@@ -587,6 +589,7 @@ const preparePool = async (
 
 const loadFiles = async ({
   setupEntries,
+  sequence,
   assetFiles,
   rstestContext,
   distPath,
@@ -601,6 +604,7 @@ const loadFiles = async ({
   tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
+  sequence: RuntimeConfig['sequence'];
   assetFiles: AssetFiles;
   rstestContext: Record<string, any>;
   distPath: string;
@@ -636,17 +640,14 @@ const loadFiles = async ({
 
   // run setup files
   tracker?.transition('setupFiles');
-  for (const {
-    distPath: setupDistPath,
-    testPath: setupTestPath,
-  } of setupEntries) {
-    setFederationDynamicImportOrigin(federation, setupTestPath, runtimeGlobal);
-
+  // ESM entries statically import the same runtime chunk. Link it once before
+  // starting concurrent entry graphs so SourceTextModule never sees it mid-link.
+  if (sequence.setupFiles === 'parallel' && outputModule && runtimeDistPath) {
     await loadModule({
-      codeContent: getAssetText(assetFiles, setupDistPath),
-      distPath: setupDistPath,
+      codeContent: getAssetText(assetFiles, runtimeDistPath),
+      distPath: runtimeDistPath,
       runtimeDistPath,
-      testPath: setupTestPath,
+      testPath,
       rstestContext,
       assetFiles,
       interopDefault,
@@ -654,6 +655,28 @@ const loadFiles = async ({
       cacheCompilation: vmContext !== undefined,
     });
   }
+  await runSetupFiles(
+    setupEntries,
+    async ({ distPath: setupDistPath, testPath: setupTestPath }) => {
+      setFederationDynamicImportOrigin(
+        federation,
+        setupTestPath,
+        runtimeGlobal,
+      );
+      await loadModule({
+        codeContent: getAssetText(assetFiles, setupDistPath),
+        distPath: setupDistPath,
+        runtimeDistPath,
+        testPath: setupTestPath,
+        rstestContext,
+        assetFiles,
+        interopDefault,
+        vmContext,
+        cacheCompilation: vmContext !== undefined,
+      });
+    },
+    sequence.setupFiles,
+  );
 
   tracker?.transition('collect');
   setFederationDynamicImportOrigin(federation, testPath, runtimeGlobal);
@@ -857,6 +880,7 @@ export const runInPool = async (
         testPath,
         assetFiles,
         setupEntries,
+        sequence: options.context.runtimeConfig.sequence,
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
@@ -1003,6 +1027,7 @@ export const runInPool = async (
         testPath,
         assetFiles,
         setupEntries,
+        sequence: options.context.runtimeConfig.sequence,
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
