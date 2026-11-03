@@ -4,7 +4,7 @@ import { filterFiles } from '../../src/utils/testFiles';
 // Run `fn` with a stubbed `process.platform` so both platform branches of
 // `filterFiles` execute deterministically on any host — CI runs unit tests on
 // Linux only (enforced by the `rstest/os-agnostic-tests` rule in
-// rslint.config.mts). The original value is captured via its property
+// rstack.config.mts). The original value is captured via its property
 // descriptor rather than a direct read, which is the stub/restore idiom that
 // rule sanctions.
 const withPlatform = (platform: NodeJS.Platform, fn: () => void) => {

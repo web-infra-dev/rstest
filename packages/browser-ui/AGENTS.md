@@ -23,7 +23,6 @@ This package owns transport bridging and UI state projection only — host sched
 ```bash
 pnpm --filter @rstest/browser-ui dev      # Start dev server
 pnpm --filter @rstest/browser-ui build    # Build for production
-pnpm --filter @rstest/browser-ui lint     # Rslint
 ```
 
 ## Do

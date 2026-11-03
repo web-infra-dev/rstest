@@ -56,9 +56,6 @@ Playwright is the only supported Browser Mode provider. Keep the public provider
 # Build
 pnpm --filter @rstest/browser build
 pnpm --filter @rstest/browser dev     # Watch mode
-
-# Lint
-pnpm --filter @rstest/browser lint
 ```
 
 ## Dependencies

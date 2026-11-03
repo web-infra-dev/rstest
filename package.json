@@ -15,7 +15,7 @@
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "format": "prettier --write . && heading-case --write",
     "lint": "prettier --check . && pnpm run check-spell && pnpm run check-doc-types && pnpm run check-harness-docs && pnpm run lint:type",
-    "lint:type": "rslint --type-check",
+    "lint:type": "rs lint --type-check",
     "prepare": "lefthook install",
     "test": "rstest",
     "test:examples": "pnpm --filter \"@examples/*\" --filter \"!@examples/federation*\" test",
@@ -23,7 +23,6 @@
     "typecheck": "pnpm run lint:type"
   },
   "devDependencies": {
-    "@rslint/core": "^0.10.0",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.1.0",
@@ -38,6 +37,7 @@
     "playwright": "^1.64.1",
     "prettier": "^3.9.10",
     "prettier-plugin-packagejson": "^3.0.3",
+    "rstack": "^0.9.0",
     "typescript": "^6.0.3"
   },
   "packageManager": "pnpm@12.16.1",

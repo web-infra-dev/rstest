@@ -32,7 +32,6 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "lint": "rslint .",
     "test": "rstest"
   },
   "devDependencies": {

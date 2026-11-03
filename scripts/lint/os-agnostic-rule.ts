@@ -1,5 +1,3 @@
-import { defineConfig, js, ts } from '@rslint/core';
-
 // Unit tests must be OS-agnostic: CI runs the ut job on ubuntu only, so a test
 // whose behavior branches on the host platform silently loses its non-Linux
 // side. OS-specific behavior belongs in e2e/ (which still runs macOS and
@@ -8,9 +6,8 @@ import { defineConfig, js, ts } from '@rslint/core';
 // Stub/restore via Object.defineProperty + Object.getOwnPropertyDescriptor is
 // intentionally not flagged: it is the sanctioned pattern.
 //
-// Exported so scripts/lint/os-agnostic-rule.test.ts can mount it in a minimal,
-// project-free config — linting fixtures without the type-aware program this
-// config otherwise builds (which the syntactic rule does not need).
+// Shared by the repository lint config and the rule tests, whose minimal
+// config skips the type-aware program this syntactic rule does not need.
 export const osAgnosticTests = {
   meta: {
     type: 'problem',
@@ -226,72 +223,3 @@ export const osAgnosticTests = {
     };
   },
 };
-
-export default defineConfig([
-  { ignores: ['**/dist/**', '**/dist-types/**'] },
-  {
-    ...js.configs.recommended,
-    files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'],
-  },
-  ts.configs.recommended,
-  {
-    languageOptions: {
-      parserOptions: {
-        // Unit tests need their own entry: a package tsconfig is `composite`
-        // with `rootDir: src` and cannot include a sibling directory, so
-        // without `tests/tsconfig.json` every test escapes both type-aware
-        // lint rules and tsc itself.
-        project: [
-          './e2e/tsconfig.json',
-          './packages/*/tsconfig.json',
-          './packages/*/tests/tsconfig.json',
-        ],
-      },
-    },
-    rules: {
-      '@typescript-eslint/ban-ts-comment': 'off',
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-require-imports': 'off',
-      'prefer-const': 'off',
-      'preserve-caught-error': 'off',
-    },
-  },
-  {
-    // Most packages keep unit tests under tests/; browser-ui colocates them as
-    // src/**/*.test.{ts,tsx}. Both are ubuntu-only in CI, so cover both.
-    files: [
-      'packages/*/tests/**',
-      'packages/*/src/**/*.test.ts',
-      'packages/*/src/**/*.test.tsx',
-    ],
-    plugins: {
-      'rstest-repo': { rules: { 'os-agnostic-tests': osAgnosticTests } },
-    },
-    rules: {
-      'rstest-repo/os-agnostic-tests': 'error',
-    },
-  },
-  {
-    // Runtime code executes inside the user's test environment, where fake
-    // timers (rstest.useFakeTimers) replace the timer globals. Framework
-    // timers must go through the real-timer registry, or they leak / misfire
-    // once a test enables fake timers.
-    files: ['packages/core/src/runtime/**'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...[
-          'setTimeout',
-          'clearTimeout',
-          'setInterval',
-          'clearInterval',
-          'setImmediate',
-          'clearImmediate',
-        ].map((name) => ({
-          selector: `CallExpression[callee.name='${name}']`,
-          message: `Fake timers replace the ${name} global in user tests. Use getRealTimers() from runtime/util (extend REAL_TIMERS there if it lacks ${name}).`,
-        })),
-      ],
-    },
-  },
-]);

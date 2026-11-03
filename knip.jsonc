@@ -19,7 +19,7 @@
   "workspaces": {
     ".": {
       "entry": [
-        "rslint.config.mts",
+        "rstack.config.mts",
         // Agent skill scripts are invoked by the skill runtime, not imported by source files.
         ".agents/skills/**/scripts/**/*.mjs",
       ],

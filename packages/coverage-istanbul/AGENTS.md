@@ -9,7 +9,6 @@ The package entry must export exactly `{ pluginCoverage, CoverageProvider }` —
 ```bash
 pnpm --filter @rstest/coverage-istanbul build    # Build via Rslib
 pnpm --filter @rstest/coverage-istanbul dev      # Watch mode
-pnpm --filter @rstest/coverage-istanbul lint     # Rslint
 ```
 
 ## Constraints
