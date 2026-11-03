@@ -66,8 +66,8 @@ const RSTACK_TOOLS: RstackTool[] = [
   {
     name: 'Rsdoctor',
     slug: 'rsdoctor',
-    en: 'A one-stop build analyzer that makes the build process transparent',
-    zh: '一站式的构建分析工具，使构建流程变得透明、可预测和可优化',
+    en: 'An AI-friendly build analyzer that makes the build process transparent',
+    zh: 'AI 友好的构建分析工具，让构建过程变得透明',
     logo: 'https://assets.rspack.rs/rsdoctor/rsdoctor-logo-480x480.png',
     url: 'https://rsdoctor.rs',
     domain: 'rsdoctor.rs',
@@ -84,8 +84,8 @@ const RSTACK_TOOLS: RstackTool[] = [
   {
     name: 'Rslint',
     slug: 'rslint',
-    en: 'A high-performance JavaScript and TypeScript linter based on typescript-go',
-    zh: '基于 typescript-go 的高性能 JavaScript 和 TypeScript 代码检查工具',
+    en: 'A high-performance, ESLint-compatible linter for JavaScript and TypeScript',
+    zh: '高性能、兼容 ESLint 的 JavaScript 和 TypeScript 代码检查工具',
     logo: 'https://assets.rspack.rs/rslint/rslint-logo.svg',
     url: 'https://rslint.rs',
     domain: 'rslint.rs',
@@ -102,8 +102,8 @@ const RSTACK_TOOLS: RstackTool[] = [
 ];
 
 const ADAPTER_DESC = {
-  en: 'Config adapters reuse the existing build config from Rsbuild, Rslib, Rspack, or Rstack CLI projects.',
-  zh: '配置适配器可以直接复用 Rsbuild、Rslib、Rspack 和 Rstack CLI 项目中已有的构建配置。',
+  en: 'Config adapters reuse the existing build config from Rsbuild, Rslib, Rspack, Lynx, or Modern.js projects.',
+  zh: '配置适配器可以直接复用 Rsbuild、Rslib、Rspack、Lynx 和 Modern.js 项目中已有的构建配置。',
 };
 
 // Each feature block reads like the rstack-cli homepage: a short title, one
@@ -112,20 +112,20 @@ type Feature = { title: string; body: string; points: string[] };
 
 const PIPELINE: Record<'en' | 'zh', Feature> = {
   en: {
-    title: 'Test it the way you ship it',
-    body: 'Compile and run tests with Rspack and Rsbuild, the same toolchain your app builds with',
+    title: 'Test through the build pipeline',
+    body: "Compile and run tests with Rspack and Rsbuild, without changing your app's build system",
     points: [
       'Use Rsbuild plugins and Rspack loaders in tests',
-      'Tests run against the code you build for production',
+      'Tests run through the build pipeline, closer to production output',
       'Skip unused dependency branches when modules are side-effect free, then tree-shake their code',
     ],
   },
   zh: {
-    title: '怎么构建，就怎么测试',
-    body: '使用 Rspack 和 Rsbuild 编译并运行测试，与应用构建共用同一套工具链',
+    title: '沿用构建链路测试',
+    body: '使用 Rspack 和 Rsbuild 编译并运行测试，无需改动应用的构建系统',
     points: [
       '在测试中使用 Rsbuild 插件和 Rspack loader',
-      '测试运行的就是生产构建出的代码',
+      '测试通过构建链路运行，更贴近生产产物',
       '无副作用时跳过未使用的依赖分支，tree-shaking 移除产物中的无用代码',
     ],
   },
@@ -158,7 +158,7 @@ const ADAPTER: Record<'en' | 'zh', Feature> = {
     body: 'The adapter extracts and converts the config the test build needs, while Rstest still owns the test entry and runtime',
     points: [
       'Reuse plugins, path aliases, and SWC options from your build config',
-      'Let frameworks preset setup files and test defaults',
+      'Keep tests consistent with your project config',
       'No duplicate config to sync or maintain',
     ],
   },
@@ -167,7 +167,7 @@ const ADAPTER: Record<'en' | 'zh', Feature> = {
     body: '适配器按需提取并转换测试编译所需的配置项，测试入口和运行时仍由 Rstest 管理',
     points: [
       '复用构建配置中的插件、路径别名和 SWC 等编译选项',
-      '由框架预设 setup 脚本、超时时间和测试环境',
+      '测试与项目配置保持一致',
       '无需为测试重复配置，减少后续维护负担',
     ],
   },
@@ -175,20 +175,20 @@ const ADAPTER: Record<'en' | 'zh', Feature> = {
 
 const JEST: Record<'en' | 'zh', Feature> = {
   en: {
-    title: 'Your Jest tests, unchanged',
+    title: 'Jest-compatible test APIs',
     body: 'Assertions, mocks, snapshots, lifecycle hooks, test projects, and coverage follow the Jest and Vitest conventions you already know',
     points: [
       'Familiar describe, test, expect, and snapshot APIs',
-      'Enable globals and run existing suites as-is',
+      'Enable globals and run suites that use global APIs',
       'Add Browser Mode and adapters when you need them',
     ],
   },
   zh: {
-    title: '沿用 Jest 测试，无需改写',
+    title: '兼容 Jest 的测试 API',
     body: '断言、Mock、快照、生命周期钩子、多项目测试和代码覆盖率沿用 Jest、Vitest 的既有习惯',
     points: [
       '熟悉的 describe、test、expect 和 snapshot API',
-      '开启 globals，现有用例原样运行',
+      '开启 globals，运行依赖全局 API 的用例',
       '需要时再启用 Browser Mode 和适配器',
     ],
   },
@@ -216,8 +216,8 @@ const PLAYWRIGHT: Record<'en' | 'zh', Feature> = {
 };
 
 const JEST_DESC = {
-  en: 'A Jest- and Vitest-compatible API and CLI, so most suites migrate by switching the runner.',
-  zh: '兼容 Jest、Vitest 的常用测试 API 与 CLI，大多数用例只需切换 runner 即可迁移。',
+  en: 'A Jest- and Vitest-compatible API and CLI, with migration guides for both.',
+  zh: '兼容 Jest、Vitest 的 API 与 CLI，并提供两者的迁移指南。',
 };
 
 const PLAYWRIGHT_DESC = {
@@ -313,8 +313,8 @@ const FOOTER_LICENSE_URL =
   'https://github.com/web-infra-dev/rstest/blob/main/LICENSE';
 
 const RSTACK_DESC = {
-  en: 'A unified JavaScript toolchain centered on Rspack, with high performance and consistent architecture.',
-  zh: '以 Rspack 为核心的 JavaScript 统一工具链，具有优秀的性能和一致的架构。',
+  en: 'The fast, unified JavaScript toolchain for developers and agents.',
+  zh: '面向开发者与 Agent 的高性能、一体化 JavaScript 工具链。',
 };
 
 // The `subtitle` i18n entry split over two lines, around the accented "Rspack".

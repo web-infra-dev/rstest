@@ -36,8 +36,8 @@
     "zh": "高效执行"
   },
   "blazingFastDesc": {
-    "en": "Rspack's build optimizations cut the module processing and loading work a test run has to do.",
-    "zh": "利用 Rspack 的构建优化，降低测试中的模块处理与加载开销。"
+    "en": "Rspack's build optimizations cut redundant module transformation and execution work in tests.",
+    "zh": "利用 Rspack 的构建优化，减少测试中重复的模块转换与执行开销。"
   },
   "realBrowserTesting": {
     "en": "Real browser testing",

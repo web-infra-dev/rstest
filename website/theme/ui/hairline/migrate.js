@@ -532,7 +532,7 @@ function pose(P, i, m) {
 }
 
 const MEANS =
-  'Test files moved from the Jest bin to the Rstest bin one at a time, unchanged.';
+  'Test files moved from the Jest bin to the Rstest bin one at a time.';
 
 function mount({ stage, svg, read }, value) {
   const bag = disposer();
