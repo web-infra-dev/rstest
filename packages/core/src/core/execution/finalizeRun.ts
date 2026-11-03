@@ -30,13 +30,12 @@ const reportNoTestFiles = ({ context }: { context: InternalContext }): void => {
       defaultMessage: `No test files found, exiting with code ${code}.`,
     });
 
-    if (code === 0) {
-      logger.log(color.yellow(message));
-    } else {
-      logger.error(color.red(message));
-    }
-
     context.exitCode.raise(code);
+    if (code === 0) {
+      logger.log(message);
+      return;
+    }
+    logger.error(color.red(message));
   }
 
   if (context.relatedFilters?.length) {
