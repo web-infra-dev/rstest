@@ -197,6 +197,15 @@ describe('test projects', () => {
     expect(
       logs.find((log) => log.includes('No test files found')),
     ).toBeTruthy();
+    for (const detail of [
+      'project:',
+      'root:',
+      'include:',
+      'exclude:',
+      'filter:',
+    ]) {
+      expect(cli.log).not.toContain(detail);
+    }
   });
 
   it('should print project summary correctly in list mode', async () => {
