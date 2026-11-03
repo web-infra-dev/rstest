@@ -61,13 +61,73 @@ describe('readResultsCache', () => {
   });
 
   it('reads back a valid cache', async () => {
-    await seed({ version: 1, files: { a: { duration: 5, at: Date.now() } } });
+    await seed({ version: 2, files: { a: { duration: 5, at: Date.now() } } });
     const cache = await readResultsCache(root);
     expect(cache?.files.a?.duration).toBe(5);
+  });
+
+  it('migrates v1 without losing failure history or refreshing timestamps', async () => {
+    const legacy = {
+      version: 1,
+      files: {
+        failed: { duration: 5, failed: true, at: 123 },
+        passed: { duration: 0, failed: false, at: 456 },
+        crashed: { failed: true, at: 789 },
+      },
+    };
+    await seed(legacy);
+    expect(await readResultsCache(root)).toEqual({
+      version: 2,
+      files: {
+        failed: { failed: true, at: 123 },
+        passed: { failed: false, at: 456 },
+        crashed: { failed: true, at: 789 },
+      },
+    });
+    expect(JSON.parse(await readFile(join(root, CACHE_REL), 'utf-8'))).toEqual(
+      legacy,
+    );
   });
 });
 
 describe('writeResultsCache', () => {
+  it('persists migrated v1 entries and starts timing estimates from the new sample', async () => {
+    const at = Date.now() - 1000;
+    const staleAt = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    const key = (name: string) =>
+      sequenceKey('default', root, join(root, name));
+    await seed({
+      version: 1,
+      files: {
+        [key('rerun.test.ts')]: { duration: 1000, failed: true, at },
+        [key('failed.test.ts')]: { duration: 200, failed: true, at },
+        [key('passed.test.ts')]: { duration: 100, failed: false, at },
+        [key('stale.test.ts')]: { duration: 500, failed: true, at: staleAt },
+      },
+    });
+    await writeResultsCache(root, [
+      { ...fileResult('rerun.test.ts', 'pass', 20), loadDuration: 80 },
+    ]);
+    const persisted: ResultsCacheData = JSON.parse(
+      await readFile(join(root, CACHE_REL), 'utf-8'),
+    );
+    expect(persisted.version).toBe(2);
+    expect(persisted.files[key('rerun.test.ts')]).toEqual({
+      duration: 100,
+      failed: false,
+      at: expect.any(Number),
+    });
+    expect(persisted.files[key('failed.test.ts')]).toEqual({
+      failed: true,
+      at,
+    });
+    expect(persisted.files[key('passed.test.ts')]).toEqual({
+      failed: false,
+      at,
+    });
+    expect(persisted.files[key('stale.test.ts')]).toBeUndefined();
+  });
+
   it('records duration and failure state for pass/fail files', async () => {
     await writeResultsCache(root, [
       fileResult('a.test.ts', 'pass', 100),
@@ -78,6 +138,36 @@ describe('writeResultsCache', () => {
     const keyB = sequenceKey('default', root, join(root, 'b.test.ts'));
     expect(cache?.files[keyA]).toMatchObject({ duration: 100, failed: false });
     expect(cache?.files[keyB]).toMatchObject({ duration: 200, failed: true });
+  });
+
+  it('smooths the sum of loading and execution time', async () => {
+    await writeResultsCache(root, [
+      {
+        ...fileResult('a.test.ts', 'pass', 10),
+        loadDuration: 90,
+      },
+    ]);
+    await writeResultsCache(root, [
+      {
+        ...fileResult('a.test.ts', 'pass', 20),
+        loadDuration: 180,
+      },
+    ]);
+    const cache = await readResultsCache(root);
+    const key = sequenceKey('default', root, join(root, 'a.test.ts'));
+    expect(cache?.files[key]?.duration).toBe(170);
+  });
+
+  it('records loading failures even without execution time', async () => {
+    await writeResultsCache(root, [
+      {
+        ...fileResult('a.test.ts', 'fail', undefined),
+        loadDuration: 120,
+      },
+    ]);
+    const cache = await readResultsCache(root);
+    const key = sequenceKey('default', root, join(root, 'a.test.ts'));
+    expect(cache?.files[key]).toMatchObject({ duration: 120, failed: true });
   });
 
   it('smooths duration via EWMA on subsequent runs', async () => {
@@ -174,7 +264,7 @@ describe('writeResultsCache', () => {
     const stale = Date.now() - 31 * 24 * 60 * 60 * 1000;
     const staleKey = sequenceKey('default', root, join(root, 'old.test.ts'));
     await seed({
-      version: 1,
+      version: 2,
       files: { [staleKey]: { duration: 100, at: stale } },
     });
     await writeResultsCache(root, [fileResult('fresh.test.ts', 'pass', 10)]);

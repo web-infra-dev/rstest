@@ -22,7 +22,12 @@ import {
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { isVmPoolType } from '../../utils/workers';
-import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import {
+  formatTestError,
+  getRealNow,
+  getRealTimers,
+  setRealTimers,
+} from '../util';
 import { clearFileContext } from '../fileContext';
 import { withPackageExports } from '../api/packageExports';
 import { disposeRstestUtilities } from '../api/utilities';
@@ -919,6 +924,7 @@ export const runInPool = async (
     results: [],
     errors: [],
   };
+  let loadDuration: number | undefined;
   let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
 
   try {
@@ -974,28 +980,30 @@ export const runInPool = async (
       });
     }
 
-    tracker.transition('load');
-    const { assetFiles, sourceMaps: sourceMapsFromAssets } =
-      await loadTaskAssets(options, assets, rpc);
-    sourceMaps = sourceMapsFromAssets;
-
-    rpc.onTestFileStart?.({
-      testId: getFileTaskId(testPath),
-      testPath,
-      project,
-      tests: [],
-    });
-
-    // Keep file-level context only while evaluating top-level module code.
-    // Once the runner starts, suite/case tasks should own subsequent logs so
-    // passed suite buffers are not replayed by the final file-level flush.
-    taskContext.setFallback({
-      taskId: getFileTaskId(testPath),
-      taskType: 'file',
-      testPath,
-    });
-
+    const loadStart = getRealNow();
+    tracker.transition('load', loadStart);
+    let assetFiles: AssetFiles;
     try {
+      const loadedAssets = await loadTaskAssets(options, assets, rpc);
+      assetFiles = loadedAssets.assetFiles;
+      sourceMaps = loadedAssets.sourceMaps;
+
+      rpc.onTestFileStart?.({
+        testId: getFileTaskId(testPath),
+        testPath,
+        project,
+        tests: [],
+      });
+
+      // Keep file-level context only while evaluating top-level module code.
+      // Once the runner starts, suite/case tasks should own subsequent logs so
+      // passed suite buffers are not replayed by the final file-level flush.
+      taskContext.setFallback({
+        taskId: getFileTaskId(testPath),
+        taskType: 'file',
+        testPath,
+      });
+
       await loadFiles({
         rstestContext,
         distPath,
@@ -1011,7 +1019,16 @@ export const runInPool = async (
         runtimeGlobal: rstestContext.global,
         tracker,
       });
+      taskContext.setFallback(undefined);
+      // Snapshot setup awaits host RPC and must finish before describe callbacks
+      // can replace process.nextTick with fake timers in child processes.
+      await runner.prepareTests(testPath);
     } finally {
+      const loadEnd = getRealNow();
+      loadDuration = loadEnd - loadStart;
+      // Keep the detailed phases inside the exact reported loading interval.
+      tracker.end(loadEnd);
+      tracker.recordFileLoad(loadStart, loadDuration);
       taskContext.setFallback(undefined);
     }
 
@@ -1114,6 +1131,9 @@ export const runInPool = async (
         ),
       onFileCleanupStart: async (result) => {
         fileCleanupResult = result;
+        if (result && loadDuration !== undefined) {
+          result.loadDuration = loadDuration;
+        }
         await lifecycleHooks.onFileCleanupStart?.(result);
       },
       onFileCleanupEnd: async () => {
@@ -1173,6 +1193,9 @@ export const runInPool = async (
     };
     return runResult;
   } finally {
+    if (loadDuration !== undefined) {
+      runResult.loadDuration = loadDuration;
+    }
     lifecycleHooks.onTaskErrorHandlingChange?.(false);
     tracker.transition('teardown');
     taskContext?.setFallback(undefined);

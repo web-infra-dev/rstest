@@ -147,10 +147,12 @@ The flag is opt-in. Each run records per-suite and per-case slices annotated wit
 - `envSetup`: install the test environment. Close to zero for `node`, and when a non-isolated worker is already pinned to the environment.
 - `load`: receive the built assets of the test entry. The host-side cost of producing them is reported as a host span instead.
 - `setupFiles`: evaluate the configured setup files.
-- `collect`: evaluate the top-level code of the test file. `describe` bodies are deferred and run in `tests`.
-- `tests`: build the suite and case tree, then run the cases and their hooks.
+- `collect`: evaluate the test module and build the suite and case tree, including deferred and async `describe` callbacks.
+- `tests`: run the cases and their hooks.
 - `coverage`: collect coverage data from the provider. Absent when coverage is disabled, or when the file bailed or threw before this point.
 - `teardown`: clean up the coverage provider and the worker state, plus the test environment when `isolate` is enabled.
+
+Node pools also emit a `file:load` slice (`cat: "file"`) whose duration exactly matches `TestFileResult.loadDuration`, including when loading fails. It covers worker-side asset loading, setup files, test module evaluation, and suite collection. This overlaps the detailed loading phases and is excluded from phase and host totals to avoid double-counting. Trace slice durations use microseconds; `loadDuration` uses milliseconds.
 
 Browser Mode records only `prepare` and `tests`, measured on the host from the messages the page sends.
 

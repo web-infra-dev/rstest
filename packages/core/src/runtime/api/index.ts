@@ -63,6 +63,7 @@ export const createRstestRuntime = async (
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
+    prepareTests: (testPath: string) => Promise<TestInfo[]>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
     getRootSuiteListeners: () => RootSuiteListeners;

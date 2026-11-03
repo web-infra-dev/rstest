@@ -67,6 +67,8 @@ it('collects host spans and slowest cases separately from phases', () => {
     slice('coverage:generate-reports', 'coverage', 300, '<host>'),
     // Suite slices are intermediate worker nodes — excluded from every section.
     slice('describe block', 'suite', 999, 'src/a.test.ts'),
+    // File loading overlaps the detailed phases; it must not be summed again.
+    slice('file:load', 'file', 100, 'src/a.test.ts'),
     slice('load', 'phase', 100, 'src/a.test.ts'),
     slice('fast case', 'case', 5, 'src/a.test.ts'),
     slice('slow case', 'case', 80, 'src/a.test.ts'),
