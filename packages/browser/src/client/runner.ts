@@ -28,6 +28,7 @@ import {
   RSTEST_ENV_SYMBOL_KEY,
   RSTEST_IMPORT_META_GLOBAL_KEY,
   setRealTimers,
+  runSetupFiles,
   unwrapRegex,
 } from '@rstest/core/internal/browser-runtime';
 import { normalize } from 'pathe';
@@ -578,11 +579,12 @@ const run = async () => {
     return;
   }
 
-  const loadSetupFiles = async (): Promise<void> => {
-    for (const loadSetup of currentSetupLoaders) {
-      await loadSetup();
-    }
-  };
+  const loadSetupFiles = (): Promise<void> =>
+    runSetupFiles(
+      currentSetupLoaders,
+      (load) => load(),
+      runtimeConfig.sequence.setupFiles,
+    );
 
   // 1. Determine which test files to run
   let testKeysToRun: string[];

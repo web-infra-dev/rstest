@@ -1,7 +1,15 @@
 import { describe, expect, it } from '@rstest/core';
+import { state } from '../../../../setup/fixtures/basic/sequence-state';
+import { value } from '../../../../setup/fixtures/basic/sequence-target';
+
+if (process.env.SETUP_FAILURE) console.log('TEST_COLLECTED_AFTER_FAILED_SETUP');
+expect(state.firstFinished).toBe(true);
+expect(state.secondFinished).toBe(true);
 
 describe('setup files', () => {
   it('should have setup file executed', () => {
+    expect(state.overlap).toBe(process.env.SETUP_SEQUENCE === 'parallel');
+    expect(value).toBe('mocked');
     expect((globalThis as Record<string, unknown>).__SETUP_EXECUTED__).toBe(
       true,
     );

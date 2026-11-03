@@ -1,19 +1,19 @@
 ---
-description: Configure the execution order of lifecycle hooks.
+description: Configure the execution order of lifecycle hooks and setup files.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # sequence
 
-<ApiMeta addedVersion="0.12.6" />
+- **Type:** `{ hooks?: 'stack' | 'list' | 'parallel'; setupFiles?: 'list' | 'parallel' }`
+- **Default:** `{ hooks: 'stack', setupFiles: 'list' }`
 
-- **Type:** `{ hooks?: 'stack' | 'list' | 'parallel' }`
-- **Default:** `{ hooks: 'stack' }`
-
-Configure the execution order of Rstest lifecycle hooks.
+Configure the execution order of Rstest lifecycle hooks and setup files.
 
 ## sequence.hooks
+
+<ApiMeta addedVersion="0.12.6" />
 
 - **Type:** `'stack' | 'list' | 'parallel'`
 - **Default:** `'stack'`
@@ -42,6 +42,33 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   sequence: {
     hooks: 'parallel',
+  },
+});
+```
+
+## sequence.setupFiles
+
+<ApiMeta addedVersion="0.12.6" />
+
+- **Type:** `'list' | 'parallel'`
+- **Default:** `'list'`
+
+Controls how [`setupFiles`](/config/test/setup-files) run before each test file in Node Mode and Browser Mode:
+
+- `'list'`: run setup files in the order listed, waiting for each file's asynchronous initialization before starting the next.
+- `'parallel'`: start all setup files and wait for their asynchronous initialization to finish before loading the test file. This option is not limited by `maxConcurrency`.
+
+Use `'parallel'` only when setup files do not depend on each other's side effects. For example, a setup that installs a polyfill must finish before another setup imports a library that needs it; keep `'list'` for that case. Setup files still share the test file's environment and module cache.
+
+If a parallel setup fails, Rstest waits for the other started setups to settle, reports the first failed setup in configuration order, and does not load the test file. This option does not affect `globalSetup`. Hooks registered by setup files follow `sequence.hooks`; their registration order can change when setup files run in parallel.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  setupFiles: ['./setup-matchers.ts', './setup-service.ts'],
+  sequence: {
+    setupFiles: 'parallel',
   },
 });
 ```

@@ -265,7 +265,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
-  sequence: { hooks: 'stack' },
+  sequence: { hooks: 'stack', setupFiles: 'list' },
   teardownTimeout: 10_000,
   testEnvironment: {
     name: 'node',

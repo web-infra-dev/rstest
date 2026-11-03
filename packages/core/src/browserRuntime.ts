@@ -22,6 +22,7 @@ export * from './runtime/api/public';
 export { formatTestError, getRealTimers, setRealTimers } from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
+export { runSetupFiles } from './runtime/runner/setup';
 export type { TaskContext } from './runtime/worker/taskContext';
 export type { FileCleanupHooks } from './runtime/runner';
 // Types for browser runtime
