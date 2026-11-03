@@ -110,7 +110,7 @@ describe('writeResultsCache', () => {
       },
     });
     await writeResultsCache(root, [
-      { ...fileResult('rerun.test.ts', 'pass', 20), loadDuration: 80 },
+      { ...fileResult('rerun.test.ts', 'passed', 20), loadDuration: 80 },
     ]);
     const persisted: ResultsCacheData = JSON.parse(
       await readFile(join(root, CACHE_REL), 'utf-8'),
@@ -147,13 +147,13 @@ describe('writeResultsCache', () => {
   it('smooths the sum of loading and execution time', async () => {
     await writeResultsCache(root, [
       {
-        ...fileResult('a.test.ts', 'pass', 10),
+        ...fileResult('a.test.ts', 'passed', 10),
         loadDuration: 90,
       },
     ]);
     await writeResultsCache(root, [
       {
-        ...fileResult('a.test.ts', 'pass', 20),
+        ...fileResult('a.test.ts', 'passed', 20),
         loadDuration: 180,
       },
     ]);
@@ -165,7 +165,7 @@ describe('writeResultsCache', () => {
   it('records loading failures even without execution time', async () => {
     await writeResultsCache(root, [
       {
-        ...fileResult('a.test.ts', 'fail', undefined),
+        ...fileResult('a.test.ts', 'failed', undefined),
         loadDuration: 120,
       },
     ]);
