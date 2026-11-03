@@ -38,31 +38,36 @@ export function Button({
   );
 }
 
-export function Section({
-  index,
-  description,
+export function Panel({
+  className = '',
   children,
 }: {
-  index?: string;
-  description?: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="mx-auto w-full max-w-6xl px-6 py-10 lg:py-14">
-      {(index || description) && (
-        <div className="mb-5 flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
-          {index && (
-            <h2 className="font-mono text-xs tracking-widest text-brand">
-              {index}
-            </h2>
-          )}
-          {description && (
-            <p className="text-[15px] text-fg-muted">{description}</p>
-          )}
-        </div>
-      )}
-      {children}
-    </section>
+    <div className={`mx-auto w-full max-w-6xl px-6 ${className}`}>
+      <div className="flex flex-col gap-px border border-line bg-line">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function PanelHeader({
+  index,
+  description,
+}: {
+  index: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col gap-y-1 bg-surface px-6 py-3 sm:flex-row sm:items-baseline sm:gap-x-2.5 sm:px-8 lg:px-10">
+      <h2 className="w-fit font-mono text-xs tracking-widest text-brand sm:-ml-[27px] sm:w-[17px] sm:shrink-0 sm:text-right">
+        {index}
+      </h2>
+      <p className="text-[14px] text-fg-muted">{description}</p>
+    </div>
   );
 }
 
@@ -74,26 +79,7 @@ export function Grid({
   columns: string;
   children: ReactNode;
 }) {
-  return (
-    <div className={`grid gap-px border border-line bg-line ${columns}`}>
-      {children}
-    </div>
-  );
-}
-
-export function Cell({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col bg-surface p-6">
-      <h3 className="text-[15px] font-semibold text-fg">{title}</h3>
-      <p className="mt-1.5 text-[13px]/[1.6] text-fg-muted">{description}</p>
-    </div>
-  );
+  return <div className={`grid gap-px bg-line ${columns}`}>{children}</div>;
 }
 
 /** The copy half of a feature block: title, body, optional chips, and a docs link. */
@@ -190,7 +176,7 @@ export function InstallCommand({
               type="button"
               aria-pressed={name === tab}
               onClick={() => select(name)}
-              className={`bg-transparent! px-2.5 py-2.5 transition-colors ${
+              className={`cursor-pointer bg-transparent! px-2.5 py-2.5 transition-colors ${
                 name === tab ? 'text-fg' : 'text-fg-subtle hover:text-fg-muted'
               }`}
             >
@@ -210,7 +196,7 @@ export function InstallCommand({
                 ? 'Copied'
                 : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
             }
-            className={`ml-auto flex items-center gap-1.5 rounded-md bg-transparent! px-2 py-1 transition-colors hover:bg-surface-mute! ${
+            className={`ml-auto flex cursor-pointer items-center gap-1.5 rounded-md bg-transparent! px-2 py-1 transition-colors hover:bg-surface-mute! ${
               copied ? 'text-brand' : 'text-fg-subtle hover:text-fg'
             }`}
           >

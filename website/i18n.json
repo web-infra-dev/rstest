@@ -5,15 +5,15 @@
   },
   "quickStart": {
     "en": "Quick Start",
-    "zh": "快速上手"
+    "zh": "快速开始"
   },
   "subtitle": {
     "en": "Rspack-based Testing Framework",
     "zh": "由 Rspack 驱动的测试框架"
   },
   "slogan": {
-    "en": "Bring build capability into testing",
-    "zh": "让构建能力延伸到测试"
+    "en": "Fast, build-integrated testing for JavaScript and TypeScript",
+    "zh": "为 JavaScript 和 TypeScript 项目带来快速、与构建深度集成的测试体验"
   },
   "reuseBuildConfig": {
     "en": "Reuse your build setup",
@@ -28,39 +28,39 @@
     "zh": "沿用构建链路测试"
   },
   "productionAccurateTestingDesc": {
-    "en": "A Bundle-based test execution model that reuses Rspack's dependency graph analysis and build optimizations.",
-    "zh": "采用基于 Bundle 的测试执行模型，复用 Rspack 的依赖图分析与构建优化。"
+    "en": "Powered by Rspack and Rsbuild for fast test compilation and a rich plugin ecosystem",
+    "zh": "基于 Rspack 和 Rsbuild，为测试带来极快的编译速度和丰富的插件生态"
   },
   "blazingFast": {
-    "en": "Fast by design",
-    "zh": "高效执行"
+    "en": "High performance",
+    "zh": "高性能"
   },
   "blazingFastDesc": {
-    "en": "Rspack's build optimizations cut redundant module transformation and execution work in tests.",
-    "zh": "利用 Rspack 的构建优化，减少测试中重复的模块转换与执行开销。"
+    "en": "Rspack's build optimizations reduce redundant module transforms and executions, even in large projects.",
+    "zh": "借助 Rspack 的构建优化，减少重复的模块转换与执行，大型项目同样快速。"
   },
   "realBrowserTesting": {
     "en": "Real browser testing",
     "zh": "真实浏览器测试"
   },
   "realBrowserTestingDesc": {
-    "en": "Run tests in Chromium, Firefox, or WebKit through Browser Mode when a simulated DOM isn't enough.",
-    "zh": "通过 Browser Mode 在 Chromium、Firefox、WebKit 中运行测试，验证模拟 DOM 环境难以覆盖的行为。"
+    "en": "Run tests in Chromium, Firefox, and WebKit via Playwright, covering what a simulated DOM can't",
+    "zh": "基于 Playwright 在 Chromium、Firefox 和 WebKit 中运行测试，覆盖模拟 DOM 难以验证的场景"
   },
   "modernByDefault": {
-    "en": "Modern by default",
-    "zh": "现代能力默认可用"
+    "en": "Out of the box",
+    "zh": "开箱即用"
   },
   "modernByDefaultDesc": {
-    "en": "TypeScript, ESM, CJS, CSS Modules, and modern JavaScript work out of the box.",
-    "zh": "TypeScript、ESM、CJS、CSS Modules 和现代 JavaScript 开箱即用。"
+    "en": "Built-in support for TypeScript, ESM, CJS, and CSS Modules, with no extra setup.",
+    "zh": "内置 TypeScript、ESM、CJS 和 CSS Modules 支持，无需额外配置。"
   },
   "testingReady": {
-    "en": "Testing essentials included",
-    "zh": "核心测试能力内置"
+    "en": "Fully featured",
+    "zh": "功能完备"
   },
   "testingReadyDesc": {
-    "en": "Assertions, snapshots, mocks, coverage, and lifecycle hooks are ready when you start.",
-    "zh": "断言、快照、Mock、覆盖率和生命周期钩子等能力开箱即用。"
+    "en": "Assertions, snapshots, mocks, and lifecycle hooks built in, with coverage through Istanbul or V8.",
+    "zh": "内置断言、快照、Mock 和生命周期钩子，支持 Istanbul 与 V8 覆盖率。"
   }
 }

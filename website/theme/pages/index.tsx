@@ -8,11 +8,11 @@ import { PipelineStackFigure } from '../ui/PipelineStackFigure';
 import { PlaywrightBeltFigure } from '../ui/PlaywrightBeltFigure';
 import {
   Button,
-  Cell,
   FeatureText,
   InstallCommand,
   Grid,
-  Section,
+  Panel,
+  PanelHeader,
 } from '../ui/primitives';
 
 type RstackTool = {
@@ -30,8 +30,8 @@ const RSTACK_TOOLS: RstackTool[] = [
   {
     name: 'Rspack',
     slug: 'rspack',
-    en: 'A high performance JavaScript bundler written in Rust, with webpack-compatible API',
-    zh: '基于 Rust 编写的高性能 JavaScript 打包工具，具备与 webpack 兼容的 API',
+    en: 'A fast Rust-based bundler for the web, with a modernized webpack API',
+    zh: '基于 Rust 编写的高性能 Web 打包工具，提供现代化的 webpack API',
     logo: 'https://assets.rspack.rs/rspack/rspack-logo.svg',
     url: 'https://rspack.rs',
     domain: 'rspack.rs',
@@ -39,8 +39,8 @@ const RSTACK_TOOLS: RstackTool[] = [
   {
     name: 'Rsbuild',
     slug: 'rsbuild',
-    en: 'An Rspack-based build tool that provides out-of-the-box setup',
-    zh: '基于 Rspack 的构建工具，包含开箱即用的预设配置，带来愉悦的开发体验',
+    en: 'A fast, extensible build tool for modern web development, powered by Rspack',
+    zh: '基于 Rspack 的现代 Web 构建工具，快速且易于扩展',
     logo: 'https://assets.rspack.rs/rsbuild/rsbuild-logo.svg',
     url: 'https://rsbuild.rs',
     domain: 'rsbuild.rs',
@@ -48,7 +48,7 @@ const RSTACK_TOOLS: RstackTool[] = [
   {
     name: 'Rslib',
     slug: 'rslib',
-    en: 'A Rsbuild-based library development tool for creating libraries and UI components',
+    en: 'An Rsbuild-based library development tool for creating libraries and UI components',
     zh: '基于 Rsbuild 的库开发工具，以简单的方式创建 JavaScript 库和 UI 组件库',
     logo: 'https://assets.rspack.rs/rslib/rslib-logo.svg',
     url: 'https://rslib.rs',
@@ -67,7 +67,7 @@ const RSTACK_TOOLS: RstackTool[] = [
     name: 'Rsdoctor',
     slug: 'rsdoctor',
     en: 'An AI-friendly build analyzer that makes the build process transparent',
-    zh: 'AI 友好的构建分析工具，让构建过程变得透明',
+    zh: 'AI 友好的构建分析工具，使构建流程变得透明、可预测和可优化',
     logo: 'https://assets.rspack.rs/rsdoctor/rsdoctor-logo-480x480.png',
     url: 'https://rsdoctor.rs',
     domain: 'rsdoctor.rs',
@@ -76,7 +76,7 @@ const RSTACK_TOOLS: RstackTool[] = [
     name: 'Rstest',
     slug: 'rstest',
     en: 'A JavaScript testing framework powered by Rspack, with a Jest-compatible API',
-    zh: '由 Rspack 驱动的 JavaScript 测试框架，兼容 Jest API',
+    zh: '基于 Rspack 的 JavaScript 测试框架，兼容 Jest API',
     logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
     url: 'https://rstest.rs',
     domain: 'rstest.rs',
@@ -85,7 +85,7 @@ const RSTACK_TOOLS: RstackTool[] = [
     name: 'Rslint',
     slug: 'rslint',
     en: 'A high-performance, ESLint-compatible linter for JavaScript and TypeScript',
-    zh: '高性能、兼容 ESLint 的 JavaScript 和 TypeScript 代码检查工具',
+    zh: '高性能 JavaScript 和 TypeScript 代码检查工具，兼容 ESLint 生态',
     logo: 'https://assets.rspack.rs/rslint/rslint-logo.svg',
     url: 'https://rslint.rs',
     domain: 'rslint.rs',
@@ -102,8 +102,8 @@ const RSTACK_TOOLS: RstackTool[] = [
 ];
 
 const ADAPTER_DESC = {
-  en: 'Config adapters reuse the existing build config from Rsbuild, Rslib, Rspack, Lynx, or Modern.js projects.',
-  zh: '配置适配器可以直接复用 Rsbuild、Rslib、Rspack、Lynx 和 Modern.js 项目中已有的构建配置。',
+  en: 'Reuse build config from Rsbuild, Rslib, Rspack, Lynx, and Modern.js projects through adapters',
+  zh: '通过适配器复用 Rsbuild、Rslib、Rspack、Lynx 和 Modern.js 项目的构建配置，无缝接入现有项目',
 };
 
 // Each feature block reads like the rstack-cli homepage: a short title, one
@@ -112,21 +112,21 @@ type Feature = { title: string; body: string; points: string[] };
 
 const PIPELINE: Record<'en' | 'zh', Feature> = {
   en: {
-    title: 'Test through the build pipeline',
-    body: "Compile and run tests with Rspack and Rsbuild, without changing your app's build system",
+    title: 'Rspack speed, Rsbuild ecosystem',
+    body: 'Tests are compiled by Rspack and share the config and plugin system of Rsbuild, ready out of the box and easy to extend',
     points: [
-      'Use Rsbuild plugins and Rspack loaders in tests',
-      'Tests run through the build pipeline, closer to production output',
-      'Skip unused dependency branches when modules are side-effect free, then tree-shake their code',
+      'Utilizes Rust-based Rspack and SWC for fast test compilation',
+      'Compatible with Rsbuild plugins, including official ones such as React and Sass',
+      'Supports Rsbuild and Rspack config options, configured the same way',
     ],
   },
   zh: {
-    title: '沿用构建链路测试',
-    body: '使用 Rspack 和 Rsbuild 编译并运行测试，无需改动应用的构建系统',
+    title: 'Rspack 的速度，Rsbuild 的生态',
+    body: '测试由 Rspack 编译，并沿用 Rsbuild 的配置与插件体系，开箱即用，易于扩展',
     points: [
-      '在测试中使用 Rsbuild 插件和 Rspack loader',
-      '测试通过构建链路运行，更贴近生产产物',
-      '无副作用时跳过未使用的依赖分支，tree-shaking 移除产物中的无用代码',
+      '利用基于 Rust 的 Rspack 和 SWC，测试编译更快',
+      '兼容 Rsbuild 插件，可直接使用 React、Sass 等官方插件',
+      '支持 Rsbuild 与 Rspack 配置项，配置方式一致',
     ],
   },
 };
@@ -134,95 +134,95 @@ const PIPELINE: Record<'en' | 'zh', Feature> = {
 const BROWSER: Record<'en' | 'zh', Feature> = {
   en: {
     title: 'Real browsers, real DOM',
-    body: 'Test code runs in real browsers launched by Playwright, so rendering, interaction, and page results are checked for real',
+    body: 'Tests run in real browsers launched by Playwright, with the same rendering, interactions, and browser APIs as production',
     points: [
-      'Test real layout, computed styles, Canvas, and Web Workers',
-      'Query the page with a Playwright-style Locator API',
+      'Covers real layout, computed styles, Canvas, and Web Workers',
+      'Query elements with the Playwright-style Locator API',
       'Assert with the auto-waiting expect.element',
     ],
   },
   zh: {
     title: '真实浏览器，真实 DOM',
-    body: '测试代码在 Playwright 启动的真实浏览器中执行，渲染、交互和页面结果都来自真实环境',
+    body: '测试运行在 Playwright 启动的真实浏览器中，渲染、交互与浏览器 API 均与生产环境一致',
     points: [
-      '覆盖真实的布局、computed style、Canvas 和 Web Worker',
-      '使用 Playwright 风格的 Locator API 查询页面',
-      '使用自动等待的 expect.element 断言',
+      '覆盖真实布局、computed style、Canvas 与 Web Worker',
+      '通过 Playwright 风格的 Locator API 查询元素',
+      '使用自动等待的 expect.element 进行断言',
     ],
   },
 };
 
 const ADAPTER: Record<'en' | 'zh', Feature> = {
   en: {
-    title: 'Reuse your existing build config',
-    body: 'The adapter extracts and converts the config the test build needs, while Rstest still owns the test entry and runtime',
+    title: 'Reuse your build config',
+    body: 'Adapters extract and convert the config tests need, while Rstest keeps control of test entries and runtime',
     points: [
-      'Reuse plugins, path aliases, and SWC options from your build config',
+      'Reuse plugins, aliases, and SWC options from your build config',
       'Keep tests consistent with your project config',
-      'No duplicate config to sync or maintain',
+      'No duplicate config to maintain',
     ],
   },
   zh: {
-    title: '复用已有的构建配置',
-    body: '适配器按需提取并转换测试编译所需的配置项，测试入口和运行时仍由 Rstest 管理',
+    title: '复用现有构建配置',
+    body: '适配器按需提取并转换测试所需的配置，测试入口与运行时仍由 Rstest 管理',
     points: [
-      '复用构建配置中的插件、路径别名和 SWC 等编译选项',
-      '测试与项目配置保持一致',
-      '无需为测试重复配置，减少后续维护负担',
+      '复用构建配置中的插件、alias 与 SWC 选项',
+      '测试与项目配置始终保持一致',
+      '无需重复维护测试配置',
     ],
   },
 };
 
 const JEST: Record<'en' | 'zh', Feature> = {
   en: {
-    title: 'Jest-compatible test APIs',
-    body: 'Assertions, mocks, snapshots, lifecycle hooks, test projects, and coverage follow the Jest and Vitest conventions you already know',
+    title: 'Jest-compatible APIs',
+    body: 'Assertions, mocks, snapshots, lifecycle hooks, projects, and coverage follow Jest and Vitest conventions',
     points: [
       'Familiar describe, test, expect, and snapshot APIs',
-      'Enable globals and run suites that use global APIs',
-      'Add Browser Mode and adapters when you need them',
+      'Enable globals to use test APIs without imports',
+      'Adopt Browser Mode and adapters as needed',
     ],
   },
   zh: {
-    title: '兼容 Jest 的测试 API',
-    body: '断言、Mock、快照、生命周期钩子、多项目测试和代码覆盖率沿用 Jest、Vitest 的既有习惯',
+    title: '兼容 Jest API',
+    body: '断言、Mock、快照、生命周期钩子、多项目与覆盖率，沿用 Jest 与 Vitest 的使用习惯',
     points: [
-      '熟悉的 describe、test、expect 和 snapshot API',
-      '开启 globals，运行依赖全局 API 的用例',
-      '需要时再启用 Browser Mode 和适配器',
+      '熟悉的 describe、test、expect 与 snapshot API',
+      '开启 globals，无需 import 即可使用测试 API',
+      '按需启用 Browser Mode 与适配器',
     ],
   },
 };
 
 const PLAYWRIGHT: Record<'en' | 'zh', Feature> = {
   en: {
-    title: 'End-to-end, in the same runner',
-    body: "Use Playwright's browser automation inside Rstest to verify complete page and app flows",
+    title: 'End-to-end in the same runner',
+    body: 'Use Playwright browser automation in Rstest to verify complete page and app flows',
     points: [
       'Ready-to-use browser, context, page, and request fixtures',
-      'Playwright-style assertions on pages and locators',
-      'Share the runner, config, and reporting flow between unit and end-to-end tests',
+      'Playwright-style assertions for pages and locators',
+      'Unit and E2E tests share one runner, config, and reporting workflow',
     ],
   },
   zh: {
-    title: '端到端测试，同一个 runner',
-    body: '在 Rstest 中直接使用 Playwright 的浏览器自动化能力，验证完整的页面和应用流程',
+    title: '端到端测试，同一 runner',
+    body: '在 Rstest 中直接使用 Playwright 的浏览器自动化能力，验证完整的页面与应用流程',
     points: [
-      '开箱即用的 browser、context、page 和 request fixture',
-      'Playwright 风格的 page 与 locator 断言',
-      '单元测试与端到端测试共享 runner、配置体系和报告流程',
+      '开箱即用的 browser、context、page 与 request fixture',
+      '支持 Playwright 风格的 page 与 locator 断言',
+      '单元测试与 E2E 测试共享 runner、配置与报告流程',
     ],
   },
 };
 
 const JEST_DESC = {
-  en: 'A Jest- and Vitest-compatible API and CLI, with migration guides for both.',
-  zh: '兼容 Jest、Vitest 的 API 与 CLI，并提供两者的迁移指南。',
+  en: 'Compatible with Jest and Vitest APIs and CLI, with guides for a smooth migration',
+  zh: '兼容 Jest 与 Vitest 的 API 和 CLI，并提供迁移指南，平滑迁移现有项目',
 };
 
 const PLAYWRIGHT_DESC = {
-  en: 'Drive a local dev server, a build preview, or a deployed app with Playwright.',
-  zh: '用 Playwright 验证本地开发服务、构建预览服务或已部署的应用。',
+  en: 'Drive a local dev server, preview server, or deployed app with Playwright for end-to-end verification',
+  zh: '基于 Playwright 驱动本地开发服务、预览服务或线上应用，完成端到端验证',
 };
 
 const FOOTER_COLUMNS: Record<
@@ -313,14 +313,14 @@ const FOOTER_LICENSE_URL =
   'https://github.com/web-infra-dev/rstest/blob/main/LICENSE';
 
 const RSTACK_DESC = {
-  en: 'The fast, unified JavaScript toolchain for developers and agents.',
-  zh: '面向开发者与 Agent 的高性能、一体化 JavaScript 工具链。',
+  en: 'The fast, unified JavaScript toolchain for developers and agents',
+  zh: '高性能、一体化的 JavaScript 工具链，为开发者与 Agent 打造',
 };
 
 // The `subtitle` i18n entry split over two lines, around the accented "Rspack".
 const HERO_TITLE = {
   en: ['', '-based', 'Testing Framework'],
-  zh: ['由 ', ' 驱动的', '测试框架'],
+  zh: ['基于 ', ' 的', '测试框架'],
 };
 
 // A short form of the quick start guide's agent prompt; the linked guide holds the steps.
@@ -328,6 +328,54 @@ const AGENT_PROMPT =
   'Set up Rstest in this project: https://rstest.rs/guide/start/agent-install.md';
 
 const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
+
+const HIGHLIGHT_ICONS = {
+  blazingFast: (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="size-4"
+    >
+      <path d="M14 2 5 14h6l-1 8 9-12h-6l1-8Z" />
+    </svg>
+  ),
+  modernByDefault: (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="size-4"
+    >
+      <path d="m8 6-6 6 6 6" />
+      <path d="m16 6 6 6-6 6" />
+      <path d="m14 4-4 16" />
+    </svg>
+  ),
+  testingReady: (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="size-4"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12 2.5 2.5L16 9" />
+    </svg>
+  ),
+};
 
 const BODY = 'mt-3 text-[15px]/[1.7] text-fg-muted';
 
@@ -353,6 +401,23 @@ export function HomeLayout() {
   const t = useI18n<typeof import('i18n')>();
   const tUrl = useI18nUrl();
   const lang = useLang() === 'zh' ? 'zh' : 'en';
+  const highlights = [
+    {
+      key: 'blazingFast',
+      title: t('blazingFast'),
+      description: t('blazingFastDesc'),
+    },
+    {
+      key: 'modernByDefault',
+      title: t('modernByDefault'),
+      description: t('modernByDefaultDesc'),
+    },
+    {
+      key: 'testingReady',
+      title: t('testingReady'),
+      description: t('testingReadyDesc'),
+    },
+  ] as const;
 
   return (
     <main className="pb-6">
@@ -382,9 +447,35 @@ export function HomeLayout() {
         <div className="mt-6 flex w-full justify-center">
           <InstallCommand prompt={AGENT_PROMPT} args="add @rstest/core -D" />
         </div>
+        <div className="mt-12 w-full border border-line bg-line text-left lg:mt-16">
+          <div className="grid gap-px sm:grid-cols-3">
+            {highlights.map((item) => (
+              <div
+                key={item.title}
+                className="home-highlight bg-surface px-6 py-5 sm:px-8 sm:py-6 lg:px-10 lg:py-8"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="home-highlight__icon flex size-8 shrink-0 items-center justify-center rounded-lg border border-line text-brand">
+                    {HIGHLIGHT_ICONS[item.key]}
+                  </div>
+                  <h2 className="text-[16px] font-semibold text-fg">
+                    {item.title}
+                  </h2>
+                </div>
+                <p className="mt-3 text-[14px]/[1.6] text-fg-muted">
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      <Section index="01" description={t('productionAccurateTestingDesc')}>
+      <Panel>
+        <PanelHeader
+          index="01"
+          description={t('productionAccurateTestingDesc')}
+        />
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={PIPELINE[lang].title}
@@ -396,9 +487,8 @@ export function HomeLayout() {
           </FeatureText>
           <PipelineStackFigure />
         </Grid>
-      </Section>
 
-      <Section index="02" description={t('realBrowserTestingDesc')}>
+        <PanelHeader index="02" description={t('realBrowserTestingDesc')} />
         {/* Zigzag: this showcase runs animation-left / text-right on desktop.
             DOM keeps text first so mobile still reads copy before the visual. */}
         <Grid columns="lg:grid-cols-2">
@@ -413,9 +503,8 @@ export function HomeLayout() {
           </FeatureText>
           <BrowserStackFigure className="lg:order-1" />
         </Grid>
-      </Section>
 
-      <Section index="03" description={ADAPTER_DESC[lang]}>
+        <PanelHeader index="03" description={ADAPTER_DESC[lang]} />
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={ADAPTER[lang].title}
@@ -427,9 +516,8 @@ export function HomeLayout() {
           </FeatureText>
           <AdaptersPatchFigure />
         </Grid>
-      </Section>
 
-      <Section index="04" description={JEST_DESC[lang]}>
+        <PanelHeader index="04" description={JEST_DESC[lang]} />
         {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
         <Grid columns="lg:grid-cols-2">
           <FeatureText
@@ -443,9 +531,8 @@ export function HomeLayout() {
           </FeatureText>
           <JestMigrateFigure className="lg:order-1" />
         </Grid>
-      </Section>
 
-      <Section index="05" description={PLAYWRIGHT_DESC[lang]}>
+        <PanelHeader index="05" description={PLAYWRIGHT_DESC[lang]} />
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={PLAYWRIGHT[lang].title}
@@ -457,21 +544,11 @@ export function HomeLayout() {
           </FeatureText>
           <PlaywrightBeltFigure />
         </Grid>
-      </Section>
+      </Panel>
 
-      <Section index="06">
-        <Grid columns="sm:grid-cols-3">
-          <Cell title={t('blazingFast')} description={t('blazingFastDesc')} />
-          <Cell
-            title={t('modernByDefault')}
-            description={t('modernByDefaultDesc')}
-          />
-          <Cell title={t('testingReady')} description={t('testingReadyDesc')} />
-        </Grid>
-      </Section>
-
-      <Section index="07" description={RSTACK_DESC[lang]}>
-        <Grid columns="sm:grid-cols-2">
+      <Panel className="mt-16 lg:mt-24">
+        <PanelHeader index="06" description={RSTACK_DESC[lang]} />
+        <Grid columns="grid-cols-2">
           {RSTACK_TOOLS.map((tool) => (
             <a
               key={tool.name}
@@ -479,35 +556,35 @@ export function HomeLayout() {
               target="_blank"
               rel="noreferrer"
               data-tool={tool.slug}
-              className="rstack-tool group relative grid min-h-[132px] grid-cols-[80px_minmax(0,1fr)] gap-x-5 bg-surface p-5 lg:grid-cols-[96px_minmax(0,1fr)]"
+              className="rstack-tool group relative flex flex-col gap-2 bg-surface p-4 sm:grid sm:min-h-[132px] sm:grid-cols-[80px_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:p-5 lg:grid-cols-[96px_minmax(0,1fr)]"
             >
-              <div className="relative col-start-1 self-stretch">
+              <div className="relative col-start-1 size-10 shrink-0 self-start sm:size-auto sm:self-stretch">
                 <img
                   src={tool.logo}
                   alt=""
-                  className="absolute inset-0 block size-full object-contain object-center"
+                  className="block size-10 object-contain object-center sm:absolute sm:inset-0 sm:size-full"
                 />
               </div>
-              <div className="col-start-2 flex min-w-0 flex-col gap-y-0.5 self-center">
-                <h3 className="text-[24px]/8 font-semibold text-fg">
+              <div className="col-start-2 flex min-w-0 flex-col gap-y-0.5 sm:self-center">
+                <h3 className="text-[16px]/6 font-semibold text-fg sm:text-[24px]/8">
                   {tool.name}
                 </h3>
-                <span className="rstack-tool__domain font-mono text-[15px]/[1.5]">
+                <span className="rstack-tool__domain font-mono text-[12px]/[1.5] sm:text-[15px]/[1.5]">
                   {tool.domain}
                 </span>
-                <p className="min-w-0 text-[15px]/[1.5] text-fg-muted">
+                <p className="min-w-0 text-[13px]/[1.45] text-fg-muted sm:text-[15px]/[1.5]">
                   {tool[lang]}
                 </p>
               </div>
             </a>
           ))}
         </Grid>
-      </Section>
+      </Panel>
 
-      <footer className="border-t border-line">
+      <footer className="mt-16 border-t border-line lg:mt-24">
         <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:py-16">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
-            <div className="col-span-2 sm:col-span-3 lg:col-span-1">
+          <div className="grid grid-cols-3 gap-x-6 gap-y-10 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
+            <div className="col-span-3 lg:col-span-1">
               <a
                 href={tUrl('/')}
                 target="_blank"

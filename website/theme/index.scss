@@ -98,3 +98,23 @@
 .rstack-tool[data-tool='rstack-cli'] {
   --tool-accent: #f17453;
 }
+
+// Highlights strip under the hero: a subtle brand tint and icon-tile border on
+// hover, desktop only, so touch layouts stay quiet.
+.home-highlight {
+  transition: background-color 160ms ease;
+}
+
+.home-highlight__icon {
+  transition: border-color 160ms ease;
+}
+
+@media (min-width: 640px) {
+  .home-highlight:hover {
+    background-color: color-mix(in oklab, var(--rp-c-brand) 6%, var(--rp-c-bg));
+  }
+
+  .home-highlight:hover .home-highlight__icon {
+    border-color: var(--rp-c-brand);
+  }
+}
