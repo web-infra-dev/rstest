@@ -23,8 +23,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
-    "dev": "rsbuild dev --config ./rsbuild.config.ts",
-    "lint": "pnpm -w exec rs lint packages/browser-ui"
+    "dev": "rsbuild dev --config ./rsbuild.config.ts"
   },
   "dependencies": {
     "antd": "^6.6.8",

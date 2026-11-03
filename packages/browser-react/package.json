@@ -40,7 +40,6 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "lint": "pnpm -w exec rs lint packages/browser-react",
     "test": "rstest"
   },
   "devDependencies": {

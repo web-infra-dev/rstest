@@ -8,7 +8,6 @@ Converts Rslib config to Rstest config via `withRslibConfig`.
 pnpm --filter @rstest/adapter-rslib build
 pnpm --filter @rstest/adapter-rslib dev     # Watch mode
 pnpm --filter @rstest/adapter-rslib test
-pnpm --filter @rstest/adapter-rslib lint
 ```
 
 ## Constraints

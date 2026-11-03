@@ -122,9 +122,6 @@ pnpm --filter @rstest/core dev            # Watch mode build
 # Test
 pnpm --filter @rstest/core test           # Run all unit tests
 pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
-
-# Lint
-pnpm --filter @rstest/core lint
 ```
 
 ## Do

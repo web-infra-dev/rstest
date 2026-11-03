@@ -11,9 +11,6 @@ pnpm --filter @rstest/adapter-rspack dev     # Watch mode
 
 # Test
 pnpm --filter @rstest/adapter-rspack test
-
-# Lint
-pnpm --filter @rstest/adapter-rspack lint
 ```
 
 ## Constraints

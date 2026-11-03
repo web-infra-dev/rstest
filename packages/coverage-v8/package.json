@@ -29,7 +29,6 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "lint": "pnpm -w exec rs lint packages/coverage-v8",
     "test": "rstest"
   },
   "dependencies": {

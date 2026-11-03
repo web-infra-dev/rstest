@@ -69,16 +69,16 @@ pnpm --filter @rstest/core build
 pnpm --filter @rstest/core dev
 pnpm --filter @rstest/core test
 pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts
-pnpm --filter @rstest/core lint    # Rslint rules, this package only
 
-# File-scoped / faster feedback
+# File-scoped / faster feedback (from the repository root)
+pnpm exec rs lint packages/core
 pnpm rstest packages/core/tests/core/rsbuild.test.ts
 pnpm prettier --write path/to/file.ts
 ```
 
 _Note_: E2E tests and examples consume built package output. Rebuild affected packages before running them (for example, `pnpm --filter @rstest/browser build`). For testing workflows, use the `testing` skill.
 
-_Note_: `rs lint --type-check` is the repo's type check and exists at the root only — it builds one program from `rstack.config.mts` and cannot be narrowed to a package, so run `pnpm typecheck` from the root. A package's `lint` covers that package's lint rules and nothing else.
+_Note_: Run lint and type checks from the repository root so paths in `rstack.config.mts` resolve consistently. `pnpm exec rs lint` lints the repository; file arguments narrow lint diagnostics. `pnpm typecheck` also checks types across the configured projects and cannot be narrowed to a package.
 
 ## Development workflow
 

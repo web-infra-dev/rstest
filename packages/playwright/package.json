@@ -39,7 +39,6 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "lint": "pnpm -w exec rs lint packages/playwright",
     "test": "pnpm run build && rstest"
   },
   "devDependencies": {
