@@ -252,7 +252,7 @@ Rules for the OG image:
 - The OG card is a **separate** asset from the banner: `rstest-og-image-v<major>-<minor>.png`
   (2400×1260, 1.91:1 social-share aspect). Do not point `og:image` at the banner — a wide
   strip renders poorly as a Twitter/Slack card.
-- Per-post override lives in `website/rspress.config.ts` via the top-level `head` function
+- Per-post override lives in `website/rstack.config.mts` via the top-level `head` function
   (route-aware). Frontmatter `head` does **not** override the site-wide default reliably:
   rspress doesn't dedupe `og:image`, so two tags end up in the HTML and scrapers pick the
   first.

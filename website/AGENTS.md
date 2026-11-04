@@ -28,7 +28,7 @@ npx skills add lucasmarkes/hairline --skill hairline-create -y -a claude-code
 Each release blog needs **two** images, generated together so they share one gradient:
 
 - **banner** — `4096x1152`, no tagline, the in-page `<img>` at the top of the post, referenced by its CDN URL (`assets.rspack.rs/rstest/rstest-banner-v<major>-<minor>.png`).
-- **og image** — `2400x1260`, optional tagline, the social-share card. `rspress.config.ts` wires `og:image` per blog route: `blog/announcing-<major>-<minor>` → `assets.rspack.rs/rstest/rstest-og-image-v<major>-<minor>.png`.
+- **og image** — `2400x1260`, optional tagline, the social-share card. `rstack.config.mts` wires `og:image` per blog route: `blog/announcing-<major>-<minor>` → `assets.rspack.rs/rstest/rstest-og-image-v<major>-<minor>.png`.
 
 Both images are committed to [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) under `rstest/` and served by the `assets.rspack.rs` CDN. Always refer to that repo by its GitHub URL — collaborators keep local clones at different paths.
 

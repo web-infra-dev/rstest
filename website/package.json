@@ -6,11 +6,11 @@
   "type": "module",
   "scripts": {
     "prebuild": "pnpm build:agent-install",
-    "build": "rspress build",
+    "build": "rs doc build",
     "build:agent-install": "node scripts/buildAgentInstall.mjs",
-    "dev": "rspress dev",
+    "dev": "rs doc",
     "gen:release-image": "node --experimental-strip-types scripts/release-image/cli.mts",
-    "preview": "rspress preview"
+    "preview": "rs doc preview"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -29,6 +29,7 @@
     "rsbuild-plugin-google-analytics": "^1.1.0",
     "rsbuild-plugin-open-graph": "^1.1.3",
     "rspress-plugin-font-open-sans": "^1.0.4",
+    "rstack": "catalog:",
     "satori": "^0.63.2",
     "satori-html": "^0.3.2",
     "tailwindcss": "^4.3.3",
