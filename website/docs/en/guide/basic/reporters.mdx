@@ -362,7 +362,7 @@ The default preset is `normal`, which is tuned for agent workflows:
 - Each failure includes a repro command (`file+name`) so an agent can rerun a single failing case.
 - Stack output defaults to `top` (a stable anchor frame) instead of full stack frames.
 - Console output is enabled by default, but limited to keep the report size under control.
-- When the number of failures exceeds `failures.max`, the reporter prints a full failure list with minimal fields (repro / type / message / expected / actual), and only expands full details for the first `failures.max` failures.
+- When the number of failures exceeds `failures.max`, the reporter prints a full failure list with minimal fields (repro example / type / message / expected / actual), and only expands full details for the first `failures.max` failures.
 
 The available presets mainly differ in how much detail they keep in failure sections:
 
@@ -444,7 +444,7 @@ When there are failures, an excerpt looks like this:
 
 ### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
 
-repro:
+repro example:
 
 ```bash
 pnpm exec rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'
