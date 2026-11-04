@@ -360,7 +360,7 @@ Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout
 - 每个失败用例都会输出 repro 命令（`file+name`），方便 agent 精准复跑某一个失败 case。
 - stack 默认使用 `top`（稳定的定位锚点），而不是输出完整的 stack frames。
 - console 默认开启，但带有严格的输出上限，避免报告体积失控。
-- 当失败数量超过 `failures.max` 时，会先输出包含最小字段的完整失败列表（repro example / type / message / expected / actual），并且只展开前 `failures.max` 个失败的完整详情。
+- 当失败数量超过 `failures.max` 时，会先输出包含最小字段的完整失败列表（repro / type / message / expected / actual），并且只展开前 `failures.max` 个失败的完整详情。
 
 几个 preset 的主要区别，在于失败信息默认会保留多少上下文：
 
@@ -442,7 +442,7 @@ Note: all tests passed. Lists omitted for brevity.
 
 ### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
 
-repro example:
+repro:
 
 ```bash
 pnpm exec rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'

@@ -42,11 +42,11 @@
  *       - Prints truncation note with counts.
  *       - Prints `### Failure List` with all failures in minimal format:
  *         `- [FXX] <title>` followed by nested `type`, `message`, `expected`,
- *         `actual`, `repro example` fields.
+ *         `actual`, `repro` fields.
  *       - Prints `### Failure Details (first N)` heading before detailed blocks.
  *     - For each displayed failure (up to `options.failures.max`):
  *       - `### [FXX] <testPath> :: <fullName>` heading.
- *       - `repro example:` bash block (when `options.reproduction !== false`).
+ *       - `repro:` bash block (when `options.reproduction !== false`).
  *       - `details:` JSON block containing testPath, project, fullName, status,
  *         duration, retryCount, errors array (each with type, message,
  *         expected/actual when no diff, topFrame or stackFrames based on
@@ -1014,7 +1014,7 @@ export class MdReporter implements Reporter {
 
           if (this.options.reproduction) {
             lines.push(
-              `  - repro example: ${buildReproCommand(
+              `  - repro: ${buildReproCommand(
                 relativePath,
                 fullName,
                 this.options.reproduction,
@@ -1036,7 +1036,7 @@ export class MdReporter implements Reporter {
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {
-          lines.push('repro example:');
+          lines.push('repro:');
           pushFencedBlock(
             lines,
             'bash',

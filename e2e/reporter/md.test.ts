@@ -594,37 +594,37 @@ describe('md', () => {
         - message: expected 1 to be 2 // Object.is equality
         - expected: 2
         - actual: 1
-        - repro example: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 1'
+        - repro: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 1'
       - [F02] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 2
         - type: AssertionError
         - message: expected 2 to be 3 // Object.is equality
         - expected: 3
         - actual: 2
-        - repro example: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 2'
+        - repro: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 2'
       - [F03] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 3
         - type: AssertionError
         - message: expected 3 to be 4 // Object.is equality
         - expected: 4
         - actual: 3
-        - repro example: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 3'
+        - repro: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 3'
       - [F04] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 4
         - type: AssertionError
         - message: expected 4 to be 5 // Object.is equality
         - expected: 5
         - actual: 4
-        - repro example: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 4'
+        - repro: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 4'
       - [F05] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 5
         - type: AssertionError
         - message: expected 5 to be 6 // Object.is equality
         - expected: 6
         - actual: 5
-        - repro example: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 5'
+        - repro: pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 5'
 
       ### Failure Details (first 2)
 
       ### [F01] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 1
 
-      repro example:
+      repro:
 
       \`\`\`bash
       pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 1'
@@ -662,7 +662,7 @@ describe('md', () => {
 
       ### [F02] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 2
 
-      repro example:
+      repro:
 
       \`\`\`bash
       pnpm exec rstest 'fixtures/agent-md/truncated.test.ts' --testNamePattern 'agent-md > truncated case 2'
