@@ -124,6 +124,17 @@ npx rstest list --changed --filesOnly
 
 `--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。它同样不支持在 watch 模式下使用。
 
+### 测试选择的限制 \{#test-selection-limitations}
+
+`--related` 和 `--changed` 根据构建时找到的文件依赖选择测试，不会先运行测试来查看实际加载了哪些文件。以下情况可能漏跑测试：
+
+- **Node mode 下通过变量拼出的加载路径。** 例如 ``import(`./shipping/${method}.mjs`)``、``require(`./shipping/${method}.cjs`)`` 或 `import(modulePath)`。即使代码里写明了目录，目前也无法可靠追踪。修改实际加载的文件，或这个文件的子依赖，都可能不会触发对应测试。
+- **只通过 `require.resolve()` 引用的文件。** 例如调用 `require.resolve('./provider.cjs')`，不会记录对 `provider.cjs` 的依赖。修改这个文件，可能不会触发对应测试。
+- **构建时看不到的文件依赖。** 例如通过 `fs.readFile()` 读取文件、通过自定义 Node 加载 hook 加载模块，或用 `noParse` 跳过文件分析。这些文件或依赖发生变化时，可能不会触发对应测试。
+- **删除文件。** `--changed` 目前不会收集已暂存或已提交的删除记录。即使把删除的路径传给 `--related`，构建时也可能已经找不到它与测试之间的依赖关系。
+
+这些依赖没有被识别时，Rstest 不会自动改跑全部测试，也不一定会打印警告。遇到上述情况，请用 `npx rstest run` 运行全部测试。对于构建时看不到的文件依赖，也可以配置 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，让 `--changed` 在检测到匹配的文件改动时运行全部测试。
+
 ### 运行分片 \{#sharding-tests}
 
 使用 `--shard <index>/<count>` 将测试文件拆分为多个分片并行运行。`count` 表示总的分片数量，`index`（从 1 开始）表示要运行的分片。

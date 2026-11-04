@@ -124,6 +124,17 @@ npx rstest list --changed --filesOnly
 
 `--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state. It is not supported in watch mode either.
 
+### Test selection limitations
+
+`--related` and `--changed` use dependencies found during the build to select tests. They do not run your tests to discover which files are loaded. The following cases can cause tests to be missed:
+
+- **Computed imports in Node mode.** Requests such as ``import(`./shipping/${method}.mjs`)``, ``require(`./shipping/${method}.cjs`)``, or `import(modulePath)` are not tracked reliably. Changing the loaded file, or a file it depends on, may not select the test, even when the directory is written directly in the request.
+- **Files referenced only by `require.resolve()`.** Calling `require.resolve('./provider.cjs')` does not establish a tracked dependency on `provider.cjs`. Changes to that file may not select the test.
+- **Files read or loaded outside the build.** Examples include files read with `fs.readFile()`, modules loaded through custom Node loading hooks, and dependencies inside files excluded from parsing with `noParse`.
+- **Deleted files.** `--changed` currently excludes staged and committed deletions. Even when a deleted path is passed to `--related`, the build may no longer contain enough information to find its tests.
+
+Rstest does not automatically run all tests when these dependencies are missing, and a warning is not guaranteed. Use `npx rstest run` for a full test run in these cases. For files read or loaded outside the build, [`forceRerunTriggers`](/config/test/force-rerun-triggers) can make `--changed` run the full suite when it detects a matching file change.
+
 ### Run a shard \{#sharding-tests}
 
 Use `--shard <index>/<count>` to split test files into several shards for parallel execution. `count` is the total number of shards and `index` (1-based) is the shard to run.
