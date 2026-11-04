@@ -97,6 +97,10 @@
 
 .rstack-tool[data-tool='rstack-cli'] {
   --tool-accent: #f17453;
+
+  img {
+    transform: scale(0.7);
+  }
 }
 
 // Homepage-only treatments. `rstest-home` keeps the light-mode contrast bump,
