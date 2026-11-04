@@ -1,8 +1,8 @@
-import { defineConfig } from '@rslib/core';
-import { rslibRspackConfig } from '../../scripts/rslibConfig';
-import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+import { define } from 'rstack';
+import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
-export default defineConfig({
+define.lib({
   lib: [
     {
       syntax: 'es2021',

@@ -41,7 +41,7 @@ const isDate = (value: unknown): value is Date =>
 
 const loadFakeTimersModule = () => {
   // Rspack bundles this `createRequire` call (parser enabled for this file in
-  // rslib.config.ts), so the dependency stays inside the chunk for both the
+  // rstack.config.mts), so the dependency stays inside the chunk for both the
   // Node and browser targets. Preserve the public sync timer API while
   // avoiding module init work on worker startup when fake timers are never used.
   const require = createRequire(import.meta.url);

@@ -28,7 +28,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
+    "build": "rs lib build",
     "test": "rstest"
   },
   "dependencies": {
@@ -42,7 +42,6 @@
   },
   "devDependencies": {
     "@rsbuild/core": "catalog:",
-    "@rslib/core": "catalog:",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",
@@ -50,6 +49,7 @@
     "@types/istanbul-reports": "^3.0.4",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.3",
+    "rstack": "catalog:",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

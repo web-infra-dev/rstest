@@ -209,6 +209,9 @@ catalogs:
     '@rspack/plugin-react-refresh':
       specifier: ~2.0.2
       version: 2.0.2
+    rstack:
+      specifier: ^0.9.0
+      version: 0.9.0
 
 packageExtensionsChecksum: sha256-/oXUNlAVRCvDfhpsbH+E7MlrA1cfGnTrmqgmHjY2sMM=
 
@@ -253,7 +256,7 @@ importers:
         specifier: ^1.64.1
         version: 1.64.1
       rstack:
-        specifier: ^0.9.0
+        specifier: 'catalog:'
         version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
@@ -1237,15 +1240,15 @@ importers:
       '@rsbuild/core':
         specifier: 'catalog:'
         version: 2.3.0(@module-federation/runtime-tools@2.9.2)
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
 
   packages/adapter-rslib:
     devDependencies:
@@ -1261,15 +1264,15 @@ importers:
       get-tsconfig:
         specifier: 5.0.0-beta.6
         version: 5.0.0-beta.6
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
 
   packages/adapter-rspack:
     devDependencies:
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rspack/cli':
         specifier: 'catalog:'
         version: 2.3.0(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.2(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23)))
@@ -1282,6 +1285,9 @@ importers:
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
 
   packages/browser:
     dependencies:
@@ -1310,9 +1316,6 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
     devDependencies:
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -1349,12 +1352,12 @@ importers:
       playwright:
         specifier: ^1.64.1
         version: 1.64.1
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
 
   packages/browser-react:
     devDependencies:
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1373,6 +1376,9 @@ importers:
       react-dom:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1453,9 +1459,6 @@ importers:
       '@rsbuild/plugin-sass':
         specifier: 'catalog:'
         version: 2.0.1(@rsbuild/core@2.3.0(@module-federation/runtime-tools@2.9.2))
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -1531,6 +1534,9 @@ importers:
       rslog:
         specifier: ^2.3.0
         version: 2.3.0
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@29.1.1)(typescript@6.0.3)
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
@@ -1585,9 +1591,6 @@ importers:
       '@rsbuild/core':
         specifier: 'catalog:'
         version: 2.3.0(@module-federation/runtime-tools@2.9.2)
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1609,6 +1612,9 @@ importers:
       '@types/node':
         specifier: ^22.16.5
         version: 22.18.6
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1640,9 +1646,6 @@ importers:
       '@rsbuild/core':
         specifier: 'catalog:'
         version: 2.3.0(@module-federation/runtime-tools@2.9.2)
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1664,15 +1667,15 @@ importers:
       '@types/picomatch':
         specifier: ^4.0.3
         version: 4.0.3
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
 
   packages/playwright:
     devDependencies:
-      '@rslib/core':
-        specifier: 'catalog:'
-        version: 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1682,6 +1685,9 @@ importers:
       playwright:
         specifier: ^1.64.1
         version: 1.64.1
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1706,6 +1712,9 @@ importers:
       rsbuild-plugin-publint:
         specifier: ^1.0.0
         version: 1.0.0(@rsbuild/core@2.3.0(@module-federation/runtime-tools@2.9.2))
+      rstack:
+        specifier: 'catalog:'
+        version: 0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@20.14.6)(jiti@2.7.0)(jsdom@30.1.3)(typescript@6.0.3)
       shell-quote:
         specifier: ^1.12.0
         version: 1.12.0
@@ -10453,6 +10462,18 @@ snapshots:
       - '@module-federation/runtime-tools'
       - core-js
 
+  '@rstest/core@0.12.6(@module-federation/runtime-tools@2.9.2)(happy-dom@21.0.4)(jsdom@29.1.1)':
+    dependencies:
+      '@rsbuild/core': 2.3.0(@module-federation/runtime-tools@2.9.2)
+      '@types/chai': 5.2.3
+      cjs-module-lexer: 2.3.0
+    optionalDependencies:
+      happy-dom: 21.0.4
+      jsdom: 29.1.1
+    transitivePeerDependencies:
+      - '@module-federation/runtime-tools'
+      - core-js
+
   '@rushstack/node-core-library@5.25.1(@types/node@22.18.6)':
     dependencies:
       ajv: 8.20.0
@@ -14421,6 +14442,40 @@ snapshots:
       '@rslib/core': 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
       '@rslint/core': 0.10.0(jiti@2.7.0)
       '@rstest/core': 0.12.6(@module-federation/runtime-tools@2.9.2)(happy-dom@20.14.6)(jsdom@30.1.3)
+      '@swc-next/parser': 0.4.1
+      prettier: 3.9.10
+      tinypool: 2.2.0
+    optionalDependencies:
+      '@rspress/core': 2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1)
+      '@rstackjs/cli-darwin-arm64': 0.9.0
+      '@rstackjs/cli-darwin-x64': 0.9.0
+      '@rstackjs/cli-linux-arm64-gnu': 0.9.0
+      '@rstackjs/cli-linux-arm64-musl': 0.9.0
+      '@rstackjs/cli-linux-ppc64-gnu': 0.9.0
+      '@rstackjs/cli-linux-riscv64-gnu': 0.9.0
+      '@rstackjs/cli-linux-riscv64-musl': 0.9.0
+      '@rstackjs/cli-linux-s390x-gnu': 0.9.0
+      '@rstackjs/cli-linux-x64-gnu': 0.9.0
+      '@rstackjs/cli-linux-x64-musl': 0.9.0
+      '@rstackjs/cli-win32-arm64-msvc': 0.9.0
+      '@rstackjs/cli-win32-ia32-msvc': 0.9.0
+      '@rstackjs/cli-win32-x64-msvc': 0.9.0
+    transitivePeerDependencies:
+      - '@microsoft/api-extractor'
+      - '@module-federation/runtime-tools'
+      - '@swc-next/parser-binding-wasm'
+      - core-js
+      - happy-dom
+      - jiti
+      - jsdom
+      - typescript
+
+  rstack@0.9.0(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(@rspress/core@2.1.0-beta.2(@module-federation/runtime-tools@2.9.2)(@rspack/core@2.3.0(@module-federation/runtime-tools@2.9.2)(@swc/helpers@0.5.23))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))(happy-dom@21.0.4)(jiti@2.7.0)(jsdom@29.1.1)(typescript@6.0.3):
+    dependencies:
+      '@rsbuild/core': 2.3.0(@module-federation/runtime-tools@2.9.2)
+      '@rslib/core': 1.0.5(@microsoft/api-extractor@7.60.0(@types/node@22.18.6))(@module-federation/runtime-tools@2.9.2)(typescript@6.0.3)
+      '@rslint/core': 0.10.0(jiti@2.7.0)
+      '@rstest/core': 0.12.6(@module-federation/runtime-tools@2.9.2)(happy-dom@21.0.4)(jsdom@29.1.1)
       '@swc-next/parser': 0.4.1
       prettier: 3.9.10
       tinypool: 2.2.0

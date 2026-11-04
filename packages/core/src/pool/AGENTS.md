@@ -26,10 +26,10 @@
 
 ## Coupling points (change both sides)
 
-- `applyRuntimeColors` in `../runtime/worker/color.ts` toggles the tinyrainbow instance shared with `@vitest/utils`/`@vitest/expect` through the `tinyrainbow` alias in `packages/core/rslib.config.ts`; the alias must stay for the toggle to reach diff/matcher colors.
+- `applyRuntimeColors` in `../runtime/worker/color.ts` toggles the tinyrainbow instance shared with `@vitest/utils`/`@vitest/expect` through the `tinyrainbow` alias in `packages/core/rstack.config.mts`; the alias must stay for the toggle to reach diff/matcher colors.
 - `WorkerRequest`/`WorkerResponse` in `protocol.ts` ↔ worker-side dispatch in `../runtime/worker/index.ts` and host-side handling in `poolRunner.ts`.
 - A new `PoolWorkerKind` → `createPoolWorker`'s switch (exhaustiveness-checked).
-- The `--require` path for `rstestSuppressWarnings.cjs` in `index.ts` ↔ the `.cjs` copy list in `../../rslib.config.ts` — the path resolves relative to dist, so renaming/moving the `.cjs` needs both sides.
+- The `--require` path for `rstestSuppressWarnings.cjs` in `index.ts` ↔ the `.cjs` copy list in `../../rstack.config.mts` — the path resolves relative to dist, so renaming/moving the `.cjs` needs both sides.
 - Assets have two delivery paths that must both stay alive: eager for non-federation forks/threads, loaded on each attempt after its runner slot is claimed and dropped by the host after send; otherwise lazily pulled via `rpc.getAssetsByEntry`. Queued tasks retain only a host-side loader, never asset payloads; a failed loader still releases its runner. Preserve the first pre-send runner failure, including its OOM-kill classification, across the loader await. Normal VM-pool runs use the lazy path so each worker can retain immutable asset bytes across fresh VM Contexts; the same `workerCacheLimit` also bounds external source and V8 compilation data. Bundle-coverage debug runs bypass that cache because every result needs its complete asset-size map. Lazy requests carry only missing asset names after the first task, and `buildId`/worker disposal invalidate the cache. Both paths pass Rspack output bytes through `prepareAssetFilesForIPC`; worker consumers must use `getAssetText` or `getAssetBuffer` rather than assuming a transport-specific value shape.
 
 ## Gotchas

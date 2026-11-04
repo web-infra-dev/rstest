@@ -1,15 +1,16 @@
 import { createRequire } from 'node:module';
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
-import { defineConfig, rspack, type Rsbuild } from '@rslib/core';
-import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
-import { rslibRspackConfig } from '../../scripts/rslibConfig';
-import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
-import {
-  peerDependencies,
-  version as browserVersion,
-} from '../browser/package.json';
-import { licensePlugin } from './licensePlugin';
-import { version } from './package.json';
+import { define } from 'rstack';
+import { rspack, type Rsbuild } from 'rstack/lib';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins.ts';
+import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
+import browserPackage from '../browser/package.json' with { type: 'json' };
+import { licensePlugin } from './licensePlugin.ts';
+import packageJson from './package.json' with { type: 'json' };
+
+const { peerDependencies, version: browserVersion } = browserPackage;
+const { version } = packageJson;
 
 const require = createRequire(import.meta.url);
 
@@ -70,7 +71,7 @@ const jestMatchersDtsBanner = `declare global {
   }
 }`;
 
-export default defineConfig({
+define.lib({
   plugins: publishCheckPlugins(),
   lib: [
     {

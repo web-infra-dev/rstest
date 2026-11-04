@@ -30,16 +30,16 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
-    "dev": "rslib build --watch",
+    "build": "rs lib build",
+    "dev": "rs lib build --watch",
     "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "catalog:",
     "@rspack/cli": "catalog:",
     "@rspack/core": "catalog:",
     "@rstest/core": "workspace:*",
-    "@rstest/tsconfig": "workspace:*"
+    "@rstest/tsconfig": "workspace:*",
+    "rstack": "catalog:"
   },
   "peerDependencies": {
     "@rspack/cli": "^2.0.0",

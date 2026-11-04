@@ -10,6 +10,7 @@
     "path-serializer": "0.7.0",
     "rsbuild-plugin-arethetypeswrong": "^0.4.0",
     "rsbuild-plugin-publint": "^1.0.0",
+    "rstack": "catalog:",
     "shell-quote": "^1.12.0"
   }
 }
