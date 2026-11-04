@@ -444,6 +444,12 @@ When there are failures, an excerpt looks like this:
 
 ### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
 
+repro:
+
+```bash
+pnpm exec rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'
+```
+
 details:
 
 ```json
