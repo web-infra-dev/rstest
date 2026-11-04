@@ -5,7 +5,7 @@ metadata:
   internal: true
 ---
 
-# API Doc Signature Sync
+# API doc signature sync
 
 The `**Type:**` / `**类型：**` blocks in `website/docs/{en,zh}/api/**` are
 **hand-written, curated copies** of real exported types — there is no

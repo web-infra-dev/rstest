@@ -5,7 +5,7 @@ metadata:
   internal: true
 ---
 
-# Create Release Blog
+# Create release blog
 
 ## Overview
 
@@ -380,7 +380,7 @@ Mirror the EN voice using these ZH conventions:
 ### Formatting
 
 - **Heading case (EN)**: sentence-style (`## A new threads pool`, not `## A New Threads
-Pool`), per the website's `AGENTS.md`. Run `npx heading-case` to check.
+Pool`), per the website's `AGENTS.md`. Run `pnpm exec rs fmt --check` from the repository root to check.
 - **Section anchors**: every highlight heading takes an explicit `\{#kebab-case}` anchor
   (e.g. `## A new threads pool \{#threads-pool}`). EN and ZH **must share the same anchor
   slug** so the intro-bullet links resolve in both locales and cross-locale deep links

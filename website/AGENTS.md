@@ -83,7 +83,7 @@ The templates live **in this repo** under `scripts/release-image/` ([satori](htt
 
 ### Format conventions
 
-- **Heading case**: Use [sentence-style capitalization](https://learn.microsoft.com/en-us/style-guide/text-formatting/using-type/use-sentence-style-capitalization) for all headings — only capitalize the first word and proper nouns (e.g., `## With factory function` not `## With Factory Function`). Run `npx heading-case` to check.
+- **Heading case**: Use [sentence-style capitalization](https://learn.microsoft.com/en-us/style-guide/text-formatting/using-type/use-sentence-style-capitalization) for all headings — only capitalize the first word and proper nouns (e.g., `## With factory function` not `## With Factory Function`). Run `pnpm exec rs fmt --check` from the repository root to check.
 - npm package names as links: no backticks (e.g., `[@rstest/browser-react](url)` not `[\`@rstest/browser-react\`](url)`)
 - First mention of a new package: include GitHub link
 - Keep technical terms in English (e.g., Context, Hook, Provider, CI)

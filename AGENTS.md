@@ -58,7 +58,7 @@ pnpm e2e                      # Run e2e tests
 pnpm lint                     # Formatting + spell check + doc type sync + harness docs + lint/type check
 pnpm lint:type                # Run rs lint --type-check (needs built package .d.ts)
 pnpm typecheck                # Alias of lint:type
-pnpm format                   # rs fmt + heading-case --write
+pnpm format                   # Format files, including heading case, via rs fmt
 pnpm check-unused             # Run knip
 pnpm test:examples            # Run example tests
 pnpm bench:cpu                # Run CPU benchmarks
