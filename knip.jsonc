@@ -26,8 +26,6 @@
     },
     "scripts": {
       "entry": [
-        // Loaded by the core build through the rs --config CLI argument.
-        "rstack-license.config.mts",
         // The root config lists `scripts/lint` as a project, but knip resolves its
         // `<rootDir>` against the `scripts` workspace instead of `scripts/lint`.
         "lint/*.test.ts",

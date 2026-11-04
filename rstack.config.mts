@@ -72,10 +72,7 @@ define.lint(({ js, ts }) => [
 define.fmt({
   singleQuote: true,
   sortPackageJson: true,
-  // The core build formats this generated file separately; root checks can
-  // run alongside the build and must not read it while it is being written.
   ignorePatterns: [
-    'LICENSE.md',
     // Keep fixture and skill lockfiles in the existing formatting scope.
     '!package-lock.json',
     '!skills-lock.json',
