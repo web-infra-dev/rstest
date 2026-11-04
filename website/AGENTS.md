@@ -13,7 +13,7 @@ pnpm gen:release-image  # Generate a release's banner + og image (see below)
 
 ## Homepage figures
 
-The homepage illustrations live in `theme/ui/hairline/` on a vendored Hairline engine. Edit existing figures in place; the engine stays byte-for-byte, and Prettier and cspell are configured to leave it alone.
+The homepage illustrations live in `theme/ui/hairline/` on a vendored Hairline engine. Edit existing figures in place; the engine stays byte-for-byte, and `rs fmt` and cspell are configured to leave it alone.
 
 Drawing a new figure needs the authoring skill. It is gitignored, so install it once per clone:
 
