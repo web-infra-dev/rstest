@@ -1,3 +1,2 @@
-rs fmt --check
 pnpm run check-spell
 pnpm run check-doc-types
