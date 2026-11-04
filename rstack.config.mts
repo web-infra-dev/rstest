@@ -76,5 +76,6 @@ define.fmt({
 });
 
 define.staged({
-  '*': 'rs fmt --ignore-unknown --no-error-on-unmatched-pattern',
+  '*.{md,mdx,json,jsonc,json5,css,less,scss,html,vue,yml,yaml}': 'rs fmt',
+  '*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}': ['rs lint', 'rs fmt'],
 });
