@@ -442,6 +442,12 @@ Note: all tests passed. Lists omitted for brevity.
 
 ### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
 
+repro:
+
+```bash
+pnpm exec rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'
+```
+
 details:
 
 ```json
