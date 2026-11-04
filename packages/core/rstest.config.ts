@@ -2,7 +2,7 @@ import { defineConfig } from '@rstest/core';
 import { withRstackLibConfig } from '../../scripts/rstestConfig';
 
 export default defineConfig({
-  extends: withRstackLibConfig(__dirname),
+  extends: withRstackLibConfig(import.meta.dirname),
   name: 'core',
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],

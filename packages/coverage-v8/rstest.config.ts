@@ -2,7 +2,7 @@ import { defineConfig } from '@rstest/core';
 import { withRstackLibConfig } from '../../scripts/rstestConfig';
 
 export default defineConfig({
-  extends: withRstackLibConfig(__dirname),
+  extends: withRstackLibConfig(import.meta.dirname),
   name: 'coverage-v8',
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],

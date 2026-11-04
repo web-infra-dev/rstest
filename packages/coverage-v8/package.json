@@ -49,7 +49,7 @@
     "@types/istanbul-reports": "^3.0.4",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.3",
-    "rstack": "^0.9.0",
+    "rstack": "catalog:",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

@@ -39,7 +39,7 @@
     "@rspack/core": "catalog:",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
-    "rstack": "^0.9.0"
+    "rstack": "catalog:"
   },
   "peerDependencies": {
     "@rspack/cli": "^2.0.0",
