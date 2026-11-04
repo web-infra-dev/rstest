@@ -1,9 +1,9 @@
-import { defineConfig } from '@rslib/core';
-import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
-import { rslibRspackConfig } from '../../scripts/rslibConfig';
-import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+import { define } from 'rstack';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins.ts';
+import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
-export default defineConfig({
+define.lib({
   plugins: publishCheckPlugins(),
   output: {
     // Bundle the shared config helpers into the adapter's dist so it carries no

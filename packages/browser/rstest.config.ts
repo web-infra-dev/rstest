@@ -1,10 +1,8 @@
 import { defineConfig } from '@rstest/core';
-import { withRslibConfig } from '../adapter-rslib/src';
+import { withRstackLibConfig } from '../../scripts/rstestConfig';
 
 export default defineConfig({
-  extends: withRslibConfig({
-    cwd: __dirname,
-  }),
+  extends: withRstackLibConfig(__dirname),
   name: 'browser',
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],

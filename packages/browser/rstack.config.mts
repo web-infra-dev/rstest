@@ -1,9 +1,10 @@
 import { createRequire } from 'node:module';
-import { defineConfig, rspack } from '@rslib/core';
+import { define } from 'rstack';
+import { rspack } from 'rstack/lib';
 import { dirname, resolve } from 'pathe';
-import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
-import { rslibRspackConfig } from '../../scripts/rslibConfig';
-import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins.ts';
+import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
 const require = createRequire(import.meta.url);
 const browserUiRoot = dirname(
@@ -11,7 +12,7 @@ const browserUiRoot = dirname(
 );
 const browserUiDist = resolve(browserUiRoot, 'dist');
 
-export default defineConfig({
+define.lib({
   plugins: publishCheckPlugins(),
   lib: [
     {

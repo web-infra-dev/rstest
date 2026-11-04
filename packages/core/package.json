@@ -64,8 +64,8 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build && rs fmt ./LICENSE.md",
-    "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "build": "rs lib build && rs fmt --config ../../rstack.config.mts ./LICENSE.md",
+    "dev": "cross-env SOURCEMAP=true rs lib build --watch",
     "test": "npx rstest --globals"
   },
   "dependencies": {
@@ -81,7 +81,6 @@
     "@rsbuild/plugin-less": "catalog:",
     "@rsbuild/plugin-node-polyfill": "catalog:",
     "@rsbuild/plugin-sass": "catalog:",
-    "@rslib/core": "catalog:",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.4.0",
     "@types/istanbul-lib-coverage": "^2.0.6",
@@ -107,6 +106,7 @@
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.7",
     "rslog": "^2.3.0",
+    "rstack": "^0.9.0",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
     "std-env": "^4.3.0",
