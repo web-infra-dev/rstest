@@ -95,6 +95,30 @@ npx rstest list --related src/button.ts --filesOnly
 
 `--related` and `--findRelatedTests` are not supported in watch mode, which already reruns the tests affected by your file changes.
 
+:::warning Experimental native dependency analysis
+
+The native runtime analysis described below depends on an unreleased Rspack `RstestPlugin` metadata producer. This draft requires a matching producer build; an ordinary published dependency installation is not sufficient. A missing producer causes related selection to fail explicitly, including for ordinary JavaScript modules.
+
+:::
+
+In Node mode, the experimental analyzer supplements the build graph with supported literal native `import()`, `require()`, and `require.resolve()` requests. Automatic resolution is limited to relative requests with an explicit JavaScript or JSON extension. It reads native modules without bundling or executing them; a `require.resolve()` target is only resolved, so its contents are not parsed.
+
+Computed requests with an unknown path domain, custom Node loading hooks, and native module-loading APIs require complete input declarations. Otherwise, selection stops with `Native dependency selection is incomplete`, including when an unsupported importer belongs to another included test. Acquiring `node:module` or `module` is deliberately treated as unsupported even when a particular use is benign. A full run remains available; an incomplete selection does not silently rerun extra tests.
+
+The existing loader APIs `addDependency()` and `addMissingDependency()` can already declare exact input files on a compiled importer. This draft additionally recognizes the following **experimental completeness marker**, assigned through a compilation hook:
+
+```js
+module.buildInfo.rstestDeclaredRuntimeDependencies = {
+  version: 1,
+  complete: true,
+  files: [absoluteProviderPath, absoluteHelperPath],
+};
+```
+
+The list must contain the importer's complete native input closure, including transitive helpers and missing inputs. It is a user-maintained promise: omitted inputs can cause tests to be missed. The marker is not an existing public Rstest config option. The [native selection fixture](https://github.com/web-infra-dev/rstest/tree/main/e2e/filter/fixtures-native-related) combines the loader declarations with this marker and demonstrates exact selection.
+
+Automatic native analysis does not cover Browser Mode, `import.meta.resolve()`, package requests, requests without a file extension, or arbitrary JavaScript loading behavior. These limits are separate from ordinary build-graph selection; explicitly declare the relevant native input relationships when using unsupported forms.
+
 ### Run changed tests
 
 <ApiMeta addedVersion="0.10.0" />

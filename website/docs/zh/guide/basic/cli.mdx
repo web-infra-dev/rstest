@@ -95,6 +95,30 @@ npx rstest list --related src/button.ts --filesOnly
 
 `--related` 和 `--findRelatedTests` 不支持在 watch 模式下使用，watch 模式本身已经会重跑受文件变更影响的测试。
 
+:::warning 实验性 native dependency 分析
+
+下文介绍的 native runtime 分析依赖尚未发布的 Rspack `RstestPlugin` metadata producer。此草案需要匹配的 producer 构建版本，普通的已发布依赖安装不足以使用该功能。缺少 producer 时，相关测试选择会明确报错，包括普通 JavaScript 模块。
+
+:::
+
+在 Node mode 下，实验性 analyzer 会在构建图之外分析受支持的 literal native `import()`、`require()` 和 `require.resolve()` 请求。自动解析仅支持带有明确 JavaScript 或 JSON 扩展名的相对路径请求。它会读取 native 模块，但不会将其打包或执行；`require.resolve()` 的目标只会被解析为路径，不会解析其文件内容。
+
+路径范围未知的 computed 请求、自定义 Node loading hooks 和 native module-loading APIs 需要完整的输入声明。否则，测试选择会以 `Native dependency selection is incomplete` 报错停止，即使不受支持的 importer 属于另一个已包含的测试。获取 `node:module` 或 `module` API 会被有意视为不受支持，即使具体用法并不涉及动态加载。你仍然可以运行完整测试；不完整的选择不会静默地额外运行其他测试。
+
+现有 loader APIs `addDependency()` 和 `addMissingDependency()` 已经可以为参与构建的 importer 声明精确的输入文件。此草案还识别以下通过 compilation hook 设置的**实验性完整性标记**：
+
+```js
+module.buildInfo.rstestDeclaredRuntimeDependencies = {
+  version: 1,
+  complete: true,
+  files: [absoluteProviderPath, absoluteHelperPath],
+};
+```
+
+该列表必须包含 importer 的完整 native 输入依赖集合，包括间接依赖的 helper 和缺失的输入文件。这是由用户维护的承诺：遗漏输入可能导致漏选测试。此标记不是现有的公开 Rstest config 选项。[Native selection fixture](https://github.com/web-infra-dev/rstest/tree/main/e2e/filter/fixtures-native-related) 将 loader 声明与此标记结合，演示精确的测试选择。
+
+自动 native 分析不覆盖 Browser Mode、`import.meta.resolve()`、package 或无扩展名请求，也不覆盖任意 JavaScript 加载行为。这些限制独立于普通的构建图选择；使用不受支持的形式时，请显式声明相关 native 输入关系。
+
 ### 运行变更相关测试
 
 <ApiMeta addedVersion="0.10.0" />

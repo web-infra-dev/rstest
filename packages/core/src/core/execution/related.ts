@@ -9,6 +9,11 @@ import type {
 import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
 import { prepareRsbuild } from '../build/rsbuild';
+import {
+  resolveRuntimeDependencyConsumers,
+  type RuntimeDependencyMetadata,
+  type RuntimeDependencyRequest,
+} from './runtimeDependencies';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
 
@@ -356,6 +361,143 @@ const collectReachableDependents = ({
   return visited;
 };
 
+type RuntimeDependencyModule = {
+  type?: string;
+  nameForCondition?: () => string | undefined;
+  buildInfo?: Rspack.Module['buildInfo'] & {
+    rstestRuntimeDependencies?: RuntimeDependencyMetadata;
+    rstestDeclaredRuntimeDependencies?: {
+      version: number;
+      complete: boolean;
+      files: string[];
+    };
+  };
+  modules?: readonly RuntimeDependencyModule[];
+};
+
+const collectRuntimeDependencyInputs = ({
+  modules,
+  moduleGraph,
+  entries,
+  projectRoot,
+  virtualModulePaths,
+  sources,
+  errorModulePaths,
+}: {
+  modules: Iterable<RuntimeDependencyModule>;
+  moduleGraph: ModuleGraph;
+  entries: string[];
+  projectRoot: string;
+  virtualModulePaths: ReadonlySet<string>;
+  sources: ReadonlySet<string>;
+  errorModulePaths: ReadonlySet<string>;
+}): {
+  requests: RuntimeDependencyRequest[];
+  declaredConsumers: Set<string>;
+} => {
+  const requests: RuntimeDependencyRequest[] = [];
+  const declaredConsumers = new Set<string>();
+  const sourcesByDependent = new Map<string, Set<string>>();
+  for (const [source, dependents] of moduleGraph.dependentsBySource) {
+    for (const dependent of dependents) {
+      const sources = sourcesByDependent.get(dependent) ?? new Set<string>();
+      sources.add(source);
+      sourcesByDependent.set(dependent, sources);
+    }
+  }
+  const relevantSources = collectReachableDependents({
+    dependentsBySource: sourcesByDependent,
+    initialSources: entries,
+  });
+  const entriesByConsumer = new Map<string, string[]>();
+
+  for (const module of modules) {
+    const candidate = module.nameForCondition?.();
+    if (!candidate) {
+      continue;
+    }
+    const consumer = normalizeStatsPathCandidate({
+      candidate,
+      projectRoot,
+      virtualModulePaths,
+    });
+    if (!consumer || !relevantSources.has(consumer)) {
+      continue;
+    }
+
+    const visit = (original: RuntimeDependencyModule): void => {
+      if (original.modules?.length) {
+        for (const inner of original.modules) {
+          visit(inner);
+        }
+        return;
+      }
+      const resource = original.nameForCondition?.();
+      if (!resource || !original.type?.startsWith('javascript/')) {
+        return;
+      }
+      const source = resolveStatsPathCandidate({
+        candidate: resource,
+        projectRoot,
+      });
+      if (!source || errorModulePaths.has(source)) {
+        return;
+      }
+      const declaration = original.buildInfo?.rstestDeclaredRuntimeDependencies;
+      if (declaration) {
+        if (
+          declaration.version !== 1 ||
+          !declaration.complete ||
+          declaration.files.some((file) => !isAbsolute(file))
+        ) {
+          throw new Error(
+            `Invalid complete native dependency declaration for ${source}. ` +
+              'Expected version 1 and absolute paths for the complete runtime dependency closure.',
+          );
+        }
+        if (
+          declaration.files.some((file) =>
+            sources.has(normalizeExactPathMatch(file)),
+          )
+        ) {
+          declaredConsumers.add(consumer);
+        }
+        return;
+      }
+      const metadata = original.buildInfo?.rstestRuntimeDependencies;
+      if (metadata?.version !== 1) {
+        throw new Error(
+          `Native dependency metadata is unavailable for ${source}. ` +
+            'This selection requires a compatible RstestPlugin and a parsed JavaScript module. ' +
+            'Use a full run when the native producer or parser is unavailable.',
+        );
+      }
+      for (const call of metadata.calls) {
+        if (call.origin === 'source') {
+          requests.push({ consumer, source, call });
+        } else {
+          // A require left unchanged resolves from the executing entry, which
+          // can differ for two tests importing the same bundled source module.
+          let consumerEntries = entriesByConsumer.get(consumer);
+          if (!consumerEntries) {
+            const reachable = collectReachableDependents({
+              dependentsBySource: moduleGraph.dependentsBySource,
+              initialSources: [consumer],
+            });
+            consumerEntries = entries.filter((entry) => reachable.has(entry));
+            entriesByConsumer.set(consumer, consumerEntries);
+          }
+          for (const entry of consumerEntries) {
+            requests.push({ consumer: entry, source: entry, call });
+          }
+        }
+      }
+    };
+    visit(module);
+  }
+  return { requests, declaredConsumers };
+};
+
 const collectProjectEntries = async (
   context: InternalContext,
 ): Promise<Map<string, Record<string, string>>> => {
@@ -585,11 +727,13 @@ export async function resolveRelatedTestFiles(
         projectEntries.get(project.environmentName) || {},
       );
 
+      const errorModulePaths = analysisHasErrors
+        ? collectErrorModulePaths({
+            errors,
+            projectRoot: project.rootPath,
+          })
+        : new Set<string>();
       if (analysisHasErrors) {
-        const errorModulePaths = collectErrorModulePaths({
-          errors,
-          projectRoot: project.rootPath,
-        });
         failedTestFileCount += testPaths.filter((testPath) =>
           errorModulePaths.has(normalize(testPath)),
         ).length;
@@ -612,7 +756,36 @@ export async function resolveRelatedTestFiles(
         projectRoot: project.rootPath,
         virtualModulePaths,
       });
-      const initialSources = [...matchedSources, ...buildInputConsumers];
+      const { requests: runtimeRequests, declaredConsumers } =
+        collectRuntimeDependencyInputs({
+          modules: stats.compilation.modules,
+          moduleGraph,
+          entries: [...testPaths, ...setupPaths, ...globalSetupPaths],
+          projectRoot: project.rootPath,
+          virtualModulePaths,
+          sources: buildInputSources,
+          errorModulePaths,
+        });
+      if (
+        runtimeRequests.length > 0 &&
+        project.normalizedConfig.browser.enabled
+      ) {
+        throw new Error(
+          'Native dependency analysis does not support browser module loading. Use a full run for this project.',
+        );
+      }
+      const runtimeConsumers = await resolveRuntimeDependencyConsumers({
+        requests: runtimeRequests,
+        sources: buildInputSources,
+        pool: context.normalizedConfig.pool,
+        env: project.normalizedConfig.env,
+      });
+      const initialSources = [
+        ...matchedSources,
+        ...buildInputConsumers,
+        ...runtimeConsumers,
+        ...declaredConsumers,
+      ];
 
       if (initialSources.length === 0) {
         continue;
