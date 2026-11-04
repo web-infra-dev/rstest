@@ -76,3 +76,8 @@ define.fmt({
   // Vendored Hairline engine, kept byte-for-byte.
   ignorePatterns: ['website/theme/ui/hairline/kernel.js'],
 });
+
+define.staged({
+  '*.{md,mdx,json,jsonc,json5,css,less,scss,html,vue,yml,yaml}': 'rs fmt',
+  '*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}': ['rs lint', 'rs fmt'],
+});

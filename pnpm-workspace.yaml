@@ -30,7 +30,6 @@ allowBuilds:
   '@swc/core': false
   core-js-pure: false
   keytar: false
-  lefthook: true
   svelte-preprocess: false
 
 autoInstallPeers: false
