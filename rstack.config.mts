@@ -73,4 +73,6 @@ define.fmt({
   singleQuote: true,
   sortPackageJson: true,
   plugins: ['heading-case'],
+  // Vendored Hairline engine, kept byte-for-byte.
+  ignorePatterns: ['website/theme/ui/hairline/kernel.js'],
 });

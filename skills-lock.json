@@ -7,6 +7,12 @@
       "skillPath": ".agents/skills/create-draft-release-notes/SKILL.md",
       "computedHash": "75d55a07f5eb3f1de5ecaa82500eeba608954bf3e618eb4ea755043bac7c4a79"
     },
+    "hairline-create": {
+      "source": "lucasmarkes/hairline",
+      "sourceType": "github",
+      "skillPath": "skills/hairline-create/SKILL.md",
+      "computedHash": "97dc77430c05a87e0e1e985f7952938b02147040742ec88095ccfe6f1abe11b5"
+    },
     "pr-creator": {
       "source": "rstackjs/agent-skills",
       "sourceType": "github",
