@@ -18,6 +18,8 @@
   ],
   "workspaces": {
     ".": {
+      // Loaded by rs fmt through define.fmt.plugins.
+      "ignoreDependencies": ["heading-case"],
       "entry": [
         "rstack.config.mts",
         // Agent skill scripts are invoked by the skill runtime, not imported by source files.

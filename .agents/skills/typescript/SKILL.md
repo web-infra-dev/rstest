@@ -5,13 +5,13 @@ metadata:
   internal: true
 ---
 
-# TypeScript Anti-Slop Guardrails
+# TypeScript Anti-Slop guardrails
 
 Skip formatting and lint rules — tooling handles those. This skill targets patterns that produce valid-looking but poor-quality code.
 
 When in doubt, **copy the local pattern in the file you are editing** rather than importing a style from elsewhere.
 
-## 1. No Restating Comments
+## 1. No restating comments
 
 Comments that repeat what the next line does are noise. Only comment **why**, never **what**.
 
@@ -30,7 +30,7 @@ const reporter = new Reporter(config);
 
 Also avoid: section-header comments inside functions (`// --- Validate ---`), JSDoc that adds nothing beyond the signature, temporal markers (`// added for`, `// Phase 1`).
 
-## 2. No Unnecessary Defensive Code
+## 2. No unnecessary defensive code
 
 Do not add runtime checks that the type system already guarantees. Trust the types.
 
@@ -73,7 +73,7 @@ if ('testName' in config) {
 
 `noExplicitAny` is **off** in this repository, so self-police. Prefer `unknown` + narrowing, or a generic, before reaching for `any`. Never let `any` leak into exported APIs, config types, or cross-package contracts.
 
-## 5. No One-Use Abstractions
+## 5. No One-Use abstractions
 
 Do not extract a function, class, or type that is used exactly once, unless it genuinely improves readability at the call site.
 
@@ -93,7 +93,7 @@ Also avoid: interfaces with single implementations, factory functions that creat
 
 **Threshold:** extract when used in 3+ places, or when the extraction meaningfully shortens a complex function.
 
-## 6. No Catch-and-Rethrow Without Context
+## 6. No Catch-and-Rethrow without context
 
 If a `catch` block doesn't add information or recover, delete the `try/catch`.
 
@@ -120,22 +120,22 @@ await loadConfig(path);
 
 Also avoid: bare rethrow (`catch (e) { throw e; }`), empty catch blocks, catch blocks that only `console.log`.
 
-## 7. Single Source of Truth — Prevent Drift
+## 7. Single source of truth — prevent drift
 
 When two declarations describe the same thing — types, constants, defaults, validation rules — one must derive from the other. Duplicating independently causes **drift**: they match today, diverge silently tomorrow. Derive via `extends`, `Pick`, `ReturnType`, `typeof`, `satisfies`, or simply importing the canonical definition.
 
-## 8. Search Before Creating Utilities
+## 8. Search before creating utilities
 
 Before writing a helper function, search the codebase. If it exists, import it. If it exists but isn't exported, export it. Don't create a second `isObject()` or `normalizeSlashes()`.
 
-## 9. No Over-Engineered Types
+## 9. No Over-Engineered types
 
 - Don't introduce deep conditional types, mapped types, or template literal types unless they clearly reduce complexity.
 - Don't create a reusable utility type for one call site.
 - Prefer the smallest type shape that explains the contract.
 - This repository uses both `type` and `interface` — follow nearby code.
 
-## Repository Conventions
+## Repository conventions
 
 - Use `import type` for type-only imports.
 - Public config properties: use JSDoc with `@default`.

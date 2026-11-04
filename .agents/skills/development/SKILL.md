@@ -5,11 +5,11 @@ metadata:
   internal: true
 ---
 
-# Feature / Bug-Fix Development Checklist
+# Feature / Bug-Fix development checklist
 
 This skill is a checklist of **guardrails** for feature and bug-fix work — reminders to catch missing work during development, then hand off to the more specific workflow when needed. The sections roughly follow a task's lifecycle for easy reading, but treat them as prompts to apply where relevant, not a rigid pipeline.
 
-## Confirm Intent & Scope
+## Confirm intent & scope
 
 Decide what the task actually is before doing any work.
 
@@ -17,7 +17,7 @@ Decide what the task actually is before doing any work.
 - When the user enumerates a subset ("only the low items", "core field only", "先只加 skip"), implement exactly that subset and stop.
 - If a fix would span multiple clusters or packages, estimate file/PR size and confirm scope before writing code. Keep one PR per coherent seam.
 
-## Build Verified Context
+## Build verified context
 
 Gather the real inputs and ground every claim in something you read **this session** — never answer from memory or impression.
 
@@ -28,7 +28,7 @@ Gather the real inputs and ground every claim in something you read **this sessi
 - To answer "how does vitest/jest/rsbuild/rspack behave?", read the **latest upstream source, not the built `node_modules` dist**: if a local clone exists (e.g. `~/Projects/vitest`), bring it up to the latest default branch before reading (`git pull` — a `git fetch` alone leaves the working tree stale); otherwise shallow-clone fresh (vitest → `vitest-dev/vitest`; rsbuild/rspack → `web-infra-dev/{rsbuild,rspack}`; `npm view <pkg> repository` finds others). Prefer a subagent for the lookup.
 - If you cannot verify, say so explicitly instead of guessing.
 
-## Map the Blast Radius
+## Map the blast radius
 
 Before writing code, determine what the change reaches:
 
@@ -41,7 +41,7 @@ Before writing code, determine what the change reaches:
 | Could it affect both Node and browser modes?    | Evaluate both; see Browser Mode Impact                 |
 | Is the config option also present in Rsbuild?   | If yes → adapter sync required; see Adapter Impact     |
 
-### Public API / Config / CLI Checklist
+### Public API / config / CLI checklist
 
 For public API/config/CLI changes, check the full surface in one pass:
 
@@ -50,7 +50,7 @@ For public API/config/CLI changes, check the full surface in one pass:
 3. Adapters (`rsbuild`, `rslib`, `rspack`), browser mode, and docs (`en`, `zh`, `ApiMeta`) impact.
 4. Unit tests for internals/transforms; e2e tests for user-facing behavior.
 
-## Implement the Minimal Root-Cause Fix
+## Implement the minimal Root-Cause fix
 
 Make the smallest **design** change that resolves the root cause — this is where design-scope decisions belong. For in-file code quality (`any`/`as`, defensive checks, one-use abstractions, single source of truth, catch-and-rethrow), defer to the `typescript` skill rather than restating its rules here.
 
@@ -59,13 +59,13 @@ Make the smallest **design** change that resolves the root cause — this is whe
 - Before adding a top-level config option, prove the existing channel (`inlineConfig` / run params) cannot express it.
 - When aligning behavior with another tool, match the reference impl as the parity target — read its **source** (the latest upstream clone, per Build Verified Context), not the `node_modules` dist. Don't harden edges beyond it.
 
-## Prove It Empirically
+## Prove it empirically
 
 Every behavioral change — feature or bug fix — must have a corresponding e2e test. Unit tests alone are not enough; e2e tests verify the full CLI → runner → reporter pipeline.
 
 Decide _whether_ test work is required here. For test layout, fixture strategy, rebuild requirements, and exact commands, switch to the `testing` skill. For what counts as **evidence** that the change works — forbidden proxy signals, per-change-shape observation standards — defer to the `verify` skill rather than restating its rules here.
 
-### When Test Work Is Required
+### When test work is required
 
 - New feature or config behavior → add or extend an e2e test that exercises the user-facing flow.
 - Bug fix → add a regression test that fails before the fix and passes after it.
@@ -81,22 +81,22 @@ Prove the repro both ways before claiming a fix:
 
 Never present a hypothesis as a conclusion — state confidence explicitly; "I believe" is not "verified".
 
-## Browser Mode Impact
+## Browser mode impact
 
 Not every feature needs browser mode support, but you must **consciously decide** rather than ignore it.
 
-### When Browser Mode Needs Changes
+### When browser mode needs changes
 
 - The feature touches test execution, module resolution, or runtime APIs → likely affects browser mode.
 - The feature adds a new config option → check if it should apply in browser mode too.
 - The feature modifies the reporter, CLI output, or test filtering → usually Node-only, but verify.
 
-### When Browser Mode Does NOT Need Changes
+### When browser mode does NOT need changes
 
 - Pure Node-specific features (e.g., `process.env` handling, Node module mocking).
 - Internal refactors that don't change the runtime contract.
 
-### If Browser Mode Is Affected
+### If browser mode is affected
 
 1. Keep ownership clear: `@rstest/browser` = host/protocol/scheduling, `@rstest/browser-ui` = UI, runner/runtime = execution semantics, provider packages = provider behavior.
 2. Update `packages/browser/` if the runtime behavior differs.
@@ -104,44 +104,44 @@ Not every feature needs browser mode support, but you must **consciously decide*
 4. If the feature requires a new browser fixture, follow the pattern in `e2e/browser-mode/fixtures/`.
 5. If the feature involves React component testing, check `@rstest/browser-react` as well.
 
-### If Browser Mode Is Not Affected
+### If browser mode is not affected
 
 Add a brief note in the PR explaining **why** browser mode is unaffected, so reviewers don't have to ask.
 
-## Adapter Impact
+## Adapter impact
 
 If the new or changed configuration option also exists in Rsbuild, check whether the adapters (`@rstest/adapter-rsbuild`, `@rstest/adapter-rslib`) need to transform it.
 
-### When Adapters Need Updates
+### When adapters need updates
 
 - The config option maps to an equivalent Rsbuild/Rslib config field → the adapter must translate it so users' existing Rsbuild configs work seamlessly.
 - A new rstest config is introduced that overlaps with Rsbuild concepts (e.g., resolve, output, source) → evaluate whether the adapter should auto-convert.
 
-### Testing Adapters
+### Testing adapters
 
 - If `@rstest/core` already has an e2e test covering the underlying feature, **do not duplicate it** in the adapter package. Prefer a **unit test** inside the adapter package (`packages/adapter-rsbuild/` or `packages/adapter-rslib/`) that verifies the config transformation logic.
 - Only add a separate adapter e2e test (`e2e/adapterTransformImport/`) when the transformation itself has complex behavior that unit tests cannot adequately cover.
 
-### Adapter Docs
+### Adapter docs
 
 - Update adapter-specific documentation when a new transform is added, so users know which Rsbuild configs are auto-converted.
 
-## Keep Docs In Sync
+## Keep docs in sync
 
 Documentation is not a follow-up task — it ships with the code. **Do not merge features without docs.**
 
-### Route The Docs Work
+### Route the docs work
 
 - Public API, config, CLI, or behavior changes usually require docs updates.
 - Treat this as the routing step: identify that docs must be updated, then inspect the existing docs structure under `website/docs/en/` and `website/docs/zh/` to edit the right pages.
 - If the change introduces a new docs surface or convention, follow the established structure in the surrounding guide/config/api pages instead of guessing a new location.
 
-### Docs Conventions
+### Docs conventions
 
 - Writing style, format, bilingual sync, and `ApiMeta` marker rules are owned by `website/AGENTS.md` — read it before editing docs rather than restating its rules here.
 - **Signature fidelity:** if you changed a public type in `packages/core/src/types/`, or edited a `**Type:**` / `**类型：**` block, run the `api-doc-sync` skill. The doc signatures are hand-written copies of the real types and drift silently (missing overloads, wrong arg order, en/zh divergence); `api-doc-sync` grounds them against source and `tsc`.
 
-## Self-Check Before Committing
+## Self-Check Before committing
 
 Run through this before you consider the work done:
 
@@ -156,7 +156,7 @@ Run through this before you consider the work done:
 - [ ] **Build passes** — `pnpm --filter <package> build` succeeds
 - [ ] **Existing tests still pass** — `pnpm test` and relevant e2e tests green
 
-## Handle Review Feedback by Redesign
+## Handle review feedback by redesign
 
 Review feedback arrives after you commit — resolve it by redesign, not more local patches.
 

@@ -64,7 +64,7 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build && npx prettier ./LICENSE.md --write",
+    "build": "rslib build && rs fmt ./LICENSE.md",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "test": "npx rstest --globals"
   },

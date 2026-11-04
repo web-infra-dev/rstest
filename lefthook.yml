@@ -1,38 +1,36 @@
 pre-commit:
   parallel: true
   commands:
-    prettier:
-      # No glob: let prettier pick which staged files it can format (via
-      # --ignore-unknown, honoring .prettierignore), so this matches the whole-repo
-      # `prettier --check .` run on pre-push and in CI. An explicit extension list
-      # drifts (it was missing yaml) and **/*.x does not match repo-root files.
+    fmt:
+      # Let rs fmt select supported staged files using the root configuration.
+      # Ignored-only and unsupported-only changes must not block commits.
       stage_fixed: true
-      run: pnpm prettier --write --ignore-unknown {staged_files}
+      run: pnpm exec rs fmt --ignore-unknown --no-error-on-unmatched-pattern {staged_files}
 
 pre-push:
-  parallel: true
+  # The build generates and formats LICENSE.md before the repository-wide
+  # formatting check reads it.
+  parallel: false
   commands:
-    # Build-free checks — whole-repo prettier + spell/heading-case. Runs on every
-    # push, including docs-only ones. Overlaps the typecheck build, so on a code
-    # push it adds no wall-clock. The build's only prettier-checked output,
-    # packages/*/LICENSE.md, is in .prettierignore so it cannot race this scan.
-    format-spell:
-      run: pnpm prettier --check . && pnpm run check-spell
     # Type-check needs built package .d.ts, so build first. Runs unless the push
     # is entirely markdown, so a docs-only push still skips the build while config
     # inputs (tsconfig.json, rstack.config.mts, ...) keep gating it. An inclusive
     # extension glob would miss those: lefthook's **/*.x does not match repo-root
     # files such as rstack.config.mts.
     typecheck:
+      priority: 1
       exclude:
         - '*.md'
         - '*.mdx'
       run: pnpm run build && pnpm run lint:type
+    # Also run on docs-only pushes, which skip the build above.
+    format-spell:
+      priority: 2
+      run: pnpm exec rs fmt --check && pnpm run check-spell
     # Dependency-version check lives here rather than on pre-commit; lefthook skips
     # it instantly when no pushed file matches its glob, so a code-only push pays
-    # nothing. `pnpm dedupe --check` is intentionally left to CI: it can perturb
-    # pnpm's modules state, and CI keeps it last to stay safe — pre-push runs in
-    # parallel and gives no ordering control to isolate it from the build.
+    # nothing.
     check-dependency-version:
+      priority: 3
       glob: '**/package.json'
       run: pnpm run check-dependency-version

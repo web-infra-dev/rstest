@@ -68,3 +68,9 @@ define.lint(({ js, ts }) => [
     },
   },
 ]);
+
+define.fmt({
+  singleQuote: true,
+  sortPackageJson: true,
+  plugins: ['heading-case'],
+});
