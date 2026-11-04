@@ -1,21 +1,21 @@
 import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { pluginTailwindcss } from '@rsbuild/plugin-tailwindcss';
-import { defineConfig } from '@rspress/core';
 import { transformerCompatibleMetaHighlight } from '@rspress/core/shiki-transformers';
 import { pluginAlgolia } from '@rspress/plugin-algolia';
 import { pluginClientRedirects } from '@rspress/plugin-client-redirects';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
+import { define } from 'rstack';
 
 const siteUrl = 'https://rstest.rs';
 const description =
   'Rstest is a JavaScript testing framework powered by Rspack';
 
-export default defineConfig({
+define.doc({
   siteOrigin: siteUrl,
-  root: path.join(__dirname, 'docs'),
+  root: path.join(import.meta.dirname, 'docs'),
   title: 'Rstest',
   icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',

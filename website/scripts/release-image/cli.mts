@@ -27,7 +27,7 @@ Options:
   --help, -h          Show this help
 
 og images are committed to rstackjs/rstack-design-resources under rstest/ so the
-assets.rspack.rs CDN can serve them (rspress.config.ts wires og:image per blog
+assets.rspack.rs CDN can serve them (rstack.config.mts wires og:image per blog
 route). Banners are referenced by a site-relative path from the blog. Compress
 both with pngquant before committing (see website/AGENTS.md).`);
   process.exit(values.help ? 0 : 1);
