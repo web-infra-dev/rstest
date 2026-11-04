@@ -41,14 +41,12 @@ fixtures-test-*/
 .rstest-reports/
 .rstest-playwright/
 .rslib/
-.rstack/
 !packages/core/src/coverage
 !packages/core/tests/coverage
 tests-dist/
 
 .rstest-temp/
 .rstest/
-lefthook-local.yml
 
 # Generated memory benchmark fixture
 benchmarks/fixtures/memory/

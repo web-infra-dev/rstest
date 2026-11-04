@@ -74,3 +74,7 @@ define.fmt({
   sortPackageJson: true,
   plugins: ['heading-case'],
 });
+
+define.staged({
+  '*': 'rs fmt --ignore-unknown --no-error-on-unmatched-pattern',
+});

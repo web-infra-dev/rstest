@@ -28,6 +28,8 @@
     },
     "scripts": {
       "entry": [
+        // Invoked by the pre-push Git hook.
+        "prePush.mjs",
         // The root config lists `scripts/lint` as a project, but knip resolves its
         // `<rootDir>` against the `scripts` workspace instead of `scripts/lint`.
         "lint/*.test.ts",
