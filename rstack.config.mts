@@ -73,9 +73,4 @@ define.fmt({
   singleQuote: true,
   sortPackageJson: true,
   plugins: ['heading-case'],
-  ignorePatterns: [
-    // Keep fixture and skill lockfiles in the existing formatting scope.
-    '!package-lock.json',
-    '!skills-lock.json',
-  ],
 });
