@@ -31,8 +31,13 @@ export function Button({
   ].join(' ');
 
   const Comp = LinkComp ?? 'a';
+  const external = href.startsWith('http');
   return (
-    <Comp href={href} className={className} target="_blank" rel="noreferrer">
+    <Comp
+      href={href}
+      className={className}
+      {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+    >
       {children}
     </Comp>
   );
@@ -108,8 +113,6 @@ export function FeatureText({
       {children}
       <LinkComp
         href={href}
-        target="_blank"
-        rel="noreferrer"
         className="group mt-6 inline-flex w-fit items-center gap-1 text-[13px] font-medium text-brand"
       >
         {linkLabel}

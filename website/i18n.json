@@ -31,14 +31,6 @@
     "en": "Powered by Rspack and Rsbuild for fast test compilation and a rich plugin ecosystem",
     "zh": "基于 Rspack 和 Rsbuild，为测试带来极快的编译速度和丰富的插件生态"
   },
-  "blazingFast": {
-    "en": "High performance",
-    "zh": "高性能"
-  },
-  "blazingFastDesc": {
-    "en": "Rspack's build optimizations reduce redundant module transforms and executions, even in large projects.",
-    "zh": "借助 Rspack 的构建优化，减少重复的模块转换与执行，大型项目同样快速。"
-  },
   "realBrowserTesting": {
     "en": "Real browser testing",
     "zh": "真实浏览器测试"
@@ -46,21 +38,5 @@
   "realBrowserTestingDesc": {
     "en": "Run tests in Chromium, Firefox, and WebKit via Playwright, covering what a simulated DOM can't",
     "zh": "基于 Playwright 在 Chromium、Firefox 和 WebKit 中运行测试，覆盖模拟 DOM 难以验证的场景"
-  },
-  "modernByDefault": {
-    "en": "Out of the box",
-    "zh": "开箱即用"
-  },
-  "modernByDefaultDesc": {
-    "en": "Built-in support for TypeScript, ESM, CJS, and CSS Modules, with no extra setup.",
-    "zh": "内置 TypeScript、ESM、CJS 和 CSS Modules 支持，无需额外配置。"
-  },
-  "testingReady": {
-    "en": "Fully featured",
-    "zh": "功能完备"
-  },
-  "testingReadyDesc": {
-    "en": "Assertions, snapshots, mocks, and lifecycle hooks built in, with coverage through Istanbul or V8.",
-    "zh": "内置断言、快照、Mock 和生命周期钩子，支持 Istanbul 与 V8 覆盖率。"
   }
 }

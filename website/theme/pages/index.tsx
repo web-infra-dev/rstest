@@ -6,6 +6,7 @@ import { BrowserStackFigure } from '../ui/BrowserStackFigure';
 import { JestMigrateFigure } from '../ui/JestMigrateFigure';
 import { PipelineStackFigure } from '../ui/PipelineStackFigure';
 import { PlaywrightBeltFigure } from '../ui/PlaywrightBeltFigure';
+import { PopperFigure } from '../ui/PopperFigure';
 import {
   Button,
   FeatureText,
@@ -129,6 +130,32 @@ const PIPELINE: Record<'en' | 'zh', Feature> = {
       '支持 Rsbuild 与 Rspack 配置项，配置方式一致',
     ],
   },
+};
+
+const ECOSYSTEM: Record<'en' | 'zh', Feature> = {
+  en: {
+    title: 'A modern testing framework',
+    body: 'One framework for Node.js, jsdom, and real browsers',
+    points: [
+      'TypeScript, CSS, and more work out of the box',
+      'Component testing for mainstream frameworks',
+      'Loads real Module Federation remotes instead of mocks',
+    ],
+  },
+  zh: {
+    title: '现代测试框架',
+    body: '从 Node.js 到 jsdom 与真实浏览器，一个框架全部覆盖',
+    points: [
+      'TypeScript、CSS 等开箱即用',
+      '支持主流框架的组件测试',
+      '加载真实的 Module Federation 远程模块，无需 mock',
+    ],
+  },
+};
+
+const ECOSYSTEM_DESC = {
+  en: 'Covers the languages, frameworks, and runtimes of modern JavaScript projects',
+  zh: '覆盖现代 JavaScript 项目的语言、框架与运行环境',
 };
 
 const BROWSER: Record<'en' | 'zh', Feature> = {
@@ -329,54 +356,6 @@ const AGENT_PROMPT =
 
 const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
 
-const HIGHLIGHT_ICONS = {
-  blazingFast: (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="size-4"
-    >
-      <path d="M14 2 5 14h6l-1 8 9-12h-6l1-8Z" />
-    </svg>
-  ),
-  modernByDefault: (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="size-4"
-    >
-      <path d="m8 6-6 6 6 6" />
-      <path d="m16 6 6 6-6 6" />
-      <path d="m14 4-4 16" />
-    </svg>
-  ),
-  testingReady: (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="size-4"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="m8 12 2.5 2.5L16 9" />
-    </svg>
-  ),
-};
-
 const BODY = 'mt-3 text-[15px]/[1.7] text-fg-muted';
 
 function FeatureCopy({ body, points }: Feature) {
@@ -401,26 +380,15 @@ export function HomeLayout() {
   const t = useI18n<typeof import('i18n')>();
   const tUrl = useI18nUrl();
   const lang = useLang() === 'zh' ? 'zh' : 'en';
-  const highlights = [
-    {
-      key: 'blazingFast',
-      title: t('blazingFast'),
-      description: t('blazingFastDesc'),
-    },
-    {
-      key: 'modernByDefault',
-      title: t('modernByDefault'),
-      description: t('modernByDefaultDesc'),
-    },
-    {
-      key: 'testingReady',
-      title: t('testingReady'),
-      description: t('testingReadyDesc'),
-    },
-  ] as const;
-
   return (
-    <main className="pb-6">
+    <main className="rstest-home relative isolate pb-6">
+      <div
+        aria-hidden
+        className="home-hero-backdrop pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] lg:h-[720px]"
+      >
+        <div className="home-hero-grid absolute inset-0" />
+        <div className="home-hero-glow absolute inset-0" />
+      </div>
       <section className="mx-auto flex w-full max-w-6xl flex-col items-center px-6 pt-10 pb-12 text-center lg:pt-16 lg:pb-16">
         <h1 className="text-[40px]/[1.1] font-semibold tracking-[-0.055em] sm:text-[64px]/[1.1]">
           <span className="block text-fg">
@@ -428,9 +396,9 @@ export function HomeLayout() {
             <span className="text-brand">Rspack</span>
             {HERO_TITLE[lang][1]}
           </span>
-          <span className="block text-[#999]">{HERO_TITLE[lang][2]}</span>
+          <span className="home-hero-sub block">{HERO_TITLE[lang][2]}</span>
         </h1>
-        <p className="mt-6 max-w-xl text-[19px]/[1.6] text-fg-muted">
+        <p className="mt-6 max-w-2xl text-[19px]/[1.6] text-balance text-fg-muted">
           {t('slogan')}
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -447,107 +415,100 @@ export function HomeLayout() {
         <div className="mt-6 flex w-full justify-center">
           <InstallCommand prompt={AGENT_PROMPT} args="add @rstest/core -D" />
         </div>
-        <div className="mt-12 w-full border border-line bg-line text-left lg:mt-16">
-          <div className="grid gap-px sm:grid-cols-3">
-            {highlights.map((item) => (
-              <div
-                key={item.title}
-                className="home-highlight bg-surface px-6 py-5 sm:px-8 sm:py-6 lg:px-10 lg:py-8"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="home-highlight__icon flex size-8 shrink-0 items-center justify-center rounded-lg border border-line text-brand">
-                    {HIGHLIGHT_ICONS[item.key]}
-                  </div>
-                  <h2 className="text-[16px] font-semibold text-fg">
-                    {item.title}
-                  </h2>
-                </div>
-                <p className="mt-3 text-[14px]/[1.6] text-fg-muted">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       <Panel>
+        <PanelHeader index="01" description={ECOSYSTEM_DESC[lang]} />
+        <Grid columns="lg:grid-cols-2">
+          <FeatureText
+            title={ECOSYSTEM[lang].title}
+            href={tUrl('/guide/start/features')}
+            linkLabel={LEARN_MORE[lang]}
+            LinkComp={Link}
+          >
+            <FeatureCopy {...ECOSYSTEM[lang]} />
+          </FeatureText>
+          <PopperFigure className="home-figure-cell" />
+        </Grid>
+
         <PanelHeader
-          index="01"
+          index="02"
           description={t('productionAccurateTestingDesc')}
         />
+        {/* Zigzag: this showcase runs animation-left / text-right on desktop.
+            DOM keeps text first so mobile still reads copy before the visual. */}
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={PIPELINE[lang].title}
             href={tUrl('/guide/start/')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
+            className="lg:order-2"
           >
             <FeatureCopy {...PIPELINE[lang]} />
           </FeatureText>
-          <PipelineStackFigure />
+          <PipelineStackFigure className="home-figure-cell lg:order-1" />
         </Grid>
 
-        <PanelHeader index="02" description={t('realBrowserTestingDesc')} />
-        {/* Zigzag: this showcase runs animation-left / text-right on desktop.
-            DOM keeps text first so mobile still reads copy before the visual. */}
+        <PanelHeader index="03" description={t('realBrowserTestingDesc')} />
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={BROWSER[lang].title}
             href={tUrl('/guide/browser-testing/')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
-            className="lg:order-2"
           >
             <FeatureCopy {...BROWSER[lang]} />
           </FeatureText>
-          <BrowserStackFigure className="lg:order-1" />
+          <BrowserStackFigure className="home-figure-cell" />
         </Grid>
 
-        <PanelHeader index="03" description={ADAPTER_DESC[lang]} />
+        <PanelHeader index="04" description={ADAPTER_DESC[lang]} />
+        {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={ADAPTER[lang].title}
             href={tUrl('/guide/advanced/adapters')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
+            className="lg:order-2"
           >
             <FeatureCopy {...ADAPTER[lang]} />
           </FeatureText>
-          <AdaptersPatchFigure />
+          <AdaptersPatchFigure className="home-figure-cell lg:order-1" />
         </Grid>
 
-        <PanelHeader index="04" description={JEST_DESC[lang]} />
-        {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
+        <PanelHeader index="05" description={JEST_DESC[lang]} />
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={JEST[lang].title}
             href={tUrl('/guide/migration/jest')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
-            className="lg:order-2"
           >
             <FeatureCopy {...JEST[lang]} />
           </FeatureText>
-          <JestMigrateFigure className="lg:order-1" />
+          <JestMigrateFigure className="home-figure-cell" />
         </Grid>
 
-        <PanelHeader index="05" description={PLAYWRIGHT_DESC[lang]} />
+        <PanelHeader index="06" description={PLAYWRIGHT_DESC[lang]} />
+        {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
         <Grid columns="lg:grid-cols-2">
           <FeatureText
             title={PLAYWRIGHT[lang].title}
             href={tUrl('/guide/basic/e2e-testing')}
             linkLabel={LEARN_MORE[lang]}
             LinkComp={Link}
+            className="lg:order-2"
           >
             <FeatureCopy {...PLAYWRIGHT[lang]} />
           </FeatureText>
-          <PlaywrightBeltFigure />
+          <PlaywrightBeltFigure className="home-figure-cell lg:order-1" />
         </Grid>
       </Panel>
 
       <Panel className="mt-16 lg:mt-24">
-        <PanelHeader index="06" description={RSTACK_DESC[lang]} />
+        <PanelHeader index="07" description={RSTACK_DESC[lang]} />
         <Grid columns="grid-cols-2">
           {RSTACK_TOOLS.map((tool) => (
             <a
@@ -556,13 +517,13 @@ export function HomeLayout() {
               target="_blank"
               rel="noreferrer"
               data-tool={tool.slug}
-              className="rstack-tool group relative flex flex-col gap-2 bg-surface p-4 sm:grid sm:min-h-[132px] sm:grid-cols-[80px_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:p-5 lg:grid-cols-[96px_minmax(0,1fr)]"
+              className="rstack-tool group relative flex flex-col gap-2 bg-surface p-4 sm:grid sm:min-h-[132px] sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:py-5 sm:pr-5 sm:pl-8 lg:min-h-[144px] lg:grid-cols-[76px_minmax(0,1fr)] lg:pl-[34px]"
             >
-              <div className="relative col-start-1 size-10 shrink-0 self-start sm:size-auto sm:self-stretch">
+              <div className="relative col-start-1 size-8 shrink-0 self-start sm:size-16 sm:self-center lg:size-[76px]">
                 <img
                   src={tool.logo}
                   alt=""
-                  className="block size-10 object-contain object-center sm:absolute sm:inset-0 sm:size-full"
+                  className="block size-8 object-contain object-left sm:absolute sm:inset-0 sm:size-full"
                 />
               </div>
               <div className="col-start-2 flex min-w-0 flex-col gap-y-0.5 sm:self-center">
@@ -587,8 +548,6 @@ export function HomeLayout() {
             <div className="col-span-3 lg:col-span-1">
               <a
                 href={tUrl('/')}
-                target="_blank"
-                rel="noreferrer"
                 className="inline-flex items-center gap-2.5"
                 aria-label="Rstest"
               >
@@ -615,8 +574,9 @@ export function HomeLayout() {
                             ? link.href
                             : tUrl(link.href)
                         }
-                        target="_blank"
-                        rel="noreferrer"
+                        {...(link.href.startsWith('http')
+                          ? { target: '_blank', rel: 'noreferrer' }
+                          : {})}
                         className="text-[13px] text-fg-muted transition-colors hover:text-fg"
                       >
                         {link.label}

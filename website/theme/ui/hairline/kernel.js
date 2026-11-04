@@ -1,5 +1,5 @@
 /*
- * Vendored from @lucasmarkes/hairline v0.5.0 (https://github.com/lucasmarkes/hairline),
+ * Vendored from @lucasmarkes/hairline v0.5.1 (https://github.com/lucasmarkes/hairline),
  * the engine bundled with its hairline-create skill. Do not edit; replace it as a whole.
  *
  * MIT License
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/* hairline kernel sha256:3a19aa2640ba8c6c306184d05fddfbd4f3323a6ebd9217dd3cbb38e9db74991c */
+/* hairline kernel sha256:346b48bdef2cdfafd5343eba01494255cf75f9c078e6fcd1aafc62bab62980a1 */
 /*
  * HL: everything a figure may call. Read this index; the code under it is the
  * package's src/core, unchanged, and a figure should not need to read it.
@@ -421,7 +421,8 @@ var HL = (() => {
   var last = 0;
   var io = null;
   var rm = null;
-  function frame(now) {
+  function frame() {
+    const now = performance.now();
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1e3));
     last = now;
     let any = false;
