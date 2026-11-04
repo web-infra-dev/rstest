@@ -22,8 +22,8 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "rsbuild build --config ./rsbuild.config.ts",
-    "dev": "rsbuild dev --config ./rsbuild.config.ts"
+    "build": "rs build",
+    "dev": "rs dev"
   },
   "dependencies": {
     "antd": "^6.6.8",
@@ -33,12 +33,12 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@rsbuild/core": "catalog:",
     "@rsbuild/plugin-react": "catalog:",
     "@rsbuild/plugin-svgr": "catalog:",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "rstack": "catalog:",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },

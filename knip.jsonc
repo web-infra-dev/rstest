@@ -89,6 +89,9 @@
         "tests/**/fixtures/**",
       ],
     },
+    "packages/browser-ui": {
+      "entry": ["rstack.config.mts", "src/main.tsx"],
+    },
     "packages/browser": {
       "rslib": { "config": ["rstack.config.mts"] },
       "ignoreUnresolved": [

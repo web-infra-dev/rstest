@@ -1,13 +1,13 @@
 import { resolve } from 'node:path';
-import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { pluginSvgr } from '@rsbuild/plugin-svgr';
+import { define } from 'rstack';
 
-const root = __dirname;
+const root = import.meta.dirname;
 
 const isDev = process.argv.includes('dev');
 
-export default defineConfig({
+define.app({
   plugins: [pluginReact(), pluginSvgr()],
   server: {
     port: 7392,
