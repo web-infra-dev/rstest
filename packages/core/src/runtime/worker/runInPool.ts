@@ -8,6 +8,7 @@ import type {
   AssetFiles,
   MaybePromise,
   RunnerHooks,
+  RuntimeConfig,
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
@@ -22,13 +23,19 @@ import {
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { isVmPoolType } from '../../utils/workers';
-import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import {
+  formatTestError,
+  getRealNow,
+  getRealTimers,
+  setRealTimers,
+} from '../util';
 import { clearFileContext } from '../fileContext';
 import { withPackageExports } from '../api/packageExports';
 import { disposeRstestUtilities } from '../api/utilities';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { takeFileCleanups } from '../runner/fileCleanup';
+import { runSetupFiles } from '../runner/setup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { applyRuntimeColors } from './color';
 import { environmentLoaders } from './env/registry';
@@ -587,6 +594,7 @@ const preparePool = async (
 
 const loadFiles = async ({
   setupEntries,
+  sequence,
   assetFiles,
   rstestContext,
   distPath,
@@ -601,6 +609,7 @@ const loadFiles = async ({
   tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
+  sequence: RuntimeConfig['sequence'];
   assetFiles: AssetFiles;
   rstestContext: Record<string, any>;
   distPath: string;
@@ -636,17 +645,14 @@ const loadFiles = async ({
 
   // run setup files
   tracker?.transition('setupFiles');
-  for (const {
-    distPath: setupDistPath,
-    testPath: setupTestPath,
-  } of setupEntries) {
-    setFederationDynamicImportOrigin(federation, setupTestPath, runtimeGlobal);
-
+  // ESM entries statically import the same runtime chunk. Link it once before
+  // starting concurrent entry graphs so SourceTextModule never sees it mid-link.
+  if (sequence.setupFiles === 'parallel' && outputModule && runtimeDistPath) {
     await loadModule({
-      codeContent: getAssetText(assetFiles, setupDistPath),
-      distPath: setupDistPath,
+      codeContent: getAssetText(assetFiles, runtimeDistPath),
+      distPath: runtimeDistPath,
       runtimeDistPath,
-      testPath: setupTestPath,
+      testPath,
       rstestContext,
       assetFiles,
       interopDefault,
@@ -654,6 +660,28 @@ const loadFiles = async ({
       cacheCompilation: vmContext !== undefined,
     });
   }
+  await runSetupFiles(
+    setupEntries,
+    async ({ distPath: setupDistPath, testPath: setupTestPath }) => {
+      setFederationDynamicImportOrigin(
+        federation,
+        setupTestPath,
+        runtimeGlobal,
+      );
+      await loadModule({
+        codeContent: getAssetText(assetFiles, setupDistPath),
+        distPath: setupDistPath,
+        runtimeDistPath,
+        testPath: setupTestPath,
+        rstestContext,
+        assetFiles,
+        interopDefault,
+        vmContext,
+        cacheCompilation: vmContext !== undefined,
+      });
+    },
+    sequence.setupFiles,
+  );
 
   tracker?.transition('collect');
   setFederationDynamicImportOrigin(federation, testPath, runtimeGlobal);
@@ -857,6 +885,7 @@ export const runInPool = async (
         testPath,
         assetFiles,
         setupEntries,
+        sequence: options.context.runtimeConfig.sequence,
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
@@ -919,6 +948,7 @@ export const runInPool = async (
     results: [],
     errors: [],
   };
+  let loadDuration: number | undefined;
   let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
 
   try {
@@ -974,28 +1004,30 @@ export const runInPool = async (
       });
     }
 
-    tracker.transition('load');
-    const { assetFiles, sourceMaps: sourceMapsFromAssets } =
-      await loadTaskAssets(options, assets, rpc);
-    sourceMaps = sourceMapsFromAssets;
-
-    rpc.onTestFileStart?.({
-      testId: getFileTaskId(testPath),
-      testPath,
-      project,
-      tests: [],
-    });
-
-    // Keep file-level context only while evaluating top-level module code.
-    // Once the runner starts, suite/case tasks should own subsequent logs so
-    // passed suite buffers are not replayed by the final file-level flush.
-    taskContext.setFallback({
-      taskId: getFileTaskId(testPath),
-      taskType: 'file',
-      testPath,
-    });
-
+    const loadStart = getRealNow();
+    tracker.transition('load', loadStart);
+    let assetFiles: AssetFiles;
     try {
+      const loadedAssets = await loadTaskAssets(options, assets, rpc);
+      assetFiles = loadedAssets.assetFiles;
+      sourceMaps = loadedAssets.sourceMaps;
+
+      rpc.onTestFileStart?.({
+        testId: getFileTaskId(testPath),
+        testPath,
+        project,
+        tests: [],
+      });
+
+      // Keep file-level context only while evaluating top-level module code.
+      // Once the runner starts, suite/case tasks should own subsequent logs so
+      // passed suite buffers are not replayed by the final file-level flush.
+      taskContext.setFallback({
+        taskId: getFileTaskId(testPath),
+        taskType: 'file',
+        testPath,
+      });
+
       await loadFiles({
         rstestContext,
         distPath,
@@ -1003,6 +1035,7 @@ export const runInPool = async (
         testPath,
         assetFiles,
         setupEntries,
+        sequence: options.context.runtimeConfig.sequence,
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
@@ -1011,7 +1044,16 @@ export const runInPool = async (
         runtimeGlobal: rstestContext.global,
         tracker,
       });
+      taskContext.setFallback(undefined);
+      // Snapshot setup awaits host RPC and must finish before describe callbacks
+      // can replace process.nextTick with fake timers in child processes.
+      await runner.prepareTests(testPath);
     } finally {
+      const loadEnd = getRealNow();
+      loadDuration = loadEnd - loadStart;
+      // Keep the detailed phases inside the exact reported loading interval.
+      tracker.end(loadEnd);
+      tracker.recordFileLoad(loadStart, loadDuration);
       taskContext.setFallback(undefined);
     }
 
@@ -1024,7 +1066,7 @@ export const runInPool = async (
       tracker.transition('coverage');
       // Under `isolate: false` this file can run module instances that earlier
       // files in this worker loaded, so coverage sees their assets too.
-      const { getLoadedAssetFiles } = await importLoader();
+      const { getLoadedAssetFiles, wrapperLength } = await importLoader();
       const loadedAssetFiles = getLoadedAssetFiles();
       const collectOptions = {
         assetFiles: Object.fromEntries(
@@ -1033,6 +1075,7 @@ export const runInPool = async (
             .map((name) => [name, getAssetText(loadedAssetFiles, name)]),
         ),
         sourceMaps,
+        wrapperLength,
         outputModule: options.context.outputModule,
         knownCoverageStructures: options.knownCoverageStructures,
       };
@@ -1113,6 +1156,9 @@ export const runInPool = async (
         ),
       onFileCleanupStart: async (result) => {
         fileCleanupResult = result;
+        if (result && loadDuration !== undefined) {
+          result.loadDuration = loadDuration;
+        }
         await lifecycleHooks.onFileCleanupStart?.(result);
       },
       onFileCleanupEnd: async () => {
@@ -1172,6 +1218,9 @@ export const runInPool = async (
     };
     return runResult;
   } finally {
+    if (loadDuration !== undefined) {
+      runResult.loadDuration = loadDuration;
+    }
     lifecycleHooks.onTaskErrorHandlingChange?.(false);
     tracker.transition('teardown');
     taskContext?.setFallback(undefined);

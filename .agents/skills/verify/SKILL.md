@@ -5,7 +5,7 @@ metadata:
   internal: true
 ---
 
-# Verify Behavior, Not Proxies
+# Verify Behavior, not proxies
 
 A change is verified only when you have **observed the real behavior change** — the actual CLI output, reporter output, or exit code — not when a proxy signal went green. This skill owns exactly one concern: **what counts as evidence**. How to run things lives in the `testing` skill; what work a change requires (including the Flip-and-Verify regression protocol) lives in the `development` skill — don't expect commands or checklists here.
 

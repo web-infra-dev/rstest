@@ -14,6 +14,8 @@ export const RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK =
   '__rstest_dynamic_import_origin__' as const;
 export const RSTEST_REQUIRE_RESOLVE_HOOK =
   '__rstest_require_resolve__' as const;
+export const RSTEST_IMPORT_META_RESOLVE_HOOK =
+  '__rstest_import_meta_resolve__' as const;
 
 /**
  * The federation fallback, parked while a non-federation file runs. Worker-wide,

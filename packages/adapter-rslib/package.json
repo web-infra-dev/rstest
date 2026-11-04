@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rslib",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "Rstest adapter for rslib configuration",
   "keywords": [
     "rstest",
@@ -30,9 +30,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
-    "dev": "rslib build --watch",
-    "lint": "rslint .",
+    "build": "rs lib build",
+    "dev": "rs lib build --watch",
     "test": "rstest"
   },
   "devDependencies": {
@@ -40,6 +39,7 @@
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "get-tsconfig": "5.0.0-beta.6",
+    "rstack": "catalog:",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

@@ -23,13 +23,12 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
-    "dev": "rsbuild dev --config ./rsbuild.config.ts",
-    "lint": "rslint ."
+    "dev": "rsbuild dev --config ./rsbuild.config.ts"
   },
   "dependencies": {
-    "antd": "^6.6.6",
+    "antd": "^6.6.8",
     "birpc": "^4.2.0",
-    "lucide-react": "^1.59.0",
+    "lucide-react": "^1.64.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

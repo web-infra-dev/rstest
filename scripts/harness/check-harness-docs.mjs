@@ -384,13 +384,7 @@ for (const entry of readdirSync(join(repoRoot, 'packages'), {
 // ---------------------------------------------------------------------------
 
 // pnpm subcommands / bins that are not workspace scripts.
-const PNPM_BIN_ALLOWLIST = new Set([
-  'rstest',
-  'prettier',
-  'install',
-  'dlx',
-  'exec',
-]);
+const PNPM_BIN_ALLOWLIST = new Set(['rstest', 'install', 'dlx', 'exec']);
 
 /** Operators that end one command and start the next. */
 const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);

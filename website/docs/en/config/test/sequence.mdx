@@ -1,33 +1,38 @@
 ---
-description: Configure the execution order of lifecycle hooks.
+description: Configure the execution order of lifecycle hooks and setup files.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # sequence
 
-<ApiMeta addedVersion="0.12.6" />
+- **Type:** `{ hooks?: 'stack' | 'list' | 'parallel'; setupFiles?: 'list' | 'parallel' }`
+- **Default:** `{ hooks: 'stack', setupFiles: 'list' }`
 
-- **Type:** `{ hooks?: 'stack' | 'list' }`
-- **Default:** `{ hooks: 'stack' }`
-
-Configure the execution order of Rstest lifecycle hooks.
+Configure the execution order of Rstest lifecycle hooks and setup files.
 
 ## sequence.hooks
 
-- **Type:** `'stack' | 'list'`
+<ApiMeta addedVersion="0.12.6" />
+
+- **Type:** `'stack' | 'list' | 'parallel'`
 - **Default:** `'stack'`
 
 Controls the order of hooks within each suite:
 
 - `'stack'`: `beforeAll` and `beforeEach` run in declaration order; `afterAll` and `afterEach` run in reverse declaration order.
 - `'list'`: all four hooks run in declaration order. Use this when migrating from Jest if cleanup depends on hook registration order, such as unmounting components before resetting stores.
+- `'parallel'`: hooks of the same kind within each suite run concurrently, limited by [`maxConcurrency`](/config/test/max-concurrency). The runner waits for the whole group to finish and reports all hook failures before continuing.
 
 For nested suites, `beforeEach` still runs from parent to child, and `afterEach` still runs from child to parent.
 
-Cleanup functions returned by `beforeEach` run after all `afterEach` hooks; those returned by `beforeAll` run after the suite's `afterAll` hooks. They also follow this option: `'stack'` runs them in reverse order of their corresponding setup hooks, while `'list'` runs them in the same order. For nested `beforeEach` hooks, this includes cleanup from both parent and child suites.
+Cleanup functions returned by `beforeEach` run after all `afterEach` hooks; those returned by `beforeAll` run after the suite's `afterAll` hooks. They also follow this option: `'stack'` runs them in reverse order of their corresponding setup hooks, while `'list'` runs them in the same order. For nested `beforeEach` hooks, this includes cleanup from both parent and child suites. In `'parallel'` mode, returned cleanup functions also run concurrently, limited by `maxConcurrency`.
 
 v0.12.6 fixes an inconsistency where returned cleanup functions ran in setup order while `afterEach` and `afterAll` ran in reverse order. Returned cleanup functions now also run in reverse setup order by default. This changes their execution order compared with earlier versions.
+
+Use `'parallel'` only when hooks in the same group do not depend on each other's side effects. It applies in both Node Mode and Browser Mode.
+
+In parallel hooks, polling assertions use their configured timeout instead of a shared task deadline. Each hook's own timeout still bounds its execution.
 
 This option does not change fixture teardown, `onTestFinished`, or `onTestFailed`.
 
@@ -36,7 +41,34 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   sequence: {
-    hooks: 'list',
+    hooks: 'parallel',
+  },
+});
+```
+
+## sequence.setupFiles
+
+<ApiMeta addedVersion="0.12.6" />
+
+- **Type:** `'list' | 'parallel'`
+- **Default:** `'list'`
+
+Controls how [`setupFiles`](/config/test/setup-files) run before each test file in Node Mode and Browser Mode:
+
+- `'list'`: run setup files in the order listed, waiting for each file's asynchronous initialization before starting the next.
+- `'parallel'`: start all setup files and wait for their asynchronous initialization to finish before loading the test file. This option is not limited by `maxConcurrency`.
+
+Use `'parallel'` only when setup files do not depend on each other's side effects. For example, a setup that installs a polyfill must finish before another setup imports a library that needs it; keep `'list'` for that case. Setup files still share the test file's environment and module cache.
+
+If a parallel setup fails, Rstest waits for the other started setups to settle, reports the first failed setup in configuration order, and does not load the test file. This option does not affect `globalSetup`. Hooks registered by setup files follow `sequence.hooks`; their registration order can change when setup files run in parallel.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  setupFiles: ['./setup-matchers.ts', './setup-service.ts'],
+  sequence: {
+    setupFiles: 'parallel',
   },
 });
 ```

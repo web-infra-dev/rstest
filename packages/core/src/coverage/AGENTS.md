@@ -19,6 +19,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
 - Blob coverage from capable providers is deliberately pre-finalization: shards never scan the same untested files or check thresholds independently. `merge-reports` is the sole owner of filtering, backfill, reports, and thresholds for that unified blob workflow; providers without the capability retain the legacy per-run finalization path.
+- Runtime `wrapperLength` applies only to bundled assets. Preserve it with raw coverage through host folding; source maps and AST locations stay in bundle coordinates, while V8 counter lookups use runtime coordinates. An explicit zero must override the legacy-core fallback.
 - The reporting provider (main process) and the worker collection providers are distinct instances — state set during collection never reaches reporting.
 - Every browser cycle reports through the shared finalize, on both commands and in every watch shape — there is no bespoke report path left. Watch coverage is per-cycle on both transports: each report covers only the files that cycle ran, so the fold that produces a cycle's map must never widen past the cycle's own results.
 

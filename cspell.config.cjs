@@ -19,6 +19,8 @@ module.exports = {
     'pnpm-lock.yaml',
     'LICENSE.md',
     'e2e/**',
+    // vendored hairline engine and the figure written against its API
+    'website/theme/ui/hairline/**',
   ],
   flagWords: banWords,
   dictionaries: ['dictionary'],

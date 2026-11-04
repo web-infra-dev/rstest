@@ -157,6 +157,8 @@ export type NormalizedCoverageOptions = Required<
 export type KnownCoverageStructure = { path: string; hash: string };
 
 export type CoverageCollectOptions = {
+  /** @internal Runtime prefix length for bundled assetFiles, in UTF-16 code units. */
+  wrapperLength?: number;
   assetFiles?: Record<string, string>;
   sourceMaps?: Record<string, string>;
   outputModule?: boolean;

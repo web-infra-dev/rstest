@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "The Rsbuild-based test tool.",
   "keywords": [
     "rstest",
@@ -64,9 +64,8 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build && npx prettier ./LICENSE.md --write",
-    "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "lint": "rslint .",
+    "build": "rs lib build && rs fmt --config ../../rstack.config.mts ./LICENSE.md",
+    "dev": "cross-env SOURCEMAP=true rs lib build --watch",
     "test": "npx rstest --globals"
   },
   "dependencies": {
@@ -78,11 +77,10 @@
     "@antfu/install-pkg": "^1.1.0",
     "@clack/prompts": "^1.8.1",
     "@jridgewell/trace-mapping": "0.3.31",
-    "@microsoft/api-extractor": "^7.59.4",
+    "@microsoft/api-extractor": "^7.60.0",
     "@rsbuild/plugin-less": "catalog:",
     "@rsbuild/plugin-node-polyfill": "catalog:",
     "@rsbuild/plugin-sass": "catalog:",
-    "@rslib/core": "catalog:",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.4.0",
     "@types/istanbul-lib-coverage": "^2.0.6",
@@ -100,7 +98,7 @@
     "chai": "^6.3.0",
     "chokidar": "^5.0.0",
     "deepmerge": "^4.3.1",
-    "happy-dom": "^21.0.3",
+    "happy-dom": "^21.0.4",
     "jsdom": "^29.1.1",
     "memfs": "^4.80.0",
     "package-manager-detector": "^1.9.0",
@@ -108,6 +106,7 @@
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.7",
     "rslog": "^2.3.0",
+    "rstack": "catalog:",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
     "std-env": "^4.3.0",

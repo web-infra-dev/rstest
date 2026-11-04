@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rspack",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "Rstest adapter for rspack configuration",
   "keywords": [
     "rstest",
@@ -30,17 +30,16 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
-    "dev": "rslib build --watch",
-    "lint": "rslint .",
+    "build": "rs lib build",
+    "dev": "rs lib build --watch",
     "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "catalog:",
     "@rspack/cli": "catalog:",
     "@rspack/core": "catalog:",
     "@rstest/core": "workspace:*",
-    "@rstest/tsconfig": "workspace:*"
+    "@rstest/tsconfig": "workspace:*",
+    "rstack": "catalog:"
   },
   "peerDependencies": {
     "@rspack/cli": "^2.0.0",

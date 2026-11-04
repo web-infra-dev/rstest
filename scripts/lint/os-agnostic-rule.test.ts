@@ -1,10 +1,10 @@
 import path from 'node:path';
-import { Rslint } from '@rslint/core';
 import { afterAll, beforeAll, describe, expect, it } from '@rstest/core';
+import { Rslint } from 'rstack/lint';
 
-// Tests the custom `rstest-repo/os-agnostic-tests` rule defined in rslint.config.mts.
+// Tests the custom `rstest-repo/os-agnostic-tests` rule shared with rstack.config.mts.
 // Each fixture documents one syntax the rule bans or sanctions and is linted
-// through @rslint/core, so the real rule runs — not a simulated AST walk.
+// through rstack/lint, so the real rule runs — not a simulated AST walk.
 //
 // The rule is mounted via a minimal, project-free config
 // (os-agnostic-rule.rslint.mjs) and fixtures are passed to lintText as buffers.

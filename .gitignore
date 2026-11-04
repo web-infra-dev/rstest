@@ -31,6 +31,8 @@ test-temp-*
 .history/
 .claude/worktrees/
 .claude/settings.local.json
+# Per-developer drawing skill, installed with `npx skills add lucasmarkes/hairline`
+.agents/skills/hairline-create/
 .env.local
 .env.*.local
 
@@ -41,14 +43,12 @@ fixtures-test-*/
 .rstest-reports/
 .rstest-playwright/
 .rslib/
-.rstack/
 !packages/core/src/coverage
 !packages/core/tests/coverage
 tests-dist/
 
 .rstest-temp/
 .rstest/
-lefthook-local.yml
 
 # Generated memory benchmark fixture
 benchmarks/fixtures/memory/

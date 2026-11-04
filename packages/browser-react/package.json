@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser-react",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "React component testing support for Rstest browser mode",
   "keywords": [
     "rstest",
@@ -38,19 +38,18 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
-    "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "lint": "rslint .",
+    "build": "rs lib build",
+    "dev": "cross-env SOURCEMAP=true rs lib build --watch",
     "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "catalog:",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "rstack": "catalog:",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

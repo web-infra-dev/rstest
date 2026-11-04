@@ -11,6 +11,18 @@ pnpm preview  # Preview production build
 pnpm gen:release-image  # Generate a release's banner + og image (see below)
 ```
 
+## Homepage figures
+
+The homepage illustrations live in `theme/ui/hairline/` on a vendored Hairline engine. Edit existing figures in place; the engine stays byte-for-byte, and `rs fmt` and cspell are configured to leave it alone.
+
+Drawing a new figure needs the authoring skill. It is gitignored, so install it once per clone:
+
+```bash
+npx skills add lucasmarkes/hairline --skill hairline-create -y -a claude-code
+```
+
+`npx skills experimental_install` restores every skill listed in `skills-lock.json`.
+
 ## Release image generation
 
 Each release blog needs **two** images, generated together so they share one gradient:
@@ -83,7 +95,7 @@ The templates live **in this repo** under `scripts/release-image/` ([satori](htt
 
 ### Format conventions
 
-- **Heading case**: Use [sentence-style capitalization](https://learn.microsoft.com/en-us/style-guide/text-formatting/using-type/use-sentence-style-capitalization) for all headings — only capitalize the first word and proper nouns (e.g., `## With factory function` not `## With Factory Function`). Run `npx heading-case` to check.
+- **Heading case**: Use [sentence-style capitalization](https://learn.microsoft.com/en-us/style-guide/text-formatting/using-type/use-sentence-style-capitalization) for all headings — only capitalize the first word and proper nouns (e.g., `## With factory function` not `## With Factory Function`). Run `pnpm exec rs fmt --check` from the repository root to check.
 - npm package names as links: no backticks (e.g., `[@rstest/browser-react](url)` not `[\`@rstest/browser-react\`](url)`)
 - First mention of a new package: include GitHub link
 - Keep technical terms in English (e.g., Context, Hook, Provider, CI)

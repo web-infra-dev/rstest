@@ -8,15 +8,19 @@ import { getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
+  createImportMetaResolve,
   finalizeDynamicImport,
   loadWasm,
   resolveImportSpecifier,
 } from './resolveDynamicImport';
 import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_IMPORT_META_RESOLVE_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
 import { workerCache } from './vm/cache';
+
+export const wrapperLength = 0;
 
 export enum EsmMode {
   Unknown = 0,
@@ -290,6 +294,8 @@ export const loadModule = async ({
       lineOffset: 0,
       columnOffset: 0,
       initializeImportMeta: (meta) => {
+        // @ts-expect-error Internal hook injected by RstestPlugin.
+        meta[RSTEST_IMPORT_META_RESOLVE_HOOK] = createImportMetaResolve();
         meta.url = pathToFileURL(
           distPath === runtimeDistPath ? distPath : testPath,
         ).toString();

@@ -2,6 +2,12 @@
   "name": "@rstest/tests-externals",
   "version": "1.0.0",
   "private": true,
+  "imports": {
+    "#rstest-resolve": {
+      "import": "./require-resolve-origin/index.js",
+      "require": "./require-resolve-origin/exportHelper.js"
+    }
+  },
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "picocolors": "^1.1.1",

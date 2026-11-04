@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-v8",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "V8 coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -28,8 +28,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
-    "lint": "rslint .",
+    "build": "rs lib build",
     "test": "rstest"
   },
   "dependencies": {
@@ -43,7 +42,6 @@
   },
   "devDependencies": {
     "@rsbuild/core": "catalog:",
-    "@rslib/core": "catalog:",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",
@@ -51,6 +49,7 @@
     "@types/istanbul-reports": "^3.0.4",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.3",
+    "rstack": "catalog:",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

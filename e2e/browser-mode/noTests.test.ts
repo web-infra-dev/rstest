@@ -53,6 +53,9 @@ describe('browser mode - no tests', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('No test files found, exiting with code 0.');
+    for (const detail of ['root:', 'include:', 'exclude:']) {
+      expect(cli.log).not.toContain(detail);
+    }
   });
 
   // RFC Phase 3 step 2d: a zero-test browser-only non-watch run now routes

@@ -1,5 +1,5 @@
-import { defineConfig } from '@rslint/core';
-import { osAgnosticTests } from '../../rslint.config.mts';
+import { defineConfig } from 'rstack/lint';
+import { osAgnosticTests } from './os-agnostic-rule.ts';
 
 // Minimal config for scripts/lint/os-agnostic-rule.test.ts: mounts the real rule but
 // omits `parserOptions.project`, so lintText skips the type-aware program the

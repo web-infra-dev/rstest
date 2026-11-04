@@ -19,18 +19,18 @@ catalog:
   '@rsbuild/plugin-svgr': ^2.0.5
   '@rsbuild/plugin-vue': ^2.0.1
   '@rsbuild/plugin-vue-jsx': ^2.0.1
-  '@rslib/core': ~1.0.3
+  '@rslib/core': ~1.0.5
   '@rspack/cli': ~2.3.0
   '@rspack/core': ~2.3.0
   '@rspack/dev-server': ~2.2.2
   '@rspack/plugin-react-refresh': ~2.0.2
+  rstack: ^0.9.0
 
 allowBuilds:
   '@parcel/watcher': false
   '@swc/core': false
   core-js-pure: false
   keytar: false
-  lefthook: true
   svelte-preprocess: false
 
 autoInstallPeers: false

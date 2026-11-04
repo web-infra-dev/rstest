@@ -941,6 +941,39 @@ describe('createFixtureResolver', () => {
     expect(setups).toEqual(['shared']);
   });
 
+  it('shares pending fixture setup between parallel hooks', async () => {
+    const events: string[] = [];
+    const fixtures = normalizeFixtures({
+      shared: async (
+        _context: unknown,
+        use: (value: string) => Promise<void>,
+      ) => {
+        events.push('setup');
+        await Promise.resolve();
+        await use('shared');
+        events.push('cleanup');
+      },
+    });
+    const context: Record<string, unknown> = {};
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(
+      { fixtures } as any,
+      context,
+      cleanups,
+    );
+    const hook = ({ shared }: { shared: string }) => shared;
+
+    await Promise.all([
+      resolver.resolveHookFixtures(hook),
+      resolver.resolveHookFixtures(hook),
+    ]);
+    expect(context.shared).toBe('shared');
+    expect(events).toEqual(['setup']);
+    expect(cleanups).toHaveLength(1);
+    await cleanups[0]!();
+    expect(events).toEqual(['setup', 'cleanup']);
+  });
+
   it('throws on circular fixture dependencies', async () => {
     const fixtures = normalizeFixtures({
       x: [async ({ y }: any, use: any) => use(y)],
@@ -955,6 +988,43 @@ describe('createFixtureResolver', () => {
     await expect(
       resolver.resolveTestFixtures(({ x }: any) => x),
     ).rejects.toThrow(/Circular fixture dependency/);
+  });
+
+  it('rejects cycles spanning simultaneous fixture dependency walks', async () => {
+    const fixtures = normalizeFixtures({
+      slow: async (
+        _context: unknown,
+        use: (value: string) => Promise<void>,
+      ) => {
+        await Promise.resolve();
+        await use('slow');
+      },
+      x: async (
+        { slow, y }: { slow: string; y: string },
+        use: (value: string) => Promise<void>,
+      ) => use(slow + y),
+      y: async ({ x }: { x: string }, use: (value: string) => Promise<void>) =>
+        use(x),
+    });
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+    const resolutions = await Promise.allSettled([
+      resolver.resolveHookFixtures(({ x }: { x: string }) => x),
+      resolver.resolveHookFixtures(({ y }: { y: string }) => y),
+    ]);
+    expect(resolutions).toEqual([
+      {
+        status: 'rejected',
+        reason: expect.objectContaining({
+          message: 'Circular fixture dependency: x',
+        }),
+      },
+      {
+        status: 'rejected',
+        reason: expect.objectContaining({
+          message: 'Circular fixture dependency: y',
+        }),
+      },
+    ]);
   });
 
   it('does not retry fixtures after setup failures', async () => {

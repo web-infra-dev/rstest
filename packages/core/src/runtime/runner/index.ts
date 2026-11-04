@@ -60,6 +60,7 @@ export function createRunner({
       hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
+    prepareTests: (testFilePath: string) => Promise<TestInfo[]>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
     getRootSuiteListeners: () => RootSuiteListeners;
@@ -86,6 +87,18 @@ export function createRunner({
     testRunner,
   });
 
+  // Node workers collect before closing their loading interval. Reuse the
+  // prepared tree when execution starts, including its resolved run modes.
+  let collectedTests: Test[] | undefined;
+  const collectTests = async (): Promise<Test[]> => {
+    if (!collectedTests) {
+      const tests = await runtimeInstance.getTests();
+      traverseUpdateTest(tests, testNamePattern);
+      collectedTests = tests;
+    }
+    return collectedTests;
+  };
+
   return {
     runner: {
       runTests: async (
@@ -94,16 +107,13 @@ export function createRunner({
         api: Rstest,
       ) => {
         const snapshotClient = workerState.snapshotClient!;
-
         await hooks.onSnapshotSetupStart?.();
         try {
           await snapshotClient.setup(testPath, workerState.snapshotOptions);
         } finally {
           await hooks.onSnapshotSetupEnd?.();
         }
-
-        const tests = await runtimeInstance.getTests();
-        traverseUpdateTest(tests, testNamePattern);
+        const tests = await collectTests();
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
           testPath,
@@ -149,9 +159,16 @@ export function createRunner({
           throw error;
         }
       },
+      prepareTests: async (testPath) => {
+        await workerState.snapshotClient!.setup(
+          testPath,
+          workerState.snapshotOptions,
+        );
+        const tests = await collectTests();
+        return tests.map(toTestInfo);
+      },
       collectTests: async () => {
-        const tests = await runtimeInstance.getTests();
-        traverseUpdateTest(tests, testNamePattern);
+        const tests = await collectTests();
 
         return tests.map(toTestInfo);
       },

@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -40,9 +40,8 @@
     "LICENSE-APACHE-2.0"
   ],
   "scripts": {
-    "build": "rslib build",
-    "dev": "rslib build --watch",
-    "lint": "rslint ."
+    "build": "rs lib build",
+    "dev": "rs lib build --watch"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
@@ -55,7 +54,6 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@rslib/core": "catalog:",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
@@ -67,7 +65,8 @@
     "@vitest/snapshot": "^4.1.12",
     "birpc": "^4.2.0",
     "picomatch": "^4.0.7",
-    "playwright": "^1.64.1"
+    "playwright": "^1.64.1",
+    "rstack": "catalog:"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:*",

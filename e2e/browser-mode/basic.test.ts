@@ -26,7 +26,7 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
-  it.each(['default', 'stack', 'list'])(
+  it.each(['default', 'stack', 'list', 'parallel'])(
     'runs hooks in %s order',
     async (hooks) => {
       const { cli, expectExecSuccess } = await runBrowserCli('basic', {
@@ -36,8 +36,35 @@ describe('browser mode - basic', () => {
 
       await expectExecSuccess();
       expect(cli.stdout).toContain(
-        `HOOK_ORDER_OK:${hooks === 'list' ? 'list' : 'stack'}`,
+        `HOOK_ORDER_OK:${hooks === 'default' ? 'stack' : hooks}`,
       );
+    },
+  );
+
+  it.each(['fixture-error', 'fixture-timeout'])(
+    'preserves sibling hooks after parallel %s',
+    async (failure) => {
+      const { cli } = await runBrowserCli('basic', {
+        args: ['-c', 'rstest.sequence.config.mts'],
+        env: { HOOK_ORDER: 'parallel', HOOK_FAILURE: failure },
+      });
+      await cli.exec;
+      expect(cli.exec.exitCode).toBe(1);
+      for (const hook of ['beforeEach', 'afterEach']) {
+        expect(cli.stderr).toContain(
+          failure === 'fixture-error'
+            ? `FIXTURE_SETUP_FAILED:${hook}:unrelated`
+            : `${hook} hook timed out in 50ms`,
+        );
+        for (const scope of failure === 'fixture-timeout'
+          ? ['unrelated', 'shared']
+          : ['unrelated']) {
+          expect(cli.stderr).toContain(`SIBLING_HOOK_FAILED:${hook}:${scope}`);
+          expect(cli.stdout).toContain(
+            `PARALLEL_FIXTURES_DRAINED:${hook}:${scope}`,
+          );
+        }
+      }
     },
   );
 

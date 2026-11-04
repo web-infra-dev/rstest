@@ -7,7 +7,7 @@
  *   1. Files that failed on the last run go first (fail fast).
  *   2. Files with no cached duration ("new") go before known files, ordered by
  *      bundle `size` descending — heavier cold-start cost first.
- *   3. Known files by cached duration descending (Longest Processing Time),
+ *   3. Known files by cached loading + execution duration descending,
  *      which minimizes worker tail idle for the FIFO pool.
  *   4. `testPath.localeCompare` as the final tie-break for full determinism.
  */

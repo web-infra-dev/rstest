@@ -18,8 +18,10 @@
   ],
   "workspaces": {
     ".": {
+      // Loaded by rs fmt through define.fmt.plugins.
+      "ignoreDependencies": ["heading-case"],
       "entry": [
-        "rslint.config.mts",
+        "rstack.config.mts",
         // Agent skill scripts are invoked by the skill runtime, not imported by source files.
         ".agents/skills/**/scripts/**/*.mjs",
       ],
@@ -60,9 +62,15 @@
       // Exposed as a Module Federation remote from the Rsbuild config.
       "entry": ["src/test.js"],
     },
+    "packages/*": {
+      "rslib": { "config": ["rstack.config.mts"] },
+    },
     "packages/core": {
+      "rslib": { "config": ["rstack.config.mts"] },
       "ignoreDependencies": [
-        // rslib.config.ts aliases this import to @vitest/utils' bundled instance.
+        // Optional Rslib peer required by dts.bundle in rstack.config.mts.
+        "@microsoft/api-extractor",
+        // rstack.config.mts aliases this import to @vitest/utils' bundled instance.
         "tinyrainbow",
       ],
       "entry": [
@@ -75,13 +83,14 @@
         // coverage/checkThresholds.ts uses picomatch but is only reachable via
         // nested dynamic imports that knip cannot fully trace
         "src/coverage/checkThresholds.ts",
-        // Webpack license plugin used by rslib.config.ts
+        // Webpack license plugin used by rstack.config.mts
         "licensePlugin.ts",
         // Fixtures loaded by path at runtime, not imported by tests.
         "tests/**/fixtures/**",
       ],
     },
     "packages/browser": {
+      "rslib": { "config": ["rstack.config.mts"] },
       "ignoreUnresolved": [
         // Virtual module injected by each browser project's Rsbuild alias
         "__rstest_virtual_browser_manifest__",

@@ -59,9 +59,9 @@
       allowedVersions: '!/-canary-/',
     },
     {
-      groupName: 'rslint',
-      matchPackageNames: ['@rslint/**'],
-      groupSlug: 'rslint',
+      groupName: 'rstack',
+      matchPackageNames: ['rstack'],
+      groupSlug: 'rstack',
     },
     // manually update peer dependencies
     {

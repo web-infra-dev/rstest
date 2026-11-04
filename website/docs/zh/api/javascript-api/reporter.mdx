@@ -156,11 +156,18 @@ interface TestResult {
 
 ```ts
 interface TestFileResult extends TestResult {
+  loadDuration?: number;
   results: TestResult[]; // 当前文件中声明的测试结果。
   snapshotResult?: SnapshotResult; // 当前文件的快照统计。
   coverage?: Record<string, FileCoverageData>; // 开启覆盖率时该文件的覆盖率数据。
 }
 ```
+
+#### 文件耗时 \{#file-timing}
+
+<ApiMeta addedVersion="0.12.6" />
+
+在 Node pool 中，`loadDuration` 以毫秒记录 worker 内的产物加载、setup 文件执行，以及测试模块求值与收集耗时。加载失败时也会记录；尚未开始加载或使用 browser mode 时，该字段缺省。现有的 `duration` 记录测试执行耗时，包含 hooks 和快照收尾。两者之和用于 Node 测试文件排序，不包含 worker 启动、环境初始化、排队和 worker teardown。
 
 `SerializedError` 的结构和 `onTestRunEnd` 参数里 `unhandledErrors` 的每一项相同。`SnapshotResult` 来自 `@vitest/snapshot`，`FileCoverageData` 来自 `istanbul-lib-coverage`。
 

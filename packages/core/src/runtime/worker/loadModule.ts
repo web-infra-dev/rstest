@@ -9,17 +9,22 @@ import { getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
+  createImportMetaResolve,
   finalizeDynamicImport,
   loadWasm,
   resolveImportSpecifier,
 } from './resolveDynamicImport';
 import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_IMPORT_META_RESOLVE_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
 import { workerCache } from './vm/cache';
 import { getVmExternalModules } from './vm/externalModules';
 import { createVmTimersLoader } from './vm/timers';
+
+const CJS_WRAPPER_PREFIX = "'use strict';return function(){\n";
+export const wrapperLength: number = CJS_WRAPPER_PREFIX.length;
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
@@ -275,6 +280,7 @@ export const loadModule = ({
       distPath,
       assetFiles,
     }),
+    [RSTEST_IMPORT_META_RESOLVE_HOOK]: createImportMetaResolve(),
     __dirname: fileDir,
     __filename: testPath,
     ...rstestContext,
@@ -284,7 +290,7 @@ export const loadModule = ({
     vmParentModule.require = context.require;
   }
 
-  const code = `'use strict';return function(){\n${codeContent}\n}`;
+  const code = `${CJS_WRAPPER_PREFIX}${codeContent}\n}`;
 
   const params = Object.keys(context);
   const cached = cacheCompilation ? compilationCache.get(distPath) : undefined;

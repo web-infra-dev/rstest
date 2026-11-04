@@ -4,6 +4,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_IMPORT_META_RESOLVE_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../runtime/worker/runtimeHooks';
 import { createVmTimersShim } from '../../runtime/worker/vm/timers';
@@ -203,6 +204,11 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
                   functionName: outputModule
                     ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
                     : RSTEST_REQUIRE_RESOLVE_HOOK,
+                },
+                injectImportMetaResolveOrigin: {
+                  functionName: outputModule
+                    ? importMetaHook(RSTEST_IMPORT_META_RESOLVE_HOOK)
+                    : RSTEST_IMPORT_META_RESOLVE_HOOK,
                 },
                 updateImportMockAPI: true,
                 updateRequireMockAPI: true,

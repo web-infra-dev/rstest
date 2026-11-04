@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rsbuild",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "Rstest adapter for rsbuild configuration",
   "keywords": [
     "rstest",
@@ -30,16 +30,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib build",
-    "dev": "rslib build --watch",
-    "lint": "rslint .",
+    "build": "rs lib build",
+    "dev": "rs lib build --watch",
     "test": "rstest"
   },
   "devDependencies": {
     "@rsbuild/core": "catalog:",
-    "@rslib/core": "catalog:",
     "@rstest/core": "workspace:*",
-    "@rstest/tsconfig": "workspace:*"
+    "@rstest/tsconfig": "workspace:*",
+    "rstack": "catalog:"
   },
   "peerDependencies": {
     "@rsbuild/core": "^1.0.0 || ^2.0.0",

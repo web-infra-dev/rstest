@@ -633,6 +633,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaResolveOrigin": {
+            "functionName": "import.meta.__rstest_import_meta_resolve__",
+          },
           "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
@@ -1373,6 +1376,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaResolveOrigin": {
+            "functionName": "__rstest_import_meta_resolve__",
+          },
           "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
@@ -2057,6 +2063,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaResolveOrigin": {
+            "functionName": "__rstest_import_meta_resolve__",
+          },
           "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
@@ -2744,6 +2753,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaResolveOrigin": {
+            "functionName": "__rstest_import_meta_resolve__",
+          },
           "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
@@ -3805,6 +3817,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaResolveOrigin": {
+            "functionName": "__rstest_import_meta_resolve__",
+          },
           "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
@@ -4502,6 +4517,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaResolveOrigin": {
+            "functionName": "__rstest_import_meta_resolve__",
+          },
           "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {

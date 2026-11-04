@@ -64,6 +64,12 @@ const defaultPool = {
 
 VM pool 会复用 worker 和编译资源，因此测试文件多、setup 依赖较大时可能受益。不过，setup 文件、测试环境创建和模块求值仍会逐文件执行。如果主要耗时来自 setup 中的数据库初始化或网络请求，切换 VM pool 并不会省去这些工作。最终应以项目自身的耗时和内存测量结果为准。
 
+## 测试文件调度
+
+Node pool 优先执行上次失败的文件，然后执行没有耗时记录的文件。新文件按 bundle 大小排序；已有耗时记录的文件按预计加载与执行耗时排序，耗时长的先执行。这个估计使用 `TestFileResult.loadDuration + TestFileResult.duration`，包含 worker 内的产物加载、setup 文件执行、测试模块求值与收集，以及后续的测试执行，不包含 worker 启动、环境初始化、排队和 teardown。
+
+Rstest 将这些估计保存在 `node_modules/.cache/.rstest-results/results.json` 中，并在完整运行后更新。读取 v1 缓存时，Rstest 会保留失败记录和时间戳，只丢弃仅含执行时间的旧耗时。下次写入时会保存为 v2，并为本次运行的文件记录新的加载与执行耗时。这个缓存独立于 Node compile cache。测试文件不应依赖执行顺序，因为顺序可能随耗时记录更新而变化。
+
 ## Pool 类型
 
 `forks` 和 `threads` 分别使用子进程和线程运行测试；`vmForks` 和 `vmThreads` 则在复用这些 worker 的同时，为每个文件创建新的 `vm.Context`。

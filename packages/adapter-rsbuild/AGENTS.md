@@ -8,7 +8,6 @@ Converts Rsbuild config to Rstest config via `toRstestConfig`.
 pnpm --filter @rstest/adapter-rsbuild build
 pnpm --filter @rstest/adapter-rsbuild dev     # Watch mode
 pnpm --filter @rstest/adapter-rsbuild test
-pnpm --filter @rstest/adapter-rsbuild lint
 ```
 
 ## Constraints

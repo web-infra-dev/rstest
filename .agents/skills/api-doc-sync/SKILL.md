@@ -5,7 +5,7 @@ metadata:
   internal: true
 ---
 
-# API Doc Signature Sync
+# API doc signature sync
 
 The `**Type:**` / `**类型：**` blocks in `website/docs/{en,zh}/api/**` are
 **hand-written, curated copies** of real exported types — there is no
@@ -128,7 +128,7 @@ Apply fixes to the `.mdx` directly. For each fix:
 ### 4. Re-verify
 
 Re-run step 1 (parity) and step 2 (compile assertions) until both are clean,
-then `pnpm prettier --check` the touched `.mdx` files.
+then `pnpm exec rs fmt --check` the touched `.mdx` files.
 
 ## Notes
 

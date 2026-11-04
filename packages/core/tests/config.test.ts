@@ -29,20 +29,41 @@ describe('mergeRstestConfig', () => {
     expect(merged).toMatchSnapshot();
   });
 
-  it('defaults hook order and preserves overrides through config merging', () => {
-    expect(withDefaultConfig({}).sequence).toEqual({ hooks: 'stack' });
-    expect(withDefaultConfig({ sequence: {} }).sequence).toEqual({
-      hooks: 'stack',
-    });
-    expect(
-      withDefaultConfig(
-        mergeRstestConfig(
-          { sequence: { hooks: 'stack' } },
-          { sequence: { hooks: 'list' } },
-        ),
-      ).sequence,
-    ).toEqual({ hooks: 'list' });
-  });
+  it.each(['stack', 'list', 'parallel'] as const)(
+    'preserves %s hook order through config merging',
+    (hooks) => {
+      expect(withDefaultConfig({}).sequence).toEqual({
+        hooks: 'stack',
+        setupFiles: 'list',
+      });
+      expect(withDefaultConfig({ sequence: {} }).sequence).toEqual({
+        hooks: 'stack',
+        setupFiles: 'list',
+      });
+      expect(
+        withDefaultConfig(
+          mergeRstestConfig(
+            { sequence: { hooks: 'stack' } },
+            { sequence: { hooks } },
+          ),
+        ).sequence,
+      ).toEqual({ hooks, setupFiles: 'list' });
+    },
+  );
+
+  it.each(['list', 'parallel'] as const)(
+    'preserves %s setup order alongside hook order',
+    (setupFiles) => {
+      expect(
+        withDefaultConfig(
+          mergeRstestConfig(
+            { sequence: { hooks: 'list' } },
+            { sequence: { setupFiles } },
+          ),
+        ).sequence,
+      ).toEqual({ hooks: 'list', setupFiles });
+    },
+  );
 
   it('should handle globalSetup array conversion', () => {
     const merged = withDefaultConfig({
