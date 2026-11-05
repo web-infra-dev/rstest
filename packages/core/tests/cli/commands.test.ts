@@ -68,6 +68,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--reporter',
         '--reporters',
         '--retry',
+        '--repeats',
         '--root',
         '--shard',
         '--silent',

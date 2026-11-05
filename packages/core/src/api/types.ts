@@ -95,6 +95,7 @@ export interface RunOptions {
   testTimeout?: number;
   hookTimeout?: number;
   retry?: number;
+  repeats?: number;
   maxConcurrency?: number;
   slowTestThreshold?: number;
   // mock lifecycle

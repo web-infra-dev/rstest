@@ -20,17 +20,32 @@ describe('TestOptions', () => {
     await expectExecSuccess();
   });
 
-  it('repeats re-runs a passing test the requested number of times', async () => {
-    const { expectExecSuccess } = await runRstestCli({
+  it.each([
+    { args: [], runs: 1 },
+    { args: ['--repeats', '2'], runs: 3 },
+    { args: ['-c', 'rstest.repeats.config.mts'], runs: 3 },
+    { args: ['-c', 'rstest.repeats.config.mts', '--repeats=0'], runs: 1 },
+  ])('repeats individual tests with $args', async ({ args, runs }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/testOptionsRepeatsPass.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
+      args: ['run', 'fixtures/testOptionsRepeatsPass.test.ts', ...args],
+      options: { nodeOptions: { cwd: __dirname } },
     });
     await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      `REPEATS_EVENTS:${[
+        ...Array(runs).fill('A'),
+        ...Array(runs).fill('B'),
+        'explicit',
+        'explicit',
+        'explicit',
+        'suite',
+        'suite',
+        'disabled',
+        'nested',
+      ].join(',')}`,
+    );
+    expect(cli.stdout).toMatch(/Tests\s+6 passed/);
   });
 
   it('repeats short-circuits on the first failure', async () => {

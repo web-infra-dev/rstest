@@ -15,6 +15,19 @@ describe('mergeWithCLIOptions', () => {
     expect(config.browser?.screenshotFailures).toBe(false);
   });
 
+  it('overrides project repeats from CLI, including zero', async () => {
+    const projects = await resolveProjects({
+      config: {
+        repeats: 2,
+        projects: [{ name: 'inherited' }, { name: 'own', repeats: 3 }],
+      },
+      root: rootPath,
+      options: { repeats: 0 },
+    });
+    expect(projects.map((project) => project.config.repeats)).toEqual([0, 0]);
+    expect(mergeWithCLIOptions({ repeats: 2 }, {}).repeats).toBe(2);
+  });
+
   it('creates simple nested build config objects from CLI', () => {
     const config = mergeWithCLIOptions(
       {},

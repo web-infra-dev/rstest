@@ -34,6 +34,7 @@ export const executorCapabilities: Record<
   globals: { node: 'supported', browser: 'supported' },
   passWithNoTests: { node: 'supported', browser: 'supported' },
   retry: { node: 'supported', browser: 'supported' },
+  repeats: { node: 'supported', browser: 'supported' },
   clearMocks: { node: 'supported', browser: 'supported' },
   resetMocks: { node: 'supported', browser: 'supported' },
   restoreMocks: { node: 'supported', browser: 'supported' },

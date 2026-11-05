@@ -12,10 +12,13 @@ const emptyFilterRoot = join(root, 'empty-filter');
 const zeroMatchRoot = join(root, 'zero-match');
 const emptyProjectRoot = join(root, 'empty-project');
 const snapshotRoot = join(root, 'snapshot-options');
-const testSource = (name, value) => `
-import { expect, it } from '@rstest/core';
+const testSource = (name, value, expectedRuns = 1) => `
+import { afterAll, expect, it } from '@rstest/core';
 
+let runs = 0;
+afterAll(() => { expect(runs).toBe(${expectedRuns}); });
 it(${JSON.stringify(name)}, () => {
+  runs++;
   expect(${value}).toBe(${value});
 });
 `;
@@ -26,8 +29,8 @@ const fileExists = (path) =>
   );
 
 await mkdir(root, { recursive: true });
-await writeFile(firstTest, testSource('first', 1));
-await writeFile(secondTest, testSource('second', 2));
+await writeFile(firstTest, testSource('first', 1, 3));
+await writeFile(secondTest, testSource('second', 2, 3));
 await writeFile(
   join(root, 'globalSetup.ts'),
   `
@@ -253,6 +256,7 @@ it('does not create a snapshot', () => {
   }
   const watcher = await rstest.watch({
     changed: false,
+    repeats: 2,
     onResult(result) {
       cycles.push({
         status: result.status,
@@ -277,7 +281,7 @@ it('does not create a snapshot', () => {
   openWatchers.add(watcher);
 
   await withTimeout(firstCycle, 'the initial watch cycle');
-  await writeFile(firstTest, testSource('first updated', 3));
+  await writeFile(firstTest, testSource('first updated', 3, 3));
   await withTimeout(secondCycle, 'the watch rerun');
   await watcher.close();
   openWatchers.delete(watcher);

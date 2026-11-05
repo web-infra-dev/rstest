@@ -144,6 +144,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--hideSkippedTestFiles', 'Hide skipped test files from the output'],
   ['--retry <retry>', 'Number of times to retry a test if it fails'],
   [
+    '--repeats <repeats>',
+    'Number of additional runs for each individual test, not the file or suite',
+  ],
+  [
     '--bail [number]',
     'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
   ],

@@ -91,6 +91,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "type": "forks",
   },
   "printConsoleTrace": false,
+  "repeats": 0,
   "reporters": [
     "verbose",
   ],

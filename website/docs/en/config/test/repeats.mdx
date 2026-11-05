@@ -1,0 +1,35 @@
+---
+description: Repeat individual tests to detect flaky failures and check stability across multiple runs.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# repeats
+
+<ApiMeta addedVersion="0.13.0" />
+
+- **Type:** `number`
+- **Default:** `0`
+- **CLI:** `--repeats <times>`
+
+Number of additional runs for each individual test, useful for detecting flaky failures. With `repeats: 2`, each passing test runs three times. Repetition applies to **individual tests**, not whole files or suites: sequential tests A and B run in the order `A, A, A, B, B, B`.
+
+Each attempt runs `beforeEach` / `afterEach` and test-scoped fixture setup and cleanup. Test modules and `beforeAll` / `afterAll` are not re-executed for each repeat.
+
+```bash
+npx rstest run --repeats 2
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  repeats: 2,
+});
+```
+
+The priority from highest to lowest is: a test's [`TestOptions.repeats`](/api/runtime-api/test-api/test#testoptions) > its nearest `describe` default > the `run({ repeats })` option or CLI `--repeats` flag > the configuration value > the default `0`.
+
+Set `{ repeats: 0 }` on a test or suite to disable inherited repetition.
+
+Each repeat has an independent [`retry`](/config/test/retry) budget. If a repeat still fails after its retries, the test fails and its remaining repeats stop. Without retries, the first failure stops that test's remaining repeats.

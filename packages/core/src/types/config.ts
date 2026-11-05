@@ -478,6 +478,13 @@ export interface RstestConfig {
    */
   retry?: number;
   /**
+   * Number of additional runs for each individual test, not the file or suite.
+   * A repeat that fails after retries stops the remaining repeats.
+   * Test and suite options override this default.
+   * @default 0
+   */
+  repeats?: number;
+  /**
    * Pass when no tests are found.
    *
    * @default false

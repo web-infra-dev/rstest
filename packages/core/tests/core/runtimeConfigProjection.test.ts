@@ -8,6 +8,7 @@ const baseNormalizedConfig = {
   testTimeout: 5000,
   passWithNoTests: false,
   retry: 0,
+  repeats: 0,
   globals: false,
   clearMocks: false,
   resetMocks: false,
@@ -50,6 +51,16 @@ describe('projectRuntimeConfig', () => {
     expect(
       projectRuntimeConfig(project, { envMode: 'static' }).sequence,
     ).toEqual({ hooks: 'list' });
+  });
+
+  it('preserves repeats for node and browser workers', () => {
+    const project = makeProject({ repeats: 3 });
+    expect(projectRuntimeConfig(project, { envMode: 'inherit' }).repeats).toBe(
+      3,
+    );
+    expect(projectRuntimeConfig(project, { envMode: 'static' }).repeats).toBe(
+      3,
+    );
   });
 
   it('preserves federation mode for node and browser workers', () => {

@@ -89,6 +89,7 @@ export function mergeWithCLIOptions(
     'unstubEnvs',
     'unstubGlobals',
     'retry',
+    'repeats',
     'slowTestThreshold',
     'maxConcurrency',
     'printConsoleTrace',

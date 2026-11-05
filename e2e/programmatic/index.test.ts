@@ -82,6 +82,11 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(result.status).toBe('passed');
+    expect(result.repeatRuns).toEqual([
+      { status: 'passed', runs: 4 },
+      { status: 'passed', runs: 1 },
+      { status: 'passed', runs: 3 },
+    ]);
     expect(result.summary.tests.passed).toBe(1);
     expect(result.results).toEqual([
       { status: 'passed', testName: 'virtual/programmatic.test.ts' },

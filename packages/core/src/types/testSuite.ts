@@ -93,7 +93,7 @@ export type TestCase = RawTestCaseInfo & {
   retry?: number;
   /**
    * Number of additional runs to perform on top of the first run; any failure
-   * short-circuits remaining repeats. Currently per-test only.
+   * short-circuits remaining repeats. Falls back to `runtimeConfig.repeats`.
    */
   repeats?: number;
   onFinished: OnTestFinishedHandler[];

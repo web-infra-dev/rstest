@@ -204,7 +204,14 @@ export class TestRunner {
   }): Promise<RawTestFileResult> {
     this.workerState = state;
     const {
-      runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail, sequence },
+      runtimeConfig: {
+        passWithNoTests,
+        retry,
+        repeats: defaultRepeats,
+        maxConcurrency,
+        bail,
+        sequence,
+      },
       project,
     } = state;
     const results: RawTestResult[] = [];
@@ -768,7 +775,9 @@ export class TestRunner {
             // Treat negative / NaN / fractional repeats as 0 so the outer
             // loop always runs at least once. Without this, an invalid
             // `repeats` value would silently report the case as skipped.
-            const repeats = sanitizeAttemptCount(test.repeats ?? 0);
+            const repeats = sanitizeAttemptCount(
+              test.repeats ?? defaultRepeats,
+            );
             let totalRetryCount = 0;
             // `retryErrors` aggregates every failed attempt across all
             // repeats so a final pass can surface the full flakiness picture
