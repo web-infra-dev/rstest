@@ -270,7 +270,7 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
   const paths = path.replace(/\[(\d+)\]/g, '.$1').split('.');
   let result = source;
   for (const p of paths) {
-    result = result[p];
+    result = result?.[p];
     if (result === undefined) {
       return defaultValue;
     }
