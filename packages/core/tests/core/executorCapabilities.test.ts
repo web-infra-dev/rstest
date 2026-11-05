@@ -14,6 +14,7 @@ const makeProject = (): InternalProjectContext =>
       testTimeout: 5000,
       passWithNoTests: false,
       retry: 0,
+      repeats: 0,
       globals: false,
       clearMocks: false,
       resetMocks: false,

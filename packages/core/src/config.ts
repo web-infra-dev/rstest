@@ -276,6 +276,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     },
   },
   retry: 0,
+  repeats: 0,
   reporters: getDefaultReporters(),
   clearMocks: false,
   resetMocks: false,

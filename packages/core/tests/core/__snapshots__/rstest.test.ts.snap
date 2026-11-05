@@ -88,6 +88,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     "type": "forks",
   },
   "printConsoleTrace": false,
+  "repeats": 0,
   "reporters": [
     "default",
   ],
@@ -205,6 +206,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "type": "forks",
   },
   "printConsoleTrace": false,
+  "repeats": 0,
   "reporters": [
     "default",
   ],
@@ -326,6 +328,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "type": "forks",
   },
   "printConsoleTrace": false,
+  "repeats": 0,
   "reporters": [
     "default",
   ],

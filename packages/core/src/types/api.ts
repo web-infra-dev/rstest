@@ -67,7 +67,7 @@ export interface TestOptions {
    * Number of times to re-run the test after it has already passed. The test is
    * considered failed as soon as any run fails. Total executions per case is
    * `repeats + 1`. Orthogonal to `retry`: each repeat independently honors the
-   * configured retry budget.
+   * configured retry budget. Overrides the global `repeats` default.
    *
    * @default 0
    */

@@ -38,6 +38,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'env',
       'bail',
       'retry',
+      'repeats',
       'testTimeout',
       'hookTimeout',
       'sequence',

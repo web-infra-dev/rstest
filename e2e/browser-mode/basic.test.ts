@@ -7,6 +7,30 @@ import {
 } from './utils';
 
 describe('browser mode - basic', () => {
+  it.each([
+    { args: [], runs: 3 },
+    { args: ['--repeats=0'], runs: 1 },
+  ])('repeats individual browser tests with $args', async ({ args, runs }) => {
+    const { cli, expectExecSuccess } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.repeats.config.mts', ...args],
+    });
+    await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      `REPEATS_EVENTS:${[
+        ...Array(runs).fill('A'),
+        ...Array(runs).fill('B'),
+        'explicit',
+        'explicit',
+        'explicit',
+        'suite',
+        'suite',
+        'disabled',
+        'nested',
+      ].join(',')}`,
+    );
+    expect(cli.stdout).toMatch(/Tests\s+6 passed/);
+  });
+
   it('should run DOM, event, and async tests correctly', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('basic');
 

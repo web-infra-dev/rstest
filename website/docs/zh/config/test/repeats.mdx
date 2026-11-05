@@ -1,0 +1,35 @@
+---
+description: 重复执行单个测试，复现偶发失败并检查多次运行的稳定性。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# repeats
+
+<ApiMeta addedVersion="0.12.7" />
+
+- **类型：** `number`
+- **默认值：** `0`
+- **CLI：** `--repeats <times>`
+
+单个测试的额外执行次数，可用于复现偶发失败。设置 `repeats: 2` 时，每个通过的测试总共执行三次。重复以**单个测试**为单位，不会重跑整个文件或套件：串行测试 A 和 B 的执行顺序为 `A, A, A, B, B, B`。
+
+每次执行都会运行 `beforeEach` / `afterEach`，以及测试级 fixture 的初始化和清理。测试模块和 `beforeAll` / `afterAll` 不会随每轮重复执行。
+
+```bash
+npx rstest run --repeats 2
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  repeats: 2,
+});
+```
+
+优先级从高到低依次为：测试自身的 [`TestOptions.repeats`](/api/runtime-api/test-api/test#testoptions) > 最近的 `describe` 默认值 > `run({ repeats })` 参数或 CLI `--repeats` 参数 > 配置中的值 > 默认值 `0`。
+
+在测试或套件上设置 `{ repeats: 0 }`，可以关闭继承的重复执行。
+
+每轮重复都有独立的 [`retry`](/config/test/retry) 配额。某轮用尽重试次数后仍然失败，该测试就会失败，并停止后续重复。未开启 retry 时，首次失败就会停止该测试的后续重复。

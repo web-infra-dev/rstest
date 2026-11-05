@@ -71,6 +71,7 @@ export type RuntimeConfig = Pick<
   | 'globals'
   | 'passWithNoTests'
   | 'retry'
+  | 'repeats'
   | 'clearMocks'
   | 'resetMocks'
   | 'restoreMocks'

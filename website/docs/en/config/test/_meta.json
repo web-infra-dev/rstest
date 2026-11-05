@@ -18,6 +18,7 @@
   "env",
   "bail",
   "retry",
+  "repeats",
   "test-timeout",
   "hook-timeout",
   "sequence",
