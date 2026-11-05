@@ -17,8 +17,8 @@ import type {
   Test,
   TestCase,
   TestContext,
-  TestFileResult,
-  TestResult,
+  RawTestFileResult,
+  RawTestResult,
   TestResultStatus,
   TestSuite,
   WorkerState,
@@ -164,8 +164,8 @@ export class TestRunner {
   }
 
   async cleanupFileFixtures(
-    result?: TestFileResult,
-  ): Promise<TestFileResult | undefined> {
+    result?: RawTestFileResult,
+  ): Promise<RawTestFileResult | undefined> {
     const cleanupStart = RealDate.now();
     try {
       await this.fileFixtureManager.cleanup();
@@ -173,7 +173,7 @@ export class TestRunner {
       if (!result) {
         throw error;
       }
-      result.status = 'fail';
+      result.status = 'failed';
       result.errors = [
         ...(result.errors ?? []),
         ...(await formatTestError(error)),
@@ -201,15 +201,15 @@ export class TestRunner {
     snapshotClient: SnapshotClient;
     api: Rstest;
     coverageProvider?: CoverageProvider;
-  }): Promise<TestFileResult> {
+  }): Promise<RawTestFileResult> {
     this.workerState = state;
     const {
       runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail, sequence },
       project,
     } = state;
-    const results: TestResult[] = [];
+    const results: RawTestResult[] = [];
     const errors: SerializedError[] = [];
-    let defaultStatus: TestResultStatus = 'pass';
+    let defaultStatus: TestResultStatus = 'passed';
 
     const hookRunner = new HookRunner(
       { sequence, maxConcurrency },
@@ -221,12 +221,12 @@ export class TestRunner {
       test: TestCase,
       parentHooks: ParentHooks,
       retryCount: number,
-    ): Promise<TestResult> => {
+    ): Promise<RawTestResult> => {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
         const result = {
           testId: test.testId,
-          status: 'skip' as const,
+          status: 'skipped' as const,
           parentNames: test.parentNames,
           name: test.name,
           testPath,
@@ -248,7 +248,7 @@ export class TestRunner {
         return result;
       }
 
-      let result: TestResult | undefined;
+      let result: RawTestResult | undefined;
 
       test.startTime = undefined;
 
@@ -266,9 +266,9 @@ export class TestRunner {
 
       let skipped = false;
 
-      const skipResult = (): TestResult => ({
+      const skipResult = (): RawTestResult => ({
         testId: test.testId,
-        status: 'skip' as const,
+        status: 'skipped' as const,
         parentNames: test.parentNames,
         name: test.name,
         testPath,
@@ -292,7 +292,7 @@ export class TestRunner {
         } else {
           result = {
             testId: test.testId,
-            status: 'fail' as const,
+            status: 'failed' as const,
             parentNames: test.parentNames,
             name: test.name,
             errors: await formatTestError(error, test),
@@ -325,12 +325,12 @@ export class TestRunner {
                 result ??= skipResult();
               } else {
                 const errors = await formatTestError(hookResult.error, test);
-                if (result?.status === 'fail') {
+                if (result?.status === 'failed') {
                   result.errors?.push(...errors);
                 } else {
                   result = {
                     testId: test.testId,
-                    status: 'fail',
+                    status: 'failed',
                     parentNames: test.parentNames,
                     name: test.name,
                     errors,
@@ -376,7 +376,7 @@ export class TestRunner {
 
             result = {
               testId: test.testId,
-              status: 'fail' as const,
+              status: 'failed' as const,
               parentNames: test.parentNames,
               name: test.name,
               testPath,
@@ -396,7 +396,7 @@ export class TestRunner {
               result = {
                 testId: test.testId,
                 project,
-                status: 'pass' as const,
+                status: 'passed' as const,
                 parentNames: test.parentNames,
                 name: test.name,
                 testPath,
@@ -417,7 +417,7 @@ export class TestRunner {
               project,
               parentNames: test.parentNames,
               name: test.name,
-              status: 'pass' as const,
+              status: 'passed' as const,
               testPath,
               meta: test.meta,
             };
@@ -429,7 +429,7 @@ export class TestRunner {
               result = {
                 testId: test.testId,
                 project,
-                status: 'fail' as const,
+                status: 'failed' as const,
                 parentNames: test.parentNames,
                 name: test.name,
                 errors: await formatTestError(error, test),
@@ -456,7 +456,7 @@ export class TestRunner {
           meta: test.meta,
         });
       };
-      if (result?.status === 'fail') {
+      if (result?.status === 'failed') {
         await captureFailedAttempt();
       }
 
@@ -482,7 +482,7 @@ export class TestRunner {
             ) {
               return;
             }
-            testResult.status = 'fail';
+            testResult.status = 'failed';
             testResult.errors ??= [];
             testResult.errors.push(
               ...(await formatTestError(hookResult.error)),
@@ -503,7 +503,7 @@ export class TestRunner {
         try {
           await fn();
         } catch (error) {
-          result.status = 'fail';
+          result.status = 'failed';
           result.errors ??= [];
           result.errors.push(...(await formatTestError(error)));
           test.context.task.result = result;
@@ -517,7 +517,7 @@ export class TestRunner {
         try {
           await this.runWithActiveTimeout(test, fn, () => fn(test.context));
         } catch (error) {
-          result.status = 'fail';
+          result.status = 'failed';
           result.errors ??= [];
           result.errors.push(...(await formatTestError(error)));
           test.context.task.result = result;
@@ -531,7 +531,7 @@ export class TestRunner {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
 
-      if (result.status === 'fail') {
+      if (result.status === 'failed') {
         for (const fn of [...test.onFailed].reverse()) {
           try {
             await this.runWithActiveTimeout(test, fn, () => fn(test.context));
@@ -559,9 +559,9 @@ export class TestRunner {
     const runTests = async (
       allTest: Test[],
       parentHooks: ParentHooks,
-    ): Promise<TestResult[]> => {
+    ): Promise<RawTestResult[]> => {
       const tests = [...allTest];
-      const results: TestResult[] = [];
+      const results: RawTestResult[] = [];
       let testIndex = 0;
 
       while (testIndex < tests.length) {
@@ -595,10 +595,10 @@ export class TestRunner {
     const runTest = async (
       test: Test,
       parentHooks: ParentHooks,
-    ): Promise<TestResult> => {
-      let result: TestResult = {
+    ): Promise<RawTestResult> => {
+      let result: RawTestResult = {
         testId: test.testId,
-        status: 'skip',
+        status: 'skipped',
         parentNames: test.parentNames,
         name: test.name,
         testPath,
@@ -609,7 +609,7 @@ export class TestRunner {
       };
 
       if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
-        defaultStatus = 'skip';
+        defaultStatus = 'skipped';
         return result;
       }
 
@@ -639,11 +639,11 @@ export class TestRunner {
 
             if (test.tests.length === 0) {
               if (['todo', 'skip'].includes(test.runMode)) {
-                defaultStatus = 'skip';
+                defaultStatus = 'skipped';
               } else if (passWithNoTests) {
-                result.status = 'pass';
+                result.status = 'passed';
               } else {
-                result.status = 'fail';
+                result.status = 'failed';
                 result.errors?.push({
                   message: `No test found in suite: ${test.name}`,
                   name: 'No tests',
@@ -742,7 +742,7 @@ export class TestRunner {
 
             result.duration = RealDate.now() - start;
             result.status = result.errors?.length
-              ? 'fail'
+              ? 'failed'
               : getTestStatus(results, defaultStatus);
             hooks.onTestSuiteResult?.(result);
 
@@ -801,7 +801,7 @@ export class TestRunner {
                   retryCount,
                 );
 
-                if (currentResult.status === 'fail') {
+                if (currentResult.status === 'failed') {
                   repeatRetryErrors.push(
                     ...(currentResult.errors || []).map((error) => ({
                       ...error,
@@ -814,27 +814,27 @@ export class TestRunner {
                 result = {
                   ...currentResult,
                   errors:
-                    currentResult.status === 'fail'
+                    currentResult.status === 'failed'
                       ? [...repeatRetryErrors]
                       : currentResult.errors,
                 };
 
                 retryCount++;
-              } while (retryCount <= retryBudget && result.status === 'fail');
+              } while (retryCount <= retryBudget && result.status === 'failed');
 
               totalRetryCount += retryCount - 1;
               retryErrors.push(...repeatRetryErrors);
 
               // `repeats` semantics: any failure short-circuits remaining
               // repeats. Pass/skip/todo continue to the next repeat.
-              if (result.status === 'fail') {
+              if (result.status === 'failed') {
                 break;
               }
             }
 
             result.duration = RealDate.now() - start;
             result.retryCount = totalRetryCount;
-            if (result.status === 'pass' && retryErrors.length > 0) {
+            if (result.status === 'passed' && retryErrors.length > 0) {
               result.retryErrors = retryErrors;
             }
             result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
@@ -856,7 +856,7 @@ export class TestRunner {
           project,
           testPath,
           name: '',
-          status: 'pass',
+          status: 'passed',
           results,
         };
       }
@@ -866,7 +866,7 @@ export class TestRunner {
         project,
         testPath,
         name: '',
-        status: 'fail',
+        status: 'failed',
         results,
         heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         errors: [
@@ -909,7 +909,9 @@ export class TestRunner {
         testPath,
         name: '',
         heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
-        status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
+        status: errors.length
+          ? 'failed'
+          : getTestStatus(results, defaultStatus),
         results,
         snapshotResult,
         errors,

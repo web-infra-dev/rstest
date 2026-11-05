@@ -43,13 +43,20 @@ describe('programmatic createRstest', () => {
         maxWorkers: 1,
         memoryLimit: '256MB',
       });
-      expect(result.status).toBe('pass');
+      expect(result.status).toBe('passed');
       expect(result.summary).toEqual({
-        tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
+        tests: {
+          total: 2,
+          passed: 2,
+          failed: 0,
+          skipped: 0,
+          todo: 0,
+          flaky: 0,
+        },
         files: { total: 1, failed: 0 },
       });
       expect(result.results).toEqual([
-        { status: 'pass', testPath: 'sum.test.ts' },
+        { status: 'passed', testPath: 'sum.test.ts' },
       ]);
       expect(result.unhandledErrors).toEqual([]);
       expect(result.duration.hasTotal).toBe(true);
@@ -74,10 +81,10 @@ describe('programmatic createRstest', () => {
     await cli.exec;
     const result = parsePayload(cli.stdout);
 
-    expect(result.status).toBe('pass');
+    expect(result.status).toBe('passed');
     expect(result.summary.tests.passed).toBe(1);
     expect(result.results).toEqual([
-      { status: 'pass', testName: 'virtual/programmatic.test.ts' },
+      { status: 'passed', testName: 'virtual/programmatic.test.ts' },
     ]);
   });
 
@@ -95,7 +102,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result.status).toBe('pass');
+    expect(result.status).toBe('passed');
     expect(result.results).toEqual([
       { project: 'project-a', testPath: 'sum.test.ts' },
       { project: 'project-b', testPath: 'sum.test.ts' },
@@ -117,7 +124,7 @@ describe('programmatic createRstest', () => {
     await cli.exec;
     const result = parsePayload(cli.stdout);
 
-    expect(result.status).toBe('pass');
+    expect(result.status).toBe('passed');
     expect(result.contextProjects).toEqual([
       {
         name: 'rstest',
@@ -172,7 +179,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result.results).toEqual(['pass', 'pass']);
+    expect(result.results).toEqual(['passed', 'passed']);
     expect(result.initializedEnv).toEqual({
       RSTEST: 'true',
       NODE_ENV: 'production',
@@ -185,7 +192,7 @@ describe('programmatic createRstest', () => {
       exitCode: 9,
     });
     expect(result.failure).toEqual({
-      status: 'fail',
+      status: 'failed',
       summary: {
         tests: { failed: 1 },
         files: { failed: 1 },
@@ -194,6 +201,29 @@ describe('programmatic createRstest', () => {
       observedMutation: false,
     });
     expect(result.teardownEntries).toEqual(['context-a', 'context-b']);
+  });
+
+  it('reports a global teardown failure through the run result status', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-teardown-failure.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // Embedded runs do not mirror the internal exit code, so the resolved
+    // result is the only structured failure signal the caller gets. The
+    // `onTestRunEnd` payload already dispatched with its pre-teardown status.
+    expect(execution.exitCode).toBe(0);
+    expect(result.hostExitCode).toBeNull();
+    expect(result.status).toBe('failed');
+    expect(result.unhandledErrors).toEqual([]);
+    expect(result.summary.tests.failed).toBe(0);
   });
 
   it('reports missing dependencies without prompting embedded callers', async ({
@@ -256,7 +286,7 @@ describe('programmatic createRstest', () => {
 
     expect(execution.exitCode).toBe(0);
     expect(result).toEqual({
-      status: 'pass',
+      status: 'passed',
       tests: 1,
       extendsCalls: 1,
     });
@@ -374,7 +404,7 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    expect(result.statuses).toEqual(['pass', 'pass']);
+    expect(result.statuses).toEqual(['passed', 'passed']);
     const expectTrace = (trace: Record<string, any>, dir: string) => {
       expect(trace).toEqual({
         traceDir: joinPosix(result.root, dir),
@@ -422,7 +452,7 @@ describe('programmatic createRstest', () => {
     expect(execution.exitCode).toBe(0);
     expect(result.cycles).toHaveLength(2);
     expect(result.cycles[0]).toEqual({
-      status: 'pass',
+      status: 'passed',
       results: expect.arrayContaining(['first.test.ts', 'second.test.ts']),
       rerunTestPaths: expect.arrayContaining([
         'first.test.ts',
@@ -433,7 +463,7 @@ describe('programmatic createRstest', () => {
     expect(result.cycles[0].results).toHaveLength(2);
     expect(result.cycles[0].rerunTestPaths).toHaveLength(2);
     expect(result.cycles[1]).toEqual({
-      status: 'pass',
+      status: 'passed',
       results: expect.arrayContaining(['first.test.ts', 'second.test.ts']),
       rerunTestPaths: ['first.test.ts'],
       tests: 2,
@@ -446,16 +476,16 @@ describe('programmatic createRstest', () => {
     expect(result.emptyProjectCycles.at(-1)).toEqual(['first.test.ts']);
     expect(result.updateOptions).toEqual({
       run: {
-        false: { status: 'fail', createdSnapshot: false },
-        undefined: { status: 'pass', createdSnapshot: true },
+        false: { status: 'failed', createdSnapshot: false },
+        undefined: { status: 'passed', createdSnapshot: true },
       },
       watch: {
-        false: { status: 'fail', createdSnapshot: false },
-        undefined: { status: 'pass', createdSnapshot: true },
+        false: { status: 'failed', createdSnapshot: false },
+        undefined: { status: 'passed', createdSnapshot: true },
       },
     });
     expect(result.teardownFailure).toEqual({
-      run: { status: 'pass' },
+      run: { status: 'passed' },
       closeErrors: ['Global teardown failed.', 'Global teardown failed.'],
     });
     expect(result.selectorRejections).toEqual({
@@ -480,9 +510,9 @@ describe('programmatic createRstest', () => {
     const { cycles } = parsePayload(cli.stdout);
     expect(execution.exitCode).toBe(0);
     expect(cycles.map((cycle: { status: string }) => cycle.status)).toEqual([
-      'pass',
+      'passed',
       'error',
-      'pass',
+      'passed',
     ]);
     expect(cycles[1].errors).toHaveLength(1);
     expect(cycles[1].errors[0].stack).toContain('getRsbuildStats');
@@ -550,7 +580,7 @@ describe('programmatic createRstest', () => {
 
     expect(execution.exitCode).toBe(0);
     expect(result).toMatchObject({
-      status: 'pass',
+      status: 'passed',
       tests: 1,
       file: 'browser.test.ts',
       errors: [],
@@ -573,8 +603,8 @@ describe('programmatic createRstest', () => {
         'Browser compilation failed intentionally',
       ),
       cycles: [
-        { status: 'pass', tests: 1, errors: [] },
-        { status: 'pass', tests: 1, errors: [] },
+        { status: 'passed', tests: 1, errors: [] },
+        { status: 'passed', tests: 1, errors: [] },
       ],
     });
     expect(result.setupCycles).toEqual([
@@ -587,13 +617,13 @@ describe('programmatic createRstest', () => {
       message: expect.stringContaining('Browser setup failed intentionally'),
     });
     expect(result.emptyProjectCycles[0]).toEqual({
-      status: 'pass',
+      status: 'passed',
       rerunTestPaths: [],
       errors: [],
     });
     expect(result.startupCompiledAtResult).toBe(true);
     expect(result.emptyProjectCycles.at(-1)).toEqual({
-      status: 'pass',
+      status: 'passed',
       rerunTestPaths: ['added.test.ts'],
       errors: [],
     });

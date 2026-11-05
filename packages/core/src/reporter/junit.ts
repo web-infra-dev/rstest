@@ -1,15 +1,15 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { relative } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
   GetSourcemap,
   Reporter,
+  SerializedError,
   TestFileResult,
   TestResult,
   TestRunEndPayload,
 } from '../types';
-import { getTaskNameWithPrefix, logger } from '../utils';
+import { logger } from '../utils';
 import { formatStack, parseErrorStacktrace } from '../utils/error';
 
 interface JUnitTestCase {
@@ -33,6 +33,7 @@ interface JUnitTestSuite {
   time: number;
   timestamp: string;
   testcases: JUnitTestCase[];
+  systemErr?: string;
 }
 
 interface JUnitReport {
@@ -94,39 +95,42 @@ export class JUnitReporter implements Reporter {
       .replace(/'/g, '&apos;');
   }
 
+  private async formatError(
+    error: SerializedError,
+    getSourcemap: GetSourcemap,
+  ): Promise<{ message: string; type: string; details: string }> {
+    let details = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
+    const stackFrames = error.stack
+      ? await parseErrorStacktrace({
+          stack: error.stack,
+          fullStack: error.fullStack,
+          getSourcemap,
+        })
+      : [];
+    if (stackFrames[0]) {
+      details += `\n${formatStack(stackFrames[0], this.rootPath)}`;
+    }
+    return {
+      message: this.escapeXml(error.message),
+      type: error.name || 'Error',
+      details: this.escapeXml(details),
+    };
+  }
+
   private async createJUnitTestCase(
     test: TestResult,
     getSourcemap: GetSourcemap,
   ): Promise<JUnitTestCase> {
     const testCase: JUnitTestCase = {
-      name: getTaskNameWithPrefix(test),
-      classname: relative(this.rootPath, test.testPath),
+      name: test.fullName,
+      classname: test.relativeTestPath,
       time: (test.duration || 0) / 1000, // Convert to seconds
       status: test.status,
     };
 
     if (test.errors && test.errors.length > 0) {
       testCase.errors = await Promise.all(
-        test.errors.map(async (error) => {
-          let details = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
-          const stackFrames = error.stack
-            ? await parseErrorStacktrace({
-                stack: error.stack,
-                fullStack: error.fullStack,
-                getSourcemap,
-              })
-            : [];
-
-          if (stackFrames[0]) {
-            details += `\n${formatStack(stackFrames[0], this.rootPath)}`;
-          }
-
-          return {
-            message: this.escapeXml(error.message),
-            type: error.name || 'Error',
-            details: this.escapeXml(details),
-          };
-        }),
+        test.errors.map((error) => this.formatError(error, getSourcemap)),
       );
     }
 
@@ -143,20 +147,15 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
-    const failures = testCases.filter((test) => test.status === 'fail').length;
     const errors = 0; // No separate error tracking; set to 0 for clarity
-    const skipped = testCases.filter(
-      (test) => test.status === 'skip' || test.status === 'todo',
-    ).length;
-    const totalTime = testCases.reduce((sum, test) => sum + test.time, 0);
 
     return {
-      name: relative(this.rootPath, fileResult.testPath),
-      tests: testCases.length,
-      failures,
+      name: fileResult.relativeTestPath,
+      tests: fileResult.summary.total,
+      failures: fileResult.summary.failed,
       errors,
-      skipped,
-      time: totalTime,
+      skipped: fileResult.summary.skipped + fileResult.summary.todo,
+      time: (fileResult.duration ?? 0) / 1000,
       timestamp: new Date().toISOString(),
       testcases: testCases,
     };
@@ -178,10 +177,10 @@ export class JUnitReporter implements Reporter {
             let testcaseXml = `
     <testcase name="${this.escapeXml(testcase.name)}" classname="${this.escapeXml(testcase.classname)}" time="${testcase.time}">`;
 
-            if (testcase.status === 'skip' || testcase.status === 'todo') {
+            if (testcase.status === 'skipped' || testcase.status === 'todo') {
               testcaseXml += `
       <skipped/>`;
-            } else if (testcase.status === 'fail' && testcase.errors) {
+            } else if (testcase.status === 'failed' && testcase.errors) {
               testcase.errors.forEach((error) => {
                 testcaseXml += `
       <failure message="${error.message}" type="${error.type}">${error.details || ''}</failure>`;
@@ -194,10 +193,15 @@ export class JUnitReporter implements Reporter {
           })
           .join('');
 
+        const systemErrXml = suite.systemErr
+          ? `
+    <system-err>${suite.systemErr}</system-err>`
+          : '';
+
         const testsuiteEnd = `
   </testsuite>`;
 
-        return testsuiteStart + testcaseXmls + testsuiteEnd;
+        return testsuiteStart + testcaseXmls + systemErrXml + testsuiteEnd;
       })
       .join('');
 
@@ -220,9 +224,10 @@ export class JUnitReporter implements Reporter {
 
   async onTestRunEnd({
     results,
-    testResults,
+    summary,
     duration,
     getSourcemap,
+    unhandledErrors,
   }: TestRunEndPayload): Promise<void> {
     const testSuites = await Promise.all(
       results.map(async (fileResult) =>
@@ -230,14 +235,27 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
-    const totalTests = testResults.length;
-    const totalFailures = testResults.filter(
-      (test) => test.status === 'fail',
-    ).length;
-    const totalErrors = 0; // This framework does not distinguish between failures and errors, so errors are always reported as zero.
-    const totalSkipped = testResults.filter(
-      (test) => test.status === 'skip' || test.status === 'todo',
-    ).length;
+    if (unhandledErrors.length > 0) {
+      const unhandledDetails = await Promise.all(
+        unhandledErrors.map((error) => this.formatError(error, getSourcemap)),
+      );
+      testSuites.push({
+        name: 'rstest unhandled errors',
+        tests: 0,
+        failures: 0,
+        errors: unhandledErrors.length,
+        skipped: 0,
+        time: 0,
+        timestamp: new Date().toISOString(),
+        testcases: [],
+        systemErr: unhandledDetails.map(({ details }) => details).join('\n\n'),
+      });
+    }
+
+    const totalTests = summary.tests.total;
+    const totalFailures = summary.tests.failed;
+    const totalErrors = unhandledErrors.length;
+    const totalSkipped = summary.tests.skipped + summary.tests.todo;
     const totalTime = duration.testTime / 1000; // Convert to seconds
 
     const report: JUnitReport = {

@@ -1,7 +1,7 @@
 import type {
   Test,
   TestCase,
-  TestResult,
+  RawTestResult,
   TestResultStatus,
   TestRunMode,
   TestSuite,
@@ -25,19 +25,19 @@ export const sanitizeAttemptCount = (value: number | undefined): number => {
 };
 
 export const getTestStatus = (
-  results: TestResult[],
+  results: RawTestResult[],
   defaultStatus: TestResultStatus,
 ): TestResultStatus => {
   if (results.length === 0) {
     return defaultStatus;
   }
-  return results.some((result) => result.status === 'fail')
-    ? 'fail'
+  return results.some((result) => result.status === 'failed')
+    ? 'failed'
     : results.every((result) => result.status === 'todo')
       ? 'todo'
-      : results.every((result) => result.status === 'skip')
-        ? 'skip'
-        : 'pass';
+      : results.every((result) => result.status === 'skipped')
+        ? 'skipped'
+        : 'passed';
 };
 
 type TestModeContext = {

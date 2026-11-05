@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+import type { Colors } from 'picocolors/types';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { SerializedError, GetSourcemap } from '../types';
-import { generateCodeFrame } from './codeFrame';
+import { type CodeFrameWindow, generateCodeFrame } from './codeFrame';
 import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
@@ -126,29 +128,35 @@ export async function printError(
   }
 }
 
-function printCodeFrame(frame: StackFrame) {
+/**
+ * Renders a frame's source into a code frame. The file read, `file://` unwrap,
+ * and formatter call are shared by the CLI error printer and the md reporter.
+ */
+export const renderFrameCodeFrame = (
+  frame: StackFrame,
+  colors: Colors,
+  window?: CodeFrameWindow,
+): string | undefined => {
   const filePath = frame.file?.startsWith('file')
     ? new URL(frame.file)
     : frame.file;
-
-  if (!filePath) {
-    return;
-  }
-
+  if (!filePath) return undefined;
   const source = fs.existsSync(filePath)
     ? fs.readFileSync(filePath, 'utf-8')
     : undefined;
-
-  if (!source) {
-    return;
-  }
-  const result = generateCodeFrame(
+  if (!source) return undefined;
+  return generateCodeFrame(
     source,
     frame.lineNumber,
     frame.column,
-    color,
+    colors,
+    window,
   );
+};
 
+function printCodeFrame(frame: StackFrame) {
+  const result = renderFrameCodeFrame(frame, color);
+  if (!result) return;
   logger.stderr(result);
   logger.stderr('');
 }
@@ -166,28 +174,40 @@ function printStack(stackFrames: StackFrame[], rootPath: string) {
   if (stackFrames.length) logger.stderr('');
 }
 
-const stackIgnores: (RegExp | string)[] = [
+export const stackIgnores: RegExp[] = [
   /\/@rstest\/core/,
   /rstest\/packages\/core\/dist/,
   /node_modules\/chai/,
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,
-  /node:\w+/,
+  /(^|\/)node:/,
   /webpack\/runtime/,
   /rstest runtime/,
   // windows path
   /webpack\\runtime/,
-  '<anonymous>',
+  /<anonymous>/,
 ];
+
+const normalizeFilePath = (file?: string | null): string | undefined => {
+  if (!file) return undefined;
+  if (!file.startsWith('file://')) return file;
+  try {
+    return fileURLToPath(file);
+  } catch {
+    return file;
+  }
+};
 
 export async function parseErrorStacktrace({
   stack,
   getSourcemap,
   fullStack = isDebug(),
+  ignore = stackIgnores,
 }: {
   fullStack?: boolean;
   stack: string;
   getSourcemap?: GetSourcemap;
+  ignore?: RegExp[];
 }): Promise<StackFrame[]> {
   // Cache TraceMap per file to avoid redundant VLQ decoding when multiple
   // stack frames originate from the same source file.
@@ -195,14 +215,13 @@ export async function parseErrorStacktrace({
 
   const stackFrames = await Promise.all(
     stackTraceParse(stack)
-      .filter((frame) =>
-        fullStack
-          ? true
-          : frame.file &&
-            !stackIgnores.some((entry) => frame.file?.match(entry)),
-      )
+      .filter((frame) => {
+        if (fullStack) return true;
+        const file = normalizeFilePath(frame.file);
+        return Boolean(file && !ignore.some((entry) => file.match(entry)));
+      })
       .map(async (frame) => {
-        const file = frame.file;
+        const file = normalizeFilePath(frame.file);
         if (!file) return frame;
 
         const sourcemap = await getSourcemap?.(file);
@@ -236,32 +255,28 @@ export async function parseErrorStacktrace({
                   }
                 })(),
             lineNumber: line,
-            name,
+            methodName: name || frame.methodName,
             column,
           };
         }
-        return frame;
+        return { ...frame, file };
       }),
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
 
-  if (fullStack) {
-    return stackFrames;
-  }
+  return fullStack
+    ? stackFrames
+    : stackFrames.filter((frame) => {
+        if (!frame.file) {
+          return false;
+        }
 
-  const filteredFrames = stackFrames.filter((frame) => {
-    if (!frame.file) {
-      return false;
-    }
+        if (isHttpLikeFile(frame.file)) {
+          return false;
+        }
 
-    if (isHttpLikeFile(frame.file)) {
-      return false;
-    }
-
-    const normalizedFile = frame.file.replace(/\\/g, '/');
-    return !stackIgnores.some((entry) => normalizedFile.match(entry));
-  });
-
-  return filteredFrames;
+        const normalizedFile = frame.file.replace(/\\/g, '/');
+        return !ignore.some((entry) => normalizedFile.match(entry));
+      });
 }

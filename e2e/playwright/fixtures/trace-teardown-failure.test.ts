@@ -60,7 +60,7 @@ test.sequential('verifies teardown failure trace is retained', async () => {
   const summary = JSON.parse(
     await readFile(join(traceDir, 'trace-summary.json'), 'utf-8'),
   );
-  expect(summary.test.status).toBe('fail');
+  expect(summary.test.status).toBe('failed');
   expect(summary.error.message).toContain('serve cleanup trace failure');
   console.log('RSTEST_PLAYWRIGHT_TRACE_TEARDOWN_FAIL_OK');
 });

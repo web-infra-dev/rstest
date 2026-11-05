@@ -13,7 +13,7 @@ import type {
   CoverageProvider,
   RawCoverageResolveOptions,
 } from '../../types/coverage';
-import { color, logger, type TraceRun } from '../../utils';
+import { color, logger, toSelectedTestFile, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
@@ -555,6 +555,30 @@ export function createNodeExecutor(
         sequenceHints,
         rootPath,
       });
+    }
+
+    const runStartFailure = await opts.onSelected?.(
+      projectPlans.flatMap(({ p, finalEntries }) =>
+        finalEntries.map(({ testPath }) =>
+          toSelectedTestFile(testPath, p.name),
+        ),
+      ),
+    );
+
+    // A run-start hook can yield to cancellation before setup or workers begin;
+    // a reporter failure aborts the run and is already recorded, so this cycle
+    // contributes no error of its own.
+    if (runStartFailure || didClose) {
+      return {
+        results: [],
+        testResults: [],
+        errors: [],
+        testPaths: [],
+        duration: {
+          buildTime: rebuildTime ?? Date.now() - cycleStart,
+          testTime: 0,
+        },
+      };
     }
 
     const returns = await Promise.all(

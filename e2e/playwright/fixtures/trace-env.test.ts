@@ -48,6 +48,6 @@ test.sequential('verifies Playwright trace from env', async () => {
     await readFile(join(traceDir, 'trace-summary.json'), 'utf-8'),
   );
   expect(summary.test.name).toBe('writes Playwright trace from env');
-  expect(summary.test.status).toBe('pass');
+  expect(summary.test.status).toBe('passed');
   console.log('RSTEST_PLAYWRIGHT_TRACE_ENV_OK');
 });

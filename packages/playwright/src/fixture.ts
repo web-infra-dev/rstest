@@ -851,7 +851,7 @@ const cleanupBrowserFixture = [
     try {
       await use(undefined);
     } finally {
-      if (task.result?.status !== 'fail') {
+      if (task.result?.status !== 'failed') {
         await release(true);
       }
     }
@@ -922,7 +922,7 @@ const playwrightFixtures = {
         try {
           if (stagedTraceDir && stagedTracePath) {
             try {
-              if (task.result?.status === 'fail' && artifacts) {
+              if (task.result?.status === 'failed' && artifacts) {
                 activeArtifacts = await reserveTraceArtifacts(artifacts);
                 try {
                   await copyFile(stagedTracePath, activeArtifacts.tracePath);
@@ -963,7 +963,7 @@ const playwrightFixtures = {
         // The first cleanup error has already been recorded by the runner
         // before onTestFailed invokes this compensation path.
         return cleanupPromise.catch(async () => {
-          if (task.result?.status === 'fail' && !finalized) {
+          if (task.result?.status === 'failed' && !finalized) {
             await finishContextCleanup(false);
           }
         });
@@ -977,10 +977,10 @@ const playwrightFixtures = {
                 artifacts.options.mode === 'on' ||
                 artifacts.options.mode === 'on-first-retry' ||
                 artifacts.options.mode === 'on-all-retries' ||
-                task.result?.status === 'fail';
+                task.result?.status === 'failed';
               const shouldStageTrace =
                 artifacts.options.mode === 'retain-on-failure' &&
-                task.result?.status !== 'fail';
+                task.result?.status !== 'failed';
 
               if (shouldSaveTrace) {
                 activeArtifacts = await reserveTraceArtifacts(artifacts);
@@ -1020,13 +1020,13 @@ const playwrightFixtures = {
             await context.close();
           }
         } catch (error) {
-          if (task.result?.status === 'fail') {
+          if (task.result?.status === 'failed') {
             await finishContextCleanup(false);
           }
           throw error;
         }
 
-        await finishContextCleanup(task.result?.status !== 'fail');
+        await finishContextCleanup(task.result?.status !== 'failed');
       })();
 
       return cleanupPromise;
@@ -1052,10 +1052,10 @@ const playwrightFixtures = {
     try {
       await use(context);
     } finally {
-      if (task.result?.status !== 'fail') {
+      if (task.result?.status !== 'failed') {
         releaseBrowser = retainBrowser();
         onTestFinished(async () => {
-          if (task.result?.status !== 'fail') {
+          if (task.result?.status !== 'failed') {
             await cleanupContext();
           }
         }, 0);
@@ -1088,7 +1088,7 @@ const playwrightFixtures = {
     try {
       await use(page);
     } finally {
-      if (task.result?.status !== 'fail') {
+      if (task.result?.status !== 'failed') {
         await page.close();
       }
     }
@@ -1121,7 +1121,7 @@ const playwrightFixtures = {
     try {
       await use(request);
     } finally {
-      if (task.result?.status !== 'fail') {
+      if (task.result?.status !== 'failed') {
         await cleanupRequest();
       }
     }
@@ -1185,7 +1185,7 @@ const playwrightFixtures = {
     try {
       await use(serve);
     } finally {
-      if (task.result?.status !== 'fail') {
+      if (task.result?.status !== 'failed') {
         await cleanupServers();
       }
     }

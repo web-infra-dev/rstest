@@ -886,25 +886,30 @@ export function createCli(): CAC {
       try {
         const [
           { loadCliConfig, applyAgentReporterDefault, mergeWithCLIOptions },
-          { createRstest },
-        ] = await Promise.all([import('./init'), import('../api')]);
+          { createRstestInstance },
+        ] = await Promise.all([
+          import('./init'),
+          import('../api/createRstest'),
+        ]);
         const cwd = process.cwd();
         const loaded = await loadCliConfig(options, cwd);
         mergeWithCLIOptions(loaded.content, options);
         applyAgentReporterDefault(loaded.content, options);
-        const rstest = await createRstest({
-          cwd,
-          config: loaded,
-          configLoader: options.configLoader,
-        });
+        // The internal CLI runtime, not the embeddable public API: a reporter
+        // failure after the payload is dispatched only raises the internal exit
+        // code, so the command mirrors it to fail the process. run/watch get the
+        // same mirroring from `createCliRstest`.
+        const rstest = await createRstestInstance(
+          { cwd, config: loaded, configLoader: options.configLoader },
+          { embedded: false, ...cliHostRuntime() },
+        );
 
-        const result = await rstest.mergeReports({
+        // No payload-status check: `onExitCodeChange` already mirrored every
+        // exit-code raise (including reporter failures after the payload).
+        await rstest.mergeReports({
           path,
           cleanup: options.cleanup,
         });
-        if (result.status !== 'pass') {
-          setHostExitCode(1);
-        }
       } catch (err) {
         logger.error('Failed to merge reports.');
         logger.error(formatError(err));

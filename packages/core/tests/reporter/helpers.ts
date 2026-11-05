@@ -1,12 +1,22 @@
 import type {
   Duration,
   SnapshotSummary,
+  TestFileSummary,
   TestRunEndPayload,
   TestRunSummary,
 } from '../../src/types';
 
+export const emptyFileSummary: TestFileSummary = {
+  total: 0,
+  passed: 0,
+  failed: 0,
+  skipped: 0,
+  todo: 0,
+  flaky: 0,
+};
+
 export const emptyRunSummary: TestRunSummary = {
-  tests: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0 },
+  tests: emptyFileSummary,
   files: { total: 0, failed: 0 },
 };
 
@@ -34,6 +44,7 @@ export const emptyDuration: Duration = {
 };
 
 export const emptyRunEndPayload: TestRunEndPayload = {
+  status: 'passed',
   results: [],
   testResults: [],
   summary: emptyRunSummary,

@@ -46,7 +46,10 @@ class BrowserLifecycleReporter implements Reporter {
 }
 
 export default defineConfig({
-  reporters: [new BrowserLifecycleReporter()],
+  reporters: [
+    new BrowserLifecycleReporter(),
+    ['../../../reporter/fixtures/contract-reporter.mjs', { marker: 'browser' }],
+  ],
   projects: [
     {
       name: 'browser',
