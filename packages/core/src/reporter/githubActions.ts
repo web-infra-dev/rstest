@@ -374,8 +374,8 @@ async function renderStepSummary({
       if (!error) continue;
 
       pushHeading(lines, 3, `❌ FAIL Unhandled Error ${index + 1}`);
-      lines.push(`**${error.name || 'Error'}**: ${trim(error.message)}`);
-      lines.push('');
+      lines.push(`**${error.name || 'Error'}**:`);
+      pushFencedBlock(lines, 'text', stripAnsi(trim(error.message)));
 
       if (error.stack) {
         pushFencedBlock(lines, '', stripAnsi(trim(error.stack)));
@@ -409,10 +409,8 @@ async function renderStepSummary({
         const errorType = getErrorType(error);
         const message = trim(error.message);
         const retryLabel = getRetryErrorLabel(error);
-        lines.push(
-          `**${retryLabel ? `${retryLabel} - ` : ''}${errorType}**: ${message}`,
-        );
-        lines.push('');
+        lines.push(`**${retryLabel ? `${retryLabel} - ` : ''}${errorType}**:`);
+        pushFencedBlock(lines, 'text', stripAnsi(message));
 
         if (error.diff) {
           pushFencedBlock(lines, 'diff', stripAnsi(trim(error.diff)));

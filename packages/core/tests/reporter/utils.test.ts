@@ -2,6 +2,7 @@ import { describe, expect, it } from '@rstest/core';
 import {
   buildPackageManagerReproCommand,
   computeSummary,
+  pushFencedBlock,
 } from '../../src/reporter/utils';
 import type { TestFileResult, TestResult } from '../../src/types';
 import { emptyFileSummary } from './helpers';
@@ -111,5 +112,17 @@ describe('buildPackageManagerReproCommand', () => {
     ).toBe(
       "pnpm exec rstest 'src/index.test.ts' --testNamePattern 'parser > parses foo\\(bar\\) \\[a\\] \\+ \\$1'",
     );
+  });
+});
+
+describe('pushFencedBlock', () => {
+  it.each([
+    ['plain text', '```'],
+    ['```text\nunclosed log', '````'],
+    ['```\n</details>\n````\n~~~', '`````'],
+  ])('keeps content inside a code block (%#)', (content, fence) => {
+    const lines: string[] = [];
+    pushFencedBlock(lines, 'text', content);
+    expect(lines.join('\n')).toBe(`${fence}text\n${content}\n${fence}\n`);
   });
 });

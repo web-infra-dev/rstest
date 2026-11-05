@@ -17,3 +17,20 @@ it('reports a long diff', () => {
     'expected last line',
   ]);
 });
+
+it('reports truncated Markdown logs', { retry: 2 }, () => {
+  throw new Error(
+    [
+      'CLI log:',
+      '````text',
+      '</details>',
+      '````',
+      '```text',
+      'x'.repeat(10_000),
+    ].join('\n'),
+  );
+});
+
+it('reports the following failure', () => {
+  throw new Error('following failure');
+});

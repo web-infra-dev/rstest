@@ -175,50 +175,61 @@ describe('GithubActionsReporter step summary', () => {
     }
   });
 
-  it('marks summaries with unhandled errors as failed', async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
-    const summaryPath = path.join(tempDir, 'summary.md');
-    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
-    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+  it.each([
+    'global setup failed',
+    'global setup failed\n```text\n</details>\n' + 'x'.repeat(1_000),
+  ])(
+    'contains unhandled error messages in the failed summary (%#)',
+    async (message) => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+      const summaryPath = path.join(tempDir, 'summary.md');
+      const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+      const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
 
-    process.env.GITHUB_STEP_SUMMARY = summaryPath;
-    process.env.GITHUB_WORKSPACE = tempDir;
+      process.env.GITHUB_STEP_SUMMARY = summaryPath;
+      process.env.GITHUB_WORKSPACE = tempDir;
 
-    try {
-      const reporter = new GithubActionsReporter({
-        rootPath: tempDir,
-        options: {
-          onWritePath: (value) => value,
-          annotations: false,
-        },
-      });
+      try {
+        const reporter = new GithubActionsReporter({
+          rootPath: tempDir,
+          options: {
+            onWritePath: (value) => value,
+            annotations: false,
+          },
+        });
 
-      await reporter.onTestRunEnd({
-        ...emptyRunEndPayload,
-        status: 'error',
-        unhandledErrors: [{ name: 'Error', message: 'global setup failed' }],
-      });
+        await reporter.onTestRunEnd({
+          ...emptyRunEndPayload,
+          status: 'error',
+          unhandledErrors: [{ name: 'Error', message }],
+        });
 
-      const summary = await fs.readFile(summaryPath, 'utf-8');
-      expect(summary).toContain('<summary>Rstest Test Reporter ❌</summary>');
-      expect(summary).toContain('### ❌ FAIL Unhandled Error 1');
-      expect(summary).toContain('**Error**: global setup failed');
-    } finally {
-      if (previousSummaryPath === undefined) {
-        delete process.env.GITHUB_STEP_SUMMARY;
-      } else {
-        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+        const summary = await fs.readFile(summaryPath, 'utf-8');
+        expect(summary).toContain('<summary>Rstest Test Reporter ❌</summary>');
+        expect(summary).toContain('### ❌ FAIL Unhandled Error 1');
+        const content =
+          message.length > 400 ? `${message.slice(0, 399)}…` : message;
+        const fence = message.includes('```') ? '````' : '```';
+        expect(summary).toContain(
+          `**Error**:\n\n${fence}text\n${content}\n${fence}\n`,
+        );
+      } finally {
+        if (previousSummaryPath === undefined) {
+          delete process.env.GITHUB_STEP_SUMMARY;
+        } else {
+          process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+        }
+
+        if (previousWorkspacePath === undefined) {
+          delete process.env.GITHUB_WORKSPACE;
+        } else {
+          process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+        }
+
+        await fs.rm(tempDir, { recursive: true, force: true });
       }
-
-      if (previousWorkspacePath === undefined) {
-        delete process.env.GITHUB_WORKSPACE;
-      } else {
-        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
-      }
-
-      await fs.rm(tempDir, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 
   it('uses the configured summary field length without changing the default', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
@@ -519,8 +530,12 @@ describe('GithubActionsReporter step summary', () => {
       expect(summary).toContain(
         '### ❌ FAIL tests/retry.test.ts > describe retry > fails after retries (retry x1)',
       );
-      expect(summary).toContain('**AssertionError**: first failure');
-      expect(summary).toContain('**Retry x1 - AssertionError**: retry failure');
+      expect(summary).toContain(
+        '**AssertionError**:\n\n```text\nfirst failure\n```',
+      );
+      expect(summary).toContain(
+        '**Retry x1 - AssertionError**:\n\n```text\nretry failure\n```',
+      );
     } finally {
       if (previousSummaryPath === undefined) {
         delete process.env.GITHUB_STEP_SUMMARY;
