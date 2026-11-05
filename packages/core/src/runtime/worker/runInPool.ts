@@ -784,6 +784,13 @@ export const runInPool = async (
 
   const trackRunnerHook = (call: Promise<void>): Promise<void> => {
     if (!isVmPool) {
+      // Runner hooks are fire-and-forget — only `onTestCaseFailure` is awaited
+      // by the runner. With `isolate: false` one worker serves consecutive
+      // files and the next file's `preparePool` `$close()`s this file's
+      // channel, rejecting calls still pending there; unhandled, that rejection
+      // fails whichever file is running. Reporter hook failures are recorded
+      // host-side, so observing the transport rejection loses nothing.
+      void call.catch(() => {});
       return call;
     }
     pendingRunnerHooks.add(call);
@@ -1012,12 +1019,15 @@ export const runInPool = async (
       assetFiles = loadedAssets.assetFiles;
       sourceMaps = loadedAssets.sourceMaps;
 
-      rpc.onTestFileStart?.({
-        testId: getFileTaskId(testPath),
-        testPath,
-        project,
-        tests: [],
-      });
+      // Observed for the same reason as `trackRunnerHook`.
+      void rpc
+        .onTestFileStart({
+          testId: getFileTaskId(testPath),
+          testPath,
+          project,
+          tests: [],
+        })
+        .catch(() => {});
 
       // Keep file-level context only while evaluating top-level module code.
       // Once the runner starts, suite/case tasks should own subsequent logs so
