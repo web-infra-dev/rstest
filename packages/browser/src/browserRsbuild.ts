@@ -409,6 +409,7 @@ const createBrowserRsbuildDevConfig = (
 ): {
   writeToDisk: boolean;
   hmr: boolean;
+  liveReload: boolean;
   client: {
     logLevel: 'error';
   };
@@ -419,6 +420,7 @@ const createBrowserRsbuildDevConfig = (
     // path that reuses a page. See that helper for why fresh-page runs (headless,
     // or any one-shot) must not receive HMR pushes.
     hmr: enableHmr,
+    liveReload: enableHmr,
     client: {
       logLevel: 'error' as const,
     },

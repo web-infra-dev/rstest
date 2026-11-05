@@ -158,6 +158,7 @@ async function compileAndRunGlobalSetup(
       server: { ...hostServerConfig },
       dev: {
         hmr: false,
+        liveReload: false,
         writeToDisk: dev.writeToDisk || debugMode,
       },
       environments: Object.fromEntries(
