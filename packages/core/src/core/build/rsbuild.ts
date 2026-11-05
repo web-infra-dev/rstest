@@ -220,6 +220,7 @@ export const prepareRsbuild = async ({
       server: { ...hostServerConfig },
       dev: {
         hmr: false,
+        liveReload: false,
         writeToDisk,
       },
       environments: Object.fromEntries(
