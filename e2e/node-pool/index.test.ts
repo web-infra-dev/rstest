@@ -1,14 +1,14 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('node pool e2e', () => {
-  it.for(['threads', 'vmThreads', 'vmForks'] as const)(
+  it.for(['forks', 'threads', 'vmThreads', 'vmForks'] as const)(
     'should run tests under the %s pool',
     async (pool, { onTestFinished }) => {
       const { expectExecSuccess } = await runRstestCli({
@@ -29,7 +29,12 @@ describe('node pool e2e', () => {
             cwd: join(__dirname, './fixtures'),
             env: {
               ISOLATE: undefined,
-              RSTEST_EXPECT_FORKS: pool === 'vmForks' ? '1' : undefined,
+              NODE_OPTIONS:
+                pool === 'forks' || pool === 'threads'
+                  ? `--import=${pathToFileURL(join(__dirname, './fixtures/nativePoolGuard.mjs')).href}`
+                  : undefined,
+              RSTEST_EXPECT_FORKS:
+                pool === 'forks' || pool === 'vmForks' ? '1' : undefined,
             },
           },
         },

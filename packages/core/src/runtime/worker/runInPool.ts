@@ -47,7 +47,6 @@ import { disableVmCompilationCache } from './vm/compilationCache';
 import { stripVmContext } from './vm/context';
 import type { VmRuntimeGlobal } from './vm/nodeGlobals';
 import { installVmProcessGuards } from './vm/process';
-import { prepareVmRuntimeRealm } from './vm/realm';
 import {
   createRuntimeRpc,
   createWorkerRpcOptions,
@@ -58,10 +57,7 @@ import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
-import {
-  clearVmExternalCompilationCache,
-  disposeVmExternalModules,
-} from './vm/externalModules';
+import { loadVmExternalModules } from './vm/externalModulesLoader';
 import { workerCache } from './vm/cache';
 
 let sourceMaps: Record<string, string> = {};
@@ -307,6 +303,7 @@ const preparePool = async (
       } catch (error) {
         errors.push(error);
       }
+      const { disposeVmExternalModules } = await loadVmExternalModules();
       disposeVmExternalModules(vmContext);
       try {
         stripVmContext(vmContext, initialVmContextKeys);
@@ -352,6 +349,10 @@ const preparePool = async (
     applyRuntimeColors(colorEnabled);
 
     if (isVmPool) {
+      const [{ prepareVmRuntimeRealm }] = await Promise.all([
+        import('./vm/realm'),
+        loadVmExternalModules(),
+      ]);
       const vmRealm = await prepareVmRuntimeRealm(
         context,
         cleanupFns,
@@ -764,7 +765,10 @@ export const runInPool = async (
     ]);
     esmLoader.clearCompilationCache();
     cjsLoader.clearCompilationCache();
-    clearVmExternalCompilationCache();
+    if (isVmPool) {
+      const { clearVmExternalCompilationCache } = await loadVmExternalModules();
+      clearVmExternalCompilationCache();
+    }
   }
   if (!isVmPool && !isolate && buildChanged) {
     // A rebuild replaces fixture definitions too. Retire instances created by

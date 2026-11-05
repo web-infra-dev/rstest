@@ -16,8 +16,12 @@ import {
   wrapperLength,
 } from '../../src/runtime/worker/loadModule';
 import { workerCache } from '../../src/runtime/worker/vm/cache';
+import { loadVmExternalModules } from '../../src/runtime/worker/vm/externalModulesLoader';
 
 describe('require.resolve origin runtime helper', () => {
+  beforeAll(async () => {
+    await loadVmExternalModules();
+  });
   afterEach(() => {
     clearEsModuleCache();
     clearEsCompilationCache();
