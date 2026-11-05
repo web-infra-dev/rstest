@@ -12,7 +12,7 @@ import {
   interopModule,
   shouldInterop,
 } from './interop';
-import { getVmExternalModules } from './vm/externalModules';
+import { loadVmExternalModules } from './vm/externalModulesLoader';
 
 /**
  * Shared dynamic-import resolution + interop policy for both worker loaders.
@@ -134,6 +134,7 @@ export const loadWasm = async (
   vmContext?: vm.Context,
 ): Promise<any> => {
   if (vmContext) {
+    const { getVmExternalModules } = await loadVmExternalModules();
     return getVmExternalModules(vmContext).import(
       pathToFileURL(filePath).href,
       true,
@@ -197,6 +198,7 @@ export const finalizeDynamicImport = async ({
   );
 
   if (vmContext) {
+    const { getVmExternalModules } = await loadVmExternalModules();
     return getVmExternalModules(vmContext).import(
       modulePath,
       interopDefault,

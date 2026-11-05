@@ -20,7 +20,7 @@ import {
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
 import { workerCache } from './vm/cache';
-import { getVmExternalModules } from './vm/externalModules';
+import { getVmExternalModules } from './vm/externalModulesLoader';
 import { createVmTimersLoader } from './vm/timers';
 
 const CJS_WRAPPER_PREFIX = "'use strict';return function(){\n";
