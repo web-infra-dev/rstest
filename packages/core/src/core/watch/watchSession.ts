@@ -1,6 +1,10 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { exitReporters } from '../../reporter';
-import type { ExecutorCycleOutcome, TestExecutor } from '../../types';
+import type {
+  ExecutorCycleOutcome,
+  SelectedTestFile,
+  TestExecutor,
+} from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import {
   clearScreen,
@@ -261,18 +265,27 @@ export function createWatchCycleDriver({
     prepareWatchCycleState(context, { isFirstCycle });
     // The run opens lazily — see `InternalContext.openReporterRun`. A rebuild
     // that reaches no test then opens nothing and leaves the screen as it was.
-    let runOpened: Promise<void> | undefined;
+    let runOpened: Promise<Error | undefined> | undefined;
+    let selectedFiles: SelectedTestFile[] = [];
+    let runStartFailure: Error | undefined;
     const openRun = () =>
       (runOpened ??= (async () => {
         // The first cycle and every shortcut clear on their own terms; only a
         // rebuild-driven rerun clears here, once it is known to be one.
         if (mode === 'on-demand') clearScreen();
-        await notifyReportersOnTestRunStart(context);
+        const failure = await notifyReportersOnTestRunStart(
+          context,
+          selectedFiles,
+        );
+        runStartFailure ??= failure;
+        return failure;
       })());
     context.openReporterRun = openRun;
     try {
-      // A scope the user chose reports even when empty ("No test files found.").
-      if (mode === 'all') await openRun();
+      const onSelected = async (files: SelectedTestFile[]) => {
+        selectedFiles = files;
+        return files.length || mode === 'all' ? await openRun() : undefined;
+      };
       let outcome: ExecutorCycleOutcome;
       try {
         outcome =
@@ -285,6 +298,7 @@ export function createWatchCycleDriver({
             updateSnapshot,
             env,
             onTraceEvents,
+            onSelected,
           }));
       } catch (error) {
         outcome = cycleFailureOutcome([toError(error)]);
@@ -295,6 +309,7 @@ export function createWatchCycleDriver({
       // A cycle that ran nothing may still have something to report: an
       // error, or a retired file the summary must stop counting.
       if (
+        mode === 'all' ||
         outcome.results.length ||
         outcome.errors.length ||
         outcome.deletedTestPaths?.length
@@ -302,7 +317,11 @@ export function createWatchCycleDriver({
         await openRun();
       }
       let sessionEndingError: Error | undefined;
-      if (outcome.failure === 'fatal') {
+      if (runStartFailure && isFirstCycle) {
+        // The failure is already recorded for the run; the first cycle only
+        // ends the session with it, without adding it to the outcome again.
+        sessionEndingError = runStartFailure;
+      } else if (outcome.failure === 'fatal') {
         sessionEndingError = outcome.errors[0];
       } else if (isFirstCycle && outcome.failure === 'setup') {
         sessionEndingError =

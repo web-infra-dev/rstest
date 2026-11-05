@@ -9,6 +9,7 @@ import {
   writeResultsCache,
 } from '../../src/core/execution/resultsCache';
 import type { TestFileResult, TestResultStatus } from '../../src/types';
+import { emptyFileSummary } from '../reporter/helpers';
 
 const CACHE_REL = 'node_modules/.cache/.rstest-results/results.json';
 
@@ -31,10 +32,13 @@ const fileResult = (
   testId: name,
   status,
   name,
+  fullName: name,
   testPath: join(root, name),
+  relativeTestPath: name,
   project,
   duration,
   results: [],
+  summary: emptyFileSummary,
 });
 
 const seed = async (data: ResultsCacheData): Promise<void> => {
@@ -106,7 +110,7 @@ describe('writeResultsCache', () => {
       },
     });
     await writeResultsCache(root, [
-      { ...fileResult('rerun.test.ts', 'pass', 20), loadDuration: 80 },
+      { ...fileResult('rerun.test.ts', 'passed', 20), loadDuration: 80 },
     ]);
     const persisted: ResultsCacheData = JSON.parse(
       await readFile(join(root, CACHE_REL), 'utf-8'),
@@ -130,8 +134,8 @@ describe('writeResultsCache', () => {
 
   it('records duration and failure state for pass/fail files', async () => {
     await writeResultsCache(root, [
-      fileResult('a.test.ts', 'pass', 100),
-      fileResult('b.test.ts', 'fail', 200),
+      fileResult('a.test.ts', 'passed', 100),
+      fileResult('b.test.ts', 'failed', 200),
     ]);
     const cache = await readResultsCache(root);
     const keyA = sequenceKey('default', root, join(root, 'a.test.ts'));
@@ -143,13 +147,13 @@ describe('writeResultsCache', () => {
   it('smooths the sum of loading and execution time', async () => {
     await writeResultsCache(root, [
       {
-        ...fileResult('a.test.ts', 'pass', 10),
+        ...fileResult('a.test.ts', 'passed', 10),
         loadDuration: 90,
       },
     ]);
     await writeResultsCache(root, [
       {
-        ...fileResult('a.test.ts', 'pass', 20),
+        ...fileResult('a.test.ts', 'passed', 20),
         loadDuration: 180,
       },
     ]);
@@ -161,7 +165,7 @@ describe('writeResultsCache', () => {
   it('records loading failures even without execution time', async () => {
     await writeResultsCache(root, [
       {
-        ...fileResult('a.test.ts', 'fail', undefined),
+        ...fileResult('a.test.ts', 'failed', undefined),
         loadDuration: 120,
       },
     ]);
@@ -171,8 +175,8 @@ describe('writeResultsCache', () => {
   });
 
   it('smooths duration via EWMA on subsequent runs', async () => {
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 200)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 100)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 200)]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
     // round(200 * 0.7 + 100 * 0.3) = 170 — the newest sample dominates.
@@ -180,11 +184,13 @@ describe('writeResultsCache', () => {
   });
 
   it('records a crash (fail without duration) into failed-first, keeping the old duration', async () => {
-    // A worker crash yields `status: 'fail'` with no `duration` (see
+    // A worker crash yields `status: 'failed'` with no `duration` (see
     // `workerErrorToResult`). It must still be marked failed for next run while
     // preserving the last known smoothed duration.
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
-    await writeResultsCache(root, [fileResult('a.test.ts', 'fail', undefined)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 100)]);
+    await writeResultsCache(root, [
+      fileResult('a.test.ts', 'failed', undefined),
+    ]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
     expect(cache?.files[key]?.failed).toBe(true);
@@ -192,7 +198,9 @@ describe('writeResultsCache', () => {
   });
 
   it('marks a first-ever crash (no prior duration) as failed with no duration', async () => {
-    await writeResultsCache(root, [fileResult('a.test.ts', 'fail', undefined)]);
+    await writeResultsCache(root, [
+      fileResult('a.test.ts', 'failed', undefined),
+    ]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
     expect(cache?.files[key]?.failed).toBe(true);
@@ -200,8 +208,10 @@ describe('writeResultsCache', () => {
   });
 
   it('preserves the cached duration for skip/todo files (no EWMA poisoning)', async () => {
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
-    await writeResultsCache(root, [fileResult('a.test.ts', 'skip', undefined)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 100)]);
+    await writeResultsCache(root, [
+      fileResult('a.test.ts', 'skipped', undefined),
+    ]);
     await writeResultsCache(root, [fileResult('a.test.ts', 'todo', undefined)]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
@@ -213,8 +223,10 @@ describe('writeResultsCache', () => {
     // Quarantining a flaky file (converting its failing tests to skip/todo)
     // must drop it out of failed-first — otherwise it steals the front of the
     // queue on every run until the entry ages out.
-    await writeResultsCache(root, [fileResult('a.test.ts', 'fail', 50)]);
-    await writeResultsCache(root, [fileResult('a.test.ts', 'skip', undefined)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'failed', 50)]);
+    await writeResultsCache(root, [
+      fileResult('a.test.ts', 'skipped', undefined),
+    ]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
     expect(cache?.files[key]?.failed).toBe(false);
@@ -223,16 +235,16 @@ describe('writeResultsCache', () => {
   });
 
   it('clears the failed flag when a previously failing file passes', async () => {
-    await writeResultsCache(root, [fileResult('a.test.ts', 'fail', 50)]);
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 50)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'failed', 50)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 50)]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
     expect(cache?.files[key]?.failed).toBe(false);
   });
 
   it('merges without dropping other keys on write', async () => {
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
-    await writeResultsCache(root, [fileResult('b.test.ts', 'pass', 200)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 100)]);
+    await writeResultsCache(root, [fileResult('b.test.ts', 'passed', 200)]);
     const cache = await readResultsCache(root);
     const keyA = sequenceKey('default', root, join(root, 'a.test.ts'));
     const keyB = sequenceKey('default', root, join(root, 'b.test.ts'));
@@ -242,8 +254,8 @@ describe('writeResultsCache', () => {
 
   it('disambiguates the same relative path across projects', async () => {
     await writeResultsCache(root, [
-      fileResult('a.test.ts', 'pass', 100, 'proj-1'),
-      fileResult('a.test.ts', 'pass', 200, 'proj-2'),
+      fileResult('a.test.ts', 'passed', 100, 'proj-1'),
+      fileResult('a.test.ts', 'passed', 200, 'proj-2'),
     ]);
     const cache = await readResultsCache(root);
     const key1 = sequenceKey('proj-1', root, join(root, 'a.test.ts'));
@@ -253,7 +265,7 @@ describe('writeResultsCache', () => {
   });
 
   it('prunes deleted test paths', async () => {
-    await writeResultsCache(root, [fileResult('gone.test.ts', 'pass', 100)]);
+    await writeResultsCache(root, [fileResult('gone.test.ts', 'passed', 100)]);
     await writeResultsCache(root, [], [join(root, 'gone.test.ts')]);
     const cache = await readResultsCache(root);
     const key = sequenceKey('default', root, join(root, 'gone.test.ts'));
@@ -267,7 +279,7 @@ describe('writeResultsCache', () => {
       version: 2,
       files: { [staleKey]: { duration: 100, at: stale } },
     });
-    await writeResultsCache(root, [fileResult('fresh.test.ts', 'pass', 10)]);
+    await writeResultsCache(root, [fileResult('fresh.test.ts', 'passed', 10)]);
     const cache = await readResultsCache(root);
     expect(cache?.files[staleKey]).toBeUndefined();
     const freshKey = sequenceKey('default', root, join(root, 'fresh.test.ts'));
@@ -275,7 +287,7 @@ describe('writeResultsCache', () => {
   });
 
   it('does not leave a temp file behind after an atomic write', async () => {
-    await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'passed', 100)]);
     const dir = join(root, 'node_modules/.cache/.rstest-results');
     const raw = await readFile(join(dir, 'results.json'), 'utf-8');
     expect(() => JSON.parse(raw)).not.toThrow();

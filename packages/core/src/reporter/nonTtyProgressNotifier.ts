@@ -1,6 +1,5 @@
-import { relative } from 'pathe';
 import type { RstestTestState, TestResult } from '../types';
-import { getTaskNameWithPrefix, prettyTime } from '../utils';
+import { prettyTime } from '../utils';
 
 const REPORT_INTERVAL_MS = 30_000;
 const SLOW_CASE_THRESHOLD_MS = 10_000;
@@ -15,15 +14,13 @@ const MAX_REPORT_COUNT = 20;
  * and gives visibility into overall progress.
  */
 export class NonTTYProgressNotifier {
-  private readonly rootPath: string;
   private readonly testState: RstestTestState;
   private reportTimeout: ReturnType<typeof setTimeout> | undefined;
   private startTime: number | undefined;
   private started = false;
   private reportCount = 0;
 
-  constructor(rootPath: string, testState: RstestTestState) {
-    this.rootPath = rootPath;
+  constructor(testState: RstestTestState) {
     this.testState = testState;
   }
 
@@ -77,8 +74,8 @@ export class NonTTYProgressNotifier {
         Array.from(runningModules.values()).flatMap(({ results }) => results),
       );
 
-    const passed = allResults.filter((r) => r.status === 'pass').length;
-    const failed = allResults.filter((r) => r.status === 'fail').length;
+    const passed = allResults.filter((r) => r.status === 'passed').length;
+    const failed = allResults.filter((r) => r.status === 'failed').length;
     const elapsed = prettyTime(Date.now() - this.startTime!);
 
     const filePart = `test files: ${doneFiles} done${runningModules.size ? `, ${runningModules.size} running` : ''}`;
@@ -96,21 +93,22 @@ export class NonTTYProgressNotifier {
 
     if (runningModules.size > 0) {
       const now = Date.now();
-      for (const [module, { runningTests }] of runningModules.entries()) {
-        const relativePath = relative(this.rootPath, module);
+      for (const {
+        runningTests,
+        relativeTestPath,
+      } of runningModules.values()) {
         const slowCases = runningTests.filter(
           (t) => t.startTime && now - t.startTime > SLOW_CASE_THRESHOLD_MS,
         );
         if (slowCases.length > 0) {
           const caseNames = slowCases
-            .map(
-              (t) =>
-                `${getTaskNameWithPrefix(t)} ${prettyTime(now - t.startTime!)}`,
-            )
+            .map((t) => `${t.fullName} ${prettyTime(now - t.startTime!)}`)
             .join(', ');
-          console.log(`            Running: ${relativePath} > ${caseNames}`);
+          console.log(
+            `            Running: ${relativeTestPath} > ${caseNames}`,
+          );
         } else {
-          console.log(`            Running: ${relativePath}`);
+          console.log(`            Running: ${relativeTestPath}`);
         }
       }
     }

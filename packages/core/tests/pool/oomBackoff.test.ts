@@ -51,7 +51,7 @@ it('halves once per epoch and recovers after ceiling completions', async () => {
   active()[0]!.kill();
   await expect.poll(() => retry, { interval: 1 }).toHaveBeenCalledTimes(2);
   expect(retry.mock.calls.map((call) => call[1])).toEqual([2, 2]);
-  active()[0]!.finish('fail');
+  active()[0]!.finish('failed');
   await waitActive(2);
   active()[0]!.finish();
   await waitActive(3);

@@ -1,7 +1,7 @@
-import type { TestInfo } from '@rstest/core/internal/browser-runtime';
+import type { RawTestInfo } from '@rstest/core/internal/browser-runtime';
 import type { CaseInfo } from '../utils/constants';
 
-type CollectedCaseInfo = Extract<TestInfo, { type: 'case' }>;
+type CollectedCaseInfo = Extract<RawTestInfo, { type: 'case' }>;
 
 /**
  * Single owner of the inbound case → {@link CaseInfo} projection used by every
@@ -48,12 +48,12 @@ export const buildCollectedCaseMap = ({
   previousCases,
 }: {
   filePath: string;
-  tests: TestInfo[];
+  tests: RawTestInfo[];
   previousCases: Record<string, CaseInfo>;
 }): Record<string, CaseInfo> => {
   const nextFile: Record<string, CaseInfo> = {};
 
-  const visit = (test: TestInfo) => {
+  const visit = (test: RawTestInfo) => {
     if (test.type === 'suite') {
       for (const child of test.tests) {
         visit(child);

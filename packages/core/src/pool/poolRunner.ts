@@ -1,7 +1,7 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
-import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
+import type { RawTestFileResult, RuntimeRPC, ServerRPC } from '../types';
 import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
-import { toError } from '../utils';
+import { createDeferred, type Deferred, toError } from '../utils';
 import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   WORKER_CLEANUP_TIMEOUT_MS,
@@ -41,25 +41,9 @@ type TaskKind = 'run' | 'collect';
 type PendingTask = {
   kind: TaskKind;
   taskId: number;
-  provisionalResult?: TestFileResult;
-  resolve: (result: TestFileResult | CollectTaskResult) => void;
+  provisionalResult?: RawTestFileResult;
+  resolve: (result: RawTestFileResult | CollectTaskResult) => void;
   reject: (err: Error) => void;
-};
-
-type Deferred<T = void> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (err: Error) => void;
-};
-
-const createDeferred = <T = void>(): Deferred<T> => {
-  let resolve!: (value: T) => void;
-  let reject!: (err: Error) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 };
 
 let nextTaskSeq = 0;
@@ -203,8 +187,8 @@ export class PoolRunner {
     }));
   }
 
-  runTest(task: PoolTask): Promise<TestFileResult> {
-    return this.runTaskInternal('run', task) as Promise<TestFileResult>;
+  runTest(task: PoolTask): Promise<RawTestFileResult> {
+    return this.runTaskInternal('run', task) as Promise<RawTestFileResult>;
   }
 
   collectTests(task: PoolTask): Promise<CollectTaskResult> {
@@ -367,7 +351,7 @@ export class PoolRunner {
   private runTaskInternal(
     kind: TaskKind,
     task: PoolTask,
-  ): Promise<TestFileResult | CollectTaskResult> {
+  ): Promise<RawTestFileResult | CollectTaskResult> {
     // Asset loading can outlive the ready worker, before a task owns its errors.
     if (this.firstFailure) {
       return Promise.reject(this.firstFailure);
@@ -396,7 +380,7 @@ export class PoolRunner {
 
     const taskId = ++nextTaskSeq;
     const { promise, resolve, reject } = createDeferred<
-      TestFileResult | CollectTaskResult
+      RawTestFileResult | CollectTaskResult
     >();
     this.currentTask = { kind, taskId, resolve, reject };
     // Keep task bytes out of the executor's shared closure context: RPC
@@ -502,7 +486,7 @@ export class PoolRunner {
   private resolveTask(
     kind: TaskKind,
     taskId: number,
-    result: TestFileResult | CollectTaskResult,
+    result: RawTestFileResult | CollectTaskResult,
   ): void {
     const task = this.currentTask;
     if (!task || task.kind !== kind || task.taskId !== taskId) return;

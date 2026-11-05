@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from 'node:util';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { DefaultReporter } from '../../src/reporter/index';
+import { computeSummary } from '../../src/reporter/utils';
 import { emptyRunEndPayload, emptySnapshotSummary } from './helpers';
 import type {
   Duration,
@@ -30,9 +31,11 @@ const createTestState = (results: TestFileResult[]): RstestTestState => ({
 
 const createFailureResults = () => {
   const testResult: TestResult = {
-    status: 'fail',
+    status: 'failed',
     name: 'should fail',
+    fullName: 'suite > should fail',
     testPath: '/test/root/example.test.ts',
+    relativeTestPath: 'example.test.ts',
     duration: 200,
     errors: [
       {
@@ -47,14 +50,17 @@ const createFailureResults = () => {
   };
 
   const fileResult: TestFileResult = {
-    status: 'fail',
+    status: 'failed',
     name: 'example.test.ts',
+    fullName: 'example.test.ts',
     testPath: '/test/root/example.test.ts',
+    relativeTestPath: 'example.test.ts',
     duration: 300,
     errors: testResult.errors,
     results: [testResult],
     project: 'default',
     testId: 'file-1',
+    summary: { total: 1, passed: 0, failed: 1, skipped: 0, todo: 0, flaky: 0 },
   };
 
   return { fileResult, testResult };
@@ -121,6 +127,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
       snapshotSummary: {
         ...emptySnapshotSummary,
         unmatched: 1,
@@ -142,9 +149,11 @@ describe('DefaultReporter summary streams', () => {
 
   it('labels retry errors by attempt in the failing summary', async () => {
     const testResult: TestResult = {
-      status: 'fail',
+      status: 'failed',
       name: 'fails after retries',
+      fullName: 'fails after retries',
       testPath: '/test/root/retry.test.ts',
+      relativeTestPath: 'retry.test.ts',
       duration: 200,
       errors: [
         {
@@ -163,13 +172,23 @@ describe('DefaultReporter summary streams', () => {
     };
 
     const fileResult: TestFileResult = {
-      status: 'fail',
+      status: 'failed',
       name: 'retry.test.ts',
+      fullName: 'retry.test.ts',
       testPath: '/test/root/retry.test.ts',
+      relativeTestPath: 'retry.test.ts',
       duration: 300,
       results: [testResult],
       project: 'default',
       testId: 'file-1',
+      summary: {
+        total: 1,
+        passed: 0,
+        failed: 1,
+        skipped: 0,
+        todo: 0,
+        flaky: 0,
+      },
     };
 
     const { stderr } = spyOnConsole();
@@ -186,6 +205,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
     });
 
     const stderrText = stripVTControlCharacters(stderr.join('\n'));
@@ -220,6 +240,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
     });
 
     expect(stdoutWrite).not.toHaveBeenCalled();
@@ -234,21 +255,33 @@ describe('DefaultReporter summary streams', () => {
 
   it('keeps the summary on stdout when there are no failures', async () => {
     const testResult: TestResult = {
-      status: 'pass',
+      status: 'passed',
       name: 'should pass',
+      fullName: 'should pass',
       testPath: '/test/root/example.test.ts',
+      relativeTestPath: 'example.test.ts',
       duration: 200,
       project: 'default',
       testId: 'case-1',
     };
     const fileResult: TestFileResult = {
-      status: 'pass',
+      status: 'passed',
       name: 'example.test.ts',
+      fullName: 'example.test.ts',
       testPath: '/test/root/example.test.ts',
+      relativeTestPath: 'example.test.ts',
       duration: 300,
       results: [testResult],
       project: 'default',
       testId: 'file-1',
+      summary: {
+        total: 1,
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+        todo: 0,
+        flaky: 0,
+      },
     };
     const { stdout, stderr } = spyOnConsole();
     const write = rs.spyOn(process.stdout, 'write');
@@ -265,6 +298,7 @@ describe('DefaultReporter summary streams', () => {
       results: [fileResult],
       testResults: [testResult],
       duration,
+      summary: computeSummary([fileResult]),
     });
 
     const stdoutText = stripVTControlCharacters(stdout.join('\n'));

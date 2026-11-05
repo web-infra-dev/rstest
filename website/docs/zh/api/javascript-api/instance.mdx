@@ -189,7 +189,7 @@ await rstest.run(); // 仍使用配置中的 2。
 
 `trace` <ApiMeta sup addedVersion="0.12.4" /> 会为本次运行采集[性能 trace](/guide/debug/profiling#using-trace)。传 `true` 时文件写入 `<rootPath>/.rstest/`。与 CLI flag 不同，它不会打印任何内容，也不会启动 Perfetto helper server，文件路径从 `TestRunResult.trace` 读取。在 `rstest.watch()` 中，它对整个会话生效。
 
-`repeats` <ApiMeta sup addedVersion="0.12.7" /> 设置单个测试的额外执行次数，测试和套件自身的选项优先。详见 [repeats](/config/test/repeats)。
+`repeats` <ApiMeta sup addedVersion="0.13.0" /> 设置单个测试的额外执行次数，测试和套件自身的选项优先。详见 [repeats](/config/test/repeats)。
 
 - **类型：**
 
@@ -212,7 +212,7 @@ interface RstestInstance {
 - **类型：**
 
 ```ts
-type TestRunStatus = 'pass' | 'fail' | 'error';
+type TestRunStatus = 'passed' | 'failed' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // 本次运行的整体状态。
@@ -223,7 +223,7 @@ interface TestRunResult {
 
 其余字段（`results`、`testResults`、`summary`、`duration`、`snapshotSummary`、`unhandledErrors`、`coverage`、`rerunTestPaths`）的说明见 Reporter API 的 [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend)。
 
-当 `unhandledErrors` 不为空时，`status` 为 `'error'`。当本次运行已完成但退出状态非零时，`status` 为 `'fail'`，例如测试或测试文件失败、覆盖率未达阈值、未设置 `passWithNoTests` 时没有找到测试，或者 `globalSetup` 清理失败。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'fail'`。其他情况下，`status` 为 `'pass'`。
+当 `unhandledErrors` 不为空时，`status` 为 `'error'`。测试或测试文件失败、coverage 未达 threshold，或未设置 `passWithNoTests` 时没有找到测试，`status` 为 `'failed'`。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'failed'`。其他情况下，`status` 为 `'passed'`。之后再发生 global teardown 错误不会影响 `onTestRunEnd` 收到的 payload，但 `run()` 仍会返回 `'failed'`。
 
 `unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
 

@@ -117,7 +117,8 @@ export const writeResultsCache = async (
       //
       // Loading failures have loadDuration but no execution duration. Crashes
       // without either timing, and skip/todo results, preserve the old estimate.
-      const isPassFail = result.status === 'pass' || result.status === 'fail';
+      const isPassFail =
+        result.status === 'passed' || result.status === 'failed';
       let duration = prev?.duration;
       if (
         isPassFail &&
@@ -136,7 +137,7 @@ export const writeResultsCache = async (
 
       files[key] = {
         duration,
-        failed: result.status === 'fail',
+        failed: result.status === 'failed',
         at: now,
       };
     }

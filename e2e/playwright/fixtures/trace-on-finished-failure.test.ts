@@ -44,7 +44,7 @@ test.sequential('verifies onTestFinished failure trace status', async () => {
   const summary = JSON.parse(
     await readFile(join(traceDir, 'trace-summary.json'), 'utf-8'),
   );
-  expect(summary.test.status).toBe('fail');
+  expect(summary.test.status).toBe('failed');
   expect(summary.error.message).toContain('onTestFinished trace failure');
 
   await rm(outputDir, { recursive: true, force: true });

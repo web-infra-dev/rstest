@@ -5,6 +5,8 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import { isAbsolute, join, relative } from 'pathe';
 import { color, logger } from '../utils';
 import type {
+  CoverageMap,
+  CoverageMapData,
   CoverageOptions,
   CoverageProvider,
   NormalizedCoverageOptions,
@@ -16,6 +18,12 @@ import {
 } from './install';
 export { ensureCoverageProviderInstalled } from './install';
 export { resolveAndMergeRawCoverage } from './resolveRawCoverage';
+
+export const cloneCoverageMapData = (map: CoverageMap): CoverageMapData => {
+  // Providers mutate the map while filtering/backfilling; blobs retain collection.
+  // JSON serialization also unwraps the nested FileCoverage instances.
+  return JSON.parse(JSON.stringify(map.toJSON()));
+};
 
 export const excludeVirtualSetupFromCoverage = (
   coverage: NormalizedCoverageOptions | undefined,

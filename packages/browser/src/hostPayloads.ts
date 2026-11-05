@@ -1,4 +1,9 @@
-import type { Reporter } from '@rstest/core/internal/browser';
+import type {
+  RawTestCaseInfo,
+  RawTestFileInfo,
+  RawTestResult,
+  RawTestSuiteInfo,
+} from '@rstest/core/internal/browser';
 import type { BrowserLogPayload } from './protocol';
 
 /** Payload for test file start event */
@@ -16,15 +21,10 @@ export type FatalPayload = {
   stack?: string;
 };
 
-export type ReporterHookArg<THook extends keyof Reporter> =
-  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
-    ? TArgs[0]
-    : never;
-
-export type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
-export type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
-export type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
-export type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
+export type TestFileReadyPayload = RawTestFileInfo;
+export type TestSuiteStartPayload = RawTestSuiteInfo;
+export type TestSuiteResultPayload = RawTestResult;
+export type TestCaseStartPayload = RawTestCaseInfo;
 
 export type DeferredPromise<T> = {
   promise: Promise<T>;

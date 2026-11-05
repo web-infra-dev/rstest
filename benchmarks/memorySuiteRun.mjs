@@ -50,7 +50,7 @@ async function runSyntheticFrontendProject() {
   });
   const result = await rstest.run();
 
-  if (result.status !== 'pass') {
+  if (result.status !== 'passed') {
     const details = result.unhandledErrors
       .map((error) => error.message)
       .join('; ');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import type { TestInfo } from '@rstest/core/internal/browser-runtime';
+import type { RawTestInfo } from '@rstest/core/internal/browser-runtime';
 import type { CaseInfo } from '../utils/constants';
 import {
   buildCollectedCaseMap,
@@ -7,7 +7,7 @@ import {
   upsertRunningCase,
 } from './caseMap';
 
-type CollectedCaseInfo = Extract<TestInfo, { type: 'case' }>;
+type CollectedCaseInfo = Extract<RawTestInfo, { type: 'case' }>;
 
 describe('buildCollectedCaseMap', () => {
   it('should flatten collected suites into leaf cases and preserve existing statuses', () => {
@@ -22,7 +22,7 @@ describe('buildCollectedCaseMap', () => {
       },
     };
 
-    const tests: TestInfo[] = [
+    const tests: RawTestInfo[] = [
       {
         testId: 'suite-1',
         type: 'suite',
@@ -173,7 +173,7 @@ describe('projectCaseInfo', () => {
     const info = projectCaseInfo({
       filePath: '/file.test.ts',
       test: { testId: 'c1', name: 'n', testPath: '' },
-      status: 'pass',
+      status: 'passed',
     });
     // Empty testPath falls through to filePath, never to a previousCase tier.
     expect(info.filePath).toBe('/file.test.ts');
@@ -193,7 +193,7 @@ describe('projectCaseInfo', () => {
     const info = projectCaseInfo({
       filePath: '/file.test.ts',
       test: { testId: 'c1', name: 'n' },
-      status: 'pass',
+      status: 'passed',
       previousCase,
     });
     expect(info.filePath).toBe('/prev.test.ts');
@@ -209,7 +209,7 @@ describe('projectCaseInfo', () => {
         testPath: '/file.test.ts',
         location: { line: 3, column: 2 },
       },
-      status: 'fail',
+      status: 'failed',
     });
     expect(info.location).toEqual({ line: 3, column: 2 });
   });
@@ -219,7 +219,7 @@ describe('projectCaseInfo', () => {
       projectCaseInfo({
         filePath: '/f.test.ts',
         test: { testId: 'c1', name: 'renders' },
-        status: 'pass',
+        status: 'passed',
       }).fullName,
     ).toBe('renders');
 
@@ -227,7 +227,7 @@ describe('projectCaseInfo', () => {
       projectCaseInfo({
         filePath: '/f.test.ts',
         test: { testId: 'c1', name: 'renders', parentNames: ['a', 'b'] },
-        status: 'pass',
+        status: 'passed',
       }).fullName,
     ).toBe('a  b  renders');
   });
@@ -240,7 +240,7 @@ describe('projectCaseInfo', () => {
         name: 'n',
         parentNames: ['a', '', 'b'] as string[],
       },
-      status: 'pass',
+      status: 'passed',
     });
     expect(info.parentNames).toEqual(['a', 'b']);
     expect(info.fullName).toBe('a  b  n');

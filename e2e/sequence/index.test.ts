@@ -136,7 +136,7 @@ describe('perf-first test sequencing', () => {
       const beta = timings.find((result) =>
         result.testPath.endsWith('beta.test.ts'),
       )!;
-      expect(beta.status).toBe('fail');
+      expect(beta.status).toBe('failed');
       expect(beta.loadDuration).toBeGreaterThanOrEqual(1200);
       expect(beta.duration).toBeUndefined();
       const tracePath = failed.cli.stdout.match(
@@ -205,7 +205,7 @@ describe('perf-first test sequencing', () => {
     const beta = timings.find((file) =>
       file.testPath.endsWith('beta.test.ts'),
     )!;
-    expect(beta.status).toBe('fail');
+    expect(beta.status).toBe('failed');
     expect(beta.loadDuration).toBeGreaterThanOrEqual(1200);
     const cached = JSON.parse(
       readFileSync(join(cacheDir, 'results.json'), 'utf-8'),

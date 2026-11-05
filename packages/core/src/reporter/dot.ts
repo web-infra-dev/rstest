@@ -12,9 +12,9 @@ import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logUserConsoleLog } from './utils';
 
 const DOT_BY_STATUS = {
-  fail: 'x',
-  pass: '·',
-  skip: '-',
+  failed: 'x',
+  passed: '·',
+  skipped: '-',
   todo: '*',
 } as const;
 
@@ -22,9 +22,9 @@ const COLOR_BY_STATUS: Record<
   keyof typeof DOT_BY_STATUS,
   (message: string) => string
 > = {
-  fail: color.red,
-  pass: color.green,
-  skip: color.yellow,
+  failed: color.red,
+  passed: color.green,
+  skipped: color.yellow,
   todo: color.gray,
 };
 
@@ -83,6 +83,7 @@ export class DotReporter implements Reporter {
     results,
     testResults,
     duration,
+    summary,
     getSourcemap,
     snapshotSummary,
     rerunTestPaths,
@@ -109,8 +110,8 @@ export class DotReporter implements Reporter {
 
     printSummaryLog({
       results,
-      testResults,
       duration,
+      summary,
       rootPath: this.rootPath,
       snapshotSummary,
     });

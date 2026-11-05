@@ -10,9 +10,9 @@ import type {
   CoverageMapData,
   CurrentTaskInfo,
   FileCleanupHooks,
+  RawTestFileResult,
   RunnerHooks,
   RuntimeConfig,
-  TestFileResult,
   WorkerState,
 } from '@rstest/core/internal/browser-runtime';
 import {
@@ -934,7 +934,7 @@ const run = async () => {
         },
         onTestCaseResult: async (result) => {
           removeTaskFromStack(result.testId);
-          if (result.status === 'fail') {
+          if (result.status === 'failed') {
             failedTestsCount++;
           }
           send({
@@ -959,7 +959,7 @@ const run = async () => {
       try {
         setRpcPhase('framework');
 
-        let result: TestFileResult;
+        let result: RawTestFileResult;
         try {
           // Setup modules are cached when a non-isolated browser worker runs
           // multiple files. Replay their root hooks on each fresh runtime so
@@ -989,7 +989,7 @@ const run = async () => {
             testId: getFileTaskId(testPath),
             project: projectRuntime.name,
             testPath,
-            status: 'fail',
+            status: 'failed',
             name: '',
             results: [],
             errors: await formatTestError(error),
@@ -1012,7 +1012,7 @@ const run = async () => {
               cleanupError instanceof Error
                 ? cleanupError
                 : new Error(String(cleanupError));
-            result.status = 'fail';
+            result.status = 'failed';
             result.errors = [
               ...(result.errors ?? []),
               {
@@ -1042,7 +1042,7 @@ const run = async () => {
         // An unhandled error/rejection that escaped the run fails the file even
         // when every test passed.
         if (unhandledErrors.length > 0) {
-          result.status = 'fail';
+          result.status = 'failed';
           result.errors = [
             ...(result.errors ?? []),
             ...unhandledErrors.map((error) => ({

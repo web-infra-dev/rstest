@@ -189,7 +189,7 @@ await rstest.run(); // Uses the configured 2 again.
 
 `trace` <ApiMeta sup addedVersion="0.12.4" /> collects a [performance trace](/guide/debug/profiling#using-trace) for the run. `true` writes the files under `<rootPath>/.rstest/`. Unlike the CLI flag, it prints nothing and never starts the Perfetto helper server; read the file paths from `TestRunResult.trace` instead. In `rstest.watch()`, it applies to the whole session.
 
-`repeats` <ApiMeta sup addedVersion="0.12.7" /> sets the number of additional runs for each individual test. Test and suite options take precedence; see [repeats](/config/test/repeats).
+`repeats` <ApiMeta sup addedVersion="0.13.0" /> sets the number of additional runs for each individual test. Test and suite options take precedence; see [repeats](/config/test/repeats).
 
 - **Type:**
 
@@ -212,7 +212,7 @@ interface RstestInstance {
 - **Type:**
 
 ```ts
-type TestRunStatus = 'pass' | 'fail' | 'error';
+type TestRunStatus = 'passed' | 'failed' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // Overall status of the run.
@@ -223,7 +223,7 @@ interface TestRunResult {
 
 The remaining fields (`results`, `testResults`, `summary`, `duration`, `snapshotSummary`, `unhandledErrors`, `coverage`, `rerunTestPaths`) are documented under [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend) in the Reporter API.
 
-`status` is `'error'` when `unhandledErrors` is non-empty. It is `'fail'` when the run completed with a non-zero exit status, such as from failing tests or test files, a coverage threshold violation, no tests being found without `passWithNoTests`, or a `globalSetup` teardown failure. In watch mode, it is also `'fail'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'pass'`.
+`status` is `'error'` when `unhandledErrors` is non-empty. It is `'failed'` when the run has failing tests or test files, a coverage threshold violation, or no tests found without `passWithNoTests`. In watch mode, it is also `'failed'` while the session still holds a failing test file, even if the current cycle passed. Otherwise, it is `'passed'`. The `onTestRunEnd` payload itself is unaffected by a later global teardown error, but `run()` still resolves with `'failed'`.
 
 Every entry in `unhandledErrors` is a plain object that can be serialized to JSON, not an `Error` instance.
 
