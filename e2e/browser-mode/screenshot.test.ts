@@ -57,7 +57,7 @@ describe.sequential('browser mode - screenshot matching', () => {
     fixturesFs = undefined;
   });
 
-  it('creates, compares, and updates PNG references', async () => {
+  it('creates and matches references with stable paths across projects', async () => {
     const screenshotRoot = path.join(fixtureDir, 'tests', '__screenshots__');
     expect(fs.existsSync(screenshotRoot)).toBe(false);
 
@@ -146,8 +146,13 @@ describe.sequential('browser mode - screenshot matching', () => {
         "test('an unrelated earlier test', () => {});\n\ntest('matches a locator screenshot'",
       ),
     );
-    const stablePathRun = await runScreenshot(['tests/screenshot.test.ts']);
+    const stablePathRun = await runScreenshot([
+      '--reporters=json',
+      'tests/screenshot.test.ts',
+    ]);
     await stablePathRun.expectExecSuccess();
+    expect(parseJsonReport(stablePathRun.cli.stdout).snapshot.matched).toBe(32);
+    expect(parseJsonReport(stablePathRun.cli.stdout).snapshot.added).toBe(0);
     expect(
       fs
         .readdirSync(screenshotDir)
@@ -188,25 +193,31 @@ describe.sequential('browser mode - screenshot matching', () => {
     expect(originalReference.subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     );
+  });
 
-    const matchingRun = await runScreenshot([
-      '--reporters=json',
+  it('updates mismatched references and preserves matching PNGs', async () => {
+    const args = [
       'tests/screenshot.test.ts',
-    ]);
-    await matchingRun.expectExecSuccess();
-    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(32);
-    const noTimeoutRun = await runScreenshot([
-      '--config=rstest.no-timeout.config.mts',
-      'tests/screenshot.test.ts',
-    ]);
-    await noTimeoutRun.expectExecSuccess();
-    const unchangedReference = fs.readFileSync(referencePath);
-    const updateMatchingRun = await runScreenshot([
-      'tests/screenshot.test.ts',
-      '--update',
-    ]);
+      '--testNamePattern=^matches a locator screenshot$',
+    ];
+    const firstRun = await runScreenshot(args);
+    await firstRun.expectExecSuccess();
+    const screenshotDir = path.join(
+      fixtureDir,
+      'tests',
+      '__screenshots__',
+      'screenshot.test.ts',
+    );
+    const referenceName = fs
+      .readdirSync(screenshotDir)
+      .find((name) => name.startsWith('primary-button'))!;
+    const referencePath = path.join(screenshotDir, referenceName);
+    const originalReference = fs.readFileSync(referencePath);
+    const testPath = path.join(fixtureDir, 'tests', 'screenshot.test.ts');
+    const originalTest = fs.readFileSync(testPath, 'utf8');
+    const updateMatchingRun = await runScreenshot([...args, '--update']);
     await updateMatchingRun.expectExecSuccess();
-    expect(fs.readFileSync(referencePath)).toEqual(unchangedReference);
+    expect(fs.readFileSync(referencePath)).toEqual(originalReference);
 
     const changedTest = originalTest.replace(
       'rgb(20, 80, 180)',
@@ -215,7 +226,7 @@ describe.sequential('browser mode - screenshot matching', () => {
     expect(changedTest).not.toBe(originalTest);
     fs.writeFileSync(testPath, changedTest);
 
-    const mismatchRun = await runScreenshot(['tests/screenshot.test.ts']);
+    const mismatchRun = await runScreenshot(args);
     await mismatchRun.cli.exec;
     expect(mismatchRun.cli.exec.exitCode).toBe(1);
     expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
@@ -235,33 +246,67 @@ describe.sequential('browser mode - screenshot matching', () => {
       fs.readdirSync(failureDir).some((name) => name.endsWith('.diff.png')),
     ).toBe(true);
 
-    const updateRun = await runScreenshot([
-      'tests/screenshot.test.ts',
-      '--update',
-    ]);
+    const updateRun = await runScreenshot([...args, '--update']);
     await updateRun.expectExecSuccess();
     expect(fs.readFileSync(referencePath)).not.toEqual(originalReference);
 
-    const updatedMatchRun = await runScreenshot(['tests/screenshot.test.ts']);
+    const updatedMatchRun = await runScreenshot(['--reporters=json', ...args]);
     await updatedMatchRun.expectExecSuccess();
+    expect(parseJsonReport(updatedMatchRun.cli.stdout).snapshot.matched).toBe(
+      4,
+    );
+    expect(parseJsonReport(updatedMatchRun.cli.stdout).snapshot.added).toBe(0);
+  });
 
-    for (const projectDir of [screenshotDir, secondProjectScreenshotDir]) {
-      const projectReference = path.join(
-        projectDir,
-        fs
-          .readdirSync(projectDir)
-          .find((name) => name.startsWith('primary-button'))!,
-      );
-      fs.writeFileSync(projectReference, 'corrupt PNG reference');
-    }
-    const repairRun = await runScreenshot([
+  it('repairs corrupt references in both project directories', async () => {
+    const args = [
       'tests/screenshot.test.ts',
-      '--update',
-    ]);
+      '--testNamePattern=^matches a locator screenshot$',
+    ];
+    const firstRun = await runScreenshot(args);
+    await firstRun.expectExecSuccess();
+    const referencePaths = ['__screenshots__', 'project-b-baselines'].map(
+      (directory) => {
+        const screenshotDir = path.join(
+          fixtureDir,
+          'tests',
+          directory,
+          'screenshot.test.ts',
+        );
+        const referenceName = fs
+          .readdirSync(screenshotDir)
+          .find((name) => name.startsWith('primary-button'))!;
+        return path.join(screenshotDir, referenceName);
+      },
+    );
+    for (const referencePath of referencePaths) {
+      fs.writeFileSync(referencePath, 'corrupt PNG reference');
+    }
+    const repairRun = await runScreenshot([...args, '--update']);
     await repairRun.expectExecSuccess();
-    const repairedMatchRun = await runScreenshot(['tests/screenshot.test.ts']);
-    await repairedMatchRun.expectExecSuccess();
-  }, 180_000);
+    for (const referencePath of referencePaths) {
+      expect(fs.readFileSync(referencePath).subarray(0, 8)).toEqual(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      );
+    }
+    const matchingRun = await runScreenshot(['--reporters=json', ...args]);
+    await matchingRun.expectExecSuccess();
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.matched).toBe(4);
+    expect(parseJsonReport(matchingRun.cli.stdout).snapshot.added).toBe(0);
+  });
+
+  it('captures screenshots with the test timeout disabled', async () => {
+    const result = await runScreenshot([
+      '--config=rstest.no-timeout.config.mts',
+      '--project=project-a',
+      '--reporters=json',
+      'tests/screenshot.test.ts',
+      '--testNamePattern=^reuses unnamed screenshot references on retry$',
+    ]);
+    await result.expectExecSuccess();
+    expect(parseJsonReport(result.cli.stdout).snapshot.added).toBe(1);
+    expect(parseJsonReport(result.cli.stdout).snapshot.matched).toBe(1);
+  });
 
   it('rejects invalid options before creating a reference', async () => {
     const invalidTestPath = path.join(
