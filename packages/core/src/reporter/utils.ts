@@ -434,10 +434,16 @@ export const pushFencedBlock = (
   lang: string,
   content: string,
 ): void => {
+  // A log or diff can contain Markdown fences, including an unclosed one.
+  let fenceLength = 3;
+  for (const match of content.matchAll(/`{3,}/g)) {
+    fenceLength = Math.max(fenceLength, match[0].length + 1);
+  }
+  const fence = '`'.repeat(fenceLength);
   ensureSingleBlankLine(lines);
-  lines.push(`\`\`\`${lang}`);
+  lines.push(`${fence}${lang}`);
   lines.push(content);
-  lines.push('```');
+  lines.push(fence);
   lines.push('');
 };
 

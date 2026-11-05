@@ -173,7 +173,7 @@ it.skipIf(!process.env.CI)(
       '### ❌ FAIL fixtures/githubActions.test.ts > should add two numbers correctly',
     );
     expect(failSummary).toContain(
-      '**AssertionError**: expected 2 to be 4 // Object.is equality',
+      '**AssertionError**:\n\n```text\nexpected 2 to be 4 // Object.is equality\n```',
     );
     expect(failSummary).toContain('- Expected');
     expect(failSummary).toContain('+ Received');
@@ -187,7 +187,7 @@ it.skipIf(!process.env.CI)(
       '### ❌ FAIL fixtures/githubActions.test.ts > test snapshot',
     );
     expect(failSummary).toContain(
-      '**SnapshotMismatchError**: Snapshot `test snapshot 1` mismatched',
+      '**SnapshotMismatchError**:\n\n```text\nSnapshot `test snapshot 1` mismatched\n```',
     );
     expect(failSummary).toContain(
       "pnpm exec rstest 'fixtures/githubActions.test.ts' --testNamePattern 'test snapshot'",
@@ -381,6 +381,21 @@ it.skipIf(!process.env.CI)(
 
       expect(stepSummary).toContain('-   "expected first line",');
       expect(stepSummary).toContain('+   "received last line",');
+      const message = [
+        'CLI log:',
+        '````text',
+        '</details>',
+        '````',
+        '```text',
+        'x'.repeat(10_000),
+      ].join('\n');
+      const content = `${message.slice(0, 9_999)}…`;
+      for (const label of ['Error', 'Retry x1 - Error', 'Retry x2 - Error']) {
+        expect(stepSummary).toContain(
+          `**${label}**:\n\n\`\`\`\`\`text\n${content}\n\`\`\`\`\`\n`,
+        );
+      }
+      expect(stepSummary.trimEnd().endsWith('</details>')).toBe(true);
     } finally {
       fs.rmSync(stepSummaryPath, { force: true });
       fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
