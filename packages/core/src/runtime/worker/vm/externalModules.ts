@@ -332,7 +332,11 @@ class VmExternalModules {
   private processBuiltin: unknown;
   private readonly fileSystemModules = new Map<
     string,
-    Record<PropertyKey, unknown>
+    {
+      exports: Record<PropertyKey, unknown>;
+      exportNames: string[];
+      synchronizedExports?: Record<PropertyKey, unknown>;
+    }
   >();
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
@@ -1540,7 +1544,7 @@ class VmExternalModules {
   private loadFileSystemModule(name: string): Record<PropertyKey, unknown> {
     const cached = this.fileSystemModules.get(name);
     if (cached) {
-      return cached;
+      return cached.exports;
     }
     const nativeModule = createNativeRequire(import.meta.url)(name) as Record<
       PropertyKey,
@@ -1550,7 +1554,10 @@ class VmExternalModules {
       PropertyKey,
       unknown
     >;
-    this.fileSystemModules.set(name, facade);
+    this.fileSystemModules.set(name, {
+      exports: facade,
+      exportNames: Object.keys(nativeModule),
+    });
     this.wrappedBuiltinValues.set(nativeModule, facade);
     this.unwrappedBuiltinValues.set(facade, nativeModule);
 
@@ -1647,6 +1654,13 @@ class VmExternalModules {
     };
     nativeModule.syncBuiltinESMExports();
 
+    // Setup can synchronize a required fs before its first VM ESM import.
+    for (const record of this.fileSystemModules.values()) {
+      record.synchronizedExports = Object.fromEntries(
+        record.exportNames.map((name) => [name, record.exports[name]]),
+      );
+    }
+
     for (const {
       module,
       imported,
@@ -1704,6 +1718,7 @@ class VmExternalModules {
         exports[name] = timers[name];
         overrides.add(name);
       }
+      overrides.add('default');
       defaultExport = timers;
     } else if (normalized === 'module') {
       const moduleBuiltin = this.loadBuiltin(resolvedId);
@@ -1732,6 +1747,15 @@ class VmExternalModules {
       defaultExport = runtimeProcess;
     } else {
       exports = this.wrapBuiltinExports(imported);
+      const synchronizedFileSystemExports =
+        this.fileSystemModules.get(normalized)?.synchronizedExports;
+      if (synchronizedFileSystemExports) {
+        for (const name of Object.keys(imported)) {
+          if (name !== 'default') {
+            exports[name] = synchronizedFileSystemExports[name];
+          }
+        }
+      }
       defaultExport = exports.default;
     }
 

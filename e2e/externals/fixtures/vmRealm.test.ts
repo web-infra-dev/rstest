@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import * as vmExternal from 'test-vm-external/index.mjs';
 
 const {
+  verifyLateBuiltinSync,
   createTimerPromise,
   createStaticTimerPromise,
   inspectRealm,
@@ -28,6 +29,15 @@ const {
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('preserves setup fs mocks for late builtin ESM imports', async () => {
+  expect(await verifyLateBuiltinSync()).toEqual({
+    defaultExport: true,
+    synchronized: true,
+    unsynchronized: true,
+    resynchronized: true,
+  });
+});
 
 it('uses the file require cache through Module._cache and keeps compile errors in the VM', () => {
   const directory = realpathSync(

@@ -551,9 +551,13 @@ describe('loadEsModule', () => {
     const mod = await loadModule({
       codeContent: [
         "import { access } from 'node:fs/promises';",
+        "import timers from 'node:timers';",
+        "import promiseTimers from 'node:timers/promises';",
         "import { syncBuiltinESMExports } from 'node:module';",
+        'const originalTimers = timers;',
+        'const originalPromiseTimers = promiseTimers;',
         'syncBuiltinESMExports();',
-        `export default access(${JSON.stringify(__filename)}) instanceof Promise;`,
+        `export default { promise: access(${JSON.stringify(__filename)}) instanceof Promise, timers: timers === originalTimers, promiseTimers: promiseTimers === originalPromiseTimers };`,
       ].join('\n'),
       distPath: '/virtual/dist/builtin-promise-after-sync.mjs',
       testPath: __filename,
@@ -563,7 +567,11 @@ describe('loadEsModule', () => {
       vmContext,
     });
 
-    expect(mod.default).toBe(true);
+    expect(mod.default).toEqual({
+      promise: true,
+      timers: true,
+      promiseTimers: true,
+    });
   });
 
   it('should preserve mutable builtin backing objects across ESM sync', async () => {
@@ -687,6 +695,65 @@ describe('loadEsModule', () => {
       executor.dispose();
     }
   });
+
+  it.for(['fs', 'fs/promises'])(
+    'preserves synchronized %s bindings before the first ESM import',
+    async (specifier) => {
+      const context = vm.createContext({});
+      const executor = getVmExternalModules(context);
+      // Builtin names are resolved dynamically by the VM loader.
+      const fileSystem = executor.require(specifier, __filename) as Record<
+        string,
+        unknown
+      >;
+      const module = executor.require(
+        'node:module',
+        __filename,
+      ) as typeof import('node:module');
+      const nativeFileSystem: Record<string, unknown> =
+        createRequire(__filename)(specifier);
+      const nativeReadFile = nativeFileSystem.readFile;
+      const original = fileSystem.readFile;
+      const synchronized = vm.runInContext('() => "synchronized"', context);
+      const unsynchronized = vm.runInContext('() => "unsynchronized"', context);
+      try {
+        Object.defineProperty(fileSystem, 'readFile', {
+          configurable: true,
+          enumerable: false,
+          value: synchronized,
+          writable: true,
+        });
+        Object.defineProperty(fileSystem, 'fileOnly', {
+          configurable: true,
+          get() {
+            throw new Error('New properties must not become ESM exports');
+          },
+        });
+        module.syncBuiltinESMExports();
+        fileSystem.readFile = unsynchronized;
+
+        const namespace = (await executor.import(
+          `node:${specifier}`,
+          false,
+          false,
+        )) as Record<string, unknown>;
+        expect(namespace.default).toBe(fileSystem);
+        expect(namespace.readFile).toBe(synchronized);
+        expect(fileSystem.readFile).toBe(unsynchronized);
+        expect(Object.hasOwn(namespace, 'fileOnly')).toBe(false);
+        module.syncBuiltinESMExports();
+        expect(namespace.readFile).toBe(unsynchronized);
+        Reflect.deleteProperty(fileSystem, 'readFile');
+        module.syncBuiltinESMExports();
+        expect(namespace.readFile).toBeUndefined();
+        expect(Object.hasOwn(namespace, 'readFile')).toBe(true);
+        expect(nativeFileSystem.readFile).toBe(nativeReadFile);
+      } finally {
+        fileSystem.readFile = original;
+        executor.dispose();
+      }
+    },
+  );
 
   it('should preserve invariant-constrained builtin properties', () => {
     const vmContext = vm.createContext({});

@@ -86,37 +86,40 @@ describe('test interop', () => {
     await expectExecSuccess();
   });
 
-  it('should execute external modules in the vmThreads realm', async ({
-    onTestFinished,
-  }) => {
-    const wasmSource = Buffer.from(
-      'AGFzbQEAAAABBQFgAAF/AhcBDy4vd2FzbS1nbHVlLm1qcwNpbXAAAAMCAQAHBwEDZXhwAAEKBgEEABAACw==',
-      'base64',
-    );
-    const wasmPath = join(
-      __dirname,
-      './node_modules/test-vm-external/external.wasm',
-    );
-    fse.writeFileSync(wasmPath, wasmSource);
-    onTestFinished(() => fse.removeSync(wasmPath));
+  it.for(['vmForks', 'vmThreads'])(
+    'should execute external modules in the %s realm',
+    async (pool, { onTestFinished }) => {
+      const wasmSource = Buffer.from(
+        'AGFzbQEAAAABBQFgAAF/AhcBDy4vd2FzbS1nbHVlLm1qcwNpbXAAAAMCAQAHBwEDZXhwAAEKBgEEABAACw==',
+        'base64',
+      );
+      const wasmPath = join(
+        __dirname,
+        './node_modules/test-vm-external/external.wasm',
+      );
+      fse.writeFileSync(wasmPath, wasmSource);
+      onTestFinished(() => fse.removeSync(wasmPath));
 
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        './fixtures/vmRealm.test.ts',
-        '-c',
-        './fixtures/rstest.vmExternal.config.mts',
-      ],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          './fixtures/vmRealm.test.ts',
+          '-c',
+          './fixtures/rstest.vmExternal.config.mts',
+          '--pool',
+          pool,
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-  });
+      await expectExecSuccess();
+    },
+  );
 
   it.each(['true', 'false'])(
     'preserves VM interop with output module %s',
