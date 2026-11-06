@@ -755,6 +755,123 @@ describe('loadEsModule', () => {
     },
   );
 
+  it.for([false, true])(
+    'isolates named fs promises exports (promises loaded first: %s)',
+    async (preloadPromises) => {
+      const context = vm.createContext({});
+      const executor = getVmExternalModules(context);
+      const nativeReadFile = nativeFsPromises.readFile;
+      try {
+        if (preloadPromises) {
+          executor.require('fs/promises', __filename);
+        }
+        // The VM loader returns a dynamically resolved builtin namespace.
+        const namespace = (await executor.import('node:fs', false, false)) as {
+          default: typeof nativeFs;
+          promises: typeof nativeFsPromises;
+        };
+        const replacement = vm.runInContext('() => "mocked"', context);
+        namespace.promises.readFile = replacement;
+        expect(nativeFsPromises.readFile).toBe(nativeReadFile);
+        expect(namespace.promises).toBe(namespace.default.promises);
+        expect(namespace.default.promises.readFile).toBe(replacement);
+        expect(executor.require('fs/promises', __filename)).toBe(
+          namespace.promises,
+        );
+        expect(executor.require('node:fs/promises', __filename)).toBe(
+          namespace.promises,
+        );
+        const promises = (await executor.import(
+          'node:fs/promises',
+          false,
+          false,
+        )) as { default: typeof nativeFsPromises };
+        expect(promises.default).toBe(namespace.promises);
+        const other = getVmExternalModules(vm.createContext({}));
+        try {
+          expect(other.require('fs/promises', __filename)).not.toBe(
+            namespace.promises,
+          );
+        } finally {
+          other.dispose();
+        }
+      } finally {
+        nativeFsPromises.readFile = nativeReadFile;
+        executor.dispose();
+      }
+    },
+  );
+
+  it.for([
+    ['ReadStream', 'createReadStream'],
+    ['WriteStream', 'createWriteStream'],
+  ] as const)(
+    'uses the file-local %s constructor in %s',
+    async ([constructorName, factoryName]) => {
+      const context = vm.createContext({});
+      const executor = getVmExternalModules(context);
+      const nativeConstructor = nativeFs[constructorName];
+      try {
+        // The VM loader returns a dynamically resolved builtin namespace.
+        const namespace = (await executor.import('node:fs', false, false)) as {
+          default: typeof nativeFs;
+          createReadStream: typeof nativeFs.createReadStream;
+          createWriteStream: typeof nativeFs.createWriteStream;
+        };
+        const replacement = vm.runInContext(
+          '(class Replacement { constructor(path, options) { this.path = path; this.options = options; } })',
+          context,
+        );
+        Reflect.set(namespace.default, constructorName, replacement);
+        const options = { fd: -1 };
+        const factory = namespace.default[factoryName];
+        expect(namespace[factoryName]).toBe(factory);
+        const stream = factory('unused-path', options);
+        expect(stream).toBeInstanceOf(replacement);
+        expect(Reflect.get(stream, 'path')).toBe('unused-path');
+        expect(Reflect.get(stream, 'options')).toBe(options);
+        expect(
+          Reflect.construct(namespace[factoryName], ['unused-path', options]),
+        ).toBeInstanceOf(replacement);
+        expect(nativeFs[constructorName]).toBe(nativeConstructor);
+        Reflect.set(namespace.default, constructorName, nativeConstructor);
+        expect(() => factory('unused-path', options)).toThrow();
+      } finally {
+        executor.dispose();
+      }
+    },
+  );
+
+  it('preserves native stream IO through fs facades', async () => {
+    const executor = getVmExternalModules(vm.createContext({}));
+    const directory = mkdtempSync(join(tmpdir(), 'rstest-vm-streams-'));
+    const output = join(directory, 'output.txt');
+    try {
+      // The VM loader returns a dynamically resolved builtin namespace.
+      const namespace = (await executor.import('node:fs', false, false)) as {
+        default: typeof nativeFs;
+        createReadStream: typeof nativeFs.createReadStream;
+      };
+      const writer = namespace.default.createWriteStream(output);
+      const closed = new Promise<void>((resolve, reject) => {
+        writer.once('close', resolve);
+        writer.once('error', reject);
+      });
+      writer.end('native stream contents');
+      await closed;
+      let contents = '';
+      for await (const chunk of namespace.createReadStream(output, {
+        encoding: 'utf8',
+      })) {
+        contents += chunk;
+      }
+      expect(contents).toBe('native stream contents');
+    } finally {
+      executor.dispose();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('should preserve invariant-constrained builtin properties', () => {
     const vmContext = vm.createContext({});
     const executor = getVmExternalModules(vmContext);

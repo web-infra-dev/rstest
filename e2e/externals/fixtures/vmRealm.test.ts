@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import * as vmExternal from 'test-vm-external/index.mjs';
 
 const {
+  verifyFileSystemBridges,
+  verifyStreamFactories,
   verifyLateBuiltinSync,
   createTimerPromise,
   createStaticTimerPromise,
@@ -36,6 +38,22 @@ it('preserves setup fs mocks for late builtin ESM imports', async () => {
     synchronized: true,
     unsynchronized: true,
     resynchronized: true,
+  });
+});
+
+it('keeps promises aliases inside the file facade', async () => {
+  expect(await verifyFileSystemBridges()).toEqual({
+    identity: true,
+    mockVisible: true,
+    nativeUnchanged: true,
+  });
+});
+
+it('uses file-local constructors in stream factories', () => {
+  expect(verifyStreamFactories()).toEqual({
+    mockedStreams: true,
+    streamArguments: true,
+    nativeConstructorsUnchanged: true,
   });
 });
 

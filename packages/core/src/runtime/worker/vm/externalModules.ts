@@ -1561,6 +1561,36 @@ class VmExternalModules {
     this.wrappedBuiltinValues.set(nativeModule, facade);
     this.unwrappedBuiltinValues.set(facade, nativeModule);
 
+    if (name === 'fs') {
+      this.loadFileSystemModule('fs/promises');
+      // Native factories close over Node's constructors, so rebinding their
+      // receiver cannot make them honor file-local constructor replacements.
+      for (const [factoryName, constructorName] of [
+        ['createReadStream', 'ReadStream'],
+        ['createWriteStream', 'WriteStream'],
+      ] as const) {
+        const nativeFactory = Reflect.get(nativeModule, factoryName) as (
+          path: unknown,
+          options: unknown,
+        ) => object;
+        const createStream = (args: unknown[]) => {
+          // The facade contains either Node's constructor or the VM's replacement.
+          const Stream = facade[constructorName] as new (
+            path: unknown,
+            options: unknown,
+          ) => object;
+          return Reflect.construct(Stream, [args[0], args[1]]);
+        };
+        const factory = new Proxy(nativeFactory, {
+          apply: (_target, _receiver, args) =>
+            this.wrapBuiltinResult(createStream(args)),
+          construct: (_target, args) => createStream(args),
+        });
+        this.wrappedBuiltinValues.set(nativeFactory, factory);
+        this.unwrappedBuiltinValues.set(factory, nativeFactory);
+      }
+    }
+
     // A dependency such as graceful-fs must never install a VM closure on the
     // worker's native fs: Node may call it after this file's timers are gone.
     for (const key of Reflect.ownKeys(nativeModule)) {

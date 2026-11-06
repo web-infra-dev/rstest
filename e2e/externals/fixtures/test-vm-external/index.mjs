@@ -16,7 +16,11 @@ import requiredEsm from './require-esm.cjs';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
 import { exit as processExit, kill as processKill } from 'node:process';
 import { verifyBuiltinSync } from './builtin-sync.mjs';
-export { verifyLateBuiltinSync } from './builtin-sync.mjs';
+export {
+  verifyFileSystemBridges,
+  verifyStreamFactories,
+  verifyLateBuiltinSync,
+} from './builtin-sync.mjs';
 import { value as dataValue } from 'data:text/javascript,export%20const%20value%20=%20%22data-js%22';
 import { value as javascriptDataValue } from 'data:application/javascript;charset=UTF-8,export%20const%20value%20=%20%22application-data-js%22';
 import dataJson from 'data:application/json,%7B%22value%22%3A1%7D' with { type: 'json' };
