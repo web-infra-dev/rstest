@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { format as nodeFormat } from 'node:util';
 import { describe, expect, it } from '@rstest/core';
 import { formatConsoleArgs } from '../../src/runtime/consoleFormat';
@@ -47,4 +48,9 @@ describe('formatConsoleArgs (node util.format parity)', () => {
     );
     expect(formatConsoleArgs([new Set(['v'])])).toBe("Set{ 'v' }");
   });
+});
+
+it('preserves a foreign error stack in console output', () => {
+  const error = runInNewContext('new TypeError("foreign console error")');
+  expect(formatConsoleArgs([error])).toBe(error.stack);
 });

@@ -4,6 +4,52 @@ import { promisify } from 'node:util';
 import vm from 'node:vm';
 import { expect, it } from '@rstest/core';
 
+it.each([undefined, { paths: [process.cwd()] }])(
+  'keeps bundled require.resolve errors in the test realm with options %j',
+  (options) => {
+    const specifier = '@rstest/definitely-not-installed';
+    expect.assertions(3);
+    try {
+      require.resolve(specifier, options);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toMatchObject({ code: 'MODULE_NOT_FOUND' });
+      expect(error).toHaveProperty(
+        'message',
+        expect.stringContaining(specifier),
+      );
+    }
+  },
+);
+
+it('keeps bundled dynamic import resolution errors in the test realm', async () => {
+  const specifier = '@rstest/definitely-not-installed';
+  expect.assertions(3);
+  try {
+    await import(specifier);
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ code: 'ERR_MODULE_NOT_FOUND' });
+    expect(error).toHaveProperty('message', expect.stringContaining(specifier));
+  }
+});
+
+it('keeps import.meta.resolve errors in the test realm', () => {
+  const resolve = import.meta.resolve;
+  expect(resolve).toBe(import.meta.resolve);
+  expect.assertions(4);
+  try {
+    resolve('@rstest/definitely-not-installed', new URL(import.meta.url));
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ code: 'ERR_MODULE_NOT_FOUND' });
+    expect(error).toHaveProperty(
+      'message',
+      expect.stringContaining('@rstest/definitely-not-installed'),
+    );
+  }
+});
+
 it('preserves the default fetch abort DOMException', async () => {
   const signal = AbortSignal.abort();
   await expect(fetch('data:text/plain,unused', { signal })).rejects.toBe(
@@ -70,4 +116,19 @@ it('links a CJS bundle to its direct external child', () => {
   expect(child.parent?.filename).toContain('vmInteropEdges.test.ts');
   expect(child.linked).toBe(true);
   expect(child.parent.loaded).toBe(true);
+});
+
+it('matches foreign errors without changing their realm or identity', () => {
+  const error = vm.runInNewContext('new TypeError("foreign matcher error")');
+  const throwError = () => {
+    throw error;
+  };
+  expect(error).not.toBeInstanceOf(Error);
+  expect(throwError).toThrow('foreign matcher error');
+  expect(error).not.toBeInstanceOf(Error);
+  try {
+    throwError();
+  } catch (caught) {
+    expect(caught).toBe(error);
+  }
 });

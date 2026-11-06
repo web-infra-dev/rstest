@@ -20,12 +20,23 @@ import type { ChaiPlugin } from '@vitest/expect';
 import { equals, iterableEquality, subsetEquality } from '@vitest/expect';
 import {
   addSerializer,
+  getSerializers,
   SnapshotClient,
   stripSnapshotIndentation,
 } from '@vitest/snapshot';
 import type { Assertion, TestCase, WorkerState } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { fileContext } from '../fileContext';
+
+export const isolateSnapshotSerializers = (): (() => void) => {
+  const serializers = getSerializers().slice();
+  return () => {
+    // addSerializer replaces the array, so restore the current registry rather
+    // than mutating the array that existed before the file ran.
+    const current = getSerializers();
+    current.splice(0, current.length, ...serializers);
+  };
+};
 
 function recordAsyncExpect(
   _test: any,

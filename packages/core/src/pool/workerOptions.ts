@@ -1,4 +1,5 @@
 import type { PoolWorkerKind } from './types';
+import { isError } from '../utils/isError';
 
 const isPlainJsonObject = (value: object): value is Record<string, unknown> => {
   const prototype = Object.getPrototypeOf(value);
@@ -63,7 +64,7 @@ export const assertWorkerEnvironmentOptions = (
   try {
     structuredClone(options ?? {});
   } catch (error) {
-    const reason = error instanceof Error ? ` ${error.message}` : '';
+    const reason = isError(error) ? ` ${error.message}` : '';
     throw new Error(
       'Node worker pools require `testEnvironment.options` to be structured-cloneable because the options are sent to a worker.' +
         ' Use cloneable values or move equivalent callback setup into a setup file.' +
@@ -78,7 +79,7 @@ export const assertWorkerEnvironmentOptions = (
     try {
       assertJsonCompatible(options ?? {});
     } catch (error) {
-      const reason = error instanceof Error ? ` ${error.message}` : '';
+      const reason = isError(error) ? ` ${error.message}` : '';
       throw new Error(
         'Bun fork pools require `testEnvironment.options` to be JSON-compatible because their IPC uses JSON serialization.' +
           reason,

@@ -18,6 +18,7 @@ import {
 import { prepareAssetFilesForIPC } from '../../utils/assetFiles';
 import { getHostExecArgv } from '../../utils/workers';
 import { composeWorkerEnv } from '../environment/workerEnv';
+import { isError } from '../../utils/isError';
 
 /**
  * Runs setup once per project, only when the project has running tests.
@@ -161,10 +162,7 @@ export class GlobalSetupWorker {
           },
         );
       } catch (err) {
-        this.rejectPending(
-          id,
-          err instanceof Error ? err : new Error(String(err)),
-        );
+        this.rejectPending(id, isError(err) ? err : new Error(String(err)));
       }
     });
   }
@@ -292,7 +290,7 @@ export async function runGlobalTeardown(
       }
     } catch (error) {
       console.error(bgColor('bgRed', 'Error during global teardown'));
-      if (error instanceof Error) {
+      if (isError(error)) {
         console.error(color.red(error.stack ?? error.message));
       } else {
         console.error(color.red(String(error)));

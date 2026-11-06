@@ -175,6 +175,8 @@ expect(1 + 1).toBe(2);
 
 自定义用来验证两个对象是否相等的测试器。
 
+自定义相等性测试器遵循与 snapshot serializer 相同的[文件隔离规则](#expectaddsnapshotserializer)。VM pool 会在每个文件结束后还原原有的测试器列表，文件执行失败时也会还原。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 内的文件会共享测试器，包括来自不同项目的文件。
+
 每个 tester 可以返回：
 
 - `true`：两者视为相等
@@ -197,6 +199,10 @@ expect(0.1 + 0.2).toEqual(0.3); // 使用自定义测试器后为 true
 - **类型：** `(serializer: SnapshotSerializer) => void`
 
 为快照测试添加自定义序列化工具。
+
+Serializer 对当前测试文件及其 hooks 生效，后添加的 serializer 优先匹配。若要为某个项目的每个文件注册 serializer，请在该项目的 `setupFiles` 中添加。
+
+`vmThreads` 和 `vmForks` 会在每个文件结束时还原 serializer 列表，文件执行失败时也会还原。由于 VM pool 始终按文件隔离，`isolate: false` 时也遵循这一行为。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 中的文件会共享 serializer，包括来自不同项目的文件。
 
 ```ts
 expect.addSnapshotSerializer({
@@ -415,6 +421,8 @@ expect('hello world').toEqual(expect.stringMatching(/^hello/));
 ```
 
 ### 自定义匹配器
+
+在 VM pool 中，自定义匹配器遵循与 snapshot serializer 相同的[文件隔离规则](#expectaddsnapshotserializer)。文件清理时会还原断言方法和不对称匹配器（`expect.matcher` 与 `expect.not.matcher`），包括被文件覆盖的内置匹配器。通过测试上下文的 `expect` 注册的扩展也遵循这一规则。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 内的文件会共享扩展，包括来自不同项目的文件。
 
 你可以通过扩展 expect 添加自定义匹配器：
 

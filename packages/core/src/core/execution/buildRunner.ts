@@ -5,6 +5,7 @@ import { exitReporters } from '../../reporter';
 import type { RstestCommand, RstestInstance } from '../../types';
 import { logger, quoteFilter } from '../../utils';
 import type { ResolvedRunnerInputs } from '../config/resolveConfig';
+import { isError } from '../../utils/isError';
 
 export type CreateRstestContextFn<
   Instance extends RstestInstance = RstestInstance,
@@ -42,7 +43,7 @@ export const validateRelatedOptions = (options: CommonOptions): void => {
 };
 
 const formatGitError = (error: unknown): string | undefined => {
-  if (error instanceof Error) {
+  if (isError(error)) {
     if ('code' in error && error.code === 'ENOENT') {
       return 'Git is not installed or not available on PATH.';
     }
