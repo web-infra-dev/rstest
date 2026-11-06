@@ -95,6 +95,7 @@ type BuiltinModuleRecord = {
   imported: Record<string, unknown>;
   overrides: Set<string>;
   wrapExports: boolean;
+  fileSystemExports?: Record<PropertyKey, unknown>;
 };
 
 type WebAssemblyCacheEntry = {
@@ -329,6 +330,10 @@ class VmExternalModules {
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleClass: typeof Module | undefined;
   private processBuiltin: unknown;
+  private readonly fileSystemModules = new Map<
+    string,
+    Record<PropertyKey, unknown>
+  >();
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
   private readonly vmError: typeof Error;
@@ -1502,6 +1507,9 @@ class VmExternalModules {
   private loadBuiltin(specifier: string): unknown {
     const normalized = specifier.replace(/^node:/, '');
     const nativeRequire = createNativeRequire(import.meta.url);
+    if (normalized === 'fs' || normalized === 'fs/promises') {
+      return this.loadFileSystemModule(normalized);
+    }
     if (normalized === 'timers') {
       return this.loadVmTimers(
         nativeRequire(specifier) as Record<PropertyKey, unknown>,
@@ -1527,6 +1535,54 @@ class VmExternalModules {
     }
 
     return this.getVmModuleClass();
+  }
+
+  private loadFileSystemModule(name: string): Record<PropertyKey, unknown> {
+    const cached = this.fileSystemModules.get(name);
+    if (cached) {
+      return cached;
+    }
+    const nativeModule = createNativeRequire(import.meta.url)(name) as Record<
+      PropertyKey,
+      unknown
+    >;
+    const facade = vm.runInContext('({})', this.context) as Record<
+      PropertyKey,
+      unknown
+    >;
+    this.fileSystemModules.set(name, facade);
+    this.wrappedBuiltinValues.set(nativeModule, facade);
+    this.unwrappedBuiltinValues.set(facade, nativeModule);
+
+    // A dependency such as graceful-fs must never install a VM closure on the
+    // worker's native fs: Node may call it after this file's timers are gone.
+    for (const key of Reflect.ownKeys(nativeModule)) {
+      const descriptor = Object.getOwnPropertyDescriptor(nativeModule, key)!;
+      if ('value' in descriptor) {
+        descriptor.value = this.wrapBuiltinValue(descriptor.value);
+      } else {
+        let assigned = false;
+        let localValue: unknown;
+        if (descriptor.get) {
+          descriptor.get = () => {
+            if (assigned) {
+              return localValue;
+            }
+            return name === 'fs' && key === 'promises'
+              ? this.loadFileSystemModule('fs/promises')
+              : this.wrapBuiltinValue(Reflect.get(nativeModule, key));
+          };
+        }
+        if (descriptor.set) {
+          descriptor.set = (value) => {
+            assigned = true;
+            localValue = value;
+          };
+        }
+      }
+      Object.defineProperty(facade, key, descriptor);
+    }
+    return facade;
   }
 
   private getVmModuleClass(): typeof Module {
@@ -1596,6 +1652,7 @@ class VmExternalModules {
       imported,
       overrides,
       wrapExports,
+      fileSystemExports,
     } of this.builtinModuleRecords.values()) {
       if (module.status !== 'evaluated') {
         continue;
@@ -1604,9 +1661,11 @@ class VmExternalModules {
         if (!overrides.has(name)) {
           module.setExport(
             name,
-            wrapExports
-              ? this.wrapBuiltinValue(imported[name])
-              : imported[name],
+            fileSystemExports
+              ? fileSystemExports[name]
+              : wrapExports
+                ? this.wrapBuiltinValue(imported[name])
+                : imported[name],
           );
         }
       }
@@ -1626,6 +1685,13 @@ class VmExternalModules {
     const overrides = new Set<string>();
     let exports: Record<string, unknown>;
     let defaultExport: unknown;
+    const fileSystemExports =
+      normalized === 'fs' || normalized === 'fs/promises'
+        ? this.loadFileSystemModule(normalized)
+        : undefined;
+    if (fileSystemExports) {
+      overrides.add('default');
+    }
     if (normalized === 'timers' || normalized === 'timers/promises') {
       const timers = this.loadBuiltin(resolvedId) as Record<
         PropertyKey,
@@ -1683,6 +1749,7 @@ class VmExternalModules {
         normalized !== 'timers' &&
         normalized !== 'timers/promises' &&
         normalized !== 'process',
+      fileSystemExports,
     });
     return module;
   }

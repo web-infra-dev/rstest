@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import {
+  default as nativeFs,
   mkdirSync,
   mkdtempSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import nativeFsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createRequire, type Module } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -587,6 +589,103 @@ describe('loadEsModule', () => {
     });
 
     expect(mod.default).toEqual({ defaultExport: true, namedExport: true });
+  });
+
+  it('isolates fs namespace mutations from native IO and other VM contexts', () => {
+    const executor = getVmExternalModules(vm.createContext({}));
+    const other = getVmExternalModules(vm.createContext({}));
+    const fs = executor.require('node:fs', __filename) as typeof nativeFs;
+    const promises = executor.require(
+      'node:fs/promises',
+      __filename,
+    ) as typeof nativeFsPromises;
+    const readFileDescriptor = Object.getOwnPropertyDescriptor(
+      nativeFs,
+      'readFileSync',
+    )!;
+    const closeDescriptor = Object.getOwnPropertyDescriptor(
+      nativeFs,
+      'closeSync',
+    )!;
+    const promiseDescriptor = Object.getOwnPropertyDescriptor(
+      nativeFsPromises,
+      'readFile',
+    )!;
+    const marker = Symbol('file-local fs property');
+    const contents = nativeFs.readFileSync(__filename, 'utf8');
+    try {
+      expect(executor.require('fs', __filename)).toBe(fs);
+      expect(fs.promises).toBe(promises);
+      expect(executor.require('fs/promises', __filename)).toBe(promises);
+      Reflect.set(fs, 'readFileSync', () => 'mocked');
+      const close = () => undefined;
+      Object.defineProperty(fs, 'closeSync', {
+        configurable: true,
+        value: close,
+      });
+      Reflect.deleteProperty(promises, 'readFile');
+      Reflect.set(fs, marker, true);
+      expect(fs.readFileSync(__filename, 'utf8')).toBe('mocked');
+      expect(fs.closeSync).toBe(close);
+      expect(promises.readFile).toBeUndefined();
+      expect(Reflect.get(fs, marker)).toBe(true);
+      expect(nativeFs.readFileSync).toBe(readFileDescriptor.value);
+      expect(nativeFs.closeSync).toBe(closeDescriptor.value);
+      expect(nativeFsPromises.readFile).toBe(promiseDescriptor.value);
+      expect(Reflect.has(nativeFs, marker)).toBe(false);
+      const otherFs = other.require('fs', __filename) as typeof nativeFs;
+      expect(otherFs.readFileSync(__filename, 'utf8')).toBe(contents);
+      expect(typeof otherFs.promises.readFile).toBe('function');
+      expect(Reflect.has(otherFs, marker)).toBe(false);
+    } finally {
+      Object.defineProperty(nativeFs, 'readFileSync', readFileDescriptor);
+      Object.defineProperty(nativeFs, 'closeSync', closeDescriptor);
+      Object.defineProperty(nativeFsPromises, 'readFile', promiseDescriptor);
+      Reflect.deleteProperty(nativeFs, marker);
+      executor.dispose();
+      other.dispose();
+    }
+  });
+
+  it('syncs file-local fs ESM exports without changing native exports', async () => {
+    const context = vm.createContext({});
+    const executor = getVmExternalModules(context);
+    const fsDescriptor = Object.getOwnPropertyDescriptor(nativeFs, 'readFile')!;
+    const promiseDescriptor = Object.getOwnPropertyDescriptor(
+      nativeFsPromises,
+      'readFile',
+    )!;
+    const nativeModule = createRequire(__filename)(
+      'node:module',
+    ) as typeof import('node:module');
+    try {
+      const fs = (await executor.import('node:fs', false, false)) as {
+        default: Record<string, unknown>;
+        readFile: unknown;
+      };
+      const promises = (await executor.import(
+        'node:fs/promises',
+        false,
+        false,
+      )) as { default: Record<string, unknown>; readFile: unknown };
+      const module = executor.require(
+        'node:module',
+        __filename,
+      ) as typeof nativeModule;
+      const replacement = vm.runInContext('() => undefined', context);
+      fs.default.readFile = replacement;
+      promises.default.readFile = replacement;
+      module.syncBuiltinESMExports();
+      expect(fs.readFile).toBe(replacement);
+      expect(promises.readFile).toBe(replacement);
+      expect(nativeFs.readFile).toBe(fsDescriptor.value);
+      expect(nativeFsPromises.readFile).toBe(promiseDescriptor.value);
+    } finally {
+      Object.defineProperty(nativeFs, 'readFile', fsDescriptor);
+      Object.defineProperty(nativeFsPromises, 'readFile', promiseDescriptor);
+      nativeModule.syncBuiltinESMExports();
+      executor.dispose();
+    }
   });
 
   it('should preserve invariant-constrained builtin properties', () => {

@@ -71,9 +71,19 @@ describe('node pool e2e', () => {
     await expectExecSuccess();
   });
 
-  it.for([false, true])(
-    'keeps vmThreads file-isolated when isolate is false (cleanup failure: %s)',
-    async (cleanupFailure, { onTestFinished }) => {
+  it.for(
+    (['vmForks', 'vmThreads'] as const).flatMap((pool) =>
+      [false, true].flatMap((isolate) =>
+        [false, true].map((cleanupFailure) => ({
+          pool,
+          isolate,
+          cleanupFailure,
+        })),
+      ),
+    ),
+  )(
+    'keeps VM files isolated: %j',
+    async ({ pool, isolate, cleanupFailure }, { onTestFinished }) => {
       const markerDirectory = mkdtempSync(join(tmpdir(), 'rstest-vm-cleanup-'));
       const cleanupMarker = join(markerDirectory, 'worker-fixture-cleanup.txt');
       const guardMarker = join(markerDirectory, 'process-guard.txt');
@@ -89,12 +99,13 @@ describe('node pool e2e', () => {
         args: [
           'run',
           '--pool',
-          'vmThreads',
+          pool,
           '--pool.maxWorkers',
           '1',
           '--pool.memoryLimit',
           '256MB',
-          '--isolate=false',
+          '--isolate',
+          String(isolate),
         ],
         onTestFinished,
         options: {
@@ -139,6 +150,11 @@ describe('node pool e2e', () => {
       );
       expect(threadIds).toHaveLength(2);
       expect(new Set(threadIds).size).toBe(1);
+      const processIds = [...output.matchAll(/VM_PROCESS_ID:(\d+)/g)].map(
+        (match) => match[1],
+      );
+      expect(processIds).toHaveLength(2);
+      expect(new Set(processIds).size).toBe(1);
     },
   );
 
