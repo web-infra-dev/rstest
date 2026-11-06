@@ -310,8 +310,6 @@ export default defineConfig({
 
 同步 `require(esm)` 需要 Node.js 24.9+、VM graph API 可用且依赖图不含 top-level await，否则应改用动态 `import()`。native addon 仅支持通过 CommonJS `require()` 直接加载，其状态不受 VM 隔离。
 
-测试和 setup bundle 中的动态 `import()` 与 `forks` 使用相同的兼容行为：转译后的 CommonJS 导出保留属性的可枚举性；导入 `.json` 文件时默认补充 `type: 'json'`，并同时提供 `default` 和 JSON 对象的属性。显式传入无效的导入属性仍会报错。外部 ESM 模块内部执行的 import 遵循下表中的模块加载规则。
-
 <details>
 <summary>查看模块加载兼容性</summary>
 
