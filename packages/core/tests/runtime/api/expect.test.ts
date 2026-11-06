@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {
   createExpect,
   createFileExpect,
+  isolateExpectExtensions,
   getCurrentTestTimeout,
   setupChaiConfig,
   registerElementExpect,
@@ -58,6 +59,49 @@ it('resets omitted Chai options before applying the next project config', () => 
 
   expect(chaiConfig.showDiff).toBe(true);
   expect(chaiConfig.truncateThreshold).toBe(40);
+});
+
+it('restores pre-existing equality testers and overridden matchers', () => {
+  publishFile('/expect', 'extension isolation');
+  const fileExpect = createFileExpect(() => {});
+  Reflect.set(globalThis, GLOBAL_EXPECT, fileExpect);
+  const restoreInitial = isolateExpectExtensions();
+  try {
+    fileExpect.addEqualityTesters([
+      (a, b) =>
+        a === 'baseline:left' && b === 'baseline:right' ? true : undefined,
+    ]);
+    fileExpect.extend({
+      toBe: (value) => ({
+        pass: value === 'baseline',
+        message: () => 'baseline matcher',
+      }),
+    });
+    const restoreFile = isolateExpectExtensions();
+    fileExpect.addEqualityTesters([
+      (a, b) => (a === 'file:left' && b === 'file:right' ? true : undefined),
+    ]);
+    fileExpect.extend({
+      toBe: (value) => ({
+        pass: value === 'file',
+        message: () => 'file matcher',
+      }),
+    });
+    fileExpect('file').toBe('different');
+    fileExpect('file:left').toEqual('file:right');
+
+    restoreFile();
+    fileExpect('baseline').toBe('different');
+    fileExpect('baseline:left').toEqual('baseline:right');
+    expect(() => fileExpect('file').toBe('different')).toThrow(
+      'baseline matcher',
+    );
+    expect(() => fileExpect('file:left').toEqual('file:right')).toThrow();
+  } finally {
+    restoreInitial();
+  }
+  fileExpect(1).toBe(1);
+  expect(() => fileExpect(1).toBe(2)).toThrow();
 });
 
 it('keeps toThrow promise-aware for regular and cross-realm regexps', async () => {

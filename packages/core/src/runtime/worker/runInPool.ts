@@ -349,10 +349,16 @@ const preparePool = async (
     applyRuntimeColors(colorEnabled);
 
     if (isVmPool) {
-      const [{ prepareVmRuntimeRealm }] = await Promise.all([
-        import('./vm/realm'),
-        loadVmExternalModules(),
-      ]);
+      const [{ prepareVmRuntimeRealm }, { isolateSnapshotSerializers }] =
+        await Promise.all([
+          import('./vm/realm'),
+          import('../api/snapshot'),
+          loadVmExternalModules(),
+        ]);
+      // The snapshot runtime is shared by VM files even with isolate: false.
+      // Keep serializers alive through file/environment cleanup, then release
+      // their VM closures along with the other task-scoped global mutations.
+      globalCleanups.push(isolateSnapshotSerializers());
       const vmRealm = await prepareVmRuntimeRealm(
         context,
         cleanupFns,
@@ -503,6 +509,13 @@ const preparePool = async (
         runtimeGlobal,
       },
     );
+
+    if (isVmPool) {
+      const { isolateExpectExtensions } = await import('../api/expect');
+      // Capture after the singleton's built-in matchers are installed, before
+      // environment setup and user code can extend the shared assertion state.
+      globalCleanups.push(isolateExpectExtensions());
+    }
 
     tracker?.transition('envSetup');
     const hasPinnedEnvironment =

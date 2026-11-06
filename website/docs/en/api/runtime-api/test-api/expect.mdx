@@ -175,6 +175,8 @@ expect(1 + 1).toBe(2);
 
 Adds custom equality testers for use in assertions.
 
+Custom equality testers follow the same [file isolation rules](#expectaddsnapshotserializer) as snapshot serializers. VM pools restore the previous tester list after each file, including failures. With `forks` or `threads` and `isolate: false`, testers remain shared within the worker, including across projects.
+
 Each tester can return:
 
 - `true`: values are considered equal
@@ -197,6 +199,10 @@ expect(0.1 + 0.2).toEqual(0.3); // true with custom tester
 - **Type:** `(serializer: SnapshotSerializer) => void`
 
 Adds a custom serializer for snapshot testing.
+
+Serializers apply to the current test file, including its hooks. The last serializer added is tried first. To register a serializer for every file in a project, add it in that project's `setupFiles`.
+
+The `vmThreads` and `vmForks` pools restore the serializer list when each file finishes, including when the file fails. This also applies when `isolate` is `false`, because VM pools always isolate files. With `forks` or `threads` and `isolate: false`, serializers remain shared by files running in the same worker, including files from different projects.
 
 ```ts
 expect.addSnapshotSerializer({
@@ -415,6 +421,8 @@ expect('hello world').toEqual(expect.stringMatching(/^hello/));
 ```
 
 ### Custom matchers
+
+In VM pools, custom matchers follow the same [file isolation rules](#expectaddsnapshotserializer) as snapshot serializers. File cleanup restores both assertion methods and asymmetric matchers (`expect.matcher` and `expect.not.matcher`), including any built-in matchers that the file overrode. This also applies to extensions registered through the test context's `expect`. With `forks` or `threads` and `isolate: false`, extensions remain shared within the worker, including across projects.
 
 You can extend expect with custom matchers:
 
