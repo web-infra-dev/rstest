@@ -11,12 +11,8 @@ const __dirname = dirname(__filename);
 // CJS-as-ESM dynamic imports.
 const dyn = (rel: string) => import(join(__dirname, rel));
 
-// User contract: a dynamic-imported CJS module should look like an ESM
-// namespace with `default` always present (CJS interop convention) plus the
-// named keys cjs-module-lexer detected. Behavior should be intuitive across
-// `get`, `'x' in ns`, `Object.keys`, spread, and pretty-format — these are
-// what Jest/vitest/Node native produce, and what users carry over from
-// other test runners.
+// Bundled dynamic imports retain Rstest's interop view across pools, including
+// the original property descriptors of transpiled CommonJS exports.
 describe('dynamic-imported CJS namespace', () => {
   describe('webpack-style __esModule with only named exports', () => {
     it('exposes named keys directly', async () => {
@@ -101,3 +97,18 @@ describe('dynamic-imported CJS namespace', () => {
     });
   });
 });
+
+it.each(['webpackStyle', 'babelStyle'])(
+  'preserves the non-enumerable __esModule marker for %s',
+  async (name) => {
+    const ns = await dyn(`./dynamic-import-interop/${name}.cjs`);
+    expect(ns.__esModule).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(ns, '__esModule')).toMatchObject({
+      value: true,
+      enumerable: false,
+    });
+    expect('module.exports' in ns).toBe(false);
+    const again = await dyn(`./dynamic-import-interop/${name}.cjs`);
+    expect(again.default).toBe(ns.default);
+  },
+);

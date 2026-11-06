@@ -197,22 +197,28 @@ export const finalizeDynamicImport = async ({
     ),
   );
 
-  if (vmContext) {
-    const { getVmExternalModules } = await loadVmExternalModules();
-    return getVmExternalModules(vmContext).import(
-      modulePath,
-      interopDefault,
-      returnModule === true,
-      attributes,
-    );
-  }
+  const isJson = modulePath.endsWith('.json');
+  const resolvedAttributes = isJson
+    ? { type: 'json', ...attributes }
+    : attributes;
+  const vmModules = vmContext
+    ? (await loadVmExternalModules()).getVmExternalModules(vmContext)
+    : undefined;
+  const importedModule = vmModules
+    ? await vmModules.import(
+        modulePath,
+        interopDefault,
+        returnModule === true,
+        resolvedAttributes,
+      )
+    : await import(modulePath, { with: resolvedAttributes });
 
-  if (modulePath.endsWith('.json')) {
+  // VM link callbacks must retain the canonical module and its graph identity.
+  // Bundled import() values use the same compatibility view as native pools.
+  if (vmModules && returnModule) return importedModule;
+
+  if (isJson) {
     // `await import(jsonPath)` should return `{ default: jsonExports, ...jsonExports }`.
-    const importedModule = await import(modulePath, {
-      with: { type: 'json', ...attributes },
-    });
-
     return returnModule
       ? asModule(
           importedModule.default,
@@ -225,8 +231,6 @@ export const finalizeDynamicImport = async ({
           default: importedModule.default,
         };
   }
-
-  const importedModule = await import(modulePath, { with: attributes });
 
   if (
     shouldInterop({

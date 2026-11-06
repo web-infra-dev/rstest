@@ -1,6 +1,7 @@
 import { withTempDir } from '../helpers/tempDir';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { createContext } from 'node:vm';
 import { join } from 'pathe';
 import {
   clearModuleCache as clearEsModuleCache,
@@ -19,6 +20,7 @@ import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
 } from '../../src/runtime/worker/runtimeHooks';
+import { loadVmExternalModules } from '../../src/runtime/worker/vm/externalModulesLoader';
 
 const getFederationFallbackCode = () => {
   const source = readFileSync(
@@ -231,4 +233,84 @@ describe('node: dynamic import is consistent across both worker loaders', () => 
 
     expect(mod.default).toBe(await import('node:path'));
   });
+});
+
+describe('VM bundled dynamic import adaptation', () => {
+  it('adapts bundled JSON without relaxing external JSON attribute checks', async () => {
+    const { getVmExternalModules } = await loadVmExternalModules();
+    const context = createContext({});
+    const loader = getVmExternalModules(context);
+    await withTempDir('rstest-json-interop-', async (dir) => {
+      const modulePath = pathToFileURL(join(dir, 'data.json')).href;
+      writeFileSync(join(dir, 'data.json'), '{"greeting":"Hello"}');
+      await expect(
+        loader.import(modulePath, true, false),
+      ).rejects.toMatchObject({
+        code: 'ERR_IMPORT_ATTRIBUTE_MISSING',
+      });
+      const result = await finalizeDynamicImport({
+        modulePath,
+        importAttributes: {},
+        interopDefault: true,
+        vmContext: context,
+      });
+      expect(result).toEqual({
+        greeting: 'Hello',
+        default: { greeting: 'Hello' },
+      });
+      const external = await loader.import(modulePath, true, false, {
+        type: 'json',
+      });
+      expect(Object.keys(Object(external))).toEqual(['default']);
+      expect(external).toHaveProperty('default', result.default);
+      await expect(
+        loader.import(modulePath, true, false),
+      ).rejects.toMatchObject({
+        code: 'ERR_IMPORT_ATTRIBUTE_MISSING',
+      });
+    });
+  });
+
+  it.each([true, false])(
+    'preserves CJS graph exports with interopDefault %s',
+    async (interopDefault) => {
+      const { getVmExternalModules } = await loadVmExternalModules();
+      const context = createContext({});
+      const loader = getVmExternalModules(context);
+      await withTempDir('rstest-cjs-interop-', async (dir) => {
+        const file = join(dir, 'source.cjs');
+        writeFileSync(
+          file,
+          'Object.defineProperty(exports, "__esModule", { value: true }); exports.default = "inner"; exports.named = 42;',
+        );
+        const modulePath = pathToFileURL(file).href;
+        const graphModule = await loader.import(
+          modulePath,
+          interopDefault,
+          true,
+        );
+        const result = await finalizeDynamicImport({
+          modulePath,
+          importAttributes: {},
+          interopDefault,
+          vmContext: context,
+        });
+        expect(result.default).toEqual(
+          interopDefault ? 'inner' : { default: 'inner', named: 42 },
+        );
+        expect(
+          Object.getOwnPropertyDescriptor(result, '__esModule')?.enumerable,
+        ).toBe(!interopDefault);
+        const linked = await finalizeDynamicImport({
+          modulePath,
+          importAttributes: {},
+          interopDefault,
+          returnModule: true,
+          vmContext: context,
+        });
+        expect(linked).toBe(graphModule);
+        expect(Object.keys(linked.namespace)).toContain('__esModule');
+      });
+    },
+  );
 });

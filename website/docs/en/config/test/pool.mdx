@@ -311,6 +311,8 @@ Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM.
 
 Synchronous `require(esm)` requires Node.js 24.9+, VM graph support, and a dependency graph without top-level await. Otherwise, use dynamic `import()`. Native addons can only be loaded through direct CommonJS `require()`, and their state is outside VM isolation.
 
+Dynamic `import()` calls in test and setup bundles use the same compatibility behavior as `forks`: transpiled CommonJS exports retain their property enumerability, and imports of `.json` files default to `type: 'json'` and expose both `default` and the JSON properties. Explicitly invalid import attributes still fail. Imports executed inside external ESM modules retain the module-loading rules below.
+
 <details>
 <summary>Module loading compatibility</summary>
 
@@ -320,7 +322,7 @@ VM loading differs from the native Node.js loader in the following ways:
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Test/setup bundles and external JavaScript | Execute in the file VM, including static and dynamic imports. Setup and evaluated module state are recreated per file.                                                                                                                                  |
 | CommonJS named exports                     | Statically detected own exports, including non-enumerable properties and getters, are read from the original `module.exports` receiver. They are snapshots, not live bindings; `interopDefault` still applies.                                          |
-| JSON, WebAssembly, and `data:` URLs        | JSON ESM imports require `type: 'json'`. Asynchronous WebAssembly and JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. Synchronous Wasm `require()` is unsupported.                                                                 |
+| JSON, WebAssembly, and `data:` URLs        | External JSON ESM imports require `type: 'json'`. Asynchronous WebAssembly and JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. Synchronous Wasm `require()` is unsupported.                                                        |
 | Synchronous `require(esm)`                 | Requires Node.js 24.9+ and VM graph support. Async graphs throw `ERR_REQUIRE_ASYNC_MODULE`; older VM implementations reject ESM require with `ERR_REQUIRE_ESM`.                                                                                         |
 | Native addons                              | Direct CommonJS `require()` delegates to Node.js. VM ESM imports of `.node` files are unsupported, and addon state is not VM-isolated.                                                                                                                  |
 | CommonJS resolution                        | Node.js `require.resolve()` selects paths and export conditions. Rstest does not choose a fallback entry if the selected entry cannot run in the VM.                                                                                                    |

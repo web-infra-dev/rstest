@@ -118,14 +118,23 @@ describe('test interop', () => {
     await expectExecSuccess();
   });
 
-  it.each(['true', 'false'])(
-    'preserves VM interop with output module %s',
-    async (outputModule) => {
+  it.each([
+    { outputModule: 'true', pool: 'vmThreads' },
+    { outputModule: 'false', pool: 'vmThreads' },
+    { outputModule: 'true', pool: 'vmForks' },
+    { outputModule: 'false', pool: 'vmForks' },
+  ])(
+    'preserves VM interop with output module $outputModule in $pool',
+    async ({ outputModule, pool }) => {
       const { expectExecSuccess } = await runRstestCli({
         command: 'rstest',
         args: [
           'run',
           './fixtures/vmInteropEdges.test.ts',
+          './dynamicImportInterop.test.ts',
+          './dynamicImportRelative.test.ts',
+          '--pool',
+          pool,
           '-c',
           './fixtures/rstest.vmExternal.config.mts',
         ],
