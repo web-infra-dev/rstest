@@ -12,7 +12,10 @@ import {
   interopModule,
   shouldInterop,
 } from './interop';
-import { loadVmExternalModules } from './vm/externalModulesLoader';
+import {
+  getVmExternalModules,
+  loadVmExternalModules,
+} from './vm/externalModulesLoader';
 
 /**
  * Shared dynamic-import resolution + interop policy for both worker loaders.
@@ -59,7 +62,7 @@ const resolveModule = (specifier: string, resolveBase: string): string => {
 
 type ImportMetaResolver = (specifier: string, parent?: string | URL) => string;
 
-export const createImportMetaResolve = () => {
+export const createImportMetaResolve = (vmContext?: vm.Context) => {
   // The factory belongs to the loaded bundle, so resolver identity survives
   // repeated reads without retaining source modules across bundle reloads.
   const resolvers = new Map<string, ImportMetaResolver>();
@@ -67,11 +70,12 @@ export const createImportMetaResolve = () => {
     let resolve = resolvers.get(origin);
     if (!resolve) {
       const parentURL = pathToFileURL(origin).href;
-      resolve = (specifier, parent = parentURL) =>
-        import.meta.resolve(
-          specifier,
-          typeof parent === 'string' ? parent : parent.href,
-        );
+      resolve = (specifier, parent = parentURL) => {
+        const parentHref = typeof parent === 'string' ? parent : parent.href;
+        return vmContext
+          ? getVmExternalModules(vmContext).resolve(specifier, parentHref)
+          : import.meta.resolve(specifier, parentHref);
+      };
       resolvers.set(origin, resolve);
     }
     return resolve;
@@ -96,10 +100,12 @@ export const resolveImportSpecifier = ({
   specifier,
   origin,
   testPath,
+  vmContext,
 }: {
   specifier: string;
   origin: string | undefined;
   testPath: string;
+  vmContext?: vm.Context;
 }): string => {
   const resolveBase = origin ?? testPath;
 
@@ -113,7 +119,9 @@ export const resolveImportSpecifier = ({
       ? specifier
       : isBuiltinSpecifier(specifier)
         ? toNodeBuiltin(specifier)
-        : resolveModule(specifier, resolveBase);
+        : vmContext
+          ? getVmExternalModules(vmContext).resolve(specifier, resolveBase)
+          : resolveModule(specifier, resolveBase);
 };
 
 /**

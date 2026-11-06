@@ -8,6 +8,7 @@ import type {
 } from '../../types';
 import { takeWorkerCleanups } from './workerCleanup';
 import { isObject } from '../../utils/helper';
+import { isError } from '../../utils/isError';
 
 export { registerWorkerCleanup } from './workerCleanup';
 
@@ -353,9 +354,7 @@ export class FixtureScopeManager {
         [
           `Failed to clean up ${this.scope}-scoped fixtures.`,
           ...errors
-            .map((error) =>
-              error instanceof Error ? error.message : String(error),
-            )
+            .map((error) => (isError(error) ? error.message : String(error)))
             .map((message) => `Fixture cleanup failed: ${message}`),
         ].join('\n'),
       );
@@ -399,9 +398,7 @@ export const cleanupWorkerFixtures = async (): Promise<void> => {
       [
         'Failed to clean up worker resources.',
         ...errors
-          .map((error) =>
-            error instanceof Error ? error.message : String(error),
-          )
+          .map((error) => (isError(error) ? error.message : String(error)))
           .map((message) => `Worker cleanup failed: ${message}`),
       ].join('\n'),
     );

@@ -19,6 +19,8 @@ import {
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
 import { workerCache } from './vm/cache';
+import { getVmExternalModules } from './vm/externalModulesLoader';
+import { isError } from '../../utils/isError';
 
 export const wrapperLength = 0;
 
@@ -86,10 +88,12 @@ const defineRstestRequireResolve =
     testPath,
     distPath,
     assetFiles,
+    vmContext,
   }: {
     testPath: string;
     distPath: string;
     assetFiles: AssetFiles;
+    vmContext?: vm.Context;
   }) =>
   (
     specifier: string,
@@ -114,7 +118,13 @@ const defineRstestRequireResolve =
       return normalizedPath;
     }
 
-    return createNativeRequire(resolveBase).resolve(specifier, options);
+    return vmContext
+      ? getVmExternalModules(vmContext).resolveRequire(
+          specifier,
+          resolveBase,
+          options,
+        )
+      : createNativeRequire(resolveBase).resolve(specifier, options);
   };
 
 const defineRstestDynamicImport =
@@ -163,7 +173,12 @@ const defineRstestDynamicImport =
     // rstest instantiates it itself so the pattern is flag-free on every Node
     // version.
     if (specifier.endsWith('.wasm')) {
-      const wasmPath = resolveImportSpecifier({ specifier, origin, testPath });
+      const wasmPath = resolveImportSpecifier({
+        specifier,
+        origin,
+        testPath,
+        vmContext,
+      });
       const wasmFsPath = path.normalize(
         wasmPath.startsWith('file://') ? fileURLToPath(wasmPath) : wasmPath,
       );
@@ -189,13 +204,18 @@ const defineRstestDynamicImport =
       } catch (err) {
         logger.error(
           `load file ${joinedPath} failed:\n`,
-          err instanceof Error ? err.message : err,
+          isError(err) ? err.message : err,
         );
       }
     }
 
     return finalizeDynamicImport({
-      modulePath: resolveImportSpecifier({ specifier, origin, testPath }),
+      modulePath: resolveImportSpecifier({
+        specifier,
+        origin,
+        testPath,
+        vmContext,
+      }),
       importAttributes,
       interopDefault,
       returnModule,
@@ -295,7 +315,8 @@ export const loadModule = async ({
       columnOffset: 0,
       initializeImportMeta: (meta) => {
         // @ts-expect-error Internal hook injected by RstestPlugin.
-        meta[RSTEST_IMPORT_META_RESOLVE_HOOK] = createImportMetaResolve();
+        meta[RSTEST_IMPORT_META_RESOLVE_HOOK] =
+          createImportMetaResolve(vmContext);
         meta.url = pathToFileURL(
           distPath === runtimeDistPath ? distPath : testPath,
         ).toString();
@@ -316,6 +337,7 @@ export const loadModule = async ({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
+          vmContext,
         });
       },
       importModuleDynamically: (specifier, _referencer, importAttributes) => {

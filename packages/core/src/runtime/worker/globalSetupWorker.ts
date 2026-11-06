@@ -6,6 +6,7 @@ import { formatTestError } from '../util';
 import { applyRuntimeColors } from './color';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { installForkTerminationPolicy, installGracefulExit } from './setup';
+import { isError } from '../../utils/isError';
 
 installGracefulExit();
 installForkTerminationPolicy();
@@ -226,7 +227,7 @@ export const runGlobalTeardown = async (): Promise<{
       await teardown();
     } catch (error) {
       const message =
-        error instanceof Error && error.stack ? error.stack : String(error);
+        isError(error) && error.stack ? error.stack : String(error);
       console.error(color.red(`Error during global teardown: ${message}`));
       success = false;
     }

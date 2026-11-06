@@ -6,6 +6,7 @@ import type {
 } from './protocol';
 import type { PoolOptions, PoolTask } from './types';
 import { createPoolWorker } from './workers';
+import { isError } from '../utils/isError';
 
 /** Attempts per file when fork workers are killed by SIGKILL; the last runs alone. */
 export const MAX_OOM_ATTEMPTS = 3;
@@ -96,7 +97,7 @@ export class Pool {
           await runner.cleanupWorkerFixtures();
           return undefined;
         } catch (error) {
-          return error instanceof Error ? error : new Error(String(error));
+          return isError(error) ? error : new Error(String(error));
         }
       }),
     );
@@ -373,7 +374,7 @@ export class Pool {
       .stop(options)
       .catch((error: unknown) => {
         this.workerStopErrors.push(
-          error instanceof Error ? error : new Error(String(error)),
+          isError(error) ? error : new Error(String(error)),
         );
       })
       .finally(() => {
@@ -410,7 +411,7 @@ export class Pool {
       runners.map((runner) =>
         runner.stop().catch((error: unknown) => {
           this.workerStopErrors.push(
-            error instanceof Error ? error : new Error(String(error)),
+            isError(error) ? error : new Error(String(error)),
           );
         }),
       ),

@@ -1,6 +1,8 @@
 import { sep } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import {
+  formatError,
+  toError,
   getFileTaskId,
   getWorkerSerialization,
   isPlainObject,
@@ -137,5 +139,18 @@ it('needFlagExperimentalDetectModule gates on the Node version', () => {
     if (originalDescriptor) {
       Object.defineProperty(process.versions, 'node', originalDescriptor);
     }
+  }
+});
+
+it('preserves foreign errors when formatting and normalizing', () => {
+  for (const expression of [
+    'new TypeError("foreign error", { cause: new Error("cause") })',
+    'new (class CustomError extends Error {})("custom")',
+    'try { null.value } catch (error) { error }',
+  ]) {
+    const error = runInNewContext(expression);
+    expect(error).not.toBeInstanceOf(Error);
+    expect(formatError(error)).toBe(error);
+    expect(toError(error)).toBe(error);
   }
 });

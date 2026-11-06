@@ -1,4 +1,5 @@
 import { format } from '@vitest/utils/display';
+import { isError } from '../utils/isError';
 
 /**
  * The imported `format` mimics `node:util.format`'s inspection (single-line
@@ -8,7 +9,7 @@ import { format } from '@vitest/utils/display';
  * debuggable with one, so Errors are pre-mapped to their stack text.
  */
 const replaceErrorWithStack = (arg: unknown): unknown =>
-  arg instanceof Error ? arg.stack || `${arg.name}: ${arg.message}` : arg;
+  isError(arg) ? arg.stack || `${arg.name}: ${arg.message}` : arg;
 
 /**
  * Format console arguments the way the node worker's console does

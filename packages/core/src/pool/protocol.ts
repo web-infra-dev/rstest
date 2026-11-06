@@ -4,6 +4,7 @@ import type {
   RawTestInfo,
   RawTestFileResult,
 } from '../types';
+import { isError } from '../utils/isError';
 
 const WORKER_REQUEST_TAG = '__rstest_worker_request__' as const;
 const WORKER_RESPONSE_TAG = '__rstest_worker_response__' as const;
@@ -144,7 +145,7 @@ export const isRpcEnvelope = (message: unknown): message is RpcEnvelope => {
 };
 
 export const serializeError = (error: unknown): TransportSerializedError => {
-  if (error instanceof Error) {
+  if (isError(error)) {
     return {
       name: error.name,
       message: error.message,

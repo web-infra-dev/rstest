@@ -304,28 +304,35 @@ describe('globalSetup', async () => {
     expectStderrLog(/globalSetup\.ts:2/);
   });
 
-  it('should fail when global teardown throws an error', async () => {
-    const { expectStderrLog, expectLog, expectExecFailed } = await runRstestCli(
-      {
-        command: 'rstest',
-        args: ['run'],
-        options: {
-          nodeOptions: {
-            env: { ISOLATE: undefined },
-            cwd: join(__dirname, 'fixtures/teardown-error'),
+  it.for([false, true])(
+    'should fail when global teardown throws an error (foreign: %s)',
+    async (foreign) => {
+      const { expectStderrLog, expectLog, expectExecFailed } =
+        await runRstestCli({
+          command: 'rstest',
+          args: ['run'],
+          options: {
+            nodeOptions: {
+              env: {
+                ISOLATE: undefined,
+                RSTEST_FOREIGN_TEARDOWN: String(foreign),
+              },
+              cwd: join(__dirname, 'fixtures/teardown-error'),
+            },
           },
-        },
-      },
-    );
+        });
 
-    await expectExecFailed();
+      await expectExecFailed();
 
-    expectLog(/This should be printed/);
+      expectLog(/This should be printed/);
 
-    // Check for global setup error message
-    expectStderrLog(/Global teardown failed intentionally/);
-    expectStderrLog(/globalSetup\.ts:3/);
-  });
+      // Check for global setup error message
+      expectStderrLog(/Global teardown failed intentionally/);
+      expectStderrLog(
+        foreign ? /foreign-teardown\.js:1/ : /globalSetup\.ts:14/,
+      );
+    },
+  );
 
   it('accepts a teardown-only global setup and runs its teardown', async () => {
     const fixturesTargetPath = join(
