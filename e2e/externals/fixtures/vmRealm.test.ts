@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import * as vmExternal from 'test-vm-external/index.mjs';
 
 const {
+  verifyCompositeFileSystem,
   verifyFileSystemBridges,
   verifyStreamFactories,
   verifyLateBuiltinSync,
@@ -54,6 +55,15 @@ it('uses file-local constructors in stream factories', () => {
     mockedStreams: true,
     streamArguments: true,
     nativeConstructorsUnchanged: true,
+  });
+});
+
+it('routes composite fs operations through file-local low-level mocks', async () => {
+  expect(await verifyCompositeFileSystem()).toEqual({
+    blocked: true,
+    noUnexpectedIO: true,
+    closedAfterWriteError: true,
+    nativeUnchanged: true,
   });
 });
 

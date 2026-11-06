@@ -5,9 +5,81 @@ import fs, {
   createWriteStream,
 } from 'node:fs';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Capture the initial named export before another test can synchronize it.
 const initialPromises = promises;
+
+export const verifyCompositeFileSystem = async () => {
+  const native = process.getBuiltinModule('fs');
+  const directory = native.mkdtempSync(join(tmpdir(), 'rstest-fs-composites-'));
+  const input = join(directory, 'input');
+  const output = join(directory, 'output');
+  native.writeFileSync(input, 'original');
+  const originalOpen = fs.open;
+  const originalOpenSync = fs.openSync;
+  const originalWrite = fs.write;
+  const originalClose = fs.close;
+  const nativeOpen = native.open;
+  const nativeClose = native.close;
+  const marker = Object.assign(new Error('mocked open'), { code: 'MOCK_OPEN' });
+  const code = (fn) =>
+    new Promise((resolve) => fn((error) => resolve(error?.code)));
+  try {
+    fs.open = (...args) => args.at(-1)(marker);
+    const namespace = await import('node:fs');
+    const blocked = [
+      await code((cb) => fs.writeFile(output, 'data', cb)),
+      await code((cb) => namespace.writeFile(output, 'data', cb)),
+      await code((cb) => fs.appendFile(output, 'data', cb)),
+      await code((cb) => fs.truncate(input, 0, cb)),
+    ];
+    if (typeof fs.lchmod === 'function')
+      blocked.push(await code((cb) => fs.lchmod(input, 0o600, cb)));
+    fs.openSync = () => {
+      throw marker;
+    };
+    for (const operation of [
+      () => fs.writeFileSync(output, Buffer.from('data')),
+      () => fs.appendFileSync(output, Buffer.from('data')),
+      () => fs.readFileSync(input),
+      () => fs.truncateSync(input, 0),
+    ]) {
+      try {
+        operation();
+        blocked.push(undefined);
+      } catch (error) {
+        blocked.push(error.code);
+      }
+    }
+    const noUnexpectedIO =
+      !native.existsSync(output) &&
+      native.readFileSync(input, 'utf8') === 'original';
+    fs.open = originalOpen;
+    fs.openSync = originalOpenSync;
+    let closeCalls = 0;
+    fs.write = (...args) => args.at(-1)(marker);
+    fs.close = (fd, callback) => {
+      closeCalls++;
+      originalClose(fd, callback);
+    };
+    const writeError = await code((cb) => fs.writeFile(output, 'data', cb));
+    return {
+      blocked: blocked.every((value) => value === 'MOCK_OPEN'),
+      noUnexpectedIO,
+      closedAfterWriteError: writeError === 'MOCK_OPEN' && closeCalls === 1,
+      nativeUnchanged:
+        native.open === nativeOpen && native.close === nativeClose,
+    };
+  } finally {
+    fs.open = originalOpen;
+    fs.openSync = originalOpenSync;
+    fs.write = originalWrite;
+    fs.close = originalClose;
+    native.rmSync(directory, { recursive: true, force: true });
+  }
+};
 
 export const verifyFileSystemBridges = async () => {
   const require = createRequire(import.meta.url);

@@ -17,6 +17,7 @@ import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
 import { exit as processExit, kill as processKill } from 'node:process';
 import { verifyBuiltinSync } from './builtin-sync.mjs';
 export {
+  verifyCompositeFileSystem,
   verifyFileSystemBridges,
   verifyStreamFactories,
   verifyLateBuiltinSync,

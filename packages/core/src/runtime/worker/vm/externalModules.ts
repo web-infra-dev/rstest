@@ -12,6 +12,7 @@ import { dirname as nativeDirname, isAbsolute, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { extname } from 'pathe';
+import { installFileSystemBridges } from './fileSystem';
 import {
   asModule,
   getOrCreateSyntheticModule,
@@ -1618,6 +1619,15 @@ class VmExternalModules {
         }
       }
       Object.defineProperty(facade, key, descriptor);
+    }
+    if (name === 'fs') {
+      installFileSystemBridges(facade, (original, replacement) => {
+        const wrapped = this.wrapBuiltinValue(replacement);
+        const native = this.unwrapBuiltinValue(original);
+        if (typeof native === 'function')
+          this.wrappedBuiltinValues.set(native, wrapped);
+        return wrapped;
+      });
     }
     return facade;
   }

@@ -298,6 +298,8 @@ export default defineConfig({
 
 `fs` 和 `fs/promises` 的模块命名空间按文件隔离。替换导出（包括 spy 和 `graceful-fs` 等依赖的补丁）不会修改 worker 的原生模块或影响其他文件。`syncBuiltinESMExports()` 会更新当前文件的具名导出。文件读写仍然操作真实文件系统。
 
+复合操作会沿用原生 Node.js 对公开方法的调用关系，并使用当前文件的底层 mock。例如，回调版 `writeFile` 会调用 `open`、`write` 和 `close`。直接使用原生 binding 的路径保持 Node.js 行为：异步 `readFile` 和同步 UTF-8 快速路径不会调用这些公开方法。stream 默认使用当前文件的 fs 操作，显式传入的 `options.fs` 或 `FileHandle` 则仍按 Node.js 规则处理。
+
 测试仍需在文件结束前 `await` 或取消异步任务。teardown 会清理受 Rstest 管理的定时器，但不会取消任意 Promise 链、原生 I/O 或后台任务。
 
 尚未完成的已包装 `node:timers/promises` 和 promisify timeout/immediate 操作会以 `AbortError` 取消。这可能触发用户的 `catch` 或 `finally`，因此不能保证 teardown 后不再执行用户代码。
