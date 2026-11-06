@@ -131,6 +131,8 @@ describe('test interop', () => {
         args: [
           'run',
           './fixtures/vmInteropEdges.test.ts',
+          './dynamicImportInterop.test.ts',
+          './dynamicImportRelative.test.ts',
           '--pool',
           pool,
           '-c',

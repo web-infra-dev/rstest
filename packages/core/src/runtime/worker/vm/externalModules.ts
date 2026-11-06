@@ -300,6 +300,10 @@ const createUnsupportedFormatError = (
 
 class VmExternalModules {
   private readonly commonJsCache = new Map<string, CommonJsModule>();
+  private readonly commonJsInteropNamespaces = new WeakMap<
+    vm.Module,
+    Record<string, unknown>
+  >();
   private readonly esmCache = new Map<string, SyncSourceTextModule>();
   private readonly esmRequireNamespaceCache = new Map<
     string,
@@ -497,7 +501,9 @@ class VmExternalModules {
     if (module.status !== 'evaluated') {
       await this.evaluateModule(module);
     }
-    return module.namespace;
+    return interopDefault
+      ? (this.commonJsInteropNamespaces.get(module) ?? module.namespace)
+      : module.namespace;
   }
 
   private enqueueLinkedModule(
@@ -761,7 +767,7 @@ class VmExternalModules {
     const { mod, defaultExport } = interopDefault
       ? interopModule(namespace)
       : { mod: namespace, defaultExport: namespace.default };
-    return getOrCreateSyntheticModule(
+    const module = getOrCreateSyntheticModule(
       mod,
       resolvedId,
       defaultExport,
@@ -769,6 +775,12 @@ class VmExternalModules {
       // Native CJS namespace shape is independent of synchronous VM graph support.
       supportsCjsModuleExportsMarker ? { value: cjsExports } : undefined,
     );
+    // SyntheticModule makes every export enumerable and may unwrap default.
+    // Preserve the input for bundled import()'s descriptor-aware interop view.
+    if (mod !== namespace && !this.commonJsInteropNamespaces.has(module)) {
+      this.commonJsInteropNamespaces.set(module, namespace);
+    }
+    return module;
   }
 
   private getCommonJsExportNames(filePath: string): string[] {
