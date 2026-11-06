@@ -40,6 +40,7 @@ import {
 } from '@vitest/expect';
 import {
   assert,
+  Assertion as ChaiAssertion,
   config as chaiConfig,
   expect as chaiExpect,
   use,
@@ -362,6 +363,46 @@ type JestMatcherRegistry = {
     toHaveBeenLastCalledWith: VitestChaiMatcher;
     toHaveBeenNthCalledWith: VitestChaiMatcher;
     toContain: VitestChaiMatcher;
+  };
+};
+
+export const isolateExpectExtensions = (): (() => void) => {
+  const registry = (globalThis as Record<symbol, unknown>)[
+    JEST_MATCHERS_OBJECT
+  ] as JestMatcherRegistry;
+  const equalityTesters = registry.customEqualityTesters.slice();
+  const expect = getGlobalExpect();
+  const asymmetricMatchers: object = Reflect.get(
+    globalThis,
+    ASYMMETRIC_MATCHERS_OBJECT,
+  );
+  // JestExtend writes both assertion methods and asymmetric factories. Preserve
+  // descriptors so overriding a built-in matcher is reversible too.
+  const targets = [
+    ChaiAssertion.prototype,
+    registry.matchers,
+    asymmetricMatchers,
+    expect,
+    expect.not,
+  ].map((target) => ({
+    target,
+    descriptors: Object.getOwnPropertyDescriptors(target),
+  }));
+
+  return () => {
+    registry.customEqualityTesters.splice(
+      0,
+      registry.customEqualityTesters.length,
+      ...equalityTesters,
+    );
+    for (const { target, descriptors } of targets) {
+      for (const key of Reflect.ownKeys(target)) {
+        if (!Object.hasOwn(descriptors, key)) {
+          Reflect.deleteProperty(target, key);
+        }
+      }
+      Object.defineProperties(target, descriptors);
+    }
   };
 };
 
