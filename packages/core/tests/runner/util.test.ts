@@ -57,6 +57,8 @@ it('test formatName', () => {
 
   expect(formatName('test $c', { a: { b: 1 } }, 0)).toBe('test undefined');
 
+  expect(formatName('test $a.b', { a: null }, 0)).toBe('test undefined');
+
   expect(formatName('%j', { a: { b: 1 } }, 0)).toBe('{"a":{"b":1}}');
 });
 
