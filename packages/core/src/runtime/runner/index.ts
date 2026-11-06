@@ -14,6 +14,7 @@ import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
 import { RunnerRuntime, runtimeAPI, type RootSuiteListeners } from './runtime';
 import { traverseUpdateTest } from './task';
+import { isError } from '../../utils/isError';
 
 // The running file's execution-phase runner (see the live-binding contract in
 // `../api`; `createRunner` publishes the context per file).
@@ -151,8 +152,8 @@ export function createRunner({
               [error, cleanupError],
               [
                 'Test execution and file fixture cleanup both failed.',
-                `Test execution failed: ${error instanceof Error ? error.message : String(error)}`,
-                `File fixture cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+                `Test execution failed: ${isError(error) ? error.message : String(error)}`,
+                `File fixture cleanup failed: ${isError(cleanupError) ? cleanupError.message : String(cleanupError)}`,
               ].join('\n'),
             );
           }

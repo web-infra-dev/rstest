@@ -12,6 +12,7 @@ import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
 import { wrapRegex } from './regexpWireFormat';
+import { isError } from './isError';
 
 export const isQuotedFilter = (filter: string): boolean =>
   filter.length >= 2 &&
@@ -124,7 +125,7 @@ export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
 };
 
 export function formatError(error: unknown): Error | string {
-  if (typeof error === 'string' || error instanceof Error) {
+  if (typeof error === 'string' || isError(error)) {
     return error;
   }
 
@@ -140,7 +141,7 @@ export function formatError(error: unknown): Error | string {
 }
 
 export const toError = (err: unknown): Error =>
-  err instanceof Error ? err : new Error(String(err));
+  isError(err) ? err : new Error(String(err));
 
 export const prettyTime = (milliseconds: number): string => {
   if (milliseconds < 1000) {

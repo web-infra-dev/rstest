@@ -22,6 +22,7 @@ import {
 import { workerCache } from './vm/cache';
 import { getVmExternalModules } from './vm/externalModulesLoader';
 import { createVmTimersLoader } from './vm/timers';
+import { isError } from '../../utils/isError';
 
 const CJS_WRAPPER_PREFIX = "'use strict';return function(){\n";
 export const wrapperLength: number = CJS_WRAPPER_PREFIX.length;
@@ -48,10 +49,12 @@ const defineRstestRequireResolve =
     testPath,
     distPath,
     assetFiles,
+    vmContext,
   }: {
     testPath: string;
     distPath: string;
     assetFiles: AssetFiles;
+    vmContext?: vm.Context;
   }) =>
   (
     specifier: string,
@@ -78,7 +81,13 @@ const defineRstestRequireResolve =
       return normalizedPath;
     }
 
-    return createNativeRequire(resolveBase).resolve(specifier, options);
+    return vmContext
+      ? getVmExternalModules(vmContext).resolveRequire(
+          specifier,
+          resolveBase,
+          options,
+        )
+      : createNativeRequire(resolveBase).resolve(specifier, options);
   };
 
 const createRequire = (
@@ -136,7 +145,7 @@ const createRequire = (
       } catch (err) {
         logger.error(
           `load file ${joinedPath} failed:\n`,
-          err instanceof Error ? err.message : err,
+          isError(err) ? err.message : err,
         );
       }
     }
@@ -154,6 +163,7 @@ const createRequire = (
     testPath: filename,
     distPath,
     assetFiles,
+    vmContext,
   }) as NodeJS.RequireResolve;
   requireResolve.paths = _require.resolve.paths.bind(_require.resolve);
   require.resolve = requireResolve;
@@ -178,7 +188,12 @@ const defineRstestDynamicImport =
     importAttributes: ImportCallOptions,
     origin?: string,
   ) => {
-    const modulePath = resolveImportSpecifier({ specifier, origin, testPath });
+    const modulePath = resolveImportSpecifier({
+      specifier,
+      origin,
+      testPath,
+      vmContext,
+    });
 
     // `.wasm` always resolves to an on-disk source file (wasmLoader.mjs rewrites
     // direct imports; `new URL(...)` resolves source-relative, #1455). rstest
@@ -279,8 +294,9 @@ export const loadModule = ({
       testPath,
       distPath,
       assetFiles,
+      vmContext,
     }),
-    [RSTEST_IMPORT_META_RESOLVE_HOOK]: createImportMetaResolve(),
+    [RSTEST_IMPORT_META_RESOLVE_HOOK]: createImportMetaResolve(vmContext),
     __dirname: fileDir,
     __filename: testPath,
     ...rstestContext,

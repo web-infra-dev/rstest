@@ -1,5 +1,6 @@
 import { open, stat } from 'node:fs/promises';
 import type { EnvironmentName, EnvironmentWithOptions } from '../types';
+import { isError } from './isError';
 
 const MAX_COMMENT_BYTES = 4096;
 const SUPPORTED_ENVIRONMENTS = ['node', 'jsdom', 'happy-dom'] as const;
@@ -170,7 +171,7 @@ const normalizeOptionsText = (text: string): string =>
   text.trim().replace(/^\*/, '').trim().replace(/\*\/$/, '').trim();
 
 const isFileNotFoundError = (error: unknown): boolean =>
-  error instanceof Error && 'code' in error && error.code === 'ENOENT';
+  isError(error) && 'code' in error && error.code === 'ENOENT';
 
 export const parseEnvironmentComment = (
   code: string,
@@ -209,7 +210,7 @@ export const parseEnvironmentComment = (
       comment.options = parsed as Record<string, unknown>;
     } catch (error) {
       throw new Error(
-        `Failed to parse test environment options in ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to parse test environment options in ${filePath}: ${isError(error) ? error.message : String(error)}`,
       );
     }
   }

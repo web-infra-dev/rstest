@@ -1,6 +1,7 @@
 import { withTempDir } from '../helpers/tempDir';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { createContext, runInContext } from 'node:vm';
 import { join } from 'pathe';
 import {
   clearModuleCache as clearEsModuleCache,
@@ -19,6 +20,7 @@ import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
 } from '../../src/runtime/worker/runtimeHooks';
+import { loadVmExternalModules } from '../../src/runtime/worker/vm/externalModulesLoader';
 
 const getFederationFallbackCode = () => {
   const source = readFileSync(
@@ -32,6 +34,33 @@ const getFederationFallbackCode = () => {
 };
 
 describe('createImportMetaResolve', () => {
+  it('uses the VM resolver while preserving parent URLs and resolver identity', async () => {
+    await loadVmExternalModules();
+    const context = createContext({});
+    const VmError = runInContext('Error', context);
+    await withTempDir('rstest-meta-resolve-vm-', async (dir) => {
+      const origin = join(dir, 'source.mjs');
+      const getResolve = createImportMetaResolve(context);
+      const resolve = getResolve(origin);
+      expect(getResolve(origin)).toBe(resolve);
+      const parent = pathToFileURL(join(dir, 'nested', 'entry.mjs'));
+      expect(resolve('./missing.json', parent)).toBe(
+        new URL('./missing.json', parent).href,
+      );
+      expect(() => resolve('@rstest/definitely-not-installed')).toThrow(
+        VmError,
+      );
+      expect(() =>
+        resolveImportSpecifier({
+          specifier: '@rstest/definitely-not-installed',
+          origin,
+          testPath: origin,
+          vmContext: context,
+        }),
+      ).toThrow(VmError);
+    });
+  });
+
   it('keeps resolver identity local to each loaded bundle', async () => {
     await withTempDir('rstest-meta-resolve-', async (dir) => {
       const origin = join(dir, 'source.mjs');

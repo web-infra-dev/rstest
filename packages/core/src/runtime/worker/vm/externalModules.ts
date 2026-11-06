@@ -432,11 +432,7 @@ class VmExternalModules {
 
     require.resolve = Object.assign(
       (specifier: string, options?: { paths?: string[] }) => {
-        try {
-          return nativeRequire.resolve(specifier, options);
-        } catch (error) {
-          throw this.wrapBuiltinError(error);
-        }
+        return this.resolveRequire(specifier, filename, options);
       },
       {
         paths: nativeRequire.resolve.paths.bind(nativeRequire.resolve),
@@ -457,15 +453,7 @@ class VmExternalModules {
       return this.loadBuiltin(specifier);
     }
 
-    const nativeRequire = createNativeRequire(parent);
-    let resolved: string;
-    try {
-      // Node owns export conditions and launch flags; VM execution support is
-      // checked after resolution, without selecting a different package entry.
-      resolved = nativeRequire.resolve(specifier);
-    } catch (error) {
-      throw this.wrapBuiltinError(error);
-    }
+    const resolved = this.resolveRequire(specifier, parent);
     switch (getModuleFormat(resolved, 'require')) {
       case 'data':
         throw createRequireEsmError(this.context, resolved);
@@ -479,7 +467,7 @@ class VmExternalModules {
         }
         return this.requireEsm(resolved);
       case 'native':
-        return nativeRequire(resolved);
+        return createNativeRequire(parent)(resolved);
       case 'wasm':
         throw createRequireAsyncModuleError(
           this.context,
@@ -532,6 +520,20 @@ class VmExternalModules {
       () => undefined,
     );
     return linkedModule;
+  }
+
+  resolveRequire(
+    specifier: string,
+    parent: string | URL,
+    options?: { paths?: string[] },
+  ): string {
+    try {
+      // Node owns export conditions and launch flags; VM execution support is
+      // checked after resolution, without selecting a different package entry.
+      return createNativeRequire(parent).resolve(specifier, options);
+    } catch (error) {
+      throw this.wrapBuiltinError(error);
+    }
   }
 
   resolve(specifier: string, parent: string): string {
