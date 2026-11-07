@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,18 +67,24 @@ const runGit = async (cwd: string, args: string[]) => {
   await execFileAsync('git', args, { cwd });
 };
 
-const initGitFixture = async (cwd: string) => {
-  await runGit(cwd, ['-c', 'init.defaultBranch=main', 'init']);
-  await runGit(cwd, ['add', '.']);
-  await runGit(cwd, [
+const commitFixture = (cwd: string, message: string) =>
+  runGit(cwd, [
     '-c',
     'user.name=rstest',
     '-c',
     'user.email=rstest@example.com',
     'commit',
     '-m',
-    'init',
+    message,
   ]);
+
+const changedArgsFor = (state: string) =>
+  state === 'committed' ? '--changed=HEAD~1' : '--changed';
+
+const initGitFixture = async (cwd: string) => {
+  await runGit(cwd, ['-c', 'init.defaultBranch=main', 'init']);
+  await runGit(cwd, ['add', '.']);
+  await commitFixture(cwd, 'init');
 };
 
 describe('changed test filtering', () => {
@@ -119,6 +132,165 @@ describe('changed test filtering', () => {
     expect(cli.stderr).toContain('Related test selection may be incomplete');
     expect(cli.stderr).not.toContain('Build error');
   });
+
+  it.each(['unstaged', 'staged', 'committed'])(
+    'should select importers of a %s deleted source',
+    async (state) => {
+      const { fixturesTargetPath } = await prepareChangedFixture(
+        `deleted-${state}`,
+      );
+      await initGitFixture(fixturesTargetPath);
+      await rm(join(fixturesTargetPath, 'src/index.ts'));
+      if (state !== 'unstaged') await runGit(fixturesTargetPath, ['add', '-u']);
+      if (state === 'committed') {
+        await commitFixture(fixturesTargetPath, 'delete source');
+      }
+
+      const changed = changedArgsFor(state);
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['list', '--filesOnly', changed],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['index.test.ts']);
+
+      const run = await runRstestCli({
+        command: 'rstest',
+        args: ['run', changed, '--passWithNoTests'],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await run.expectExecFailed();
+      expect(run.cli.log).toContain('index.test.ts');
+      expect(run.cli.log).not.toContain('No changed files found');
+      expect(run.cli.log).not.toContain('other.test.ts');
+      expect(run.cli.stderr).not.toContain(
+        'Related test selection may be incomplete',
+      );
+    },
+  );
+
+  it.each([
+    [
+      'json',
+      'src/data.json',
+      '{"value": 1}\n',
+      "import data from './src/data.json';\nimport { expect, it } from '@rstest/core';\nit('x', () => { expect(data.value).toBe(1); });\n",
+    ],
+    [
+      'mjs',
+      'src/data.mjs',
+      'export const value = 1;\n',
+      "import { value } from './src/data.mjs';\nimport { expect, it } from '@rstest/core';\nit('x', () => { expect(value).toBe(1); });\n",
+    ],
+  ])(
+    'should keep importers of a deleted %s source',
+    async (name, deletedFile, content, testSource) => {
+      const { fixturesTargetPath } = await prepareChangedFixture(
+        `deleted-${name}`,
+      );
+      await writeFile(join(fixturesTargetPath, deletedFile), content);
+      await writeFile(
+        join(fixturesTargetPath, `deleted-${name}.test.ts`),
+        testSource,
+      );
+      await initGitFixture(fixturesTargetPath);
+      await rm(join(fixturesTargetPath, deletedFile));
+      await runGit(fixturesTargetPath, ['add', '-u']);
+
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['list', '--filesOnly', '--changed'],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout.split('\n').filter(Boolean)).toEqual([
+        `deleted-${name}.test.ts`,
+      ]);
+    },
+  );
+
+  it('should select importers when a changed file is replaced by a directory', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture('file-to-dir');
+    await initGitFixture(fixturesTargetPath);
+    await rm(join(fixturesTargetPath, 'src/index.ts'));
+    await mkdir(join(fixturesTargetPath, 'src/index.ts'));
+    await writeFile(
+      join(fixturesTargetPath, 'src/index.ts/readme.txt'),
+      'replacement\n',
+    );
+    await runGit(fixturesTargetPath, ['add', '-A']);
+
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly', '--changed'],
+      options: { nodeOptions: { cwd: fixturesTargetPath } },
+    });
+    await expectExecSuccess();
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['index.test.ts']);
+  });
+
+  it.each(['staged', 'committed'])(
+    'should keep both paths when a %s rename drops the old import target',
+    async (state) => {
+      const { fixturesTargetPath } = await prepareChangedFixture(
+        `renamed-${state}`,
+      );
+      await initGitFixture(fixturesTargetPath);
+      await runGit(fixturesTargetPath, [
+        'mv',
+        'src/index.ts',
+        'src/renamed.ts',
+      ]);
+      if (state === 'committed') {
+        await commitFixture(fixturesTargetPath, 'rename source');
+      }
+
+      const changed = changedArgsFor(state);
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['list', '--filesOnly', changed],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['index.test.ts']);
+
+      const run = await runRstestCli({
+        command: 'rstest',
+        args: ['run', changed, '--passWithNoTests'],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await run.expectExecFailed();
+      expect(run.cli.log).toContain('index.test.ts');
+    },
+  );
+
+  it.each(['staged', 'committed'])(
+    'should run all tests for a %s deleted force rerun trigger',
+    async (state) => {
+      const { fixturesTargetPath } = await prepareChangedFixture(
+        `deleted-trigger-${state}`,
+      );
+      await writeFile(join(fixturesTargetPath, 'package.json'), '{}\n');
+      await initGitFixture(fixturesTargetPath);
+      await rm(join(fixturesTargetPath, 'package.json'));
+      await runGit(fixturesTargetPath, ['add', '-u']);
+      if (state === 'committed') {
+        await commitFixture(fixturesTargetPath, 'delete trigger');
+      }
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', changedArgsFor(state)],
+        options: { nodeOptions: { cwd: fixturesTargetPath } },
+      });
+      await expectExecSuccess();
+      expect(collectRunTestFileLogs(cli.stdout)).toEqual([
+        ' ✓ index.test.ts (1)',
+        ' ✓ other.test.ts (1)',
+      ]);
+      expect(cli.stdout).toContain('matched forceRerunTriggers');
+    },
+  );
 
   it('should reject changed with positional filters', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
