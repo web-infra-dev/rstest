@@ -8,6 +8,10 @@ import { join } from 'node:path';
 import * as vmExternal from 'test-vm-external/index.mjs';
 
 const {
+  verifyCompositeFileSystem,
+  verifyFileSystemBridges,
+  verifyStreamFactories,
+  verifyLateBuiltinSync,
   createTimerPromise,
   createStaticTimerPromise,
   inspectRealm,
@@ -28,6 +32,40 @@ const {
   verifyProcessGuards,
   verifyUnsupportedImportAttribute,
 } = vmExternal;
+
+it('preserves setup fs mocks for late builtin ESM imports', async () => {
+  expect(await verifyLateBuiltinSync()).toEqual({
+    defaultExport: true,
+    synchronized: true,
+    unsynchronized: true,
+    resynchronized: true,
+  });
+});
+
+it('keeps promises aliases inside the file facade', async () => {
+  expect(await verifyFileSystemBridges()).toEqual({
+    identity: true,
+    mockVisible: true,
+    nativeUnchanged: true,
+  });
+});
+
+it('uses file-local constructors in stream factories', () => {
+  expect(verifyStreamFactories()).toEqual({
+    mockedStreams: true,
+    streamArguments: true,
+    nativeConstructorsUnchanged: true,
+  });
+});
+
+it('routes composite fs operations through file-local low-level mocks', async () => {
+  expect(await verifyCompositeFileSystem()).toEqual({
+    blocked: true,
+    noUnexpectedIO: true,
+    closedAfterWriteError: true,
+    nativeUnchanged: true,
+  });
+});
 
 it('uses the file require cache through Module._cache and keeps compile errors in the VM', () => {
   const directory = realpathSync(
