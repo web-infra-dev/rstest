@@ -13,8 +13,9 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 
 ## Launch-key model
 
-- A run launches one browser per `(provider, browserName, headless, providerOptions.launch)` launch key across all projects; two projects naming the same key share the launched browser. Within a project every browser of the project shares one build and one dev server, so build-scoped options stay project-level while `BrowserEntry` overrides only runtime-effective fields.
+- A run launches one browser per launch key across all projects; two projects naming the same key share the launched browser. `launchSpecForEntry` (in `browserRsbuild.ts`) is the only place a spec is derived for both the launch plan and the runtime rows, so a row can never name a launch key the runtime did not launch. Within a project every browser of the project shares one build and one dev server, so build-scoped options stay project-level while `BrowserEntry` overrides only runtime-effective fields.
 - The host scheduler unit is `(project, browserName, testFile)`: selection expands to one row per configured browser, every state/screenshot/collect key includes the browser, and the client stamps `browserName` (via `WorkerState`) onto every payload it sends — a payload without it is indistinguishable from the node pool's.
+- At most one `(project, browser)` pair may run headed per run, and a watch run may not mix headed and headless browsers — `validateBrowserConfig` owns both rules, and the host composition (headless lanes plus at most one headed lane, dispatch lanes resolved from request data) relies on them.
 - Watch file-set entries carry no browser dimension, so stale-screenshot cleanup must sweep every browser directory the project could have written, not only the bare-path hash a key without a browser segment hashes to.
 
 ## Contract ownership

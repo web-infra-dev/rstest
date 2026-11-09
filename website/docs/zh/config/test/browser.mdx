@@ -230,7 +230,7 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     providerOptions: {
-      launch: { headless: true },
+      launch: { slowMo: 100 },
       context: { locale: 'en-US' },
     },
     browsers: [
@@ -602,7 +602,7 @@ npx rstest --browser.browsers webkit
 当项目选择了多个浏览器时，Rstest 会把每条 payload 归属到产生它的浏览器：
 
 - Reporter payload（`onTestFileStart`、`onTestFileReady`、`onTestFileResult`、`onTestCaseStart`/`onTestCaseResult`、`onConsoleLog`、`onTestRunStart` 的 files 项）在 browser 项目上携带 `browserName`，Node pool 上缺失。Case 与 suite 的 task id 在 browser 模式下以 `file:project:browserName:testPath` 为根（Node pool 为 `file:project:testPath`），同一文件的两个浏览器副本各自独立成结果，不会互相覆盖。
-- 内置 reporter 仅在 run 对某个项目选中多个浏览器时，为文件行追加灰色的 `[chromium]` 风格标记（junit suite 名与 markdown 标题在文件路径后追加同一标记）；单浏览器输出保持不变。自定义 reporter 与 reporter 选项可通过内置 reporter 的 `showBrowserName` 选项控制 —— Rstest 在用户选项之前为 multi-browser run 自动注入该选项，因此用户选项优先。
+- 内置 reporter 仅在 run 对某个项目选中多个浏览器时，为文件行追加灰色的 `[chromium]` 风格标记（junit suite 名与 markdown 标题在文件路径后追加同一标记，`rstest list` 行以相同规则标注浏览器名）；单浏览器输出保持不变。自定义 reporter 与 reporter 选项可通过内置 reporter 的 `showBrowserName` 选项控制 —— Rstest 在用户选项之前为 multi-browser run 自动注入该选项，因此用户选项优先。
 - blob reporter 的文件 key 存储为 `[project, browserName, testPath]`，blob 格式版本提升到 Rstest 版本号后缀 `:3`；旧版本记录的 blob 会被 `merge-reports` 拒绝，需要用 `--reporters=blob` 重新生成。
 
 ## 多项目配置隔离
