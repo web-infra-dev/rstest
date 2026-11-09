@@ -825,7 +825,12 @@ export const runInPool = async (
     return call;
   };
 
-  const restoreProcessGuards = installVmProcessGuards();
+  // Guards cover preparation and teardown, including callbacks after the file
+  // context is cleared. Retain this task's constructor until guards are restored.
+  let processErrorConstructor: ErrorConstructor = Error;
+  const restoreProcessGuards = installVmProcessGuards(
+    () => processErrorConstructor,
+  );
 
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
@@ -902,6 +907,7 @@ export const runInPool = async (
         lifecycleHooks.onTestEnvironmentFallback,
         lifecycleHooks.onTaskErrorHandlingChange,
       );
+      processErrorConstructor = rstestContext.Error;
       cleanups.push(cleanup);
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         await loadTaskAssets(options, assets, rpc);
@@ -1000,6 +1006,7 @@ export const runInPool = async (
       lifecycleHooks.onTaskErrorHandlingChange,
     );
     taskContext = preparedTaskContext;
+    processErrorConstructor = rstestContext.Error;
     cleanups.push(cleanup);
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);

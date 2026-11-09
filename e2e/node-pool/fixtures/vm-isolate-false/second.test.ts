@@ -71,8 +71,11 @@ it('keeps process guards active during VM cleanup', () => {
     try {
       process.kill(process.pid, 'SIGCONT');
       appendFileSync(marker, 'unguarded\n');
-    } catch {
-      appendFileSync(marker, 'guarded\n');
+    } catch (error) {
+      appendFileSync(
+        marker,
+        error instanceof Error ? 'guarded\n' : 'wrong realm\n',
+      );
     }
   });
 });
