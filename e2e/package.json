@@ -9,7 +9,7 @@
     "test:threads": "cross-env RSTEST_POOL_TYPE=threads rstest run --pool.type threads"
   },
   "devDependencies": {
-    "@module-federation/rstest": "2.9.2",
+    "@module-federation/rstest": "2.9.3",
     "@rsbuild/core": "catalog:",
     "@rsbuild/plugin-react": "catalog:",
     "@rslib/core": "catalog:",

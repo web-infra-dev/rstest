@@ -16,12 +16,12 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@module-federation/rsbuild-plugin": "2.9.2",
-    "@module-federation/rstest": "2.9.2",
+    "@module-federation/rsbuild-plugin": "2.9.3",
+    "@module-federation/rstest": "2.9.3",
     "@rsbuild/core": "catalog:",
     "@rsbuild/plugin-react": "catalog:",
     "@rstest/core": "workspace:*",
     "concurrently": "8.2.2",
-    "serve": "14.2.6"
+    "serve": "14.2.7"
   }
 }

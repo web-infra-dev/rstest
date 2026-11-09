@@ -577,6 +577,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private parseAst(code: string, outputModule: boolean) {
     return parseSync(code, {
+      errorRecovery: true,
       preserveParens: false,
       sourceType: outputModule ? 'module' : 'script',
     });

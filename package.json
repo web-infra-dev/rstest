@@ -28,18 +28,18 @@
     "bumpp": "^11.1.0",
     "check-dependency-version-consistency": "^6.0.0",
     "cross-env": "^10.1.0",
-    "cspell": "10.4.0",
+    "cspell": "10.4.1",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^2.0.3",
-    "knip": "^6.44.0",
-    "pkg-pr-new": "^0.0.92",
-    "playwright": "^1.64.1",
+    "knip": "^6.44.2",
+    "pkg-pr-new": "^0.0.93",
+    "playwright": "^1.65.0",
     "rstack": "catalog:",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.18.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=12.16.1"
+    "pnpm": ">=12.18.0"
   }
 }
