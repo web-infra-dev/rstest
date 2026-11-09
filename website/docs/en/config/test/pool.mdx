@@ -309,8 +309,6 @@ Pending wrapped `node:timers/promises` and promisified timeout/immediate operati
 
 Values from Node.js, workers, or DOM environments may use different constructors and fail `instanceof` checks in the current VM. Use `await` and content assertions, and check an error's `name`, `code`, or `message`.
 
-When a VM uses Node.js's global `TextEncoder`, `encode()` returns a `Uint8Array` and backing `ArrayBuffer` from the current VM, and `encodeInto()` returns a VM-local result object. VM intrinsic constructors remain isolated. An environment-provided `TextEncoder` is preserved; encoders imported from `node:util` retain native behavior.
-
 ### Module loading
 
 Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
