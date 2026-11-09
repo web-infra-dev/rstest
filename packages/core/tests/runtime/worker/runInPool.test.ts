@@ -2,7 +2,7 @@ import { expect, test } from '@rstest/core';
 import vm from 'node:vm';
 import { util } from 'chai';
 import { setupVM } from '../../../src/runtime/worker/env/jsdom';
-import { setupVM as setupHappyDOMVM } from '../../../src/runtime/worker/env/happyDom';
+import { setupVM as setupHappyDOM } from '../../../src/runtime/worker/env/happyDom';
 import {
   captureVmContextKeys,
   stripVmContext,
@@ -16,9 +16,9 @@ import {
 
 test.for([
   { name: 'jsdom', setup: setupVM },
-  { name: 'happy-dom', setup: setupHappyDOMVM },
+  { name: 'happy-dom', setup: setupHappyDOM },
 ])(
-  'cancels pending DOM immediates after VM initialization: $name',
+  'cancels pending DOM immediate callbacks after VM initialization: $name',
   async ({ setup }) => {
     const environment = await setup({}, { scope: 'file' });
     const runtimeGlobal: VmRuntimeGlobal = vm.runInContext(
