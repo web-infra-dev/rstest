@@ -427,6 +427,7 @@ const preparePool = async (
       // to the silent policy, instead of being reported to the host.
 
       const customConsole = createCustomConsole({
+        silent: silent === true,
         onConsoleLog: (log) => {
           silentConsoleController.onConsoleLog(log);
         },

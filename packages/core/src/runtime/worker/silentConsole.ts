@@ -6,6 +6,14 @@ type ConsoleWriter = (payload: {
   type: 'stderr' | 'stdout';
 }) => void;
 
+type BufferedLogTask = {
+  taskId: string;
+  status: 'skipped' | 'passed' | 'failed' | 'todo';
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
+  testPath: string;
+};
+
 const getBufferedLogTaskId = (log: RawUserConsoleLog): string => {
   if (log.taskId) {
     return log.taskId;
@@ -32,10 +40,10 @@ export const createSilentConsoleController = ({
   runtimeConfig: Pick<RuntimeConfig, 'disableConsoleIntercept' | 'silent'>;
   emitInterceptedLog: (log: RawUserConsoleLog) => Promise<void> | void;
   writeOriginalLog: ConsoleWriter;
-}) => {
-  const bufferedConsoleLogs = new Map<string, RawUserConsoleLog[]>();
-  const suiteIdsByChain = new Map<string, string>();
-
+}): {
+  onConsoleLog: (log: RawUserConsoleLog) => void;
+  flushBufferedLogsForTask: (task: BufferedLogTask) => void;
+} => {
   const emitLog = (log: RawUserConsoleLog): void => {
     if (runtimeConfig.disableConsoleIntercept) {
       writeOriginalLog({
@@ -48,32 +56,32 @@ export const createSilentConsoleController = ({
     emitInterceptedLog(log);
   };
 
+  if (runtimeConfig.silent !== 'passed-only') {
+    return {
+      onConsoleLog: runtimeConfig.silent === true ? () => {} : emitLog,
+      flushBufferedLogsForTask: () => {},
+    };
+  }
+
+  const bufferedConsoleLogs = new Map<string, RawUserConsoleLog[]>();
+  const suiteIdsByChain = new Map<string, string>();
+
   return {
     onConsoleLog(log: RawUserConsoleLog): void {
-      if (runtimeConfig.silent === true) {
-        return;
+      const taskId = getBufferedLogTaskId(log);
+      const logs = bufferedConsoleLogs.get(taskId) || [];
+      logs.push(log);
+      bufferedConsoleLogs.set(taskId, logs);
+
+      if (log.taskType === 'suite' && log.taskId) {
+        suiteIdsByChain.set(
+          getSuiteChainKey([
+            ...(log.taskParentNames || []),
+            log.taskName || '',
+          ]),
+          log.taskId,
+        );
       }
-
-      if (runtimeConfig.silent === 'passed-only') {
-        const taskId = getBufferedLogTaskId(log);
-        const logs = bufferedConsoleLogs.get(taskId) || [];
-        logs.push(log);
-        bufferedConsoleLogs.set(taskId, logs);
-
-        if (log.taskType === 'suite' && log.taskId) {
-          suiteIdsByChain.set(
-            getSuiteChainKey([
-              ...(log.taskParentNames || []),
-              log.taskName || '',
-            ]),
-            log.taskId,
-          );
-        }
-
-        return;
-      }
-
-      emitLog(log);
     },
     flushBufferedLogsForTask({
       taskId,
@@ -81,13 +89,7 @@ export const createSilentConsoleController = ({
       taskParentNames,
       taskType,
       testPath,
-    }: {
-      taskId: string;
-      status: 'skipped' | 'passed' | 'failed' | 'todo';
-      taskParentNames?: string[];
-      taskType?: 'file' | 'suite' | 'case';
-      testPath: string;
-    }): void {
+    }: BufferedLogTask): void {
       if (status !== 'failed') {
         bufferedConsoleLogs.delete(taskId);
         return;
