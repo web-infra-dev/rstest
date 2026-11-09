@@ -9,9 +9,7 @@ import { isAbsolute, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
   BrowserEntry,
-  BrowserExpectConfig,
   BrowserName,
-  BrowserViewport,
   BuiltInReporterNames,
   ExtendConfig,
   NormalizedConfig,
@@ -19,6 +17,7 @@ import type {
   RstestConfig,
   ResolvedBrowserEntry,
 } from './types';
+import { BROWSER_NAMES } from './types';
 import {
   castArray,
   DEFAULT_CONFIG_EXTENSIONS,
@@ -165,8 +164,6 @@ export const plainDeepMerge = <T>(base: T, override: T): T =>
     isMergeableObject: isPlainObject,
   }) as T;
 
-const BROWSER_NAMES: BrowserName[] = ['chromium', 'firefox', 'webkit'];
-
 const isBrowserName = (value: unknown): value is BrowserName =>
   BROWSER_NAMES.includes(value as BrowserName);
 
@@ -194,16 +191,31 @@ export const assertValidBrowserName = (value: string, source: string): void => {
  * deprecated `browser.browser` fallback so it is never reported as
  * "set together with browsers".
  */
+/**
+ * Reads one layer's `browser.browsers` (or the deprecated `browser.browser`
+ * fallback, or the `'chromium'` default) as `[name, item]` pairs in source
+ * order, casting arrays/objects through `castArray` semantics once. The key
+ * is a plain string even for malformed items, so diagnostics can render
+ * them; both consumers (CLI selection, normalization) decide how strict to
+ * be about the name.
+ */
+const rawBrowserEntries = (
+  layer: Partial<RstestConfig['browser']> | undefined,
+): [string, string | BrowserEntry][] => {
+  const rawValue = layer?.browsers ?? layer?.browser ?? 'chromium';
+  const items = Array.isArray(rawValue) ? rawValue : [rawValue];
+  return items.map((item) => [
+    typeof item === 'object' ? String(item.browserName) : String(item),
+    item,
+  ]);
+};
+
 export const selectCliBrowserEntries = (
   layer: RstestConfig['browser'],
   names: BrowserName[],
 ): (BrowserName | BrowserEntry)[] => {
-  const rawValue = layer?.browsers ?? layer?.browser ?? 'chromium';
-  const rawEntries = Array.isArray(rawValue) ? rawValue : [rawValue];
-
   const configured = new Map<BrowserName, BrowserName | BrowserEntry>();
-  for (const item of rawEntries) {
-    const name = typeof item === 'object' ? item.browserName : item;
+  for (const [name, item] of rawBrowserEntries(layer)) {
     // Malformed entries cannot be matched by a name; normalization reports them.
     if (!isBrowserName(name)) {
       continue;
@@ -242,52 +254,43 @@ const warnDeprecatedBrowserField = (): void => {
  * The user layer — not the defaults-merged layer — is the expansion source: the
  * built-in defaults would otherwise force their own browser onto entries.
  */
+type BrowserEntryDefaults = Omit<ResolvedBrowserEntry, 'browserName'>;
+
 const normalizeBrowserEntries = (
   userBrowser: RstestConfig['browser'],
-  defaults: {
-    enabled: boolean;
-    headless: boolean;
-    screenshotFailures: boolean;
-    viewport?: BrowserViewport;
-    expect?: BrowserExpectConfig;
-    providerOptions: Record<string, unknown>;
-  },
+  defaults: BrowserEntryDefaults & { enabled: boolean },
 ): ResolvedBrowserEntry[] => {
-  const rawValue = userBrowser?.browsers ?? userBrowser?.browser ?? 'chromium';
-  const rawEntries = Array.isArray(rawValue) ? rawValue : [rawValue];
+  // Browser config carries shape errors only for browser projects; a disabled
+  // layer always normalizes to the built-in default so the non-empty invariant
+  // holds for every `NormalizedBrowserModeConfig`.
+  if (!defaults.enabled) {
+    return [resolvedBrowserEntry(null, defaults)];
+  }
 
-  if (defaults.enabled) {
-    if (
-      userBrowser?.browser !== undefined &&
-      userBrowser?.browsers !== undefined
-    ) {
-      throw new Error(
-        '`browser.browser` and `browser.browsers` cannot be set together: `browser.browser` is deprecated and superseded by `browsers`. Configure `browser.browsers` only.',
-      );
-    }
-    if (rawEntries.length === 0) {
-      throw new Error(
-        '`browser.browsers` must not be empty. Remove the option to run the default Chromium.',
-      );
-    }
+  if (
+    userBrowser?.browser !== undefined &&
+    userBrowser?.browsers !== undefined
+  ) {
+    throw new Error(
+      '`browser.browser` and `browser.browsers` cannot be set together: `browser.browser` is deprecated and superseded by `browsers`. Configure `browser.browsers` only.',
+    );
+  }
+
+  const rawEntries = rawBrowserEntries(userBrowser);
+  if (rawEntries.length === 0) {
+    throw new Error(
+      '`browser.browsers` must not be empty. Remove the option to run the default Chromium.',
+    );
   }
 
   const entries: ResolvedBrowserEntry[] = [];
   const seen = new Set<BrowserName>();
-  for (const item of rawEntries) {
-    const entry = (typeof item === 'object' ? item : undefined) as
-      BrowserEntry | undefined;
-    const browserName = entry ? entry.browserName : (item as BrowserName);
+  for (const [browserName, item] of rawEntries) {
+    const entry = typeof item === 'object' ? item : undefined;
     if (!isBrowserName(browserName)) {
-      if (!defaults.enabled) {
-        continue;
-      }
       throw new Error(
         `Browser entry must either be a browser name (${browserNameList()}) or an object with a \`browserName\` field of those values. Received: ${JSON.stringify(entry ?? item)}.`,
       );
-    }
-    if (!defaults.enabled) {
-      continue;
     }
     if (seen.has(browserName)) {
       throw new Error(
@@ -298,9 +301,6 @@ const normalizeBrowserEntries = (
     entries.push(resolvedBrowserEntry(entry ?? { browserName }, defaults));
   }
 
-  // Browser config carries shape errors only for browser projects; a disabled
-  // layer always normalizes to the built-in default so the non-empty invariant
-  // holds for every `NormalizedBrowserModeConfig`.
   return entries.length > 0 ? entries : [resolvedBrowserEntry(null, defaults)];
 };
 
@@ -311,13 +311,7 @@ const normalizeBrowserEntries = (
  */
 const resolvedBrowserEntry = (
   entry: BrowserEntry | null,
-  defaults: {
-    headless: boolean;
-    screenshotFailures: boolean;
-    viewport?: BrowserViewport;
-    expect?: BrowserExpectConfig;
-    providerOptions: Record<string, unknown>;
-  },
+  defaults: BrowserEntryDefaults,
 ): ResolvedBrowserEntry => ({
   browserName: entry?.browserName ?? 'chromium',
   headless: entry?.headless ?? defaults.headless,

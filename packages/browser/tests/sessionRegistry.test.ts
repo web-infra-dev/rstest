@@ -2,7 +2,7 @@ import { describe, expect, it } from '@rstest/core';
 import { RunnerSessionRegistry } from '../src/sessionRegistry';
 
 describe('runner session registry', () => {
-  it('should register and query by test file', () => {
+  it('registers sessions with identity records', () => {
     const registry = new RunnerSessionRegistry();
 
     const session = registry.register({
@@ -14,42 +14,12 @@ describe('runner session registry', () => {
     });
 
     expect(registry.getById(session.id)?.testFile).toBe('/tests/a.test.ts');
-    expect(
-      registry.getByTestFile('/tests/a.test.ts', {
-        projectName: 'project',
-        browserName: 'chromium',
-      })?.id,
-    ).toBe(session.id);
+    expect(registry.getById(session.id)?.browserName).toBe('chromium');
   });
 
-  it('should replace mapping when re-registering same (project, browser) row', () => {
-    const registry = new RunnerSessionRegistry();
-    const first = registry.register({
-      testFile: '/tests/a.test.ts',
-      projectName: 'project',
-      browserName: 'chromium',
-      runToken: 1,
-      mode: 'headless-page',
-    });
-
-    const second = registry.register({
-      testFile: '/tests/a.test.ts',
-      projectName: 'project',
-      browserName: 'chromium',
-      runToken: 2,
-      mode: 'headless-page',
-    });
-
-    expect(
-      registry.getByTestFile('/tests/a.test.ts', {
-        projectName: 'project',
-        browserName: 'chromium',
-      })?.id,
-    ).toBe(second.id);
-    expect(registry.getById(first.id)).toBeDefined();
-  });
-
-  it('should index per browser: parallel rows of one file stay distinct', () => {
+  it('keeps parallel rows of one file as distinct sessions', () => {
+    // (project, browser) copies share a path, so identity stays on the
+    // session record; the registry only keys by id and run token.
     const registry = new RunnerSessionRegistry();
     const chromium = registry.register({
       testFile: '/tests/a.test.ts',
@@ -67,23 +37,11 @@ describe('runner session registry', () => {
     });
 
     expect(chromium.id).not.toBe(firefox.id);
-    expect(
-      registry.getByTestFile('/tests/a.test.ts', {
-        projectName: 'project',
-        browserName: 'chromium',
-      })?.id,
-    ).toBe(chromium.id);
-    expect(
-      registry.getByTestFile('/tests/a.test.ts', {
-        projectName: 'project',
-        browserName: 'firefox',
-      })?.id,
-    ).toBe(firefox.id);
-    // A bare path is ambiguous under multi-browser runs, so it matches nothing.
-    expect(registry.getByTestFile('/tests/a.test.ts')).toBeUndefined();
+    expect(registry.getById(chromium.id)?.browserName).toBe('chromium');
+    expect(registry.getById(firefox.id)?.browserName).toBe('firefox');
   });
 
-  it('should filter by run token', () => {
+  it('deletes by id and filters by run token', () => {
     const registry = new RunnerSessionRegistry();
     registry.register({
       testFile: '/tests/a.test.ts',
@@ -100,5 +58,21 @@ describe('runner session registry', () => {
 
     expect(registry.listByRunToken(1)).toHaveLength(1);
     expect(registry.listByRunToken(2)).toHaveLength(1);
+    expect(registry.deleteById('runner-session-1')).toBe(true);
+    expect(registry.getById('runner-session-1')).toBeUndefined();
+    expect(registry.deleteById('runner-session-1')).toBe(false);
+  });
+
+  it('clears every session', () => {
+    const registry = new RunnerSessionRegistry();
+    registry.register({
+      testFile: '/tests/a.test.ts',
+      projectName: 'project',
+      runToken: 1,
+      mode: 'headless-page',
+    });
+    expect(registry.list()).toHaveLength(1);
+    registry.clear();
+    expect(registry.list()).toEqual([]);
   });
 });

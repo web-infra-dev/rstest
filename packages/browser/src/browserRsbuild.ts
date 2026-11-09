@@ -26,10 +26,12 @@ import {
   loadCoverageProvider,
   materializeVirtualSetupFiles,
   pluginMockRuntime,
+  projectRuntimeConfig,
   resolveProjectBuildCache,
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
+  serializableConfig,
   type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
 import openEditor from 'open-editor';
@@ -44,6 +46,7 @@ import { createDeferredPromise } from './hostPayloads';
 import {
   type BrowserDispatchHandler,
   type BrowserHostConfig,
+  type BrowserProjectRuntime,
   type BrowserViewport,
   RSTEST_BROWSER_CACHE_CLEANERS_KEY,
   type TestFileInfo,
@@ -259,15 +262,10 @@ export type BrowserRuntime = {
   // server below is shared and reachable from any origin.
   containerServer: BrowserProjectServer;
   /**
-   * The default launch (the first resolved spec) — the list/collect page and
-   * any default-browser caller use it; the schedulers pick their per-row launch
-   * from `browsers` by the row's `launchKey`.
-   */
-  browser: BrowserProviderBrowser;
-  browserLaunchOptions: BrowserLaunchSpec;
-  /**
-   * One Playwright browser per resolved launch key. Rows pick theirs by
-   * `launchKey`; two rows sharing a key run in the same browser process.
+   * One Playwright browser per resolved launch key; `launches` is the single
+   * source of truth. Rows pick their launch from the `browsers` map by
+   * `launchKey`; `launches[0]` is the default launch the list/collect page
+   * and any default-browser caller use.
    */
   launches: BrowserLaunch[];
   browsers: Map<string, BrowserProviderBrowser>;
@@ -827,6 +825,26 @@ export type BrowserLaunch = BrowserLaunchSpec & {
 };
 
 /**
+ * The one launch-spec derivation every `(project, browser)` launch plan and
+ * runtime row goes through (resolved entries), so row launch keys and launched
+ * keys cannot drift.
+ */
+const launchSpecForEntry = (
+  browser: { provider: BrowserProvider },
+  entry: {
+    browserName: BrowserName;
+    providerOptions: Record<string, unknown>;
+    headless: boolean;
+  },
+  headless: boolean,
+): BrowserLaunchSpec => ({
+  provider: browser.provider,
+  browserName: entry.browserName,
+  headless,
+  providerOptions: entry.providerOptions,
+});
+
+/**
  * Builds one launch spec per resolved `(project, browser)` row and dedupes by
  * launch key. `forceHeadless` (the `list` collection boot) wins over the
  * configured per-entry headless value.
@@ -843,12 +861,11 @@ export const resolveBrowserLaunchSpecs = (
   for (const project of browserProjects) {
     const { browser } = project.normalizedConfig;
     for (const entry of browser.browsers) {
-      const spec: BrowserLaunchSpec = {
-        provider: browser.provider,
-        browserName: entry.browserName,
-        headless: forceHeadless ?? entry.headless,
-        providerOptions: entry.providerOptions,
-      };
+      const spec = launchSpecForEntry(
+        browser,
+        entry,
+        forceHeadless ?? entry.headless,
+      );
       const key = browserLaunchKey(spec);
       if (!specs.has(key)) {
         specs.set(key, spec);
@@ -857,6 +874,53 @@ export const resolveBrowserLaunchSpecs = (
   }
   return [...specs.values()];
 };
+
+/**
+ * One `(project, browser)` row per configured browser entry — the shared run
+ * and list projection. The row's `runtimeConfig` is computed once per project
+ * and shared by its rows, and the `launchKey` comes from the same spec shape
+ * `resolveBrowserLaunchSpecs` feeds the provider, so a row can never name a
+ * launch key the runtime did not launch. Callers pass `forceHeadless` in list
+ * collection (the collect boot runs with the default launch) so rows there
+ * partition against launched reality.
+ */
+export const buildBrowserRuntimeRows = (
+  browserProjects: InternalProjectContext[],
+  options: {
+    /** The post-globalSetup change-set (run) or `RunOptions.env` (list). */
+    envOverlay?: Record<string, string | undefined>;
+    forceHeadless?: boolean;
+  } = {},
+): BrowserProjectRuntime[] =>
+  browserProjects.flatMap((project) => {
+    const { browser } = project.normalizedConfig;
+    const projectConfig = project.normalizedConfig;
+    // Per-project and browser-agnostic: every row of a project shares the
+    // projection so one Map entry backs all its rows.
+    const runtimeConfig = serializableConfig(
+      projectRuntimeConfig(project, {
+        envMode: 'static',
+        envOverlay: options.envOverlay,
+      }),
+    );
+    return browser.browsers.map((entry) => {
+      const headless = options.forceHeadless ?? entry.headless;
+      const spec = launchSpecForEntry(browser, entry, headless);
+      return {
+        name: project.name,
+        browserName: entry.browserName,
+        headless: spec.headless,
+        environmentName: project.environmentName,
+        projectRoot: normalize(project.rootPath),
+        hasSetupFiles: (projectConfig.setupFiles?.length ?? 0) > 0,
+        screenshotFailures: entry.screenshotFailures,
+        viewport: entry.viewport,
+        providerOptions: entry.providerOptions,
+        runtimeConfig,
+        launchKey: browserLaunchKey(spec),
+      };
+    });
+  });
 
 export const collectProjectEntries = async (
   context: InternalContext,
@@ -1202,7 +1266,6 @@ export const destroyBrowserRuntime = async (
     }
   };
   await Promise.allSettled([
-    closeLaunch(runtime.browser),
     ...runtime.launches.map((launch) => closeLaunch(launch.browser)),
     closeAllProjectServers(runtime.projectServers.values()),
   ]);
@@ -1273,7 +1336,9 @@ export const createBrowserRuntime = async ({
   // Launch specs resolve once: the fields that would change them
   // (`browser.browsers`/`provider`/`headless`/`port`) are forbidden to
   // `modifyRstestConfig`, so a first-cycle hook can never add launches.
-  const defaultLaunchSpec = resolveBrowserLaunchSpecs(browserProjects)[0]!;
+  // One resolution feeds both the launch list and every default-launch
+  // reader (`launches[0]`); `forceHeadless` applies in list mode, matching
+  // what actually boots.
   const launchSpecs = resolveBrowserLaunchSpecs(browserProjects, forceHeadless);
   let projectEntries = initialProjectEntries;
   // Created with the runtime so the per-project watch plugins and the
@@ -1299,8 +1364,6 @@ export const createBrowserRuntime = async ({
         port: 0,
         manifestPath: '',
       },
-      browser: undefined as unknown as BrowserProviderBrowser,
-      browserLaunchOptions: defaultLaunchSpec,
       launches: [],
       browsers: new Map(),
       wsPort: 0,
@@ -2098,38 +2161,51 @@ export const createBrowserRuntime = async ({
   try {
     // One launch per unique launch-key row (provider, browserName, headless,
     // launch options); rows sharing a key reuse the same browser process.
-    for (const spec of launchSpecs) {
-      const launchOptions = spec.providerOptions.launch;
-      const channel =
-        launchOptions && typeof launchOptions === 'object'
-          ? String((launchOptions as Record<string, unknown>).channel ?? '')
-          : '';
-      logger.debug(
-        `[Browser] launching ${spec.provider}/${spec.browserName}` +
-          (spec.headless ? ' (headless)' : ' (headed)') +
-          (channel ? ` channel=${channel}` : ''),
-      );
-      const key = browserLaunchKey(spec);
-      const providerImplementation = getBrowserProviderImplementation(
-        spec.provider,
-      );
-      const runtime = await providerImplementation.launchRuntime({
-        browserName: spec.browserName,
-        headless: spec.headless,
-        providerOptions: spec.providerOptions,
-      });
-      launched.push({
-        ...spec,
-        key,
-        browser: runtime.browser,
-      });
+    // Launches are independent processes, so they boot concurrently next to
+    // the per-project builds; a failure closes the ones that landed.
+    const settledLaunches = await Promise.allSettled(
+      launchSpecs.map(async (spec) => {
+        const launchOptions = spec.providerOptions.launch;
+        const channel =
+          launchOptions && typeof launchOptions === 'object'
+            ? String((launchOptions as Record<string, unknown>).channel ?? '')
+            : '';
+        logger.debug(
+          `[Browser] launching ${spec.provider}/${spec.browserName}` +
+            (spec.headless ? ' (headless)' : ' (headed)') +
+            (channel ? ` channel=${channel}` : ''),
+        );
+        const key = browserLaunchKey(spec);
+        const providerImplementation = getBrowserProviderImplementation(
+          spec.provider,
+        );
+        const runtimeLaunch = await providerImplementation.launchRuntime({
+          browserName: spec.browserName,
+          headless: spec.headless,
+          providerOptions: spec.providerOptions,
+        });
+        return {
+          ...spec,
+          key,
+          browser: runtimeLaunch.browser,
+        } satisfies BrowserLaunch;
+      }),
+    );
+    for (const settled of settledLaunches) {
+      if (settled.status === 'fulfilled') {
+        launched.push(settled.value);
+      }
+    }
+    const launchFailure = settledLaunches.find(
+      (settled) => settled.status === 'rejected',
+    );
+    if (launchFailure && launchFailure.status === 'rejected') {
+      throw launchFailure.reason;
     }
     await waitForBuildsAcrossLaunches();
     return {
       projectServers,
       containerServer,
-      browser: launched[0]!.browser,
-      browserLaunchOptions: defaultLaunchSpec,
       launches: launched,
       browsers: new Map(launched.map((launch) => [launch.key, launch.browser])),
       wsPort,

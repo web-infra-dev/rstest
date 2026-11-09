@@ -191,9 +191,53 @@ const statusColorfulStr: {
  * Appends the owning browser of a browser-mode result to a reporter title, so
  * the same project file run by several browsers produces distinguishable
  * entries everywhere reporters name a file or task by its relative path.
+ * `show` carries the run-level gate (see `shouldShowBrowserTags`): single-
+ * browser output must stay byte-identical to the pre-multi-browser format.
  */
-export const formatBrowserSuffix = (browserName: string | undefined): string =>
-  browserName ? ` [${browserName}]` : '';
+export const formatBrowserSuffix = (
+  browserName: string | undefined,
+  show: boolean,
+): string => (show && browserName ? ` [${browserName}]` : '');
+
+/**
+ * The one gate every browser-aware rendering uses: an enabled project that
+ * runs two or more browsers of the same file in one run produces ambiguous
+ * titles, and only then does every browser tag earn its place. Both the
+ * reporter factories (project configs) and the list command (collected rows)
+ * feed rows of this shape, so both share this predicate instead of their own
+ * counters.
+ */
+export const shouldShowBrowserTags = (
+  rows: readonly { project: string; browserName: string | undefined }[],
+): boolean => {
+  const browsersByProject = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.browserName === undefined) {
+      continue;
+    }
+    let browsers = browsersByProject.get(row.project);
+    if (!browsers) {
+      browsers = new Set();
+      browsersByProject.set(row.project, browsers);
+    }
+    browsers.add(row.browserName);
+  }
+  return [...browsersByProject.values()].some((browsers) => browsers.size > 1);
+};
+
+/**
+ * The file label the failure/test-list titles print: relative path, the
+ * browser tag when shown, and the task's name when it has one.
+ */
+export const formatFileTitle = (
+  relativePath: string,
+  browserName: string | undefined,
+  fullName: string,
+  showBrowserName: boolean,
+): string =>
+  fullName
+    ? `${relativePath}${formatBrowserSuffix(browserName, showBrowserName)} :: ${fullName}`
+    : `${relativePath}${formatBrowserSuffix(browserName, showBrowserName)}`;
 
 export const logCase = (
   result: TestResult,
@@ -364,9 +408,7 @@ export const logFileTitle = (
     title += ` ${statusColor[test.status](`[${test.project}]`)}`;
   }
 
-  if (showBrowserName && test.browserName) {
-    title += ` ${color.gray(`[${test.browserName}]`)}`;
-  }
+  title += color.gray(formatBrowserSuffix(test.browserName, showBrowserName));
 
   title += ` ${prettyTestPath(relativePath)}`;
 

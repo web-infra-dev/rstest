@@ -5,6 +5,7 @@ import {
   logger,
   type RuntimeConfig,
 } from '@rstest/core/internal/browser';
+import type { BrowserName } from './protocol';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
 type BrowserProjectConfig =
@@ -127,6 +128,28 @@ const validateViewport = (viewport: unknown): void => {
   );
 };
 
+type BrowserConfigRow = {
+  projectName: string;
+  browserName: BrowserName;
+  headed: boolean;
+};
+
+/**
+ * One `(project, browser)` row per configured browser of every browser
+ * project, computed once per validation pass. The headed, watch-hybrid, and
+ * coverage-v8 checks all read the same selection, so they share it.
+ */
+const browserConfigRows = (context: InternalContext): BrowserConfigRow[] =>
+  context.projects.flatMap((project) =>
+    project.normalizedConfig.browser.enabled
+      ? project.normalizedConfig.browser.browsers.map((entry) => ({
+          projectName: project.name,
+          browserName: entry.browserName,
+          headed: entry.headless === false,
+        }))
+      : [],
+  );
+
 /**
  * Warn (or hard-error) on node-only config that is silently ignored under
  * `browser.enabled`. Prevents the #1389 class of silent no-ops. The per-key
@@ -140,7 +163,10 @@ const validateViewport = (viewport: unknown): void => {
  * runs — a mixed repo legitimately sets them for its node projects and must not
  * get unsilenceable noise on a correct configuration.
  */
-const reportUnsupportedBrowserOptions = (context: InternalContext): void => {
+const reportUnsupportedBrowserOptions = (
+  context: InternalContext,
+  browserRows: BrowserConfigRow[],
+): void => {
   const browserProjects = context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
@@ -160,16 +186,11 @@ const reportUnsupportedBrowserOptions = (context: InternalContext): void => {
     coverage.enabled &&
     coverage.provider === 'v8'
   ) {
-    const unsupported = browserProjects.flatMap((project) =>
-      project.normalizedConfig.browser.browsers
-        .filter((entry) => entry.browserName !== 'chromium')
-        .map((entry) => ({
-          projectName: project.name,
-          browserName: entry.browserName,
-        })),
+    const unsupported = browserRows.find(
+      (row) => row.browserName !== 'chromium',
     );
-    if (unsupported.length > 0) {
-      const { projectName, browserName } = unsupported[0]!;
+    if (unsupported) {
+      const { projectName, browserName } = unsupported;
       // Both screen modes are rejected uniformly (Vitest also hard-errors
       // unless the selected browsers are all chromium): v8 cannot collect in
       // non-V8 engines, and a partially-chromium run would silently lose the
@@ -287,15 +308,7 @@ export const validateBrowserConfig = (context: InternalContext): void => {
 
   // Headed debugging works through one container window today, so at most one
   // (project, browser) pair may run headed per run; the rest run headless.
-  const browserRows = context.projects.flatMap((project) =>
-    project.normalizedConfig.browser.enabled
-      ? project.normalizedConfig.browser.browsers.map((entry) => ({
-          projectName: project.name,
-          browserName: entry.browserName,
-          headed: entry.headless === false,
-        }))
-      : [],
-  );
+  const browserRows = browserConfigRows(context);
   const headedPairs = browserRows.filter((row) => row.headed);
   if (headedPairs.length > 1) {
     const listed = headedPairs
@@ -325,5 +338,5 @@ export const validateBrowserConfig = (context: InternalContext): void => {
     );
   }
 
-  reportUnsupportedBrowserOptions(context);
+  reportUnsupportedBrowserOptions(context, browserRows);
 };

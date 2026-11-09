@@ -8,6 +8,7 @@ import {
   createHeadedScheduler,
 } from '../src/headedScheduler';
 import type { FatalPayload } from '../src/hostPayloads';
+import type { BrowserProjectRuntime } from '../src/protocol';
 import { DISPATCH_NAMESPACE_RUNNER } from '../src/protocol';
 import type {
   BrowserProviderContext,
@@ -129,8 +130,8 @@ describe('createHeadedScheduler', () => {
     const fatalErrorRef: { current: Error | null } = { current: null };
     const snapshotManager = new SnapshotManager({ updateSnapshot: 'none' });
     const runtime = {
-      browser: {},
-      browserLaunchOptions: { providerOptions: {} },
+      launches: [{ key: 'headed-launch', browser: {}, providerOptions: {} }],
+      browsers: new Map([['headed-launch', {}]]),
       containerContext: context,
       containerPage: page,
       containerServer: { port: 3000 },
@@ -168,6 +169,18 @@ describe('createHeadedScheduler', () => {
         snapshotManager,
       },
       runtime,
+      headedRow: {
+        name: 'browser',
+        browserName: 'chromium',
+        headless: false,
+        environmentName: 'browser',
+        projectRoot: '/project',
+        hasSetupFiles: false,
+        screenshotFailures: false,
+        providerOptions: {},
+        launchKey: 'headed-launch',
+        runtimeConfig: {} as BrowserProjectRuntime['runtimeConfig'],
+      },
       allTestFiles: [testFile],
       hostOptions: {
         rootPath: '/project',

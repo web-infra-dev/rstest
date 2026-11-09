@@ -8,7 +8,7 @@ import {
   resolve,
   sep,
 } from 'pathe';
-import type { RuntimeConfig, TestResult } from '../types';
+import type { BrowserName, RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
 import { wrapRegex } from './regexpWireFormat';
@@ -41,7 +41,7 @@ export const normalizeExactPathMatch = (filePath: string): string => {
 export function generateFilePathHash(
   project: string,
   testPath: string,
-  browserName?: string,
+  browserName?: BrowserName,
 ): string {
   const str =
     browserName === undefined
@@ -208,7 +208,7 @@ export const getTaskNameWithPrefix = (
 export const getFileTaskId = (file: {
   project: string;
   testPath: string;
-  browserName?: string;
+  browserName?: BrowserName;
 }): string =>
   `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 

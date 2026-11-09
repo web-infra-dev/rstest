@@ -1,4 +1,4 @@
-import type { BrowserDispatchRequest } from '../protocol';
+import type { BrowserDispatchRequest, BrowserName } from '../protocol';
 import { DISPATCH_METHOD_RPC, DISPATCH_NAMESPACE_BROWSER } from '../protocol';
 import type { BrowserRpcRequest } from '../rpcProtocol';
 import {
@@ -39,7 +39,7 @@ const getCurrentProjectName = (): string => {
   return projectName;
 };
 
-const getCurrentBrowserName = (): string | undefined =>
+const getCurrentBrowserName = (): BrowserName | undefined =>
   window.__RSTEST_BROWSER_OPTIONS__?.browserName;
 
 const createBrowserDispatchRequest = (

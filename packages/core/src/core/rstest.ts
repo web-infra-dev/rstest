@@ -12,7 +12,7 @@ import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
-import { reporterFileKey } from '../reporter/utils';
+import { reporterFileKey, shouldShowBrowserTags } from '../reporter/utils';
 import type {
   BuiltInReporterNames,
   InternalContext,
@@ -398,10 +398,15 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
   // File titles must say which browser produced a result only when two
   // browsers can run the same project file concurrently; single-browser runs
   // never have an ambiguous file title, so the tag would just be noise.
-  const showBrowserName = context.projects.some(
-    (project) =>
-      project.normalizedConfig.browser.enabled &&
-      project.normalizedConfig.browser.browsers.length > 1,
+  const showBrowserName = shouldShowBrowserTags(
+    context.projects.flatMap((project) =>
+      project.normalizedConfig.browser.enabled
+        ? project.normalizedConfig.browser.browsers.map((browser) => ({
+            project: project.name,
+            browserName: browser.browserName,
+          }))
+        : [],
+    ),
   );
   let resolver:
     | InstanceType<

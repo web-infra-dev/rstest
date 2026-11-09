@@ -187,7 +187,13 @@ export type ProjectConfig = Omit<
  * - `firefox` - Mozilla Firefox
  * - `webkit` - Safari
  */
-export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+export const BROWSER_NAMES = ['chromium', 'firefox', 'webkit'] as const;
+
+/**
+ * Canonical browser-engine name echoed on every browser-mode payload. Derived
+ * from `BROWSER_NAMES` so the diagnostic list cannot drift from the type.
+ */
+export type BrowserName = (typeof BROWSER_NAMES)[number];
 
 /**
  * Device presets aligned with Chrome DevTools device toolbar.

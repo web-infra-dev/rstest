@@ -79,14 +79,17 @@ const normalizeBooleanLikeCliValue = (
  * Parses the browser names handed in through CLI/API browser options: values
  * may be comma-separated and the flags may be repeated.
  */
-const toCliBrowserNames = (values: string | string[]): BrowserName[] => {
+const toCliBrowserNames = (
+  values: string | string[] | undefined,
+  source: '`--browser.browsers`' | '`--browser.name`',
+): BrowserName[] => {
   const names = castArray(values).flatMap((value) => String(value).split(','));
   const trimmed = names.map((name) => name.trim()).filter(Boolean);
   if (trimmed.length === 0) {
-    throw new Error('`--browser.browsers` needs at least one browser name.');
+    throw new Error(`${source} needs at least one browser name.`);
   }
   for (const name of trimmed) {
-    assertValidBrowserName(name, '`--browser.browsers`');
+    assertValidBrowserName(name, source);
   }
   return trimmed as BrowserName[];
 };
@@ -295,28 +298,26 @@ export function mergeWithCLIOptions(
       if (browserEnabled !== undefined) {
         config.browser.enabled = browserEnabled;
       }
-      if (
-        options.browser.browsers !== undefined ||
-        options.browser.name !== undefined
-      ) {
-        let names: BrowserName[];
-        if (options.browser.browsers !== undefined) {
-          if (options.browser.name !== undefined) {
-            throw new Error(
-              'Use `--browser.browsers` (or `RunOptions.browser.browsers`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
-            );
+      const cliBrowserNames = options.browser.browsers;
+      const cliBrowserName = options.browser.name;
+      if (cliBrowserNames !== undefined || cliBrowserName !== undefined) {
+        const names: BrowserName[] = (() => {
+          if (cliBrowserNames !== undefined) {
+            if (cliBrowserName !== undefined) {
+              throw new Error(
+                'Use `--browser.browsers` (or `RunOptions.browser.browsers`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
+              );
+            }
+            return toCliBrowserNames(cliBrowserNames, '`--browser.browsers`');
           }
-          names = toCliBrowserNames(options.browser.browsers);
-        } else {
           if (!deprecatedBrowserNameOptionWarned) {
             deprecatedBrowserNameOptionWarned = true;
             logger.warn(
               '`--browser.name` (and `RunOptions.browser.name`) is deprecated and will be removed in 1.0: use `--browser.browsers` / `browser.browsers` instead.',
             );
           }
-          names = [String(options.browser.name).trim()] as BrowserName[];
-          assertValidBrowserName(names[0]!, '`--browser.name`');
-        }
+          return toCliBrowserNames(cliBrowserName, '`--browser.name`');
+        })();
         // CLI selection overrides/filters this layer's configured browsers;
         // the deprecated per-project field is absorbed (see selectCliBrowserEntries).
         config.browser.browsers = selectCliBrowserEntries(

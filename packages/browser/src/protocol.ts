@@ -1,4 +1,11 @@
-import type { BrowserViewport } from '@rstest/core/internal/browser';
+import type {
+  BrowserViewport,
+  BrowserName,
+} from '@rstest/core/internal/browser';
+export type {
+  BrowserName,
+  BrowserViewport,
+} from '@rstest/core/internal/browser';
 import type {
   BrowserRuntimeConfig,
   RawTestFileResult,
@@ -33,12 +40,22 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 
 export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
-// `BrowserViewport` is a core config type (`@rstest/core` owns the canonical
-// definition used by `NormalizedBrowserModeConfig`). Re-export it so the host
-// assigns the SAME type across the seam instead of a hand-copied duplicate.
-export type { BrowserViewport };
+/**
+ * Browser-side copy of the core `getFileTaskId` grammar. `helper.ts` (the
+ * canonical source) pulls in Node-only logger/agent modules, so the client
+ * cannot import it; this package keeps exactly one literal copy here and the
+ * host/client/shared surfaces re-export it. Changing one changes both within
+ * the same release (browser loader enforces the core version match).
+ */
+export const getFileTaskId = (file: {
+  project: string;
+  testPath: string;
+  browserName?: BrowserName;
+}): string =>
+  `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 
-export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+// `BrowserViewport` / `BrowserName` are core config types (`@rstest/core`
+// owns the canonical definitions used by `NormalizedBrowserModeConfig`).
 
 /**
  * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the
@@ -50,6 +67,12 @@ export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 export type BrowserProjectRuntime = {
   name: string;
   browserName: BrowserName;
+  /**
+   * The resolved launch's headless value (entry config, with the list
+   * collect's `forceHeadless` applied), so run/list partitioning and the
+   * container's headed-only row set derive from the row itself.
+   */
+  headless: boolean;
   environmentName: string;
   projectRoot: string;
   /** Setup modules are re-evaluated per file, so they cannot share a worker page. */

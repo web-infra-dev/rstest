@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { relative } from 'pathe';
 import type { ListedTest } from '../api/types';
 import type { ListCommandCollectOptions, Location } from '../types';
+import { formatBrowserSuffix } from '../reporter/utils';
 import { color, logger, prettyTestPath } from '../utils';
 
 export type ListCommandOptions = ListCommandCollectOptions & {
@@ -198,7 +199,7 @@ export async function renderListTests(
       if (test.location && printLocation) {
         shortPath = `${shortPath}:${test.location.line}:${test.location.column}`;
       }
-      const browser = test.browser ? ` ${color.gray(`[${test.browser}]`)}` : '';
+      const browser = color.gray(formatBrowserSuffix(test.browser, true));
       logger.log(
         test.name
           ? `${color.dim(`${shortPath}${browser} > `)}${test.name}`

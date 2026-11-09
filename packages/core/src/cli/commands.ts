@@ -10,6 +10,7 @@ import {
   isTTY,
 } from '../utils';
 import { flushOutputStreams, logger } from '../utils/logger';
+import { shouldShowBrowserTags } from '../reporter/utils';
 import { isRelatedRun } from '../core/execution/buildRunner';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { setHostExitCode } from './exitCode';
@@ -849,14 +850,12 @@ export function createCli(): CAC {
             ).length > 1,
           // Browser rows only need a tag when more than one browser row is
           // listed; single-browser rows never have ambiguous file titles.
-          showBrowser:
-            new Set(
-              result.flatMap((entry) =>
-                entry.browserName === undefined
-                  ? []
-                  : [`${entry.project}\0${entry.browserName}`],
-              ),
-            ).size > 1,
+          showBrowser: shouldShowBrowserTags(
+            result.map((entry) => ({
+              project: entry.project,
+              browserName: entry.browserName,
+            })),
+          ),
           filesOnly,
           json,
           includeSuites,

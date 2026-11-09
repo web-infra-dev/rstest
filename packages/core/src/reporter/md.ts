@@ -102,7 +102,7 @@ import {
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
-  formatBrowserSuffix,
+  formatFileTitle,
   getErrorType,
   PerFileEventBuffer,
   pushFencedBlock,
@@ -327,15 +327,15 @@ const formatFailureTitle = (
 } => {
   const relativePath = failure.test.relativeTestPath;
   const fullName = failure.test.fullName;
-  const browserSuffix = showBrowserName
-    ? formatBrowserSuffix(failure.test.browserName)
-    : '';
   return {
     relativePath,
     fullName,
-    title: fullName
-      ? `${relativePath}${browserSuffix} :: ${fullName}`
-      : `${relativePath}${browserSuffix}`,
+    title: formatFileTitle(
+      relativePath,
+      failure.test.browserName,
+      fullName,
+      showBrowserName,
+    ),
     formattedId: String(index + 1).padStart(2, '0'),
   };
 };
@@ -570,15 +570,9 @@ export class MdReporter implements Reporter {
     const displayed = truncated ? tests.slice(0, limit) : tests;
 
     for (const test of displayed) {
-      const relativePath = test.relativeTestPath;
-      const fullName = test.fullName;
-      const browserSuffix = this.options.showBrowserName
-        ? formatBrowserSuffix(test.browserName)
-        : '';
-      const title = fullName
-        ? `${relativePath}${browserSuffix} :: ${fullName}`
-        : `${relativePath}${browserSuffix}`;
-      lines.push(`- ${title}`);
+      lines.push(
+        `- ${formatFileTitle(test.relativeTestPath, test.browserName, test.fullName, this.options.showBrowserName)}`,
+      );
     }
 
     if (truncated) {

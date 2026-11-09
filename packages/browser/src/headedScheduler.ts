@@ -8,6 +8,7 @@ import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   logger,
 } from '@rstest/core/internal/browser';
+import type { BrowserProjectRuntime } from './protocol';
 import { normalize, relative } from 'pathe';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getTestPathKey } from './pathUtils';
@@ -54,13 +55,10 @@ type HeadedSchedulerDeps = {
    * Single headed pair per run (validated): the row whose launch is headed.
    * In a pure-headed run this is also the runtime's default launch; in a
    * hybrid run the default launch may belong to a headless row, so the row
-   * picks the container's browser explicitly.
+   * picks the container's browser explicitly. The scheduler owns the
+   * container's `projects` slice, so the full row is required.
    */
-  headedRow?: {
-    browserName: string;
-    launchKey: string;
-    providerOptions: Record<string, unknown>;
-  };
+  headedRow: BrowserProjectRuntime;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
   v8Coverage?: BrowserV8CoverageRuntime;
@@ -81,7 +79,10 @@ type HeadedSchedulerDeps = {
     | 'setAbort'
     | 'queueInvalidationAfter'
   >;
-  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
+  setDispatchPageResolver: (lanes: {
+    /** Run-identity resolution: the lane another lane falls back to. */
+    headed?: DispatchPageResolver;
+  }) => void;
   createWatchSession: (
     execute: (
       testPaths: string[],
@@ -157,19 +158,24 @@ export const createHeadedScheduler = async ({
 }: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
   const { watchState, wss } = runtime;
   // The container window belongs to the headed pair's launch: headless rows
-  // reuse a different browser process entirely (hybrid runs).
-  const headedLaunch = headedRow
-    ? runtime.browsers.get(headedRow.launchKey)
-    : undefined;
-  if (headedRow && !headedLaunch) {
+  // reuse a different browser process entirely (hybrid runs). The scheduler
+  // constructor's caller only builds one with a headed row, so the row and
+  // its provider options are required.
+  const headedLaunch = runtime.browsers.get(headedRow.launchKey);
+  if (!headedLaunch) {
     throw new Error(
       `No launched browser for the headed pair (${JSON.stringify(headedRow.browserName)}, launch key ${headedRow.launchKey}).`,
     );
   }
-  const browser = headedLaunch ?? runtime.browser;
-  const browserLaunchOptions = headedRow
-    ? { providerOptions: headedRow.providerOptions }
-    : runtime.browserLaunchOptions;
+  const browser = headedLaunch;
+  const browserLaunchOptions = { providerOptions: headedRow.providerOptions };
+  // The container window runs only this headed pair's row — its scheduler
+  // owns the `projects` slice, so the base host config needs no headed
+  // variant.
+  const headedHostOptions: BrowserHostConfig = {
+    ...hostOptions,
+    projects: [headedRow],
+  };
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
   let currentTestFiles = allTestFiles;
   if (isWatchMode) {
@@ -312,10 +318,12 @@ export const createHeadedScheduler = async ({
     }
   }
 
-  setDispatchPageResolver((_target, runId) => ({
-    containerPage,
-    isRunCurrent: runId ? () => runs.isCurrent(runId) : undefined,
-  }));
+  setDispatchPageResolver({
+    headed: (_target, runId) => ({
+      containerPage,
+      isRunCurrent: runId ? () => runs.isCurrent(runId) : undefined,
+    }),
+  });
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createSerialTaskQueue();
@@ -735,7 +743,7 @@ export const createHeadedScheduler = async ({
       updateSnapshot: SnapshotUpdateState,
     ): Promise<void> => {
       const refreshedHostOptions: BrowserHostConfig = {
-        ...hostOptions,
+        ...headedHostOptions,
         snapshot: {
           updateSnapshot,
         },

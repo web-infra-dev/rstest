@@ -1,5 +1,6 @@
 export type * from './api';
 export type * from './browser';
+export { BROWSER_NAMES } from './config';
 export type * from './config';
 export type * from './core';
 export type * from './coverage';

@@ -6,6 +6,7 @@ import type {
   AfterEachListener,
   BeforeAllListener,
   BeforeEachListener,
+  BrowserName,
   DescribeAPI,
   DescribeEachFn,
   DescribeForFn,
@@ -115,7 +116,7 @@ export class RunnerRuntime {
     runtimeConfig: RuntimeConfig;
     project: string;
     /** Owning browser of a browser-mode page; folds into every derived id. */
-    browserName?: string;
+    browserName?: BrowserName;
   }) {
     this.project = project;
     this.testPath = testPath;

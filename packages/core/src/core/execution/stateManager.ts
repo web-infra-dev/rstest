@@ -5,20 +5,17 @@ import type {
   TestFileResult,
   TestResult,
 } from '../../types';
+import { reporterFileKey } from '../../reporter/utils';
 
 /**
  * One (project, browser, path) triple per module state: a test path alone is
  * ambiguous once another project (node pool) or another browser (browser
  * mode) runs the same file in the same cycle, and each run of the file keeps
  * its own running/case state here so reporters never collapse them. `browser`
- * is empty for the node pool.
+ * is empty for the node pool. The keying itself is `reporterFileKey`: one
+ * helper for every process-lifetime `(project, browser, path)` map, so a
+ * getter on the reporter side cannot silently lose the browser dimension.
  */
-const fileStateKey = (file: {
-  project: string;
-  browserName?: string;
-  testPath: string;
-}): string =>
-  `${file.project}\u0000${file.browserName ?? ''}\u0000${file.testPath}`;
 
 export class TestStateManager {
   public runningModules: ReturnType<RstestTestState['getRunningModules']> =
@@ -40,7 +37,7 @@ export class TestStateManager {
         results: TestResult[];
       }
     | undefined {
-    return this.runningModules.get(fileStateKey(file));
+    return this.runningModules.get(reporterFileKey(file));
   }
 
   onTestFileStart({
@@ -52,7 +49,7 @@ export class TestStateManager {
     TestFileInfo,
     'project' | 'browserName' | 'testPath' | 'relativeTestPath'
   >): void {
-    const key = fileStateKey({ project, browserName, testPath });
+    const key = reporterFileKey({ project, browserName, testPath });
     const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
@@ -67,7 +64,7 @@ export class TestStateManager {
   }
 
   onTestCaseResult(result: TestResult): void {
-    const key = fileStateKey(result);
+    const key = reporterFileKey(result);
     const currentModule = this.runningModules.get(key);
     if (!currentModule) {
       this.runningModules.set(key, {
@@ -90,7 +87,7 @@ export class TestStateManager {
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    const key = fileStateKey(test);
+    const key = reporterFileKey(test);
     const currentModule = this.runningModules.get(key);
     if (!currentModule) {
       this.runningModules.set(key, {
@@ -114,7 +111,7 @@ export class TestStateManager {
   }
 
   onTestFileResult(test: TestFileResult): void {
-    const key = fileStateKey(test);
+    const key = reporterFileKey(test);
     const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(

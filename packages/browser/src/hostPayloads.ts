@@ -4,7 +4,10 @@ import type {
   RawTestResult,
   RawTestSuiteInfo,
 } from '@rstest/core/internal/browser';
-import type { BrowserLogPayload, BrowserName } from './protocol';
+import type { BrowserName, BrowserLogPayload } from './protocol';
+import { getFileTaskId } from './protocol';
+
+export { getFileTaskId };
 
 /** Payload for test file start event */
 export type TestFileStartPayload = {
@@ -32,14 +35,6 @@ export type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: unknown) => void;
-};
-
-export const getFileTaskId = (file: {
-  project: string;
-  testPath: string;
-  browserName?: string;
-}): string => {
-  return `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 };
 
 export const toError = (error: unknown): Error => {

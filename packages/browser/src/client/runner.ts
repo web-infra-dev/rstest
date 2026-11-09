@@ -44,6 +44,7 @@ import type {
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_FILE_CLEANUP,
+  getFileTaskId,
   RSTEST_BROWSER_CACHE_CLEANERS_KEY,
   RSTEST_CONFIG_MESSAGE_TYPE,
 } from '../protocol';
@@ -232,14 +233,6 @@ const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
       }
     }
   }
-};
-
-const getFileTaskId = (file: {
-  project: string;
-  testPath: string;
-  browserName?: string;
-}): string => {
-  return `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 };
 
 /**

@@ -156,7 +156,7 @@ export class JUnitReporter implements Reporter {
       // The browser suffix keeps suites of the same file distinct when several
       // browsers of one project run it in one report; single-browser runs
       // stay byte-identical to the pre-multi-browser output.
-      name: `${fileResult.relativeTestPath}${this.showBrowserName ? formatBrowserSuffix(fileResult.browserName) : ''}`,
+      name: `${fileResult.relativeTestPath}${formatBrowserSuffix(fileResult.browserName, this.showBrowserName)}`,
       tests: fileResult.summary.total,
       failures: fileResult.summary.failed,
       errors,

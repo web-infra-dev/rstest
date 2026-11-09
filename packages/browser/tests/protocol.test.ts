@@ -32,6 +32,7 @@ describe('browser protocol types', () => {
       const runtime: BrowserProjectRuntime = {
         name: 'default',
         browserName: 'chromium',
+        headless: true,
         environmentName: 'browser',
         projectRoot: '/root',
         hasSetupFiles: false,
