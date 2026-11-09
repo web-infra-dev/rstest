@@ -223,14 +223,12 @@ export default defineConfig({
 Each entry is either a browser name (a plain entry inheriting every project-level default) or a `BrowserEntry` object that overrides fields per browser:
 
 ```ts title="rstest.config.ts"
-import type { BrowserEntry } from '@rstest/core';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
-    browser: 'chromium',
     providerOptions: {
       launch: { headless: true },
       context: { locale: 'en-US' },
@@ -244,7 +242,7 @@ export default defineConfig({
           launch: { channel: 'chrome' },
         },
       },
-    ] satisfies BrowserEntry[],
+    ],
   },
 });
 ```

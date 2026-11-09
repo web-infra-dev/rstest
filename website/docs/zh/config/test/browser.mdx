@@ -223,14 +223,12 @@ export default defineConfig({
 每一项既可以是浏览器名（plain entry，继承所有项目级默认值），也可以是按浏览器覆盖字段的 `BrowserEntry` 对象：
 
 ```ts title="rstest.config.ts"
-import type { BrowserEntry } from '@rstest/core';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
-    browser: 'chromium',
     providerOptions: {
       launch: { headless: true },
       context: { locale: 'en-US' },
@@ -244,7 +242,7 @@ export default defineConfig({
           launch: { channel: 'chrome' },
         },
       },
-    ] satisfies BrowserEntry[],
+    ],
   },
 });
 ```
