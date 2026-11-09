@@ -679,6 +679,13 @@ describe('programmatic createRstest', () => {
             : { total: 1, failed: 1 },
         testMessages:
           filter === 'firefox' ? [] : [expect.stringContaining('800')],
+        fileResults: [
+          {
+            browserName: filter,
+            status: filter === 'firefox' ? 'passed' : 'failed',
+            message: filter === 'firefox' ? '' : expect.stringContaining('800'),
+          },
+        ],
       });
     },
   );
@@ -701,11 +708,33 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     expect(execution.exitCode).toBe(0);
-    // Unfiltered runs every configured browser: the chromium entry copy can
-    // never pass the 900-wide assertion, so the cycle fails. Per-test counts
-    // here are last-writer-wins across the two browser copies (reporter
-    // attribution per browser is still pending), so only the cycle status is
-    // asserted — it proves both browsers executed the file.
+    // Unfiltered runs every configured browser: one file per browser, results
+    // attributed per browser (chromium's 800-wide entry cannot pass the
+    // 900-wide assertion, firefox's 900-wide entry does).
     expect(result.status).toBe('failed');
+    expect(result.tests).toEqual({
+      total: 2,
+      passed: 1,
+      failed: 1,
+      skipped: 0,
+      todo: 0,
+      flaky: 0,
+    });
+    expect(result.files).toEqual({ total: 2, failed: 1 });
+    expect(result.fileResults).toEqual(
+      expect.arrayContaining([
+        {
+          browserName: 'chromium',
+          status: 'failed',
+          message: expect.stringContaining('800'),
+        },
+        {
+          browserName: 'firefox',
+          status: 'passed',
+          message: '',
+        },
+      ]),
+    );
+    expect(result.fileResults).toHaveLength(2);
   });
 });

@@ -74,6 +74,18 @@ it('runs in the selected browser', () => {
           ),
         ),
       ),
+      // Per-file browser attribution: an unfiltered run runs one row per
+      // (project, browser) with its own results, so each row says who ran it.
+      fileResults: result.results.map((fileResult) => ({
+        browserName: fileResult.browserName,
+        status: fileResult.status,
+        message: String(
+          (fileResult.results ?? [])
+            .flatMap((testResults) => testResults.errors ?? [])
+            .map((error) => String((error.detail ?? error)?.message ?? error))
+            .join(' | '),
+        ),
+      })),
     })}__END__`,
   );
 } finally {

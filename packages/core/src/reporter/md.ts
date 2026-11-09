@@ -165,6 +165,7 @@ type ResolvedOptions = {
   candidateFiles: CandidateFilesResolved;
   console: ConsoleResolved;
   errors: ErrorsResolved;
+  showBrowserName: boolean;
 };
 
 const DEFAULT_TEST_LIST_MAX_ITEMS = 50;
@@ -205,6 +206,7 @@ const defaultOptions: ResolvedOptions = {
   errors: {
     unhandled: true,
   },
+  showBrowserName: false,
 };
 
 const presetOptions: Record<
@@ -309,12 +311,14 @@ export const resolveOptions = (
     errors: resolveToggleOption(userOptions.errors, defaultOptions.errors, {
       unhandled: false,
     }),
+    showBrowserName: userOptions.showBrowserName ?? false,
   };
 };
 
 const formatFailureTitle = (
   failure: FailureItem,
   index: number,
+  showBrowserName: boolean,
 ): {
   relativePath: string;
   fullName: string;
@@ -323,12 +327,15 @@ const formatFailureTitle = (
 } => {
   const relativePath = failure.test.relativeTestPath;
   const fullName = failure.test.fullName;
+  const browserSuffix = showBrowserName
+    ? formatBrowserSuffix(failure.test.browserName)
+    : '';
   return {
     relativePath,
     fullName,
     title: fullName
-      ? `${relativePath}${formatBrowserSuffix(failure.test.browserName)} :: ${fullName}`
-      : `${relativePath}${formatBrowserSuffix(failure.test.browserName)}`,
+      ? `${relativePath}${browserSuffix} :: ${fullName}`
+      : `${relativePath}${browserSuffix}`,
     formattedId: String(index + 1).padStart(2, '0'),
   };
 };
@@ -565,9 +572,12 @@ export class MdReporter implements Reporter {
     for (const test of displayed) {
       const relativePath = test.relativeTestPath;
       const fullName = test.fullName;
+      const browserSuffix = this.options.showBrowserName
+        ? formatBrowserSuffix(test.browserName)
+        : '';
       const title = fullName
-        ? `${relativePath}${formatBrowserSuffix(test.browserName)} :: ${fullName}`
-        : `${relativePath}${formatBrowserSuffix(test.browserName)}`;
+        ? `${relativePath}${browserSuffix} :: ${fullName}`
+        : `${relativePath}${browserSuffix}`;
       lines.push(`- ${title}`);
     }
 
@@ -743,7 +753,7 @@ export class MdReporter implements Reporter {
           if (!failure) continue;
 
           const { relativePath, fullName, title, formattedId } =
-            formatFailureTitle(failure, index);
+            formatFailureTitle(failure, index, this.options.showBrowserName);
 
           lines.push(`- [F${formattedId}] ${title}`);
 
@@ -792,7 +802,7 @@ export class MdReporter implements Reporter {
         if (!failure) continue;
 
         const { relativePath, fullName, title, formattedId } =
-          formatFailureTitle(failure, index);
+          formatFailureTitle(failure, index, this.options.showBrowserName);
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {

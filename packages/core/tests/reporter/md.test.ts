@@ -2,6 +2,7 @@ import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { MdReporter, resolveOptions } from '../../src/reporter/md';
 import { computeSummary } from '../../src/reporter/utils';
 import type {
+  BrowserName,
   MdReporterOptions,
   NormalizedConfig,
   Reporter,
@@ -32,6 +33,7 @@ describe('resolveOptions', () => {
           maxCharsPerEntry: 500,
         },
         errors: { unhandled: true },
+        showBrowserName: false,
       });
     });
   });
@@ -389,5 +391,61 @@ describe('MdReporter watch reruns', () => {
 
     expect(report).toContain('[stdout] log: b only cycle');
     expect(report).not.toContain('[stdout] log: a only cycle');
+  });
+});
+
+describe('MdReporter browser attribution', () => {
+  const createBrowserPayload = (browserName?: BrowserName) => {
+    const test = createFailedTest(PATH_A, 'fails in a');
+    test.browserName = browserName;
+    return {
+      test,
+      file: { ...createFailedFile(PATH_A, [test]), browserName },
+    };
+  };
+
+  // Core auto-injects this option when a run selects more than one browser;
+  // without it the tags would change single-browser output users already get.
+  it('tags titles with the browser only when showBrowserName is set', async () => {
+    const { runEnd } = setupMdReporter({
+      header: false,
+      reproduction: false,
+      codeFrame: false,
+      testLists: 'always',
+      showBrowserName: true,
+    });
+    const { test, file } = createBrowserPayload('chromium');
+    const passing: TestResult = {
+      ...test,
+      status: 'passed',
+      fullName: 'passes in a',
+      name: 'passes in a',
+      errors: undefined,
+    };
+
+    const report = await runEnd({
+      results: [file],
+      testResults: [test, passing],
+    });
+
+    expect(report).toContain('### [F01] a.test.ts [chromium] :: fails in a');
+    expect(report).toContain('- a.test.ts [chromium] :: passes in a');
+  });
+
+  it('keeps titles browser-free when showBrowserName is off', async () => {
+    const { runEnd } = setupMdReporter({
+      header: false,
+      reproduction: false,
+      codeFrame: false,
+    });
+    const { test, file } = createBrowserPayload('chromium');
+
+    const report = await runEnd({
+      results: [file],
+      testResults: [test],
+    });
+
+    expect(report).toContain('### [F01] a.test.ts :: fails in a');
+    expect(report).not.toContain('[chromium]');
   });
 });

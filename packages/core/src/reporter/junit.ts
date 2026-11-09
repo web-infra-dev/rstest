@@ -53,16 +53,18 @@ interface JUnitReport {
 export class JUnitReporter implements Reporter {
   private readonly rootPath: string;
   private readonly outputPath?: string;
+  private readonly showBrowserName: boolean;
 
   constructor({
     rootPath,
-    options: { outputPath } = {},
+    options: { outputPath, showBrowserName } = {},
   }: {
     rootPath: string;
-    options?: { outputPath?: string };
+    options?: { outputPath?: string; showBrowserName?: boolean };
   }) {
     this.rootPath = rootPath;
     this.outputPath = outputPath;
+    this.showBrowserName = showBrowserName ?? false;
   }
 
   private sanitizeXml(text: string): string {
@@ -152,8 +154,9 @@ export class JUnitReporter implements Reporter {
 
     return {
       // The browser suffix keeps suites of the same file distinct when several
-      // browsers of one project run it in one report.
-      name: `${fileResult.relativeTestPath}${formatBrowserSuffix(fileResult.browserName)}`,
+      // browsers of one project run it in one report; single-browser runs
+      // stay byte-identical to the pre-multi-browser output.
+      name: `${fileResult.relativeTestPath}${this.showBrowserName ? formatBrowserSuffix(fileResult.browserName) : ''}`,
       tests: fileResult.summary.total,
       failures: fileResult.summary.failed,
       errors,

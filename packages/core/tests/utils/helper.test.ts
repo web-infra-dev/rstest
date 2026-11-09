@@ -3,6 +3,7 @@ import { runInNewContext } from 'node:vm';
 import {
   formatError,
   toError,
+  generateFilePathHash,
   getFileTaskId,
   getWorkerSerialization,
   isPlainObject,
@@ -35,6 +36,23 @@ it('getFileTaskId builds the file: task-id grammar', () => {
       browserName: 'firefox',
     }),
   ).toBe('file:p:firefox:/abs/foo.test.ts');
+});
+
+it('generateFilePathHash keeps the origin/main value on the node pool', () => {
+  // origin/main seeds the hash with `${project}\0${testPath}` and case ids are
+  // rooted at it, so node case ids must stay byte-identical across the
+  // multi-browser change. Only browser rows may add the browser segment.
+  expect(generateFilePathHash('node', '/fixtures/index.test.ts')).toBe(
+    'd3d72794ce',
+  );
+  expect(generateFilePathHash('np', '/a.test.ts')).toBe(
+    generateFilePathHash('np', '/a.test.ts', undefined),
+  );
+  // Browser rows alias-proof: one file, two browsers, two hashes.
+  expect(generateFilePathHash('p', '/a.test.ts', 'chromium')).toBe(
+    'e17a5bb2a1',
+  );
+  expect(generateFilePathHash('p', '/a.test.ts', 'firefox')).toBe('fca9d7f73c');
 });
 
 it('toNativePath converts forward-slash paths to OS-native separators', () => {

@@ -33,15 +33,20 @@ export const normalizeExactPathMatch = (filePath: string): string => {
 
 /**
  * Generate a stable hash for a file inside its project and (browser mode) its
- * browser. Uses FNV-1a to produce a 10-char hex string; the browser joins the
- * seed so parallel browser copies of one file cannot alias.
+ * browser. Uses FNV-1a to produce a 10-char hex string. Node rows keep the
+ * historical `${project}\0${testPath}` seed byte-for-byte so upstream id pins
+ * stay stable; only browser rows add the browser segment, which is what makes
+ * parallel browser copies of one file distinct.
  */
 export function generateFilePathHash(
   project: string,
   testPath: string,
   browserName?: string,
 ): string {
-  const str = `${project}\0${browserName ?? ''}\0${testPath}`;
+  const str =
+    browserName === undefined
+      ? `${project}\0${testPath}`
+      : `${project}\0${browserName}\0${testPath}`;
 
   // FNV-1a 32-bit hash, produce 10 hex chars by combining two rounds
   let h1 = 0x811c9dc5;

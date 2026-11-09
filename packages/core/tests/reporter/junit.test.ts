@@ -145,6 +145,73 @@ describe('JUnitReporter', () => {
     expect(logs.some((log) => log.includes('failures="0"'))).toBe(true);
   });
 
+  const browserFileResult = (): TestFileResult => ({
+    testId: 'file-browser',
+    status: 'failed',
+    name: 'browser1.test.ts',
+    fullName: 'browser1.test.ts',
+    testPath: '/test/root/browser1.test.ts',
+    relativeTestPath: 'browser1.test.ts',
+    duration: 10,
+    results: [],
+    project: 'browser',
+    browserName: 'chromium',
+    summary: {
+      total: 1,
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      todo: 0,
+      flaky: 0,
+    },
+  });
+
+  const suiteNames = (logs: string[]): string[] =>
+    logs
+      .join('\n')
+      .split('\n')
+      .filter((line) => line.includes('<testsuite'));
+
+  // Core auto-injects this option when a run selects more than one browser;
+  // without it single-browser junit output stays identical to before.
+  it('suffixes suite names with the browser only when showBrowserName is set', async () => {
+    const collect = () => {
+      const logs: string[] = [];
+      rs.spyOn(console, 'log').mockImplementation((...args) => {
+        logs.push(args.join(' '));
+      });
+      onTestFinished(() => {
+        rs.resetAllMocks();
+      });
+      return logs;
+    };
+
+    const tagged = new JUnitReporter({
+      rootPath: '/test/root',
+      options: { showBrowserName: true },
+    });
+    const taggedLogs = collect();
+    await tagged.onTestRunEnd({
+      ...emptyRunEndPayload,
+      results: [browserFileResult()],
+    });
+    expect(suiteNames(taggedLogs).join('\n')).toContain(
+      'name="browser1.test.ts [chromium]"',
+    );
+
+    rs.restoreAllMocks();
+    const untaggedLogs = collect();
+    const untagged = new JUnitReporter({ rootPath: '/test/root' });
+    await untagged.onTestRunEnd({
+      ...emptyRunEndPayload,
+      results: [browserFileResult()],
+    });
+    expect(suiteNames(untaggedLogs).join('\n')).toContain(
+      'name="browser1.test.ts"',
+    );
+    expect(suiteNames(untaggedLogs).join('\n')).not.toContain('[chromium]');
+  });
+
   it('uses authoritative summaries and durations', async () => {
     const logs: string[] = [];
     rs.spyOn(console, 'log').mockImplementation((...args) => {

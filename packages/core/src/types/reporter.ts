@@ -110,6 +110,13 @@ export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
 export type MdReporterOptions = {
   /**
+   * prints out browser name in md titles. Rstest sets it automatically when a
+   * run selects several browsers in one project; see the same-named option on
+   * `DefaultReporterOptions`.
+   */
+  showBrowserName?: boolean;
+
+  /**
    * Output detail level preset.
    * - `'normal'`: balanced output with code frames, repro commands, and candidate files
    * - `'compact'`: minimal output without code frames, candidate files, or full stack traces
