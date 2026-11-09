@@ -61,7 +61,7 @@ export function createRunner({
       hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<RawTestFileResult>;
-    prepareTests: (testFilePath: string) => Promise<RawTestInfo[]>;
+    prepareTests: (testFilePath: string, hooks?: RunnerHooks) => Promise<void>;
     collectTests: () => Promise<RawTestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
     getRootSuiteListeners: () => RootSuiteListeners;
@@ -91,7 +91,8 @@ export function createRunner({
   // Node workers collect before closing their loading interval. Reuse the
   // prepared tree when execution starts, including its resolved run modes.
   let collectedTests: Test[] | undefined;
-  const collectTests = async (): Promise<Test[]> => {
+  let isPrepared = false;
+  const ensureCollected = async (): Promise<Test[]> => {
     if (!collectedTests) {
       const tests = await runtimeInstance.getTests();
       traverseUpdateTest(tests, testNamePattern);
@@ -107,14 +108,11 @@ export function createRunner({
         hooks: RunnerHooks & FileCleanupHooks,
         api: Rstest,
       ) => {
-        const snapshotClient = workerState.snapshotClient!;
-        await hooks.onSnapshotSetupStart?.();
-        try {
-          await snapshotClient.setup(testPath, workerState.snapshotOptions);
-        } finally {
-          await hooks.onSnapshotSetupEnd?.();
+        if (!isPrepared) {
+          throw new Error('prepareTests() must complete before runTests().');
         }
-        const tests = await collectTests();
+        const snapshotClient = workerState.snapshotClient!;
+        const tests = collectedTests!;
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
           testPath,
@@ -160,16 +158,22 @@ export function createRunner({
           throw error;
         }
       },
-      prepareTests: async (testPath) => {
-        await workerState.snapshotClient!.setup(
-          testPath,
-          workerState.snapshotOptions,
-        );
-        const tests = await collectTests();
-        return tests.map(toTestInfo);
+      prepareTests: async (testPath, hooks) => {
+        if (isPrepared) return;
+        await hooks?.onSnapshotSetupStart?.();
+        try {
+          await workerState.snapshotClient!.setup(
+            testPath,
+            workerState.snapshotOptions,
+          );
+        } finally {
+          await hooks?.onSnapshotSetupEnd?.();
+        }
+        await ensureCollected();
+        isPrepared = true;
       },
       collectTests: async () => {
-        const tests = await collectTests();
+        const tests = await ensureCollected();
 
         return tests.map(toTestInfo);
       },

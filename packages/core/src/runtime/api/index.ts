@@ -1,20 +1,11 @@
 import { normalize } from 'pathe';
-import type {
-  Rstest,
-  RstestExpect,
-  RawTestFileResult,
-  RawTestInfo,
-  RunnerHooks,
-  TestCase,
-  WorkerState,
-} from '../../types';
+import type { Rstest, RstestExpect, WorkerState } from '../../types';
 import { createRunner, runnerAPI } from '../runner';
 import { registerWorkerCleanup } from '../runner/workerCleanup';
 import { registerFileCleanup } from '../runner/fileCleanup';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
-import type { RootSuiteListeners } from '../runner/runtime';
 
 export type RuntimeRstest = Rstest & {
   registerFileCleanup: typeof registerFileCleanup;
@@ -57,18 +48,7 @@ export const createRstestRuntime = async (
   },
 ): Promise<{
   resolveImportMetaRstest: (filename: string) => Rstest | undefined;
-  runner: {
-    runTests: (
-      testPath: string,
-      hooks: RunnerHooks,
-      api: Rstest,
-    ) => Promise<RawTestFileResult>;
-    prepareTests: (testPath: string) => Promise<RawTestInfo[]>;
-    collectTests: () => Promise<RawTestInfo[]>;
-    getCurrentTest: () => TestCase | undefined;
-    getRootSuiteListeners: () => RootSuiteListeners;
-    setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
-  };
+  runner: ReturnType<typeof createRunner>['runner'];
   api: RuntimeRstest;
 }> => {
   const [{ runner }, { SnapshotPlugin, ensureSnapshotClient }] =

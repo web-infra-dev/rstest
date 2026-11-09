@@ -57,6 +57,20 @@ describe('browser mode - snapshot', () => {
     fixturesFs = undefined;
   });
 
+  it('lists snapshot tests without creating snapshot files', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(fixtureDir, {
+      command: 'list',
+      args: ['tests/snapshot.test.ts'],
+    });
+    cliToKill = cli;
+    await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      'browser snapshot > should match object snapshot',
+    );
+    expect(fs.existsSync(snapshotDir)).toBe(false);
+    expect(fs.existsSync(fileSnapshotDir)).toBe(false);
+  });
+
   it('should create and match standard snapshots', async () => {
     const mergedFiles = [
       'tests/snapshot.test.ts',

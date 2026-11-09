@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 
-describe('browser snapshot', () => {
+describe('browser snapshot', async () => {
+  await Promise.resolve();
   it('should match object snapshot', () => {
     const user = {
       name: 'Alice',
