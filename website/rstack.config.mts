@@ -22,9 +22,6 @@ define.doc({
   logoText: 'Rstest',
   description,
   markdown: {
-    link: {
-      checkAnchors: true,
-    },
     shiki: {
       // Enable line highlighting via code block meta, e.g. ```ts {1,3-5}
       transformers: [transformerCompatibleMetaHighlight()],
@@ -32,7 +29,6 @@ define.doc({
   },
   lang: 'en',
   route: {
-    cleanUrls: true,
     // exclude document fragments from routes
     exclude: ['**/zh/shared/**', '**/en/shared/**', './theme'],
   },
