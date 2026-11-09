@@ -261,7 +261,7 @@ export const formatName = (
 
   return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
     const value = getValue(param, key);
-    return value?.toString();
+    return value === null ? 'null' : value?.toString();
   });
 };
 
