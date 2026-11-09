@@ -7,6 +7,50 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('console log', () => {
+  it.for([
+    ...['forks', 'threads', 'vmForks', 'vmThreads'].map((pool) => ({
+      pool,
+      silent: true,
+      disableConsoleIntercept: false,
+    })),
+    { pool: 'forks', silent: true, disableConsoleIntercept: true },
+    { pool: 'forks', silent: false, disableConsoleIntercept: false },
+    { pool: 'forks', silent: 'passed-only', disableConsoleIntercept: false },
+  ])(
+    'formats only visible logs ($pool, silent=$silent, intercept disabled=$disableConsoleIntercept)',
+    async ({ pool, silent, disableConsoleIntercept }, { onTestFinished }) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          'silent-formatting.test.ts',
+          '--pool',
+          pool,
+          ...(silent === true
+            ? ['--silent']
+            : silent === 'passed-only'
+              ? ['--silent=passed-only']
+              : []),
+          '--printConsoleTrace',
+          ...(disableConsoleIntercept ? ['--disableConsoleIntercept'] : []),
+        ],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+            env: { RSTEST_EXPECT_SILENT: String(silent) },
+          },
+        },
+      });
+      await expectExecSuccess();
+      if (silent === false) {
+        expect(cli.log).toContain('formatted-console-value');
+      } else {
+        expect(cli.log).not.toContain('formatted-console-value');
+      }
+    },
+  );
+
   it('should not console log when onConsoleLog return false', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',

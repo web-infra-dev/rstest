@@ -64,12 +64,14 @@ type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
   onConsoleLog,
+  silent = false,
   testPath,
   project,
   printConsoleTrace,
   getCurrentTask,
 }: {
   onConsoleLog: (log: RawUserConsoleLog) => void;
+  silent?: boolean;
   testPath: string;
   project: string;
   printConsoleTrace: boolean;
@@ -230,5 +232,31 @@ export function createCustomConsole({
     }
   }
 
-  return new CustomConsole(nullWritable, nullWritable);
+  const console = new CustomConsole(nullWritable, nullWritable);
+  if (silent) {
+    // Decide once per console so suppressed calls never format arguments or stacks.
+    const noop = () => {};
+    Object.assign(console, {
+      assert: noop,
+      clear: noop,
+      count: noop,
+      countReset: noop,
+      debug: noop,
+      dir: noop,
+      dirxml: noop,
+      error: noop,
+      group: noop,
+      groupCollapsed: noop,
+      groupEnd: noop,
+      info: noop,
+      log: noop,
+      table: noop,
+      time: noop,
+      timeEnd: noop,
+      timeLog: noop,
+      trace: noop,
+      warn: noop,
+    });
+  }
+  return console;
 }
