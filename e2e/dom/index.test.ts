@@ -8,6 +8,16 @@ const jestDomFilters = 'test/jestDom';
 
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
+it.for(['vmForks', 'vmThreads'] as const)(
+  'supports jsdom abort signals in Node fetch under %s',
+  async (pool) => {
+    const { expectExecSuccess } = await runCli('test/abortSignal', 'jsdom', {
+      args: ['--pool', pool, '--pool.maxWorkers', '1'],
+    });
+    await expectExecSuccess();
+  },
+);
+
 it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   'formats React DOM assertions under %s',
   async (pool) => {
