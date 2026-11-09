@@ -1,6 +1,7 @@
 import './fsIsolation';
 import { resolveObjectURL } from 'node:buffer';
 import { appendFileSync } from 'node:fs';
+import nodeProcess from 'node:process';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { promisify } from 'node:util';
 import {
@@ -10,6 +11,30 @@ import {
   registerFileCleanup,
   rs,
 } from '@rstest/core';
+
+const assertProcessGuardRealm = () => {
+  for (const target of [process, nodeProcess]) {
+    for (const [invoke, message] of [
+      [() => target.exit(1), 'process.exit unexpectedly called with "1"'],
+      [
+        () => target.kill(target.pid, 'SIGCONT'),
+        `process.kill unexpectedly called with "${target.pid}" and "SIGCONT"`,
+      ],
+    ] as const) {
+      let caught: unknown;
+      try {
+        invoke();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect(Object.getPrototypeOf(caught)).toBe(Error.prototype);
+      expect(caught).toMatchObject({ name: 'Error', message });
+    }
+  }
+};
+
+assertProcessGuardRealm();
 
 expect(typeof globalThis.crypto.subtle.digest).toBe('function');
 expect(globalThis.crypto.randomUUID()).toMatch(/^[0-9a-f-]{36}$/);
@@ -103,6 +128,7 @@ if (process.env.RSTEST_VM_FILE_CLEANUP_FAIL === 'true') {
   });
 }
 registerFileCleanup(async () => {
+  assertProcessGuardRealm();
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(resolveObjectURL(objectURL)).toBeDefined();
   const marker = process.env.RSTEST_VM_FILE_CLEANUP_MARKER;

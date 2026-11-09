@@ -7,7 +7,10 @@ import {
   captureVmContextKeys,
   stripVmContext,
 } from '../../../src/runtime/worker/vm/context';
-import { isBlockedProcessKillTarget } from '../../../src/runtime/worker/vm/process';
+import {
+  installVmProcessGuards,
+  isBlockedProcessKillTarget,
+} from '../../../src/runtime/worker/vm/process';
 import {
   installVmNodeGlobals,
   installWorkerHTMLElement,
@@ -86,6 +89,33 @@ test('blocks process-group and current-process kill targets', () => {
   expect(isBlockedProcessKillTarget(123, 123)).toBe(true);
   expect(isBlockedProcessKillTarget(-123, 123)).toBe(true);
   expect(isBlockedProcessKillTarget(456, 123)).toBe(false);
+});
+
+test('uses the task Error realm after preparation without removing process guards', () => {
+  let runtimeError: ErrorConstructor = Error;
+  const restore = installVmProcessGuards(() => runtimeError);
+  try {
+    for (const constructor of [Error, vm.runInNewContext('Error')]) {
+      runtimeError = constructor;
+      for (const invoke of [
+        () => process.exit(1),
+        ...[0, -1, process.pid, -process.pid].map(
+          (pid) => () => process.kill(pid, 'SIGCONT'),
+        ),
+      ]) {
+        let caught: unknown;
+        try {
+          invoke();
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toBeInstanceOf(runtimeError);
+        expect(Object.getPrototypeOf(caught)).toBe(runtimeError.prototype);
+      }
+    }
+  } finally {
+    restore();
+  }
 });
 
 test.for([false, true])(

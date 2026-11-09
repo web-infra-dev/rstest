@@ -4,6 +4,40 @@ import { promisify } from 'node:util';
 import vm from 'node:vm';
 import { expect, it } from '@rstest/core';
 
+const supportsSourcePhaseImports = (() => {
+  try {
+    new vm.Script("import.source('unused.wasm')");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+it.skipIf(!supportsSourcePhaseImports).for(['static', 'dynamic', 'commonjs'])(
+  'rejects unsupported WebAssembly source-phase imports from %s modules',
+  async (kind) => {
+    const extension = kind === 'commonjs' ? 'cjs' : 'mjs';
+    const specifier = `test-vm-external/wasm-source-${kind}.${extension}`;
+    const load = async () => {
+      if (kind === 'commonjs') {
+        const require = createRequire(import.meta.url);
+        await require(specifier)();
+        return;
+      }
+      const module = await import(specifier);
+      if (kind === 'dynamic') await module.default();
+    };
+
+    await expect(load()).rejects.toMatchObject({
+      name: 'SyntaxError',
+      code: 'ERR_SOURCE_PHASE_NOT_DEFINED',
+      message: expect.stringContaining(
+        'Source phase import object is not defined',
+      ),
+    });
+  },
+);
+
 it.each([undefined, { paths: [process.cwd()] }])(
   'keeps bundled require.resolve errors in the test realm with options %j',
   (options) => {

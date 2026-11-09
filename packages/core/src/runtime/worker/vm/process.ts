@@ -3,11 +3,16 @@ export const isBlockedProcessKillTarget = (
   currentPid: number,
 ): boolean => pid === 0 || pid === -1 || Math.abs(pid) === currentPid;
 
-export const installVmProcessGuards = (): (() => void) => {
+export const installVmProcessGuards = (
+  getErrorConstructor: () => ErrorConstructor,
+): (() => void) => {
   const exit = process.exit.bind(process);
   process.exit = (code): never => {
     const effectiveCode = code ?? Reflect.get(process, 'exitCode') ?? 0;
-    throw new Error(`process.exit unexpectedly called with "${effectiveCode}"`);
+    const RuntimeError = getErrorConstructor();
+    throw new RuntimeError(
+      `process.exit unexpectedly called with "${effectiveCode}"`,
+    );
   };
 
   const kill = process.kill.bind(process);
@@ -16,7 +21,8 @@ export const installVmProcessGuards = (): (() => void) => {
     // be able to signal the host shell or sibling workers through this shared
     // worker-thread process.
     if (isBlockedProcessKillTarget(pid, process.pid)) {
-      throw new Error(
+      const RuntimeError = getErrorConstructor();
+      throw new RuntimeError(
         `process.kill unexpectedly called with "${pid}" and "${signal}"`,
       );
     }
