@@ -419,6 +419,36 @@ describe('PoolRunner worker fixture cleanup', () => {
 });
 
 describe('PoolRunner VM worker memory limit', () => {
+  it.for([
+    { memoryMetric: 'rss', memoryLimit: undefined, expected: undefined },
+    { memoryMetric: 'heapUsed', memoryLimit: undefined, expected: undefined },
+    { memoryMetric: 'rss', memoryLimit: 200, expected: 'rss' },
+    { memoryMetric: 'heapUsed', memoryLimit: 200, expected: 'heapUsed' },
+  ] as const)(
+    'requests only the consumed metric ($memoryMetric, limit $memoryLimit)',
+    async ({ memoryMetric, memoryLimit, expected }) => {
+      const worker = new MemoryReportingWorker();
+      const send = rs.spyOn(worker, 'send');
+      const runner = new PoolRunner(worker, {
+        environmentKey: 'node',
+        workerId: 1,
+        memoryMetric,
+        memoryLimit,
+      });
+      try {
+        await runner.start();
+        await runner.runTest(createTask());
+        const request = send.mock.calls
+          .map(([request]) => request)
+          .find((request) => request.type === 'run');
+        expect(request).toBeDefined();
+        expect(request?.memoryMetric).toBe(expected);
+      } finally {
+        await runner.stop({ force: true });
+      }
+    },
+  );
+
   it('marks a runner for recycling after a worker reports heap over the limit', async () => {
     const runner = new PoolRunner(new MemoryReportingWorker(), {
       environmentKey: 'jsdom',

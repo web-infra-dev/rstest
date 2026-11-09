@@ -17,11 +17,13 @@ export type WorkerRequest =
       type: 'run';
       taskId: number;
       options: RunWorkerOptions['options'];
+      memoryMetric?: keyof WorkerMemoryReport;
     }
   | {
       type: 'collect';
       taskId: number;
       options: RunWorkerOptions['options'];
+      memoryMetric?: keyof WorkerMemoryReport;
     };
 
 export type CollectTaskResult = {
