@@ -979,6 +979,7 @@ const run = async () => {
             await preloadTestFileSourceMap(chunkUrl);
           }
 
+          await runtime.runner.prepareTests(testPath, runnerHooks);
           result = await runtime.runner.runTests(
             testPath,
             runnerHooks,

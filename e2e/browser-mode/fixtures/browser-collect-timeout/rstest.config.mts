@@ -10,4 +10,7 @@ export default defineConfig({
   },
   include: ['tests/**/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
+  resolveSnapshotPath() {
+    throw new Error('Listing must not initialize snapshots.');
+  },
 });

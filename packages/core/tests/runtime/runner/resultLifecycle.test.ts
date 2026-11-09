@@ -34,6 +34,7 @@ it('does not hold a case slot while its result hook is pending', async () => {
   const { runner } = createRunner({ workerState, taskContext });
   runtimeAPI.it.skip('first', () => {});
   runtimeAPI.it.skip('second', () => {});
+  await runner.prepareTests(__filename);
 
   let releaseFirst!: () => void;
   const firstDelivery = new Promise<void>((resolve) => {
