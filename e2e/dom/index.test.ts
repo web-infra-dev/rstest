@@ -8,22 +8,6 @@ const jestDomFilters = 'test/jestDom';
 
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
-it.for(['vmForks', 'vmThreads'] as const)(
-  'encodes VM-local UTF-8 values under %s',
-  async (pool) => {
-    for (const environment of ['node', 'happy-dom']) {
-      const { expectExecSuccess } = await runCli(
-        'test/textEncoder',
-        environment,
-        {
-          args: ['--pool', pool, '--pool.maxWorkers', '1'],
-        },
-      );
-      await expectExecSuccess();
-    }
-  },
-);
-
 it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   'formats React DOM assertions under %s',
   async (pool) => {
@@ -215,6 +199,22 @@ describe('jsdom', () => {
     await expectExecSuccess();
   });
 });
+
+it.for(['vmForks', 'vmThreads'] as const)(
+  'encodes VM-local UTF-8 values under %s',
+  async (pool) => {
+    for (const environment of ['node', 'happy-dom']) {
+      const { expectExecSuccess } = await runCli(
+        'test/textEncoder',
+        environment,
+        {
+          args: ['--pool', pool, '--pool.maxWorkers', '1'],
+        },
+      );
+      await expectExecSuccess();
+    }
+  },
+);
 
 describe('happy-dom', () => {
   it('should run test correctly', async () => {

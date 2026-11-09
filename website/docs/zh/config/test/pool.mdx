@@ -306,9 +306,9 @@ export default defineConfig({
 
 ### 跨 realm 断言
 
-当 VM 使用 Node.js 的全局 `TextEncoder` 时，`encode()` 返回的 `Uint8Array` 及其底层 `ArrayBuffer` 属于当前 VM，`encodeInto()` 的结果对象也属于当前 VM。VM 的内建 constructor 仍保持隔离。环境自行提供的 `TextEncoder` 会保留，从 `node:util` 导入的 encoder 保持原生行为。
-
 来自 Node.js、worker 或 DOM 环境的值可能使用不同的 constructor，无法通过当前 VM 中的 `instanceof` 检查。请使用 `await` 和内容断言，判断错误时检查 `name`、`code` 或 `message`。
+
+当 VM 使用 Node.js 的全局 `TextEncoder` 时，`encode()` 返回的 `Uint8Array` 及其底层 `ArrayBuffer` 属于当前 VM，`encodeInto()` 的结果对象也属于当前 VM。VM 的内建 constructor 仍保持隔离。环境自行提供的 `TextEncoder` 会保留，从 `node:util` 导入的 encoder 保持原生行为。
 
 ### 模块加载
 
