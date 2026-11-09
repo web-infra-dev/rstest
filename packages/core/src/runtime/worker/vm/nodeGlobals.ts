@@ -198,6 +198,28 @@ export const installVmNodeGlobals = (
     );
   }
 
+  // Native TextEncoder allocates host arrays even when constructed from a VM.
+  if (runtimeGlobal.TextEncoder === globalThis.TextEncoder) {
+    Reflect.set(
+      runtimeGlobal,
+      'TextEncoder',
+      createVmFunction(
+        vmContext,
+        `(HostTextEncoder) => class TextEncoder extends HostTextEncoder {
+          encode(input) {
+            return new Uint8Array(super.encode(input));
+          }
+
+          encodeInto(input, destination) {
+            const { read, written } = super.encodeInto(input, destination);
+            return { read, written };
+          }
+        }`,
+        globalThis.TextEncoder,
+      ),
+    );
+  }
+
   Object.assign(runtimeGlobal, {
     process,
     Buffer,

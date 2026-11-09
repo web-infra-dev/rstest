@@ -13,7 +13,68 @@ import {
 import {
   installVmNodeGlobals,
   installWorkerHTMLElement,
+  type VmRuntimeGlobal,
 } from '../../../src/runtime/worker/vm/nodeGlobals';
+
+test('returns VM-local TextEncoder arrays and encodeInto results', () => {
+  const context = vm.createContext({});
+  const runtimeGlobal: VmRuntimeGlobal = vm.runInContext('globalThis', context);
+  installVmNodeGlobals(runtimeGlobal, context);
+  const Encoder: typeof TextEncoder = vm.runInContext('TextEncoder', context);
+  const Bytes: typeof Uint8Array = vm.runInContext('Uint8Array', context);
+  const BufferConstructor: typeof ArrayBuffer = vm.runInContext(
+    'ArrayBuffer',
+    context,
+  );
+  const ObjectConstructor: typeof Object = vm.runInContext('Object', context);
+  const encoder = new Encoder();
+
+  expect(encoder.encoding).toBe('utf-8');
+  expect(encoder.encode()).toBeInstanceOf(Bytes);
+  expect(encoder.encode().length).toBe(0);
+  const encoded = encoder.encode('A😀');
+  expect(encoded).toBeInstanceOf(Bytes);
+  expect(encoded.buffer).toBeInstanceOf(BufferConstructor);
+  expect(Array.from(encoded)).toEqual([65, 240, 159, 152, 128]);
+
+  const destination = new Bytes(5);
+  const result = encoder.encodeInto('A😀', destination);
+  expect(result).toBeInstanceOf(ObjectConstructor);
+  expect(result).toEqual({ read: 3, written: 5 });
+  expect(Array.from(destination)).toEqual([65, 240, 159, 152, 128]);
+  const partial = new Bytes(3);
+  expect(encoder.encodeInto('A😀', partial)).toEqual({ read: 1, written: 1 });
+  expect(Array.from(partial)).toEqual([65, 0, 0]);
+});
+
+test('isolates TextEncoder prototypes across VM contexts', () => {
+  const first = vm.createContext({});
+  installVmNodeGlobals(vm.runInContext('globalThis', first), first);
+  vm.runInContext('TextEncoder.prototype.__rstestEncoderMarker = true', first);
+
+  try {
+    const second = vm.createContext({});
+    installVmNodeGlobals(vm.runInContext('globalThis', second), second);
+    expect(
+      vm.runInContext('TextEncoder.prototype.__rstestEncoderMarker', second),
+    ).toBeUndefined();
+    expect(
+      Reflect.get(TextEncoder.prototype, '__rstestEncoderMarker'),
+    ).toBeUndefined();
+  } finally {
+    Reflect.deleteProperty(TextEncoder.prototype, '__rstestEncoderMarker');
+  }
+});
+
+test('preserves a TextEncoder already provided by the VM', () => {
+  const context = vm.createContext({});
+  const original = vm.runInContext(
+    'globalThis.TextEncoder = class TextEncoder {}',
+    context,
+  );
+  installVmNodeGlobals(vm.runInContext('globalThis', context), context);
+  expect(vm.runInContext('TextEncoder', context)).toBe(original);
+});
 
 test('strips file globals while preserving context globals', () => {
   const context = vm.createContext({ preserved: true });
