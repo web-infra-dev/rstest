@@ -33,13 +33,9 @@ it('rejects an explicitly unsupported JSON import type', async () => {
           'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
         ]
       : ['ERR_IMPORT_ATTRIBUTE_UNSUPPORTED'];
-  const rejectedCode = await fetchStrings('en-us', {
-    with: { type: 'text' },
-  }).then(
-    () => undefined,
-    (error: { code?: string }) => error.code,
-  );
-  expect(
-    rejectedCode !== undefined && expectedCodes.includes(rejectedCode),
-  ).toBe(true);
+  await expect(
+    fetchStrings('en-us', { with: { type: 'text' } }),
+  ).rejects.toMatchObject({
+    code: expect.toBeOneOf(expectedCodes),
+  });
 });
