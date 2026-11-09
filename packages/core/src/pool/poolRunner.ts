@@ -14,6 +14,7 @@ import {
   isWorkerResponseEnvelope,
   type TestEnvironmentModuleFallback,
   type WorkerResponse,
+  type WorkerMemoryReport,
   wrapRpc,
 } from './protocol';
 import type { PoolTask } from './types';
@@ -52,7 +53,7 @@ type PoolRunnerOptions = {
   workerId: number;
   environmentKey: string;
   memoryLimit?: number;
-  memoryMetric?: 'rss' | 'heapUsed';
+  memoryMetric?: keyof WorkerMemoryReport;
   onOomKill?: () => void;
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
@@ -106,7 +107,7 @@ export class PoolRunner {
   ) => void;
   private readonly memoryLimit: number | undefined;
   private memoryLimitReached = false;
-  private readonly memoryMetric: 'rss' | 'heapUsed';
+  private readonly memoryMetric: keyof WorkerMemoryReport;
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
@@ -389,7 +390,13 @@ export class PoolRunner {
       // Tasks are built eagerly; sample coverage only when a worker is ready.
       task.options.knownCoverageStructures =
         task.getKnownCoverageStructures?.();
-      this.worker.send({ type: kind, taskId, options: task.options });
+      this.worker.send({
+        type: kind,
+        taskId,
+        options: task.options,
+        memoryMetric:
+          this.memoryLimit === undefined ? undefined : this.memoryMetric,
+      });
     } catch (err) {
       reject(toError(err));
       this.currentTask = undefined;

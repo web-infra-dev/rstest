@@ -38,3 +38,4 @@
 - stderr attribution: the buffer resets per task on reused workers, task rejection is deferred briefly so stderr can settle, and attached stderr is truncated head+tail.
 - Fork stop escalates SIGTERM → SIGKILL after a grace period; thread stop is a bare `terminate()` and `force` is a no-op.
 - `minWorkers` is internal-only — a floor for retained idle runners, not a reuse cap; a pending slot waiter always wins reuse.
+- Memory sampling is requested by the host only for its configured recycling metric. Do not infer it from pool type or worker count on the worker side: a single reused worker still needs its memory limit enforced, while a worker with no recycling consumer needs no sample.

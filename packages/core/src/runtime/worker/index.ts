@@ -8,7 +8,6 @@ import {
 } from '../../pool/protocol';
 import { LOST_IPC_MESSAGE_HINT } from '../../utils/constants';
 import { ENV } from '../../utils/env';
-import { isVmPoolType } from '../../utils/workers';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
@@ -142,20 +141,16 @@ const runTask = async (
         send({ type: 'testEnvironmentFallback', fallback });
       },
     });
-    // Fork RSS also drives explicit recycling limits, independently of the
-    // host spawn gate. Thread RSS is process-wide and cannot identify a worker.
     send({
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
-      memory: isVmPoolType(request.options.context.pool)
-        ? {
-            heapUsed: process.memoryUsage().heapUsed,
-            ...(isMainThread ? { rss: process.memoryUsage().rss } : {}),
-          }
-        : isMainThread
-          ? { rss: process.memoryUsage().rss }
-          : undefined,
+      memory:
+        request.memoryMetric === 'heapUsed'
+          ? { heapUsed: process.memoryUsage().heapUsed }
+          : request.memoryMetric === 'rss'
+            ? { rss: process.memoryUsage.rss() }
+            : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into
