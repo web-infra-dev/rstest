@@ -222,6 +222,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
         with:
           install-webkit: 'true'
+          install-firefox: 'true'
 
       - name: E2E Test (test)
         run: cd e2e && pnpm test

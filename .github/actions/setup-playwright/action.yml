@@ -6,6 +6,10 @@ inputs:
     description: 'Install Playwright WebKit.'
     required: false
     default: 'false'
+  install-firefox:
+    description: 'Install Playwright Firefox (bundled build, no channel equivalent).'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -21,4 +25,16 @@ runs:
           npx playwright install --with-deps webkit
         else
           npx playwright install webkit
+        fi
+    - name: Install Playwright Firefox
+      if: inputs.install-firefox == 'true'
+      shell: bash
+      # The multi-browser fixtures run the bundled Firefox (Playwright offers
+      # no system channel for it); Linux runners also need its system
+      # libraries.
+      run: |
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          npx playwright install --with-deps firefox
+        else
+          npx playwright install firefox
         fi

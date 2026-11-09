@@ -81,6 +81,12 @@ export type BrowserRpcRequest = {
   testPath: string;
   /** Project identity; paths alone do not distinguish overlapping projects. */
   projectName: string;
+  /**
+   * Browser identity of the requesting page, so per-browser lookups
+   * (`expect.toMatchScreenshot`, reference paths) attribute correctly when
+   * several browsers run the same file. Set by the runner options.
+   */
+  browserName?: string;
   kind: 'locator' | 'expect' | 'screenshot' | 'config' | 'keyboard';
   locator: BrowserLocatorIR;
   method: string;
@@ -224,6 +230,16 @@ export const validateBrowserRpcRequest = (
       );
     }
     request.snapshotUpdate = snapshotUpdate;
+  }
+
+  const browserName = payload.browserName;
+  if (browserName !== undefined) {
+    if (typeof browserName !== 'string') {
+      throw new Error(
+        'Invalid browser RPC request: browserName must be a string',
+      );
+    }
+    request.browserName = browserName;
   }
 
   return request;

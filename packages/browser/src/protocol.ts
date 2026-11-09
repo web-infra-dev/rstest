@@ -38,8 +38,18 @@ export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 // assigns the SAME type across the seam instead of a hand-copied duplicate.
 export type { BrowserViewport };
 
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
+/**
+ * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the
+ * scheduler's task list are keyed by this pair: every browser of a project
+ * shares the project's runtime config (it is browser-agnostic), while
+ * `screenshotFailures` / `viewport` come from the per-browser entry and
+ * `launchKey` names which Playwright launch the row runs on.
+ */
 export type BrowserProjectRuntime = {
   name: string;
+  browserName: BrowserName;
   environmentName: string;
   projectRoot: string;
   /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
@@ -47,15 +57,21 @@ export type BrowserProjectRuntime = {
   screenshotFailures: boolean;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
+  /** Resolved per-entry provider options (launch + context) for `newContext`. */
+  providerOptions: Record<string, unknown>;
+  /** Which launched browser this row runs on (see `BrowserRuntime.browsers`). */
+  launchKey: string;
 };
 
 /**
- * Test file info with associated project name.
- * Used to track which project a test file belongs to.
+ * Test file info with associated project name, and (once scheduled) the browser
+ * it runs on. Host planning stays keyed by `(project, testPath)`; the browser
+ * dimension is added when the work list is expanded for scheduling.
  */
 export type TestFileInfo = {
   testPath: string;
   projectName: string;
+  browserName?: BrowserName;
 };
 
 export type FileCleanupDispatchMethod =
@@ -117,8 +133,17 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
-  /** Project identity for the currently loaded runner page. */
+  /**
+   * Project identity for the currently loaded runner page.
+   */
   projectName?: string;
+  /**
+   * Browser identity for the currently loaded runner page. Runner documents
+   * resolve their `(project, browser)` runtime row through this plus
+   * `projectName`; absent only on documents that never got per-page options
+   * (collect pages), where name-only lookup is unambiguous enough.
+   */
+  browserName?: BrowserName;
   /** Test files assigned to one browser worker session. */
   testFiles?: string[];
   /**

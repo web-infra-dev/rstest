@@ -265,17 +265,6 @@ export const validateBrowserConfig = (context: InternalContext): void => {
       );
     }
 
-    // Multi-browser runs (one project, several browsers) are not wired through
-    // launch/scheduling yet; rebuild this guard when the runtime widens.
-    if (browser.browsers.length > 1) {
-      const names = browser.browsers
-        .map((entry) => JSON.stringify(entry.browserName))
-        .join(', ');
-      throw new Error(
-        `Project ${JSON.stringify(project.name)} selects multiple browsers (${names}), but multi-browser runs are not supported yet. Configure one browser per project for now.`,
-      );
-    }
-
     validateViewport(browser.viewport);
 
     if (!isPlainObject(browser.providerOptions)) {
@@ -291,16 +280,16 @@ export const validateBrowserConfig = (context: InternalContext): void => {
 
   // Headed debugging works through one container window today, so at most one
   // (project, browser) pair may run headed per run; the rest run headless.
-  const headedPairs = context.projects.flatMap((project) =>
+  const browserRows = context.projects.flatMap((project) =>
     project.normalizedConfig.browser.enabled
-      ? project.normalizedConfig.browser.browsers
-          .filter((entry) => entry.headless === false)
-          .map((entry) => ({
-            projectName: project.name,
-            browserName: entry.browserName,
-          }))
+      ? project.normalizedConfig.browser.browsers.map((entry) => ({
+          projectName: project.name,
+          browserName: entry.browserName,
+          headed: entry.headless === false,
+        }))
       : [],
   );
+  const headedPairs = browserRows.filter((row) => row.headed);
   if (headedPairs.length > 1) {
     const listed = headedPairs
       .map(
@@ -310,6 +299,21 @@ export const validateBrowserConfig = (context: InternalContext): void => {
       .join(', ');
     throw new Error(
       `Only one (project, browser) pair can run headed per run: ${listed}. Browser mode opens one debug window, so every other browser must set headless: true.`,
+    );
+  }
+
+  // Watch rerun planning is single-planner: a headed pair has its own serial
+  // reload queue, and a mixed headed+headless watch session would rerun only
+  // through the last-installed scheduler. Until the two-watch-owner composition
+  // lands, mixed headed+headless is a run-only shape.
+  if (
+    context.command === 'watch' &&
+    headedPairs.length > 0 &&
+    browserRows.some((row) => !row.headed)
+  ) {
+    const { projectName, browserName } = headedPairs[0]!;
+    throw new Error(
+      `Watch mode does not support mixing headed (${projectName} / ${browserName}) and headless browsers in one run yet: every configured browser must set headless: true, or run without watch.`,
     );
   }
 

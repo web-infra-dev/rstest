@@ -68,7 +68,7 @@ describe('browser config validation errors', () => {
       },
     }) as unknown as InternalContext;
 
-  it('rejects a project selecting several browsers until multi-browser runs ship', () => {
+  it('accepts a run selecting several headless browsers in one project', () => {
     const context = makeContext([
       makeProject('p', {
         enabled: true,
@@ -88,9 +88,72 @@ describe('browser config validation errors', () => {
         ],
       }),
     ]);
-    expect(() => validateBrowserConfig(context)).toThrow(
-      /selects multiple browsers|not supported yet/,
+    expect(() => validateBrowserConfig(context)).not.toThrow();
+  });
+
+  it('rejects watch mixed with a headed pair when headless rows exist too', () => {
+    const watchContext = (
+      command: string,
+      projects: InternalProjectContext[],
+    ): InternalContext =>
+      ({
+        command,
+        projects,
+        normalizedConfig: {
+          coverage: { enabled: false },
+          pool: { type: 'forks' },
+        },
+      }) as unknown as InternalContext;
+
+    const hybrid = [
+      makeProject('p', {
+        enabled: true,
+        browsers: [
+          {
+            browserName: 'chromium',
+            headless: false,
+            screenshotFailures: false,
+            providerOptions: {},
+          },
+          {
+            browserName: 'firefox',
+            headless: true,
+            screenshotFailures: false,
+            providerOptions: {},
+          },
+        ],
+      }),
+    ];
+    expect(() => validateBrowserConfig(watchContext('watch', hybrid))).toThrow(
+      /Watch mode does not support mixing headed/,
     );
+    expect(() =>
+      validateBrowserConfig(watchContext('run', hybrid)),
+    ).not.toThrow();
+
+    // Watch + single headless-only selection stays valid.
+    const headlessOnly = [
+      makeProject('p', {
+        enabled: true,
+        browsers: [
+          {
+            browserName: 'chromium',
+            headless: true,
+            screenshotFailures: false,
+            providerOptions: {},
+          },
+          {
+            browserName: 'firefox',
+            headless: true,
+            screenshotFailures: false,
+            providerOptions: {},
+          },
+        ],
+      }),
+    ];
+    expect(() =>
+      validateBrowserConfig(watchContext('watch', headlessOnly)),
+    ).not.toThrow();
   });
 
   it('rejects more than one headed (project, browser) pair per run', () => {

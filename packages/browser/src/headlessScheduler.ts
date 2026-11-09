@@ -14,7 +14,7 @@ import { createSerialTaskQueue } from './serialTaskQueue';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
-  mapViewportByProject,
+  resolveViewport,
   serializeForInlineScript,
 } from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
@@ -30,6 +30,7 @@ import {
 import type {
   BrowserClientMessage,
   BrowserHostConfig,
+  BrowserName,
   BrowserProjectRuntime,
   FileCleanupDispatchPayload,
   TestFileInfo,
@@ -67,8 +68,8 @@ type HeadlessSchedulerContext = Pick<
 
 type HeadlessSchedulerDeps = {
   context: HeadlessSchedulerContext;
-  browser: BrowserProviderBrowser;
-  browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
+  /** One launched browser per launch key (see `BrowserRuntime.browsers`). */
+  browsers: Map<string, BrowserProviderBrowser>;
   projectServers: BrowserRuntime['projectServers'];
   v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
@@ -106,8 +107,7 @@ type HeadlessSchedulerDeps = {
 
 export const createHeadlessScheduler = async ({
   context,
-  browser,
-  browserLaunchOptions,
+  browsers,
   projectServers,
   v8Coverage,
   allTestFiles,
@@ -134,14 +134,68 @@ export const createHeadlessScheduler = async ({
     coverageCollectors: Set<() => Promise<void>>;
   };
 
-  const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
-  const projectRootByName = new Map(
-    projectRuntimeConfigs.map((project) => [project.name, project.projectRoot]),
+  const rowKey = (projectName: string, browserName: string): string =>
+    `${projectName}\u0000${browserName}`;
+  const rowByKey = new Map(
+    projectRuntimeConfigs.map((row) => [
+      rowKey(row.name, row.browserName),
+      row,
+    ]),
   );
-  const projectIsolation = new Map(
-    projectRuntimeConfigs.map((project) => [
-      project.name,
-      project.hasSetupFiles || project.runtimeConfig?.isolate !== false,
+  const rowsByProject = new Map<string, BrowserProjectRuntime[]>();
+  for (const row of projectRuntimeConfigs) {
+    const rows = rowsByProject.get(row.name) ?? [];
+    rows.push(row);
+    rowsByProject.set(row.name, rows);
+  }
+  const missingLaunchKeysLogged = new Set<string>();
+  const browserForRow = (
+    row: BrowserProjectRuntime,
+  ): BrowserProviderBrowser => {
+    const browser = browsers.get(row.launchKey);
+    if (!browser && !missingLaunchKeysLogged.has(row.launchKey)) {
+      missingLaunchKeysLogged.add(row.launchKey);
+      logger.error(
+        `No launched browser for ${JSON.stringify(row.browserName)} under key ${row.launchKey}.`,
+      );
+    }
+    if (!browser) {
+      throw new Error(
+        `No launched browser for (project, browser) ` +
+          `(${JSON.stringify(row.name)}, ${JSON.stringify(row.browserName)}).`,
+      );
+    }
+    return browser;
+  };
+
+  /**
+   * Plan-level files are keyed by `(project, testPath)`; the browser dimension
+   * is added here, once per scheduling boundary, so every consumer below —
+   * page batches, sessions, page options, coverage guards — sees the full
+   * `(project, browserName, testPath)` task unit.
+   */
+  type ScheduledTestFile = TestFileInfo & { browserName: BrowserName };
+  const expandToBrowsers = (files: TestFileInfo[]): ScheduledTestFile[] =>
+    files.flatMap((file) =>
+      (rowsByProject.get(file.projectName) ?? []).map((row) => ({
+        ...file,
+        browserName: row.browserName,
+      })),
+    );
+
+  const viewportByRow = new Map(
+    projectRuntimeConfigs.flatMap((row) => {
+      const viewport = resolveViewport(row.viewport);
+      return viewport ? [[rowKey(row.name, row.browserName), viewport]] : [];
+    }),
+  );
+  const projectRootByName = new Map(
+    projectRuntimeConfigs.map((row) => [row.name, row.projectRoot]),
+  );
+  const isolationByRow = new Map(
+    projectRuntimeConfigs.map((row) => [
+      rowKey(row.name, row.browserName),
+      row.hasSetupFiles || row.runtimeConfig?.isolate !== false,
     ]),
   );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
@@ -237,7 +291,7 @@ export const createHeadlessScheduler = async ({
 
   const dispatchRunnerMessage = async (
     run: ActiveHeadlessRun,
-    files: TestFileInfo[],
+    files: ScheduledTestFile[],
     sessionId: string,
     message: BrowserClientMessage,
   ): Promise<void> => {
@@ -275,7 +329,7 @@ export const createHeadlessScheduler = async ({
 
   const runWorkerFiles = async (
     run: ActiveHeadlessRun,
-    files: TestFileInfo[],
+    files: ScheduledTestFile[],
     rawCoverage: unknown[],
     updateSnapshot: SnapshotUpdateState,
   ): Promise<void> => {
@@ -285,9 +339,16 @@ export const createHeadlessScheduler = async ({
 
     const file = files[0]!;
     let activeFile = file;
-    const viewport = viewportByProject.get(file.projectName);
+    const row = rowByKey.get(rowKey(file.projectName, file.browserName));
+    if (!row) {
+      throw new Error(
+        `No (project, browser) row for (${JSON.stringify(file.projectName)}, ${JSON.stringify(file.browserName)}) (test file: ${file.testPath}).`,
+      );
+    }
+    const browser = browserForRow(row);
+    const viewport = viewportByRow.get(rowKey(row.name, row.browserName));
     const browserContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
+      providerOptions: row.providerOptions,
       viewport: viewport ?? null,
     });
     run.contexts.add(browserContext);
@@ -300,7 +361,8 @@ export const createHeadlessScheduler = async ({
     let workerCleanupTimer: ReturnType<typeof setTimeout> | undefined;
     let dispatchQueue = Promise.resolve();
     const completedFiles = new Set<string>();
-    const keepWorkerFixtures = projectIsolation.get(file.projectName) === false;
+    const keepWorkerFixtures =
+      isolationByRow.get(rowKey(row.name, row.browserName)) === false;
     const fileCleanupStates = new Map<
       string,
       {
@@ -370,8 +432,13 @@ export const createHeadlessScheduler = async ({
       crashDeferred.resolve(reason);
     };
 
+    // V8 coverage is coupled to Chromium's CDP: a non-chromium launch never
+    // instruments its pages (validation guarantees chromium-only selections
+    // whenever coverage v8 is enabled at all).
+    const coverageEnabledOnRow =
+      v8Coverage !== undefined && row.browserName === 'chromium';
     const collectCoverage = async (): Promise<void> => {
-      if (!page || !v8Coverage) {
+      if (!page || !coverageEnabledOnRow) {
         return;
       }
       if (!coverageCollection) {
@@ -396,7 +463,9 @@ export const createHeadlessScheduler = async ({
     };
     try {
       page = await browserContext.newPage();
-      await v8Coverage?.start(page);
+      if (coverageEnabledOnRow) {
+        await v8Coverage.start(page);
+      }
       run.coverageCollectors.add(collectCoverage);
       page.on('crash', () =>
         onPageDead(
@@ -412,6 +481,7 @@ export const createHeadlessScheduler = async ({
       const session = sessionRegistry.register({
         testFile: file.testPath,
         projectName: file.projectName,
+        browserName: file.browserName,
         runToken: run.token,
         mode: 'headless-page',
         context: browserContext,
@@ -575,6 +645,9 @@ export const createHeadlessScheduler = async ({
         testFile: file.testPath,
         testFiles: files.map((item) => item.testPath),
         runId: `${run.token}:${session.id}`,
+        // The runner resolves its `(project, browser)` runtime row through this
+        // identity; results and screenshot RPCs attribute through it too.
+        browserName: file.browserName,
       };
       const serializedOptions = serializeForInlineScript(inlineOptions);
       await page.addInitScript(
@@ -700,13 +773,16 @@ export const createHeadlessScheduler = async ({
       coverageCollectors: new Set<() => Promise<void>>(),
     }));
 
-    const queue = [...files];
+    const queue = expandToBrowsers(files);
     const concurrency = getHeadlessConcurrency(context, queue.length);
     const bail = context.normalizedConfig.bail;
     const nonIsolatedBatchSize = Math.max(
       1,
-      bail ? 1 : Math.ceil(files.length / Math.max(concurrency, 1)),
+      bail ? 1 : Math.ceil(queue.length / Math.max(concurrency, 1)),
     );
+    // Batches never mix browsers: a page belongs to one context/viewport pair.
+    const batchKey = (file: ScheduledTestFile): string =>
+      rowKey(file.projectName, file.browserName);
 
     const worker = async (): Promise<void> => {
       while (
@@ -734,10 +810,15 @@ export const createHeadlessScheduler = async ({
           return;
         }
         const batch = [next];
-        if (projectIsolation.get(next.projectName) === false) {
+        if (
+          isolationByRow.get(batchKey(next)) === false &&
+          next.browserName !== undefined
+        ) {
           while (
             batch.length < nonIsolatedBatchSize &&
-            queue[0]?.projectName === next.projectName
+            queue[0] &&
+            queue[0].browserName !== undefined &&
+            batchKey(queue[0]) === batchKey(next)
           ) {
             batch.push(queue.shift()!);
           }

@@ -538,22 +538,35 @@ const run = async () => {
     return;
   }
 
-  // Find the runtime config for this project
+  // Find the runtime config for this project. Rows are `(project, browser)`
+  // pairs, so the page's browser identity disambiguates; documents that never
+  // got a per-page browser (collect pages) fall back to name-only lookup.
+  // `const` narrows for the callback below; TS drops narrowing for `let` there.
+  const pageBrowserName = options.browserName;
   const projectRuntime = options.projects.find(
-    (p) => p.name === currentProject.name,
+    (p) =>
+      p.name === currentProject.name &&
+      (pageBrowserName === undefined || p.browserName === pageBrowserName),
   );
   if (!projectRuntime) {
     send({
       type: 'fatal',
       payload: {
-        message: `Project ${currentProject.name} not found in runtime options`,
+        message:
+          options.browserName === undefined
+            ? `Project ${currentProject.name} not found in runtime options`
+            : `Project ${currentProject.name} has no runtime row for browser ${options.browserName}`,
       },
     });
     window.__RSTEST_DONE__ = true;
     return;
   }
 
-  options = { ...options, projectName: currentProject.name };
+  options = {
+    ...options,
+    projectName: currentProject.name,
+    browserName: projectRuntime.browserName,
+  };
   window.__RSTEST_BROWSER_OPTIONS__ = options;
 
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);

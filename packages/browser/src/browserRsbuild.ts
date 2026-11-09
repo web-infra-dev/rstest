@@ -7,7 +7,6 @@ import {
 } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { isDeepStrictEqual } from 'node:util';
 import type { Rspack, BrowserName } from '@rstest/core';
 import {
   applyRstestWatchIgnored,
@@ -45,7 +44,6 @@ import { createDeferredPromise } from './hostPayloads';
 import {
   type BrowserDispatchHandler,
   type BrowserHostConfig,
-  type BrowserProjectRuntime,
   type BrowserViewport,
   RSTEST_BROWSER_CACHE_CLEANERS_KEY,
   type TestFileInfo,
@@ -148,32 +146,6 @@ export type BrowserProviderProject = {
   rootPath: string;
   provider: BrowserProvider;
 };
-
-type BrowserLaunchOptions = {
-  provider: BrowserProvider;
-  // Launches attach to one browser entry per project in this phase; validation
-  // rejects multi-entry projects, so index 0 is the run's browser.
-  browser: BrowserName;
-  headless: InternalProjectContext['normalizedConfig']['browser']['headless'];
-  port: InternalProjectContext['normalizedConfig']['browser']['port'];
-  strictPort: InternalProjectContext['normalizedConfig']['browser']['strictPort'];
-  providerOptions: Record<string, unknown>;
-};
-
-const getBrowserProviderOptions = (
-  project: InternalProjectContext,
-): Record<string, unknown> => {
-  const browserConfig = project.normalizedConfig.browser as {
-    providerOptions?: Record<string, unknown>;
-  };
-
-  return browserConfig.providerOptions ?? {};
-};
-
-const getFirstBrowserEntry = (
-  project: InternalProjectContext,
-): InternalProjectContext['normalizedConfig']['browser']['browsers'][number] =>
-  project.normalizedConfig.browser.browsers[0]!;
 
 export type BrowserProjectServer = {
   projectName: string;
@@ -286,8 +258,19 @@ export type BrowserRuntime = {
   // The server that hosts the container UI HTML (headed mode). The WebSocket
   // server below is shared and reachable from any origin.
   containerServer: BrowserProjectServer;
+  /**
+   * The default launch (the first resolved spec) — the list/collect page and
+   * any default-browser caller use it; the schedulers pick their per-row launch
+   * from `browsers` by the row's `launchKey`.
+   */
   browser: BrowserProviderBrowser;
-  browserLaunchOptions: BrowserLaunchOptions;
+  browserLaunchOptions: BrowserLaunchSpec;
+  /**
+   * One Playwright browser per resolved launch key. Rows pick theirs by
+   * `launchKey`; two rows sharing a key run in the same browser process.
+   */
+  launches: BrowserLaunch[];
+  browsers: Map<string, BrowserProviderBrowser>;
   wsPort: number;
   tempDir: string;
   containerPage?: BrowserProviderPage;
@@ -301,7 +284,7 @@ export type BrowserRuntime = {
   watchState: BrowserWatchState;
 };
 
-const resolveViewport = (
+export const resolveViewport = (
   viewport: BrowserViewport | undefined,
 ): { width: number; height: number } | null => {
   if (!viewport) {
@@ -327,19 +310,6 @@ const resolveViewport = (
   }
 
   return null;
-};
-
-export const mapViewportByProject = (
-  projects: BrowserProjectRuntime[],
-): Map<string, { width: number; height: number }> => {
-  const map = new Map<string, { width: number; height: number }>();
-  for (const project of projects) {
-    const viewport = resolveViewport(project.viewport);
-    if (viewport) {
-      map.set(project.name, viewport);
-    }
-  }
-  return map;
 };
 
 const applyDefaultWatchOptions = (
@@ -830,46 +800,62 @@ const getBrowserRsbuildEnvironmentConfig = (
 // Max testTimeout across browser projects, used for provider assertion fallback
 // and browser server fetch timeout.
 
-const getBrowserLaunchOptions = (
-  project: InternalProjectContext,
-): BrowserLaunchOptions => ({
-  provider: project.normalizedConfig.browser.provider,
-  browser: getFirstBrowserEntry(project).browserName,
-  headless: project.normalizedConfig.browser.headless,
-  port: project.normalizedConfig.browser.port,
-  strictPort: project.normalizedConfig.browser.strictPort,
-  providerOptions: getBrowserProviderOptions(project),
-});
+/**
+ * One Playwright launch: every `(project, browser)` row whose (provider,
+ * browserName, headless, launch options) match shares the same browser process.
+ * `providerOptions` is the resolved per-entry value, so two projects disagreeing
+ * about `providerOptions.launch` simply get two launches.
+ */
+export type BrowserLaunchSpec = {
+  provider: BrowserProvider;
+  browserName: BrowserName;
+  headless: boolean;
+  providerOptions: Record<string, unknown>;
+};
 
-const ensureConsistentBrowserLaunchOptions = (
-  projects: InternalProjectContext[],
-): BrowserLaunchOptions => {
-  if (projects.length === 0) {
+export const browserLaunchKey = (spec: BrowserLaunchSpec): string =>
+  JSON.stringify([
+    spec.provider,
+    spec.browserName,
+    spec.headless,
+    spec.providerOptions.launch ?? null,
+  ]);
+
+export type BrowserLaunch = BrowserLaunchSpec & {
+  key: string;
+  browser: BrowserProviderBrowser;
+};
+
+/**
+ * Builds one launch spec per resolved `(project, browser)` row and dedupes by
+ * launch key. `forceHeadless` (the `list` collection boot) wins over the
+ * configured per-entry headless value.
+ */
+export const resolveBrowserLaunchSpecs = (
+  browserProjects: InternalProjectContext[],
+  forceHeadless?: boolean,
+): BrowserLaunchSpec[] => {
+  if (browserProjects.length === 0) {
     throw new Error('No browser-enabled projects found.');
   }
 
-  const firstProject = projects[0]!;
-  const firstOptions = getBrowserLaunchOptions(firstProject);
-
-  for (const project of projects.slice(1)) {
-    const options = getBrowserLaunchOptions(project);
-    // Each browser project now runs on its own rsbuild dev server, so ports may
-    // differ per project. Only the shared single Playwright browser forces
-    // provider/browser/headless/providerOptions to match across projects.
-    if (
-      options.provider !== firstOptions.provider ||
-      options.browser !== firstOptions.browser ||
-      options.headless !== firstOptions.headless ||
-      !isDeepStrictEqual(options.providerOptions, firstOptions.providerOptions)
-    ) {
-      throw new Error(
-        `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
-          'All browser-enabled projects in one run must share provider/browser/headless/providerOptions.',
-      );
+  const specs = new Map<string, BrowserLaunchSpec>();
+  for (const project of browserProjects) {
+    const { browser } = project.normalizedConfig;
+    for (const entry of browser.browsers) {
+      const spec: BrowserLaunchSpec = {
+        provider: browser.provider,
+        browserName: entry.browserName,
+        headless: forceHeadless ?? entry.headless,
+        providerOptions: entry.providerOptions,
+      };
+      const key = browserLaunchKey(spec);
+      if (!specs.has(key)) {
+        specs.set(key, spec);
+      }
     }
   }
-
-  return firstOptions;
+  return [...specs.values()];
 };
 
 export const collectProjectEntries = async (
@@ -1206,12 +1192,20 @@ const copyProxyResponseHeaders = (
 export const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
 ): Promise<void> => {
-  try {
-    await runtime.browser?.close?.();
-  } catch {
-    // ignore
-  }
-  await closeAllProjectServers(runtime.projectServers.values());
+  const closeLaunch = async (
+    browser?: BrowserProviderBrowser,
+  ): Promise<void> => {
+    try {
+      await browser?.close?.();
+    } catch {
+      // ignore
+    }
+  };
+  await Promise.allSettled([
+    closeLaunch(runtime.browser),
+    ...runtime.launches.map((launch) => closeLaunch(launch.browser)),
+    closeAllProjectServers(runtime.projectServers.values()),
+  ]);
   try {
     await closeWebSocketServer(runtime.wss);
   } catch {
@@ -1276,8 +1270,11 @@ export const createBrowserRuntime = async ({
     }
   };
 
-  let browserLaunchOptions =
-    ensureConsistentBrowserLaunchOptions(browserProjects);
+  // Launch specs resolve once: the fields that would change them
+  // (`browser.browsers`/`provider`/`headless`/`port`) are forbidden to
+  // `modifyRstestConfig`, so a first-cycle hook can never add launches.
+  const defaultLaunchSpec = resolveBrowserLaunchSpecs(browserProjects)[0]!;
+  const launchSpecs = resolveBrowserLaunchSpecs(browserProjects, forceHeadless);
   let projectEntries = initialProjectEntries;
   // Created with the runtime so the per-project watch plugins and the
   // controller's rerun closures share one state whose lifetime matches the
@@ -1303,7 +1300,9 @@ export const createBrowserRuntime = async ({
         manifestPath: '',
       },
       browser: undefined as unknown as BrowserProviderBrowser,
-      browserLaunchOptions,
+      browserLaunchOptions: defaultLaunchSpec,
+      launches: [],
+      browsers: new Map(),
       wsPort: 0,
       tempDir,
       setContainerOptions,
@@ -1348,8 +1347,6 @@ export const createBrowserRuntime = async ({
 
   const refreshProjectEntries = async (): Promise<void> => {
     validateBrowserConfig(context);
-    browserLaunchOptions =
-      ensureConsistentBrowserLaunchOptions(browserProjects);
     const updatedShardedEntries = freezeShardedEntries
       ? shardedEntries
       : context.normalizedConfig.shard
@@ -2074,8 +2071,8 @@ export const createBrowserRuntime = async ({
     return createRuntimeWithoutProvider();
   }
 
-  // browserProjects is non-empty (ensureConsistentBrowserLaunchOptions throws
-  // otherwise) and index 0 is the designated container origin.
+  // browserProjects is non-empty (resolveBrowserLaunchSpecs throws otherwise)
+  // and index 0 is the designated container origin.
   const containerServer = projectServers.get(browserProjects[0]!.name)!;
 
   // Create WebSocket server on an available port
@@ -2089,29 +2086,46 @@ export const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  const browserName = browserLaunchOptions.browser;
-  let browser: BrowserProviderBrowser | undefined;
-  try {
-    const providerImplementation = getBrowserProviderImplementation(
-      browserLaunchOptions.provider,
-    );
-    const runtime = await providerImplementation.launchRuntime({
-      browserName,
-      headless: forceHeadless ?? browserLaunchOptions.headless,
-      providerOptions: browserLaunchOptions.providerOptions,
-    });
-    browser = runtime.browser;
+  const launched: BrowserLaunch[] = [];
+  const waitForBuildsAcrossLaunches = async (): Promise<void> => {
     let generation;
     do {
       generation = buildGeneration;
       await Promise.all(waitForBuilds.map((waitForBuild) => waitForBuild()));
       // A finished project can rebuild while another project is still starting.
     } while (generation !== buildGeneration);
+  };
+  try {
+    // One launch per unique launch-key row (provider, browserName, headless,
+    // launch options); rows sharing a key reuse the same browser process.
+    for (const spec of launchSpecs) {
+      logger.debug(
+        `[Browser] launching ${spec.provider}/${spec.browserName}` +
+          (spec.headless ? ' (headless)' : ' (headed)'),
+      );
+      const key = browserLaunchKey(spec);
+      const providerImplementation = getBrowserProviderImplementation(
+        spec.provider,
+      );
+      const runtime = await providerImplementation.launchRuntime({
+        browserName: spec.browserName,
+        headless: spec.headless,
+        providerOptions: spec.providerOptions,
+      });
+      launched.push({
+        ...spec,
+        key,
+        browser: runtime.browser,
+      });
+    }
+    await waitForBuildsAcrossLaunches();
     return {
       projectServers,
       containerServer,
-      browser,
-      browserLaunchOptions,
+      browser: launched[0]!.browser,
+      browserLaunchOptions: defaultLaunchSpec,
+      launches: launched,
+      browsers: new Map(launched.map((launch) => [launch.key, launch.browser])),
       wsPort,
       tempDir,
       setContainerOptions,
@@ -2122,7 +2136,7 @@ export const createBrowserRuntime = async ({
     };
   } catch (error) {
     await Promise.allSettled([
-      browser?.close(),
+      ...launched.map((launch) => launch.browser.close()),
       closeAllProjectServers(projectServers.values()),
     ]);
     await closeWebSocketServer(wss);

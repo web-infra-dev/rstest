@@ -50,6 +50,17 @@ type HeadedSchedulerContext = Pick<
 type HeadedSchedulerDeps = {
   context: HeadedSchedulerContext;
   runtime: BrowserRuntime;
+  /**
+   * Single headed pair per run (validated): the row whose launch is headed.
+   * In a pure-headed run this is also the runtime's default launch; in a
+   * hybrid run the default launch may belong to a headless row, so the row
+   * picks the container's browser explicitly.
+   */
+  headedRow?: {
+    browserName: string;
+    launchKey: string;
+    providerOptions: Record<string, unknown>;
+  };
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
   v8Coverage?: BrowserV8CoverageRuntime;
@@ -128,6 +139,7 @@ export const claimHeadedCycleScope = (
 export const createHeadedScheduler = async ({
   context,
   runtime,
+  headedRow,
   allTestFiles,
   hostOptions,
   v8Coverage,
@@ -143,7 +155,21 @@ export const createHeadedScheduler = async ({
   logWatchReady,
   destroyRuntime,
 }: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
-  const { browser, browserLaunchOptions, watchState, wss } = runtime;
+  const { watchState, wss } = runtime;
+  // The container window belongs to the headed pair's launch: headless rows
+  // reuse a different browser process entirely (hybrid runs).
+  const headedLaunch = headedRow
+    ? runtime.browsers.get(headedRow.launchKey)
+    : undefined;
+  if (headedRow && !headedLaunch) {
+    throw new Error(
+      `No launched browser for the headed pair (${JSON.stringify(headedRow.browserName)}, launch key ${headedRow.launchKey}).`,
+    );
+  }
+  const browser = headedLaunch ?? runtime.browser;
+  const browserLaunchOptions = headedRow
+    ? { providerOptions: headedRow.providerOptions }
+    : runtime.browserLaunchOptions;
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
   let currentTestFiles = allTestFiles;
   if (isWatchMode) {

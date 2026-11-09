@@ -761,7 +761,7 @@ describe('resolveProjects', () => {
       });
     });
 
-    it('should fall back to a plain entry for a CLI-selected unconfigured browser', async () => {
+    it('should fall back to a plain entry for a CLI-selected browser without a configured entry', async () => {
       const config: RstestConfig = {
         projects: [
           {

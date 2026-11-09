@@ -636,4 +636,46 @@ describe('programmatic createRstest', () => {
     expect(cli.stdout).toContain('Waiting for file changes...');
     expect(cli.stdout).not.toContain('press h');
   });
+
+  it('filters configured browsers via RunOptions.browser.browsers like the CLI flag', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: [
+        'run-browsers-filter.mjs',
+        String(BROWSER_PORTS['programmatic-browsers-filter']),
+      ],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const execution = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(execution.exitCode).toBe(0);
+    const [unfiltered, firefoxOnly, chromiumOnly] = result.runs;
+    // Unfiltered runs every configured browser: the chromium entry copy can
+    // never pass the 900-wide assertion, so the cycle fails. Per-test counts
+    // here are last-writer-wins across the two browser copies (reporter
+    // attribution per browser is still pending), so only the cycle status is
+    // asserted — it proves both browsers executed the file.
+    expect(unfiltered.status).toBe('failed');
+    // A single filtered browser executes exactly one copy of the file with
+    // that browser's entry viewport.
+    expect(firefoxOnly).toEqual({
+      filter: 'firefox',
+      status: 'passed',
+      tests: { total: 1, passed: 1, failed: 0, skipped: 0, todo: 0, flaky: 0 },
+      files: { total: 1, failed: 0 },
+      testMessages: [],
+    });
+    expect(chromiumOnly).toEqual({
+      filter: 'chromium',
+      status: 'failed',
+      tests: { total: 1, passed: 0, failed: 1, skipped: 0, todo: 0, flaky: 0 },
+      files: { total: 1, failed: 1 },
+      testMessages: [expect.stringContaining('800')],
+    });
+  });
 });
