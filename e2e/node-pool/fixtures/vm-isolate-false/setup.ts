@@ -1,3 +1,4 @@
+import './fsIsolation';
 import { resolveObjectURL } from 'node:buffer';
 import { appendFileSync } from 'node:fs';
 import { setTimeout as nodeSetTimeout } from 'node:timers';

@@ -278,7 +278,11 @@ const preparePool = async (
       }
     }
     if (isVmPool) {
-      disposeRstestUtilities();
+      try {
+        disposeRstestUtilities();
+      } catch (error) {
+        errors.push(error);
+      }
     }
     const cleanupResults = await Promise.allSettled(
       cleanupFns.map((fn) => fn()),

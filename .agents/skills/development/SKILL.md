@@ -55,6 +55,7 @@ For public API/config/CLI changes, check the full surface in one pass:
 Make the smallest **design** change that resolves the root cause — this is where design-scope decisions belong. For in-file code quality (`any`/`as`, defensive checks, one-use abstractions, single source of truth, catch-and-rethrow), defer to the `typescript` skill rather than restating its rules here.
 
 - Fix at the single origin of the bug with the fewest lines. Find the one source, not N symptoms.
+- Keep VM-only implementations and dependencies behind dynamic imports reached only from VM execution. Shared worker/loader entry points may reference a lightweight bridge or types, but must not eagerly load VM-only implementations or install their side effects in `forks` / `threads`. Check the emitted import graph when changing this boundary; an `if (isVmPool)` inside an eagerly imported implementation does not preserve loading isolation.
 - Do **not** add new config knobs, buffers, heuristics, timeouts, dependencies, abstractions, or mode-specific hacks (e.g. string-replacing the Rspack runtime) unless the user asks. Surface any such need as an explicit decision point or follow-up issue — never take the shortcut silently.
 - Before adding a top-level config option, prove the existing channel (`inlineConfig` / run params) cannot express it.
 - When aligning behavior with another tool, match the reference impl as the parity target — read its **source** (the latest upstream clone, per Build Verified Context), not the `node_modules` dist. Don't harden edges beyond it.

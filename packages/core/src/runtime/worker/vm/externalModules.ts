@@ -567,6 +567,9 @@ class VmExternalModules {
   }
 
   dispose(): void {
+    // Spies have been restored before disposal; refresh Node's live bindings
+    // so a later VM import cannot retain a previous file's synchronized spy.
+    Module.syncBuiltinESMExports();
     this.loadVmTimersPromises.dispose();
     this.esmJsonCache.clear();
     this.moduleEvaluationCache.clear();
@@ -1652,6 +1655,7 @@ class VmExternalModules {
         exports[name] = timers[name];
         overrides.add(name);
       }
+      overrides.add('default');
       defaultExport = timers;
     } else if (normalized === 'module') {
       const moduleBuiltin = this.loadBuiltin(resolvedId);

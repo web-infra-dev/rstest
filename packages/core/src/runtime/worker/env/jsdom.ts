@@ -419,6 +419,9 @@ export const setupVM = async (
     setTimeout: globalThis.setTimeout,
   };
   const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
+  // After tracking stops, retained native-module callbacks still need Node
+  // timers: jsdom's timers stop scheduling once its window has been closed.
+  Object.assign(vmGlobal, nodeTimers);
   const cleanupAddEventListener = patchAddEventListener(
     dom.window,
     globalThis.AbortSignal,

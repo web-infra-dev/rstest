@@ -297,6 +297,10 @@ These restrictions apply to both `vmForks` and `vmThreads`.
 
 Each file gets a fresh VM context, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file, regardless of [`isolate`](/config/test/isolate). Workers are reused, however, so state outside the VM, such as `process.env` and native-addon state, may persist across files.
 
+`fs` and `fs/promises` use the worker's native modules. Aliases such as `fs` and `node:fs`, and `fs.promises` and `fs/promises`, share the same underlying state. Composite operations, streams, and `syncBuiltinESMExports()` retain Node.js behavior, including when native implementations capture a method during initialization. Direct assignments and dependency patches such as those from `graceful-fs` can persist across files; restore your own direct mutations when they should not persist.
+
+At the end of each VM test file, Rstest resets registered mocks (including call history and queued one-time implementations) and restores spies. This runs after file cleanup callbacks and before environment teardown, even when a test or cleanup callback fails. It applies regardless of `clearMocks`, `resetMocks`, and `restoreMocks`, which control cleanup between tests. Native builtin ESM exports are synchronized after restoration. This file-end mock cleanup is specific to VM pools.
+
 Tests must still await or cancel asynchronous work before the file finishes. Teardown clears timers managed by Rstest, but does not cancel arbitrary Promise chains, native I/O, or background tasks.
 
 Pending wrapped `node:timers/promises` and promisified timeout/immediate operations are cancelled with `AbortError`. Cancellation may run user `catch` or `finally` handlers, so teardown does not guarantee that no user code runs afterward.
