@@ -1,9 +1,11 @@
 import { expect, it } from '@rstest/core';
+import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import Module, { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 // @ts-expect-error: the package is copied into node_modules by the e2e harness
 import * as vmExternal from 'test-vm-external/index.mjs';
 
@@ -59,12 +61,26 @@ it('uses replaced native constructors in stream factories', () => {
 });
 
 it('preserves native composite fs dispatch through low-level mocks', async () => {
-  expect(await verifyCompositeFileSystem()).toEqual({
-    blocked: true,
-    noUnexpectedIO: true,
-    closedAfterWriteError: true,
-    nativeMocksVisible: true,
-  });
+  const fixture = pathToFileURL(
+    createRequire(import.meta.url).resolve('test-vm-external/builtin-sync.mjs'),
+  ).href;
+  // Public fs dependencies can change between Node versions; use a fresh
+  // native process as the reference instead of pinning one version's dispatch.
+  const expected = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { verifyCompositeFileSystem } from ${JSON.stringify(fixture)};
+console.log(JSON.stringify(await verifyCompositeFileSystem()));`,
+      ],
+      { encoding: 'utf8' },
+    ),
+  );
+  const actual = await verifyCompositeFileSystem();
+  expect(actual.nativeMocksVisible).toBe(true);
+  expect(actual).toEqual(expected);
 });
 
 it('uses the file require cache through Module._cache and keeps compile errors in the VM', () => {

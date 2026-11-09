@@ -23,39 +23,42 @@ export const verifyCompositeFileSystem = async () => {
   const originalClose = fs.close;
   const marker = Object.assign(new Error('mocked open'), { code: 'MOCK_OPEN' });
   const code = (fn) =>
-    new Promise((resolve) => fn((error) => resolve(error?.code)));
+    new Promise((resolve) => fn((error) => resolve(error?.code ?? null)));
   try {
     fs.open = (...args) => args.at(-1)(marker);
     const nativeOpenMockVisible = native.open === fs.open;
     const namespace = await import('node:fs');
-    const blocked = [
-      await code((cb) => fs.writeFile(output, 'data', cb)),
-      await code((cb) => namespace.writeFile(output, 'data', cb)),
-      await code((cb) => fs.appendFile(output, 'data', cb)),
-      await code((cb) => fs.truncate(input, 0, cb)),
-    ];
+    const operationErrors = {
+      writeFile: await code((cb) => fs.writeFile(output, 'data', cb)),
+      namedWriteFile: await code((cb) =>
+        namespace.writeFile(output, 'data', cb),
+      ),
+      appendFile: await code((cb) => fs.appendFile(output, 'data', cb)),
+      truncate: await code((cb) => fs.truncate(input, 0, cb)),
+    };
     if (typeof fs.lchmod === 'function')
-      blocked.push(await code((cb) => fs.lchmod(input, 0o600, cb)));
+      operationErrors.lchmod = await code((cb) => fs.lchmod(input, 0o600, cb));
     fs.openSync = () => {
       throw marker;
     };
-    for (const operation of [
-      () => fs.writeFileSync(output, Buffer.from('data')),
-      () => fs.appendFileSync(output, Buffer.from('data')),
-      () => fs.readFileSync(input),
-      () => fs.truncateSync(input, 0),
-    ]) {
+    for (const [name, operation] of Object.entries({
+      writeFileSync: () => fs.writeFileSync(output, Buffer.from('data')),
+      appendFileSync: () => fs.appendFileSync(output, Buffer.from('data')),
+      readFileSync: () => fs.readFileSync(input),
+      truncateSync: () => fs.truncateSync(input, 0),
+    })) {
       try {
         operation();
-        blocked.push(undefined);
+        operationErrors[name] = null;
       } catch (error) {
-        blocked.push(error.code);
+        operationErrors[name] = error.code;
       }
     }
     fs.openSync = originalOpenSync;
-    const noUnexpectedIO =
-      !native.existsSync(output) &&
-      native.readFileSync(input, 'utf8') === 'original';
+    const inputContents = native.readFileSync(input, 'utf8');
+    const outputContents = native.existsSync(output)
+      ? native.readFileSync(output, 'utf8')
+      : null;
     fs.open = originalOpen;
     let closeCalls = 0;
     fs.write = (...args) => args.at(-1)(marker);
@@ -65,9 +68,11 @@ export const verifyCompositeFileSystem = async () => {
     };
     const writeError = await code((cb) => fs.writeFile(output, 'data', cb));
     return {
-      blocked: blocked.every((value) => value === 'MOCK_OPEN'),
-      noUnexpectedIO,
-      closedAfterWriteError: writeError === 'MOCK_OPEN' && closeCalls === 1,
+      operationErrors,
+      inputContents,
+      outputContents,
+      writeError,
+      closeCalls,
       nativeMocksVisible: nativeOpenMockVisible && native.close === fs.close,
     };
   } finally {
