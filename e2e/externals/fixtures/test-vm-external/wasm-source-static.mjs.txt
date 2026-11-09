@@ -1,0 +1,3 @@
+import source wasm from 'data:application/wasm;base64,AGFzbQEAAAA=';
+
+export default wasm;
