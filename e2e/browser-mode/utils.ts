@@ -17,6 +17,16 @@ export const defaultEnvOverrides: Record<string, string> = {
   GITHUB_ACTIONS: '',
 };
 
+/**
+ * Chromium-only fixtures get the CI Chrome channel two ways:
+ *
+ * 1. The CLI-level push below injects `launch.channel=chrome` for fixtures
+ *    whose whole browser set is chromium — it must never reach a firefox/webkit
+ *    launch, so mixed fixtures opt out with `githubActionsChrome: false`.
+ * 2. For those mixed fixtures the helper hands a dedicated env var the child
+ *    keeps (CI itself is cleared for snapshot behavior), and the fixture sets
+ *    the channel on its own chromium entries under that variable.
+ */
 const useGithubActionsChrome = (fixtureName?: string): boolean =>
   Boolean(process.env.CI) && fixtureName !== 'webkit';
 
@@ -30,6 +40,13 @@ const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {
 
   args.push('--browser.providerOptions.launch.channel=chrome');
 };
+
+const chromeChannelEnvOverride = (
+  fixtureName?: string,
+): Record<string, string> =>
+  useGithubActionsChrome(fixtureName)
+    ? { RSTEST_E2E_CHROME_CHANNEL: 'chrome' }
+    : {};
 
 const canRunHeadedBrowser =
   process.platform === 'darwin' ||
@@ -156,7 +173,11 @@ export const runBrowserCli = async (
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
-        env: { ...defaultEnvOverrides, ...extra?.env },
+        env: {
+          ...defaultEnvOverrides,
+          ...chromeChannelEnvOverride(fixtureName),
+          ...extra?.env,
+        },
       },
     },
   });
@@ -192,7 +213,12 @@ export const runBrowserWatchCli = async (
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
-        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
+        env: {
+          ...defaultEnvOverrides,
+          ...chromeChannelEnvOverride(fixtureName),
+          DEBUG: 'rstest',
+          ...extra?.env,
+        },
       },
     },
   });
@@ -222,7 +248,12 @@ export const runBrowserWatchCliWithCwd = async (
     options: {
       nodeOptions: {
         cwd,
-        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
+        env: {
+          ...defaultEnvOverrides,
+          ...chromeChannelEnvOverride(),
+          DEBUG: 'rstest',
+          ...extra?.env,
+        },
       },
     },
   });
@@ -327,7 +358,11 @@ export const runBrowserCliWithCwd = async (
     options: {
       nodeOptions: {
         cwd,
-        env: { ...defaultEnvOverrides, ...extra?.env },
+        env: {
+          ...defaultEnvOverrides,
+          ...chromeChannelEnvOverride(),
+          ...extra?.env,
+        },
       },
     },
   });

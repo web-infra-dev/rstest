@@ -156,6 +156,42 @@ describe('browser config validation errors', () => {
     ).not.toThrow();
   });
 
+  it('validates the viewport of every resolved browser entry', () => {
+    // Entries carry merged project defaults, so their viewport runs through
+    // the same shape checks as the project-level value.
+    const badWidth = makeProject('a', {
+      enabled: true,
+      browsers: [
+        {
+          browserName: 'chromium',
+          headless: true,
+          screenshotFailures: false,
+          providerOptions: {},
+          viewport: { width: 0, height: 600 },
+        },
+      ],
+    });
+    expect(() => validateBrowserConfig(makeContext([badWidth]))).toThrow(
+      /browser\.viewport\.width must be a positive number/,
+    );
+
+    const badPreset = makeProject('b', {
+      enabled: true,
+      browsers: [
+        {
+          browserName: 'firefox',
+          headless: true,
+          screenshotFailures: false,
+          providerOptions: {},
+          viewport: 'NotAPreset',
+        },
+      ],
+    });
+    expect(() => validateBrowserConfig(makeContext([badPreset]))).toThrow(
+      /browser\.viewport must be a valid preset id/,
+    );
+  });
+
   it('rejects more than one headed (project, browser) pair per run', () => {
     const context = makeContext([
       makeProject('a', {

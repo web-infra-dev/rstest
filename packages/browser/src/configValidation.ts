@@ -267,6 +267,13 @@ export const validateBrowserConfig = (context: InternalContext): void => {
 
     validateViewport(browser.viewport);
 
+    // Entry-level viewport overrides must pass the same shape checks as the
+    // project value: resolved entries have already merged project defaults,
+    // so the entry argument covers both layers.
+    for (const entry of browser.browsers) {
+      validateViewport(entry.viewport);
+    }
+
     if (!isPlainObject(browser.providerOptions)) {
       throw new Error('browser.providerOptions must be a plain object.');
     }

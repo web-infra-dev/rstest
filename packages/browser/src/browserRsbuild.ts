@@ -2099,9 +2099,15 @@ export const createBrowserRuntime = async ({
     // One launch per unique launch-key row (provider, browserName, headless,
     // launch options); rows sharing a key reuse the same browser process.
     for (const spec of launchSpecs) {
+      const launchOptions = spec.providerOptions.launch;
+      const channel =
+        launchOptions && typeof launchOptions === 'object'
+          ? String((launchOptions as Record<string, unknown>).channel ?? '')
+          : '';
       logger.debug(
         `[Browser] launching ${spec.provider}/${spec.browserName}` +
-          (spec.headless ? ' (headless)' : ' (headed)'),
+          (spec.headless ? ' (headless)' : ' (headed)') +
+          (channel ? ` channel=${channel}` : ''),
       );
       const key = browserLaunchKey(spec);
       const providerImplementation = getBrowserProviderImplementation(
