@@ -127,6 +127,7 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 
 function parseModule(code: string) {
   return parseSync(code, {
+    errorRecovery: true,
     preserveParens: false,
     sourceType: 'module',
   });
@@ -719,6 +720,45 @@ const label = "😀";
       }),
     ).rejects.toThrow(SyntaxError);
   });
+
+  it.for([true, false])(
+    'preserves parser diagnostics and ignore-file comments with outputModule=%s',
+    async (outputModule) => {
+      const file = join(
+        tmpdir(),
+        'rstest-coverage-v8-provider-parser-error.js',
+      );
+      const provider = getProviderInternals(
+        new CoverageProvider(createOptions(), tmpdir()),
+      );
+      const entry = {
+        url: pathToFileURL(file).href,
+        scriptId: '1',
+        functions: [],
+      };
+
+      await expect(
+        provider.convertWithAst(
+          file,
+          entry,
+          { outputModule },
+          {
+            code: '/* c8 ignore file */ const =;',
+          },
+        ),
+      ).resolves.toEqual({});
+      await expect(
+        provider.convertWithAst(
+          file,
+          entry,
+          { outputModule },
+          {
+            code: 'const =;',
+          },
+        ),
+      ).rejects.toThrow(SyntaxError);
+    },
+  );
 
   it('invalidates prepared AST coverage when an external source map changes', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-external-map-cache');
