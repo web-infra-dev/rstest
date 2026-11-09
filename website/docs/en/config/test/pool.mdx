@@ -67,9 +67,9 @@ VM pools reuse workers and compilation resources, which can benefit suites with 
 
 ## Test file scheduling
 
-Node pools prioritize files that failed on the previous run, then files without recorded timings. New files are ordered by bundle size; files with recorded timings are ordered by their estimated loading and execution time, longest first. The estimate uses `TestFileResult.loadDuration + TestFileResult.duration`: worker-side asset loading, setup files, test module evaluation and collection, followed by test execution. It excludes worker startup, environment initialization, queue wait, and teardown.
+Node pools prioritize files that failed on the previous run, then files without recorded timings. Files with recorded timings are ordered by their estimated loading and execution time, longest first.
 
-Rstest retains these estimates in `node_modules/.cache/.rstest-results/results.json` and updates them after full runs. When reading a v1 cache, Rstest preserves failure history and timestamps but discards execution-only timings. The next cache write saves v2 data with fresh loading and execution estimates for the files that ran. This cache is independent of Node compile cache. Test files should not depend on their execution order, which can change as timings are updated.
+Rstest saves these results in `node_modules/.cache/.rstest-results/results.json` and updates them after full runs. Test files should not depend on their execution order, which can change as timings are updated.
 
 ## Pool types
 
@@ -251,7 +251,7 @@ npx rstest --pool vmThreads --pool.memoryLimit 256MB
 
 `memoryLimit` triggers recycling only between files. It is not a hard process RSS limit and cannot guarantee that a run avoids OOM.
 
-It also bounds each VM worker's shared cache of immutable assets, external source, resolution results, and compilation data to the smaller of 64 MiB and one quarter of `memoryLimit`. Lowering the threshold can shrink this cache and increase loading and compilation work.
+Lowering `memoryLimit` may increase loading and compilation work.
 
 ## Pass Node.js flags to workers
 
