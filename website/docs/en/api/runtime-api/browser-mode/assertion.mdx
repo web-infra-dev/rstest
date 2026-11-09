@@ -59,8 +59,6 @@ Outside concurrent flows, the effective timeout is capped by the remaining activ
 
 For `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) when the assertion must use that test's remaining deadline. The shared file-level `expect` uses the configured poll timeout because browsers cannot identify concurrent async flows reliably. The same limitation applies to hooks inside `describe.concurrent`; their assertions use the poll timeout and can still be ended by the enclosing hook timeout.
 
-Assertion timeout is independent from the browser RPC transport timeout. During test execution, browser and snapshot RPC requests do not add another timeout. Framework setup and file-cleanup RPCs use a separate 30-second watchdog.
-
 ```ts
 // Uses the Browser Mode expect.poll.timeout default (5000ms),
 // capped by the remaining time of the current test
