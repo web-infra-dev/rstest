@@ -11,7 +11,9 @@ Follow the project's existing documentation conventions.
 
 ## Writing
 
-- Explain user-facing behavior concisely, adding details and examples only when they help users configure or use the feature.
+- In usage guides and API/configuration references, explain observable behavior, usage, limits, and required user actions. Include implementation details only when they help users make a choice, configure a feature, or troubleshoot a problem.
+- Reserve detailed internal mechanisms for architecture/internals documents or explicit requests for implementation explanations. A correct implementation detail is not, by itself, a reason to include it in user documentation.
+- A compatibility fix does not require a user-facing explanation of its implementation when usage and documented guarantees are unchanged. Keep that rationale in code comments, tests, or the PR description instead.
 - Keep common abbreviations such as `dev server`.
 - Keep documentation in sync across locales when changing content. Use English as the default language unless the project specifies another.
 - Use sentence-case headings.
