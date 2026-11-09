@@ -189,6 +189,8 @@ export interface ListedTest {
   fullName?: string;
   parentNames?: string[];
   project: string;
+  /** Owning browser in browser mode; `undefined` on the node pool. */
+  browserName?: BrowserName;
   location?: TestLocation;
   runMode?: 'skip' | 'todo';
   type: 'file' | 'suite' | 'case';

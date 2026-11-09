@@ -182,7 +182,7 @@ describe('browser config validation errors', () => {
       }),
     ]);
     expect(() => validateBrowserConfig(context)).toThrow(
-      /Only one \(project, browser\) pair can run headed/,
+      /Only one \(project, browser\) pair can run headed[\s\S]*--browser\.headless=false[\s\S]*--browser\.browsers <name>` or narrow the projects with `--project`/,
     );
   });
 

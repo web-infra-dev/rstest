@@ -102,6 +102,7 @@ import {
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
+  formatBrowserSuffix,
   getErrorType,
   PerFileEventBuffer,
   pushFencedBlock,
@@ -325,7 +326,9 @@ const formatFailureTitle = (
   return {
     relativePath,
     fullName,
-    title: fullName ? `${relativePath} :: ${fullName}` : relativePath,
+    title: fullName
+      ? `${relativePath}${formatBrowserSuffix(failure.test.browserName)} :: ${fullName}`
+      : `${relativePath}${formatBrowserSuffix(failure.test.browserName)}`,
     formattedId: String(index + 1).padStart(2, '0'),
   };
 };
@@ -562,7 +565,9 @@ export class MdReporter implements Reporter {
     for (const test of displayed) {
       const relativePath = test.relativeTestPath;
       const fullName = test.fullName;
-      const title = fullName ? `${relativePath} :: ${fullName}` : relativePath;
+      const title = fullName
+        ? `${relativePath}${formatBrowserSuffix(test.browserName)} :: ${fullName}`
+        : `${relativePath}${formatBrowserSuffix(test.browserName)}`;
       lines.push(`- ${title}`);
     }
 

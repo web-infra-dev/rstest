@@ -119,6 +119,7 @@ export class DefaultReporter implements Reporter {
         test.relativeTestPath,
         false,
         this.options.showProjectName,
+        this.options.showBrowserName,
       );
       const showAllCases = this.testState.getTestFiles()?.length === 1;
 

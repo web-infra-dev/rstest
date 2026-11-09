@@ -425,6 +425,7 @@ export const createHeadedScheduler = async ({
                 projectName: payload.projectName,
                 result: payload.result,
                 testPath: payload.testPath,
+                browserName: payload.browserName,
               }),
             );
             runs.resolve(runId);

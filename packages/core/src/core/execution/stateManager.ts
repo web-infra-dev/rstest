@@ -6,6 +6,20 @@ import type {
   TestResult,
 } from '../../types';
 
+/**
+ * One (project, browser, path) triple per module state: a test path alone is
+ * ambiguous once another project (node pool) or another browser (browser
+ * mode) runs the same file in the same cycle, and each run of the file keeps
+ * its own running/case state here so reporters never collapse them. `browser`
+ * is empty for the node pool.
+ */
+const fileStateKey = (file: {
+  project: string;
+  browserName?: string;
+  testPath: string;
+}): string =>
+  `${file.project}\u0000${file.browserName ?? ''}\u0000${file.testPath}`;
+
 export class TestStateManager {
   public runningModules: ReturnType<RstestTestState['getRunningModules']> =
     new Map();
@@ -14,17 +28,38 @@ export class TestStateManager {
   public testFiles: string[] | undefined = undefined;
   private failedTestCount = 0;
 
+  /** The module state a (project, browser, path) run currently holds. */
+  runningModuleFor(file: {
+    project: string;
+    browserName?: string;
+    testPath: string;
+  }):
+    | {
+        relativeTestPath: string;
+        runningTests: TestCaseInfo[];
+        results: TestResult[];
+      }
+    | undefined {
+    return this.runningModules.get(fileStateKey(file));
+  }
+
   onTestFileStart({
+    project,
+    browserName,
     testPath,
     relativeTestPath,
-  }: Pick<TestFileInfo, 'testPath' | 'relativeTestPath'>): void {
-    const currentModule = this.runningModules.get(testPath);
+  }: Pick<
+    TestFileInfo,
+    'project' | 'browserName' | 'testPath' | 'relativeTestPath'
+  >): void {
+    const key = fileStateKey({ project, browserName, testPath });
+    const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
         (result) => result.status === 'failed',
       ).length;
     }
-    this.runningModules.set(testPath, {
+    this.runningModules.set(key, {
       relativeTestPath,
       runningTests: [],
       results: [],
@@ -32,9 +67,10 @@ export class TestStateManager {
   }
 
   onTestCaseResult(result: TestResult): void {
-    const currentModule = this.runningModules.get(result.testPath);
+    const key = fileStateKey(result);
+    const currentModule = this.runningModules.get(key);
     if (!currentModule) {
-      this.runningModules.set(result.testPath, {
+      this.runningModules.set(key, {
         relativeTestPath: result.relativeTestPath,
         runningTests: [],
         results: [result],
@@ -54,9 +90,10 @@ export class TestStateManager {
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    const currentModule = this.runningModules.get(test.testPath);
+    const key = fileStateKey(test);
+    const currentModule = this.runningModules.get(key);
     if (!currentModule) {
-      this.runningModules.set(test.testPath, {
+      this.runningModules.set(key, {
         relativeTestPath: test.relativeTestPath,
         runningTests: [test],
         results: [],
@@ -77,13 +114,14 @@ export class TestStateManager {
   }
 
   onTestFileResult(test: TestFileResult): void {
-    const currentModule = this.runningModules.get(test.testPath);
+    const key = fileStateKey(test);
+    const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
         (result) => result.status === 'failed',
       ).length;
     }
-    this.runningModules.delete(test.testPath);
+    this.runningModules.delete(key);
     this.failedTestCount +=
       test.results.length > 0
         ? test.results.filter((result) => result.status === 'failed').length

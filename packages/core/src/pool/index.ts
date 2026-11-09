@@ -324,7 +324,10 @@ const workerErrorToResult = (
     delete error.stack;
   }
 
-  const runningModule = context.stateManager.runningModules.get(testPath);
+  const runningModule = context.stateManager.runningModuleFor({
+    project: projectName,
+    testPath,
+  });
   const runningTests = runningModule?.runningTests;
   const completedResults = runningModule?.results || [];
 
@@ -366,7 +369,7 @@ const workerErrorToResult = (
 
   return {
     fileResult: {
-      testId: getFileTaskId(testPath),
+      testId: getFileTaskId({ project: projectName, testPath }),
       project: projectName,
       testPath,
       status: 'failed',

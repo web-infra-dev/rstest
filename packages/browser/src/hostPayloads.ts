@@ -4,12 +4,14 @@ import type {
   RawTestResult,
   RawTestSuiteInfo,
 } from '@rstest/core/internal/browser';
-import type { BrowserLogPayload } from './protocol';
+import type { BrowserLogPayload, BrowserName } from './protocol';
 
 /** Payload for test file start event */
 export type TestFileStartPayload = {
   testPath: string;
   projectName: string;
+  /** Owning browser, from the page options; absent only on collect pages. */
+  browserName?: BrowserName;
 };
 
 /** Payload for log event — single-sourced from the wire protocol. */
@@ -32,8 +34,12 @@ export type DeferredPromise<T> = {
   reject: (reason?: unknown) => void;
 };
 
-export const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
+export const getFileTaskId = (file: {
+  project: string;
+  testPath: string;
+  browserName?: string;
+}): string => {
+  return `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 };
 
 export const toError = (error: unknown): Error => {

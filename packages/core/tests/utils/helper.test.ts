@@ -23,8 +23,18 @@ it('isPlainObject accepts objects created in another realm', () => {
 
 it('getFileTaskId builds the file: task-id grammar', () => {
   // Locks the single source of truth so the worker/pool/runner consumers and
-  // the tests/pool/fixtures/testWorker.mjs literal copy cannot drift.
-  expect(getFileTaskId('/abs/foo.test.ts')).toBe('file:/abs/foo.test.ts');
+  // the tests/pool/fixtures/testWorker.mjs literal copy cannot drift: project
+  // always joins, the browser joins only in browser mode.
+  expect(getFileTaskId({ project: 'p', testPath: '/abs/foo.test.ts' })).toBe(
+    'file:p:/abs/foo.test.ts',
+  );
+  expect(
+    getFileTaskId({
+      project: 'p',
+      testPath: '/abs/foo.test.ts',
+      browserName: 'firefox',
+    }),
+  ).toBe('file:p:firefox:/abs/foo.test.ts');
 });
 
 it('toNativePath converts forward-slash paths to OS-native separators', () => {

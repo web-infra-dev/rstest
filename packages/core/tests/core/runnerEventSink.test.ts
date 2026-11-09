@@ -21,6 +21,7 @@ const makeContext = (
     disableConsoleIntercept?: boolean;
     resolveSnapshotPath?: (testPath: string, snapExtension: string) => string;
     failedCount?: number;
+    name?: string;
   } = {},
 ) => {
   const calls = {
@@ -58,6 +59,8 @@ const makeContext = (
 
   const projectConfig = {
     onConsoleLog: overrides.onConsoleLog,
+    name: overrides.name ?? 'test',
+
     disableConsoleIntercept: overrides.disableConsoleIntercept ?? false,
     resolveSnapshotPath: overrides.resolveSnapshotPath,
   } as unknown as InternalProjectContext['normalizedConfig'];

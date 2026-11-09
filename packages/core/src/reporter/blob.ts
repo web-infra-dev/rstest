@@ -59,7 +59,10 @@ export type BlobData = {
 };
 
 const DEFAULT_OUTPUT_DIR = '.rstest-reports';
-const BLOB_FORMAT_VERSION = `${RSTEST_VERSION}:2`;
+// `:3` adds the browser to the per-file key grammar (multi-browser runs): a
+// (project, testPath) pair alone is ambiguous once several browsers of one
+// project run the same file.
+const BLOB_FORMAT_VERSION = `${RSTEST_VERSION}:3`;
 
 /**
  * Single owner of the on-disk blob filename grammar. The writer (this module)
@@ -101,19 +104,23 @@ export const parseBlobFile = (content: string, fileName: string): BlobData => {
 /**
  * Single owner of the `BlobData.files` key grammar: both sides must key through
  * here, never by test path alone — a path is ambiguous once several projects
- * run the same file. Every producer carries its project on its own payload;
- * the reader takes `TestFileResult.project`, or parses the project back out
- * of the key when a track has no result.
+ * run the same file, and browsers of one project can run it concurrently, so
+ * the browser joins the key (empty for the node pool). Every producer carries
+ * its project on its own payload; the reader takes `TestFileResult.project`,
+ * or parses the project back out of the key when a track has no result.
  */
-export const blobFileKey = (project: string, testPath: string): string =>
-  JSON.stringify([project, testPath]);
+export const blobFileKey = (
+  project: string,
+  testPath: string,
+  browserName?: string,
+): string => JSON.stringify([project, browserName ?? '', testPath]);
 
 /**
  * Reads the project back out of a {@link blobFileKey} — the only field the
  * reader needs when a track has no result to take it from.
  */
 export const blobFileKeyProject = (key: string): string =>
-  (JSON.parse(key) as [string, string])[0];
+  (JSON.parse(key) as [string, string, string])[0];
 
 export class BlobReporter implements Reporter {
   // Blob output goes to a file, never process stdout/stderr.
@@ -211,7 +218,7 @@ export class BlobReporter implements Reporter {
         this.events
           .entries()
           .map(([file, events]) => [
-            blobFileKey(file.project, file.testPath),
+            blobFileKey(file.project, file.testPath, file.browserName),
             { events },
           ]),
       ),

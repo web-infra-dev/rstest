@@ -32,14 +32,16 @@ export const normalizeExactPathMatch = (filePath: string): string => {
 };
 
 /**
- * Generate a stable hash for a file path.
- * Uses FNV-1a to produce a 10-char hex string.
+ * Generate a stable hash for a file inside its project and (browser mode) its
+ * browser. Uses FNV-1a to produce a 10-char hex string; the browser joins the
+ * seed so parallel browser copies of one file cannot alias.
  */
 export function generateFilePathHash(
   project: string,
   testPath: string,
+  browserName?: string,
 ): string {
-  const str = `${project}\0${testPath}`;
+  const str = `${project}\0${browserName ?? ''}\0${testPath}`;
 
   // FNV-1a 32-bit hash, produce 10 hex chars by combining two rounds
   let h1 = 0x811c9dc5;
@@ -191,10 +193,19 @@ export const getTaskNameWithPrefix = (
  * grammar only needs to stay self-consistent — owning it here keeps the worker,
  * pool, and runner copies from drifting.
  *
+ * The project — and in browser mode the browser — join the id, so the same
+ * file is never aliased while another project (node pool) or another browser
+ * (browser mode) runs it concurrently.
+ *
  * The browser package keeps its own copy on purpose (it must not import core
  * runtime internals across the provider-agnostic barrier).
  */
-export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
+export const getFileTaskId = (file: {
+  project: string;
+  testPath: string;
+  browserName?: string;
+}): string =>
+  `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 
 /**
  * Makes some special types that are not supported for passing into the pool serializable.

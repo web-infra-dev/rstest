@@ -1,6 +1,7 @@
 import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type {
+  BrowserName,
   EnvironmentName,
   NormalizedConfig,
   RstestPoolType,
@@ -133,6 +134,12 @@ export type WorkerContext = {
   rootPath: InternalContext['rootPath'];
   projectRoot: InternalProjectContext['rootPath'];
   project: string;
+  /**
+   * Owning browser of the browser-mode page this state serves; set only on
+   * the browser runtime, never by the node pool. Task ids and file hashes
+   * include it so parallel browser copies of one file cannot alias.
+   */
+  browserName?: BrowserName;
   runtimeConfig: RuntimeConfig;
   taskId: number;
   /**

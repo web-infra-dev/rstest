@@ -11,6 +11,7 @@ import type {
 } from '../types';
 import { logger } from '../utils';
 import { formatStack, parseErrorStacktrace } from '../utils/error';
+import { formatBrowserSuffix } from './utils';
 
 interface JUnitTestCase {
   name: string;
@@ -150,7 +151,9 @@ export class JUnitReporter implements Reporter {
     const errors = 0; // No separate error tracking; set to 0 for clarity
 
     return {
-      name: fileResult.relativeTestPath,
+      // The browser suffix keeps suites of the same file distinct when several
+      // browsers of one project run it in one report.
+      name: `${fileResult.relativeTestPath}${formatBrowserSuffix(fileResult.browserName)}`,
       tests: fileResult.summary.total,
       failures: fileResult.summary.failed,
       errors,

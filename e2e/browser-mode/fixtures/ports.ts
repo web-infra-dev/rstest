@@ -59,7 +59,13 @@ export const BROWSER_PORTS = {
   'browser-coverage-v8-webkit': 5282,
   'empty-suite': 5284,
   'programmatic-runner': 5286,
+  // The browser-filter fixture runs one e2e case per run (firefox / chromium /
+  // none); the suite's test files run concurrently, so each case holds its own
+  // strictPort.
   'programmatic-browsers-filter': 5302,
+  'programmatic-browsers-filter-chromium': 5304,
+  'programmatic-browsers-filter-none': 5306,
+  'multi-browser': 5308,
   'browser-coverage-virtual-setup': 5288,
   'browser-coverage-virtual-setup-v8': 5290,
   'watch-setup': 5278,

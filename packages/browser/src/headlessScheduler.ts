@@ -537,6 +537,7 @@ export const createHeadlessScheduler = async ({
                     projectName: file.projectName,
                     result: state.result,
                     testPath: payload.testPath,
+                    browserName: file.browserName,
                   }),
                 );
                 for (const pendingFile of files) {
@@ -549,6 +550,7 @@ export const createHeadlessScheduler = async ({
                       message: `${message}; file was not run because the previous file cleanup timed out`,
                       projectName: pendingFile.projectName,
                       testPath: pendingFile.testPath,
+                      browserName: pendingFile.browserName,
                     }),
                   );
                 }
@@ -744,12 +746,19 @@ export const createHeadlessScheduler = async ({
   // Bailed files never run, so they carry no case results — mirror the node
   // pool's skip result (`runInPool.ts`) so the summary reports them as skipped
   // rather than dropping them silently.
-  const makeSkippedFileResult = (file: TestFileInfo): RawTestFileResult => ({
-    testId: getFileTaskId(file.testPath),
+  const makeSkippedFileResult = (
+    file: ScheduledTestFile,
+  ): RawTestFileResult => ({
+    testId: getFileTaskId({
+      project: file.projectName,
+      testPath: file.testPath,
+      browserName: file.browserName,
+    }),
     status: 'skipped',
     name: '',
     testPath: file.testPath,
     project: file.projectName,
+    browserName: file.browserName,
     results: [],
   });
 

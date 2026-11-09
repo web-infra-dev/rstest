@@ -11,6 +11,7 @@ type BufferedLogTask = {
   status: 'skipped' | 'passed' | 'failed' | 'todo';
   taskParentNames?: string[];
   taskType?: 'file' | 'suite' | 'case';
+  project: string;
   testPath: string;
 };
 
@@ -19,7 +20,7 @@ const getBufferedLogTaskId = (log: RawUserConsoleLog): string => {
     return log.taskId;
   }
 
-  return getFileTaskId(log.testPath);
+  return getFileTaskId({ project: log.project, testPath: log.testPath });
 };
 
 const getSuiteChainKey = (names: string[]): string => {
@@ -88,6 +89,7 @@ export const createSilentConsoleController = ({
       status,
       taskParentNames,
       taskType,
+      project,
       testPath,
     }: BufferedLogTask): void {
       if (status !== 'failed') {
@@ -98,7 +100,7 @@ export const createSilentConsoleController = ({
       const taskIdsToFlush: string[] = [];
 
       if (taskType === 'case') {
-        pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+        pushTaskId(taskIdsToFlush, getFileTaskId({ project, testPath }));
 
         const suiteNames = taskParentNames || [];
         for (let i = 0; i < suiteNames.length; i++) {
@@ -115,7 +117,7 @@ export const createSilentConsoleController = ({
       }
 
       if (taskType === 'suite') {
-        pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+        pushTaskId(taskIdsToFlush, getFileTaskId({ project, testPath }));
         pushTaskId(taskIdsToFlush, taskId);
       }
 

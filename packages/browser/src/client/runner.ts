@@ -34,6 +34,7 @@ import {
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
+  BrowserName,
   BrowserProjectRuntime,
   FileCleanupDispatchMethod,
   FileCleanupDispatchPayload,
@@ -233,8 +234,12 @@ const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
   }
 };
 
-const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
+const getFileTaskId = (file: {
+  project: string;
+  testPath: string;
+  browserName?: string;
+}): string => {
+  return `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
 };
 
 /**
@@ -243,6 +248,7 @@ const getFileTaskId = (testPath: string): string => {
  */
 const interceptConsole = (
   projectName: string,
+  browserName: BrowserName | undefined,
   getCurrentTask: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
 ): (() => void) => {
@@ -278,6 +284,7 @@ const interceptConsole = (
           level,
           content,
           projectName,
+          browserName,
           taskId: currentTask?.taskId,
           taskName: currentTask?.taskName,
           taskParentNames: currentTask?.taskParentNames,
@@ -665,6 +672,7 @@ const run = async () => {
           payload: {
             testPath,
             project: projectRuntime.name,
+            browserName: pageBrowserName,
             tests,
           },
         });
@@ -739,7 +747,11 @@ const run = async () => {
       window.__RSTEST_BROWSER_OPTIONS__ = options;
       const taskStack: CurrentTaskInfo[] = [
         {
-          taskId: getFileTaskId(testPath),
+          taskId: getFileTaskId({
+            project: projectRuntime.name,
+            testPath,
+            browserName: pageBrowserName,
+          }),
           taskType: 'file',
           testPath,
         },
@@ -758,6 +770,7 @@ const run = async () => {
       const restoreConsole = shouldInterceptConsole
         ? interceptConsole(
             projectRuntime.name,
+            options.browserName,
             () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
             runtimeConfig.disableConsoleIntercept
               ? false
@@ -774,6 +787,9 @@ const run = async () => {
 
       const workerState: WorkerState = {
         project: projectRuntime.name,
+        // The runner runtime folds the browser into every task id and file
+        // hash it derives, so parallel browser copies cannot alias.
+        browserName: pageBrowserName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -832,6 +848,7 @@ const run = async () => {
           method,
           args: {
             projectName: projectRuntime.name,
+            browserName: pageBrowserName,
             result,
             runId: getRunIdentity(),
             testPath,
@@ -899,7 +916,10 @@ const run = async () => {
           setRpcPhase('test');
         },
         onTestFileReady: async (test) => {
-          dispatchRunnerLifecycle('file-ready', test);
+          dispatchRunnerLifecycle('file-ready', {
+            ...test,
+            browserName: pageBrowserName,
+          });
         },
         onTestSuiteStart: async (test) => {
           taskStack.push({
@@ -910,11 +930,17 @@ const run = async () => {
             testPath: test.testPath,
           });
           syncCurrentTask();
-          dispatchRunnerLifecycle('suite-start', test);
+          dispatchRunnerLifecycle('suite-start', {
+            ...test,
+            browserName: pageBrowserName,
+          });
         },
         onTestSuiteResult: async (result) => {
           removeTaskFromStack(result.testId);
-          dispatchRunnerLifecycle('suite-result', result);
+          dispatchRunnerLifecycle('suite-result', {
+            ...result,
+            browserName: pageBrowserName,
+          });
         },
         onTestCaseStart: async (test) => {
           taskStack.push({
@@ -925,7 +951,10 @@ const run = async () => {
             testPath: test.testPath,
           });
           syncCurrentTask();
-          dispatchRunnerLifecycle('case-start', test);
+          dispatchRunnerLifecycle('case-start', {
+            ...test,
+            browserName: pageBrowserName,
+          });
         },
         onTestCaseFailure: async (test) => {
           if (!projectRuntime.screenshotFailures) return;
@@ -952,7 +981,7 @@ const run = async () => {
           }
           send({
             type: 'case-result',
-            payload: result,
+            payload: { ...result, browserName: pageBrowserName },
           });
         },
         getCountOfFailedTests: async () => failedTestsCount,
@@ -963,6 +992,7 @@ const run = async () => {
         payload: {
           testPath,
           projectName: projectRuntime.name,
+          browserName: pageBrowserName,
         },
       });
 
@@ -1000,8 +1030,13 @@ const run = async () => {
           );
         } catch (error) {
           result = {
-            testId: getFileTaskId(testPath),
+            testId: getFileTaskId({
+              project: projectRuntime.name,
+              testPath,
+              browserName: pageBrowserName,
+            }),
             project: projectRuntime.name,
+            browserName: pageBrowserName,
             testPath,
             status: 'failed',
             name: '',
@@ -1069,7 +1104,14 @@ const run = async () => {
 
         send({
           type: 'file-complete',
-          payload: result,
+          payload: {
+            ...result,
+            browserName: pageBrowserName,
+            results: result.results.map((caseResult) => ({
+              ...caseResult,
+              browserName: pageBrowserName,
+            })),
+          },
         });
         // Failures outside a file's load and run (runtime bootstrap, result publishing) end the batch as fatal.
       } catch (_error) {

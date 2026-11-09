@@ -106,7 +106,7 @@ describe('--onlyFailures', () => {
       {
         project: 'selection',
         testPath: normalize(join(fixtures, 'first.test.ts')),
-        testId: `file:${normalize(join(fixtures, 'first.test.ts'))}`,
+        testId: `file:selection:${normalize(join(fixtures, 'first.test.ts'))}`,
       },
     ]);
   }, 90_000);

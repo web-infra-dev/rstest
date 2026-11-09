@@ -778,9 +778,11 @@ describe('merge-reports lifecycle replay', () => {
     fs.outputFileSync(
       join(blobDir, 'blob.json'),
       JSON.stringify({
-        version: `${version}:2`,
+        version: `${version}:3`,
         runStart: {
-          files: [{ testPath, project: 'rstest', testId: `file:${testPath}` }],
+          files: [
+            { testPath, project: 'rstest', testId: `file:rstest:${testPath}` },
+          ],
         },
         results: [],
         testResults: [],
@@ -805,12 +807,12 @@ describe('merge-reports lifecycle replay', () => {
           updated: 0,
         },
         files: {
-          [JSON.stringify(['rstest', testPath])]: {
+          [JSON.stringify(['rstest', '', testPath])]: {
             events: [
               {
                 h: 'start',
                 test: {
-                  testId: `file:${testPath}`,
+                  testId: `file:rstest:${testPath}`,
                   testPath,
                   relativeTestPath: 'fatal.test.ts',
                   project: 'rstest',
@@ -889,7 +891,7 @@ describe('merge-reports lifecycle replay', () => {
     ]);
     await expectExecFailed();
     expectStderrLog(
-      /blob\.json uses format 1, but this Rstest version requires format .*:2/,
+      /blob\.json uses format 1, but this Rstest version requires format .*:3/,
     );
 
     fs.removeSync(blobDir);

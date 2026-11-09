@@ -109,14 +109,17 @@ export class RunnerRuntime {
     testPath,
     runtimeConfig,
     project,
+    browserName,
   }: {
     testPath: string;
     runtimeConfig: RuntimeConfig;
     project: string;
+    /** Owning browser of a browser-mode page; folds into every derived id. */
+    browserName?: string;
   }) {
     this.project = project;
     this.testPath = testPath;
-    this.fileHash = generateFilePathHash(project, testPath);
+    this.fileHash = generateFilePathHash(project, testPath, browserName);
     this.runtimeConfig = runtimeConfig;
   }
 

@@ -75,17 +75,26 @@ export const toReportDuration = (duration: Duration): ReportDuration => ({
 });
 
 /**
- * Keys reporter-internal per-file state (buffered console logs). A test path
- * alone is ambiguous once several projects run the same file, and the emitter
- * is only recoverable from the payload's `project`. Deliberately not
+ * Keys reporter-internal per-file state. A test path alone is ambiguous once
+ * several projects run the same file, and several browsers of one project can
+ * run it concurrently too, so project and browser join the key; the emitter
+ * is recoverable from the payload's `project`/`browserName`. Deliberately not
  * `blobFileKey`: that one is a persisted wire format whose encoding cannot
  * change without a blob version bump, while this key is process-local and free
  * to stay cheap.
  */
-export const reporterFileKey = (project: string, testPath: string): string =>
-  `${project}\u0000${testPath}`;
+export const reporterFileKey = (file: {
+  project: string;
+  testPath: string;
+  browserName?: string;
+}): string =>
+  `${file.project}\u0000${file.browserName ?? ''}\u0000${file.testPath}`;
 
-type FileIdentity = { project: string; testPath: string };
+type FileIdentity = {
+  project: string;
+  testPath: string;
+  browserName?: string;
+};
 
 export class PerFileEventBuffer<T> {
   private files = new Map<
@@ -95,11 +104,11 @@ export class PerFileEventBuffer<T> {
   private sequence = 0;
 
   reset(file: FileIdentity): void {
-    this.files.delete(reporterFileKey(file.project, file.testPath));
+    this.files.delete(reporterFileKey(file));
   }
 
   push(event: T, file: FileIdentity): void {
-    const key = reporterFileKey(file.project, file.testPath);
+    const key = reporterFileKey(file);
     let entry = this.files.get(key);
     if (!entry) {
       entry = { file, events: [] };
@@ -110,8 +119,7 @@ export class PerFileEventBuffer<T> {
 
   get(file?: FileIdentity): T[] {
     const events = file
-      ? (this.files.get(reporterFileKey(file.project, file.testPath))?.events ??
-        [])
+      ? (this.files.get(reporterFileKey(file))?.events ?? [])
       : Array.from(this.files.values())
           .flatMap(({ events }) => events)
           .sort((a, b) => a.seq - b.seq);
@@ -126,9 +134,7 @@ export class PerFileEventBuffer<T> {
   }
 
   prune(files: FileIdentity[]): void {
-    const keys = new Set(
-      files.map((file) => reporterFileKey(file.project, file.testPath)),
-    );
+    const keys = new Set(files.map((file) => reporterFileKey(file)));
     for (const key of this.files.keys()) {
       if (!keys.has(key)) this.files.delete(key);
     }
@@ -180,6 +186,14 @@ const statusColorfulStr: {
   todo: statusColor.todo(statusStr.todo),
   skipped: statusColor.skipped(statusStr.skipped),
 };
+
+/**
+ * Appends the owning browser of a browser-mode result to a reporter title, so
+ * the same project file run by several browsers produces distinguishable
+ * entries everywhere reporters name a file or task by its relative path.
+ */
+export const formatBrowserSuffix = (browserName: string | undefined): string =>
+  browserName ? ` [${browserName}]` : '';
 
 export const logCase = (
   result: TestResult,
@@ -342,11 +356,16 @@ export const logFileTitle = (
   relativePath: string,
   alwaysShowTime = false,
   showProjectName = false,
+  showBrowserName = false,
 ): void => {
   let title = ` ${color.bold(statusColorfulStr[test.status])}`;
 
   if (showProjectName && test.project) {
     title += ` ${statusColor[test.status](`[${test.project}]`)}`;
+  }
+
+  if (showBrowserName && test.browserName) {
+    title += ` ${color.gray(`[${test.browserName}]`)}`;
   }
 
   title += ` ${prettyTestPath(relativePath)}`;

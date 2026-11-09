@@ -49,7 +49,12 @@ describe('browser mode - reporter lifecycle hooks', () => {
       expect(getHookCount(cli.stdout, 'onTestRunEnd')).toBe(1);
       const payload = parseMarkerPayload<{
         selection: {
-          files: { testPath: string; testId: string; project: string }[];
+          files: {
+            testPath: string;
+            testId: string;
+            project: string;
+            browserName?: string;
+          }[];
         };
         events: { event: string; testId?: string; testPath?: string }[];
       }>(cli.stdout, '__RSTEST_REPORTER_CONTRACT__');
@@ -57,7 +62,10 @@ describe('browser mode - reporter lifecycle hooks', () => {
         payload.selection.files.map((file) => file.project).sort(),
       ).toEqual(filtered ? ['browser'] : ['browser', 'node']);
       for (const file of payload.selection.files) {
-        expect(file.testId).toBe(`file:${file.testPath}`);
+        const browserSegment = file.browserName ? `${file.browserName}:` : '';
+        expect(file.testId).toBe(
+          `file:${file.project}:${browserSegment}${file.testPath}`,
+        );
         const events = payload.events
           .filter((event) => event.testPath === file.testPath)
           .map((event) => event.event);

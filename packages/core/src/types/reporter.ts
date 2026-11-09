@@ -97,6 +97,13 @@ export type DefaultReporterOptions = {
    * show project name by default when running multiple projects
    */
   showProjectName?: boolean;
+
+  /**
+   * prints out browser name in test file title. Rstest sets it automatically
+   * when a run selects several browsers in one project; browser file results
+   * appear once per browser, so the tag says which browser produced each.
+   */
+  showBrowserName?: boolean;
 };
 
 export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;

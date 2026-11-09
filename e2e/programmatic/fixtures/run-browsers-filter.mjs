@@ -3,10 +3,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRstest } from '@rstest/core/api';
 
+// One process per case: the whole programmatic suite runs with other e2e
+// files in parallel, and the firefox boot is the slow part — a process that
+// only has to launch and run once cannot outlive its test's timeout.
 const fixtureDir = dirname(fileURLToPath(import.meta.url));
+// filter = 'none' | 'firefox' | 'chromium'
+const filter = process.argv[3];
+const runOptions =
+  filter === 'none' ? undefined : { browser: { browsers: filter } };
 const root = join(fixtureDir, `.browsers-filter-${process.pid}`);
-
-const runs = [];
 
 try {
   await mkdir(root, { recursive: true });
@@ -51,11 +56,12 @@ it('runs in the selected browser', () => {
     },
   };
 
-  const runWith = async (runOptions) => {
-    const rstest = await createRstest({ cwd: root, config: baseConfig });
-    const result = await rstest.run(runOptions);
-    runs.push({
-      filter: runOptions?.browser?.browsers ?? 'none',
+  const rstest = await createRstest({ cwd: root, config: baseConfig });
+  const result = await rstest.run(runOptions);
+
+  console.log(
+    `__RSTEST_API_RESULT__${JSON.stringify({
+      filter,
       status: result.status,
       tests: result.summary.tests,
       files: result.summary.files,
@@ -68,16 +74,8 @@ it('runs in the selected browser', () => {
           ),
         ),
       ),
-    });
-  };
-
-  // The /api path filters the configured browsers like the CLI flag:
-  // a single selected browser executes exactly one copy of the file.
-  await runWith(undefined);
-  await runWith({ browser: { browsers: 'firefox' } });
-  await runWith({ browser: { browsers: 'chromium' } });
-
-  console.log(`__RSTEST_API_RESULT__${JSON.stringify({ runs })}__END__`);
+    })}__END__`,
+  );
 } finally {
   await rm(root, { recursive: true, force: true });
 }

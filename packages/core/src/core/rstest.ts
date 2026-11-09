@@ -309,15 +309,10 @@ export class Rstest implements InternalContext {
     testResults: TestResult[],
     deletedEntries: string[] = [],
   ): void {
-    const filesToUpdate = new Map<string, Set<string>>();
+    const updatedFileKeys = new Set<string>();
     results.forEach((item) => {
-      const key = reporterFileKey(item.project, item.testPath);
-      const projectPaths = filesToUpdate.get(item.project);
-      if (projectPaths) {
-        projectPaths.add(item.testPath);
-      } else {
-        filesToUpdate.set(item.project, new Set([item.testPath]));
-      }
+      const key = reporterFileKey(item);
+      updatedFileKeys.add(key);
       const existingIndex = this.reporterResultIndex.get(key);
       if (existingIndex !== undefined) {
         this.reporterResults.results[existingIndex] = item;
@@ -328,7 +323,7 @@ export class Rstest implements InternalContext {
     });
 
     this.reporterResults.testResults = this.reporterResults.testResults.filter(
-      (result) => !filesToUpdate.get(result.project)?.has(result.testPath),
+      (result) => !updatedFileKeys.has(reporterFileKey(result)),
     );
     this.reporterResults.testResults.push(...testResults);
 
@@ -349,21 +344,19 @@ export class Rstest implements InternalContext {
     // see testSequencer.ts). Without this, the order files appear in reports
     // would shift run-to-run with the sequencer's scheduling. Sort is stable,
     // so individual test cases keep their in-file declaration order.
-    const byTestPathAndProject = (
-      a: { testPath: string; project: string },
-      b: { testPath: string; project: string },
+    const byFileIdentity = (
+      a: { testPath: string; project: string; browserName?: string },
+      b: { testPath: string; project: string; browserName?: string },
     ) =>
       a.testPath.localeCompare(b.testPath) ||
-      a.project.localeCompare(b.project);
-    this.reporterResults.results.sort(byTestPathAndProject);
+      a.project.localeCompare(b.project) ||
+      (a.browserName ?? '').localeCompare(b.browserName ?? '');
+    this.reporterResults.results.sort(byFileIdentity);
     this.reporterResultIndex.clear();
     this.reporterResults.results.forEach((result, index) => {
-      this.reporterResultIndex.set(
-        reporterFileKey(result.project, result.testPath),
-        index,
-      );
+      this.reporterResultIndex.set(reporterFileKey(result), index);
     });
-    this.reporterResults.testResults.sort(byTestPathAndProject);
+    this.reporterResults.testResults.sort(byFileIdentity);
   }
 }
 
@@ -402,6 +395,14 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
       ]),
     ),
   };
+  // File titles must say which browser produced a result only when two
+  // browsers can run the same project file concurrently; single-browser runs
+  // never have an ambiguous file title, so the tag would just be noise.
+  const showBrowserName = context.projects.some(
+    (project) =>
+      project.normalizedConfig.browser.enabled &&
+      project.normalizedConfig.browser.browsers.length > 1,
+  );
   let resolver:
     | InstanceType<
         typeof import('@rsbuild/core').rspack.experiments.resolver.ResolverFactory
@@ -432,6 +433,7 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
               ...initConfig,
               options: {
                 showProjectName: context.projects.length > 1,
+                showBrowserName,
                 ...options,
               },
             }),

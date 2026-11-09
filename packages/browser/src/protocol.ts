@@ -79,6 +79,8 @@ export type FileCleanupDispatchMethod =
 
 export type FileCleanupDispatchPayload = {
   projectName: string;
+  /** Owning browser of the running file; absent only on collect paths. */
+  browserName?: BrowserName;
   result?: RawTestFileResult;
   runId?: string;
   testPath: string;
@@ -117,6 +119,11 @@ export type BrowserLogPayload = {
    * file, so a path-keyed lookup can attribute the log to the wrong project.
    */
   projectName: string;
+  /**
+   * Owning browser, stamped by the client from the page options. The host must
+   * not re-derive it — several browsers of one project run the same file.
+   */
+  browserName?: BrowserName;
   taskId?: string;
   taskName?: string;
   taskParentNames?: string[];
@@ -204,7 +211,14 @@ export type BrowserClientMessage =
   | { type: 'ready' }
   | {
       type: 'file-start';
-      payload: { testPath: string; projectName: string };
+      payload: {
+        testPath: string;
+        projectName: string;
+        /**
+         * Owning browser, from the page options; absent only on collect pages.
+         */
+        browserName?: BrowserName;
+      };
     }
   | { type: 'case-result'; payload: RawTestResult }
   | { type: 'file-complete'; payload: RawTestFileResult }
@@ -217,7 +231,13 @@ export type BrowserClientMessage =
   // Collect mode messages
   | {
       type: 'collect-result';
-      payload: { testPath: string; project: string; tests: RawTestInfo[] };
+      payload: {
+        testPath: string;
+        project: string;
+        /** Owning browser of the collecting page; absent for project-level collection. */
+        browserName?: BrowserName;
+        tests: RawTestInfo[];
+      };
     }
   | { type: 'collect-complete' }
   // Unified RPC envelope for all runner -> container/host capability calls.

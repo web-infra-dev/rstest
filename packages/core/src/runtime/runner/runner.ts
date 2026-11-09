@@ -861,7 +861,11 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
-          testId: getFileTaskId(testPath),
+          testId: getFileTaskId({
+            project,
+            testPath,
+            browserName: state.browserName,
+          }),
           project,
           testPath,
           name: '',
@@ -871,7 +875,11 @@ export class TestRunner {
       }
 
       return {
-        testId: getFileTaskId(testPath),
+        testId: getFileTaskId({
+          project,
+          testPath,
+          browserName: state.browserName,
+        }),
         project,
         testPath,
         name: '',
@@ -906,14 +914,22 @@ export class TestRunner {
     }
 
     this.taskContext.setFallback({
-      taskId: getFileTaskId(testPath),
+      taskId: getFileTaskId({
+        project,
+        testPath,
+        browserName: state.browserName,
+      }),
       taskType: 'file',
       testPath,
     });
 
     try {
       return {
-        testId: getFileTaskId(testPath),
+        testId: getFileTaskId({
+          project,
+          testPath,
+          browserName: state.browserName,
+        }),
         project,
         testPath,
         name: '',

@@ -847,6 +847,16 @@ export function createCli(): CAC {
               })),
               commonOptions,
             ).length > 1,
+          // Browser rows only need a tag when more than one browser row is
+          // listed; single-browser rows never have ambiguous file titles.
+          showBrowser:
+            new Set(
+              result.flatMap((entry) =>
+                entry.browserName === undefined
+                  ? []
+                  : [`${entry.project}\0${entry.browserName}`],
+              ),
+            ).size > 1,
           filesOnly,
           json,
           includeSuites,

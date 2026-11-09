@@ -14,6 +14,7 @@ import {
 } from '../core/config/resolveConfig';
 import { exitReporters } from '../reporter';
 import type {
+  BrowserName,
   InternalContext,
   ListCommandResult,
   RawTestInfo,
@@ -76,12 +77,13 @@ const flattenListedTests = (
     return files.map((file) => ({
       testPath: file.testPath,
       project: file.project,
+      browserName: file.browserName,
       type: 'file',
     }));
   }
 
   const listed: ListedTest[] = [];
-  const visit = (test: RawTestInfo): void => {
+  const visit = (test: RawTestInfo, browserName?: BrowserName): void => {
     if (
       test.type === 'case' ||
       (options.includeSuites &&
@@ -90,24 +92,26 @@ const flattenListedTests = (
     ) {
       // Structured consumers need skipped declarations to build a complete
       // test tree. The CLI renderer deliberately continues to omit them.
+      // The raw test info carries no browser: it is the collecting row's.
       listed.push({
         testPath: test.testPath,
         name: test.name,
         fullName: getTaskNameWithPrefix(test),
         parentNames: test.parentNames ?? [],
         project: test.project,
+        browserName,
         location: test.location,
         runMode: listedRunModes[test.runMode],
         type: test.type,
       });
     }
     if (test.type === 'suite') {
-      test.tests.forEach(visit);
+      test.tests.forEach((nested) => visit(nested, browserName));
     }
   };
 
   for (const file of files) {
-    file.tests.forEach(visit);
+    file.tests.forEach((test) => visit(test, file.browserName));
   }
   return listed;
 };
