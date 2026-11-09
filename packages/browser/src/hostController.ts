@@ -440,8 +440,8 @@ export const runBrowserController = async (
     !filesOnly &&
     context.command !== 'list' &&
     coverageConfig?.provider === 'v8' &&
-    (browserProjects[0]?.normalizedConfig.browser.browser ?? 'chromium') ===
-      'chromium' &&
+    (browserProjects[0]?.normalizedConfig.browser.browsers[0]?.browserName ??
+      'chromium') === 'chromium' &&
     coverageProvider?.supportsBrowserCoverage !== true
       ? new Error(
           'The installed @rstest/coverage-v8 provider does not support Chromium Browser Mode coverage. ' +

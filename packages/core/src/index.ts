@@ -1,5 +1,9 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
+  BrowserEntry,
+  BrowserExpectConfig,
+  BrowserName,
+  BrowserViewport,
   CoverageOptions,
   CoverageProvider,
   ExpectConfig,
@@ -8,6 +12,7 @@ import type {
   KnownCoverageStructure,
   NormalizedCoverageOptions,
   RawCoverageResolveOptions,
+  ResolvedBrowserEntry,
   RstestExposeAPI,
   ProjectConfig,
   ResolvedRstestConfig,
@@ -26,6 +31,10 @@ export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
 export { registerFileCleanup } from './runtime/runner/fileCleanup';
 
 export type {
+  BrowserEntry,
+  BrowserExpectConfig,
+  BrowserName,
+  BrowserViewport,
   CoverageOptions,
   CoverageProvider,
   ExpectConfig,
@@ -33,6 +42,7 @@ export type {
   KnownCoverageStructure,
   NormalizedCoverageOptions,
   RawCoverageResolveOptions,
+  ResolvedBrowserEntry,
   ResolvedRstestConfig,
   RsbuildPlugin,
   RstestConfig,

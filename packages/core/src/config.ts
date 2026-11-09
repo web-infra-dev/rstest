@@ -8,11 +8,16 @@ import deepmerge from 'deepmerge';
 import { isAbsolute, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
+  BrowserEntry,
+  BrowserExpectConfig,
+  BrowserName,
+  BrowserViewport,
   BuiltInReporterNames,
   ExtendConfig,
   NormalizedConfig,
   ProjectConfig,
   RstestConfig,
+  ResolvedBrowserEntry,
 } from './types';
 import {
   castArray,
@@ -160,6 +165,168 @@ export const plainDeepMerge = <T>(base: T, override: T): T =>
     isMergeableObject: isPlainObject,
   }) as T;
 
+const BROWSER_NAMES: BrowserName[] = ['chromium', 'firefox', 'webkit'];
+
+const isBrowserName = (value: unknown): value is BrowserName =>
+  BROWSER_NAMES.includes(value as BrowserName);
+
+const browserNameList = (): string =>
+  BROWSER_NAMES.map((n) => `'${n}'`).join(', ');
+
+/**
+ * Validates one CLI/API browser-name token (`--browser.browsers`,
+ * `--browser.name`). `source` names the originating flag for the error.
+ */
+export const assertValidBrowserName = (value: string, source: string): void => {
+  if (!isBrowserName(value)) {
+    throw new Error(
+      `Unknown browser value ${JSON.stringify(value)} for ${source}. Accepted values: ${browserNameList()}.`,
+    );
+  }
+};
+
+/**
+ * CLI browser-name filter. `--browser.browsers`/`--browser.name` selects
+ * against this config layer's configured browsers: listed names keep their
+ * configured entries (with their overrides); a listed name the layer does not
+ * configure falls back to a plain entry with the layer's project-level
+ * defaults. The result replaces `browser.browsers` and absorbs (deletes) the
+ * deprecated `browser.browser` fallback so it is never reported as
+ * "set together with browsers".
+ */
+export const selectCliBrowserEntries = (
+  layer: RstestConfig['browser'],
+  names: BrowserName[],
+): (BrowserName | BrowserEntry)[] => {
+  const rawValue = layer?.browsers ?? layer?.browser ?? 'chromium';
+  const rawEntries = Array.isArray(rawValue) ? rawValue : [rawValue];
+
+  const configured = new Map<BrowserName, BrowserName | BrowserEntry>();
+  for (const item of rawEntries) {
+    const name = typeof item === 'object' ? item.browserName : item;
+    // Malformed entries cannot be matched by a name; normalization reports them.
+    if (!isBrowserName(name)) {
+      continue;
+    }
+    if (!configured.has(name)) {
+      configured.set(name, item as BrowserName | BrowserEntry);
+    }
+  }
+
+  return names.map((name) => configured.get(name) ?? name);
+};
+
+/**
+ * Warned once per process when a config layer still uses the deprecated single
+ * `browser` field. The runtime value is normalized away, so the warning cannot
+ * key off the normalized config.
+ */
+let deprecatedBrowserFieldWarned = false;
+const warnDeprecatedBrowserField = (): void => {
+  if (deprecatedBrowserFieldWarned) {
+    return;
+  }
+  deprecatedBrowserFieldWarned = true;
+  logger.warn(
+    "`browser.browser` is deprecated and will be removed in 1.0: use `browser.browsers` instead, e.g. `browsers: ['chromium']` or `[{ browserName: 'firefox' }]`.",
+  );
+};
+
+/**
+ * Expands the user-layer `browser.browsers` / deprecated `browser.browser`
+ * value into one raw entry per configured browser, preserving overrides.
+ * Shape errors are raised only for browser projects (mirrors how provider/viewport
+ * validation only runs for `browser.enabled: true` config), while the
+ * normalization result itself always satisfies the non-empty default.
+ *
+ * The user layer — not the defaults-merged layer — is the expansion source: the
+ * built-in defaults would otherwise force their own browser onto entries.
+ */
+const normalizeBrowserEntries = (
+  userBrowser: RstestConfig['browser'],
+  defaults: {
+    enabled: boolean;
+    headless: boolean;
+    screenshotFailures: boolean;
+    viewport?: BrowserViewport;
+    expect?: BrowserExpectConfig;
+    providerOptions: Record<string, unknown>;
+  },
+): ResolvedBrowserEntry[] => {
+  const rawValue = userBrowser?.browsers ?? userBrowser?.browser ?? 'chromium';
+  const rawEntries = Array.isArray(rawValue) ? rawValue : [rawValue];
+
+  if (defaults.enabled) {
+    if (
+      userBrowser?.browser !== undefined &&
+      userBrowser?.browsers !== undefined
+    ) {
+      throw new Error(
+        '`browser.browser` and `browser.browsers` cannot be set together: `browser.browser` is deprecated and superseded by `browsers`. Configure `browser.browsers` only.',
+      );
+    }
+    if (rawEntries.length === 0) {
+      throw new Error(
+        '`browser.browsers` must not be empty. Remove the option to run the default Chromium.',
+      );
+    }
+  }
+
+  const entries: ResolvedBrowserEntry[] = [];
+  const seen = new Set<BrowserName>();
+  for (const item of rawEntries) {
+    const entry = (typeof item === 'object' ? item : undefined) as
+      BrowserEntry | undefined;
+    const browserName = entry ? entry.browserName : (item as BrowserName);
+    if (!isBrowserName(browserName)) {
+      if (!defaults.enabled) {
+        continue;
+      }
+      throw new Error(
+        `Browser entry must either be a browser name (${browserNameList()}) or an object with a \`browserName\` field of those values. Received: ${JSON.stringify(entry ?? item)}.`,
+      );
+    }
+    if (!defaults.enabled) {
+      continue;
+    }
+    if (seen.has(browserName)) {
+      throw new Error(
+        `Browser '${browserName}' appears twice in \`browser.browsers\`: each browser may be configured at most once per project.`,
+      );
+    }
+    seen.add(browserName);
+    entries.push(resolvedBrowserEntry(entry ?? { browserName }, defaults));
+  }
+
+  // Browser config carries shape errors only for browser projects; a disabled
+  // layer always normalizes to the built-in default so the non-empty invariant
+  // holds for every `NormalizedBrowserModeConfig`.
+  return entries.length > 0 ? entries : [resolvedBrowserEntry(null, defaults)];
+};
+
+/**
+ * Overrides per entry field: an entry field set wins, then the project-level
+ * default. `providerOptions` merges per top-level key (`launch`, `context`)
+ * instead of whole-field, so an entry tweak keeps sibling provider keys.
+ */
+const resolvedBrowserEntry = (
+  entry: BrowserEntry | null,
+  defaults: {
+    headless: boolean;
+    screenshotFailures: boolean;
+    viewport?: BrowserViewport;
+    expect?: BrowserExpectConfig;
+    providerOptions: Record<string, unknown>;
+  },
+): ResolvedBrowserEntry => ({
+  browserName: entry?.browserName ?? 'chromium',
+  headless: entry?.headless ?? defaults.headless,
+  screenshotFailures: entry?.screenshotFailures ?? defaults.screenshotFailures,
+  viewport: entry?.viewport ?? defaults.viewport,
+  expect: entry?.expect ?? defaults.expect,
+  providerOptions: { ...defaults.providerOptions, ...entry?.providerOptions },
+});
+
 export const clonePlainConfig = <T>(value: T): T => {
   if (Array.isArray(value)) {
     return value.map((item) => clonePlainConfig(item)) as T;
@@ -305,10 +472,19 @@ const createDefaultConfig = (): NormalizedConfig => ({
   bail: 0,
   includeTaskLocation: false,
   federation: false,
+  // Pre-normalization seed: `withDefaultConfig` re-derives every browser entry
+  // from the user layer, so this list only keeps the merged layer type-shaped.
   browser: {
     enabled: false,
     provider: 'playwright',
-    browser: 'chromium',
+    browsers: [
+      {
+        browserName: 'chromium',
+        headless: isCI,
+        screenshotFailures: isCI,
+        providerOptions: {},
+      },
+    ],
     headless: isCI,
     screenshotFailures: isCI,
     strictPort: false,
@@ -391,10 +567,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
         }
       : merged.testEnvironment;
 
-  merged.browser = {
+  const browserDefaults = {
     enabled: merged.browser?.enabled ?? false,
     provider: merged.browser?.provider ?? 'playwright',
-    browser: merged.browser?.browser ?? 'chromium',
     headless: merged.browser?.headless ?? isCI,
     screenshotFailures:
       config.browser?.screenshotFailures ?? merged.browser?.headless ?? isCI,
@@ -406,6 +581,15 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       ? {}
       : { expect: merged.browser.expect }),
   };
+
+  merged.browser = {
+    ...browserDefaults,
+    browsers: normalizeBrowserEntries(config.browser, browserDefaults),
+  };
+
+  if (browserDefaults.enabled && config.browser?.browser !== undefined) {
+    warnDeprecatedBrowserField();
+  }
 
   return {
     ...merged,

@@ -4,7 +4,16 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
 {
   "bail": 0,
   "browser": {
-    "browser": "chromium",
+    "browsers": [
+      {
+        "browserName": "chromium",
+        "expect": undefined,
+        "headless": false,
+        "providerOptions": {},
+        "screenshotFailures": false,
+        "viewport": undefined,
+      },
+    ],
     "enabled": false,
     "headless": false,
     "port": undefined,
@@ -121,7 +130,16 @@ exports[`rstest context > should generate rstest context correctly with multiple
 {
   "bail": 0,
   "browser": {
-    "browser": "chromium",
+    "browsers": [
+      {
+        "browserName": "chromium",
+        "expect": undefined,
+        "headless": false,
+        "providerOptions": {},
+        "screenshotFailures": false,
+        "viewport": undefined,
+      },
+    ],
     "enabled": false,
     "headless": false,
     "port": undefined,
@@ -243,7 +261,16 @@ exports[`rstest context > should generate rstest context correctly with multiple
 {
   "bail": 0,
   "browser": {
-    "browser": "chromium",
+    "browsers": [
+      {
+        "browserName": "chromium",
+        "expect": undefined,
+        "headless": false,
+        "providerOptions": {},
+        "screenshotFailures": false,
+        "viewport": undefined,
+      },
+    ],
     "enabled": false,
     "headless": false,
     "port": undefined,

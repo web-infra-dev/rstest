@@ -1,7 +1,11 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
 import { mergeWithCLIOptions, resolveProjects } from '../../src/cli/init';
-import type { InlineProjectConfig, RstestConfig } from '../../src/types';
+import type {
+  BrowserName,
+  InlineProjectConfig,
+  RstestConfig,
+} from '../../src/types';
 
 const rootPath = join(__dirname, '../..');
 
@@ -572,7 +576,7 @@ describe('resolveProjects', () => {
         options: {
           browser: {
             enabled: true,
-            name: 'webkit',
+            browsers: 'webkit',
             headless: false,
             port: 4000,
             strictPort: true,
@@ -583,10 +587,29 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.browser).toEqual({
         enabled: true,
         provider: 'playwright',
-        browser: 'webkit',
+        browsers: ['webkit'],
         headless: false,
         port: 4000,
         strictPort: true,
+      });
+    });
+
+    it('should map the deprecated --browser.name to a browser selection', async () => {
+      const config: RstestConfig = {
+        projects: [{ name: 'test-project' }],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: { enabled: true, name: 'webkit' },
+        },
+      });
+
+      expect(projects[0]!.config.browser).toMatchObject({
+        enabled: true,
+        browsers: ['webkit'],
       });
     });
 
@@ -616,7 +639,7 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toMatchObject({
         enabled: true, // preserved from config
-        browser: 'firefox', // overridden by CLI
+        browsers: ['firefox'], // overridden by CLI (deprecated --browser.name)
         headless: true, // preserved from config
         port: 6000, // overridden by CLI
       });
@@ -708,6 +731,87 @@ describe('resolveProjects', () => {
           locale: 'en-US',
         },
       });
+    });
+
+    it('should filter configured browsers by --browser.browsers', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              browsers: [
+                'chromium',
+                { browserName: 'firefox', headless: false },
+              ],
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: { browser: { browsers: 'firefox' } },
+      });
+
+      expect(projects[0]!.config.browser).toMatchObject({
+        browsers: [{ browserName: 'firefox', headless: false }],
+      });
+    });
+
+    it('should fall back to a plain entry for a CLI-selected unconfigured browser', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              browsers: ['chromium'],
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        // CLI level: cac hands a comma-joined value as one string; the merge
+        // splits and validates it. The typed API surface stays BrowserName[].
+        options: { browser: { browsers: 'chromium,firefox' as BrowserName } },
+      });
+
+      expect(projects[0]!.config.browser!.browsers).toEqual([
+        'chromium',
+        'firefox',
+      ]);
+    });
+
+    it('should reject unknown --browser.browsers values', async () => {
+      const config: RstestConfig = {
+        projects: [{ name: 'test-project' }],
+      };
+
+      // CLI strings are validated at runtime; the type cannot express "invalid".
+      const invalid = 'safari' as BrowserName;
+      await expect(
+        resolveProjects({
+          config,
+          root: rootPath,
+          options: { browser: { browsers: invalid } },
+        }),
+      ).rejects.toThrow(/Unknown browser value/);
+    });
+
+    it('should reject --browser.name together with --browser.browsers', () => {
+      expect(() =>
+        mergeWithCLIOptions(
+          { browser: { enabled: true, provider: 'playwright' } },
+          { browser: { browsers: 'firefox', name: 'chromium' } },
+        ),
+      ).toThrow(/deprecated alias|cannot be set together/);
     });
   });
 

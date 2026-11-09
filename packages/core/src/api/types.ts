@@ -1,8 +1,11 @@
 import type { LoadConfigOptions } from '@rsbuild/core';
 import type {
+  BrowserEntry,
   BrowserName,
+  BrowserViewport,
   Location as TestLocation,
   NormalizedConfig,
+  ResolvedBrowserEntry,
   RstestConfig,
   RstestOutputConfig,
   TestRunEndPayload,
@@ -20,8 +23,12 @@ export type {
 
 /** @experimental Subject to change until 1.0.0. */
 export type {
+  BrowserEntry,
+  BrowserName,
+  BrowserViewport,
   NormalizedConfig,
   RstestConfig,
+  ResolvedBrowserEntry,
   TestLocation,
   LoadedRstestConfig,
   LoadProjectConfig,
@@ -83,9 +90,19 @@ export interface RunOptions {
     | boolean
     | {
         enabled?: boolean;
+        /**
+         * @deprecated Use `browsers` instead. Will be removed in 1.0.
+         */
         name?: BrowserName;
+        /**
+         * Browsers to run for browser projects. Overrides and filters the
+         * configured browsers: names with a configured entry use it, the rest
+         * run with project-level defaults.
+         */
+        browsers?: BrowserName | BrowserName[];
         headless?: boolean;
         screenshotFailures?: boolean;
+        viewport?: BrowserViewport;
         port?: number;
         strictPort?: boolean;
         providerOptions?: Record<string, unknown>;

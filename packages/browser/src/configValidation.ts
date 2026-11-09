@@ -160,25 +160,25 @@ const reportUnsupportedBrowserOptions = (context: InternalContext): void => {
     coverage.enabled &&
     coverage.provider === 'v8'
   ) {
-    const unsupportedProject = browserProjects.find(
-      (project) => project.normalizedConfig.browser.browser !== 'chromium',
+    const unsupported = browserProjects.flatMap((project) =>
+      project.normalizedConfig.browser.browsers
+        .filter((entry) => entry.browserName !== 'chromium')
+        .map((entry) => ({
+          projectName: project.name,
+          browserName: entry.browserName,
+        })),
     );
-    if (!unsupportedProject) {
-      // Chromium exposes V8 precise coverage through the Playwright provider.
-    } else if (isBrowserOnlyRun) {
+    if (unsupported.length > 0) {
+      const { projectName, browserName } = unsupported[0]!;
+      // Both screen modes are rejected uniformly (Vitest also hard-errors
+      // unless the selected browsers are all chromium): v8 cannot collect in
+      // non-V8 engines, and a partially-chromium run would silently lose the
+      // non-chromium projects' coverage.
       throw new Error(
-        "Coverage provider 'v8' in browser mode requires Chromium. " +
-          `Project ${JSON.stringify(unsupportedProject.name)} uses ${JSON.stringify(
-            unsupportedProject.normalizedConfig.browser.browser,
-          )}. Use Chromium or coverage.provider: 'istanbul'.`,
-      );
-    } else {
-      logger.warn(
-        color.yellow(
-          "Coverage provider 'v8' requires Chromium for browser project " +
-            `${JSON.stringify(unsupportedProject.name)}. Its files will not ` +
-            'produce coverage; node projects will still use v8.',
-        ),
+        "Coverage provider 'v8' in browser mode requires Chromium. Project " +
+          `${JSON.stringify(projectName)} selects ${JSON.stringify(browserName)}. ` +
+          "Switch to coverage.provider: 'istanbul', or select Chromium only " +
+          '(e.g. CLI `--browser.browsers chromium`).',
       );
     }
   }
@@ -220,7 +220,8 @@ const reportUnsupportedBrowserOptions = (context: InternalContext): void => {
     isBrowserOnlyRun &&
     browserProjects.some(
       ({ normalizedConfig: config }) =>
-        config.isolate === false && config.browser.headless === false,
+        config.isolate === false &&
+        config.browser.browsers.some((entry) => entry.headless === false),
     )
   ) {
     warnings.add(
@@ -264,6 +265,17 @@ export const validateBrowserConfig = (context: InternalContext): void => {
       );
     }
 
+    // Multi-browser runs (one project, several browsers) are not wired through
+    // launch/scheduling yet; rebuild this guard when the runtime widens.
+    if (browser.browsers.length > 1) {
+      const names = browser.browsers
+        .map((entry) => JSON.stringify(entry.browserName))
+        .join(', ');
+      throw new Error(
+        `Project ${JSON.stringify(project.name)} selects multiple browsers (${names}), but multi-browser runs are not supported yet. Configure one browser per project for now.`,
+      );
+    }
+
     validateViewport(browser.viewport);
 
     if (!isPlainObject(browser.providerOptions)) {
@@ -275,6 +287,30 @@ export const validateBrowserConfig = (context: InternalContext): void => {
         'output.bundleDependencies false is not supported in browser mode.',
       );
     }
+  }
+
+  // Headed debugging works through one container window today, so at most one
+  // (project, browser) pair may run headed per run; the rest run headless.
+  const headedPairs = context.projects.flatMap((project) =>
+    project.normalizedConfig.browser.enabled
+      ? project.normalizedConfig.browser.browsers
+          .filter((entry) => entry.headless === false)
+          .map((entry) => ({
+            projectName: project.name,
+            browserName: entry.browserName,
+          }))
+      : [],
+  );
+  if (headedPairs.length > 1) {
+    const listed = headedPairs
+      .map(
+        ({ projectName, browserName }) =>
+          `${JSON.stringify(projectName)} (${JSON.stringify(browserName)})`,
+      )
+      .join(', ');
+    throw new Error(
+      `Only one (project, browser) pair can run headed per run: ${listed}. Browser mode opens one debug window, so every other browser must set headless: true.`,
+    );
   }
 
   reportUnsupportedBrowserOptions(context);

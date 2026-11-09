@@ -132,6 +132,9 @@ export {
   RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
+// Browser launch-options identity: the browser host reads the normalized
+// per-entry browser name from `NormalizedBrowserModeConfig.browsers`.
+export type { BrowserName } from './types';
 export {
   getSetupFiles,
   materializeVirtualSetupFiles,

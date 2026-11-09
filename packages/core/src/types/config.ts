@@ -299,6 +299,33 @@ export type BrowserExpectConfig = {
   toMatchScreenshot?: BrowserScreenshotMatcherConfig;
 };
 
+/**
+ * Per-browser override entry inside `browser.browsers`.
+ *
+ * Only runtime-effective fields are overridable per browser: every browser of a
+ * project shares one build and one dev server, so build-scoped options
+ * (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level
+ * `browser` config and are inherited untouched by each entry.
+ */
+export type BrowserEntry = {
+  /** Required on the object form of a `browser.browsers` entry. */
+  browserName: BrowserName;
+  /** @default project `browser.headless` (which defaults to `true` in CI). */
+  headless?: boolean;
+  /** @default project `browser.viewport`. */
+  viewport?: BrowserViewport;
+  /** @default project `browser.screenshotFailures`. */
+  screenshotFailures?: boolean;
+  /** @default project `browser.expect`. */
+  expect?: BrowserExpectConfig;
+  /**
+   * Provider-specific options for this browser. Overrides the project-level
+   * `providerOptions` per top-level key (`launch`, `context`); keys not set on
+   * the entry keep the project-level value.
+   */
+  providerOptions?: Record<string, unknown>;
+};
+
 export type BrowserModeConfig = {
   /**
    * Enable browser mode when running tests.
@@ -313,9 +340,18 @@ export type BrowserModeConfig = {
    */
   provider: BrowserProvider;
   /**
-   * Which browser to use for testing.
+   * Browsers this project runs on. Each item is either a browser name (a plain
+   * entry inheriting every project-level default) or a {@link BrowserEntry}
+   * object overriding fields per browser. All browsers of a project share one
+   * build and one dev server.
    *
    * @default 'chromium'
+   */
+  browsers?: BrowserName | (BrowserName | BrowserEntry)[];
+  /**
+   * @deprecated Use `browsers` instead. Will be removed in 1.0.
+   *
+   * Normalized to a single entry inside `browsers` with a deprecation warning.
    */
   browser?: BrowserName;
   /**
@@ -807,10 +843,27 @@ type OptionalKeys =
   | 'resolveSnapshotPath'
   | 'extends';
 
+/**
+ * A `browser.browsers` entry after defaults are merged: the resolved shape the
+ * runtime schedules and launches against (`NormalizedBrowserModeConfig.browsers`).
+ */
+export type ResolvedBrowserEntry = {
+  browserName: BrowserName;
+  headless: boolean;
+  viewport?: BrowserViewport;
+  screenshotFailures: boolean;
+  expect?: BrowserExpectConfig;
+  providerOptions: Record<string, unknown>;
+};
+
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: BrowserProvider;
-  browser: BrowserName;
+  /** Non-empty: one {@link ResolvedBrowserEntry} per configured browser. */
+  browsers: ResolvedBrowserEntry[];
+  // Shared project-level fields: every entry above inherits these when it does
+  // not override them; build-scoped options (`port`, `strictPort`) and the
+  // provider identity live only here.
   headless: boolean;
   screenshotFailures: boolean;
   port?: number;

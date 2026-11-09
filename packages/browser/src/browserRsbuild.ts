@@ -8,7 +8,7 @@ import {
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import type { Rspack } from '@rstest/core';
+import type { Rspack, BrowserName } from '@rstest/core';
 import {
   applyRstestWatchIgnored,
   applyWatchInvalidation,
@@ -151,7 +151,9 @@ export type BrowserProviderProject = {
 
 type BrowserLaunchOptions = {
   provider: BrowserProvider;
-  browser: InternalProjectContext['normalizedConfig']['browser']['browser'];
+  // Launches attach to one browser entry per project in this phase; validation
+  // rejects multi-entry projects, so index 0 is the run's browser.
+  browser: BrowserName;
   headless: InternalProjectContext['normalizedConfig']['browser']['headless'];
   port: InternalProjectContext['normalizedConfig']['browser']['port'];
   strictPort: InternalProjectContext['normalizedConfig']['browser']['strictPort'];
@@ -167,6 +169,11 @@ const getBrowserProviderOptions = (
 
   return browserConfig.providerOptions ?? {};
 };
+
+const getFirstBrowserEntry = (
+  project: InternalProjectContext,
+): InternalProjectContext['normalizedConfig']['browser']['browsers'][number] =>
+  project.normalizedConfig.browser.browsers[0]!;
 
 export type BrowserProjectServer = {
   projectName: string;
@@ -827,7 +834,7 @@ const getBrowserLaunchOptions = (
   project: InternalProjectContext,
 ): BrowserLaunchOptions => ({
   provider: project.normalizedConfig.browser.provider,
-  browser: project.normalizedConfig.browser.browser,
+  browser: getFirstBrowserEntry(project).browserName,
   headless: project.normalizedConfig.browser.headless,
   port: project.normalizedConfig.browser.port,
   strictPort: project.normalizedConfig.browser.strictPort,
@@ -2082,7 +2089,7 @@ export const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  const browserName = browserLaunchOptions.browser ?? 'chromium';
+  const browserName = browserLaunchOptions.browser;
   let browser: BrowserProviderBrowser | undefined;
   try {
     const providerImplementation = getBrowserProviderImplementation(

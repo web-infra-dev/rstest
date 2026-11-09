@@ -7,8 +7,12 @@ import {
   withDefaultConfig,
 } from '../src/config';
 import { Rstest } from '../src/core/rstest';
-import type { RstestConfig } from '../src/types';
-import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
+import type { BrowserName, RstestConfig } from '../src/types';
+import {
+  normalizeBuildCache,
+  logger,
+  resolveProjectBuildCache,
+} from '../src/utils';
 
 // Mock std-env to ensure consistent snapshot across environments
 rs.mock('std-env', () => ({
@@ -708,6 +712,201 @@ describe('withDefaultConfig browser normalization', () => {
     const config: RstestConfig = {};
 
     expect(() => withDefaultConfig(config)).not.toThrow();
+  });
+});
+
+describe('browser.browsers normalization', () => {
+  it('resolves the default single chromium entry with project defaults merged', () => {
+    const normalized = withDefaultConfig({
+      browser: { enabled: true, provider: 'playwright', headless: true },
+    });
+    expect(normalized.browser.browsers).toEqual([
+      {
+        browserName: 'chromium',
+        headless: true,
+        screenshotFailures: true,
+        providerOptions: {},
+      },
+    ]);
+  });
+
+  it('expands a browser-name list into one plain entry per browser', () => {
+    const normalized = withDefaultConfig({
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        viewport: 'iPhone12Pro',
+        browsers: ['chromium', 'firefox'],
+      },
+    });
+    expect(normalized.browser.browsers).toEqual([
+      {
+        browserName: 'chromium',
+        headless: false,
+        screenshotFailures: false,
+        viewport: 'iPhone12Pro',
+        providerOptions: {},
+      },
+      {
+        browserName: 'firefox',
+        headless: false,
+        screenshotFailures: false,
+        viewport: 'iPhone12Pro',
+        providerOptions: {},
+      },
+    ]);
+  });
+
+  it('merges per-entry overrides over the project-level defaults', () => {
+    const normalized = withDefaultConfig({
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: true,
+        viewport: 'iPhone12Pro',
+        providerOptions: {
+          launch: { channel: 'chromium', args: ['--no-sandbox'] },
+          context: { locale: 'en-US' },
+        },
+        browsers: [
+          'chromium',
+          { browserName: 'firefox', headless: false, viewport: 'GalaxyZFold5' },
+          {
+            browserName: 'webkit',
+            providerOptions: { launch: { channel: 'webkit-nightly' } },
+          },
+        ],
+      } as RstestConfig['browser'],
+    });
+
+    // Firefox keeps the project providerOptions untouched.
+    expect(normalized.browser.browsers).toMatchObject([
+      { browserName: 'chromium', headless: true, viewport: 'iPhone12Pro' },
+      {
+        browserName: 'firefox',
+        headless: false,
+        viewport: 'GalaxyZFold5',
+        providerOptions: {
+          launch: { channel: 'chromium', args: ['--no-sandbox'] },
+          context: { locale: 'en-US' },
+        },
+      },
+      {
+        browserName: 'webkit',
+        headless: true,
+        viewport: 'iPhone12Pro',
+        // Entry providerOptions replace per top-level key: `launch` replaced
+        // wholesale, sibling `context` kept.
+        providerOptions: {
+          launch: { channel: 'webkit-nightly' },
+          context: { locale: 'en-US' },
+        },
+      },
+    ]);
+  });
+
+  it('normalizes the deprecated browser.browser into a single entry', () => {
+    const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
+    const normalized = withDefaultConfig({
+      browser: { enabled: true, provider: 'playwright', browser: 'firefox' },
+    });
+    expect(normalized.browser.browsers).toMatchObject([
+      { browserName: 'firefox', headless: false, providerOptions: {} },
+    ]);
+    // The legacy key never reaches the normalized config.
+    expect(
+      (normalized.browser as Record<string, unknown>).browser,
+    ).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('`browser.browser` is deprecated'),
+    );
+    warn.mockRestore();
+  });
+
+  it('emits the browser.browser deprecation warning once per process', () => {
+    // The sibling test above already consumed the once-per-process warning.
+    const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
+    withDefaultConfig({
+      browser: { enabled: true, provider: 'playwright', browser: 'firefox' },
+    });
+    const deprecationWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('`browser.browser` is deprecated'),
+    );
+    warn.mockRestore();
+    expect(deprecationWarnings).toHaveLength(0);
+  });
+
+  it('validates entries but skips shape errors for disabled browser projects', () => {
+    // The type cannot express "invalid" browser strings; normalization does.
+    const normalized = withDefaultConfig({
+      browser: {
+        enabled: false,
+        provider: 'playwright',
+        browser: 'not-a-browser' as BrowserName,
+      },
+    });
+    expect(normalized.browser.browsers).toHaveLength(1);
+    expect(normalized.browser.browsers[0]!.browserName).toBe('chromium');
+
+    expect(() =>
+      withDefaultConfig({
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          browsers: ['macOS' as BrowserName],
+        },
+      }),
+    ).toThrow(/must either be a browser name|browserName/);
+  });
+
+  it('rejects setting browser.browser together with browser.browsers', () => {
+    expect(() =>
+      withDefaultConfig({
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          browser: 'chromium',
+          browsers: ['firefox'],
+        },
+      }),
+    ).toThrow(/cannot be set together/);
+  });
+
+  it('rejects an empty browsers list', () => {
+    expect(() =>
+      withDefaultConfig({
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          browsers: [],
+        },
+      }),
+    ).toThrow(/must not be empty/);
+  });
+
+  it('rejects duplicate browser names within one project', () => {
+    expect(() =>
+      withDefaultConfig({
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          browsers: ['chromium', { browserName: 'chromium' }],
+        },
+      }),
+    ).toThrow(/appears twice/);
+  });
+
+  it('rejects unknown browser names', () => {
+    expect(() =>
+      withDefaultConfig({
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          browsers: ['safari' as BrowserName],
+        },
+      }),
+    ).toThrow(/must either be a browser name|browserName/);
   });
 });
 

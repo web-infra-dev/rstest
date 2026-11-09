@@ -172,8 +172,12 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--browser', 'Run tests in browser mode'],
   ['--browser.enabled', 'Run tests in browser mode'],
   [
+    '--browser.browsers <name>',
+    'Browser(s) to run: chromium, firefox, webkit — comma-separated and/or repeat the flag (default: chromium)',
+  ],
+  [
     '--browser.name <name>',
-    'Browser to use: chromium, firefox, webkit (default: chromium)',
+    'Single browser to use (deprecated: use --browser.browsers)',
   ],
   ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
   [
@@ -501,6 +505,7 @@ const allowedWildcardOptions = {
   browser: new Set([
     'enabled',
     'name',
+    'browsers',
     'headless',
     'screenshotFailures',
     'port',
