@@ -25,6 +25,9 @@ it('rejects an explicitly unsupported JSON import type', async () => {
   await expect(
     fetchStrings('en-us', { with: { type: 'text' } }),
   ).rejects.toMatchObject({
-    code: 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+    // Node 20 still uses the legacy import assertion error code.
+    code: expect.stringMatching(
+      /^ERR_IMPORT_(?:ATTRIBUTE|ASSERTION_TYPE)_UNSUPPORTED$/,
+    ),
   });
 });
