@@ -307,8 +307,6 @@ Pending wrapped `node:timers/promises` and promisified timeout/immediate operati
 
 ### Cross-realm assertions
 
-In jsdom VM environments, global `AbortController` and `AbortSignal` use Node.js implementations so their signals work with Node.js `fetch` and `Request`. DOM event listeners accept these signals through a bridge to jsdom's own implementation.
-
 Values from Node.js, workers, or DOM environments may use different constructors and fail `instanceof` checks in the current VM. Use `await` and content assertions, and check an error's `name`, `code`, or `message`.
 
 ### Module loading

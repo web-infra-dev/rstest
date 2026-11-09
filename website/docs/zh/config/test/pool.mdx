@@ -306,8 +306,6 @@ export default defineConfig({
 
 ### 跨 realm 断言
 
-在 jsdom VM 环境中，全局 `AbortController` 和 `AbortSignal` 使用 Node.js 实现，使其 signal 能用于 Node.js 的 `fetch` 和 `Request`。DOM 事件监听器通过桥接到 jsdom 自身实现的方式接受这些 signal。
-
 来自 Node.js、worker 或 DOM 环境的值可能使用不同的 constructor，无法通过当前 VM 中的 `instanceof` 检查。请使用 `await` 和内容断言，判断错误时检查 `name`、`code` 或 `message`。
 
 ### 模块加载
