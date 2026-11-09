@@ -8,8 +8,8 @@
     "serve:node": "serve dist-node -p 3004"
   },
   "devDependencies": {
-    "@module-federation/rsbuild-plugin": "2.9.2",
+    "@module-federation/rsbuild-plugin": "2.9.3",
     "@rsbuild/core": "catalog:",
-    "serve": "14.2.6"
+    "serve": "14.2.7"
   }
 }

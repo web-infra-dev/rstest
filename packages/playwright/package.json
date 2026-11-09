@@ -44,7 +44,7 @@
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
-    "playwright": "^1.64.1",
+    "playwright": "^1.65.0",
     "rstack": "catalog:",
     "typescript": "^6.0.3"
   },

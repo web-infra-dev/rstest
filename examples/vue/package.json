@@ -10,7 +10,7 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "vue": "^3.5.44"
+    "vue": "^3.5.45"
   },
   "devDependencies": {
     "@rsbuild/core": "catalog:",
@@ -18,8 +18,8 @@
     "@rsbuild/plugin-vue": "catalog:",
     "@rsbuild/plugin-vue-jsx": "catalog:",
     "@rstest/core": "workspace:*",
-    "@vue/compiler-dom": "^3.5.44",
-    "@vue/server-renderer": "^3.5.44",
+    "@vue/compiler-dom": "^3.5.45",
+    "@vue/server-renderer": "^3.5.45",
     "@vue/test-utils": "^2.5.1",
     "happy-dom": "^21.0.4",
     "typescript": "^6.0.3"
