@@ -1,21 +1,21 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 import type {
   onTestFailed as onRstestFailed,
   onTestFinished as onRstestFinished,
-} from '@rstest/core';
-import stripAnsi from 'strip-ansi';
-import type { Options, Output, Result } from 'tinyexec';
-import { x } from 'tinyexec';
-import treeKill from 'tree-kill';
+} from "@rstest/core";
+import stripAnsi from "strip-ansi";
+import type { Options, Output, Result } from "tinyexec";
+import { x } from "tinyexec";
+import treeKill from "tree-kill";
 
-type IoType = 'stdout' | 'stderr';
+type IoType = "stdout" | "stderr";
 
 class Cli {
   public exec: Result;
-  public stdout = '';
-  public stderr = '';
-  public log = '';
+  public stdout = "";
+  public stderr = "";
+  public log = "";
   private stdoutListeners: Array<() => void> = [];
   private stderrListeners: Array<() => void> = [];
   private stdoutEnded: Promise<void>;
@@ -37,8 +37,8 @@ class Cli {
         resolve();
         return;
       }
-      this.exec.process.stdout.once('end', resolve);
-      this.exec.process.stdout.once('error', resolve);
+      this.exec.process.stdout.once("end", resolve);
+      this.exec.process.stdout.once("error", resolve);
     });
 
     this.stderrEnded = new Promise((resolve) => {
@@ -46,23 +46,23 @@ class Cli {
         resolve();
         return;
       }
-      this.exec.process.stderr.once('end', resolve);
-      this.exec.process.stderr.once('error', resolve);
+      this.exec.process.stderr.once("end", resolve);
+      this.exec.process.stderr.once("error", resolve);
     });
 
-    this.exec.process?.stdout?.on('data', (data) => {
+    this.exec.process?.stdout?.on("data", (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
-      this.stdout += processStd ?? '';
-      this.log += processStd ?? '';
+      this.stdout += processStd ?? "";
+      this.log += processStd ?? "";
       for (const listener of this.stdoutListeners) {
         listener();
       }
     });
 
-    this.exec.process?.stderr?.on('data', (data) => {
+    this.exec.process?.stderr?.on("data", (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
-      this.stderr += processStd ?? '';
-      this.log += processStd ?? '';
+      this.stderr += processStd ?? "";
+      this.log += processStd ?? "";
       for (const listener of this.stderrListeners) {
         listener();
       }
@@ -116,8 +116,8 @@ class Cli {
     return new Promise<void>((resolve) => {
       const finish = () => resolve();
 
-      child.once('exit', finish);
-      treeKill(pid, 'SIGKILL', () => {
+      child.once("exit", finish);
+      treeKill(pid, "SIGKILL", () => {
         if (child.exitCode != null || child.signalCode != null) {
           finish();
         }
@@ -134,16 +134,16 @@ class Cli {
   }
 
   resetStd = (std?: IoType) => {
-    const toReset: IoType[] = std ? [std] : ['stdout', 'stderr'];
+    const toReset: IoType[] = std ? [std] : ["stdout", "stderr"];
     for (const io of toReset) {
-      this[io] = '';
+      this[io] = "";
     }
-    this.log = '';
+    this.log = "";
   };
 
   private waitForStd = (expect: string | RegExp, io: IoType): Promise<void> => {
     const matched = () =>
-      typeof expect === 'string'
+      typeof expect === "string"
         ? this[io].includes(expect)
         : Boolean(this[io].match(expect));
 
@@ -165,11 +165,11 @@ class Cli {
   };
 
   waitForStdout(expect: string | RegExp) {
-    return this.waitForStd(expect, 'stdout');
+    return this.waitForStd(expect, "stdout");
   }
 
   waitForStderr(expect: string | RegExp) {
-    return this.waitForStd(expect, 'stderr');
+    return this.waitForStd(expect, "stderr");
   }
 }
 
@@ -195,13 +195,21 @@ export async function runRstestCli({
     onTestFinished: onRstestFinished,
     onTestFailed: onRstestFailed,
     expect,
-  } = await import('@rstest/core');
+  } = await import("@rstest/core");
 
-  if (process.env.ISOLATE === 'false' && !args.includes('--isolate')) {
-    args.push('--isolate', 'false');
+  if (process.env.ISOLATE === "false" && !args.includes("--isolate")) {
+    args.push("--isolate", "false");
   }
 
   const baseEnv: Record<string, string | undefined> = { ...process.env };
+  // Every spawned CLI here asserts default human-facing output. Agent
+  // detection (std-env, e.g. CLAUDECODE=1 in the parent shell) otherwise
+  // switches the default reporter to `md`, which kills stdout assertions.
+  // e2e tests that exercise the agent reporter (e2e/reporter/*) clear this
+  // with `unsetEnv`.
+  if (baseEnv.RSTEST_NO_AGENT === undefined) {
+    baseEnv.RSTEST_NO_AGENT = "1";
+  }
   for (const key of unsetEnv ?? []) {
     // tinyexec merges env as `{ ...process.env, ...options.env }`, so deleting the
     // key here is not enough if the parent process has it set (e.g. FORCE_COLOR).
@@ -215,11 +223,6 @@ export async function runRstestCli({
       ...(options?.nodeOptions || {}),
       env: {
         ...baseEnv,
-        // Every spawned CLI here asserts default human-facing output. Agent
-        // detection (std-env, e.g. CLAUDECODE=1) otherwise switches the
-        // default reporter to `md`, which kills every stdout assertion.
-        // Tests that need the agent reporter clear this via `unsetEnv`.
-        RSTEST_NO_AGENT: '1',
         ...(options?.nodeOptions?.env || {}),
         GITHUB_ACTIONS: options?.nodeOptions?.env?.GITHUB_ACTIONS || undefined,
         GITHUB_STEP_SUMMARY:
@@ -243,9 +246,9 @@ export async function runRstestCli({
     await cli.waitForStreamsEnd();
     const exitCode = cli.exec.process?.exitCode;
     if (exitCode !== 0) {
-      const logs = cli.stdout.split('\n').filter(Boolean);
+      const logs = cli.stdout.split("\n").filter(Boolean);
       throw new Error(
-        `Test failed with exit code ${exitCode}. Logs:\n\n${logs.join('\n')}`,
+        `Test failed with exit code ${exitCode}. Logs:\n\n${logs.join("\n")}`,
       );
     }
     expect(exitCode).toBe(0);
@@ -256,9 +259,9 @@ export async function runRstestCli({
     await cli.waitForStreamsEnd();
     const exitCode = cli.exec.process?.exitCode;
     if (exitCode === 0) {
-      const logs = cli.stdout.split('\n').filter(Boolean);
+      const logs = cli.stdout.split("\n").filter(Boolean);
       throw new Error(
-        `expect test failed but passed. Logs:\n\n${logs.join('\n')}`,
+        `expect test failed but passed. Logs:\n\n${logs.join("\n")}`,
       );
     }
     expect(exitCode).not.toBe(0);
@@ -266,23 +269,23 @@ export async function runRstestCli({
 
   const expectLog = (
     msg: string | RegExp,
-    logs: string[] = cli.stdout.split('\n').filter(Boolean),
+    logs: string[] = cli.stdout.split("\n").filter(Boolean),
   ) => {
     const matchedLog = logs.find((log) => {
-      if (typeof msg === 'string') {
+      if (typeof msg === "string") {
         return log.includes(msg);
       }
       return log.match(msg);
     });
 
     if (!matchedLog) {
-      throw new Error(`Can't find log(${msg}) in:\n${logs.join('\n')}`);
+      throw new Error(`Can't find log(${msg}) in:\n${logs.join("\n")}`);
     }
   };
 
   const expectStderrLog = (
     msg: string | RegExp,
-    logs: string[] = cli.stderr.split('\n').filter(Boolean),
+    logs: string[] = cli.stderr.split("\n").filter(Boolean),
   ) => {
     expectLog(msg, logs);
   };
@@ -317,7 +320,7 @@ export async function prepareFixtures({
       retryDelay: 500,
     });
   } catch (err) {
-    if (process.platform !== 'win32') {
+    if (process.platform !== "win32") {
       throw err;
     }
     // On Windows, if we can't delete, try to proceed anyway
@@ -333,9 +336,9 @@ export async function prepareFixtures({
     filter: (src) => {
       const basename = path.basename(src);
       return (
-        !basename.startsWith('fixtures-test-') &&
-        basename !== 'dist' &&
-        basename !== '.cache'
+        !basename.startsWith("fixtures-test-") &&
+        basename !== "dist" &&
+        basename !== ".cache"
       );
     },
   });
@@ -346,14 +349,14 @@ export async function prepareFixtures({
   ) => {
     const targetFilepath = path.resolve(root, relativePath);
     let newContent: string;
-    if (typeof content === 'function') {
-      const oldContent = fs.readFileSync(targetFilepath, 'utf-8');
+    if (typeof content === "function") {
+      const oldContent = fs.readFileSync(targetFilepath, "utf-8");
       newContent = content(oldContent);
     } else {
       newContent = content;
     }
 
-    fs.writeFileSync(targetFilepath, newContent, 'utf-8');
+    fs.writeFileSync(targetFilepath, newContent, "utf-8");
   };
 
   const remove = (filePath: string) => {
@@ -369,12 +372,12 @@ export async function prepareFixtures({
   };
 
   const create = (filePath: string, content: string) => {
-    fs.writeFileSync(path.resolve(root, filePath), content, 'utf-8');
+    fs.writeFileSync(path.resolve(root, filePath), content, "utf-8");
   };
 
   const read = (relativePath: string) => {
     const targetFilepath = path.resolve(root, relativePath);
-    const content = fs.readFileSync(targetFilepath, 'utf-8');
+    const content = fs.readFileSync(targetFilepath, "utf-8");
     return content;
   };
 
@@ -395,4 +398,4 @@ export async function prepareFixtures({
   };
 }
 
-export * from './utils';
+export * from "./utils";
