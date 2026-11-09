@@ -8,6 +8,18 @@ const jestDomFilters = 'test/jestDom';
 
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
+it.for(['vmForks', 'vmThreads'] as const)(
+  'cancels pending DOM immediates under %s',
+  async (pool) => {
+    for (const environment of ['jsdom', 'happy-dom']) {
+      const { expectExecSuccess } = await runCli('test/timers', environment, {
+        args: ['--pool', pool, '--pool.maxWorkers', '1'],
+      });
+      await expectExecSuccess();
+    }
+  },
+);
+
 it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   'formats React DOM assertions under %s',
   async (pool) => {
