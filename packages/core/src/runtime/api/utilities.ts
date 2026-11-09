@@ -178,10 +178,10 @@ let utilitiesPromise:
       disposeForFile: () => void;
     }>
   | undefined;
-let disposeCurrentWaits: (() => void) | undefined;
+let disposeCurrentFile: (() => void) | undefined;
 
 export const disposeRstestUtilities = (): void => {
-  disposeCurrentWaits?.();
+  disposeCurrentFile?.();
 };
 
 /**
@@ -194,14 +194,15 @@ export const disposeRstestUtilities = (): void => {
  * is kept (it holds weak references, keyed by project) so a mock from a module
  * shared across files stays tracked without one project's `*AllMocks` reaching
  * another project's mocks on a reused worker. The actual globalThis side-effects
- * are still unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and the
- * per-file `useRealTimers`, unchanged.
+ * are unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and the
+ * per-file `useRealTimers`. VM file disposal also resets mocks and restores
+ * spies before environment teardown, since native modules survive worker reuse.
  * See https://github.com/web-infra-dev/rstest/issues/1376.
  */
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
   utilitiesPromise ??= buildRstestUtilities();
   const bound = await utilitiesPromise;
-  disposeCurrentWaits = bound.disposeForFile;
+  disposeCurrentFile = bound.disposeForFile;
   // On the first file this is a no-op (the fresh singleton already has empty
   // maps/registry); every later file returns it to a clean slate, mirroring the
   // previous per-file rebuild.
@@ -234,7 +235,7 @@ const buildRstestUtilities = async (): Promise<{
   const timerStack: TimerStackEntry[] = [];
   const timersByGlobal = new WeakMap<object, InstanceType<typeof FakeTimers>>();
   const pendingWaits = new Set<() => void>();
-  const disposeForFile = (): void => {
+  const cancelPendingWaits = (): void => {
     for (const cancel of pendingWaits) {
       cancel();
     }
@@ -761,13 +762,24 @@ const buildRstestUtilities = async (): Promise<{
   // weak references (see `initSpy`), so file-local mocks fall out on their own
   // once their evicted module is collected.
   const resetForFile = (): void => {
-    disposeForFile();
+    cancelPendingWaits();
     resetCallOrder();
     originalEnvValues.clear();
     originalGlobalValues.clear();
     timerStack.length = 0;
     originalConfig = undefined;
     currentFakeTimersConfig = undefined;
+  };
+
+  const disposeForFile = (): void => {
+    try {
+      // Native modules can retain a spy after its export is restored. Reset
+      // captured implementations too, without calling mutable public APIs.
+      forEachMock((mock) => mock.mockReset());
+      restoreAllSpies();
+    } finally {
+      cancelPendingWaits();
+    }
   };
 
   return { rstest, resetForFile, disposeForFile };

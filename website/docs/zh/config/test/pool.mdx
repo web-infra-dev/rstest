@@ -296,9 +296,9 @@ export default defineConfig({
 
 每个文件都有新的 VM context、模块图和测试环境，worker scope fixture 也按文件创建和清理；[`isolate`](/config/test/isolate) 对此不生效。但 worker 会复用，`process.env`、native addon 等 VM 之外的状态可能跨文件保留。
 
-`fs` 和 `fs/promises` 的模块命名空间按文件隔离。替换导出（包括 spy 和 `graceful-fs` 等依赖的补丁）不会修改 worker 的原生模块或影响其他文件。`syncBuiltinESMExports()` 会更新当前文件的具名导出。文件读写仍然操作真实文件系统。
+`fs` 和 `fs/promises` 使用 worker 的原生模块。`fs` 与 `node:fs`、`fs.promises` 与 `fs/promises` 等别名共享底层状态。复合操作、stream 和 `syncBuiltinESMExports()` 保持 Node.js 行为，包括原生实现可能在初始化时捕获某个方法。直接赋值和 `graceful-fs` 等依赖的补丁可能跨文件保留；不应保留的直接修改需要自行恢复。
 
-复合操作会沿用原生 Node.js 对公开方法的调用关系，并使用当前文件的底层 mock。例如，回调版 `writeFile` 会调用 `open`、`write` 和 `close`。直接使用原生 binding 的路径保持 Node.js 行为：异步 `readFile` 和同步 UTF-8 快速路径不会调用这些公开方法。stream 默认使用当前文件的 fs 操作，显式传入的 `options.fs` 或 `FileHandle` 则仍按 Node.js 规则处理。
+每个 VM 测试文件结束时，Rstest 会重置已注册的 mock（包括调用记录和待执行的单次实现），并恢复 spy。清理发生在文件清理回调之后、环境 teardown 之前，即使测试或清理回调失败也会执行。这不受 `clearMocks`、`resetMocks` 和 `restoreMocks` 影响，这些配置控制的是测试用例之间的清理。恢复后还会同步原生 builtin 的 ESM 导出。此文件结束时的 mock 清理仅适用于 VM pool。
 
 测试仍需在文件结束前 `await` 或取消异步任务。teardown 会清理受 Rstest 管理的定时器，但不会取消任意 Promise 链、原生 I/O 或后台任务。
 

@@ -599,7 +599,7 @@ describe('loadEsModule', () => {
     expect(mod.default).toEqual({ defaultExport: true, namedExport: true });
   });
 
-  it('isolates fs namespace mutations from native IO and other VM contexts', () => {
+  it('shares native fs mutations across VM contexts', () => {
     const executor = getVmExternalModules(vm.createContext({}));
     const other = getVmExternalModules(vm.createContext({}));
     const fs = executor.require('node:fs', __filename) as typeof nativeFs;
@@ -619,14 +619,13 @@ describe('loadEsModule', () => {
       nativeFsPromises,
       'readFile',
     )!;
-    const marker = Symbol('file-local fs property');
-    const contents = nativeFs.readFileSync(__filename, 'utf8');
+    const marker = Symbol('shared fs property');
     try {
       expect(executor.require('fs', __filename)).toBe(fs);
       expect(fs.promises).toBe(promises);
       expect(executor.require('fs/promises', __filename)).toBe(promises);
-      Reflect.set(fs, 'readFileSync', () => 'mocked');
-      const close = () => undefined;
+      Reflect.set(fs, 'readFileSync', vm.runInNewContext('() => "mocked"'));
+      const close = vm.runInNewContext('() => undefined');
       Object.defineProperty(fs, 'closeSync', {
         configurable: true,
         value: close,
@@ -634,17 +633,17 @@ describe('loadEsModule', () => {
       Reflect.deleteProperty(promises, 'readFile');
       Reflect.set(fs, marker, true);
       expect(fs.readFileSync(__filename, 'utf8')).toBe('mocked');
-      expect(fs.closeSync).toBe(close);
+      expect(fs.closeSync(-1)).toBeUndefined();
       expect(promises.readFile).toBeUndefined();
       expect(Reflect.get(fs, marker)).toBe(true);
-      expect(nativeFs.readFileSync).toBe(readFileDescriptor.value);
-      expect(nativeFs.closeSync).toBe(closeDescriptor.value);
-      expect(nativeFsPromises.readFile).toBe(promiseDescriptor.value);
-      expect(Reflect.has(nativeFs, marker)).toBe(false);
+      expect(nativeFs.readFileSync(__filename, 'utf8')).toBe('mocked');
+      expect(nativeFs.closeSync).toBe(close);
+      expect(nativeFsPromises.readFile).toBeUndefined();
+      expect(Reflect.get(nativeFs, marker)).toBe(true);
       const otherFs = other.require('fs', __filename) as typeof nativeFs;
-      expect(otherFs.readFileSync(__filename, 'utf8')).toBe(contents);
-      expect(typeof otherFs.promises.readFile).toBe('function');
-      expect(Reflect.has(otherFs, marker)).toBe(false);
+      expect(otherFs.readFileSync(__filename, 'utf8')).toBe('mocked');
+      expect(otherFs.promises.readFile).toBeUndefined();
+      expect(Reflect.get(otherFs, marker)).toBe(true);
     } finally {
       Object.defineProperty(nativeFs, 'readFileSync', readFileDescriptor);
       Object.defineProperty(nativeFs, 'closeSync', closeDescriptor);
@@ -655,7 +654,7 @@ describe('loadEsModule', () => {
     }
   });
 
-  it('syncs file-local fs ESM exports without changing native exports', async () => {
+  it('syncs native fs ESM exports after VM mutations', async () => {
     const context = vm.createContext({});
     const executor = getVmExternalModules(context);
     const fsDescriptor = Object.getOwnPropertyDescriptor(nativeFs, 'readFile')!;
@@ -686,8 +685,8 @@ describe('loadEsModule', () => {
       module.syncBuiltinESMExports();
       expect(fs.readFile).toBe(replacement);
       expect(promises.readFile).toBe(replacement);
-      expect(nativeFs.readFile).toBe(fsDescriptor.value);
-      expect(nativeFsPromises.readFile).toBe(promiseDescriptor.value);
+      expect(nativeFs.readFile).toBe(replacement);
+      expect(nativeFsPromises.readFile).toBe(replacement);
     } finally {
       Object.defineProperty(nativeFs, 'readFile', fsDescriptor);
       Object.defineProperty(nativeFsPromises, 'readFile', promiseDescriptor);
@@ -697,7 +696,7 @@ describe('loadEsModule', () => {
   });
 
   it.for(['fs', 'fs/promises'])(
-    'preserves synchronized %s bindings before the first ESM import',
+    'preserves native synchronized %s bindings before the first VM ESM import',
     async (specifier) => {
       const context = vm.createContext({});
       const executor = getVmExternalModules(context);
@@ -712,8 +711,11 @@ describe('loadEsModule', () => {
       ) as typeof import('node:module');
       const nativeFileSystem: Record<string, unknown> =
         createRequire(__filename)(specifier);
-      const nativeReadFile = nativeFileSystem.readFile;
-      const original = fileSystem.readFile;
+      const originalDescriptor = Object.getOwnPropertyDescriptor(
+        nativeFileSystem,
+        'readFile',
+      )!;
+      const nativeNamespace = await import(`node:${specifier}`);
       const synchronized = vm.runInContext('() => "synchronized"', context);
       const unsynchronized = vm.runInContext('() => "unsynchronized"', context);
       try {
@@ -738,6 +740,7 @@ describe('loadEsModule', () => {
           false,
         )) as Record<string, unknown>;
         expect(namespace.default).toBe(fileSystem);
+        expect(nativeNamespace.readFile).toBe(synchronized);
         expect(namespace.readFile).toBe(synchronized);
         expect(fileSystem.readFile).toBe(unsynchronized);
         expect(Object.hasOwn(namespace, 'fileOnly')).toBe(false);
@@ -747,16 +750,17 @@ describe('loadEsModule', () => {
         module.syncBuiltinESMExports();
         expect(namespace.readFile).toBeUndefined();
         expect(Object.hasOwn(namespace, 'readFile')).toBe(true);
-        expect(nativeFileSystem.readFile).toBe(nativeReadFile);
+        expect(nativeFileSystem.readFile).toBeUndefined();
       } finally {
-        fileSystem.readFile = original;
+        Object.defineProperty(nativeFileSystem, 'readFile', originalDescriptor);
+        Reflect.deleteProperty(nativeFileSystem, 'fileOnly');
         executor.dispose();
       }
     },
   );
 
   it.for([false, true])(
-    'isolates named fs promises exports (promises loaded first: %s)',
+    'shares native promises aliases (promises loaded first: %s)',
     async (preloadPromises) => {
       const context = vm.createContext({});
       const executor = getVmExternalModules(context);
@@ -772,7 +776,7 @@ describe('loadEsModule', () => {
         };
         const replacement = vm.runInContext('() => "mocked"', context);
         namespace.promises.readFile = replacement;
-        expect(nativeFsPromises.readFile).toBe(nativeReadFile);
+        expect(nativeFsPromises.readFile).toBe(replacement);
         expect(namespace.promises).toBe(namespace.default.promises);
         expect(namespace.default.promises.readFile).toBe(replacement);
         expect(executor.require('fs/promises', __filename)).toBe(
@@ -789,9 +793,12 @@ describe('loadEsModule', () => {
         expect(promises.default).toBe(namespace.promises);
         const other = getVmExternalModules(vm.createContext({}));
         try {
-          expect(other.require('fs/promises', __filename)).not.toBe(
-            namespace.promises,
-          );
+          const otherPromises = other.require(
+            'fs/promises',
+            __filename,
+          ) as typeof nativeFsPromises;
+          expect(otherPromises.readFile).not.toBe(nativeReadFile);
+          expect(await otherPromises.readFile('unused')).toBe('mocked');
         } finally {
           other.dispose();
         }
@@ -806,7 +813,7 @@ describe('loadEsModule', () => {
     ['ReadStream', 'createReadStream'],
     ['WriteStream', 'createWriteStream'],
   ] as const)(
-    'uses the file-local %s constructor in %s',
+    'uses the replaced native %s constructor in %s',
     async ([constructorName, factoryName]) => {
       const context = vm.createContext({});
       const executor = getVmExternalModules(context);
@@ -833,16 +840,17 @@ describe('loadEsModule', () => {
         expect(
           Reflect.construct(namespace[factoryName], ['unused-path', options]),
         ).toBeInstanceOf(replacement);
-        expect(nativeFs[constructorName]).toBe(nativeConstructor);
+        expect(nativeFs[constructorName]).toBe(replacement);
         Reflect.set(namespace.default, constructorName, nativeConstructor);
         expect(() => factory('unused-path', options)).toThrow();
       } finally {
+        Reflect.set(nativeFs, constructorName, nativeConstructor);
         executor.dispose();
       }
     },
   );
 
-  it('preserves native stream IO through fs facades', async () => {
+  it('preserves native stream IO through VM builtin wrappers', async () => {
     const executor = getVmExternalModules(vm.createContext({}));
     const directory = mkdtempSync(join(tmpdir(), 'rstest-vm-streams-'));
     const output = join(directory, 'output.txt');

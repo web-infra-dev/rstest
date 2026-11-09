@@ -135,7 +135,7 @@ it.for(
       Object.keys(nativeFs).map((name) => [name, Reflect.get(nativeFs, name)]),
     );
     try {
-      // The external fixture is executed in the same VM as its fs facade.
+      // The external fixture is executed in the same VM as its native fs wrapper.
       const mod = (await executor.import(fixture, false, false)) as {
         exercise: (fileSystem: unknown, scenario: Scenario) => Promise<unknown>;
       };

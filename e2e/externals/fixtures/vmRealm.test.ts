@@ -42,28 +42,28 @@ it('preserves setup fs mocks for late builtin ESM imports', async () => {
   });
 });
 
-it('keeps promises aliases inside the file facade', async () => {
+it('preserves native fs promises aliases', async () => {
   expect(await verifyFileSystemBridges()).toEqual({
     identity: true,
     mockVisible: true,
-    nativeUnchanged: true,
+    nativeMutationVisible: true,
   });
 });
 
-it('uses file-local constructors in stream factories', () => {
+it('uses replaced native constructors in stream factories', () => {
   expect(verifyStreamFactories()).toEqual({
     mockedStreams: true,
     streamArguments: true,
-    nativeConstructorsUnchanged: true,
+    nativeConstructorsReplaced: true,
   });
 });
 
-it('routes composite fs operations through file-local low-level mocks', async () => {
+it('preserves native composite fs dispatch through low-level mocks', async () => {
   expect(await verifyCompositeFileSystem()).toEqual({
     blocked: true,
     noUnexpectedIO: true,
     closedAfterWriteError: true,
-    nativeUnchanged: true,
+    nativeMocksVisible: true,
   });
 });
 

@@ -26,6 +26,27 @@ describe('rstest utilities per-file reset', () => {
     });
   });
 
+  it('preserves mocks on file initialization until VM disposal is requested', async () => {
+    const rs = await createUtilities();
+    const target = { method: () => 'original' };
+    const mock = rs.spyOn(target, 'method').mockReturnValue('mocked');
+    const captured = target.method;
+    target.method();
+    try {
+      await createRstestUtilities();
+      expect(target.method).toBe(mock);
+      expect(mock).toHaveBeenCalledTimes(1);
+      expect(target.method()).toBe('mocked');
+
+      disposeRstestUtilities();
+      expect(target.method()).toBe('original');
+      expect(mock).not.toHaveBeenCalled();
+      expect(captured()).toBe('original');
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
   it('restarts invocationCallOrder numbering for the next file', async () => {
     const rs1 = await createUtilities();
     const first = rs1.fn();

@@ -21,13 +21,12 @@ export const verifyCompositeFileSystem = async () => {
   const originalOpenSync = fs.openSync;
   const originalWrite = fs.write;
   const originalClose = fs.close;
-  const nativeOpen = native.open;
-  const nativeClose = native.close;
   const marker = Object.assign(new Error('mocked open'), { code: 'MOCK_OPEN' });
   const code = (fn) =>
     new Promise((resolve) => fn((error) => resolve(error?.code)));
   try {
     fs.open = (...args) => args.at(-1)(marker);
+    const nativeOpenMockVisible = native.open === fs.open;
     const namespace = await import('node:fs');
     const blocked = [
       await code((cb) => fs.writeFile(output, 'data', cb)),
@@ -53,11 +52,11 @@ export const verifyCompositeFileSystem = async () => {
         blocked.push(error.code);
       }
     }
+    fs.openSync = originalOpenSync;
     const noUnexpectedIO =
       !native.existsSync(output) &&
       native.readFileSync(input, 'utf8') === 'original';
     fs.open = originalOpen;
-    fs.openSync = originalOpenSync;
     let closeCalls = 0;
     fs.write = (...args) => args.at(-1)(marker);
     fs.close = (fd, callback) => {
@@ -69,8 +68,7 @@ export const verifyCompositeFileSystem = async () => {
       blocked: blocked.every((value) => value === 'MOCK_OPEN'),
       noUnexpectedIO,
       closedAfterWriteError: writeError === 'MOCK_OPEN' && closeCalls === 1,
-      nativeUnchanged:
-        native.open === nativeOpen && native.close === nativeClose,
+      nativeMocksVisible: nativeOpenMockVisible && native.close === fs.close,
     };
   } finally {
     fs.open = originalOpen;
@@ -96,7 +94,7 @@ export const verifyFileSystemBridges = async () => {
         initialPromises === require('fs/promises') &&
         initialPromises === promiseNamespace.default,
       mockVisible: fs.promises.readFile === replacement,
-      nativeUnchanged: nativeFs.promises.readFile === nativeReadFile,
+      nativeMutationVisible: nativeFs.promises.readFile === replacement,
     };
   } finally {
     initialPromises.readFile = originalReadFile;
@@ -106,8 +104,6 @@ export const verifyFileSystemBridges = async () => {
 
 export const verifyStreamFactories = () => {
   const nativeFs = process.getBuiltinModule('fs');
-  const nativeReadStream = nativeFs.ReadStream;
-  const nativeWriteStream = nativeFs.WriteStream;
   const originalReadStream = fs.ReadStream;
   const originalWriteStream = fs.WriteStream;
   class Replacement {
@@ -131,9 +127,9 @@ export const verifyStreamFactories = () => {
       streamArguments: streams.every(
         (stream) => stream.path === 'unused-path' && stream.options === options,
       ),
-      nativeConstructorsUnchanged:
-        nativeFs.ReadStream === nativeReadStream &&
-        nativeFs.WriteStream === nativeWriteStream,
+      nativeConstructorsReplaced:
+        nativeFs.ReadStream === Replacement &&
+        nativeFs.WriteStream === Replacement,
     };
   } finally {
     fs.ReadStream = originalReadStream;

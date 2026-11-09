@@ -12,7 +12,6 @@ import { dirname as nativeDirname, isAbsolute, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { extname } from 'pathe';
-import { installFileSystemBridges } from './fileSystem';
 import {
   asModule,
   getOrCreateSyntheticModule,
@@ -96,7 +95,6 @@ type BuiltinModuleRecord = {
   imported: Record<string, unknown>;
   overrides: Set<string>;
   wrapExports: boolean;
-  fileSystemExports?: Record<PropertyKey, unknown>;
 };
 
 type WebAssemblyCacheEntry = {
@@ -331,14 +329,6 @@ class VmExternalModules {
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleClass: typeof Module | undefined;
   private processBuiltin: unknown;
-  private readonly fileSystemModules = new Map<
-    string,
-    {
-      exports: Record<PropertyKey, unknown>;
-      exportNames: string[];
-      synchronizedExports?: Record<PropertyKey, unknown>;
-    }
-  >();
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
   private readonly vmError: typeof Error;
@@ -569,6 +559,9 @@ class VmExternalModules {
   }
 
   dispose(): void {
+    // Spies have been restored before disposal; refresh Node's live bindings
+    // so a later VM import cannot retain a previous file's synchronized spy.
+    Module.syncBuiltinESMExports();
     this.loadVmTimersPromises.dispose();
     this.esmJsonCache.clear();
     this.moduleEvaluationCache.clear();
@@ -1512,9 +1505,6 @@ class VmExternalModules {
   private loadBuiltin(specifier: string): unknown {
     const normalized = specifier.replace(/^node:/, '');
     const nativeRequire = createNativeRequire(import.meta.url);
-    if (normalized === 'fs' || normalized === 'fs/promises') {
-      return this.loadFileSystemModule(normalized);
-    }
     if (normalized === 'timers') {
       return this.loadVmTimers(
         nativeRequire(specifier) as Record<PropertyKey, unknown>,
@@ -1540,96 +1530,6 @@ class VmExternalModules {
     }
 
     return this.getVmModuleClass();
-  }
-
-  private loadFileSystemModule(name: string): Record<PropertyKey, unknown> {
-    const cached = this.fileSystemModules.get(name);
-    if (cached) {
-      return cached.exports;
-    }
-    const nativeModule = createNativeRequire(import.meta.url)(name) as Record<
-      PropertyKey,
-      unknown
-    >;
-    const facade = vm.runInContext('({})', this.context) as Record<
-      PropertyKey,
-      unknown
-    >;
-    this.fileSystemModules.set(name, {
-      exports: facade,
-      exportNames: Object.keys(nativeModule),
-    });
-    this.wrappedBuiltinValues.set(nativeModule, facade);
-    this.unwrappedBuiltinValues.set(facade, nativeModule);
-
-    if (name === 'fs') {
-      this.loadFileSystemModule('fs/promises');
-      // Native factories close over Node's constructors, so rebinding their
-      // receiver cannot make them honor file-local constructor replacements.
-      for (const [factoryName, constructorName] of [
-        ['createReadStream', 'ReadStream'],
-        ['createWriteStream', 'WriteStream'],
-      ] as const) {
-        const nativeFactory = Reflect.get(nativeModule, factoryName) as (
-          path: unknown,
-          options: unknown,
-        ) => object;
-        const createStream = (args: unknown[]) => {
-          // The facade contains either Node's constructor or the VM's replacement.
-          const Stream = facade[constructorName] as new (
-            path: unknown,
-            options: unknown,
-          ) => object;
-          return Reflect.construct(Stream, [args[0], args[1]]);
-        };
-        const factory = new Proxy(nativeFactory, {
-          apply: (_target, _receiver, args) =>
-            this.wrapBuiltinResult(createStream(args)),
-          construct: (_target, args) => createStream(args),
-        });
-        this.wrappedBuiltinValues.set(nativeFactory, factory);
-        this.unwrappedBuiltinValues.set(factory, nativeFactory);
-      }
-    }
-
-    // A dependency such as graceful-fs must never install a VM closure on the
-    // worker's native fs: Node may call it after this file's timers are gone.
-    for (const key of Reflect.ownKeys(nativeModule)) {
-      const descriptor = Object.getOwnPropertyDescriptor(nativeModule, key)!;
-      if ('value' in descriptor) {
-        descriptor.value = this.wrapBuiltinValue(descriptor.value);
-      } else {
-        let assigned = false;
-        let localValue: unknown;
-        if (descriptor.get) {
-          descriptor.get = () => {
-            if (assigned) {
-              return localValue;
-            }
-            return name === 'fs' && key === 'promises'
-              ? this.loadFileSystemModule('fs/promises')
-              : this.wrapBuiltinValue(Reflect.get(nativeModule, key));
-          };
-        }
-        if (descriptor.set) {
-          descriptor.set = (value) => {
-            assigned = true;
-            localValue = value;
-          };
-        }
-      }
-      Object.defineProperty(facade, key, descriptor);
-    }
-    if (name === 'fs') {
-      installFileSystemBridges(facade, (original, replacement) => {
-        const wrapped = this.wrapBuiltinValue(replacement);
-        const native = this.unwrapBuiltinValue(original);
-        if (typeof native === 'function')
-          this.wrappedBuiltinValues.set(native, wrapped);
-        return wrapped;
-      });
-    }
-    return facade;
   }
 
   private getVmModuleClass(): typeof Module {
@@ -1694,19 +1594,11 @@ class VmExternalModules {
     };
     nativeModule.syncBuiltinESMExports();
 
-    // Setup can synchronize a required fs before its first VM ESM import.
-    for (const record of this.fileSystemModules.values()) {
-      record.synchronizedExports = Object.fromEntries(
-        record.exportNames.map((name) => [name, record.exports[name]]),
-      );
-    }
-
     for (const {
       module,
       imported,
       overrides,
       wrapExports,
-      fileSystemExports,
     } of this.builtinModuleRecords.values()) {
       if (module.status !== 'evaluated') {
         continue;
@@ -1715,11 +1607,9 @@ class VmExternalModules {
         if (!overrides.has(name)) {
           module.setExport(
             name,
-            fileSystemExports
-              ? fileSystemExports[name]
-              : wrapExports
-                ? this.wrapBuiltinValue(imported[name])
-                : imported[name],
+            wrapExports
+              ? this.wrapBuiltinValue(imported[name])
+              : imported[name],
           );
         }
       }
@@ -1739,13 +1629,6 @@ class VmExternalModules {
     const overrides = new Set<string>();
     let exports: Record<string, unknown>;
     let defaultExport: unknown;
-    const fileSystemExports =
-      normalized === 'fs' || normalized === 'fs/promises'
-        ? this.loadFileSystemModule(normalized)
-        : undefined;
-    if (fileSystemExports) {
-      overrides.add('default');
-    }
     if (normalized === 'timers' || normalized === 'timers/promises') {
       const timers = this.loadBuiltin(resolvedId) as Record<
         PropertyKey,
@@ -1787,15 +1670,6 @@ class VmExternalModules {
       defaultExport = runtimeProcess;
     } else {
       exports = this.wrapBuiltinExports(imported);
-      const synchronizedFileSystemExports =
-        this.fileSystemModules.get(normalized)?.synchronizedExports;
-      if (synchronizedFileSystemExports) {
-        for (const name of Object.keys(imported)) {
-          if (name !== 'default') {
-            exports[name] = synchronizedFileSystemExports[name];
-          }
-        }
-      }
       defaultExport = exports.default;
     }
 
@@ -1813,7 +1687,6 @@ class VmExternalModules {
         normalized !== 'timers' &&
         normalized !== 'timers/promises' &&
         normalized !== 'process',
-      fileSystemExports,
     });
     return module;
   }

@@ -116,8 +116,6 @@ export const setupVM = async (
 }> => {
   const happyDOM = await loadHappyDOM(dependency);
   const win = createHappyDOMWindow(happyDOM, options, undefined);
-  const vmContext = createContext({});
-  const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
   const nodeTimers: NodeTimerPrimitives = {
     clearImmediate: globalThis.clearImmediate,
     clearInterval: globalThis.clearInterval,
@@ -126,6 +124,11 @@ export const setupVM = async (
     setInterval: globalThis.setInterval,
     setTimeout: globalThis.setTimeout,
   };
+  // Native modules can retain VM callbacks after the DOM is disposed (for
+  // example graceful-fs patches fs.close). Keep their Node timer primitives
+  // outside the DOM globals that cleanupGlobal removes.
+  const vmContext = createContext({ ...nodeTimers });
+  const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
   const cleanupObjectURLs = installObjectURLTracker(
     win.URL as unknown as typeof URL,
     context,

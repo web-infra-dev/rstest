@@ -297,9 +297,9 @@ These restrictions apply to both `vmForks` and `vmThreads`.
 
 Each file gets a fresh VM context, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file, regardless of [`isolate`](/config/test/isolate). Workers are reused, however, so state outside the VM, such as `process.env` and native-addon state, may persist across files.
 
-The `fs` and `fs/promises` module namespaces are local to each file. Replacing their exports, including with spies or patches from dependencies such as `graceful-fs`, does not modify the worker's native modules or other files. `syncBuiltinESMExports()` updates the current file's named exports. Filesystem reads and writes still access the real filesystem.
+`fs` and `fs/promises` use the worker's native modules. Aliases such as `fs` and `node:fs`, and `fs.promises` and `fs/promises`, share the same underlying state. Composite operations, streams, and `syncBuiltinESMExports()` retain Node.js behavior, including when native implementations capture a method during initialization. Direct assignments and dependency patches such as those from `graceful-fs` can persist across files; restore your own direct mutations when they should not persist.
 
-Composite operations honor file-local low-level mocks where native Node.js consults those exports: for example, callback-based `writeFile` uses `open`, `write`, and `close`. Native binding paths retain Node.js behavior: asynchronous `readFile` and synchronous UTF-8 fast paths bypass those public methods. Streams use file-local operations by default while honoring an explicit `options.fs` or `FileHandle`.
+At the end of each VM test file, Rstest resets registered mocks (including call history and queued one-time implementations) and restores spies. This runs after file cleanup callbacks and before environment teardown, even when a test or cleanup callback fails. It applies regardless of `clearMocks`, `resetMocks`, and `restoreMocks`, which control cleanup between tests. Native builtin ESM exports are synchronized after restoration. This file-end mock cleanup is specific to VM pools.
 
 Tests must still await or cancel asynchronous work before the file finishes. Teardown clears timers managed by Rstest, but does not cancel arbitrary Promise chains, native I/O, or background tasks.
 
