@@ -215,6 +215,11 @@ export async function runRstestCli({
       ...(options?.nodeOptions || {}),
       env: {
         ...baseEnv,
+        // Every spawned CLI here asserts default human-facing output. Agent
+        // detection (std-env, e.g. CLAUDECODE=1) otherwise switches the
+        // default reporter to `md`, which kills every stdout assertion.
+        // Tests that need the agent reporter clear this via `unsetEnv`.
+        RSTEST_NO_AGENT: '1',
         ...(options?.nodeOptions?.env || {}),
         GITHUB_ACTIONS: options?.nodeOptions?.env?.GITHUB_ACTIONS || undefined,
         GITHUB_STEP_SUMMARY:
