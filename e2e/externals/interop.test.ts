@@ -26,6 +26,15 @@ describe('test interop', () => {
       join(__dirname, './fixtures/test-vm-external'),
       join(__dirname, './node_modules/test-vm-external'),
     );
+    // TypeScript cannot parse source-phase import syntax in checked fixtures.
+    fse.moveSync(
+      join(
+        __dirname,
+        './node_modules/test-vm-external/wasm-source-static.mjs.txt',
+      ),
+      join(__dirname, './node_modules/test-vm-external/wasm-source-static.mjs'),
+      { overwrite: true },
+    );
     fse.copySync(
       join(__dirname, './fixtures/test-vm-external/helper.cjs'),
       join(
