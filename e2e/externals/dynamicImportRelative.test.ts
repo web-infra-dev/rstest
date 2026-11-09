@@ -24,13 +24,22 @@ it.each([undefined, { with: { type: 'json' } }])(
 it('rejects an explicitly unsupported JSON import type', async () => {
   // Node 20 reports unsupported import attributes as ERR_IMPORT_ASSERTION_TYPE_UNSUPPORTED;
   // Node 21 renamed it to ERR_IMPORT_ATTRIBUTE_UNSUPPORTED.
+  // VM pools synthesize the renamed code on every Node version.
   const nodeMajor = Number(process.versions.node.split('.')[0]);
-  await expect(
-    fetchStrings('en-us', { with: { type: 'text' } }),
-  ).rejects.toMatchObject({
-    code:
-      nodeMajor < 21
-        ? 'ERR_IMPORT_ASSERTION_TYPE_UNSUPPORTED'
-        : 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
-  });
+  const expectedCodes =
+    nodeMajor < 21
+      ? [
+          'ERR_IMPORT_ASSERTION_TYPE_UNSUPPORTED',
+          'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+        ]
+      : ['ERR_IMPORT_ATTRIBUTE_UNSUPPORTED'];
+  const rejectedCode = await fetchStrings('en-us', {
+    with: { type: 'text' },
+  }).then(
+    () => undefined,
+    (error: { code?: string }) => error.code,
+  );
+  expect(
+    rejectedCode !== undefined && expectedCodes.includes(rejectedCode),
+  ).toBe(true);
 });
