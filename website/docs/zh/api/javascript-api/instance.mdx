@@ -191,6 +191,8 @@ await rstest.run(); // 仍使用配置中的 2。
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> 设置单个测试的额外执行次数，测试和套件自身的选项优先。详见 [repeats](/config/test/repeats)。
 
+`browser` <ApiMeta sup addedVersion="0.12.7" /> 覆盖本次 run 中 browser 项目的浏览器选项：`RunOptions.browser.browsers` 按 [CLI 过滤](/config/test/browser#cli-浏览器过滤) 的规则选择并过滤已配置的浏览器 —— 列出的名字配置了对应 entry 就保留它（连同其覆盖项），没有配置则回退为继承项目级默认值的 plain entry；传 `undefined` 保持配置列表不变。废弃的 `browser.name` 别名选择单个浏览器。选项语义见 [browser](/config/test/browser#browsers)。
+
 - **类型：**
 
 ```ts
@@ -198,6 +200,21 @@ interface RunOptions {
   filters?: string[];
   trace?: boolean;
   repeats?: number;
+  // `true` 是 `browser.enabled: true` 的简写。
+  browser?:
+    | boolean
+    | {
+        enabled?: boolean;
+        /** @deprecated 请改用 `browsers`，将在 1.0 移除。 */
+        name?: BrowserName;
+        browsers?: BrowserName | BrowserName[];
+        headless?: boolean;
+        screenshotFailures?: boolean;
+        viewport?: BrowserViewport;
+        port?: number;
+        strictPort?: boolean;
+        providerOptions?: Record<string, unknown>;
+      };
   // ……以及其他支持的运行选项，用于覆盖同名配置项，
   // 例如 `testTimeout`、`coverage`、`reporters`。
 }
@@ -336,6 +353,7 @@ interface ListedTest {
   fullName?: string; // 带测试套件前缀的显示名称；文件条目不包含此字段。
   parentNames?: string[]; // 外层测试套件的名称。
   project: string; // 项目名称。
+  browserName?: BrowserName; // browser 模式下的所属浏览器；Node pool 上缺失。
   location?: TestLocation; // 请求后提供的源码位置。
   runMode?: 'skip' | 'todo'; // 不可运行声明的 skip 或 todo 模式。
   type: 'file' | 'suite' | 'case'; // 条目类型。

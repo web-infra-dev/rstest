@@ -124,7 +124,9 @@ Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写�
 
 <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。`TestRunStartPayload` 可从 `@rstest/core` 导入。
+`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`，以及（自 v0.12.7 起）browser 模式下的所属浏览器 `browserName`（Node pool 上缺失）。为项目选中多个浏览器的 run 会按 `(project, browser)` 各列一项。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。`TestRunStartPayload` 可从 `@rstest/core` 导入。
+
+<ApiMeta addedVersion="0.12.7" />
 
 - **类型：**
 
@@ -134,6 +136,7 @@ interface TestRunStartPayload {
     testPath: string;
     project: string;
     testId: string;
+    browserName?: BrowserName; // browser 模式下的所属浏览器。
   }[];
 }
 ```
@@ -172,10 +175,19 @@ interface TestResult {
   retryErrors?: SerializedError[]; // 之前重试产生的错误。
   retryCount?: number; // 已执行的重试次数。
   project: string; // 项目名称。
+  browserName?: BrowserName; // browser 模式下的所属浏览器；Node pool 上缺失。
   meta?: TaskMeta; // 关联到任务的可序列化元数据。
   heap?: number; // 堆内存用量（字节），开启 `logHeapUsage` 时采样。
 }
 ```
+
+#### 浏览器归属
+
+<ApiMeta addedVersion="0.12.7" />
+
+Browser 模式下，每条结果 payload（文件、suite、case 与 console log）都会携带运行它的浏览器的 `browserName`，task id 也会带上它：case id 以 `file:<project>:<browserName>:<testPath>` 为根，因此同一测试文件在两个浏览器下运行会得到两条互不覆盖的结果。Node pool 上 id 以 `file:<project>:<testPath>` 为根，`browserName` 保持缺失。
+
+内置 reporter 只在项目选中多个浏览器时，为文件行追加灰色的 `[browserName]` 标记（junit 的 suite 名与 markdown 标题在文件路径后追加同一标记）；单浏览器输出与旧版本逐字节一致。内置 reporter 的 `showBrowserName` 选项控制该标记：Rstest 在用户传入的选项之前自动注入它，因此自定义值始终优先。
 
 ### TestFileResult
 

@@ -5,7 +5,11 @@ import { runBrowserCli } from './utils';
 // must say which browser produced each of the two distinct results.
 describe('browser mode - multi-browser attribution', () => {
   it('runs one file copy per browser with per-browser reporter rows', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser');
+    // firefox is in the fixture browser set, so the CI chrome-channel push is
+    // managed inside the fixture config per chromium entry (see utils.ts).
+    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+      githubActionsChrome: false,
+    });
 
     await expectExecSuccess();
     // One row per (project, browser): the file title carries the browser tag
@@ -18,6 +22,7 @@ describe('browser mode - multi-browser attribution', () => {
   it('filters to one browser like the CLI flag and drops the other copy', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
       args: ['--browser.browsers=firefox'],
+      githubActionsChrome: false,
     });
 
     await expectExecSuccess();

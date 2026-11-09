@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
  * from being created. Since e2e tests often delete and recreate snapshots,
  * this causes all snapshot tests to fail in CI.
  */
-const defaultEnvOverrides: Record<string, string> = {
+export const defaultEnvOverrides: Record<string, string> = {
   CI: '',
   GITHUB_ACTIONS: '',
 };
@@ -135,11 +135,20 @@ export const runBrowserCli = async (
     command?: 'run' | 'list';
     args?: string[];
     env?: Record<string, string>;
+    /**
+     * Set `false` for fixtures whose browser set is not one chromium entry:
+     * the CI chrome-channel push (a `launch.*` option) would apply to every
+     * browser of the run, and Playwright rejects a channel on firefox/webkit.
+     * Such fixtures manage the channel themselves per chromium entry.
+     */
+    githubActionsChrome?: boolean;
   },
 ) => {
   const args = extra?.args || [];
 
-  applyGithubActionsChrome(args, fixtureName);
+  if (extra?.githubActionsChrome !== false) {
+    applyGithubActionsChrome(args, fixtureName);
+  }
 
   const result = await runRstestCli({
     command: 'rstest',
@@ -168,11 +177,14 @@ export const runBrowserWatchCli = async (
   extra?: {
     args?: string[];
     env?: Record<string, string>;
+    githubActionsChrome?: boolean;
   },
 ) => {
   const args = extra?.args || [];
 
-  applyGithubActionsChrome(args, fixtureName);
+  if (extra?.githubActionsChrome !== false) {
+    applyGithubActionsChrome(args, fixtureName);
+  }
 
   const result = await runRstestCli({
     command: 'rstest',

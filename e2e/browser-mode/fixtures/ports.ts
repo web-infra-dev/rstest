@@ -66,6 +66,7 @@ export const BROWSER_PORTS = {
   'programmatic-browsers-filter-chromium': 5304,
   'programmatic-browsers-filter-none': 5306,
   'multi-browser': 5308,
+  'multi-browser-rules': 5310,
   'browser-coverage-virtual-setup': 5288,
   'browser-coverage-virtual-setup-v8': 5290,
   'watch-setup': 5278,

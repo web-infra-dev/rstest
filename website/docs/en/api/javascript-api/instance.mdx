@@ -191,6 +191,8 @@ await rstest.run(); // Uses the configured 2 again.
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> sets the number of additional runs for each individual test. Test and suite options take precedence; see [repeats](/config/test/repeats).
 
+`browser` overrides the browser options for browser projects on this run: `RunOptions.browser.browsers` <ApiMeta sup addedVersion="0.12.7" /> selects and filters the configured browsers the [CLI filter](/config/test/browser#cli-browser-filters) does — a listed name with a configured entry keeps it (with its overrides), a listed name without one falls back to a plain entry with project-level defaults; `undefined` keeps the configured list. The deprecated `browser.name` alias selects a single browser. See [browser](/config/test/browser#browsers) for the option semantics.
+
 - **Type:**
 
 ```ts
@@ -198,6 +200,21 @@ interface RunOptions {
   filters?: string[];
   trace?: boolean;
   repeats?: number;
+  // `true` is shorthand for `browser.enabled: true`.
+  browser?:
+    | boolean
+    | {
+        enabled?: boolean;
+        /** @deprecated Use `browsers` instead. Will be removed in 1.0. */
+        name?: BrowserName;
+        browsers?: BrowserName | BrowserName[];
+        headless?: boolean;
+        screenshotFailures?: boolean;
+        viewport?: BrowserViewport;
+        port?: number;
+        strictPort?: boolean;
+        providerOptions?: Record<string, unknown>;
+      };
   // ...plus other supported run options as overrides of the config option
   // of the same name, e.g. `testTimeout`, `coverage`, `reporters`.
 }
@@ -336,6 +353,7 @@ interface ListedTest {
   fullName?: string; // Suite-prefixed display name; absent for file entries.
   parentNames?: string[]; // Names of the enclosing suites.
   project: string; // Project name.
+  browserName?: BrowserName; // Owning browser in browser mode; absent on the node pool.
   location?: TestLocation; // Source location when requested.
   runMode?: 'skip' | 'todo'; // Skip or todo mode for non-runnable declarations.
   type: 'file' | 'suite' | 'case'; // Entry kind.

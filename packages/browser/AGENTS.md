@@ -11,6 +11,12 @@ Headless: runner top-level page --exposeFunction(__rstest_dispatch__ / __rstest_
 
 Responses always travel back as transport replies — `dispatchRouter` handles inbound request routing only and never initiates outbound delivery. `dispatchTransport` (client side) owns request ids, timeouts, and pending-response resolution for both transports.
 
+## Launch-key model
+
+- A run launches one browser per `(provider, browserName, headless, providerOptions.launch)` launch key across all projects; two projects naming the same key share the launched browser. Within a project every browser of the project shares one build and one dev server, so build-scoped options stay project-level while `BrowserEntry` overrides only runtime-effective fields.
+- The host scheduler unit is `(project, browserName, testFile)`: selection expands to one row per configured browser, every state/screenshot/collect key includes the browser, and the client stamps `browserName` (via `WorkerState`) onto every payload it sends — a payload without it is indistinguishable from the node pool's.
+- Watch file-set entries carry no browser dimension, so stale-screenshot cleanup must sweep every browser directory the project could have written, not only the bare-path hash a key without a browser segment hashes to.
+
 ## Contract ownership
 
 - `@rstest/browser` owns host scheduling, dispatch routing, and protocol semantics.
