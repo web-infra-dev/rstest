@@ -131,7 +131,7 @@ export default defineConfig({
 
 环境包优先从当前项目的依赖解析，再回退到 Rstest workspace 根目录，最后通过 `@rstest/core` 的原生依赖解析保持向后兼容。
 
-使用 jsdom 测试环境并启用预打包时，参与打包的静态 `import` 和 `require('jsdom')` 如果解析到环境使用的同一份 jsdom，会复用环境模块。预打包失败时，这些引用会共同使用回退后的原生模块。显式配置的 external、其他 jsdom 安装副本，以及 external 依赖内部的引用，仍按原有方式加载。设置 `prebundle: false` 可关闭这种复用。
+使用 jsdom 或 happy-dom 测试环境并启用预打包时，参与打包的静态 `import`、使用字符串字面量的 `import()` 和 `require` 如果引用的是环境使用的同一份依赖，会复用环境模块。预打包失败时，这些引用会共同使用回退后的原生模块。显式配置的 external、该依赖的其他安装副本，以及 external 依赖内部的引用，仍按原有方式加载。设置 `prebundle: false` 可关闭这种复用。
 
 ### 环境注释
 

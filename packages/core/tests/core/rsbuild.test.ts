@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../src/utils/constants';
+import { RSTEST_ENVIRONMENT_GLOBAL_PREFIX } from '../../src/utils/constants';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import type {
   OnAfterCreateCompilerFn,
@@ -2184,90 +2184,105 @@ describe('prepareRsbuild', () => {
     });
   });
 
-  it('should generate rspack config correctly (jsdom)', async () => {
-    const rsbuildInstance = await prepareRsbuild({
-      context: {
-        rootPath,
-        normalizedConfig: {
-          root: rootPath,
-          name: 'test',
-          plugins: [],
-          resolve: {},
-          source: {},
-          output: {
-            distPath: {
-              root: TEMP_RSTEST_OUTPUT_DIR,
-            },
-          },
-          tools: {},
-          testEnvironment: {
-            name: 'jsdom',
-          },
-          pool: { type: 'forks' },
-        },
-        projects: [
-          {
+  it.for(['jsdom', 'happy-dom'] as const)(
+    'should generate rspack config correctly (%s)',
+    async (environment) => {
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath,
+          normalizedConfig: {
+            root: rootPath,
             name: 'test',
-            rootPath,
-            environmentName: 'test',
-            normalizedConfig: {
-              plugins: [],
-              resolve: {},
-              source: {},
-              output: {},
-              tools: {},
-              testEnvironment: {
-                name: 'jsdom',
+            plugins: [],
+            resolve: {},
+            source: {},
+            output: {
+              distPath: {
+                root: TEMP_RSTEST_OUTPUT_DIR,
               },
-              browser: { enabled: false },
             },
+            tools: {},
+            testEnvironment: {
+              name: environment,
+            },
+            pool: { type: 'forks' },
           },
-        ],
-      } as unknown as InternalContext,
-      globTestSourceEntries: async () => ({}),
-      setupFileState: createSetupFileState(),
-    });
-    expect(rsbuildInstance).toBeDefined();
-    const {
-      origin: { bundlerConfigs },
-    } = await rsbuildInstance.inspectConfig();
+          projects: [
+            {
+              name: 'test',
+              rootPath,
+              environmentName: 'test',
+              normalizedConfig: {
+                plugins: [],
+                resolve: {},
+                source: {},
+                output: {},
+                tools: {},
+                testEnvironment: {
+                  name: environment,
+                },
+                browser: { enabled: false },
+              },
+            },
+          ],
+        } as unknown as InternalContext,
+        globTestSourceEntries: async () => ({}),
+        setupFileState: createSetupFileState(),
+      });
+      expect(rsbuildInstance).toBeDefined();
+      const {
+        origin: { bundlerConfigs },
+      } = await rsbuildInstance.inspectConfig();
 
-    expect(bundlerConfigs[0]).toMatchSnapshot();
-    const external = castArray(bundlerConfigs[0]!.externals).at(-1);
-    if (typeof external !== 'function')
-      throw new Error('Missing jsdom external');
-    const resolvedPath = createRequire(import.meta.url).resolve('jsdom');
-    for (const [request, resolved, shared] of [
-      ['jsdom', resolvedPath, true],
-      ['jsdom', createRequire(import.meta.url).resolve('happy-dom'), false],
-      ['jsdom/lib/api.js', resolvedPath, false],
-    ] as const) {
-      const callback = rs.fn();
-      external(
-        {
-          request,
-          context: rootPath,
-          // Only the callback resolver overload is used by the external hook.
-          getResolve: (() =>
-            (
-              _context: string,
-              _request: string,
-              done: (error: null, path: string) => void,
-            ) =>
-              done(
-                null,
-                resolved,
-              )) as Rspack.ExternalItemFunctionData['getResolve'],
-        },
-        callback,
-      );
-      expect(callback.mock.calls).toEqual(
-        shared
-          ? [[undefined, [RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath], 'global']]
-          : [[]],
-      );
-    }
-  });
+      if (environment === 'jsdom') expect(bundlerConfigs[0]).toMatchSnapshot();
+      const external = castArray(bundlerConfigs[0]!.externals).at(-1);
+      if (typeof external !== 'function')
+        throw new Error('Missing environment external');
+      const resolvedPath = createRequire(import.meta.url).resolve(environment);
+      for (const [request, resolved, shared] of [
+        [environment, resolvedPath, true],
+        [
+          environment,
+          createRequire(import.meta.url).resolve(
+            environment === 'jsdom' ? 'happy-dom' : 'jsdom',
+          ),
+          false,
+        ],
+        [`${environment}/lib/index.js`, resolvedPath, false],
+      ] as const) {
+        const callback = rs.fn();
+        external(
+          {
+            request,
+            context: rootPath,
+            // Only the callback resolver overload is used by the external hook.
+            getResolve: (() =>
+              (
+                _context: string,
+                _request: string,
+                done: (error: null, path: string) => void,
+              ) =>
+                done(
+                  null,
+                  resolved,
+                )) as Rspack.ExternalItemFunctionData['getResolve'],
+          },
+          callback,
+        );
+        expect(callback.mock.calls).toEqual(
+          shared
+            ? [
+                [
+                  undefined,
+                  [RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath],
+                  'global',
+                ],
+              ]
+            : [[]],
+        );
+      }
+    },
+  );
 
   it('should generate rspack config correctly (node)', async () => {
     const rsbuildInstance = await prepareRsbuild({

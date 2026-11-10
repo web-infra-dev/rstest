@@ -3,7 +3,7 @@ import { expect, it } from '@rstest/core';
 it('runs in a DOM environment', () => {
   expect(
     Object.getOwnPropertyNames(globalThis).some((key) =>
-      key.startsWith('@rstest/jsdom/'),
+      key.startsWith('@rstest/environment/'),
     ),
   ).toBe(false);
   expect(document.body).toBeInstanceOf(HTMLBodyElement);

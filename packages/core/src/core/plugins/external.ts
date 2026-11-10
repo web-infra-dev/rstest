@@ -5,7 +5,7 @@ import type { InternalContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 import { isVmPoolType } from '../../utils/workers';
-import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../utils/constants';
+import { RSTEST_ENVIRONMENT_GLOBAL_PREFIX } from '../../utils/constants';
 import { isBrowserProject } from '../environment/isBrowserProject';
 import { resolveTestEnvironmentModule } from '../environment/testEnvironmentModule';
 import { rstestCoreGlobalExternal } from './mockBuild';
@@ -13,57 +13,62 @@ import { rstestCoreGlobalExternal } from './mockBuild';
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
 const SCRIPT_EXTENSION_RE = /\.(?:[cm]?[jt]sx?)$/;
 
-export const jsdomBridgeEntries: WeakMap<
+export const environmentBridgeEntries: WeakMap<
   Rspack.Compilation,
   Set<string>
 > = new WeakMap();
 
-const trackJsdomBridgeEntries = (compiler: Rspack.Compiler): void => {
-  compiler.hooks.thisCompilation.tap('rstest:jsdom-bridge', (compilation) => {
-    compilation.hooks.afterSeal.tap('rstest:jsdom-bridge', () => {
-      const consumers = new Set<string>();
-      const queue: Rspack.Module[] = [];
-      for (const module of compilation.modules) {
-        // Rspack exposes the external request through its identifier.
-        // The reserved global key survives persistent cache restores.
-        if (
-          module instanceof compiler.webpack.ExternalModule &&
-          module
-            .identifier()
-            .startsWith(`external global "${RSTEST_JSDOM_GLOBAL_PREFIX}`) &&
-          [...compilation.chunkGraph.getModuleChunksIterable(module)].length
-        ) {
-          queue.push(module);
-        }
-      }
-      for (let i = 0; i < queue.length; i++) {
-        const module = queue[i]!;
-        if (consumers.has(module.identifier())) continue;
-        consumers.add(module.identifier());
-        for (const connection of compilation.moduleGraph.getIncomingConnections(
-          module,
-        )) {
+const trackEnvironmentBridgeEntries = (compiler: Rspack.Compiler): void => {
+  compiler.hooks.thisCompilation.tap(
+    'rstest:environment-bridge',
+    (compilation) => {
+      compilation.hooks.afterSeal.tap('rstest:environment-bridge', () => {
+        const consumers = new Set<string>();
+        const queue: Rspack.Module[] = [];
+        for (const module of compilation.modules) {
+          // Rspack exposes the external request through its identifier.
+          // The reserved global key survives persistent cache restores.
           if (
-            connection.originModule &&
-            connection.getActiveState(undefined) !== false
+            module instanceof compiler.webpack.ExternalModule &&
+            module
+              .identifier()
+              .startsWith(
+                `external global "${RSTEST_ENVIRONMENT_GLOBAL_PREFIX}`,
+              ) &&
+            [...compilation.chunkGraph.getModuleChunksIterable(module)].length
           ) {
-            queue.push(connection.originModule);
+            queue.push(module);
           }
         }
-      }
-      const entries = new Set<string>();
-      for (const [name, entry] of compilation.entries) {
-        if (
-          entry.dependencies.some((dependency) => {
-            const module = compilation.moduleGraph.getModule(dependency);
-            return module && consumers.has(module.identifier());
-          })
-        )
-          entries.add(name);
-      }
-      jsdomBridgeEntries.set(compilation, entries);
-    });
-  });
+        for (let i = 0; i < queue.length; i++) {
+          const module = queue[i]!;
+          if (consumers.has(module.identifier())) continue;
+          consumers.add(module.identifier());
+          for (const connection of compilation.moduleGraph.getIncomingConnections(
+            module,
+          )) {
+            if (
+              connection.originModule &&
+              connection.getActiveState(undefined) !== false
+            ) {
+              queue.push(connection.originModule);
+            }
+          }
+        }
+        const entries = new Set<string>();
+        for (const [name, entry] of compilation.entries) {
+          if (
+            entry.dependencies.some((dependency) => {
+              const module = compilation.moduleGraph.getModule(dependency);
+              return module && consumers.has(module.identifier());
+            })
+          )
+            entries.add(name);
+        }
+        environmentBridgeEntries.set(compilation, entries);
+      });
+    },
+  );
 };
 
 function hasInlineLoader(request: string): boolean {
@@ -371,17 +376,18 @@ export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
             // User externals and automatic dependency externalization take precedence.
             // Only requests still destined for bundling can share the environment.
             if (
-              testEnvironment.name === 'jsdom' &&
+              testEnvironment.name !== 'node' &&
               !isBrowserProject(project) &&
               testEnvironment.prebundle !== false
             ) {
               config.plugins ??= [];
-              config.plugins.push({ apply: trackJsdomBridgeEntries });
+              config.plugins.push({ apply: trackEnvironmentBridgeEntries });
               config.externals.push(
                 ({ context: issuer, request, getResolve }, callback) => {
-                  if (request !== 'jsdom' || !getResolve) return callback();
+                  if (request !== testEnvironment.name || !getResolve)
+                    return callback();
                   const environmentPath = resolveTestEnvironmentModule(
-                    'jsdom',
+                    testEnvironment.name,
                     project.rootPath,
                     context.rootPath,
                   );
@@ -395,7 +401,7 @@ export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
                       return callback();
                     callback(
                       undefined,
-                      [RSTEST_JSDOM_GLOBAL_PREFIX + environmentPath],
+                      [RSTEST_ENVIRONMENT_GLOBAL_PREFIX + environmentPath],
                       'global',
                     );
                   });

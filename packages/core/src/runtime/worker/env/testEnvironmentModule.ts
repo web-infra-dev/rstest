@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { TestEnvironmentModuleFallback } from '../../../pool/protocol';
 import type { TestEnvironmentModuleReference } from '../../../types';
-import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../../utils/constants';
+import { RSTEST_ENVIRONMENT_GLOBAL_PREFIX } from '../../../utils/constants';
 import { installGlobalProperty } from '../globalProperty';
 import { logger } from '../../../utils';
 import { finalizeDynamicImport } from '../resolveDynamicImport';
@@ -175,13 +175,18 @@ export const installTestEnvironmentModule = async (
   target: object,
   onFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ): Promise<() => void> => {
-  if (reference?.name !== 'jsdom') return () => {};
+  if (!reference) return () => {};
   const loaded = await loadTestEnvironmentModule(reference, onFallback);
+  // CommonJS consumers may spy on exports. Keep their mutable facade separate
+  // from the cached namespace used to initialize the test environment.
+  const module = { ...loaded?.module };
+  if (reference.name === 'happy-dom') {
+    // Rspack must not synthesize a CommonJS default export for this ESM package.
+    Object.defineProperty(module, '__esModule', { value: true });
+  }
   return installGlobalProperty(
     target,
-    RSTEST_JSDOM_GLOBAL_PREFIX + reference.resolvedPath,
-    // CommonJS consumers may spy on exports. Keep their mutable facade separate
-    // from the cached namespace used to initialize the test environment.
-    { ...loaded?.module },
+    RSTEST_ENVIRONMENT_GLOBAL_PREFIX + reference.resolvedPath,
+    module,
   );
 };

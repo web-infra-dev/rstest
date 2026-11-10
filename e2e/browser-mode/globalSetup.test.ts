@@ -128,49 +128,52 @@ const expectSignalExitDuringGlobalSetup = async ({
 // its env change-set into the browser runtime store. Explicit `test.env` config
 // still takes precedence.
 describe('browser mode - globalSetup', () => {
-  it('does not bridge jsdom in browser globalSetup when the environment is ignored', async () => {
-    const target = path.join(
-      __dirname,
-      'fixtures/fixtures-test-browser-jsdom-setup',
-    );
-    const { fs: fixtureFs } = await prepareFixtures({
-      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
-      fixturesTargetPath: target,
-    });
-    try {
-      const jsdomPackage = createRequire(import.meta.url).resolve(
-        'jsdom/package.json',
-        {
-          paths: [path.join(__dirname, '../dom/fixtures')],
-        },
+  it.for(['jsdom', 'happy-dom'])(
+    'does not bridge %s in browser globalSetup when the environment is ignored',
+    async (environment) => {
+      const target = path.join(
+        __dirname,
+        `fixtures/fixtures-test-browser-${environment}-setup`,
       );
-      fs.mkdirSync(path.join(target, 'node_modules'), { recursive: true });
-      fs.symlinkSync(
-        path.dirname(jsdomPackage),
-        path.join(target, 'node_modules/jsdom'),
-        'junction',
-      );
-      fixtureFs.update(path.join(target, 'rstest.config.mts'), (content) =>
-        content.replace(
-          'defineConfig({',
-          "defineConfig({ testEnvironment: 'jsdom', output: { bundleDependencies: ['jsdom'] },",
-        ),
-      );
-      fixtureFs.update(
-        path.join(target, 'globalSetup.ts'),
-        (content) =>
-          "import { JSDOM } from 'jsdom';\n" +
+      const { fs: fixtureFs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+        fixturesTargetPath: target,
+      });
+      try {
+        const environmentPackage = createRequire(import.meta.url).resolve(
+          `${environment}/package.json`,
+          {
+            paths: [path.join(__dirname, '../dom/fixtures')],
+          },
+        );
+        fs.mkdirSync(path.join(target, 'node_modules'), { recursive: true });
+        fs.symlinkSync(
+          path.dirname(environmentPackage),
+          path.join(target, `node_modules/${environment}`),
+          'junction',
+        );
+        fixtureFs.update(path.join(target, 'rstest.config.mts'), (content) =>
           content.replace(
-            "console.log('[browser-global-setup] executed');",
-            "const dom = new JSDOM('<p>setup</p>'); dom.window.close(); console.log('[browser-global-setup] executed');",
+            'defineConfig({',
+            `defineConfig({ testEnvironment: "${environment}", output: { bundleDependencies: ["${environment}"] },`,
           ),
-      );
-      const { expectExecSuccess } = await runBrowserCliWithCwd(target);
-      await expectExecSuccess();
-    } finally {
-      await deleteFixtureTarget(fixtureFs, target);
-    }
-  });
+        );
+        fixtureFs.update(
+          path.join(target, 'globalSetup.ts'),
+          (content) =>
+            `import { ${environment === 'jsdom' ? 'JSDOM' : 'Window'} } from '${environment}';\n` +
+            content.replace(
+              "console.log('[browser-global-setup] executed');",
+              `const win = ${environment === 'jsdom' ? "new JSDOM('<p>setup</p>').window" : 'new Window()'}; win.close(); console.log('[browser-global-setup] executed');`,
+            ),
+        );
+        const { expectExecSuccess } = await runBrowserCliWithCwd(target);
+        await expectExecSuccess();
+      } finally {
+        await deleteFixtureTarget(fixtureFs, target);
+      }
+    },
+  );
 
   it('runs globalSetup, propagates env into browser tests, and tears down in order', async () => {
     const { cli, expectExecSuccess } = await runBrowserCli(

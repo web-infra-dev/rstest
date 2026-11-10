@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../../../src/utils/constants';
+import { RSTEST_ENVIRONMENT_GLOBAL_PREFIX } from '../../../../src/utils/constants';
 import path from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { withTempDir } from '../../../helpers/tempDir';
@@ -272,12 +272,12 @@ it.for(['success', 'import failure', 'probe failure'])(
       const loaded = await loadTestEnvironmentModule(reference);
       if (loaded?.name !== 'jsdom') throw new Error('Expected jsdom');
       expect(
-        Reflect.get(target, RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath),
+        Reflect.get(target, RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath),
       ).toEqual({ ...loaded.module });
       expect(fallback).toHaveBeenCalledTimes(mode === 'success' ? 0 : 1);
       const exports = Reflect.get(
         target,
-        RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath,
+        RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath,
       );
       const original = loaded.module.JSDOM;
       const spy = rs.spyOn(exports, 'JSDOM');
@@ -286,7 +286,59 @@ it.for(['success', 'import failure', 'probe failure'])(
       spy.mockRestore();
       restore();
       expect(
-        Reflect.has(target, RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath),
+        Reflect.has(target, RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath),
+      ).toBe(false);
+    });
+  },
+);
+
+it.for(['success', 'import failure'])(
+  'publishes happy-dom named exports after %s',
+  async (mode) => {
+    await withTempDir('rstest-happy-bridge-', async (root) => {
+      const resolvedPath = writeModule(
+        root,
+        'native.mjs',
+        'export class Window {}',
+      );
+      const bundlePath = writeModule(
+        root,
+        'bundle.mjs',
+        mode === 'success'
+          ? 'export class Window {}'
+          : 'throw new Error("broken import")',
+      );
+      const reference = {
+        name: 'happy-dom',
+        packageName: 'happy-dom',
+        resolvedPath,
+        bundlePath,
+      } as const;
+      const target = {};
+      const fallback = rs.fn();
+      const restore = await installTestEnvironmentModule(
+        reference,
+        target,
+        fallback,
+      );
+      const loaded = await loadTestEnvironmentModule(reference);
+      if (loaded?.name !== 'happy-dom') throw new Error('Expected happy-dom');
+      const exports = Reflect.get(
+        target,
+        RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath,
+      );
+      expect(exports.Window).toBe(loaded.module.Window);
+      expect(exports).not.toHaveProperty('default');
+      expect(exports.__esModule).toBe(true);
+      const original = loaded.module.Window;
+      const spy = rs.spyOn(exports, 'Window');
+      expect(exports.Window).not.toBe(original);
+      expect(loaded.module.Window).toBe(original);
+      spy.mockRestore();
+      expect(fallback).toHaveBeenCalledTimes(mode === 'success' ? 0 : 1);
+      restore();
+      expect(
+        Reflect.has(target, RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath),
       ).toBe(false);
     });
   },

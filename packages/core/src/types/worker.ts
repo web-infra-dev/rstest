@@ -18,7 +18,7 @@ import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
   /** Includes transitive imports; setup entries carry their own bridge requirement. */
-  usesJsdomBridge?: boolean;
+  usesEnvironmentBridge?: boolean;
   distPath: DistPath;
   runtimeDistPath?: DistPath;
   chunks: (string | number)[];
