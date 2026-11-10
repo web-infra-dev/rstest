@@ -224,7 +224,5 @@ export const installVmNodeGlobals = (
     process,
     Buffer,
     global: runtimeGlobal,
-    setImmediate,
-    clearImmediate,
   });
 };

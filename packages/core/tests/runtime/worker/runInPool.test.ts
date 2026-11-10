@@ -2,6 +2,7 @@ import { expect, test } from '@rstest/core';
 import vm from 'node:vm';
 import { util } from 'chai';
 import { setupVM } from '../../../src/runtime/worker/env/jsdom';
+import { setupVM as setupHappyDOM } from '../../../src/runtime/worker/env/happyDom';
 import {
   captureVmContextKeys,
   stripVmContext,
@@ -75,6 +76,33 @@ test('preserves a TextEncoder already provided by the VM', () => {
   installVmNodeGlobals(vm.runInContext('globalThis', context), context);
   expect(vm.runInContext('TextEncoder', context)).toBe(original);
 });
+
+test.for([
+  { name: 'jsdom', setup: setupVM },
+  { name: 'happy-dom', setup: setupHappyDOM },
+])(
+  'cancels pending DOM immediate callbacks after VM initialization: $name',
+  async ({ setup }) => {
+    const environment = await setup({}, { scope: 'file' });
+    const runtimeGlobal: VmRuntimeGlobal = vm.runInContext(
+      'globalThis',
+      environment.context,
+    );
+    let callbackCalls = 0;
+
+    try {
+      installVmNodeGlobals(runtimeGlobal, environment.context);
+      runtimeGlobal.setImmediate(() => {
+        callbackCalls++;
+      });
+    } finally {
+      await environment.teardown();
+    }
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(callbackCalls).toBe(0);
+  },
+);
 
 test('strips file globals while preserving context globals', () => {
   const context = vm.createContext({ preserved: true });

@@ -59,8 +59,6 @@ expect.element(target: Locator | Element): BrowserElementExpect
 
 对于 `test.concurrent`，如果断言需要使用该测试自己的剩余时间，请使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）。Browser 无法可靠识别并发异步流程，因此共享的文件级 `expect` 会使用配置的轮询超时。`describe.concurrent` 内的 hook 也有相同限制：其中的断言使用轮询超时，但外层 hook timeout 仍然可以提前结束断言。
 
-断言超时与 Browser RPC transport timeout 独立。测试执行期间，browser 和 snapshot RPC 请求不会额外增加超时；framework setup 和文件清理 RPC 使用独立的 30 秒 watchdog。
-
 ```ts
 // 使用 Browser Mode 的 expect.poll.timeout 默认值（5000ms），
 // 同时受当前测试剩余时间限制
