@@ -1,35 +1,36 @@
-import { expect, test } from '@rstest/core';
+import { describe, expect, test } from '@rstest/core';
 
-test('accepts global AbortController signals in Request and fetch', async () => {
-  const controller = new AbortController();
-  const request = new Request('http://127.0.0.1:1/', {
-    signal: controller.signal,
+describe('Request and fetch cancellation', () => {
+  test('accepts global AbortController signals in Request and fetch', async () => {
+    const controller = new AbortController();
+    const request = new Request('http://127.0.0.1:1/', {
+      signal: controller.signal,
+    });
+    controller.abort(new Error('request cancelled'));
+
+    expect(request.signal.aborted).toBe(true);
+    await expect(fetch(request)).rejects.toHaveProperty(
+      'message',
+      'request cancelled',
+    );
+
+    await expect(
+      fetch('http://127.0.0.1:1/', {
+        signal: AbortSignal.abort(new Error('fetch cancelled')),
+      }),
+    ).rejects.toHaveProperty('message', 'fetch cancelled');
   });
-  controller.abort(new Error('request cancelled'));
 
-  expect(request.signal.aborted).toBe(true);
-  await expect(fetch(request)).rejects.toHaveProperty(
-    'message',
-    'request cancelled',
-  );
+  test('preserves global AbortSignal timeout reasons in fetch', async () => {
+    const signal = AbortSignal.timeout(0);
+    await new Promise<void>((resolve) =>
+      signal.addEventListener('abort', () => resolve(), { once: true }),
+    );
 
-  await expect(
-    fetch('http://127.0.0.1:1/', {
-      signal: AbortSignal.abort(new Error('fetch cancelled')),
-    }),
-  ).rejects.toHaveProperty('message', 'fetch cancelled');
-});
-
-test('preserves global AbortSignal timeout reasons in fetch', async () => {
-  const signal = AbortSignal.timeout(0);
-  await new Promise<void>((resolve) =>
-    signal.addEventListener('abort', () => resolve(), { once: true }),
-  );
-
-  await expect(fetch('http://127.0.0.1:1/', { signal })).rejects.toHaveProperty(
-    'name',
-    'TimeoutError',
-  );
+    await expect(
+      fetch('http://127.0.0.1:1/', { signal }),
+    ).rejects.toHaveProperty('name', 'TimeoutError');
+  });
 });
 
 test('accepts Node AbortSignal in DOM event listeners', () => {

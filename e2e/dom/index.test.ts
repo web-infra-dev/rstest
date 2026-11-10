@@ -19,6 +19,28 @@ it.for(['vmForks', 'vmThreads'] as const)(
 );
 
 it.for(['vmForks', 'vmThreads'] as const)(
+  'supports happy-dom abort signals in Request and fetch under %s',
+  async (pool) => {
+    const { cli, expectExecSuccess } = await runCli(
+      'test/abortSignal',
+      'happy-dom',
+      {
+        args: [
+          '--pool',
+          pool,
+          '--pool.maxWorkers',
+          '1',
+          '--testNamePattern',
+          'Request and fetch cancellation',
+        ],
+      },
+    );
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('2 passed');
+  },
+);
+
+it.for(['vmForks', 'vmThreads'] as const)(
   'cancels pending DOM immediate callbacks under %s',
   async (pool) => {
     for (const environment of ['jsdom', 'happy-dom']) {
