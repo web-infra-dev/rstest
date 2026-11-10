@@ -1,5 +1,5 @@
 import { defineConfig } from '@rstest/core';
-import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
 
 // One headed entry and one headless entry in the same watch session: watch
 // mode rejects the mixed shape at validation (run keeps it allowed).
@@ -14,7 +14,10 @@ export default defineConfig({
         browserName: 'firefox',
         headless: false,
       },
-      'chromium',
+      {
+        browserName: 'chromium',
+        ...ciChromeEntry(),
+      },
     ],
   },
   include: ['tests/basic.test.ts'],

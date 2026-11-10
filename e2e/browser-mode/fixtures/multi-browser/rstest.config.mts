@@ -1,5 +1,5 @@
 import { defineConfig } from '@rstest/core';
-import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
 
 export default defineConfig({
   browser: {
@@ -11,14 +11,11 @@ export default defineConfig({
       {
         browserName: 'chromium',
         // Per-entry overrides: the viewports must differ so the in-page
-        // attribution assertion can tell the two entries apart. The helper
-        // clears CI in the spawned CLI but passes this variable through, so
-        // CI chrome runners install the chrome channel on the one chromium
-        // entry without touching the firefox launch (see utils.ts).
+        // attribution assertion can tell the two entries apart.
         viewport: { width: 800, height: 600 },
-        ...(process.env.RSTEST_E2E_CHROME_CHANNEL
-          ? { providerOptions: { launch: { channel: 'chrome' } } }
-          : {}),
+        // CI chrome runners install the chrome channel on this entry without
+        // touching the firefox launch (see ciChromeEntry/ports.ts).
+        ...ciChromeEntry(),
       },
       {
         browserName: 'firefox',

@@ -90,3 +90,21 @@ if (new Set(browserPortValues).size !== browserPortValues.length) {
 
 export const BROWSER_TEST_TIMEOUT =
   process.platform === 'win32' ? 20_000 : 10_000;
+
+/**
+ * CI installs the channel-based Chrome only, and the e2e helpers clear `CI`
+ * in the spawned CLI while passing `RSTEST_E2E_CHROME_CHANNEL` through (see
+ * `utils.ts`). Every chromium entry of a fixture that declares entries
+ * spreads this so the CI runner gets a launchable channel; locally it is a
+ * no-op and bundled Chromium is used.
+ */
+export const ciChromeEntry = (): {
+  providerOptions?: { launch: { channel: string } };
+} =>
+  process.env.RSTEST_E2E_CHROME_CHANNEL
+    ? {
+        providerOptions: {
+          launch: { channel: process.env.RSTEST_E2E_CHROME_CHANNEL },
+        },
+      }
+    : {};

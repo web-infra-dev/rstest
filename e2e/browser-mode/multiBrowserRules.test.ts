@@ -11,24 +11,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, 'fixtures/multi-browser');
 const blobDir = join(fixtureDir, '.rstest-reports');
 
-// Every browser in this fixture is not one plain chromium entry (firefox is
-// present), so each call manages the CI chrome channel inside the config and
-// must not inherit an automatic `launch.channel` push. This file must not
-// race `multiBrowser.test.ts` for the fixture's own port (configs reached
-// from different concurrently-running test files must not share one; the
-// loser retries or fails), so every CLI here carries the file-own
-// `multi-browser-rules` port.
+// This file must not race `multiBrowser.test.ts` for the fixture's own port
+// (configs reached from different concurrently-running test files must not
+// share one; the loser retries or fails), so every CLI here carries the
+// file-own `multi-browser-rules` port.
 const rulesPort = `--browser.port=${BROWSER_PORTS['multi-browser-rules']}`;
 const rulesCli = (
   args: string[],
-  extra?: Omit<
-    NonNullable<Parameters<typeof runBrowserCli>[1]>,
-    'githubActionsChrome'
-  >,
+  extra?: NonNullable<Parameters<typeof runBrowserCli>[1]>,
 ) =>
   runBrowserCli('multi-browser', {
     ...extra,
-    githubActionsChrome: false,
     args: [rulesPort, ...args],
   });
 

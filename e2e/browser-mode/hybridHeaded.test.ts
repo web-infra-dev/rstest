@@ -10,11 +10,8 @@ describe('browser mode - one headed + headless hybrid run', () => {
   it.runIf(shouldRunHeadedBrowserTests)(
     'runs one headed and one headless browser in the same cycle',
     async () => {
-      // firefox is in this fixture's browser set, so the CI chrome-channel
-      // push is managed inside the config per chromium entry (see utils.ts);
       // DEBUG=rstest exposes the per-launch host log for the headed proof.
       const { expectExecSuccess, cli } = await runBrowserCli('hybrid-headed', {
-        githubActionsChrome: false,
         env: { DEBUG: 'rstest' },
       });
 
