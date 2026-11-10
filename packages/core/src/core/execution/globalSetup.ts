@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import type {
   EntryInfo,
+  TestEnvironmentModuleReference,
   ExecutorCycleOutcome,
   SerializedError,
   InternalContext,
@@ -190,6 +191,7 @@ export async function runGlobalSetup(
   project: Pick<InternalProjectContext, '_globalSetups'>,
   {
     globalSetupEntries,
+    testEnvironmentModule,
     assetFiles,
     sourceMaps,
     interopDefault,
@@ -197,6 +199,7 @@ export async function runGlobalSetup(
     federation,
   }: {
     globalSetupEntries: EntryInfo[];
+    testEnvironmentModule?: TestEnvironmentModuleReference;
     assetFiles: Record<string, Buffer>;
     sourceMaps: Record<string, string>;
     interopDefault: boolean;
@@ -227,6 +230,11 @@ export async function runGlobalSetup(
     payload: {
       color: resolveColorEnabled(env),
       entries: globalSetupEntries,
+      testEnvironmentModule: globalSetupEntries.some(
+        (entry) => entry.usesJsdomBridge,
+      )
+        ? testEnvironmentModule
+        : undefined,
       assetFiles: prepareAssetFilesForIPC(assetFiles, 'forks'),
       interopDefault,
       outputModule,

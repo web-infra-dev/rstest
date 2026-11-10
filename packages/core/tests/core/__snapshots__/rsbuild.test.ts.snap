@@ -759,6 +759,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     {
       "@rstest/core": "global @rstest/core",
     },
+    [Function],
   ],
   "externalsPresets": {
     "node": false,
@@ -1391,6 +1392,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       ],
       "affectedHooks": undefined,
       "name": "RstestPlugin",
+    },
+    {
+      "apply": [Function],
     },
   ],
   "resolve": {
@@ -3200,6 +3204,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     {
       "@rstest/core": "global @rstest/core",
     },
+    [Function],
   ],
   "externalsPresets": {
     "node": false,
@@ -3832,6 +3837,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       ],
       "affectedHooks": undefined,
       "name": "RstestPlugin",
+    },
+    {
+      "apply": [Function],
     },
   ],
   "resolve": {

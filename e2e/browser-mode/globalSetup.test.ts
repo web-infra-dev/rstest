@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import { constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -127,6 +128,50 @@ const expectSignalExitDuringGlobalSetup = async ({
 // its env change-set into the browser runtime store. Explicit `test.env` config
 // still takes precedence.
 describe('browser mode - globalSetup', () => {
+  it('does not bridge jsdom in browser globalSetup when the environment is ignored', async () => {
+    const target = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-jsdom-setup',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+      fixturesTargetPath: target,
+    });
+    try {
+      const jsdomPackage = createRequire(import.meta.url).resolve(
+        'jsdom/package.json',
+        {
+          paths: [path.join(__dirname, '../dom/fixtures')],
+        },
+      );
+      fs.mkdirSync(path.join(target, 'node_modules'), { recursive: true });
+      fs.symlinkSync(
+        path.dirname(jsdomPackage),
+        path.join(target, 'node_modules/jsdom'),
+        'junction',
+      );
+      fixtureFs.update(path.join(target, 'rstest.config.mts'), (content) =>
+        content.replace(
+          'defineConfig({',
+          "defineConfig({ testEnvironment: 'jsdom', output: { bundleDependencies: ['jsdom'] },",
+        ),
+      );
+      fixtureFs.update(
+        path.join(target, 'globalSetup.ts'),
+        (content) =>
+          "import { JSDOM } from 'jsdom';\n" +
+          content.replace(
+            "console.log('[browser-global-setup] executed');",
+            "const dom = new JSDOM('<p>setup</p>'); dom.window.close(); console.log('[browser-global-setup] executed');",
+          ),
+      );
+      const { expectExecSuccess } = await runBrowserCliWithCwd(target);
+      await expectExecSuccess();
+    } finally {
+      await deleteFixtureTarget(fixtureFs, target);
+    }
+  });
+
   it('runs globalSetup, propagates env into browser tests, and tears down in order', async () => {
     const { cli, expectExecSuccess } = await runBrowserCli(
       'browser-global-setup',

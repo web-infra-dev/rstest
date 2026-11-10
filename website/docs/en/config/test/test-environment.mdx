@@ -131,6 +131,8 @@ Rstest automatically falls back to native loading if it cannot build, load, or v
 
 The environment package is resolved from the project's dependencies first, then the Rstest workspace root, and finally through `@rstest/core`'s native dependency resolution for backward compatibility.
 
+With a jsdom test environment and `prebundle` enabled, bundled static `import` and `require('jsdom')` requests that resolve to the same jsdom installation reuse the environment module. If the prebundle fails, these requests share the native fallback. Explicit externals, other jsdom installations, and requests inside external dependencies keep their existing loading behavior. Setting `prebundle: false` disables this reuse.
+
 ### Environment comments
 
 <ApiMeta addedVersion="0.10.5" />
