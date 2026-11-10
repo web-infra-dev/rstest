@@ -185,7 +185,7 @@ interface TestResult {
 
 <ApiMeta addedVersion="0.13.0" />
 
-Browser 模式下，每条结果 payload（文件、suite、case 与 console log）都会携带运行它的浏览器的 `browserName`，task id 也会带上它：case id 以 `file:<project>:<browserName>:<testPath>` 为根，因此同一测试文件在两个浏览器下运行会得到两条互不覆盖的结果。Node pool 上 id 以 `file:<project>:<testPath>` 为根，`browserName` 保持缺失。
+Browser 模式下，每条结果 payload（文件、suite、case 与 console log）都会携带运行它的浏览器的 `browserName`，task id 也会带上它：case id 以 `file:<project>:<browserName>:<testPath>` 为根，因此同一测试文件在两个浏览器下运行会得到两条互不覆盖的结果。Node pool 上 id 保持不变（`file:<testPath>`），`browserName` 保持缺失。
 
 内置 reporter 只在项目选中多个浏览器时，为文件行追加灰色的 `[browserName]` 标记（junit 的 suite 名与 markdown 标题在文件路径后追加同一标记）；单浏览器输出与旧版本逐字节一致。内置 reporter 的 `showBrowserName` 选项控制该标记：Rstest 在用户传入的选项之前自动注入它，因此自定义值始终优先。
 

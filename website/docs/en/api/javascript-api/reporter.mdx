@@ -185,7 +185,7 @@ interface TestResult {
 
 <ApiMeta addedVersion="0.13.0" />
 
-In browser mode every result payload (file, suite, case, and console log) carries the `browserName` of the browser that ran it, and task ids encode it: a case id is rooted at `file:<project>:<browserName>:<testPath>`, so the same test file run by two browsers produces two distinct results. On the node pool the id is rooted at `file:<project>:<testPath>` and `browserName` stays absent.
+In browser mode every result payload (file, suite, case, and console log) carries the `browserName` of the browser that ran it, and task ids encode it: a case id is rooted at `file:<project>:<browserName>:<testPath>`, so the same test file run by two browsers produces two distinct results. On the node pool the id is unchanged (`file:<testPath>`) and `browserName` stays absent.
 
 The built-in reporters append a gray `[browserName]` suffix to file rows (and to the suite names of the junit and markdown reporters) only when a project selects several browsers; single-browser output is byte-identical to previous versions. The `showBrowserName` option on the built-in reporters controls the suffix: Rstest sets it automatically before user-supplied options, so a custom value always wins.
 

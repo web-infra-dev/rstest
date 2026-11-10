@@ -18,6 +18,8 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 - At most one `(project, browser)` pair may run headed per run, and a watch run may not mix headed and headless browsers — `validateBrowserConfig` owns both rules, and the host composition (headless lanes plus at most one headed lane, dispatch lanes resolved from request data) relies on them.
 - Watch file-set entries stay row-free (path-keyed only), so stale-screenshot cleanup must sweep every browser directory the project could have written, not only the bare-path hash a key without a browser segment hashes to.
 
+- Browser entries are resolved only through `resolveProjectBrowsers` (raw `browser.browsers` / deprecated `browser.browser` / CLI selection, which core stores untouched). Shape errors surface from `validateBrowserConfig`, before any test or browser launch, so no caller re-derives entries from the raw config.
+
 ## Contract ownership
 
 - `@rstest/browser` owns host scheduling, dispatch routing, and protocol semantics.
