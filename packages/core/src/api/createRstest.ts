@@ -76,13 +76,12 @@ const flattenListedTests = (
     return files.map((file) => ({
       testPath: file.testPath,
       project: file.project,
-      browserName: file.browserName,
       type: 'file',
     }));
   }
 
   const listed: ListedTest[] = [];
-  const visit = (test: RawTestInfo, browserName?: string): void => {
+  const visit = (test: RawTestInfo): void => {
     if (
       test.type === 'case' ||
       (options.includeSuites &&
@@ -91,26 +90,24 @@ const flattenListedTests = (
     ) {
       // Structured consumers need skipped declarations to build a complete
       // test tree. The CLI renderer deliberately continues to omit them.
-      // The raw test info carries no browser: it is the collecting row's.
       listed.push({
         testPath: test.testPath,
         name: test.name,
         fullName: getTaskNameWithPrefix(test),
         parentNames: test.parentNames ?? [],
         project: test.project,
-        browserName,
         location: test.location,
         runMode: listedRunModes[test.runMode],
         type: test.type,
       });
     }
     if (test.type === 'suite') {
-      test.tests.forEach((nested) => visit(nested, browserName));
+      test.tests.forEach(visit);
     }
   };
 
   for (const file of files) {
-    file.tests.forEach((test) => visit(test, file.browserName));
+    file.tests.forEach(visit);
   }
   return listed;
 };

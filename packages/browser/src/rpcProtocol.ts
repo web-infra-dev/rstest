@@ -1,6 +1,4 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { BrowserName } from './protocol';
-import { isBrowserName } from './browserNames';
 
 export type BrowserLocatorText =
   | { type: 'string'; value: string }
@@ -88,7 +86,7 @@ export type BrowserRpcRequest = {
    * (`expect.toMatchScreenshot`, reference paths) attribute correctly when
    * several browsers run the same file. Set by the runner options.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   kind: 'locator' | 'expect' | 'screenshot' | 'config' | 'keyboard';
   locator: BrowserLocatorIR;
   method: string;
@@ -241,13 +239,8 @@ export const validateBrowserRpcRequest = (
         'Invalid browser RPC request: browserName must be a string',
       );
     }
-    // The wire payload only promises a string; anything outside
-    // `BROWSER_NAMES` (the same set the config accepts) is rejected here.
-    if (!isBrowserName(browserName)) {
-      throw new Error(
-        `Invalid browser RPC request: unknown browser name ${browserName}`,
-      );
-    }
+    // The host resolves the requesting row by `(projectName, browserName)`,
+    // so a name no row carries never matches one.
     request.browserName = browserName;
   }
 

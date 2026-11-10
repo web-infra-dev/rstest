@@ -565,8 +565,9 @@ const run = async () => {
   };
   window.__RSTEST_BROWSER_OPTIONS__ = options;
 
-  // Stamps below read the RESOLVED row's `browserName` — the row the page
-  // just matched — as the single browser identity its payloads carry.
+  // The page's own messages (file start, logs, cleanup) name the RESOLVED
+  // row by `(project, browserName)`; the host translates them to the row's
+  // instance name, which core's runner payloads already carry.
   const { browserName } = projectRuntime;
 
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
@@ -620,7 +621,7 @@ const run = async () => {
       const testPath = toAbsolutePath(key, currentProject.projectRoot);
 
       const workerState: WorkerState = {
-        project: projectRuntime.name,
+        project: projectRuntime.instanceName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -664,7 +665,7 @@ const run = async () => {
           type: 'collect-result',
           payload: {
             testPath,
-            project: projectRuntime.name,
+            project: projectRuntime.instanceName,
             tests,
           },
         });
@@ -739,11 +740,7 @@ const run = async () => {
       window.__RSTEST_BROWSER_OPTIONS__ = options;
       const taskStack: CurrentTaskInfo[] = [
         {
-          taskId: getFileTaskId({
-            project: projectRuntime.name,
-            testPath,
-            browserName,
-          }),
+          taskId: getFileTaskId(testPath),
           taskType: 'file',
           testPath,
         },
@@ -778,10 +775,9 @@ const run = async () => {
       }
 
       const workerState: WorkerState = {
-        project: projectRuntime.name,
-        // The runner runtime folds the browser into every task id and file
-        // hash it derives, so parallel browser copies cannot alias.
-        browserName,
+        // Core sees the row as its own project: every id and payload the
+        // runtime derives carries the instance name, never a browser.
+        project: projectRuntime.instanceName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -908,10 +904,7 @@ const run = async () => {
           setRpcPhase('test');
         },
         onTestFileReady: async (test) => {
-          dispatchRunnerLifecycle('file-ready', {
-            ...test,
-            browserName,
-          });
+          dispatchRunnerLifecycle('file-ready', test);
         },
         onTestSuiteStart: async (test) => {
           taskStack.push({
@@ -922,17 +915,11 @@ const run = async () => {
             testPath: test.testPath,
           });
           syncCurrentTask();
-          dispatchRunnerLifecycle('suite-start', {
-            ...test,
-            browserName,
-          });
+          dispatchRunnerLifecycle('suite-start', test);
         },
         onTestSuiteResult: async (result) => {
           removeTaskFromStack(result.testId);
-          dispatchRunnerLifecycle('suite-result', {
-            ...result,
-            browserName,
-          });
+          dispatchRunnerLifecycle('suite-result', result);
         },
         onTestCaseStart: async (test) => {
           taskStack.push({
@@ -943,10 +930,7 @@ const run = async () => {
             testPath: test.testPath,
           });
           syncCurrentTask();
-          dispatchRunnerLifecycle('case-start', {
-            ...test,
-            browserName,
-          });
+          dispatchRunnerLifecycle('case-start', test);
         },
         onTestCaseFailure: async (test) => {
           if (!projectRuntime.screenshotFailures) return;
@@ -973,7 +957,7 @@ const run = async () => {
           }
           send({
             type: 'case-result',
-            payload: { ...result, browserName },
+            payload: result,
           });
         },
         getCountOfFailedTests: async () => failedTestsCount,
@@ -1022,13 +1006,8 @@ const run = async () => {
           );
         } catch (error) {
           result = {
-            testId: getFileTaskId({
-              project: projectRuntime.name,
-              testPath,
-              browserName,
-            }),
-            project: projectRuntime.name,
-            browserName,
+            testId: getFileTaskId(testPath),
+            project: projectRuntime.instanceName,
             testPath,
             status: 'failed',
             name: '',
@@ -1096,14 +1075,7 @@ const run = async () => {
 
         send({
           type: 'file-complete',
-          payload: {
-            ...result,
-            browserName,
-            results: result.results.map((caseResult) => ({
-              ...caseResult,
-              browserName,
-            })),
-          },
+          payload: result,
         });
         // Failures outside a file's load and run (runtime bootstrap, result publishing) end the batch as fatal.
       } catch (_error) {

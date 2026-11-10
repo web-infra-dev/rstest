@@ -9,7 +9,6 @@ import type {
   TestFileResult,
   TestFileSummary,
   TestResult,
-  TestRunStartPayload,
   TestRunSummary,
   UserConsoleLog,
 } from '../types';
@@ -75,23 +74,18 @@ export const toReportDuration = (duration: Duration): ReportDuration => ({
   tests: duration.testTime,
 });
 
-type FileIdentity = {
-  project: string;
-  testPath: string;
-  browserName?: string;
-};
-
 /**
- * Keys reporter-internal per-file state. A test path alone is ambiguous once
- * several projects run the same file, and several browsers of one project can
- * run it concurrently too, so project and browser join the key; the emitter
- * is recoverable from the payload's `project`/`browserName`. Deliberately not
+ * Keys reporter-internal per-file state (buffered console logs). A test path
+ * alone is ambiguous once several projects run the same file, and the emitter
+ * is only recoverable from the payload's `project`. Deliberately not
  * `blobFileKey`: that one is a persisted wire format whose encoding cannot
  * change without a blob version bump, while this key is process-local and free
  * to stay cheap.
  */
-export const reporterFileKey = (file: FileIdentity): string =>
-  `${file.project}\u0000${file.browserName ?? ''}\u0000${file.testPath}`;
+export const reporterFileKey = (project: string, testPath: string): string =>
+  `${project}\u0000${testPath}`;
+
+type FileIdentity = { project: string; testPath: string };
 
 export class PerFileEventBuffer<T> {
   private files = new Map<
@@ -101,11 +95,11 @@ export class PerFileEventBuffer<T> {
   private sequence = 0;
 
   reset(file: FileIdentity): void {
-    this.files.delete(reporterFileKey(file));
+    this.files.delete(reporterFileKey(file.project, file.testPath));
   }
 
   push(event: T, file: FileIdentity): void {
-    const key = reporterFileKey(file);
+    const key = reporterFileKey(file.project, file.testPath);
     let entry = this.files.get(key);
     if (!entry) {
       entry = { file, events: [] };
@@ -116,7 +110,8 @@ export class PerFileEventBuffer<T> {
 
   get(file?: FileIdentity): T[] {
     const events = file
-      ? (this.files.get(reporterFileKey(file))?.events ?? [])
+      ? (this.files.get(reporterFileKey(file.project, file.testPath))?.events ??
+        [])
       : Array.from(this.files.values())
           .flatMap(({ events }) => events)
           .sort((a, b) => a.seq - b.seq);
@@ -131,7 +126,9 @@ export class PerFileEventBuffer<T> {
   }
 
   prune(files: FileIdentity[]): void {
-    const keys = new Set(files.map((file) => reporterFileKey(file)));
+    const keys = new Set(
+      files.map((file) => reporterFileKey(file.project, file.testPath)),
+    );
     for (const key of this.files.keys()) {
       if (!keys.has(key)) this.files.delete(key);
     }
@@ -182,77 +179,6 @@ const statusColorfulStr: {
   passed: statusColor.passed(statusStr.passed),
   todo: statusColor.todo(statusStr.todo),
   skipped: statusColor.skipped(statusStr.skipped),
-};
-
-/**
- * Appends the owning browser of a browser-mode result to a reporter title, so
- * the same project file run by several browsers produces distinguishable
- * entries everywhere reporters name a file or task by its relative path.
- * `show` carries the run-level gate (see `shouldShowBrowserTags`), so
- * single-browser output never carries the suffix.
- */
-export const formatBrowserSuffix = (
-  browserName: string | undefined,
-  show: boolean,
-): string => (show && browserName ? ` [${browserName}]` : '');
-
-/**
- * The one gate every browser-aware rendering uses: a project that runs two or
- * more browsers of the same file in one run produces ambiguous titles, and
- * only then does every browser tag earn its place. The reporters (selected
- * files at run start) and the list command (collected rows) feed rows of this
- * shape, so both share this predicate instead of their own counters.
- */
-export const shouldShowBrowserTags = (
-  rows: readonly { project: string; browserName?: string }[],
-): boolean => {
-  const browsersByProject = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (row.browserName === undefined) {
-      continue;
-    }
-    let browsers = browsersByProject.get(row.project);
-    if (!browsers) {
-      browsers = new Set();
-      browsersByProject.set(row.project, browsers);
-    }
-    browsers.add(row.browserName);
-  }
-  return [...browsersByProject.values()].some((browsers) => browsers.size > 1);
-};
-
-/**
- * A built-in reporter's `showBrowserName` decision: an explicit option wins;
- * otherwise it follows the files the pool selected for the run (or watch
- * cycle), so core never reads browser config to decide it. Reporters forward
- * `onTestRunStart` to {@link BrowserTagGate.onTestRunStart}.
- */
-export class BrowserTagGate {
-  private fromRun = false;
-
-  constructor(private readonly explicit?: boolean) {}
-
-  get show(): boolean {
-    return this.explicit ?? this.fromRun;
-  }
-
-  onTestRunStart(payload: TestRunStartPayload): void {
-    this.fromRun = shouldShowBrowserTags(payload.files);
-  }
-}
-
-/**
- * The file label the failure/test-list titles print: relative path, the
- * browser tag when shown, and the task's name when it has one.
- */
-export const formatFileTitle = (
-  relativePath: string,
-  browserName: string | undefined,
-  fullName: string,
-  showBrowserName: boolean,
-): string => {
-  const label = `${relativePath}${formatBrowserSuffix(browserName, showBrowserName)}`;
-  return fullName ? `${label} :: ${fullName}` : label;
 };
 
 export const logCase = (
@@ -416,15 +342,12 @@ export const logFileTitle = (
   relativePath: string,
   alwaysShowTime = false,
   showProjectName = false,
-  showBrowserName = false,
 ): void => {
   let title = ` ${color.bold(statusColorfulStr[test.status])}`;
 
   if (showProjectName && test.project) {
     title += ` ${statusColor[test.status](`[${test.project}]`)}`;
   }
-
-  title += color.gray(formatBrowserSuffix(test.browserName, showBrowserName));
 
   title += ` ${prettyTestPath(relativePath)}`;
 

@@ -353,7 +353,6 @@ interface ListedTest {
   fullName?: string; // Suite-prefixed display name; absent for file entries.
   parentNames?: string[]; // Names of the enclosing suites.
   project: string; // Project name.
-  browserName?: BrowserName; // Owning browser in browser mode; absent on the node pool.
   location?: TestLocation; // Source location when requested.
   runMode?: 'skip' | 'todo'; // Skip or todo mode for non-runnable declarations.
   type: 'file' | 'suite' | 'case'; // Entry kind.

@@ -3,12 +3,10 @@ import type {
   BrowserExpectConfig,
   BrowserName,
   BrowserViewport,
-} from '@rstest/core';
-import {
-  type InternalProjectContext,
-  logger,
-} from '@rstest/core/internal/browser';
-import { BROWSER_NAMES, isBrowserName } from './browserNames';
+  InternalProjectContext,
+} from '../../types';
+import { BROWSER_NAMES, isBrowserName } from '../../utils/browserNames';
+import { logger } from '../../utils/logger';
 
 /**
  * A `browser.browsers` entry after defaults are merged: the shape this package
@@ -146,25 +144,59 @@ const resolveBrowserEntries = (
   return entries;
 };
 
-const resolvedByConfig = new WeakMap<object, ResolvedBrowserEntry[]>();
+/**
+ * One `(project, browser)` pair of a browser project. Everything outside
+ * `@rstest/browser` sees an instance as a plain project named {@link name}:
+ * reporters, the event sink, task ids and blob keys never carry a browser.
+ */
+export type BrowserInstance = ResolvedBrowserEntry & {
+  /**
+   * The project name the instance reports under: the project's own name when
+   * it runs one browser, `<project> (<browser>)` when it runs several.
+   */
+  name: string;
+};
+
+const instancesByConfig = new WeakMap<object, BrowserInstance[]>();
 
 /**
- * The only place a project's browser entries are resolved: raw
+ * The only place a project's browser instances are resolved: raw
  * `browser.browsers` / deprecated `browser.browser` / CLI selection (stored
- * untouched by core) → one entry per browser with the project-level defaults
- * merged. Shape errors throw here; {@link validateBrowserConfig} calls it for
- * every browser project, so they surface before any test or browser launch.
- * Memoized per project browser config so every caller of a run sees the same
- * entries and the deprecation warning fires once.
+ * untouched by config normalization) → one instance per browser with the
+ * project-level defaults merged. Shape errors throw here; browser validation
+ * calls it for every browser project, so they surface before any test or
+ * browser launch. Memoized per project browser config so every caller of a
+ * run sees the same instances and the deprecation warning fires once.
  */
-export const resolveProjectBrowsers = (
-  project: Pick<InternalProjectContext, 'normalizedConfig'>,
-): ResolvedBrowserEntry[] => {
+export const resolveBrowserInstances = (
+  project: Pick<InternalProjectContext, 'name' | 'normalizedConfig'>,
+): BrowserInstance[] => {
   const { browser } = project.normalizedConfig;
-  let resolved = resolvedByConfig.get(browser);
-  if (!resolved) {
-    resolved = resolveBrowserEntries(browser);
-    resolvedByConfig.set(browser, resolved);
+  let instances = instancesByConfig.get(browser);
+  if (!instances) {
+    const entries = resolveBrowserEntries(browser);
+    instances = entries.map((entry) => ({
+      ...entry,
+      name:
+        entries.length > 1
+          ? `${project.name} (${entry.browserName})`
+          : project.name,
+    }));
+    instancesByConfig.set(browser, instances);
   }
-  return resolved;
+  return instances;
 };
+
+/**
+ * The project names a run reports under, each paired with the project whose
+ * config it uses: a node project reports as itself, a browser project as each
+ * of its {@link BrowserInstance}s.
+ */
+export const getReportedProjects = (
+  projects: readonly InternalProjectContext[],
+): { name: string; project: InternalProjectContext }[] =>
+  projects.flatMap((project) =>
+    project.normalizedConfig.browser.enabled
+      ? resolveBrowserInstances(project).map(({ name }) => ({ name, project }))
+      : [{ name: project.name, project }],
+  );

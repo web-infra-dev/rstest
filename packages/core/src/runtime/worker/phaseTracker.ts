@@ -21,8 +21,6 @@ export type PhaseTrackerOptions = {
   trace?: {
     testPath: string;
     project: string;
-    /** Owning browser of the tracked file (browser mode only). */
-    browserName?: string;
   };
   /**
    * Override the Perfetto `pid` recorded on emitted events. Defaults to

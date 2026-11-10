@@ -74,10 +74,10 @@ it('runs in the selected browser', () => {
           ),
         ),
       ),
-      // Per-file browser attribution: an unfiltered run runs one row per
-      // (project, browser) with its own results, so each row says who ran it.
+      // Per-file attribution: an unfiltered run reports one project per
+      // (project, browser) with its own results, so each says who ran it.
       fileResults: result.results.map((fileResult) => ({
-        browserName: fileResult.browserName,
+        project: fileResult.project,
         status: fileResult.status,
         message: String(
           (fileResult.results ?? [])

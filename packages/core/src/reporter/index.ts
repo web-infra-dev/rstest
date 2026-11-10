@@ -8,7 +8,6 @@ import type {
   TestFileResult,
   TestResult,
   TestRunEndPayload,
-  TestRunStartPayload,
   UserConsoleLog,
 } from '../types';
 import { runLifecycleStep } from '../core/execution/finalizeRun';
@@ -16,12 +15,7 @@ import { color, flushOutputStreams, isTTY, logger } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
-import {
-  BrowserTagGate,
-  logCase,
-  logFileTitle,
-  logUserConsoleLog,
-} from './utils';
+import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 
 export class DefaultReporter implements Reporter {
   readonly flushOutputStreams: boolean;
@@ -33,7 +27,6 @@ export class DefaultReporter implements Reporter {
   protected statusRenderer: StatusRenderer | undefined;
   protected nonTTYProgressNotifier: NonTTYProgressNotifier | undefined;
   private readonly testState: RstestTestState;
-  protected readonly browserTags: BrowserTagGate;
 
   constructor({
     rootPath,
@@ -52,7 +45,6 @@ export class DefaultReporter implements Reporter {
     this.config = config;
     this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
-    this.browserTags = new BrowserTagGate(options.showBrowserName);
     this.testState = testState;
     this.flushOutputStreams = !options.logger;
     if (isTTY() || options.logger) {
@@ -60,10 +52,6 @@ export class DefaultReporter implements Reporter {
     } else {
       this.nonTTYProgressNotifier = new NonTTYProgressNotifier(testState);
     }
-  }
-
-  onTestRunStart(payload: TestRunStartPayload): void {
-    this.browserTags.onTestRunStart(payload);
   }
 
   onTestFileStart(): void {
@@ -131,7 +119,6 @@ export class DefaultReporter implements Reporter {
         test.relativeTestPath,
         false,
         this.options.showProjectName,
-        this.browserTags.show,
       );
       const showAllCases = this.testState.getTestFiles()?.length === 1;
 

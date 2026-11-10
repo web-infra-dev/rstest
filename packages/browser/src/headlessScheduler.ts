@@ -471,10 +471,9 @@ export const createHeadlessScheduler = async ({
                 await handleTestFileComplete(
                   createFileCleanupTimeoutResult({
                     message,
-                    projectName: file.projectName,
+                    projectName: file.row.instanceName,
                     result: state.result,
                     testPath: payload.testPath,
-                    browserName: file.row.browserName,
                   }),
                 );
                 for (const pendingFile of files) {
@@ -485,9 +484,8 @@ export const createHeadlessScheduler = async ({
                   await handleTestFileComplete(
                     createFileCleanupTimeoutResult({
                       message: `${message}; file was not run because the previous file cleanup timed out`,
-                      projectName: pendingFile.projectName,
+                      projectName: pendingFile.row.instanceName,
                       testPath: pendingFile.testPath,
-                      browserName: pendingFile.row.browserName,
                     }),
                   );
                 }
@@ -689,16 +687,11 @@ export const createHeadlessScheduler = async ({
   const makeSkippedFileResult = (
     file: ScheduledTestFile,
   ): RawTestFileResult => ({
-    testId: getFileTaskId({
-      project: file.projectName,
-      testPath: file.testPath,
-      browserName: file.row.browserName,
-    }),
+    testId: getFileTaskId(file.testPath),
     status: 'skipped',
     name: '',
     testPath: file.testPath,
-    project: file.projectName,
-    browserName: file.row.browserName,
+    project: file.row.instanceName,
     results: [],
   });
 

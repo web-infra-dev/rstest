@@ -2,10 +2,11 @@ import {
   browserIgnoredRuntimeConfigKeys,
   color,
   type InternalContext,
+  getReportedProjects,
   logger,
+  resolveBrowserInstances,
   type RuntimeConfig,
 } from '@rstest/core/internal/browser';
-import { resolveProjectBrowsers } from './browserEntries';
 import type { BrowserName } from './protocol';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
@@ -143,7 +144,7 @@ type BrowserConfigRow = {
 const browserConfigRows = (context: InternalContext): BrowserConfigRow[] =>
   context.projects.flatMap((project) =>
     project.normalizedConfig.browser.enabled
-      ? resolveProjectBrowsers(project).map((entry) => ({
+      ? resolveBrowserInstances(project).map((entry) => ({
           projectName: project.name,
           browserName: entry.browserName,
           headed: entry.headless === false,
@@ -293,7 +294,7 @@ export const validateBrowserConfig = (context: InternalContext): void => {
     // Entry-level viewport overrides must pass the same shape checks as the
     // project value: resolved entries have already merged project defaults,
     // so the entry argument covers both layers.
-    for (const entry of resolveProjectBrowsers(project)) {
+    for (const entry of resolveBrowserInstances(project)) {
       validateViewport(entry.viewport);
     }
 
@@ -304,6 +305,23 @@ export const validateBrowserConfig = (context: InternalContext): void => {
     if (output?.bundleDependencies === false) {
       throw new Error(
         'output.bundleDependencies false is not supported in browser mode.',
+      );
+    }
+  }
+
+  // A multi-browser project reports each browser as `<project> (<browser>)`;
+  // that name must not collide with another project's, or reporters and
+  // blob merges would fold two runs into one.
+  const reported = getReportedProjects(context.projects);
+  const reportedNames = new Set(
+    reported
+      .filter(({ name, project }) => name === project.name)
+      .map(({ name }) => name),
+  );
+  for (const { name, project } of reported) {
+    if (name !== project.name && reportedNames.has(name)) {
+      throw new Error(
+        `Project name ${JSON.stringify(name)} is used twice: project ${JSON.stringify(project.name)} runs several browsers and reports each one as "<project> (<browser>)", so rename the project that collides with it.`,
       );
     }
   }

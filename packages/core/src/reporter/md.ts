@@ -88,7 +88,6 @@ import type {
   TestFileInfo,
   TestResult,
   TestRunEndPayload,
-  TestRunStartPayload,
   UserConsoleLog,
 } from '../types';
 import {
@@ -97,14 +96,12 @@ import {
   stackIgnores,
 } from '../utils/error';
 import {
-  BrowserTagGate,
   buildPackageManagerReproCommand,
   collectFailures,
   createUnknownFailure,
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
-  formatFileTitle,
   getErrorType,
   PerFileEventBuffer,
   pushFencedBlock,
@@ -317,7 +314,6 @@ export const resolveOptions = (
 const formatFailureTitle = (
   failure: FailureItem,
   index: number,
-  showBrowserName: boolean,
 ): {
   relativePath: string;
   fullName: string;
@@ -329,12 +325,7 @@ const formatFailureTitle = (
   return {
     relativePath,
     fullName,
-    title: formatFileTitle(
-      relativePath,
-      failure.test.browserName,
-      fullName,
-      showBrowserName,
-    ),
+    title: fullName ? `${relativePath} :: ${fullName}` : relativePath,
     formattedId: String(index + 1).padStart(2, '0'),
   };
 };
@@ -511,7 +502,6 @@ export class MdReporter implements Reporter {
   protected config: NormalizedConfig;
   private readonly fileFilters: string[];
   private readonly options: ResolvedOptions;
-  private readonly browserTags: BrowserTagGate;
   private readonly logs = new PerFileEventBuffer<string>();
 
   constructor({
@@ -532,11 +522,6 @@ export class MdReporter implements Reporter {
     void testState;
     this.fileFilters = fileFilters ?? [];
     this.options = resolveOptions(options);
-    this.browserTags = new BrowserTagGate(options.showBrowserName);
-  }
-
-  onTestRunStart(payload: TestRunStartPayload): void {
-    this.browserTags.onTestRunStart(payload);
   }
 
   private isFocusedRun({
@@ -575,9 +560,10 @@ export class MdReporter implements Reporter {
     const displayed = truncated ? tests.slice(0, limit) : tests;
 
     for (const test of displayed) {
-      lines.push(
-        `- ${formatFileTitle(test.relativeTestPath, test.browserName, test.fullName, this.browserTags.show)}`,
-      );
+      const relativePath = test.relativeTestPath;
+      const fullName = test.fullName;
+      const title = fullName ? `${relativePath} :: ${fullName}` : relativePath;
+      lines.push(`- ${title}`);
     }
 
     if (truncated) {
@@ -752,7 +738,7 @@ export class MdReporter implements Reporter {
           if (!failure) continue;
 
           const { relativePath, fullName, title, formattedId } =
-            formatFailureTitle(failure, index, this.browserTags.show);
+            formatFailureTitle(failure, index);
 
           lines.push(`- [F${formattedId}] ${title}`);
 
@@ -801,7 +787,7 @@ export class MdReporter implements Reporter {
         if (!failure) continue;
 
         const { relativePath, fullName, title, formattedId } =
-          formatFailureTitle(failure, index, this.browserTags.show);
+          formatFailureTitle(failure, index);
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {

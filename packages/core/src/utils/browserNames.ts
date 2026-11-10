@@ -1,7 +1,8 @@
-import type { BrowserName } from '@rstest/core/internal/browser';
+import type { BrowserName } from '../types';
 
-// A `Record` keyed by the `BrowserName` union: tsc rejects a missing or extra
-// name, so this set cannot drift from the type core's config accepts.
+// Dependency-free so both the host and the browser runtime entries can expose
+// it. A `Record` keyed by the `BrowserName` union: tsc rejects a missing or
+// extra name, so this set cannot drift from the type the config accepts.
 const BROWSER_NAME_SET: Record<BrowserName, true> = {
   chromium: true,
   firefox: true,

@@ -59,12 +59,6 @@ export type RawTestCaseInfo = {
   timeout?: number;
   parentNames?: string[];
   project: string;
-  /**
-   * Owning browser in browser mode; `undefined` on the node pool. A
-   * (project, testPath) pair alone does not identify the emitter once
-   * several browsers of the same project run the same file concurrently.
-   */
-  browserName?: string;
   startTime?: number;
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
@@ -143,12 +137,6 @@ export type RawTestSuiteInfo = {
   parentNames?: string[];
   testPath: TestPath;
   project: string;
-  /**
-   * Owning browser in browser mode; `undefined` on the node pool. A
-   * (project, testPath) pair alone does not identify the emitter once
-   * several browsers of the same project run the same file concurrently.
-   */
-  browserName?: string;
   type: 'suite';
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
@@ -205,12 +193,6 @@ export type RawTestFileInfo<Info extends RawTestInfo = RawTestInfo> = {
   testId: string;
   testPath: TestPath;
   project: string;
-  /**
-   * Owning browser in browser mode; `undefined` on the node pool. A
-   * (project, testPath) pair alone does not identify the emitter once
-   * several browsers of the same project run the same file concurrently.
-   */
-  browserName?: string;
   tests: Info[];
 };
 
@@ -248,12 +230,6 @@ export type RawTestResult = {
   retryErrors?: SerializedError[];
   retryCount?: number;
   project: string;
-  /**
-   * Owning browser in browser mode; `undefined` on the node pool. A
-   * (project, testPath) pair alone does not identify the emitter once
-   * several browsers of the same project run the same file concurrently.
-   */
-  browserName?: string;
   /** Best-effort: semantics may change independently of the stable reporter contract. */
   meta?: TaskMeta;
   /** Best-effort: semantics may change independently of the stable reporter contract. */
@@ -322,12 +298,6 @@ export interface RawUserConsoleLog {
    * cannot recover it from the other fields.
    */
   project: string;
-  /**
-   * Owning browser in browser mode; `undefined` on the node pool. A
-   * (project, testPath) pair alone does not identify the emitter once
-   * several browsers of the same project run the same file concurrently.
-   */
-  browserName?: string;
   type: ConsoleStreamType;
 }
 

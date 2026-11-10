@@ -306,11 +306,7 @@ export async function mergeReports(
 
     const claimed = new Set<string>();
     for (const result of blob.results) {
-      const key = blobFileKey(
-        result.project,
-        result.testPath,
-        result.browserName,
-      );
+      const key = blobFileKey(result.project, result.testPath);
       claimed.add(key);
       replayFiles.push({
         project: result.project,

@@ -341,7 +341,7 @@ describe('createRstest', () => {
       writeFileSync(
         join(root, '.rstest-reports/blob.json'),
         JSON.stringify({
-          version: `${RSTEST_VERSION}:3`,
+          version: `${RSTEST_VERSION}:2`,
           runStart: { files: [] },
           results: [],
           testResults: [],

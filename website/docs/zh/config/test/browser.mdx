@@ -260,7 +260,7 @@ export default defineConfig({
 
 每个 entry 的合并规则：entry 字段优先，其次是项目级 `browser.*` 字段，最后是内置默认值。`providerOptions` 按顶层键（`launch`、`context`）合并，而不是整字段合并：entry 的某个顶层键（如 `launch`）会整体替换项目级的同名键（Playwright 选项可能包含函数和类实例，因此不在其内部逐层合并），entry 未设置的键保留项目级值 —— 上例中的 chromium entry 仅以 `channel: 'chrome'` 启动，其 context 保留项目级的 `locale: 'en-US'`。
 
-一个项目按 entry 各运行一份浏览器；同一个文件会得到多条结果。当 run 中的项目选择了多个浏览器时，reporter 会在文件行上标注所属浏览器 —— 见 [多浏览器的 reporter 表现](#多浏览器的-reporter-表现)。
+一个项目按 entry 各运行一份浏览器；同一个文件会得到多条结果，每条结果以各自的项目名上报 —— 见 [多浏览器的 reporter 表现](#多浏览器的-reporter-表现)。
 
 校验规则：
 
@@ -599,11 +599,11 @@ npx rstest --browser.browsers webkit
 
 ## 多浏览器的 reporter 表现
 
-当项目选择了多个浏览器时，Rstest 会把每条 payload 归属到产生它的浏览器：
+Reporter 不感知浏览器。当项目选择了多个浏览器时，每个 `(project, browser)` 组合会作为一个独立项目上报，名称为 `<project> (<browserName>)`，例如 `web (chromium)` 与 `web (firefox)`。只选择一个浏览器的项目保留原名。
 
-- Reporter payload（`onTestFileStart`、`onTestFileReady`、`onTestFileResult`、`onTestCaseStart`/`onTestCaseResult`、`onConsoleLog`、`onTestRunStart` 的 files 项）在 browser 项目上携带 `browserName`，Node pool 上缺失。Case 与 suite 的 task id 在 browser 模式下以 `file:project:browserName:testPath` 为根（Node pool 保持不变，仍为 `file:testPath`），同一文件的两个浏览器副本各自独立成结果，不会互相覆盖。
-- 内置 reporter 仅在 run 对某个项目选中多个浏览器时，为文件行追加灰色的 `[chromium]` 风格标记（junit suite 名与 markdown 标题在文件路径后追加同一标记，`rstest list` 行以相同规则标注浏览器名）；单浏览器输出保持不变。自定义 reporter 与 reporter 选项可通过内置 reporter 的 `showBrowserName` 选项控制 —— Rstest 在用户选项之前为 multi-browser run 自动注入该选项，因此用户选项优先。
-- blob reporter 的文件 key 存储为 `[project, browserName, testPath]`，blob 格式版本提升到 Rstest 版本号后缀 `:3`；旧版本记录的 blob 会被 `merge-reports` 拒绝，需要用 `--reporters=blob` 重新生成。
+- Reporter payload、`rstest list` 结果和 blob 报告都以该名称作为 `project`，因此同一文件在两个浏览器下运行会得到两条互不覆盖的结果。内置 reporter 像展示其他项目名一样展示它，例如 `✓ [web (chromium)] tests/basic.test.ts`。
+- 这些组合只影响上报：同一项目的所有浏览器仍共用一次构建和一个 dev server，`--project` 仍按配置中的项目名过滤。
+- 配置中的项目名不能与生成的 `<project> (<browserName>)` 名称冲突，冲突会作为配置错误报出。
 
 ## 多项目配置隔离
 

@@ -438,10 +438,10 @@ export const createHeadedScheduler = async ({
             await handleTestFileComplete(
               createFileCleanupTimeoutResult({
                 message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-                projectName: payload.projectName,
+                // The headed lane runs one row: the payload names it.
+                projectName: headedRow.instanceName,
                 result: payload.result,
                 testPath: payload.testPath,
-                browserName: payload.browserName,
               }),
             );
             runs.resolve(runId);

@@ -5,10 +5,7 @@ import type { CoverageMapData, RawCoverageResolveOptions } from './coverage';
 import type { SourceMapInput } from './reporter';
 import type { TestFileInfo, TestFileResult, TestResult } from './testSuite';
 
-export type SelectedTestFile = Pick<
-  TestFileInfo,
-  'testPath' | 'project' | 'browserName'
->;
+export type SelectedTestFile = Pick<TestFileInfo, 'testPath' | 'project'>;
 
 /**
  * Options for a single {@link TestExecutor.runCycle}. Core owns cycle

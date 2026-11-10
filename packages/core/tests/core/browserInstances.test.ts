@@ -1,9 +1,7 @@
 import { describe, expect, it, rs } from '@rstest/core';
-import {
-  type InternalProjectContext,
-  logger,
-} from '@rstest/core/internal/browser';
-import { resolveProjectBrowsers } from '../src/browserEntries';
+import { resolveBrowserInstances } from '../../src/core/browser/browserInstances';
+import type { InternalProjectContext } from '../../src/types';
+import { logger } from '../../src/utils/logger';
 
 const makeProject = (
   browser: Record<string, unknown> = {},
@@ -23,10 +21,11 @@ const makeProject = (
     },
   }) as unknown as InternalProjectContext;
 
-describe('resolveProjectBrowsers', () => {
+describe('resolveBrowserInstances', () => {
   it('resolves the default single chromium entry with project defaults merged', () => {
-    expect(resolveProjectBrowsers(makeProject())).toEqual([
+    expect(resolveBrowserInstances(makeProject())).toEqual([
       {
+        name: 'p',
         browserName: 'chromium',
         headless: true,
         screenshotFailures: true,
@@ -37,7 +36,7 @@ describe('resolveProjectBrowsers', () => {
 
   it('expands a browser-name list into one plain entry per browser', () => {
     expect(
-      resolveProjectBrowsers(
+      resolveBrowserInstances(
         makeProject({
           headless: false,
           screenshotFailures: false,
@@ -47,6 +46,7 @@ describe('resolveProjectBrowsers', () => {
       ),
     ).toEqual([
       {
+        name: 'p (chromium)',
         browserName: 'chromium',
         headless: false,
         screenshotFailures: false,
@@ -54,6 +54,7 @@ describe('resolveProjectBrowsers', () => {
         providerOptions: {},
       },
       {
+        name: 'p (firefox)',
         browserName: 'firefox',
         headless: false,
         screenshotFailures: false,
@@ -64,7 +65,7 @@ describe('resolveProjectBrowsers', () => {
   });
 
   it('merges per-entry overrides over the project-level defaults per providerOptions key', () => {
-    const entries = resolveProjectBrowsers(
+    const entries = resolveBrowserInstances(
       makeProject({
         viewport: 'iPhone12Pro',
         providerOptions: {
@@ -111,9 +112,9 @@ describe('resolveProjectBrowsers', () => {
     const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
     try {
       expect(
-        resolveProjectBrowsers(makeProject({ browser: 'firefox' })),
+        resolveBrowserInstances(makeProject({ browser: 'firefox' })),
       ).toMatchObject([{ browserName: 'firefox', providerOptions: {} }]);
-      resolveProjectBrowsers(makeProject({ browser: 'webkit' }));
+      resolveBrowserInstances(makeProject({ browser: 'webkit' }));
       const deprecation = warn.mock.calls.filter(([message]) =>
         String(message).includes('`browser.browser` is deprecated'),
       );
@@ -126,28 +127,28 @@ describe('resolveProjectBrowsers', () => {
 
   it('returns the same resolution for repeated calls on one project', () => {
     const project = makeProject({ browsers: ['chromium', 'firefox'] });
-    expect(resolveProjectBrowsers(project)).toBe(
-      resolveProjectBrowsers(project),
+    expect(resolveBrowserInstances(project)).toBe(
+      resolveBrowserInstances(project),
     );
   });
 
   it('rejects setting browser.browser together with browser.browsers', () => {
     expect(() =>
-      resolveProjectBrowsers(
+      resolveBrowserInstances(
         makeProject({ browser: 'chromium', browsers: ['firefox'] }),
       ),
     ).toThrow(/cannot be set together/);
   });
 
   it('rejects an empty browsers list', () => {
-    expect(() => resolveProjectBrowsers(makeProject({ browsers: [] }))).toThrow(
-      /must not be empty/,
-    );
+    expect(() =>
+      resolveBrowserInstances(makeProject({ browsers: [] })),
+    ).toThrow(/must not be empty/);
   });
 
   it('rejects duplicate browser names within one project', () => {
     expect(() =>
-      resolveProjectBrowsers(
+      resolveBrowserInstances(
         makeProject({ browsers: ['chromium', { browserName: 'chromium' }] }),
       ),
     ).toThrow(/appears twice/);
@@ -155,10 +156,10 @@ describe('resolveProjectBrowsers', () => {
 
   it('rejects unknown browser names in config', () => {
     expect(() =>
-      resolveProjectBrowsers(makeProject({ browsers: ['safari'] })),
+      resolveBrowserInstances(makeProject({ browsers: ['safari'] })),
     ).toThrow(/must either be a browser name/);
     expect(() =>
-      resolveProjectBrowsers(
+      resolveBrowserInstances(
         makeProject({ browsers: [{ browserName: 'macOS' }] }),
       ),
     ).toThrow(/must either be a browser name/);
@@ -167,7 +168,7 @@ describe('resolveProjectBrowsers', () => {
   describe('CLI selection', () => {
     it('keeps the configured entry (with overrides) of a selected browser', () => {
       expect(
-        resolveProjectBrowsers(
+        resolveBrowserInstances(
           makeProject({
             browsers: ['chromium', { browserName: 'firefox', headless: false }],
             cliBrowsers: ['firefox'],
@@ -178,7 +179,7 @@ describe('resolveProjectBrowsers', () => {
 
     it('falls back to a plain entry for a selected browser without a configured entry', () => {
       expect(
-        resolveProjectBrowsers(
+        resolveBrowserInstances(
           makeProject({
             browsers: ['chromium'],
             cliBrowsers: ['chromium', 'firefox'],
@@ -189,7 +190,7 @@ describe('resolveProjectBrowsers', () => {
 
     it('absorbs the deprecated browser.browser instead of reporting a conflict', () => {
       expect(
-        resolveProjectBrowsers(
+        resolveBrowserInstances(
           makeProject({ browser: 'chromium', cliBrowsers: ['webkit'] }),
         ).map((entry) => entry.browserName),
       ).toEqual(['webkit']);
@@ -197,13 +198,13 @@ describe('resolveProjectBrowsers', () => {
 
     it('rejects unknown names', () => {
       expect(() =>
-        resolveProjectBrowsers(makeProject({ cliBrowsers: ['safari'] })),
+        resolveBrowserInstances(makeProject({ cliBrowsers: ['safari'] })),
       ).toThrow(/Unknown browser value "safari"/);
     });
 
     it('rejects a duplicated selection', () => {
       expect(() =>
-        resolveProjectBrowsers(
+        resolveBrowserInstances(
           makeProject({ cliBrowsers: ['chromium', 'chromium'] }),
         ),
       ).toThrow(/appears twice/);

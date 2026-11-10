@@ -1,6 +1,5 @@
 import type { RawTestFileResult } from '../../types';
 import type { MaybePromise } from '../../types';
-import { getFileTaskId } from '../../utils/helper';
 
 type FileCleanup = () => MaybePromise<void>;
 
@@ -37,27 +36,19 @@ export const createFileCleanupTimeoutResult = ({
   projectName,
   result,
   testPath,
-  browserName,
 }: {
   message: string;
   projectName: string;
   result?: RawTestFileResult;
   testPath: string;
-  /** Owning browser of the run that timed out (browser mode only). */
-  browserName?: string;
 }): RawTestFileResult => {
   const error = new Error(message);
   return {
     ...(result ?? {
       name: '',
       project: projectName,
-      browserName,
       results: [],
-      testId: getFileTaskId({
-        project: projectName,
-        testPath,
-        browserName,
-      }),
+      testId: `file:${testPath}`,
       testPath,
     }),
     status: 'failed',

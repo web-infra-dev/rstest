@@ -41,6 +41,7 @@ import {
   TS_CONFIG_FILE,
 } from '../utils';
 import { createExitCode, type RstestExitCode } from './execution/exitCode';
+import { getReportedProjects } from './browser/browserInstances';
 import { TestStateManager } from './execution/stateManager';
 
 /**
@@ -309,10 +310,15 @@ export class Rstest implements InternalContext {
     testResults: TestResult[],
     deletedEntries: string[] = [],
   ): void {
-    const updatedFileKeys = new Set<string>();
+    const filesToUpdate = new Map<string, Set<string>>();
     results.forEach((item) => {
-      const key = reporterFileKey(item);
-      updatedFileKeys.add(key);
+      const key = reporterFileKey(item.project, item.testPath);
+      const projectPaths = filesToUpdate.get(item.project);
+      if (projectPaths) {
+        projectPaths.add(item.testPath);
+      } else {
+        filesToUpdate.set(item.project, new Set([item.testPath]));
+      }
       const existingIndex = this.reporterResultIndex.get(key);
       if (existingIndex !== undefined) {
         this.reporterResults.results[existingIndex] = item;
@@ -323,7 +329,7 @@ export class Rstest implements InternalContext {
     });
 
     this.reporterResults.testResults = this.reporterResults.testResults.filter(
-      (result) => !updatedFileKeys.has(reporterFileKey(result)),
+      (result) => !filesToUpdate.get(result.project)?.has(result.testPath),
     );
     this.reporterResults.testResults.push(...testResults);
 
@@ -344,19 +350,21 @@ export class Rstest implements InternalContext {
     // see testSequencer.ts). Without this, the order files appear in reports
     // would shift run-to-run with the sequencer's scheduling. Sort is stable,
     // so individual test cases keep their in-file declaration order.
-    const byFileIdentity = (
-      a: { testPath: string; project: string; browserName?: string },
-      b: { testPath: string; project: string; browserName?: string },
+    const byTestPathAndProject = (
+      a: { testPath: string; project: string },
+      b: { testPath: string; project: string },
     ) =>
       a.testPath.localeCompare(b.testPath) ||
-      a.project.localeCompare(b.project) ||
-      (a.browserName ?? '').localeCompare(b.browserName ?? '');
-    this.reporterResults.results.sort(byFileIdentity);
+      a.project.localeCompare(b.project);
+    this.reporterResults.results.sort(byTestPathAndProject);
     this.reporterResultIndex.clear();
     this.reporterResults.results.forEach((result, index) => {
-      this.reporterResultIndex.set(reporterFileKey(result), index);
+      this.reporterResultIndex.set(
+        reporterFileKey(result.project, result.testPath),
+        index,
+      );
     });
-    this.reporterResults.testResults.sort(byFileIdentity);
+    this.reporterResults.testResults.sort(byTestPathAndProject);
   }
 }
 
@@ -383,14 +391,16 @@ const isBuiltInReporterName = (name: string): name is BuiltInReporterNames =>
 
 async function createReporters(context: InternalContext): Promise<Reporter[]> {
   const result: Reporter[] = [];
+  // Reporters see each browser instance as its own project.
+  const reportedProjects = getReportedProjects(context.projects);
   const initConfig = {
     rootPath: context.rootPath,
     config: context.normalizedConfig,
     testState: context.testState,
     fileFilters: context.fileFilters,
     projectConfigs: new Map(
-      context.projects.map((project) => [
-        project.name,
+      reportedProjects.map(({ name, project }) => [
+        name,
         project.normalizedConfig,
       ]),
     ),
@@ -424,7 +434,7 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
             new Reporter({
               ...initConfig,
               options: {
-                showProjectName: context.projects.length > 1,
+                showProjectName: reportedProjects.length > 1,
                 ...options,
               },
             }),

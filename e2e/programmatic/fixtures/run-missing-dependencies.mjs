@@ -20,7 +20,7 @@ try {
   await writeFile(
     join(root, '.rstest-reports/blob.json'),
     JSON.stringify({
-      version: `${version}:3`,
+      version: `${version}:2`,
       results: [],
       testResults: [],
       duration: { totalTime: 0, buildTime: 0, testTime: 0 },

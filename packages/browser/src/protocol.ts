@@ -6,7 +6,6 @@ export type {
   BrowserName,
   BrowserViewport,
 } from '@rstest/core/internal/browser';
-import { getFileTaskId } from '@rstest/core/internal/browser-runtime';
 import type {
   BrowserExpectConfig,
   BrowserRuntimeConfig,
@@ -42,20 +41,31 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 
 export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
-// Shared with every surface of this package: the runtime entry's
-// dependency-free task-id grammar.
-export { getFileTaskId };
+/**
+ * The `file:` task id core's runner assigns a file. Kept as a dependency-free
+ * copy so host and runner surfaces share it without importing core runtime
+ * internals.
+ */
+export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
 
 /**
  * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the
  * scheduler's task list are keyed by this pair: every browser of a project
- * shares the project's runtime config (it is browser-agnostic), while
- * `screenshotFailures` / `viewport` come from the per-browser entry and
- * `launchKey` names which Playwright launch the row runs on.
+ * shares the project's build, dev server and runtime config (it is
+ * browser-agnostic), while `screenshotFailures` / `viewport` come from the
+ * per-browser entry and `launchKey` names which Playwright launch the row
+ * runs on.
  */
 export type BrowserProjectRuntime = {
+  /** The project the row builds and serves under. */
   name: string;
   browserName: BrowserName;
+  /**
+   * The project name the row reports to core under (core's browser instance
+   * name): every payload core receives from this row carries it as `project`
+   * and no browser, so core and reporters see each row as its own project.
+   */
+  instanceName: string;
   /**
    * The resolved launch's headless value (entry config, with the list
    * collect's `forceHeadless` applied), so run/list partitioning and the

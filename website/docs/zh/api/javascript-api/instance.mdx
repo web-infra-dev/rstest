@@ -353,7 +353,6 @@ interface ListedTest {
   fullName?: string; // 带测试套件前缀的显示名称；文件条目不包含此字段。
   parentNames?: string[]; // 外层测试套件的名称。
   project: string; // 项目名称。
-  browserName?: BrowserName; // browser 模式下的所属浏览器；Node pool 上缺失。
   location?: TestLocation; // 请求后提供的源码位置。
   runMode?: 'skip' | 'todo'; // 不可运行声明的 skip 或 todo 模式。
   type: 'file' | 'suite' | 'case'; // 条目类型。

@@ -54,7 +54,6 @@ export class VerboseReporter extends DefaultReporter {
         test.relativeTestPath,
         true,
         this.verboseOptions.showProjectName,
-        this.browserTags.show,
       );
 
       for (const result of test.results) {

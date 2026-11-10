@@ -27,6 +27,7 @@ import {
   materializeVirtualSetupFiles,
   pluginMockRuntime,
   projectRuntimeConfig,
+  resolveBrowserInstances,
   resolveProjectBuildCache,
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
@@ -39,7 +40,6 @@ import { dirname, join, normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
-import { resolveProjectBrowsers } from './browserEntries';
 import { validateBrowserConfig } from './configValidation';
 import type { ContainerRpcManager } from './containerRpc';
 import type { HeadedRunRegistry } from './headedRunRegistry';
@@ -886,7 +886,7 @@ export const buildBrowserRuntimeRows = (
         envOverlay: options.envOverlay,
       }),
     );
-    for (const entry of resolveProjectBrowsers(project)) {
+    for (const entry of resolveBrowserInstances(project)) {
       const headless = options.forceHeadless ?? entry.headless;
       const spec = launchSpecForEntry(browser, entry, headless);
       if (!specsByKey.has(spec.key)) {
@@ -895,6 +895,7 @@ export const buildBrowserRuntimeRows = (
       rows.push({
         name: project.name,
         browserName: entry.browserName,
+        instanceName: entry.name,
         headless: spec.headless,
         environmentName: project.environmentName,
         projectRoot: normalize(project.rootPath),

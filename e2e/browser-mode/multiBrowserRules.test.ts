@@ -14,10 +14,13 @@ describe('browser mode - multi-browser launch rules', () => {
   it('runs one file copy per browser with per-entry viewport overrides', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {});
     await expectExecSuccess();
-    // One row per (project, browser), each tagged with its browser, and the
-    // per-entry viewport assertion passed inside each real page.
-    expect(cli.stdout).toMatch(/\[chromium\].*attribution\.test\.ts/);
-    expect(cli.stdout).toMatch(/\[firefox\].*attribution\.test\.ts/);
+    // One row per (project, browser), each reported as its own
+    // `<project> (<browser>)` project, and the per-entry viewport assertion
+    // passed inside each real page.
+    expect(cli.stdout).toMatch(
+      /\[rstest \(chromium\)\].*attribution\.test\.ts/,
+    );
+    expect(cli.stdout).toMatch(/\[rstest \(firefox\)\].*attribution\.test\.ts/);
     expect(cli.stdout).toMatch(/Test Files 2 passed/);
     expect(cli.stdout).toMatch(/Tests 6 passed/);
   }, 60_000);
@@ -28,11 +31,10 @@ describe('browser mode - multi-browser launch rules', () => {
     });
 
     await expectExecSuccess();
-    // One browser row selected → one file result, and the dropped copy's
-    // tag must not leak anywhere. (The reporter tags rows only when the
-    // selected project still records more than one browser, so the
-    // narrowed run here prints an untagged single row.)
-    expect(cli.stdout).not.toMatch(/\[chromium\]/);
+    // One browser row selected → one file result under the plain project
+    // name: a project that runs one browser keeps its own name, so neither
+    // browser's instance name appears.
+    expect(cli.stdout).not.toMatch(/\(chromium\)/);
     expect(cli.stdout).toMatch(/Test Files 1 passed/);
   }, 60_000);
 
@@ -72,7 +74,7 @@ describe('browser mode - multi-browser launch rules', () => {
     });
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Test Files 1 passed/);
-    expect(cli.stdout).not.toMatch(/\[firefox\]/);
+    expect(cli.stdout).not.toMatch(/\(firefox\)/);
   }, 60_000);
 
   it('rejects a second headed browser and names the CLI fix', async () => {
@@ -118,9 +120,13 @@ describe('browser mode - multi-browser launch rules', () => {
       options: { nodeOptions: { cwd: fixtureDir } },
     });
     await merge.expectExecSuccess();
-    // Merged output attributes both browser rows again.
-    expect(merge.cli.stdout).toMatch(/\[chromium\].*attribution\.test\.ts/);
-    expect(merge.cli.stdout).toMatch(/\[firefox\].*attribution\.test\.ts/);
+    // Merged output attributes both browser instances again.
+    expect(merge.cli.stdout).toMatch(
+      /\[rstest \(chromium\)\].*attribution\.test\.ts/,
+    );
+    expect(merge.cli.stdout).toMatch(
+      /\[rstest \(firefox\)\].*attribution\.test\.ts/,
+    );
     expect(merge.cli.stdout).toMatch(/Test Files 2 passed/);
   }, 120_000);
 });

@@ -673,7 +673,8 @@ describe('programmatic createRstest', () => {
           filter === 'firefox' ? [] : [expect.stringContaining('800')],
         fileResults: [
           {
-            browserName: filter,
+            // One selected browser keeps the plain project name.
+            project: 'rstest',
             status: filter === 'firefox' ? 'passed' : 'failed',
             message: filter === 'firefox' ? '' : expect.stringContaining('800'),
           },
@@ -712,12 +713,12 @@ describe('programmatic createRstest', () => {
     expect(result.fileResults).toEqual(
       expect.arrayContaining([
         {
-          browserName: 'chromium',
+          project: 'rstest (chromium)',
           status: 'failed',
           message: expect.stringContaining('800'),
         },
         {
-          browserName: 'firefox',
+          project: 'rstest (firefox)',
           status: 'passed',
           message: '',
         },

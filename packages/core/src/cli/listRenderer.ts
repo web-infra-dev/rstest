@@ -3,7 +3,6 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { relative } from 'pathe';
 import type { ListedTest } from '../api/types';
 import type { ListCommandCollectOptions, Location } from '../types';
-import { formatBrowserSuffix, reporterFileKey } from '../reporter/utils';
 import { color, logger, prettyTestPath } from '../utils';
 
 export type ListCommandOptions = ListCommandCollectOptions & {
@@ -17,7 +16,6 @@ type InternalListedTest = {
   file: string;
   name?: string;
   project?: string;
-  browser?: string;
   location?: Location;
   type: 'file' | 'suite' | 'case';
 };
@@ -38,13 +36,7 @@ const getListSummaryCounts = (tests: InternalListedTest[]) => {
       projects.add(test.project);
     }
 
-    files.add(
-      reporterFileKey({
-        project: test.project ?? '',
-        browserName: test.browser,
-        testPath: test.file,
-      }),
-    );
+    files.add(`${test.project ?? ''}\0${test.file}`);
 
     if (test.type === 'suite') {
       suites += 1;
@@ -137,31 +129,22 @@ export async function renderListTests(
   {
     rootPath,
     showProject,
-    showBrowser,
     filesOnly,
     json,
     printLocation,
     includeSuites,
     summary,
-  }: ListCommandOptions & {
-    rootPath: string;
-    showProject: boolean;
-    showBrowser?: boolean;
-  },
+  }: ListCommandOptions & { rootPath: string; showProject: boolean },
 ): Promise<void> {
   const tests: InternalListedTest[] = [];
   for (const test of list) {
     if (test.runMode === 'skip' || test.runMode === 'todo') {
       continue;
     }
-    // A run that lists several browsers of one project yields one entry per
-    // file copy; the browser tag keeps those rows distinguishable.
-    const browser = showBrowser ? test.browserName : undefined;
     if (filesOnly) {
       tests.push({
         file: test.testPath,
         project: showProject ? test.project : undefined,
-        browser,
         type: 'file',
       });
     } else {
@@ -171,7 +154,6 @@ export async function renderListTests(
         location: test.location,
         type: test.type,
         project: showProject ? test.project : undefined,
-        browser,
       });
     }
   }
@@ -205,11 +187,10 @@ export async function renderListTests(
       if (test.location && printLocation) {
         shortPath = `${shortPath}:${test.location.line}:${test.location.column}`;
       }
-      const browser = color.gray(formatBrowserSuffix(test.browser, true));
       logger.log(
         test.name
-          ? `${color.dim(`${shortPath}${browser} > `)}${test.name}`
-          : `${prettyTestPath(shortPath)}${browser}`,
+          ? `${color.dim(`${shortPath} > `)}${test.name}`
+          : prettyTestPath(shortPath),
       );
     }
 

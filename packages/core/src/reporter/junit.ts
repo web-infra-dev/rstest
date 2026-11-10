@@ -8,11 +8,9 @@ import type {
   TestFileResult,
   TestResult,
   TestRunEndPayload,
-  TestRunStartPayload,
 } from '../types';
 import { logger } from '../utils';
 import { formatStack, parseErrorStacktrace } from '../utils/error';
-import { BrowserTagGate, formatBrowserSuffix } from './utils';
 
 interface JUnitTestCase {
   name: string;
@@ -54,22 +52,16 @@ interface JUnitReport {
 export class JUnitReporter implements Reporter {
   private readonly rootPath: string;
   private readonly outputPath?: string;
-  private readonly browserTags: BrowserTagGate;
 
   constructor({
     rootPath,
-    options: { outputPath, showBrowserName } = {},
+    options: { outputPath } = {},
   }: {
     rootPath: string;
-    options?: { outputPath?: string; showBrowserName?: boolean };
+    options?: { outputPath?: string };
   }) {
     this.rootPath = rootPath;
     this.outputPath = outputPath;
-    this.browserTags = new BrowserTagGate(showBrowserName);
-  }
-
-  onTestRunStart(payload: TestRunStartPayload): void {
-    this.browserTags.onTestRunStart(payload);
   }
 
   private sanitizeXml(text: string): string {
@@ -158,10 +150,7 @@ export class JUnitReporter implements Reporter {
     const errors = 0; // No separate error tracking; set to 0 for clarity
 
     return {
-      // The browser suffix keeps suites of the same file distinct when several
-      // browsers of one project run it in one report; single-browser runs
-      // never carry it.
-      name: `${fileResult.relativeTestPath}${formatBrowserSuffix(fileResult.browserName, this.browserTags.show)}`,
+      name: fileResult.relativeTestPath,
       tests: fileResult.summary.total,
       failures: fileResult.summary.failed,
       errors,

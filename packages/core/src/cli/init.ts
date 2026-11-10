@@ -298,8 +298,8 @@ export function mergeWithCLIOptions(
           'Use `--browser.browsers` (or `RunOptions.browser.browsers`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
         );
       }
-      // Raw selection for `@rstest/browser`, which filters this layer's
-      // configured browsers by it (see `resolveProjectBrowsers`).
+      // Raw selection; `resolveBrowserInstances` filters this layer's
+      // configured browsers by it.
       if (cliBrowserNames !== undefined) {
         config.browser.cliBrowsers = toCliBrowserNames(
           cliBrowserNames,

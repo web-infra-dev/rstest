@@ -14,11 +14,11 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 ## Launch-key model
 
 - A run launches one browser per launch key across all projects; two projects naming the same key share the launched browser. The row projection is the single derivation: rows carry their launch keys and the launch plan dedupes them by key, so a row can never name a launch key the runtime did not launch. Within a project every browser of the project shares one build and one dev server, so build-scoped options stay project-level while `BrowserEntry` overrides only runtime-effective fields.
-- The host scheduler unit is `(project, browserName, testFile)`: selection and both lanes expand plans through the same file→row expansion, every state/screenshot/collect key includes the browser, and the runner stamps the resolved row's `browserName` beside every payload it sends — whether headless pages or headed frames received the browser at boot — so a payload without it is indistinguishable from the node pool's.
+- The host scheduler unit is `(project, browserName, testFile)`: selection and both lanes expand plans through the same file→row expansion, and every state/screenshot/collect key includes the browser. Browser-internal wire (file start, logs, RPC, file cleanup) identifies a row by `(projectName, browserName)`, where `projectName` is the configured project (the build unit). Payloads forwarded to core carry the row's `instanceName` as `project` instead, so core and reporters see each browser as its own project; `hostController` owns the translation between the two.
 - At most one `(project, browser)` pair may run headed per run, and a watch run may not mix headed and headless browsers — `validateBrowserConfig` owns both rules, and the host composition (headless lanes plus at most one headed lane, dispatch lanes resolved from request data) relies on them.
 - Watch file-set entries stay row-free (path-keyed only), so stale-screenshot cleanup must sweep every browser directory the project could have written, not only the bare-path hash a key without a browser segment hashes to.
 
-- Browser entries are resolved only through `resolveProjectBrowsers` (raw `browser.browsers` / deprecated `browser.browser` / CLI selection, which core stores untouched). Shape errors surface from `validateBrowserConfig`, before any test or browser launch, so no caller re-derives entries from the raw config.
+- Browser entries are resolved only through core's `resolveBrowserInstances` (re-exported from `@rstest/core/browser`). Shape errors and instance-name collisions surface from `validateBrowserConfig`, before any test or browser launch, so no caller re-derives entries from the raw config.
 
 ## Contract ownership
 

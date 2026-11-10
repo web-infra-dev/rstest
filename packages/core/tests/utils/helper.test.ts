@@ -3,7 +3,6 @@ import { runInNewContext } from 'node:vm';
 import {
   formatError,
   toError,
-  generateFilePathHash,
   getFileTaskId,
   getWorkerSerialization,
   isPlainObject,
@@ -22,31 +21,10 @@ it('isPlainObject accepts objects created in another realm', () => {
   expect(isPlainObject(Object.create(null))).toBe(false);
 });
 
-it('getFileTaskId keeps node ids at file:<testPath> and roots browser ids at project and browser', () => {
-  expect(getFileTaskId({ project: 'node', testPath: '/a.test.ts' })).toBe(
-    'file:/a.test.ts',
-  );
-  expect(getFileTaskId('/a.test.ts')).toBe('file:/a.test.ts');
-  expect(
-    getFileTaskId({
-      project: 'web',
-      testPath: '/a.test.ts',
-      browserName: 'firefox',
-    }),
-  ).toBe('file:web:firefox:/a.test.ts');
-});
-
-it('generateFilePathHash keeps the node-pool seed byte-stable', () => {
-  // Case ids root at this hash (`fileHash_{idx}` in custom-reporter
-  // payloads), so the node seed `${project}\0${testPath}` must stay
-  // byte-identical across the multi-browser change.
-  expect(generateFilePathHash('node', '/fixtures/index.test.ts')).toBe(
-    'd3d72794ce',
-  );
-  // Browser rows alias-proof: one file, two browsers, two distinct hashes.
-  expect(generateFilePathHash('p', '/a.test.ts', 'chromium')).not.toBe(
-    generateFilePathHash('p', '/a.test.ts', 'firefox'),
-  );
+it('getFileTaskId builds the file: task-id grammar', () => {
+  // Locks the single source of truth so the worker/pool/runner consumers and
+  // the tests/pool/fixtures/testWorker.mjs literal copy cannot drift.
+  expect(getFileTaskId('/abs/foo.test.ts')).toBe('file:/abs/foo.test.ts');
 });
 
 it('toNativePath converts forward-slash paths to OS-native separators', () => {

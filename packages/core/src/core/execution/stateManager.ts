@@ -8,13 +8,11 @@ import type {
 import { reporterFileKey } from '../../reporter/utils';
 
 /**
- * One (project, browser, path) triple per module state: a test path alone is
- * ambiguous once another project (node pool) or another browser (browser
- * mode) runs the same file in the same cycle, and each run of the file keeps
- * its own running/case state here so reporters never collapse them. `browser`
- * is empty for the node pool. The keying itself is `reporterFileKey`: one
- * helper for every process-lifetime `(project, browser, path)` map, so a
- * getter on the reporter side cannot silently lose the browser dimension.
+ * One module state per (project, path): a test path alone is ambiguous once
+ * several projects run the same file in the same cycle, and each run of the
+ * file keeps its own running/case state here so reporters never collapse
+ * them. Keyed through `reporterFileKey`, the same helper as every other
+ * process-lifetime per-file map.
  */
 
 export class TestStateManager {
@@ -25,31 +23,25 @@ export class TestStateManager {
   public testFiles: string[] | undefined = undefined;
   private failedTestCount = 0;
 
-  /** The module state a (project, browser, path) run currently holds. */
-  runningModuleFor(file: {
-    project: string;
-    browserName?: string;
-    testPath: string;
-  }):
+  /** The module state a (project, path) run currently holds. */
+  runningModuleFor(file: { project: string; testPath: string }):
     | {
         relativeTestPath: string;
         runningTests: TestCaseInfo[];
         results: TestResult[];
       }
     | undefined {
-    return this.runningModules.get(reporterFileKey(file));
+    return this.runningModules.get(
+      reporterFileKey(file.project, file.testPath),
+    );
   }
 
   onTestFileStart({
     project,
-    browserName,
     testPath,
     relativeTestPath,
-  }: Pick<
-    TestFileInfo,
-    'project' | 'browserName' | 'testPath' | 'relativeTestPath'
-  >): void {
-    const key = reporterFileKey({ project, browserName, testPath });
+  }: Pick<TestFileInfo, 'project' | 'testPath' | 'relativeTestPath'>): void {
+    const key = reporterFileKey(project, testPath);
     const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
@@ -64,7 +56,7 @@ export class TestStateManager {
   }
 
   onTestCaseResult(result: TestResult): void {
-    const key = reporterFileKey(result);
+    const key = reporterFileKey(result.project, result.testPath);
     const currentModule = this.runningModules.get(key);
     if (!currentModule) {
       this.runningModules.set(key, {
@@ -87,7 +79,7 @@ export class TestStateManager {
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    const key = reporterFileKey(test);
+    const key = reporterFileKey(test.project, test.testPath);
     const currentModule = this.runningModules.get(key);
     if (!currentModule) {
       this.runningModules.set(key, {
@@ -111,7 +103,7 @@ export class TestStateManager {
   }
 
   onTestFileResult(test: TestFileResult): void {
-    const key = reporterFileKey(test);
+    const key = reporterFileKey(test.project, test.testPath);
     const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(

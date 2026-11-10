@@ -9,6 +9,7 @@ const row = (
 ): BrowserProjectRuntime => ({
   name,
   browserName,
+  instanceName: `${name} (${browserName})`,
   headless: true,
   environmentName: 'browser',
   projectRoot: `/root/${name}`,

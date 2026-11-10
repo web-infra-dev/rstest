@@ -46,8 +46,8 @@ export {
   SNAPSHOT_HEADER,
 } from './utils/snapshotPath';
 // Shared selection projection so the browser host's `onSelected` entries carry
-// the same shape as the node executor's; shared (project, browser, testPath)
-// reporter key so the host's maps key exactly what the core reporters key.
+// the same shape as the node executor's; shared (project, testPath) reporter
+// key so the host's maps key exactly what the core reporters key.
 export { toSelectedTestFile } from './utils/selectedTestFile';
 export { reporterFileKey } from './reporter/utils';
 // Shared watch-ready banner so the browser host prints the same hint text as
@@ -137,6 +137,12 @@ export {
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
 export type { BrowserName } from './types';
+// Browser instance resolution: one `(project, browser)` pair reported to
+// core as its own project.
+export {
+  getReportedProjects,
+  resolveBrowserInstances,
+} from './core/browser/browserInstances';
 export {
   getSetupFiles,
   materializeVirtualSetupFiles,

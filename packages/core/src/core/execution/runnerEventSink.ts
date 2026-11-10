@@ -187,12 +187,8 @@ export function createRunnerEventSink(
     ...log,
   });
 
-  const fileHooks = (file: {
-    project: string;
-    testPath: string;
-    browserName?: string;
-  }) => {
-    const key = reporterFileKey(file);
+  const fileHooks = (file: { project: string; testPath: string }) => {
+    const key = reporterFileKey(file.project, file.testPath);
     let hooks = run.files.get(key);
     if (!hooks) {
       hooks = new Set();
@@ -324,7 +320,9 @@ export function createRunnerEventSink(
       await dispatch('onTestSuiteResult', enriched);
     },
     async onTestFileResult(result) {
-      const pending = run.files.get(reporterFileKey(result));
+      const pending = run.files.get(
+        reporterFileKey(result.project, result.testPath),
+      );
       if (pending) await joinHooks(() => [pending]);
       const results = result.results.map(enrichTask);
       const enriched: TestFileResult = {

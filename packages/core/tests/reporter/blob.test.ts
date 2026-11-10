@@ -75,7 +75,7 @@ describe('blob wire-format', () => {
   });
 
   it('rejects both old reporter formats and other package versions', () => {
-    for (const version of [RSTEST_VERSION, '0.0.0-other:3']) {
+    for (const version of [RSTEST_VERSION, '0.0.0-other:2']) {
       expect(() =>
         parseBlobFile(JSON.stringify({ version }), 'blob.json'),
       ).toThrow(/must match both the Rstest version and reporter format/);

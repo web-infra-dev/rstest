@@ -25,10 +25,12 @@ import {
   logWatchReadyMessage,
   PhaseTracker,
   type RunnerEventSink,
+  type RawTestFileInfo,
   type RawTestFileResult,
   type RawTestResult,
   type RawUserConsoleLog,
   reporterFileKey,
+  resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
   toSelectedTestFile,
@@ -36,7 +38,6 @@ import {
   type TestResult,
 } from '@rstest/core/internal/browser';
 import { basename, dirname, join, normalize } from 'pathe';
-import { resolveProjectBrowsers } from './browserEntries';
 import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
@@ -142,20 +143,16 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
     ),
   );
 
-/**
- * `reporterFileKey` for the host's `projectName`-keyed shapes (file-start
- * payloads, RPC requests, `TestFileInfo`).
- */
-const projectFileKey = (file: {
-  projectName: string;
-  testPath: string;
-  browserName?: string;
-}): string =>
-  reporterFileKey({
-    project: file.projectName,
-    testPath: file.testPath,
-    browserName: file.browserName,
-  });
+/** Re-attributes a collected test tree to `project`. */
+const withProject = (
+  tests: RawTestFileInfo['tests'],
+  project: string,
+): RawTestFileInfo['tests'] =>
+  tests.map((test) =>
+    test.type === 'suite'
+      ? { ...test, project, tests: withProject(test.tests, project) }
+      : { ...test, project },
+  );
 
 const getFailureScreenshotKey = (
   project: string,
@@ -209,7 +206,7 @@ const removeFailureScreenshotsForFiles = async (
       const sweptBrowsers = browserName
         ? [browserName]
         : project.normalizedConfig.browser.enabled
-          ? resolveProjectBrowsers(project).map((entry) => entry.browserName)
+          ? resolveBrowserInstances(project).map((entry) => entry.browserName)
           : [undefined];
       return sweptBrowsers.map((sweptBrowserName) =>
         fs
@@ -393,6 +390,27 @@ export const runBrowserController = async (
   // node projects keep a single unattributed entry. This is the reporter
   // run-start list.
   const rowsByProject = groupRowsByProject(projectRuntimeConfigs);
+  // Core sees each row as its own project, named by `row.instanceName`: every
+  // payload handed to core carries that name and no browser. Client payloads
+  // name their `(project, browser)` row instead, so the host translates them
+  // here and keys its own per-file maps by instance name too — a client
+  // payload and the core payload it leads to then address the same entry.
+  const rowByInstance = new Map(
+    projectRuntimeConfigs.map((row) => [row.instanceName, row]),
+  );
+  const instanceNameOf = (file: {
+    projectName: string;
+    browserName?: string;
+  }): string =>
+    rowsByProject
+      .get(file.projectName)
+      ?.find((row) => row.browserName === file.browserName)?.instanceName ??
+    file.projectName;
+  const fileKeyOf = (file: {
+    projectName: string;
+    testPath: string;
+    browserName?: string;
+  }): string => reporterFileKey(instanceNameOf(file), file.testPath);
   const expandSelectedFiles = (
     files: { testPath: string; projectName: string }[],
   ): SelectedTestFile[] =>
@@ -401,11 +419,7 @@ export const runBrowserController = async (
         return [toSelectedTestFile(file.testPath, file.projectName)];
       }
       return expandToRows([file], rowsByProject).map((expanded) =>
-        toSelectedTestFile(
-          file.testPath,
-          file.projectName,
-          expanded.row.browserName,
-        ),
+        toSelectedTestFile(file.testPath, expanded.row.instanceName),
       );
     });
 
@@ -687,7 +701,7 @@ export const runBrowserController = async (
       return Promise.resolve();
     }
 
-    const cleanupKey = projectFileKey(testFile);
+    const cleanupKey = fileKeyOf(testFile);
     const cleanup = (
       failureScreenshotCleanups.get(cleanupKey) ?? Promise.resolve()
     ).then(() => removeFailureScreenshotsForFiles([project], [testFile]));
@@ -1063,12 +1077,13 @@ export const runBrowserController = async (
     // `expect` is host-only config carried on the row itself; the request
     // resolves against its own (project, browser) row — falling back to the
     // run-wide default browser when a request omits its own.
-    const screenshotBrowserName = request.browserName ?? browserName;
+    const requestedBrowserName = request.browserName ?? browserName;
     const screenshotRow = screenshotProject
       ? rowsByProject
           .get(screenshotProject.name)
-          ?.find((row) => row.browserName === screenshotBrowserName)
+          ?.find((row) => row.browserName === requestedBrowserName)
       : undefined;
+    const screenshotBrowserName = screenshotRow?.browserName ?? browserName;
     const screenshotConfig = screenshotRow?.expect?.toMatchScreenshot;
     const {
       comparatorOptions,
@@ -1166,12 +1181,12 @@ export const runBrowserController = async (
             parentNames: testIdentity.parentNames,
             browserName: request.browserName,
           });
-          await failureScreenshotCleanups.get(projectFileKey(request));
+          await failureScreenshotCleanups.get(fileKeyOf(request));
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));
           failureScreenshots.set(
             getFailureScreenshotKey(
-              request.projectName,
+              instanceNameOf(request),
               request.testPath,
               testId,
             ),
@@ -1225,7 +1240,7 @@ export const runBrowserController = async (
           resolvePath: resolveScreenshotPath,
           platform: process.platform,
         });
-        const key = projectFileKey(request);
+        const key = fileKeyOf(request);
         const counts = screenshotCountsByFile.get(key) ?? {
           added: 0,
           updated: 0,
@@ -1240,7 +1255,7 @@ export const runBrowserController = async (
       return result;
     } catch (error) {
       if (error instanceof ScreenshotMismatchError) {
-        const key = projectFileKey(request);
+        const key = fileKeyOf(request);
         const counts = screenshotCountsByFile.get(key) ?? {
           added: 0,
           updated: 0,
@@ -1294,9 +1309,12 @@ export const runBrowserController = async (
   // `resolveSnapshotPath` correct across browser projects that share a relative
   // test path.
   const runnerSinks = new Map<string, RunnerEventSink>(
-    browserProjects.map((project) => [
-      project.name,
-      createRunnerEventSink(context, project.normalizedConfig),
+    projectRuntimeConfigs.map((row) => [
+      row.instanceName,
+      createRunnerEventSink(context, {
+        ...projectByName.get(row.name)!.normalizedConfig,
+        name: row.instanceName,
+      }),
     ]),
   );
   // Every per-file wire payload carries its owning project name, so routing
@@ -1324,13 +1342,13 @@ export const runBrowserController = async (
     string,
     ReturnType<typeof createSilentConsoleController>
   >(
-    browserProjects.map((project) => [
-      project.name,
+    projectRuntimeConfigs.map((row) => [
+      row.instanceName,
       createSilentConsoleController({
         runtimeConfig: {
-          silent: project.normalizedConfig.silent,
-          disableConsoleIntercept:
-            project.normalizedConfig.disableConsoleIntercept,
+          silent: projectByName.get(row.name)!.normalizedConfig.silent,
+          disableConsoleIntercept: projectByName.get(row.name)!.normalizedConfig
+            .disableConsoleIntercept,
         },
         emitInterceptedLog: (log) =>
           sinkForProjectName(log.project).onConsoleLog(log),
@@ -1424,31 +1442,24 @@ export const runBrowserController = async (
       browserName: payload.browserName,
       testPath: payload.testPath,
     });
-    const fileKey = projectFileKey(payload);
+    const project = instanceNameOf(payload);
+    const fileKey = reporterFileKey(project, payload.testPath);
     screenshotCountsByFile.delete(fileKey);
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
-        trace: {
-          testPath: payload.testPath,
-          project: payload.projectName,
-          browserName: payload.browserName,
-        },
+        trace: { testPath: payload.testPath, project },
         pid: nextBrowserFilePid++,
       });
       tracker.transition('prepare');
       phaseTrackers.set(fileKey, tracker);
     }
     // The client sends `{ testPath, projectName, browserName }`; the sink
-    // adapter builds the `TestFileInfo` the reporters and stateManager expect.
-    await sinkForProjectName(payload.projectName).onTestFileStart({
-      testId: getFileTaskId({
-        project: payload.projectName,
-        testPath: payload.testPath,
-        browserName: payload.browserName,
-      }),
+    // adapter builds the `TestFileInfo` the reporters and stateManager expect,
+    // under the row's instance name.
+    await sinkForProjectName(project).onTestFileStart({
+      testId: getFileTaskId(payload.testPath),
       testPath: payload.testPath,
-      project: payload.projectName,
-      browserName: payload.browserName,
+      project,
       tests: [],
     });
   };
@@ -1456,21 +1467,27 @@ export const runBrowserController = async (
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(reporterFileKey(payload))?.transition('tests');
+    phaseTrackers
+      ?.get(reporterFileKey(payload.project, payload.testPath))
+      ?.transition('tests');
     await sinkForProjectName(payload.project).onTestFileReady(payload);
   };
 
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(reporterFileKey(payload))?.recordSuiteStart(payload);
+    phaseTrackers
+      ?.get(reporterFileKey(payload.project, payload.testPath))
+      ?.recordSuiteStart(payload);
     await sinkForProjectName(payload.project).onTestSuiteStart(payload);
   };
 
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(reporterFileKey(payload))?.recordSuiteResult(payload);
+    phaseTrackers
+      ?.get(reporterFileKey(payload.project, payload.testPath))
+      ?.recordSuiteResult(payload);
     await sinkForProjectName(payload.project).onTestSuiteResult(payload);
 
     silentConsoleControllerForProjectName(
@@ -1480,8 +1497,6 @@ export const runBrowserController = async (
       status: payload.status,
       taskParentNames: payload.parentNames,
       taskType: 'suite',
-      project: payload.project,
-      browserName: payload.browserName,
       testPath: payload.testPath,
     });
   };
@@ -1489,7 +1504,9 @@ export const runBrowserController = async (
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(reporterFileKey(payload))?.recordCaseStart(payload);
+    phaseTrackers
+      ?.get(reporterFileKey(payload.project, payload.testPath))
+      ?.recordCaseStart(payload);
     // Fire-and-forget on both transports (the sink does not await case-start).
     sinkForProjectName(payload.project).onTestCaseStart(payload);
   };
@@ -1508,14 +1525,15 @@ export const runBrowserController = async (
     if (payload.status === 'failed' && failureScreenshot) {
       logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
     } else if (payload.status !== 'failed') {
-      const project = projectByName.get(payload.project);
+      const row = rowByInstance.get(payload.project);
+      const project = row && projectByName.get(row.name);
       screenshotPathToRemove = project
         ? getFailureScreenshotPath({
             projectRoot: project.rootPath,
-            projectName: payload.project,
+            projectName: project.name,
             testPath: payload.testPath,
             testName: payload.name,
-            browserName: payload.browserName,
+            browserName: row.browserName,
             testId: payload.testId,
             parentNames: payload.parentNames ?? [],
           })
@@ -1525,7 +1543,9 @@ export const runBrowserController = async (
       payload,
     );
     caseResults.push(result);
-    phaseTrackers?.get(reporterFileKey(payload))?.recordCaseResult(payload);
+    phaseTrackers
+      ?.get(reporterFileKey(payload.project, payload.testPath))
+      ?.recordCaseResult(payload);
 
     silentConsoleControllerForProjectName(
       payload.project,
@@ -1534,8 +1554,6 @@ export const runBrowserController = async (
       status: payload.status,
       taskParentNames: payload.parentNames,
       taskType: 'case',
-      project: payload.project,
-      browserName: payload.browserName,
       testPath: payload.testPath,
     });
 
@@ -1552,7 +1570,7 @@ export const runBrowserController = async (
   const handleTestFileComplete = async (
     payload: RawTestFileResult,
   ): Promise<void> => {
-    const key = reporterFileKey(payload);
+    const key = reporterFileKey(payload.project, payload.testPath);
     const screenshotCounts = screenshotCountsByFile.get(key);
     screenshotCountsByFile.delete(key);
     if (screenshotCounts) {
@@ -1591,8 +1609,6 @@ export const runBrowserController = async (
       status: payload.status,
       taskParentNames: payload.parentNames,
       taskType: 'file',
-      project: payload.project,
-      browserName: payload.browserName,
       testPath: payload.testPath,
     });
 
@@ -1613,14 +1629,11 @@ export const runBrowserController = async (
       taskParentNames: payload.taskParentNames,
       taskType: payload.taskType,
       testPath: payload.testPath,
-      project: payload.projectName,
-      browserName: payload.browserName,
+      project: instanceNameOf(payload),
       type: payload.type,
       trace: payload.trace,
     };
-    silentConsoleControllerForProjectName(payload.projectName).onConsoleLog(
-      log,
-    );
+    silentConsoleControllerForProjectName(log.project).onConsoleLog(log);
   };
 
   // Every failing file and every fatal error reaches core through the cycle
@@ -1974,20 +1987,14 @@ export const listBrowserTests = async (
         switch (message.type) {
           case 'collect-result': {
             const payload = message.payload;
-            // One page collects the project's structure once; the configured
-            // browser entries each get their own attribution copy, so listed
-            // entries keep the run dimension the reporters do. The pages run
-            // only against servers this block launched, so the lookup always
-            // resolves.
-            const browserNames = listRowsByProject
-              .get(payload.project)!
-              .map((row) => row.browserName);
+            // One page collects the project's structure once; each browser
+            // row gets its own copy under its instance name, so listed
+            // entries match the projects the reporters see.
             results.push(
-              ...browserNames.map((browserName) => ({
+              ...listRowsByProject.get(projectRow.name)!.map((row) => ({
                 testPath: payload.testPath,
-                project: payload.project,
-                browserName,
-                tests: payload.tests,
+                project: row.instanceName,
+                tests: withProject(payload.tests, row.instanceName),
               })),
             );
             break;

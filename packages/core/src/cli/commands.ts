@@ -10,7 +10,6 @@ import {
   isTTY,
 } from '../utils';
 import { flushOutputStreams, logger } from '../utils/logger';
-import { shouldShowBrowserTags } from '../reporter/utils';
 import { isRelatedRun } from '../core/execution/buildRunner';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import { setHostExitCode } from './exitCode';
@@ -840,17 +839,17 @@ export function createCli(): CAC {
         });
         await renderListTests(result, {
           rootPath,
-          // Public context keeps all configured projects; selection precedes planning.
+          // Public context keeps all configured projects; selection precedes
+          // planning. A multi-browser project lists each browser instance as
+          // its own project, so listed projects count as well.
           showProject:
             filterProjects(
               rstest.context.projects.map((project) => ({
                 config: { name: project.name },
               })),
               commonOptions,
-            ).length > 1,
-          // Browser rows only need a tag when more than one browser row is
-          // listed; single-browser rows never have ambiguous file titles.
-          showBrowser: shouldShowBrowserTags(result),
+            ).length > 1 ||
+            new Set(result.map((test) => test.project)).size > 1,
           filesOnly,
           json,
           includeSuites,

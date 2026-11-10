@@ -77,7 +77,6 @@ export function createRunner({
     project,
     testPath,
     runtimeConfig: workerState.runtimeConfig,
-    browserName: workerState.browserName,
   });
   const testRunner: TestRunner = new TestRunner(taskContext);
   // Publish this file's context as one unit; every stable forwarder (runner
@@ -115,14 +114,9 @@ export function createRunner({
         const snapshotClient = workerState.snapshotClient!;
         const tests = collectedTests!;
         hooks.onTestFileReady?.({
-          testId: getFileTaskId({
-            project: workerState.project,
-            testPath,
-            browserName: workerState.browserName,
-          }),
+          testId: getFileTaskId(testPath),
           testPath,
           project: workerState.project,
-          browserName: workerState.browserName,
           tests: tests.map(toTestInfo),
         });
         runtimeInstance.updateStatus('running');

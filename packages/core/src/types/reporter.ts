@@ -97,25 +97,11 @@ export type DefaultReporterOptions = {
    * show project name by default when running multiple projects
    */
   showProjectName?: boolean;
-
-  /**
-   * prints out browser name in test file title. Rstest sets it automatically
-   * when a run selects several browsers in one project; browser file results
-   * appear once per browser, so the tag says which browser produced each.
-   */
-  showBrowserName?: boolean;
 };
 
 export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
 export type MdReporterOptions = {
-  /**
-   * prints out browser name in md titles. Rstest sets it automatically when a
-   * run selects several browsers in one project; see the same-named option on
-   * `DefaultReporterOptions`.
-   */
-  showBrowserName?: boolean;
-
   /**
    * Output detail level preset.
    * - `'normal'`: balanced output with code frames, repro commands, and candidate files

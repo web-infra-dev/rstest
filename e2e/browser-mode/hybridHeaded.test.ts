@@ -16,10 +16,10 @@ describe('browser mode - one headed + headless hybrid run', () => {
       });
 
       await expectExecSuccess();
-      // One file copy per browser, each row tagged with its browser: the
-      // run attributions through both the headed and the headless lane.
-      expect(cli.stdout).toMatch(/\[chromium\].*hybrid\.test\.ts/);
-      expect(cli.stdout).toMatch(/\[firefox\].*hybrid\.test\.ts/);
+      // One file copy per browser, each reported as its own project: the
+      // run attributes through both the headed and the headless lane.
+      expect(cli.stdout).toMatch(/\[rstest \(chromium\)\].*hybrid\.test\.ts/);
+      expect(cli.stdout).toMatch(/\[rstest \(firefox\)\].*hybrid\.test\.ts/);
       expect(cli.stdout).toMatch(/Test Files 2 passed/);
       expect(cli.stdout).toMatch(/Tests 2 passed/);
 

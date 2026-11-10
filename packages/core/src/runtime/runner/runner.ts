@@ -857,16 +857,11 @@ export class TestRunner {
     };
 
     const start = RealDate.now();
-    const fileTaskId = getFileTaskId({
-      project,
-      testPath,
-      browserName: state.browserName,
-    });
 
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
-          testId: fileTaskId,
+          testId: getFileTaskId(testPath),
           project,
           testPath,
           name: '',
@@ -876,7 +871,7 @@ export class TestRunner {
       }
 
       return {
-        testId: fileTaskId,
+        testId: getFileTaskId(testPath),
         project,
         testPath,
         name: '',
@@ -911,14 +906,14 @@ export class TestRunner {
     }
 
     this.taskContext.setFallback({
-      taskId: fileTaskId,
+      taskId: getFileTaskId(testPath),
       taskType: 'file',
       testPath,
     });
 
     try {
       return {
-        testId: fileTaskId,
+        testId: getFileTaskId(testPath),
         project,
         testPath,
         name: '',

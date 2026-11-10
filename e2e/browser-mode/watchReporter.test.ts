@@ -105,19 +105,12 @@ describe('browser mode - watch reporter lifecycle', () => {
       const rerunReportLog = fs.read(reportLogPath);
       expect(getHookCountFromLog(rerunReportLog, 'onTestRunStart')).toBe(2);
       expect(getHookCountFromLog(rerunReportLog, 'onTestRunEnd')).toBe(2);
-      const initialRow = selections(initialReportLog)[0]!.files[0]!;
-      const rerunProject = initialRow.project;
-      const rerunBrowser = initialRow.browserName;
-      const projectSegment = rerunBrowser
-        ? `${rerunProject}:${rerunBrowser}:`
-        : '';
       const rerunFiles = selections(rerunReportLog)[1]!.files;
       expect(rerunFiles).toHaveLength(1);
       expect(rerunFiles[0]).toEqual({
         testPath: normalize(testFilePath),
-        testId: `file:${projectSegment}${normalize(testFilePath)}`,
-        project: rerunProject,
-        browserName: rerunBrowser,
+        testId: `file:${normalize(testFilePath)}`,
+        project: selections(initialReportLog)[0]!.files[0]!.project,
       });
     } finally {
       await killCliProcessTree(cli);

@@ -179,8 +179,6 @@ export type ListCommandResult = {
   tests: RawTestInfo[];
   testPath: string;
   project: string;
-  /** Owning browser of the collecting row (browser mode multi-browser only). */
-  browserName?: string;
   errors?: SerializedError[];
 };
 

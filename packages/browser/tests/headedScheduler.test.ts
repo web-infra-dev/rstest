@@ -172,6 +172,7 @@ describe('createHeadedScheduler', () => {
       headedRow: {
         name: 'browser',
         browserName: 'chromium',
+        instanceName: 'browser',
         headless: false,
         environmentName: 'browser',
         projectRoot: '/project',
