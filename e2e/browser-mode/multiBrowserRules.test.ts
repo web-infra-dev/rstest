@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 import { defaultEnvOverrides, runBrowserCli } from './utils';
+import { BROWSER_PORTS } from './fixtures/ports';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, 'fixtures/multi-browser');
@@ -12,7 +13,12 @@ const blobDir = join(fixtureDir, '.rstest-reports');
 
 // Every browser in this fixture is not one plain chromium entry (firefox is
 // present), so each call manages the CI chrome channel inside the config and
-// must not inherit an automatic `launch.channel` push.
+// must not inherit an automatic `launch.channel` push. This file must not
+// race `multiBrowser.test.ts` for the fixture's own port (configs reached
+// from different concurrently-running test files must not share one; the
+// loser retries or fails), so every CLI here carries the file-own
+// `multi-browser-rules` port.
+const rulesPort = `--browser.port=${BROWSER_PORTS['multi-browser-rules']}`;
 const rulesCli = (
   args: string[],
   extra?: Omit<
@@ -23,7 +29,7 @@ const rulesCli = (
   runBrowserCli('multi-browser', {
     ...extra,
     githubActionsChrome: false,
-    args,
+    args: [rulesPort, ...args],
   });
 
 describe('browser mode - multi-browser launch rules', () => {
@@ -90,7 +96,7 @@ describe('browser mode - multi-browser launch rules', () => {
   it('rejects watch with one headed and one headless browser', async () => {
     const result = await runRstestCli({
       command: 'rstest',
-      args: ['watch', '-c', 'rstest.mixed-headed.config.mts'],
+      args: ['watch', '-c', 'rstest.mixed-headed.config.mts', rulesPort],
       options: {
         nodeOptions: {
           cwd: fixtureDir,
