@@ -569,6 +569,12 @@ const run = async () => {
   };
   window.__RSTEST_BROWSER_OPTIONS__ = options;
 
+  // Stamps below must use the RESOLVED `(project, browser)` row, never the
+  // pre-resolution page value: a headed document is granted per-frame run
+  // identity, not a browser id, so its lane boots without a page-level
+  // `browserName` and the rows' name is what its payloads attribute through.
+  const rowBrowserName: BrowserName = projectRuntime.browserName;
+
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
   ensureRuntimeEnv(runtimeConfig.env);
 
@@ -665,7 +671,7 @@ const run = async () => {
           payload: {
             testPath,
             project: projectRuntime.name,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
             tests,
           },
         });
@@ -743,7 +749,7 @@ const run = async () => {
           taskId: getFileTaskId({
             project: projectRuntime.name,
             testPath,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
           }),
           taskType: 'file',
           testPath,
@@ -782,7 +788,7 @@ const run = async () => {
         project: projectRuntime.name,
         // The runner runtime folds the browser into every task id and file
         // hash it derives, so parallel browser copies cannot alias.
-        browserName: pageBrowserName,
+        browserName: rowBrowserName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -841,7 +847,7 @@ const run = async () => {
           method,
           args: {
             projectName: projectRuntime.name,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
             result,
             runId: getRunIdentity(),
             testPath,
@@ -911,7 +917,7 @@ const run = async () => {
         onTestFileReady: async (test) => {
           dispatchRunnerLifecycle('file-ready', {
             ...test,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
           });
         },
         onTestSuiteStart: async (test) => {
@@ -925,14 +931,14 @@ const run = async () => {
           syncCurrentTask();
           dispatchRunnerLifecycle('suite-start', {
             ...test,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
           });
         },
         onTestSuiteResult: async (result) => {
           removeTaskFromStack(result.testId);
           dispatchRunnerLifecycle('suite-result', {
             ...result,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
           });
         },
         onTestCaseStart: async (test) => {
@@ -946,7 +952,7 @@ const run = async () => {
           syncCurrentTask();
           dispatchRunnerLifecycle('case-start', {
             ...test,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
           });
         },
         onTestCaseFailure: async (test) => {
@@ -974,7 +980,7 @@ const run = async () => {
           }
           send({
             type: 'case-result',
-            payload: { ...result, browserName: pageBrowserName },
+            payload: { ...result, browserName: rowBrowserName },
           });
         },
         getCountOfFailedTests: async () => failedTestsCount,
@@ -985,7 +991,7 @@ const run = async () => {
         payload: {
           testPath,
           projectName: projectRuntime.name,
-          browserName: pageBrowserName,
+          browserName: rowBrowserName,
         },
       });
 
@@ -1026,10 +1032,10 @@ const run = async () => {
             testId: getFileTaskId({
               project: projectRuntime.name,
               testPath,
-              browserName: pageBrowserName,
+              browserName: rowBrowserName,
             }),
             project: projectRuntime.name,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
             testPath,
             status: 'failed',
             name: '',
@@ -1099,10 +1105,10 @@ const run = async () => {
           type: 'file-complete',
           payload: {
             ...result,
-            browserName: pageBrowserName,
+            browserName: rowBrowserName,
             results: result.results.map((caseResult) => ({
               ...caseResult,
-              browserName: pageBrowserName,
+              browserName: rowBrowserName,
             })),
           },
         });
