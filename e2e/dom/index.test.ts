@@ -44,9 +44,36 @@ it.for(['vmForks', 'vmThreads'] as const)(
   'cancels pending DOM immediate callbacks under %s',
   async (pool) => {
     for (const environment of ['jsdom', 'happy-dom']) {
-      const { expectExecSuccess } = await runCli('test/timers', environment, {
-        args: ['--pool', pool, '--pool.maxWorkers', '1'],
-      });
+      const { expectExecSuccess } = await runCli(
+        'test/vmTimerCleanup',
+        environment,
+        {
+          args: ['--pool', pool, '--pool.maxWorkers', '1'],
+        },
+      );
+      await expectExecSuccess();
+    }
+  },
+);
+
+it.for(['forks', 'threads'] as const)(
+  'keeps shared DOM timer fixtures valid without isolation under %s',
+  async (pool) => {
+    for (const environment of ['jsdom', 'happy-dom']) {
+      const { expectExecSuccess } = await runCli(
+        ['test/timers', 'test/storage'],
+        environment,
+        {
+          args: [
+            '--pool',
+            pool,
+            '--isolate',
+            'false',
+            '--pool.maxWorkers',
+            '1',
+          ],
+        },
+      );
       await expectExecSuccess();
     }
   },

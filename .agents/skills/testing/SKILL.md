@@ -9,6 +9,16 @@ metadata:
 
 This skill owns the **mechanics**: how to run and write tests, fixtures, and builds. Whether a change needs test work is routed by the `development` skill; what counts as evidence that a change works is defined by the `verify` skill.
 
+## Validate the CI execution matrix
+
+For pool, isolation, environment setup/teardown, or shared-fixture changes, derive the local validation matrix before running tests:
+
+- Read `.github/workflows/test.yml` and `e2e/package.json` for the Node.js versions and execution modes actually used. Include relevant combinations from main-push and release runs even when regular PR CI omits them. Testing each Node.js version in the default mode alone does not cover CommonJS output, no-isolate, or threads execution.
+- For environment compatibility, include the dependency versions declared by affected compatibility fixtures, rather than testing only the root-installed jsdom or happy-dom version. Respect each fixture's Node.js requirements and report unsupported or unavailable combinations explicitly.
+- Trace callers of every changed shared fixture or helper. Map their pool, isolation setting, and file-scoped versus worker-scoped environment lifetime. A regression that requires file-end teardown must not impose that assertion on a shared worker environment; keep an explicit no-isolate check for the shared fixture's other callers.
+- Run focused tests that cover the failure and affected callers for each applicable combination. Record the runtime and environment dependency versions, execution mode, command, test counts, and exit code. Explain exclusions instead of presenting an untested combination as covered.
+- Run combinations serially when fixtures share persistent output such as `dist/.rstest-temp/`, or give them separate checkouts. Changing the Node.js version does not isolate a shared build directory.
+
 ## Running tests
 
 ### Package/unit tests from repository root (single file — preferred)

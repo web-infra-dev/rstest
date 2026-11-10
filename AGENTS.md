@@ -94,7 +94,7 @@ _Note_: Run lint and type checks from the repository root so paths in `rstack.co
 
 ## Testing guidance
 
-- Before submitting a PR, run the relevant tests locally on every Node.js major version used by `.github/workflows/test.yml`, including the full-run matrix used for main pushes and releases. Derive the versions from that workflow rather than only testing the current shell version or the regular PR matrix, and report each version's result.
+- Before submitting a PR, run the relevant tests locally on every Node.js major version used by `.github/workflows/test.yml` and in each applicable execution mode, including the full-run matrix for main pushes and releases. Pool, isolation, environment lifecycle, and shared-fixture changes must also cover the environment dependency versions used by affected compatibility fixtures. Follow the testing skill to derive the matrix and report each combination's result; the current shell version and regular PR matrix are not sufficient.
 - For root-discovered unit tests, prefer `pnpm rstest <package-test-path>`.
 - Do not pass `e2e/...` paths to the root `pnpm rstest` command.
 - Run e2e tests from the `e2e/` directory; when passing a path, strip the `e2e/` prefix.
