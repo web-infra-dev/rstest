@@ -202,14 +202,6 @@ export async function runRstestCli({
   }
 
   const baseEnv: Record<string, string | undefined> = { ...process.env };
-  // Every spawned CLI here asserts default human-facing output. Agent
-  // detection (std-env, e.g. CLAUDECODE=1 in the parent shell) otherwise
-  // switches the default reporter to `md`, which kills stdout assertions.
-  // e2e tests that exercise the agent reporter (e2e/reporter/*) clear this
-  // with `unsetEnv`.
-  if (baseEnv.RSTEST_NO_AGENT === undefined) {
-    baseEnv.RSTEST_NO_AGENT = '1';
-  }
   for (const key of unsetEnv ?? []) {
     // tinyexec merges env as `{ ...process.env, ...options.env }`, so deleting the
     // key here is not enough if the parent process has it set (e.g. FORCE_COLOR).

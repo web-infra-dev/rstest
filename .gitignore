@@ -52,3 +52,7 @@ tests-dist/
 
 # Generated memory benchmark fixture
 benchmarks/fixtures/memory/
+
+# Programmatic e2e per-pid run roots (created and removed per invocation; leaks
+# only when an interrupted run skips its cleanup)
+e2e/programmatic/fixtures/.browsers-filter-*/
