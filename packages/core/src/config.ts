@@ -182,6 +182,16 @@ export const assertValidBrowserName = (value: string, source: string): void => {
   }
 };
 
+const rawBrowserEntries = (
+  layer: Partial<RstestConfig['browser']> | undefined,
+): [string, string | BrowserEntry][] => {
+  const rawValue = layer?.browsers ?? layer?.browser ?? 'chromium';
+  return castArray(rawValue).map((item) => [
+    typeof item === 'object' ? String(item.browserName) : String(item),
+    item,
+  ]);
+};
+
 /**
  * CLI browser-name filter. `--browser.browsers`/`--browser.name` selects
  * against this config layer's configured browsers: listed names keep their
@@ -191,25 +201,6 @@ export const assertValidBrowserName = (value: string, source: string): void => {
  * deprecated `browser.browser` fallback so it is never reported as
  * "set together with browsers".
  */
-/**
- * Reads one layer's `browser.browsers` (or the deprecated `browser.browser`
- * fallback, or the `'chromium'` default) as `[name, item]` pairs in source
- * order, casting arrays/objects through `castArray` semantics once. The key
- * is a plain string even for malformed items, so diagnostics can render
- * them; both consumers (CLI selection, normalization) decide how strict to
- * be about the name.
- */
-const rawBrowserEntries = (
-  layer: Partial<RstestConfig['browser']> | undefined,
-): [string, string | BrowserEntry][] => {
-  const rawValue = layer?.browsers ?? layer?.browser ?? 'chromium';
-  const items = Array.isArray(rawValue) ? rawValue : [rawValue];
-  return items.map((item) => [
-    typeof item === 'object' ? String(item.browserName) : String(item),
-    item,
-  ]);
-};
-
 export const selectCliBrowserEntries = (
   layer: RstestConfig['browser'],
   names: BrowserName[],
@@ -301,7 +292,7 @@ const normalizeBrowserEntries = (
     entries.push(resolvedBrowserEntry(entry ?? { browserName }, defaults));
   }
 
-  return entries.length > 0 ? entries : [resolvedBrowserEntry(null, defaults)];
+  return entries;
 };
 
 /**

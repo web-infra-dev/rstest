@@ -11,18 +11,3 @@ export const getTestPathKey = (testPath: string): string => {
     ? normalized.toLowerCase()
     : normalized;
 };
-
-/**
- * In-memory identity of one (`project`, `browser`, `testPath`) row, shared by
- * every process-lifetime map inside the host: tracker keys, screenshot file
- * keys, per-row scheduler maps. Process-local and free to change; the persisted
- * blobs (`blobFileKey`) and on-disk screenshot hash each keep their own
- * versioned grammars.
- */
-import type { BrowserName } from './protocol';
-
-export const browserRowKey = (
-  project: string,
-  testPath: string,
-  browserName?: BrowserName,
-): string => `${project}\u0000${browserName ?? ''}\u0000${testPath}`;

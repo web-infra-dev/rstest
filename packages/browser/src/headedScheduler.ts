@@ -33,11 +33,12 @@ import {
 } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
-import type {
-  BrowserV8CoverageRuntime,
-  BrowserWatchSession,
-  DispatchPageResolver,
-  SchedulerRunResult,
+import {
+  expandToRows,
+  type BrowserV8CoverageRuntime,
+  type BrowserWatchSession,
+  type DispatchLanes,
+  type SchedulerRunResult,
 } from './schedulerSeam';
 import type { RequestedTestPaths, WatchSignals } from './watchSignals';
 
@@ -79,10 +80,7 @@ type HeadedSchedulerDeps = {
     | 'setAbort'
     | 'queueInvalidationAfter'
   >;
-  setDispatchPageResolver: (lanes: {
-    /** Run-identity resolution: the lane another lane falls back to. */
-    headed?: DispatchPageResolver;
-  }) => void;
+  setDispatchPageResolver: (lanes: Pick<DispatchLanes, 'headed'>) => void;
   createWatchSession: (
     execute: (
       testPaths: string[],
@@ -167,8 +165,10 @@ export const createHeadedScheduler = async ({
       `No launched browser for the headed pair (${JSON.stringify(headedRow.browserName)}, launch key ${headedRow.launchKey}).`,
     );
   }
-  const browser = headedLaunch;
-  const browserLaunchOptions = { providerOptions: headedRow.providerOptions };
+  const containerNewContextOptions = {
+    providerOptions: headedRow.providerOptions,
+    viewport: null,
+  };
   // The container window runs only this headed pair's row — its scheduler
   // owns the `projects` slice, so the base host config needs no headed
   // variant.
@@ -177,10 +177,23 @@ export const createHeadedScheduler = async ({
     projects: [headedRow],
   };
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
-  let currentTestFiles = allTestFiles;
-  if (isWatchMode) {
-    watchState.lastTestFiles = allTestFiles;
-  }
+  // The headed lane runs its row's project only: the lanes' shared file→row
+  // expansion stamps each file with the row it runs on, keeping the one-head
+  // lane's reload queue out of other rows' files and threading the row's
+  // browserName to the frames (browser-ui forwards it in the window options,
+  // so a frame resolves its row strictly). Watch file-set updates commit
+  // path-keyed sets, so every commit re-stamps through this helper.
+  const stampLaneFiles = (
+    files: readonly { testPath: string; projectName: string }[],
+  ): TestFileInfo[] =>
+    expandToRows(files, new Map([[headedRow.name, [headedRow]]])).map(
+      (file) => ({
+        testPath: file.testPath,
+        projectName: file.projectName,
+        browserName: file.browserName,
+      }),
+    );
+  let currentTestFiles = stampLaneFiles(allTestFiles);
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
   // semantically distinct and in a different runtime, so deliberately NOT shared
@@ -293,10 +306,9 @@ export const createHeadedScheduler = async ({
     context: BrowserProviderContext;
     page: BrowserProviderPage;
   }> => {
-    const nextContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
-      viewport: null,
-    });
+    const nextContext = await headedLaunch.newContext(
+      containerNewContextOptions,
+    );
     const nextPage = await nextContext.newPage();
     attachContainerPageHandlers(nextContext, nextPage);
     return { context: nextContext, page: nextPage };
@@ -779,7 +791,9 @@ export const createHeadedScheduler = async ({
           watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
 
         if (rerunPlan.fileSetUpdate) {
-          currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
+          currentTestFiles = stampLaneFiles(
+            rerunPlan.fileSetUpdate.currentTestFiles,
+          );
           const version = (watchState.headedFileSetVersion += 1);
           // Must run before the container is told: `notifyTestFileUpdate` is
           // what unmounts the dropped iframes, and their runs must already be

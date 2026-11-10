@@ -5,10 +5,6 @@ import type {
   RawTestSuiteInfo,
 } from '@rstest/core/internal/browser';
 import type { BrowserName, BrowserLogPayload } from './protocol';
-import { getFileTaskId } from './protocol';
-
-export { getFileTaskId };
-
 /** Payload for test file start event */
 export type TestFileStartPayload = {
   testPath: string;

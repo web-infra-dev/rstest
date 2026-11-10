@@ -46,8 +46,10 @@ export {
   SNAPSHOT_HEADER,
 } from './utils/snapshotPath';
 // Shared selection projection so the browser host's `onSelected` entries carry
-// the same shape as the node executor's.
+// the same shape as the node executor's; shared (project, browser, testPath)
+// reporter key so the host's maps key exactly what the core reporters key.
 export { toSelectedTestFile } from './utils/selectedTestFile';
+export { reporterFileKey } from './reporter/utils';
 // Shared watch-ready banner so the browser host prints the same hint text as
 // the node watch loop.
 export { logWatchReadyMessage } from './core/watch/cliShortcuts';
@@ -133,8 +135,10 @@ export {
   RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
-// Browser launch-options identity: the browser host reads the normalized
-// per-entry browser name from `NormalizedBrowserModeConfig.browsers`.
+// Browser identity: `BrowserName`/`BROWSER_NAMES` are core config types (the
+// browser host validates wire rows against the same set the config accepts),
+// and `NormalizedBrowserModeConfig.browsers` carries the launch-option
+// identity.
 export type { BrowserName } from './types';
 export {
   getSetupFiles,

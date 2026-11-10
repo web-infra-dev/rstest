@@ -6,6 +6,10 @@ export type {
   BrowserName,
   BrowserViewport,
 } from '@rstest/core/internal/browser';
+import {
+  BROWSER_NAMES,
+  getFileTaskId,
+} from '@rstest/core/internal/browser-runtime';
 import type {
   BrowserRuntimeConfig,
   RawTestFileResult,
@@ -40,22 +44,13 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 
 export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
-/**
- * Browser-side copy of the core `getFileTaskId` grammar. `helper.ts` (the
- * canonical source) pulls in Node-only logger/agent modules, so the client
- * cannot import it; this package keeps exactly one literal copy here and the
- * host/client/shared surfaces re-export it. Changing one changes both within
- * the same release (browser loader enforces the core version match).
- */
-export const getFileTaskId = (file: {
-  project: string;
-  testPath: string;
-  browserName?: BrowserName;
-}): string =>
-  `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
-
-// `BrowserViewport` / `BrowserName` are core config types (`@rstest/core`
-// owns the canonical definitions used by `NormalizedBrowserModeConfig`).
+// Shared with every surface of this package: the runtime entry's
+// dependency-free task-id grammar and the canonical browser-name set the wire
+// validates against.
+export { BROWSER_NAMES, getFileTaskId };
+/** Wire narrowing for `BROWSER_NAMES`. */
+export const isBrowserName = (value: string): value is BrowserName =>
+  (BROWSER_NAMES as readonly string[]).includes(value);
 
 /**
  * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the

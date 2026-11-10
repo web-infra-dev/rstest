@@ -192,25 +192,7 @@ export const getTaskNameWithPrefix = (
   delimiter: string = TEST_DELIMITER,
 ): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
-/**
- * Single source of truth for the `file:` task-id grammar. The value is an
- * opaque pass-through label (never equality-checked across processes), so the
- * grammar only needs to stay self-consistent — owning it here keeps the worker,
- * pool, and runner copies from drifting.
- *
- * The project — and in browser mode the browser — join the id, so the same
- * file is never aliased while another project (node pool) or another browser
- * (browser mode) runs it concurrently.
- *
- * The browser package keeps its own copy on purpose (it must not import core
- * runtime internals across the provider-agnostic barrier).
- */
-export const getFileTaskId = (file: {
-  project: string;
-  testPath: string;
-  browserName?: BrowserName;
-}): string =>
-  `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
+export { getFileTaskId } from './taskId';
 
 /**
  * Makes some special types that are not supported for passing into the pool serializable.

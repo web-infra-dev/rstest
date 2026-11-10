@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import type { BrowserProjectRuntime } from '../src/protocol';
-import { expandToRows } from '../src/headlessScheduler';
+import type { ScheduledTestFile } from '../src/schedulerSeam';
+import { expandToRows } from '../src/schedulerSeam';
 
 const row = (
   name: string,
@@ -23,7 +24,7 @@ describe('expandToRows (headless scheduler queue order)', () => {
     const chromium = row('web', 'chromium');
     const firefox = row('web', 'firefox');
     const rowsByProject = new Map([['web', [chromium, firefox]]]);
-    const queue = expandToRows(
+    const queue: ScheduledTestFile[] = expandToRows(
       [
         { testPath: '/tests/a.test.ts', projectName: 'web' },
         { testPath: '/tests/b.test.ts', projectName: 'web' },
@@ -50,7 +51,7 @@ describe('expandToRows (headless scheduler queue order)', () => {
       ['web', [webChromium]],
       ['api', [apiChromium]],
     ]);
-    const queue = expandToRows(
+    const queue: ScheduledTestFile[] = expandToRows(
       [
         { testPath: '/tests/b.test.ts', projectName: 'web' },
         { testPath: '/tests/a.test.ts', projectName: 'web' },

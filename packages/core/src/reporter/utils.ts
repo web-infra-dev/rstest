@@ -191,8 +191,8 @@ const statusColorfulStr: {
  * Appends the owning browser of a browser-mode result to a reporter title, so
  * the same project file run by several browsers produces distinguishable
  * entries everywhere reporters name a file or task by its relative path.
- * `show` carries the run-level gate (see `shouldShowBrowserTags`): single-
- * browser output must stay byte-identical to the pre-multi-browser format.
+ * `show` carries the run-level gate (see `shouldShowBrowserTags`), so
+ * single-browser output never carries the suffix.
  */
 export const formatBrowserSuffix = (
   browserName: string | undefined,
@@ -208,7 +208,7 @@ export const formatBrowserSuffix = (
  * counters.
  */
 export const shouldShowBrowserTags = (
-  rows: readonly { project: string; browserName: string | undefined }[],
+  rows: readonly { project: string; browserName?: string }[],
 ): boolean => {
   const browsersByProject = new Map<string, Set<string>>();
   for (const row of rows) {
@@ -234,10 +234,10 @@ export const formatFileTitle = (
   browserName: string | undefined,
   fullName: string,
   showBrowserName: boolean,
-): string =>
-  fullName
-    ? `${relativePath}${formatBrowserSuffix(browserName, showBrowserName)} :: ${fullName}`
-    : `${relativePath}${formatBrowserSuffix(browserName, showBrowserName)}`;
+): string => {
+  const label = `${relativePath}${formatBrowserSuffix(browserName, showBrowserName)}`;
+  return fullName ? `${label} :: ${fullName}` : label;
+};
 
 export const logCase = (
   result: TestResult,

@@ -1,5 +1,6 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { BrowserName } from './protocol';
+import { isBrowserName } from './protocol';
 
 export type BrowserLocatorText =
   | { type: 'string'; value: string }
@@ -240,9 +241,14 @@ export const validateBrowserRpcRequest = (
         'Invalid browser RPC request: browserName must be a string',
       );
     }
-    // The wire payload only promises a string; a non-engine name fails at the
-    // (project, browser) row lookup below, so the member check is the consumer's.
-    request.browserName = browserName as BrowserName;
+    // The wire payload only promises a string; anything outside
+    // `BROWSER_NAMES` (the same set the config accepts) is rejected here.
+    if (!isBrowserName(browserName)) {
+      throw new Error(
+        `Invalid browser RPC request: unknown browser name ${browserName}`,
+      );
+    }
+    request.browserName = browserName;
   }
 
   return request;

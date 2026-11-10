@@ -3,7 +3,8 @@ import type {
   ExecutorRunCycleOptions,
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { BrowserDispatchRequest } from './protocol';
+import type { BrowserName } from './protocol';
+import type { BrowserDispatchRequest, BrowserProjectRuntime } from './protocol';
 import type { BrowserProviderPage } from './providers';
 
 /**
@@ -70,3 +71,66 @@ export type DispatchPageResolver = (
   containerPage?: BrowserProviderPage;
   isRunCurrent?: () => boolean;
 };
+
+/**
+ * The dispatch lanes a run's schedulers install, keyed by request shape: a
+ * session target shot resolves in the headless lane's registry, a runId-named
+ * shot resolves in the headed container lane. No cross-lane fallback — a
+ * request that misses its own lane produces `{}` and the dispatch layer's
+ * existing errors surface instead.
+ */
+export type DispatchLanes = {
+  headless?: DispatchPageResolver;
+  headed?: DispatchPageResolver;
+};
+
+/**
+ * One `(project, browserName, testPath)` scheduling unit: plan-level files are
+ * keyed by `(project, testPath)`, and the browser dimension is added once per
+ * scheduling boundary so every consumer — page batches, sessions, page
+ * options, coverage guards — sees the full unit and reads the row's
+ * runtime-effective fields off it instead of a per-key side map.
+ */
+export type ScheduledTestFile = {
+  testPath: string;
+  projectName: string;
+  browserName: BrowserName;
+  row: BrowserProjectRuntime;
+};
+
+/**
+ * Build the scheduling queue as `(project, browser)` row groups: the files of
+ * each row come in plan order, and whole rows follow each other. The batch
+ * loop needs same-row files consecutive (a non-isolated page reuses its
+ * fixtures per row), so interleaving browsers — flatMap's natural file-major
+ * order — would make every batch a single file. Concurrency keeps this fair
+ * (workers drain from one queue), so grouping is a scheduling-order change,
+ * not a serialization.
+ */
+export const expandToRows = (
+  files: readonly {
+    testPath: string;
+    projectName: string;
+  }[],
+  rowsByProject: ReadonlyMap<string, BrowserProjectRuntime[]>,
+): ScheduledTestFile[] =>
+  files
+    .flatMap((file) =>
+      (rowsByProject.get(file.projectName) ?? []).map((row) => ({
+        testPath: file.testPath,
+        projectName: file.projectName,
+        browserName: row.browserName,
+        row,
+      })),
+    )
+    .sort((a, b) =>
+      a.row.name === b.row.name
+        ? a.row.browserName === b.row.browserName
+          ? 0
+          : a.row.browserName < b.row.browserName
+            ? -1
+            : 1
+        : a.row.name < b.row.name
+          ? -1
+          : 1,
+    );

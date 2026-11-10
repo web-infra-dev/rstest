@@ -539,23 +539,27 @@ const run = async () => {
   }
 
   // Find the runtime config for this project. Rows are `(project, browser)`
-  // pairs, so the page's browser identity disambiguates; documents that never
-  // got a per-page browser (collect pages) fall back to name-only lookup.
-  // `const` narrows for the callback below; TS drops narrowing for `let` there.
+  // pairs, and every running document names its browser — headless pages at
+  // page level, headed frames per file through the window options — so the
+  // page resolves its row by requiring the browser it declares. Only collect
+  // pages — mode-aware pages that collect metadata for every configured
+  // browser at once — fall back to name-only lookup.
+  // `const` narrows for the callbacks below; TS drops narrowing for `let`.
+  const isCollect = options.mode === 'collect';
   const pageBrowserName = options.browserName;
   const projectRuntime = options.projects.find(
     (p) =>
       p.name === currentProject.name &&
-      (pageBrowserName === undefined || p.browserName === pageBrowserName),
+      (isCollect || p.browserName === pageBrowserName),
   );
   if (!projectRuntime) {
     send({
       type: 'fatal',
       payload: {
         message:
-          options.browserName === undefined
+          pageBrowserName === undefined
             ? `Project ${currentProject.name} not found in runtime options`
-            : `Project ${currentProject.name} has no runtime row for browser ${options.browserName}`,
+            : `Project ${currentProject.name} has no runtime row for browser ${pageBrowserName}`,
       },
     });
     window.__RSTEST_DONE__ = true;
@@ -569,11 +573,9 @@ const run = async () => {
   };
   window.__RSTEST_BROWSER_OPTIONS__ = options;
 
-  // Stamps below must use the RESOLVED `(project, browser)` row, never the
-  // pre-resolution page value: a headed document is granted per-frame run
-  // identity, not a browser id, so its lane boots without a page-level
-  // `browserName` and the rows' name is what its payloads attribute through.
-  const rowBrowserName: BrowserName = projectRuntime.browserName;
+  // Stamps below read the RESOLVED row's `browserName` — the row the page
+  // just matched — as the single browser identity its payloads carry.
+  const { browserName } = projectRuntime;
 
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
   ensureRuntimeEnv(runtimeConfig.env);
@@ -671,7 +673,7 @@ const run = async () => {
           payload: {
             testPath,
             project: projectRuntime.name,
-            browserName: rowBrowserName,
+            browserName: browserName,
             tests,
           },
         });
@@ -749,7 +751,7 @@ const run = async () => {
           taskId: getFileTaskId({
             project: projectRuntime.name,
             testPath,
-            browserName: rowBrowserName,
+            browserName: browserName,
           }),
           taskType: 'file',
           testPath,
@@ -788,7 +790,7 @@ const run = async () => {
         project: projectRuntime.name,
         // The runner runtime folds the browser into every task id and file
         // hash it derives, so parallel browser copies cannot alias.
-        browserName: rowBrowserName,
+        browserName: browserName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -847,7 +849,7 @@ const run = async () => {
           method,
           args: {
             projectName: projectRuntime.name,
-            browserName: rowBrowserName,
+            browserName: browserName,
             result,
             runId: getRunIdentity(),
             testPath,
@@ -917,7 +919,7 @@ const run = async () => {
         onTestFileReady: async (test) => {
           dispatchRunnerLifecycle('file-ready', {
             ...test,
-            browserName: rowBrowserName,
+            browserName: browserName,
           });
         },
         onTestSuiteStart: async (test) => {
@@ -931,14 +933,14 @@ const run = async () => {
           syncCurrentTask();
           dispatchRunnerLifecycle('suite-start', {
             ...test,
-            browserName: rowBrowserName,
+            browserName: browserName,
           });
         },
         onTestSuiteResult: async (result) => {
           removeTaskFromStack(result.testId);
           dispatchRunnerLifecycle('suite-result', {
             ...result,
-            browserName: rowBrowserName,
+            browserName: browserName,
           });
         },
         onTestCaseStart: async (test) => {
@@ -952,7 +954,7 @@ const run = async () => {
           syncCurrentTask();
           dispatchRunnerLifecycle('case-start', {
             ...test,
-            browserName: rowBrowserName,
+            browserName: browserName,
           });
         },
         onTestCaseFailure: async (test) => {
@@ -980,7 +982,7 @@ const run = async () => {
           }
           send({
             type: 'case-result',
-            payload: { ...result, browserName: rowBrowserName },
+            payload: { ...result, browserName: browserName },
           });
         },
         getCountOfFailedTests: async () => failedTestsCount,
@@ -991,7 +993,7 @@ const run = async () => {
         payload: {
           testPath,
           projectName: projectRuntime.name,
-          browserName: rowBrowserName,
+          browserName: browserName,
         },
       });
 
@@ -1032,10 +1034,10 @@ const run = async () => {
             testId: getFileTaskId({
               project: projectRuntime.name,
               testPath,
-              browserName: rowBrowserName,
+              browserName: browserName,
             }),
             project: projectRuntime.name,
-            browserName: rowBrowserName,
+            browserName: browserName,
             testPath,
             status: 'failed',
             name: '',
@@ -1105,10 +1107,10 @@ const run = async () => {
           type: 'file-complete',
           payload: {
             ...result,
-            browserName: rowBrowserName,
+            browserName: browserName,
             results: result.results.map((caseResult) => ({
               ...caseResult,
-              browserName: rowBrowserName,
+              browserName: browserName,
             })),
           },
         });

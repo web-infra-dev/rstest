@@ -21,16 +21,15 @@ import { getHeadlessConcurrency } from './concurrency';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
+import { getFileTaskId } from './protocol';
 import {
   createDeferredPromise,
-  getFileTaskId,
   type FatalPayload,
   toError,
 } from './hostPayloads';
 import type {
   BrowserClientMessage,
   BrowserHostConfig,
-  BrowserName,
   BrowserProjectRuntime,
   FileCleanupDispatchPayload,
   TestFileInfo,
@@ -54,9 +53,11 @@ import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
   BrowserV8CoverageRuntime,
   BrowserWatchSession,
-  DispatchPageResolver,
+  DispatchLanes,
+  ScheduledTestFile,
   SchedulerRunResult,
 } from './schedulerSeam';
+import { expandToRows } from './schedulerSeam';
 import type { WatchSignals } from './watchSignals';
 
 type HeadlessSchedulerContext = Pick<
@@ -65,57 +66,6 @@ type HeadlessSchedulerContext = Pick<
 > & {
   normalizedConfig: Pick<InternalContext['normalizedConfig'], 'bail' | 'pool'>;
 };
-
-/**
- * One `(project, browserName, testPath)` scheduling unit: plan-level files are
- * keyed by `(project, testPath)`, and the browser dimension is added once per
- * scheduling boundary so every consumer — page batches, sessions, page
- * options, coverage guards — sees the full unit and reads the row's
- * runtime-effective fields off it instead of a per-key side map.
- */
-export type ScheduledTestFile = {
-  testPath: string;
-  projectName: string;
-  browserName: BrowserName;
-  row: BrowserProjectRuntime;
-};
-
-/**
- * Build the scheduling queue as `(project, browser)` row groups: the files of
- * each row come in plan order, and whole rows follow each other. The batch
- * loop needs same-row files consecutive (a non-isolated page reuses its
- * fixtures per row), so interleaving browsers — flatMap's natural file-major
- * order — would make every batch a single file. Concurrency keeps this fair
- * (workers drain from one queue), so grouping is a scheduling-order change,
- * not a serialization.
- */
-export const expandToRows = (
-  files: readonly {
-    testPath: string;
-    projectName: string;
-  }[],
-  rowsByProject: ReadonlyMap<string, BrowserProjectRuntime[]>,
-): ScheduledTestFile[] =>
-  files
-    .flatMap((file) =>
-      (rowsByProject.get(file.projectName) ?? []).map((row) => ({
-        testPath: file.testPath,
-        projectName: file.projectName,
-        browserName: row.browserName,
-        row,
-      })),
-    )
-    .sort((a, b) =>
-      a.row.name === b.row.name
-        ? a.row.browserName === b.row.browserName
-          ? 0
-          : a.row.browserName < b.row.browserName
-            ? -1
-            : 1
-        : a.row.name < b.row.name
-          ? -1
-          : 1,
-    );
 
 type HeadlessSchedulerDeps = {
   context: HeadlessSchedulerContext;
@@ -142,10 +92,7 @@ type HeadlessSchedulerDeps = {
     | 'signalInvalidation'
     | 'queueInvalidationAfter'
   >;
-  setDispatchPageResolver: (lanes: {
-    /** Session-targeted resolution: the lane another lane falls back to. */
-    headless?: DispatchPageResolver;
-  }) => void;
+  setDispatchPageResolver: (lanes: Pick<DispatchLanes, 'headless'>) => void;
   createWatchSession: (
     execute: (
       testPaths: string[],
@@ -158,6 +105,15 @@ type HeadlessSchedulerDeps = {
   logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
+
+/**
+ * True when the row runs file-isolated (per-file fixtures torn down): a row
+ * with setup files is always file-isolated and `isolate: false` opts the
+ * whole row into one shared page per batch. The batch builder and the worker
+ * page lifecycle both read this one predicate.
+ */
+export const isRowIsolated = (row: BrowserProjectRuntime): boolean =>
+  !row.hasSetupFiles && row.runtimeConfig?.isolate !== false;
 
 export const createHeadlessScheduler = async ({
   context,
@@ -178,10 +134,6 @@ export const createHeadlessScheduler = async ({
   logWatchReady,
   destroyRuntime,
 }: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
-  if (isWatchMode) {
-    watchState.lastTestFiles = allTestFiles;
-  }
-
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
@@ -207,9 +159,6 @@ export const createHeadlessScheduler = async ({
     return browser;
   };
 
-  const projectRootByName = new Map(
-    projectRuntimeConfigs.map((row) => [row.name, row.projectRoot]),
-  );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
   setDispatchPageResolver({
@@ -370,8 +319,7 @@ export const createHeadlessScheduler = async ({
     let workerCleanupTimer: ReturnType<typeof setTimeout> | undefined;
     let dispatchQueue = Promise.resolve();
     const completedFiles = new Set<string>();
-    const keepWorkerFixtures =
-      (row.hasSetupFiles || row.runtimeConfig?.isolate !== false) === false;
+    const keepWorkerFixtures = !isRowIsolated(row);
     const fileCleanupStates = new Map<
       string,
       {
@@ -452,7 +400,7 @@ export const createHeadlessScheduler = async ({
         coverageCollection = (async () => {
           const coverage = await v8Coverage.take(
             page,
-            projectRootByName.get(file.projectName) ?? context.rootPath,
+            file.row.projectRoot,
             file.projectName,
           );
           if (coverage) {
@@ -802,8 +750,6 @@ export const createHeadlessScheduler = async ({
     // Batches never mix browsers: a page belongs to one context/viewport pair.
     // Non-isolated pages take consecutive files of the SAME row; the batch is
     // bounded only when isolation is off (shared page accumulates module state).
-    const keepWorkerFixturesFor = (file: ScheduledTestFile): boolean =>
-      file.row.hasSetupFiles || file.row.runtimeConfig?.isolate !== false;
 
     const worker = async (): Promise<void> => {
       while (
@@ -831,7 +777,7 @@ export const createHeadlessScheduler = async ({
           return;
         }
         const batch = [next];
-        if (keepWorkerFixturesFor(next) === false) {
+        if (!isRowIsolated(next.row)) {
           while (
             batch.length < nonIsolatedBatchSize &&
             queue[0] &&

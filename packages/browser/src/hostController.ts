@@ -28,6 +28,7 @@ import {
   type RawTestFileResult,
   type RawTestResult,
   type RawUserConsoleLog,
+  reporterFileKey,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
   toSelectedTestFile,
@@ -35,7 +36,7 @@ import {
   type TestResult,
 } from '@rstest/core/internal/browser';
 import { basename, dirname, join, normalize } from 'pathe';
-import { browserRowKey, getTestPathKey } from './pathUtils';
+import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
@@ -71,7 +72,6 @@ import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
   BrowserName,
-  BrowserProjectRuntime,
   BrowserRpcRequest,
   RunnerEnvelope,
   SnapshotRpcMethod,
@@ -92,9 +92,9 @@ import {
   type BrowserV8CoverageCollector,
   getBrowserProviderImplementation,
 } from './providers';
+import { type BrowserProjectRuntime, getFileTaskId } from './protocol';
 import {
   type FatalPayload,
-  getFileTaskId,
   type LogPayload,
   type TestCaseStartPayload,
   type TestFileReadyPayload,
@@ -109,9 +109,11 @@ import {
   type SourceMapPayload,
 } from './sourceMap/sourceMapLoader';
 import { collectWatchTestFiles } from './watchRerunPlanner';
-import type {
-  BrowserWatchSession,
-  DispatchPageResolver,
+import {
+  expandToRows,
+  type BrowserWatchSession,
+  type DispatchLanes,
+  type DispatchPageResolver,
 } from './schedulerSeam';
 import { cleanupWatchRuntime, watchContext } from './watchRuntime';
 import { createWatchSignals } from './watchSignals';
@@ -144,12 +146,6 @@ const getFailureScreenshotKey = (
   testPath: string,
   testId: string,
 ): string => JSON.stringify([project, testPath, testId]);
-
-const getFailureScreenshotFileKey = (
-  project: string,
-  testPath: string,
-  browserName?: BrowserName,
-): string => browserRowKey(project, testPath, browserName);
 
 const getFailureScreenshotDirectory = (
   projectRoot: string,
@@ -364,30 +360,45 @@ export const runBrowserController = async (
   // through these rows. `runtimeConfig` is projected once per project (shared
   // across its rows) with the post-globalSetup `env` change-set layered
   // between the static base and the user `test.env` config.
-  const projectRuntimeConfigs = buildBrowserRuntimeRows(browserProjects, {
-    envOverlay: env,
-  });
+  const { rows: projectRuntimeConfigs, launchSpecs } = buildBrowserRuntimeRows(
+    browserProjects,
+    {
+      envOverlay: env,
+    },
+  );
   // The schedulers partition on the row itself. At most one `(project, browser)`
   // row can run headed per run (validated), so the composition degrades to a
-  // pure headless run whenever `headedRows` is empty; `useHeadlessDirect` only
-  // steers the container window resolution and `setContainerOptions`.
-  const headedRows = projectRuntimeConfigs.filter((row) => !row.headless);
-  const headlessRows = projectRuntimeConfigs.filter((row) => row.headless);
-  const useHeadlessDirect = headedRows.length === 0;
+  // pure headless run when no row is headed; `useHeadlessDirect` only steers
+  // the container window resolution and `setContainerOptions`.
+  const headedRow = projectRuntimeConfigs.find((row) => !row.headless);
+  const headlessRows = projectRuntimeConfigs.filter(
+    (row) => row !== headedRow || !row.headless,
+  );
+  const useHeadlessDirect = !headedRow;
 
-  // `onSelected` receives one file entry per run of a file: browser-enabled
-  // projects contribute one entry per configured browser row; node projects
-  // keep a single unattributed entry. This is the reporter run-start list.
+  // `onSelected` receives one file entry per run of a file: browser projects
+  // contribute one entry per row through the lanes' shared file→row expansion;
+  // node projects keep a single unattributed entry. This is the reporter
+  // run-start list.
+  const rowsByProject = new Map<string, BrowserProjectRuntime[]>();
+  for (const row of projectRuntimeConfigs) {
+    const rows = rowsByProject.get(row.name) ?? [];
+    rows.push(row);
+    rowsByProject.set(row.name, rows);
+  }
   const expandSelectedFiles = (
     files: { testPath: string; projectName: string }[],
   ): SelectedTestFile[] =>
     files.flatMap((file) => {
-      const project = projectByName.get(file.projectName);
-      if (!project || !project.normalizedConfig.browser.enabled) {
+      if (!rowsByProject.has(file.projectName)) {
         return [toSelectedTestFile(file.testPath, file.projectName)];
       }
-      return project.normalizedConfig.browser.browsers.map((entry) =>
-        toSelectedTestFile(file.testPath, file.projectName, entry.browserName),
+      return expandToRows([file], rowsByProject).map((expanded) =>
+        toSelectedTestFile(
+          file.testPath,
+          file.projectName,
+          expanded.browserName,
+        ),
       );
     });
 
@@ -596,6 +607,7 @@ export const runBrowserController = async (
         context,
         projectEntries,
         browserProjects,
+        launchSpecs,
         shardedEntries: options?.shardedEntries,
         freezeShardedEntries: options?.freezeShardedEntries,
         tempDir,
@@ -668,11 +680,11 @@ export const runBrowserController = async (
       return Promise.resolve();
     }
 
-    const cleanupKey = getFailureScreenshotFileKey(
-      testFile.projectName,
-      testFile.testPath,
-      testFile.browserName,
-    );
+    const cleanupKey = reporterFileKey({
+      project: testFile.projectName,
+      testPath: testFile.testPath,
+      browserName: testFile.browserName,
+    });
     const cleanup = (
       failureScreenshotCleanups.get(cleanupKey) ?? Promise.resolve()
     ).then(() => removeFailureScreenshotsForFiles([project], [testFile]));
@@ -893,8 +905,8 @@ export const runBrowserController = async (
 
   const { wsPort } = runtime;
   // The v8 provider resolves per collector; under a v8 run validation
-  // guarantees every launch is chromium, so the first launch names both.
-  const browserLaunchOptions = runtime.launches[0]!;
+  // guarantees every launch is chromium, so the default launch names both.
+  const defaultLaunch = runtime.launches[0]!;
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
@@ -919,9 +931,6 @@ export const runBrowserController = async (
     await closeRuntime();
     return createEmptyRunResult();
   }
-
-  // One `(project, browser)` row per resolved browser entry; the schedulers
-  // expand their work list through these rows (built above, shared with them).
 
   const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
   const screenshotCountsByFile = new Map<
@@ -972,11 +981,11 @@ export const runBrowserController = async (
     }
   }
 
-  const browserName = browserLaunchOptions.browserName;
+  const browserName = defaultLaunch.browserName;
   const v8CoverageCollector: BrowserV8CoverageCollector | null =
     coverageConfig?.provider === 'v8'
       ? (implementationByProvider
-          .get(browserLaunchOptions.provider)
+          .get(defaultLaunch.provider)
           ?.createV8CoverageCollector?.({ browserName }) ?? null)
       : null;
   const v8Coverage = v8CoverageCollector
@@ -1001,14 +1010,9 @@ export const runBrowserController = async (
     : undefined;
 
   // Hybrid runs (one headed pair + headless pages) install one lane per
-  // scheduler. The lane is chosen from the REQUEST'S OWN data, not install
+  // scheduler; the lane is chosen from the REQUEST'S OWN data, not install
   // order: a session target names a headless runner page, a runId names the
-  // headed container, and the other lane is consulted only as a fallback so a
-  // request cannot land on whichever scheduler registered first.
-  type DispatchLanes = {
-    headless?: DispatchPageResolver;
-    headed?: DispatchPageResolver;
-  };
+  // headed container.
   const dispatchLanes: DispatchLanes = {};
   const setDispatchPageResolver = (lanes: DispatchLanes): void => {
     Object.assign(dispatchLanes, lanes);
@@ -1017,19 +1021,10 @@ export const runBrowserController = async (
     target?: BrowserDispatchRequest['target'],
     runId?: string,
   ): ReturnType<DispatchPageResolver> => {
-    const primary = target?.sessionId
+    const lane = target?.sessionId
       ? dispatchLanes.headless
       : dispatchLanes.headed;
-    const fallbackUp = target?.sessionId
-      ? dispatchLanes.headed
-      : dispatchLanes.headless;
-    for (const lane of [primary, fallbackUp]) {
-      const result = lane?.(target, runId);
-      if (result?.runnerPage || result?.containerPage) {
-        return result;
-      }
-    }
-    return {};
+    return lane?.(target, runId) ?? {};
   };
 
   const dispatchBrowserRpcRequest = async ({
@@ -1169,11 +1164,11 @@ export const runBrowserController = async (
             browserName: request.browserName,
           });
           await failureScreenshotCleanups.get(
-            getFailureScreenshotFileKey(
-              request.projectName,
-              request.testPath,
-              request.browserName,
-            ),
+            reporterFileKey({
+              project: request.projectName,
+              testPath: request.testPath,
+              browserName: request.browserName,
+            }),
           );
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));
@@ -1233,11 +1228,11 @@ export const runBrowserController = async (
           resolvePath: resolveScreenshotPath,
           platform: process.platform,
         });
-        const key = browserRowKey(
-          request.projectName,
-          request.testPath,
-          request.browserName,
-        );
+        const key = reporterFileKey({
+          project: request.projectName,
+          testPath: request.testPath,
+          browserName: request.browserName,
+        });
         const counts = screenshotCountsByFile.get(key) ?? {
           added: 0,
           updated: 0,
@@ -1252,11 +1247,11 @@ export const runBrowserController = async (
       return result;
     } catch (error) {
       if (error instanceof ScreenshotMismatchError) {
-        const key = browserRowKey(
-          request.projectName,
-          request.testPath,
-          request.browserName,
-        );
+        const key = reporterFileKey({
+          project: request.projectName,
+          testPath: request.testPath,
+          browserName: request.browserName,
+        });
         const counts = screenshotCountsByFile.get(key) ?? {
           added: 0,
           updated: 0,
@@ -1290,7 +1285,7 @@ export const runBrowserController = async (
   // headless-only runs never render it; a headed window gets its headed rows
   // (at most one, validated), keeping `(project, browser)` lookups unambiguous.
   runtime.setContainerOptions(
-    useHeadlessDirect ? hostOptions : { ...hostOptions, projects: headedRows },
+    useHeadlessDirect ? hostOptions : { ...hostOptions, projects: [headedRow] },
   );
 
   // Track test results from browser runners
@@ -1441,7 +1436,11 @@ export const runBrowserController = async (
       testPath: payload.testPath,
     });
     screenshotCountsByFile.delete(
-      browserRowKey(payload.projectName, payload.testPath, payload.browserName),
+      reporterFileKey({
+        project: payload.projectName,
+        testPath: payload.testPath,
+        browserName: payload.browserName,
+      }),
     );
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
@@ -1454,11 +1453,11 @@ export const runBrowserController = async (
       });
       tracker.transition('prepare');
       phaseTrackers.set(
-        browserRowKey(
-          payload.projectName,
-          payload.testPath,
-          payload.browserName,
-        ),
+        reporterFileKey({
+          project: payload.projectName,
+          testPath: payload.testPath,
+          browserName: payload.browserName,
+        }),
         tracker,
       );
     }
@@ -1482,7 +1481,11 @@ export const runBrowserController = async (
   ): Promise<void> => {
     phaseTrackers
       ?.get(
-        browserRowKey(payload.project, payload.testPath, payload.browserName),
+        reporterFileKey({
+          project: payload.project,
+          testPath: payload.testPath,
+          browserName: payload.browserName,
+        }),
       )
       ?.transition('tests');
     await sinkForProjectName(payload.project).onTestFileReady(payload);
@@ -1493,7 +1496,11 @@ export const runBrowserController = async (
   ): Promise<void> => {
     phaseTrackers
       ?.get(
-        browserRowKey(payload.project, payload.testPath, payload.browserName),
+        reporterFileKey({
+          project: payload.project,
+          testPath: payload.testPath,
+          browserName: payload.browserName,
+        }),
       )
       ?.recordSuiteStart(payload);
     await sinkForProjectName(payload.project).onTestSuiteStart(payload);
@@ -1504,7 +1511,11 @@ export const runBrowserController = async (
   ): Promise<void> => {
     phaseTrackers
       ?.get(
-        browserRowKey(payload.project, payload.testPath, payload.browserName),
+        reporterFileKey({
+          project: payload.project,
+          testPath: payload.testPath,
+          browserName: payload.browserName,
+        }),
       )
       ?.recordSuiteResult(payload);
     await sinkForProjectName(payload.project).onTestSuiteResult(payload);
@@ -1526,7 +1537,11 @@ export const runBrowserController = async (
   ): Promise<void> => {
     phaseTrackers
       ?.get(
-        browserRowKey(payload.project, payload.testPath, payload.browserName),
+        reporterFileKey({
+          project: payload.project,
+          testPath: payload.testPath,
+          browserName: payload.browserName,
+        }),
       )
       ?.recordCaseStart(payload);
     // Fire-and-forget on both transports (the sink does not await case-start).
@@ -1566,7 +1581,11 @@ export const runBrowserController = async (
     caseResults.push(result);
     phaseTrackers
       ?.get(
-        browserRowKey(payload.project, payload.testPath, payload.browserName),
+        reporterFileKey({
+          project: payload.project,
+          testPath: payload.testPath,
+          browserName: payload.browserName,
+        }),
       )
       ?.recordCaseResult(payload);
 
@@ -1594,11 +1613,11 @@ export const runBrowserController = async (
   const handleTestFileComplete = async (
     payload: RawTestFileResult,
   ): Promise<void> => {
-    const key = browserRowKey(
-      payload.project,
-      payload.testPath,
-      payload.browserName,
-    );
+    const key = reporterFileKey({
+      project: payload.project,
+      testPath: payload.testPath,
+      browserName: payload.browserName,
+    });
     const screenshotCounts = screenshotCountsByFile.get(key);
     screenshotCountsByFile.delete(key);
     if (screenshotCounts) {
@@ -1621,11 +1640,11 @@ export const runBrowserController = async (
       };
     }
     if (phaseTrackers) {
-      const key = browserRowKey(
-        payload.project,
-        payload.testPath,
-        payload.browserName,
-      );
+      const key = reporterFileKey({
+        project: payload.project,
+        testPath: payload.testPath,
+        browserName: payload.browserName,
+      });
       const tracker = phaseTrackers.get(key);
       if (tracker) {
         tracker.end();
@@ -1762,13 +1781,10 @@ export const runBrowserController = async (
   // Hybrid scope: at most one headed row (validated), the rest stay headless.
   // The headless lane keeps the watch ownership (its pool drives reruns); a
   // headed window joins the initial cycle beside it.
-  const headlessProjectNames = new Set(headlessRows.map((row) => row.name));
+  // The headless lane keeps the watch ownership (its pool drives reruns); a
+  // headed window joins the initial cycle beside it.
   const headlessAllTestFiles = allTestFiles.filter((file) =>
-    headlessProjectNames.has(file.projectName),
-  );
-  const headedProjectNames = new Set(headedRows.map((row) => row.name));
-  const headedAllTestFiles = allTestFiles.filter((file) =>
-    headedProjectNames.has(file.projectName),
+    headlessRows.some((row) => row.name === file.projectName),
   );
 
   // Always composed lanes: each owns its own transport (headless page bridges,
@@ -1789,12 +1805,12 @@ export const runBrowserController = async (
           handlers: { handleFatal, handleTestFileComplete },
         })
       : undefined,
-    headedRows.length > 0
+    headedRow
       ? createHeadedScheduler({
           ...schedulerDeps,
-          allTestFiles: headedAllTestFiles,
+          allTestFiles,
           runtime,
-          headedRow: headedRows[0]!,
+          headedRow,
           v8Coverage,
           handlers: { handleTestFileComplete },
         })
@@ -1911,6 +1927,16 @@ export const listBrowserTests = async (
     `list-${Date.now()}`,
   );
 
+  // Collect projects the rows once: forced headless, so the launch plan and
+  // every row's launch key agree.
+  const { rows: projectRuntimeConfigs, launchSpecs } = buildBrowserRuntimeRows(
+    browserProjects,
+    {
+      envOverlay: options?.env,
+      forceHeadless: true, // Always use headless for list command
+    },
+  );
+
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;
   try {
@@ -1918,13 +1944,13 @@ export const listBrowserTests = async (
       context,
       projectEntries,
       browserProjects,
+      launchSpecs: [launchSpecs[0]!], // Collect boots the default launch only
       shardedEntries: options?.shardedEntries,
       freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
       containerDevServer: undefined,
-      forceHeadless: true, // Always use headless for list command
       skipProviderLaunch: options?.filesOnly,
       appliedModifyRstestConfigEnvironments:
         options?.appliedModifyRstestConfigEnvironments,
@@ -1974,16 +2000,6 @@ export const listBrowserTests = async (
   const defaultLaunch = runtime.launches[0]!;
   const browser = defaultLaunch.browser;
 
-  // Collect uses the same per-(project, browser) row shape as the run path.
-  // Collect pages resolve their project by name alone (every browser row of a
-  // project shares the same runtimeConfig); the launch is forced headless so
-  // the rows' launch keys cannot name a launch the runtime skipped.
-  const projectRuntimeConfigs: BrowserProjectRuntime[] =
-    buildBrowserRuntimeRows(browserProjects, {
-      envOverlay: options?.env,
-      forceHeadless: true,
-    });
-
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
@@ -2008,15 +2024,15 @@ export const listBrowserTests = async (
   // not hang `rstest list` forever.
   const collectTimeoutMs = 30_000;
 
-  const browserNamesByProject = new Map<string, BrowserName[]>();
-  for (const row of projectRuntimeConfigs) {
-    const names = browserNamesByProject.get(row.name) ?? [];
-    names.push(row.browserName);
-    browserNamesByProject.set(row.name, names);
-  }
+  // The collect pages resolve only servers this function launched, so the
+  // project lookup always resolves.
+  const browserProjectByName = new Map(
+    browserProjects.map((project) => [project.name, project]),
+  );
 
-  const collectFromProjectRow = async (
+  const collectFromProject = async (
     server: BrowserProjectServer,
+    projectRow: BrowserProjectRuntime,
   ): Promise<{ results: ListCommandResult[]; error: Error | null }> => {
     const results: ListCommandResult[] = [];
     let error: Error | null = null;
@@ -2040,16 +2056,15 @@ export const listBrowserTests = async (
           case 'collect-result': {
             const payload = message.payload;
             // One page collects the project's structure once; the configured
-            // browser rows each get their own attribution copy, so listed
-            // entries keep the run dimension the reporters do.
-            const browserNames = browserNamesByProject.get(payload.project);
-            if (!browserNames) {
-              error = new Error(
-                `No configured browser rows for collected project ${payload.project}.`,
+            // browser entries each get their own attribution copy, so listed
+            // entries keep the run dimension the reporters do. The pages run
+            // only against servers this block launched, so the lookup always
+            // resolves.
+            const browserNames = browserProjectByName
+              .get(payload.project)!
+              .normalizedConfig.browser.browsers.map(
+                (entry) => entry.browserName,
               );
-              resolveCollect?.();
-              break;
-            }
             results.push(
               ...browserNames.map((browserName) => ({
                 testPath: payload.testPath,
@@ -2083,10 +2098,14 @@ export const listBrowserTests = async (
     );
 
     // Inject host options before navigation so the runner can access them.
-    // No page-level browserName: the collect page resolves its project row by
-    // name alone, and attribution is stamped onto the results afterwards.
+    // The page collects one project, so its options carry only that project's
+    // first row (the collect page resolves its row by name alone) — one
+    // inline-options serialization per project.
     await page.addInitScript(
-      `window.__RSTEST_BROWSER_OPTIONS__ = ${serializeForInlineScript(hostOptions)};`,
+      `window.__RSTEST_BROWSER_OPTIONS__ = ${serializeForInlineScript({
+        ...hostOptions,
+        projects: [projectRow],
+      })};`,
     );
 
     // Navigate to this project's runner page
@@ -2123,9 +2142,12 @@ export const listBrowserTests = async (
   // Collect one page per project concurrently — the default launch's browser
   // hosts every page against the project's own dev server.
   const collected = await Promise.all(
-    [...runtime.projectServers.values()].map((server) =>
-      collectFromProjectRow(server),
-    ),
+    [...runtime.projectServers.values()].map((server) => {
+      const projectRow = projectRuntimeConfigs.find(
+        (row) => row.name === server.projectName,
+      )!;
+      return collectFromProject(server, projectRow);
+    }),
   );
   const collectResults = collected.flatMap((entry) => entry.results);
   const fatalError = collected.find((entry) => entry.error)?.error ?? null;
