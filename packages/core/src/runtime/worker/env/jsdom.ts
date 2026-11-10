@@ -422,10 +422,15 @@ export const setupVM = async (
   // After tracking stops, retained native-module callbacks still need Node
   // timers: jsdom's timers stop scheduling once its window has been closed.
   Object.assign(vmGlobal, nodeTimers);
+  // The bridge must capture jsdom's controller before Node's globals replace it.
   const cleanupAddEventListener = patchAddEventListener(
     dom.window,
     globalThis.AbortSignal,
   );
+  Object.assign(vmGlobal, {
+    AbortController: globalThis.AbortController,
+    AbortSignal: globalThis.AbortSignal,
+  });
   const cleanupTimers = installTimerTracking(vmGlobal, nodeTimers, context);
   const cleanupHandler = addDefaultErrorHandler(vmGlobal as unknown as Window);
 

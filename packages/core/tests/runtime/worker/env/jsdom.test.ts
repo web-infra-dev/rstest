@@ -168,27 +168,65 @@ test('forwards deferred VM console events to the configured target', async () =>
 });
 
 test('bridges Node AbortSignal to VM JSDOM event listeners', async () => {
-  const { context, teardown } = await setupVM({}, { scope: 'file' });
+  let JSDOMAbortController!: typeof AbortController;
+  const { context, teardown } = await setupVM(
+    {
+      beforeParse(window: DOMWindow) {
+        JSDOMAbortController = window.AbortController;
+      },
+    },
+    { scope: 'file' },
+  );
   const vmGlobal = runInContext('globalThis', context) as typeof globalThis;
-  const controller = new AbortController();
-  let calls = 0;
 
   try {
-    vmGlobal.document.addEventListener(
-      'rstest-vm-abort-signal',
-      () => calls++,
-      { signal: controller.signal },
-    );
-    vmGlobal.document.dispatchEvent(
-      new vmGlobal.Event('rstest-vm-abort-signal'),
-    );
-    expect(calls).toBe(1);
+    for (const controller of [
+      new vmGlobal.AbortController(),
+      new JSDOMAbortController(),
+    ]) {
+      let calls = 0;
+      vmGlobal.document.addEventListener(
+        'rstest-vm-abort-signal',
+        () => calls++,
+        { signal: controller.signal },
+      );
+      vmGlobal.document.dispatchEvent(
+        new vmGlobal.Event('rstest-vm-abort-signal'),
+      );
+      expect(calls).toBe(1);
 
-    controller.abort();
-    vmGlobal.document.dispatchEvent(
-      new vmGlobal.Event('rstest-vm-abort-signal'),
+      controller.abort();
+      vmGlobal.document.dispatchEvent(
+        new vmGlobal.Event('rstest-vm-abort-signal'),
+      );
+      expect(calls).toBe(1);
+    }
+  } finally {
+    teardown();
+  }
+});
+
+test('accepts VM global abort signals in Node Request and fetch', async () => {
+  const { context, teardown } = await setupVM({}, { scope: 'file' });
+  const vmGlobal: typeof globalThis = runInContext('globalThis', context);
+
+  try {
+    expect(vmGlobal.AbortController).toBe(AbortController);
+    expect(vmGlobal.AbortSignal).toBe(AbortSignal);
+
+    const controller = new vmGlobal.AbortController();
+    const request = new Request('http://127.0.0.1:1/', {
+      signal: controller.signal,
+    });
+    const reason = new Error('VM request cancelled');
+    controller.abort(reason);
+
+    expect(request.signal.aborted).toBe(true);
+    expect(request.signal.reason).toBe(reason);
+    await expect(fetch(request)).rejects.toHaveProperty(
+      'message',
+      reason.message,
     );
-    expect(calls).toBe(1);
   } finally {
     teardown();
   }
