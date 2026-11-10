@@ -88,6 +88,7 @@ import type {
   TestFileInfo,
   TestResult,
   TestRunEndPayload,
+  TestRunStartPayload,
   UserConsoleLog,
 } from '../types';
 import {
@@ -96,6 +97,7 @@ import {
   stackIgnores,
 } from '../utils/error';
 import {
+  BrowserTagGate,
   buildPackageManagerReproCommand,
   collectFailures,
   createUnknownFailure,
@@ -165,7 +167,6 @@ type ResolvedOptions = {
   candidateFiles: CandidateFilesResolved;
   console: ConsoleResolved;
   errors: ErrorsResolved;
-  showBrowserName: boolean;
 };
 
 const DEFAULT_TEST_LIST_MAX_ITEMS = 50;
@@ -206,7 +207,6 @@ const defaultOptions: ResolvedOptions = {
   errors: {
     unhandled: true,
   },
-  showBrowserName: false,
 };
 
 const presetOptions: Record<
@@ -311,7 +311,6 @@ export const resolveOptions = (
     errors: resolveToggleOption(userOptions.errors, defaultOptions.errors, {
       unhandled: false,
     }),
-    showBrowserName: userOptions.showBrowserName ?? false,
   };
 };
 
@@ -512,6 +511,7 @@ export class MdReporter implements Reporter {
   protected config: NormalizedConfig;
   private readonly fileFilters: string[];
   private readonly options: ResolvedOptions;
+  private readonly browserTags: BrowserTagGate;
   private readonly logs = new PerFileEventBuffer<string>();
 
   constructor({
@@ -532,6 +532,11 @@ export class MdReporter implements Reporter {
     void testState;
     this.fileFilters = fileFilters ?? [];
     this.options = resolveOptions(options);
+    this.browserTags = new BrowserTagGate(options.showBrowserName);
+  }
+
+  onTestRunStart(payload: TestRunStartPayload): void {
+    this.browserTags.onTestRunStart(payload);
   }
 
   private isFocusedRun({
@@ -571,7 +576,7 @@ export class MdReporter implements Reporter {
 
     for (const test of displayed) {
       lines.push(
-        `- ${formatFileTitle(test.relativeTestPath, test.browserName, test.fullName, this.options.showBrowserName)}`,
+        `- ${formatFileTitle(test.relativeTestPath, test.browserName, test.fullName, this.browserTags.show)}`,
       );
     }
 
@@ -747,7 +752,7 @@ export class MdReporter implements Reporter {
           if (!failure) continue;
 
           const { relativePath, fullName, title, formattedId } =
-            formatFailureTitle(failure, index, this.options.showBrowserName);
+            formatFailureTitle(failure, index, this.browserTags.show);
 
           lines.push(`- [F${formattedId}] ${title}`);
 
@@ -796,7 +801,7 @@ export class MdReporter implements Reporter {
         if (!failure) continue;
 
         const { relativePath, fullName, title, formattedId } =
-          formatFailureTitle(failure, index, this.options.showBrowserName);
+          formatFailureTitle(failure, index, this.browserTags.show);
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {

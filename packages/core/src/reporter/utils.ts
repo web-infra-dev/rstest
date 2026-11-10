@@ -9,6 +9,7 @@ import type {
   TestFileResult,
   TestFileSummary,
   TestResult,
+  TestRunStartPayload,
   TestRunSummary,
   UserConsoleLog,
 } from '../types';
@@ -200,12 +201,11 @@ export const formatBrowserSuffix = (
 ): string => (show && browserName ? ` [${browserName}]` : '');
 
 /**
- * The one gate every browser-aware rendering uses: an enabled project that
- * runs two or more browsers of the same file in one run produces ambiguous
- * titles, and only then does every browser tag earn its place. Both the
- * reporter factories (project configs) and the list command (collected rows)
- * feed rows of this shape, so both share this predicate instead of their own
- * counters.
+ * The one gate every browser-aware rendering uses: a project that runs two or
+ * more browsers of the same file in one run produces ambiguous titles, and
+ * only then does every browser tag earn its place. The reporters (selected
+ * files at run start) and the list command (collected rows) feed rows of this
+ * shape, so both share this predicate instead of their own counters.
  */
 export const shouldShowBrowserTags = (
   rows: readonly { project: string; browserName?: string }[],
@@ -224,6 +224,26 @@ export const shouldShowBrowserTags = (
   }
   return [...browsersByProject.values()].some((browsers) => browsers.size > 1);
 };
+
+/**
+ * A built-in reporter's `showBrowserName` decision: an explicit option wins;
+ * otherwise it follows the files the pool selected for the run (or watch
+ * cycle), so core never reads browser config to decide it. Reporters forward
+ * `onTestRunStart` to {@link BrowserTagGate.onTestRunStart}.
+ */
+export class BrowserTagGate {
+  private fromRun = false;
+
+  constructor(private readonly explicit?: boolean) {}
+
+  get show(): boolean {
+    return this.explicit ?? this.fromRun;
+  }
+
+  onTestRunStart(payload: TestRunStartPayload): void {
+    this.fromRun = shouldShowBrowserTags(payload.files);
+  }
+}
 
 /**
  * The file label the failure/test-list titles print: relative path, the

@@ -33,7 +33,6 @@ describe('resolveOptions', () => {
           maxCharsPerEntry: 500,
         },
         errors: { unhandled: true },
-        showBrowserName: false,
       });
     });
   });
