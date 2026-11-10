@@ -108,12 +108,12 @@ describe('browser mode - watch reporter lifecycle', () => {
       const initialRow = selections(initialReportLog)[0]!.files[0]!;
       const rerunProject = initialRow.project;
       const rerunBrowser = initialRow.browserName;
-      const browserSegment = rerunBrowser ? `${rerunBrowser}:` : '';
+      const projectSegment = rerunBrowser ? `${rerunProject}:${rerunBrowser}:` : '';
       const rerunFiles = selections(rerunReportLog)[1]!.files;
       expect(rerunFiles).toHaveLength(1);
       expect(rerunFiles[0]).toEqual({
         testPath: normalize(testFilePath),
-        testId: `file:${rerunProject}:${browserSegment}${normalize(testFilePath)}`,
+        testId: `file:${projectSegment}${normalize(testFilePath)}`,
         project: rerunProject,
         browserName: rerunBrowser,
       });

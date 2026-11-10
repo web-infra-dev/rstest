@@ -62,9 +62,10 @@ describe('browser mode - reporter lifecycle hooks', () => {
         payload.selection.files.map((file) => file.project).sort(),
       ).toEqual(filtered ? ['browser'] : ['browser', 'node']);
       for (const file of payload.selection.files) {
-        const browserSegment = file.browserName ? `${file.browserName}:` : '';
         expect(file.testId).toBe(
-          `file:${file.project}:${browserSegment}${file.testPath}`,
+          file.browserName
+            ? `file:${file.project}:${file.browserName}:${file.testPath}`
+            : `file:${file.testPath}`,
         );
         const events = payload.events
           .filter((event) => event.testPath === file.testPath)
