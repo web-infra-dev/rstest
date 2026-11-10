@@ -1,6 +1,7 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { config } from 'chai';
+import type { BrowserEntry } from './browser';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -187,20 +188,7 @@ export type ProjectConfig = Omit<
  * - `firefox` - Mozilla Firefox
  * - `webkit` - Safari
  */
-export const BROWSER_NAMES = ['chromium', 'firefox', 'webkit'] as const;
-
-/**
- * Type guard over {@link BROWSER_NAMES}, dependency-free so config
- * normalization and the browser wire share one predicate.
- */
-export const isBrowserName = (value: unknown): value is BrowserName =>
-  (BROWSER_NAMES as readonly string[]).includes(value as string);
-
-/**
- * Canonical browser-engine name echoed on every browser-mode payload. Derived
- * from `BROWSER_NAMES` so the diagnostic list cannot drift from the type.
- */
-export type BrowserName = (typeof BROWSER_NAMES)[number];
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
 /**
  * Device presets aligned with Chrome DevTools device toolbar.
@@ -312,33 +300,6 @@ export type BrowserExpectConfig = {
   toMatchScreenshot?: BrowserScreenshotMatcherConfig;
 };
 
-/**
- * Per-browser override entry inside `browser.browsers`.
- *
- * Only runtime-effective fields are overridable per browser: every browser of a
- * project shares one build and one dev server, so build-scoped options
- * (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level
- * `browser` config and are inherited untouched by each entry.
- */
-export type BrowserEntry = {
-  /** Required on the object form of a `browser.browsers` entry. */
-  browserName: BrowserName;
-  /** @default project `browser.headless` (which defaults to `true` in CI). */
-  headless?: boolean;
-  /** @default project `browser.viewport`. */
-  viewport?: BrowserViewport;
-  /** @default project `browser.screenshotFailures`. */
-  screenshotFailures?: boolean;
-  /** @default project `browser.expect`. */
-  expect?: BrowserExpectConfig;
-  /**
-   * Provider-specific options for this browser. Overrides the project-level
-   * `providerOptions` per top-level key (`launch`, `context`); keys not set on
-   * the entry keep the project-level value.
-   */
-  providerOptions?: Record<string, unknown>;
-};
-
 export type BrowserModeConfig = {
   /**
    * Enable browser mode when running tests.
@@ -353,18 +314,14 @@ export type BrowserModeConfig = {
    */
   provider: BrowserProvider;
   /**
-   * Browsers this project runs on. Each item is either a browser name (a plain
-   * entry inheriting every project-level default) or a {@link BrowserEntry}
-   * object overriding fields per browser. All browsers of a project share one
-   * build and one dev server.
+   * Browsers this project runs on: browser names or {@link BrowserEntry}
+   * objects overriding fields per browser.
    *
    * @default 'chromium'
    */
   browsers?: BrowserName | (BrowserName | BrowserEntry)[];
   /**
    * @deprecated Use `browsers` instead. Will be removed in 1.0.
-   *
-   * Normalized to a single entry inside `browsers` with a deprecation warning.
    */
   browser?: BrowserName;
   /**
@@ -839,7 +796,10 @@ export type ShardConfig = { count: number; index: number };
  * `RstestConfig` after CLI options are merged in. Carries the resolved
  * `shard` value, which the CLI injects but the public config type omits.
  */
-export type ResolvedRstestConfig = RstestConfig & { shard?: ShardConfig };
+export type ResolvedRstestConfig = RstestConfig & {
+  shard?: ShardConfig;
+  browser?: { cliBrowsers?: string[] };
+};
 
 type OptionalKeys =
   | 'testNamePattern'
@@ -856,27 +816,14 @@ type OptionalKeys =
   | 'resolveSnapshotPath'
   | 'extends';
 
-/**
- * A `browser.browsers` entry after defaults are merged: the resolved shape the
- * runtime schedules and launches against (`NormalizedBrowserModeConfig.browsers`).
- */
-export type ResolvedBrowserEntry = {
-  browserName: BrowserName;
-  headless: boolean;
-  viewport?: BrowserViewport;
-  screenshotFailures: boolean;
-  expect?: BrowserExpectConfig;
-  providerOptions: Record<string, unknown>;
-};
-
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: BrowserProvider;
-  /** Non-empty: one {@link ResolvedBrowserEntry} per configured browser. */
-  browsers: ResolvedBrowserEntry[];
-  // Shared project-level fields: every entry above inherits these when it does
-  // not override them; build-scoped options (`port`, `strictPort`) and the
-  // provider identity live only here.
+  // `browsers`/`browser`/`cliBrowsers` hold the raw user and CLI values; only
+  // `@rstest/browser` resolves them.
+  browsers?: BrowserModeConfig['browsers'];
+  browser?: BrowserModeConfig['browser'];
+  cliBrowsers?: string[];
   headless: boolean;
   screenshotFailures: boolean;
   port?: number;

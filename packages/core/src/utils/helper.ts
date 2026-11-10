@@ -8,7 +8,7 @@ import {
   resolve,
   sep,
 } from 'pathe';
-import type { BrowserName, RuntimeConfig, TestResult } from '../types';
+import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
 import { wrapRegex } from './regexpWireFormat';
@@ -41,7 +41,7 @@ export const normalizeExactPathMatch = (filePath: string): string => {
 export function generateFilePathHash(
   project: string,
   testPath: string,
-  browserName?: BrowserName,
+  browserName?: string,
 ): string {
   const str =
     browserName === undefined

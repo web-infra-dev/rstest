@@ -5,7 +5,6 @@ import type {
   BrowserViewport,
   Location as TestLocation,
   NormalizedConfig,
-  ResolvedBrowserEntry,
   RstestConfig,
   RstestOutputConfig,
   TestRunEndPayload,
@@ -28,7 +27,6 @@ export type {
   BrowserViewport,
   NormalizedConfig,
   RstestConfig,
-  ResolvedBrowserEntry,
   TestLocation,
   LoadedRstestConfig,
   LoadProjectConfig,
@@ -190,7 +188,7 @@ export interface ListedTest {
   parentNames?: string[];
   project: string;
   /** Owning browser in browser mode; `undefined` on the node pool. */
-  browserName?: BrowserName;
+  browserName?: string;
   location?: TestLocation;
   runMode?: 'skip' | 'todo';
   type: 'file' | 'suite' | 'case';

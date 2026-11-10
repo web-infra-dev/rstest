@@ -5,6 +5,7 @@ import {
   logger,
   type RuntimeConfig,
 } from '@rstest/core/internal/browser';
+import { resolveProjectBrowsers } from './browserEntries';
 import type { BrowserName } from './protocol';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
@@ -142,7 +143,7 @@ type BrowserConfigRow = {
 const browserConfigRows = (context: InternalContext): BrowserConfigRow[] =>
   context.projects.flatMap((project) =>
     project.normalizedConfig.browser.enabled
-      ? project.normalizedConfig.browser.browsers.map((entry) => ({
+      ? resolveProjectBrowsers(project).map((entry) => ({
           projectName: project.name,
           browserName: entry.browserName,
           headed: entry.headless === false,
@@ -240,9 +241,11 @@ const reportUnsupportedBrowserOptions = (
   if (
     isBrowserOnlyRun &&
     browserProjects.some(
-      ({ normalizedConfig: config }) =>
-        config.isolate === false &&
-        config.browser.browsers.some((entry) => entry.headless === false),
+      (project) =>
+        project.normalizedConfig.isolate === false &&
+        resolveProjectBrowsers(project).some(
+          (entry) => entry.headless === false,
+        ),
     )
   ) {
     warnings.add(
@@ -291,7 +294,7 @@ export const validateBrowserConfig = (context: InternalContext): void => {
     // Entry-level viewport overrides must pass the same shape checks as the
     // project value: resolved entries have already merged project defaults,
     // so the entry argument covers both layers.
-    for (const entry of browser.browsers) {
+    for (const entry of resolveProjectBrowsers(project)) {
       validateViewport(entry.viewport);
     }
 

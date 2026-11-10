@@ -1,6 +1,6 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { BrowserName } from './protocol';
-import { isBrowserName } from './protocol';
+import { isBrowserName } from './browserNames';
 
 export type BrowserLocatorText =
   | { type: 'string'; value: string }

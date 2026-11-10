@@ -11,16 +11,31 @@ type BufferedLogTask = {
   status: 'skipped' | 'passed' | 'failed' | 'todo';
   taskParentNames?: string[];
   taskType?: 'file' | 'suite' | 'case';
-  project: string;
   testPath: string;
+  /** Browser rows only: the node pool's file id is just the test path. */
+  project?: string;
+  browserName?: string;
 };
+
+const getBufferedFileTaskId = ({
+  project,
+  testPath,
+  browserName,
+}: {
+  project?: string;
+  testPath: string;
+  browserName?: string;
+}): string =>
+  project !== undefined && browserName !== undefined
+    ? getFileTaskId({ project, testPath, browserName })
+    : getFileTaskId(testPath);
 
 const getBufferedLogTaskId = (log: RawUserConsoleLog): string => {
   if (log.taskId) {
     return log.taskId;
   }
 
-  return getFileTaskId({ project: log.project, testPath: log.testPath });
+  return getBufferedFileTaskId(log);
 };
 
 const getSuiteChainKey = (names: string[]): string => {
@@ -89,8 +104,9 @@ export const createSilentConsoleController = ({
       status,
       taskParentNames,
       taskType,
-      project,
       testPath,
+      project,
+      browserName,
     }: BufferedLogTask): void {
       if (status !== 'failed') {
         bufferedConsoleLogs.delete(taskId);
@@ -100,7 +116,10 @@ export const createSilentConsoleController = ({
       const taskIdsToFlush: string[] = [];
 
       if (taskType === 'case') {
-        pushTaskId(taskIdsToFlush, getFileTaskId({ project, testPath }));
+        pushTaskId(
+          taskIdsToFlush,
+          getBufferedFileTaskId({ project, testPath, browserName }),
+        );
 
         const suiteNames = taskParentNames || [];
         for (let i = 0; i < suiteNames.length; i++) {
@@ -117,7 +136,10 @@ export const createSilentConsoleController = ({
       }
 
       if (taskType === 'suite') {
-        pushTaskId(taskIdsToFlush, getFileTaskId({ project, testPath }));
+        pushTaskId(
+          taskIdsToFlush,
+          getBufferedFileTaskId({ project, testPath, browserName }),
+        );
         pushTaskId(taskIdsToFlush, taskId);
       }
 

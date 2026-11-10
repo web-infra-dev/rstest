@@ -4,20 +4,13 @@ import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RunOptions } from '../api/types';
 import {
-  assertValidBrowserName,
   loadConfig,
   mergeForceRerunTriggers,
   plainDeepMerge,
   resolveExtends,
-  selectCliBrowserEntries,
 } from '../config';
 import type { LoadProjectConfig } from '../projectLoader';
-import type {
-  BrowserName,
-  Project,
-  ResolvedRstestConfig,
-  RstestConfig,
-} from '../types';
+import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
 import {
   castArray,
   color,
@@ -76,22 +69,22 @@ const normalizeBooleanLikeCliValue = (
 };
 
 /**
- * Parses the browser names handed in through CLI/API browser options: values
- * may be comma-separated and the flags may be repeated.
+ * Generic list parsing for the browser names handed in through CLI/API browser
+ * options: values may be comma-separated and the flags may be repeated. The
+ * names are not validated here; `@rstest/browser` owns that.
  */
 const toCliBrowserNames = (
   values: string | string[] | undefined,
   source: '`--browser.browsers`' | '`--browser.name`',
-): BrowserName[] => {
-  const names = castArray(values).flatMap((value) => String(value).split(','));
-  const trimmed = names.map((name) => name.trim()).filter(Boolean);
-  if (trimmed.length === 0) {
+): string[] => {
+  const names = castArray(values)
+    .flatMap((value) => String(value).split(','))
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (names.length === 0) {
     throw new Error(`${source} needs at least one browser name.`);
   }
-  for (const name of trimmed) {
-    assertValidBrowserName(name, source);
-  }
-  return trimmed as BrowserName[];
+  return names;
 };
 
 let deprecatedBrowserNameOptionWarned = false;
@@ -301,7 +294,7 @@ export function mergeWithCLIOptions(
       const cliBrowserNames = options.browser.browsers;
       const cliBrowserName = options.browser.name;
       if (cliBrowserNames !== undefined || cliBrowserName !== undefined) {
-        const names: BrowserName[] = (() => {
+        const names = (() => {
           if (cliBrowserNames !== undefined) {
             if (cliBrowserName !== undefined) {
               throw new Error(
@@ -318,13 +311,9 @@ export function mergeWithCLIOptions(
           }
           return toCliBrowserNames(cliBrowserName, '`--browser.name`');
         })();
-        // CLI selection overrides/filters this layer's configured browsers;
-        // the deprecated per-project field is absorbed (see selectCliBrowserEntries).
-        config.browser.browsers = selectCliBrowserEntries(
-          config.browser,
-          names,
-        );
-        delete config.browser.browser;
+        // Raw selection for `@rstest/browser`, which filters this layer's
+        // configured browsers by it (see `resolveProjectBrowsers`).
+        config.browser.cliBrowsers = names;
       }
       if (options.browser.headless !== undefined) {
         config.browser.headless = options.browser.headless;

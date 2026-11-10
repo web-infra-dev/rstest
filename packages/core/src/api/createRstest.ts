@@ -14,7 +14,6 @@ import {
 } from '../core/config/resolveConfig';
 import { exitReporters } from '../reporter';
 import type {
-  BrowserName,
   InternalContext,
   ListCommandResult,
   RawTestInfo,
@@ -83,7 +82,7 @@ const flattenListedTests = (
   }
 
   const listed: ListedTest[] = [];
-  const visit = (test: RawTestInfo, browserName?: BrowserName): void => {
+  const visit = (test: RawTestInfo, browserName?: string): void => {
     if (
       test.type === 'case' ||
       (options.includeSuites &&

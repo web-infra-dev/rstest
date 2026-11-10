@@ -4,16 +4,6 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
 {
   "bail": 0,
   "browser": {
-    "browsers": [
-      {
-        "browserName": "chromium",
-        "expect": undefined,
-        "headless": false,
-        "providerOptions": {},
-        "screenshotFailures": false,
-        "viewport": undefined,
-      },
-    ],
     "enabled": false,
     "headless": false,
     "port": undefined,

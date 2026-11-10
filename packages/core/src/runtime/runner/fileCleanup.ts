@@ -1,5 +1,4 @@
 import type { RawTestFileResult } from '../../types';
-import type { BrowserName } from '../../types/config';
 import type { MaybePromise } from '../../types';
 import { getFileTaskId } from '../../utils/helper';
 
@@ -45,7 +44,7 @@ export const createFileCleanupTimeoutResult = ({
   result?: RawTestFileResult;
   testPath: string;
   /** Owning browser of the run that timed out (browser mode only). */
-  browserName?: BrowserName;
+  browserName?: string;
 }): RawTestFileResult => {
   const error = new Error(message);
   return {

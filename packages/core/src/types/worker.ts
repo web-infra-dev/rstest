@@ -1,7 +1,6 @@
 import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type {
-  BrowserName,
   EnvironmentName,
   NormalizedConfig,
   RstestPoolType,
@@ -139,7 +138,7 @@ export type WorkerContext = {
    * the browser runtime, never by the node pool. Task ids and file hashes
    * include it so parallel browser copies of one file cannot alias.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   runtimeConfig: RuntimeConfig;
   taskId: number;
   /**

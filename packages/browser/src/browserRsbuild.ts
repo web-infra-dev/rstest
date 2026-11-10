@@ -39,6 +39,7 @@ import { dirname, join, normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
+import { resolveProjectBrowsers } from './browserEntries';
 import { validateBrowserConfig } from './configValidation';
 import type { ContainerRpcManager } from './containerRpc';
 import type { HeadedRunRegistry } from './headedRunRegistry';
@@ -886,7 +887,7 @@ export const buildBrowserRuntimeRows = (
         envOverlay: options.envOverlay,
       }),
     );
-    for (const entry of browser.browsers) {
+    for (const entry of resolveProjectBrowsers(project)) {
       const headless = options.forceHeadless ?? entry.headless;
       const spec = launchSpecForEntry(browser, entry, headless);
       if (!specsByKey.has(spec.key)) {

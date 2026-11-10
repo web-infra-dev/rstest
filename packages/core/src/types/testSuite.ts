@@ -6,7 +6,6 @@ import type {
   OnTestFinishedHandler,
   TestContext,
 } from './api';
-import type { BrowserName } from './config';
 import type { ConsoleStreamType, MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -65,7 +64,7 @@ export type RawTestCaseInfo = {
    * (project, testPath) pair alone does not identify the emitter once
    * several browsers of the same project run the same file concurrently.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   startTime?: number;
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
@@ -149,7 +148,7 @@ export type RawTestSuiteInfo = {
    * (project, testPath) pair alone does not identify the emitter once
    * several browsers of the same project run the same file concurrently.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   type: 'suite';
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
@@ -211,7 +210,7 @@ export type RawTestFileInfo<Info extends RawTestInfo = RawTestInfo> = {
    * (project, testPath) pair alone does not identify the emitter once
    * several browsers of the same project run the same file concurrently.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   tests: Info[];
 };
 
@@ -254,7 +253,7 @@ export type RawTestResult = {
    * (project, testPath) pair alone does not identify the emitter once
    * several browsers of the same project run the same file concurrently.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   /** Best-effort: semantics may change independently of the stable reporter contract. */
   meta?: TaskMeta;
   /** Best-effort: semantics may change independently of the stable reporter contract. */
@@ -328,7 +327,7 @@ export interface RawUserConsoleLog {
    * (project, testPath) pair alone does not identify the emitter once
    * several browsers of the same project run the same file concurrently.
    */
-  browserName?: BrowserName;
+  browserName?: string;
   type: ConsoleStreamType;
 }
 

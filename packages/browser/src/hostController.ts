@@ -36,6 +36,7 @@ import {
   type TestResult,
 } from '@rstest/core/internal/browser';
 import { basename, dirname, join, normalize } from 'pathe';
+import { resolveProjectBrowsers } from './browserEntries';
 import { getTestPathKey } from './pathUtils';
 import {
   createHostDispatchRouter,
@@ -71,7 +72,6 @@ import {
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
-  BrowserName,
   BrowserRpcRequest,
   RunnerEnvelope,
   SnapshotRpcMethod,
@@ -152,7 +152,7 @@ const getFailureScreenshotDirectory = (
   projectRoot: string,
   projectName: string,
   testPath: string,
-  browserName?: BrowserName,
+  browserName?: string,
 ): string => {
   const fileHash = createHash('sha256')
     .update(
@@ -194,9 +194,7 @@ const removeFailureScreenshotsForFiles = async (
       const sweptBrowsers = browserName
         ? [browserName]
         : project.normalizedConfig.browser.enabled
-          ? project.normalizedConfig.browser.browsers.map(
-              (entry) => entry.browserName,
-            )
+          ? resolveProjectBrowsers(project).map((entry) => entry.browserName)
           : [undefined];
       return sweptBrowsers.map((sweptBrowserName) =>
         fs
@@ -238,7 +236,7 @@ const getFailureScreenshotPath = ({
   testName: string;
   testId: string;
   parentNames: string[];
-  browserName?: BrowserName;
+  browserName?: string;
 }): string => {
   const safeName = `${basename(testPath)}-${testName}`
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
@@ -1522,6 +1520,7 @@ export const runBrowserController = async (
       taskParentNames: payload.parentNames,
       taskType: 'suite',
       project: payload.project,
+      browserName: payload.browserName,
       testPath: payload.testPath,
     });
   };
@@ -1591,6 +1590,7 @@ export const runBrowserController = async (
       taskParentNames: payload.parentNames,
       taskType: 'case',
       project: payload.project,
+      browserName: payload.browserName,
       testPath: payload.testPath,
     });
 
@@ -1656,6 +1656,7 @@ export const runBrowserController = async (
       taskParentNames: payload.parentNames,
       taskType: 'file',
       project: payload.project,
+      browserName: payload.browserName,
       testPath: payload.testPath,
     });
 

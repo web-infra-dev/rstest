@@ -4,7 +4,6 @@ import type { TestStateManager } from '../core/execution/stateManager';
 import type { PackageInstallerConfirm } from '../utils/packageInstaller';
 import type { TraceOutput } from '../utils/trace';
 import type {
-  BrowserName,
   EnvironmentName,
   NormalizedConfig,
   NormalizedProjectConfig,
@@ -181,7 +180,7 @@ export type ListCommandResult = {
   testPath: string;
   project: string;
   /** Owning browser of the collecting row (browser mode multi-browser only). */
-  browserName?: BrowserName;
+  browserName?: string;
   errors?: SerializedError[];
 };
 

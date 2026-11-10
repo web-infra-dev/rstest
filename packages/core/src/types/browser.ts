@@ -1,9 +1,41 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type {
+  BrowserExpectConfig,
+  BrowserName,
+  BrowserViewport,
+} from './config';
 import type { InternalProjectContext } from './core';
 import type { RawCoverageResolveOptions } from './coverage';
 import type { GetSourcemap, SourceMapInput } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
+
+/**
+ * Per-browser override entry inside `browser.browsers`.
+ *
+ * Only runtime-effective fields are overridable per browser: every browser of a
+ * project shares one build and one dev server, so build-scoped options
+ * (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level
+ * `browser` config and are inherited untouched by each entry.
+ */
+export type BrowserEntry = {
+  /** Required on the object form of a `browser.browsers` entry. */
+  browserName: BrowserName;
+  /** @default project `browser.headless` (which defaults to `true` in CI). */
+  headless?: boolean;
+  /** @default project `browser.viewport`. */
+  viewport?: BrowserViewport;
+  /** @default project `browser.screenshotFailures`. */
+  screenshotFailures?: boolean;
+  /** @default project `browser.expect`. */
+  expect?: BrowserExpectConfig;
+  /**
+   * Provider-specific options for this browser. Overrides the project-level
+   * `providerOptions` per top-level key (`launch`, `context`); keys not set on
+   * the entry keep the project-level value.
+   */
+  providerOptions?: Record<string, unknown>;
+};
 
 export interface BrowserSourcemapResolutionResult {
   handled: boolean;

@@ -1,11 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
 import { mergeWithCLIOptions, resolveProjects } from '../../src/cli/init';
-import type {
-  BrowserName,
-  InlineProjectConfig,
-  RstestConfig,
-} from '../../src/types';
+import type { InlineProjectConfig, RstestConfig } from '../../src/types';
 
 const rootPath = join(__dirname, '../..');
 
@@ -587,7 +583,7 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.browser).toEqual({
         enabled: true,
         provider: 'playwright',
-        browsers: ['webkit'],
+        cliBrowsers: ['webkit'],
         headless: false,
         port: 4000,
         strictPort: true,
@@ -609,7 +605,7 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toMatchObject({
         enabled: true,
-        browsers: ['webkit'],
+        cliBrowsers: ['webkit'],
       });
     });
 
@@ -639,7 +635,7 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toMatchObject({
         enabled: true, // preserved from config
-        browsers: ['firefox'], // overridden by CLI (deprecated --browser.name)
+        cliBrowsers: ['firefox'], // selected by CLI (deprecated --browser.name)
         headless: true, // preserved from config
         port: 6000, // overridden by CLI
       });
@@ -733,7 +729,7 @@ describe('resolveProjects', () => {
       });
     });
 
-    it('should filter configured browsers by --browser.browsers', async () => {
+    it('should record --browser.browsers as a raw selection without touching configured browsers', async () => {
       const config: RstestConfig = {
         projects: [
           {
@@ -741,10 +737,7 @@ describe('resolveProjects', () => {
             browser: {
               enabled: true,
               provider: 'playwright',
-              browsers: [
-                'chromium',
-                { browserName: 'firefox', headless: false },
-              ],
+              browsers: ['chromium', { browserName: 'firefox' }],
             },
           },
         ],
@@ -757,52 +750,25 @@ describe('resolveProjects', () => {
       });
 
       expect(projects[0]!.config.browser).toMatchObject({
-        browsers: [{ browserName: 'firefox', headless: false }],
+        browsers: ['chromium', { browserName: 'firefox' }],
+        cliBrowsers: ['firefox'],
       });
     });
 
-    it('should fall back to a plain entry for a CLI-selected browser without a configured entry', async () => {
-      const config: RstestConfig = {
-        projects: [
-          {
-            name: 'test-project',
-            browser: {
-              enabled: true,
-              provider: 'playwright',
-              browsers: ['chromium'],
-            },
-          },
-        ],
-      };
-
+    it('should split comma-separated and repeated --browser.browsers values without validating names', async () => {
       const projects = await resolveProjects({
-        config,
+        config: { projects: [{ name: 'test-project' }] },
         root: rootPath,
-        // CLI level: cac hands a comma-joined value as one string; the merge
-        // splits and validates it. The typed API surface stays BrowserName[].
-        options: { browser: { browsers: 'chromium,firefox' as BrowserName } },
+        // CLI level: cac hands a comma-joined value as one string, or an array
+        // when the flag repeats. Names are validated by `@rstest/browser`.
+        options: {
+          browser: { browsers: ['chromium, firefox', 'not-a-browser'] as any },
+        },
       });
 
-      expect(projects[0]!.config.browser!.browsers).toEqual([
-        'chromium',
-        'firefox',
-      ]);
-    });
-
-    it('should reject unknown --browser.browsers values', async () => {
-      const config: RstestConfig = {
-        projects: [{ name: 'test-project' }],
-      };
-
-      // CLI strings are validated at runtime; the type cannot express "invalid".
-      const invalid = 'safari' as BrowserName;
-      await expect(
-        resolveProjects({
-          config,
-          root: rootPath,
-          options: { browser: { browsers: invalid } },
-        }),
-      ).rejects.toThrow(/Unknown browser value/);
+      expect(projects[0]!.config.browser).toMatchObject({
+        cliBrowsers: ['chromium', 'firefox', 'not-a-browser'],
+      });
     });
 
     it('should reject --browser.name together with --browser.browsers', () => {

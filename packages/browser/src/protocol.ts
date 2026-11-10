@@ -6,10 +6,7 @@ export type {
   BrowserName,
   BrowserViewport,
 } from '@rstest/core/internal/browser';
-import {
-  getFileTaskId,
-  isBrowserName,
-} from '@rstest/core/internal/browser-runtime';
+import { getFileTaskId } from '@rstest/core/internal/browser-runtime';
 import type {
   BrowserExpectConfig,
   BrowserRuntimeConfig,
@@ -46,8 +43,8 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
 // Shared with every surface of this package: the runtime entry's
-// dependency-free task-id grammar and its browser-name wire guard.
-export { getFileTaskId, isBrowserName };
+// dependency-free task-id grammar.
+export { getFileTaskId };
 
 /**
  * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the

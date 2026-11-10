@@ -136,10 +136,6 @@ export {
   RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
-// Browser identity: `BrowserName`/`BROWSER_NAMES` are core config types (the
-// browser host validates wire rows against the same set the config accepts),
-// and `NormalizedBrowserModeConfig.browsers` carries the launch-option
-// identity.
 export type { BrowserName } from './types';
 export {
   getSetupFiles,
