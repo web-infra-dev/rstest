@@ -12,13 +12,9 @@ const fixturesDir = join(__dirname, 'fixtures');
 const parsePayload = (stdout: string) =>
   parseMarkerPayload<Record<string, any>>(stdout, '__RSTEST_API_RESULT__');
 
-// The browser-filter fixture runs one case per run-mode; the suite's test
-// files run concurrently, so each case holds its own strictPort.
-const BROWSERS_FILTER_PORTS = {
-  firefox: 'programmatic-browsers-filter',
-  chromium: 'programmatic-browsers-filter-chromium',
-  none: 'programmatic-browsers-filter-none',
-} as const;
+// The three browser-filter cases run one after another and each child exits
+// before the next spawns, so one port serves all of them.
+const BROWSERS_FILTER_PORT = BROWSER_PORTS['programmatic-browsers-filter'];
 
 describe('programmatic createRstest', () => {
   it.for(['forks', 'vmThreads'] as const)(
@@ -650,11 +646,7 @@ describe('programmatic createRstest', () => {
     async (filter, { onTestFinished }) => {
       const { cli } = await runRstestCli({
         command: 'node',
-        args: [
-          'run-browsers-filter.mjs',
-          String(BROWSER_PORTS[BROWSERS_FILTER_PORTS[filter]]),
-          filter,
-        ],
+        args: ['run-browsers-filter.mjs', String(BROWSERS_FILTER_PORT), filter],
         onTestFinished,
         options: { nodeOptions: { cwd: fixturesDir } },
       });
@@ -695,11 +687,7 @@ describe('programmatic createRstest', () => {
   }) => {
     const { cli } = await runRstestCli({
       command: 'node',
-      args: [
-        'run-browsers-filter.mjs',
-        String(BROWSER_PORTS[BROWSERS_FILTER_PORTS['none']]),
-        'none',
-      ],
+      args: ['run-browsers-filter.mjs', String(BROWSERS_FILTER_PORT), 'none'],
       onTestFinished,
       options: { nodeOptions: { cwd: fixturesDir } },
     });

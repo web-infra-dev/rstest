@@ -5,29 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 import { defaultEnvOverrides, runBrowserCli } from './utils';
-import { BROWSER_PORTS } from './fixtures/ports';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, 'fixtures/multi-browser');
 const blobDir = join(fixtureDir, '.rstest-reports');
 
-// This file must not race `multiBrowser.test.ts` for the fixture's own port
-// (configs reached from different concurrently-running test files must not
-// share one; the loser retries or fails), so every CLI here carries the
-// file-own `multi-browser-rules` port.
-const rulesPort = `--browser.port=${BROWSER_PORTS['multi-browser-rules']}`;
-const rulesCli = (
-  args: string[],
-  extra?: NonNullable<Parameters<typeof runBrowserCli>[1]>,
-) =>
-  runBrowserCli('multi-browser', {
-    ...extra,
-    args: [rulesPort, ...args],
-  });
-
 describe('browser mode - multi-browser launch rules', () => {
   it('runs one file copy per browser with per-entry viewport overrides', async () => {
-    const { expectExecSuccess, cli } = await rulesCli([]);
+    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {});
     await expectExecSuccess();
     // One row per (project, browser), each tagged with its browser, and the
     // per-entry viewport assertion passed inside each real page.
@@ -37,11 +22,24 @@ describe('browser mode - multi-browser launch rules', () => {
     expect(cli.stdout).toMatch(/Tests 6 passed/);
   }, 60_000);
 
+  it('filters to one browser like the CLI flag and drops the other copy', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+      args: ['--browser.browsers=firefox'],
+    });
+
+    await expectExecSuccess();
+    // One browser row selected → one file result, and the dropped copy's
+    // tag must not leak anywhere. (The reporter tags rows only when the
+    // selected project still records more than one browser, so the
+    // narrowed run here prints an untagged single row.)
+    expect(cli.stdout).not.toMatch(/\[chromium\]/);
+    expect(cli.stdout).toMatch(/Test Files 1 passed/);
+  }, 60_000);
+
   it('warns once per run that browser.browser is deprecated', async () => {
-    const { expectExecSuccess, cli } = await rulesCli([
-      '-c',
-      'rstest.deprecated-browser.config.mts',
-    ]);
+    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+      args: ['-c', 'rstest.deprecated-browser.config.mts'],
+    });
     await expectExecSuccess();
     const output = `${cli.stdout}\n${cli.stderr}`;
     expect(output).toContain('`browser.browser` is deprecated');
@@ -52,10 +50,9 @@ describe('browser mode - multi-browser launch rules', () => {
   }, 60_000);
 
   it('rejects v8 coverage when a non-chromium browser stays selected', async () => {
-    const { expectExecFailed, cli } = await rulesCli([
-      '-c',
-      'rstest.v8-coverage.config.mts',
-    ]);
+    const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
+      args: ['-c', 'rstest.v8-coverage.config.mts'],
+    });
     await expectExecFailed();
     expect(`${cli.stdout}\n${cli.stderr}`).toMatch(
       /Coverage provider 'v8' in browser mode requires Chromium/,
@@ -66,20 +63,22 @@ describe('browser mode - multi-browser launch rules', () => {
     // The v8 guard runs AFTER CLI browser filtering (Vitest #7306): with the
     // filter narrowing the multi-browser project to chromium, the same
     // config runs successfully and collects coverage.
-    const { expectExecSuccess, cli } = await rulesCli([
-      '-c',
-      'rstest.v8-coverage.config.mts',
-      '--browser.browsers=chromium',
-    ]);
+    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+      args: [
+        '-c',
+        'rstest.v8-coverage.config.mts',
+        '--browser.browsers=chromium',
+      ],
+    });
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Test Files 1 passed/);
     expect(cli.stdout).not.toMatch(/\[firefox\]/);
   }, 60_000);
 
   it('rejects a second headed browser and names the CLI fix', async () => {
-    const { expectExecFailed, cli } = await rulesCli([
-      '--browser.headless=false',
-    ]);
+    const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
+      args: ['--browser.headless=false'],
+    });
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
     expect(output).toMatch(/Only one \(project, browser\) pair can run headed/);
@@ -89,7 +88,7 @@ describe('browser mode - multi-browser launch rules', () => {
   it('rejects watch with one headed and one headless browser', async () => {
     const result = await runRstestCli({
       command: 'rstest',
-      args: ['watch', '-c', 'rstest.mixed-headed.config.mts', rulesPort],
+      args: ['watch', '-c', 'rstest.mixed-headed.config.mts'],
       options: {
         nodeOptions: {
           cwd: fixtureDir,
@@ -107,7 +106,9 @@ describe('browser mode - multi-browser launch rules', () => {
     onTestFinished(() => rmSync(blobDir, { recursive: true, force: true }));
     rmSync(blobDir, { recursive: true, force: true });
 
-    const blobRun = await rulesCli(['--reporters=blob']);
+    const blobRun = await runBrowserCli('multi-browser', {
+      args: ['--reporters=blob'],
+    });
     await blobRun.expectExecSuccess();
     expect(existsSync(join(blobDir, 'blob.json'))).toBe(true);
 

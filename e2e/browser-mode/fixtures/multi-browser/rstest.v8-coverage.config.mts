@@ -13,7 +13,7 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
-    port: BROWSER_PORTS['multi-browser-rules'],
+    port: BROWSER_PORTS['multi-browser'],
     browsers: [
       {
         browserName: 'chromium',
