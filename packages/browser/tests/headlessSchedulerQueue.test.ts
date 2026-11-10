@@ -32,7 +32,7 @@ describe('expandToRows (headless scheduler queue order)', () => {
       rowsByProject,
     );
 
-    expect(queue.map((file) => [file.testPath, file.browserName])).toEqual([
+    expect(queue.map((file) => [file.testPath, file.row.browserName])).toEqual([
       ['/tests/a.test.ts', 'chromium'],
       ['/tests/b.test.ts', 'chromium'],
       ['/tests/a.test.ts', 'firefox'],

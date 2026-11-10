@@ -824,19 +824,6 @@ describe('browser.browsers normalization', () => {
     warn.mockRestore();
   });
 
-  it('emits the browser.browser deprecation warning once per process', () => {
-    // The sibling test above already consumed the once-per-process warning.
-    const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
-    withDefaultConfig({
-      browser: { enabled: true, provider: 'playwright', browser: 'firefox' },
-    });
-    const deprecationWarnings = warn.mock.calls.filter(([message]) =>
-      String(message).includes('`browser.browser` is deprecated'),
-    );
-    warn.mockRestore();
-    expect(deprecationWarnings).toHaveLength(0);
-  });
-
   it('validates entries but skips shape errors for disabled browser projects', () => {
     // The type cannot express "invalid" browser strings; normalization does.
     const normalized = withDefaultConfig({

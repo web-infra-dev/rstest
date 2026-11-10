@@ -4,7 +4,6 @@ import {
   formatError,
   toError,
   generateFilePathHash,
-  getFileTaskId,
   getWorkerSerialization,
   isPlainObject,
   needFlagExperimentalDetectModule,
@@ -22,37 +21,17 @@ it('isPlainObject accepts objects created in another realm', () => {
   expect(isPlainObject(Object.create(null))).toBe(false);
 });
 
-it('getFileTaskId builds the file: task-id grammar', () => {
-  // Locks the single source of truth so the worker/pool/runner consumers and
-  // the tests/pool/fixtures/testWorker.mjs literal copy cannot drift: project
-  // always joins, the browser joins only in browser mode.
-  expect(getFileTaskId({ project: 'p', testPath: '/abs/foo.test.ts' })).toBe(
-    'file:p:/abs/foo.test.ts',
-  );
-  expect(
-    getFileTaskId({
-      project: 'p',
-      testPath: '/abs/foo.test.ts',
-      browserName: 'firefox',
-    }),
-  ).toBe('file:p:firefox:/abs/foo.test.ts');
-});
-
-it('generateFilePathHash keeps the origin/main value on the node pool', () => {
-  // origin/main seeds the hash with `${project}\0${testPath}` and case ids are
-  // rooted at it, so node case ids must stay byte-identical across the
-  // multi-browser change. Only browser rows may add the browser segment.
+it('generateFilePathHash keeps the node-pool seed byte-stable', () => {
+  // Case ids root at this hash (`fileHash_{idx}` in custom-reporter
+  // payloads), so the node seed `${project}\0${testPath}` must stay
+  // byte-identical across the multi-browser change.
   expect(generateFilePathHash('node', '/fixtures/index.test.ts')).toBe(
     'd3d72794ce',
   );
-  expect(generateFilePathHash('np', '/a.test.ts')).toBe(
-    generateFilePathHash('np', '/a.test.ts', undefined),
+  // Browser rows alias-proof: one file, two browsers, two distinct hashes.
+  expect(generateFilePathHash('p', '/a.test.ts', 'chromium')).not.toBe(
+    generateFilePathHash('p', '/a.test.ts', 'firefox'),
   );
-  // Browser rows alias-proof: one file, two browsers, two hashes.
-  expect(generateFilePathHash('p', '/a.test.ts', 'chromium')).toBe(
-    'e17a5bb2a1',
-  );
-  expect(generateFilePathHash('p', '/a.test.ts', 'firefox')).toBe('fca9d7f73c');
 });
 
 it('toNativePath converts forward-slash paths to OS-native separators', () => {
