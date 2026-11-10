@@ -191,7 +191,7 @@ await rstest.run(); // Uses the configured 2 again.
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> sets the number of additional runs for each individual test. Test and suite options take precedence; see [repeats](/config/test/repeats).
 
-`browser` overrides the browser options for browser projects on this run: `RunOptions.browser.browsers` <ApiMeta sup addedVersion="0.12.7" /> selects and filters the configured browsers the [CLI filter](/config/test/browser#cli-browser-filters) does — a listed name with a configured entry keeps it (with its overrides), a listed name without one falls back to a plain entry with project-level defaults; `undefined` keeps the configured list. The deprecated `browser.name` alias selects a single browser. See [browser](/config/test/browser#browsers) for the option semantics.
+`browser` overrides the browser options for browser projects on this run: `RunOptions.browser.browsers` <ApiMeta sup addedVersion="0.13.0" /> selects and filters the configured browsers the [CLI filter](/config/test/browser#cli-browser-filters) does — a listed name with a configured entry keeps it (with its overrides), a listed name without one falls back to a plain entry with project-level defaults; `undefined` keeps the configured list. The deprecated `browser.name` alias selects a single browser. See [browser](/config/test/browser#browsers) for the option semantics.
 
 - **Type:**
 

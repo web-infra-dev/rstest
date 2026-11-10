@@ -124,9 +124,9 @@ Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写�
 
 <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`，以及（自 v0.12.7 起）browser 模式下的所属浏览器 `browserName`（Node pool 上缺失）。为项目选中多个浏览器的 run 会按 `(project, browser)` 各列一项。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。`TestRunStartPayload` 可从 `@rstest/core` 导入。
+`onTestRunStart` 接收的 `TestRunStartPayload` 包含 `files` 数组，每个选中文件都有绝对路径 `testPath`、`project` 和 `testId`，以及（自 v0.13.0 起）browser 模式下的所属浏览器 `browserName`（Node pool 上缺失）。为项目选中多个浏览器的 run 会按 `(project, browser)` 各列一项。watch 模式下，它只包含本轮选中的文件，不是整个会话的累计结果。`TestRunStartPayload` 可从 `@rstest/core` 导入。
 
-<ApiMeta addedVersion="0.12.7" />
+<ApiMeta addedVersion="0.13.0" />
 
 - **类型：**
 
@@ -183,7 +183,7 @@ interface TestResult {
 
 #### 浏览器归属
 
-<ApiMeta addedVersion="0.12.7" />
+<ApiMeta addedVersion="0.13.0" />
 
 Browser 模式下，每条结果 payload（文件、suite、case 与 console log）都会携带运行它的浏览器的 `browserName`，task id 也会带上它：case id 以 `file:<project>:<browserName>:<testPath>` 为根，因此同一测试文件在两个浏览器下运行会得到两条互不覆盖的结果。Node pool 上 id 以 `file:<project>:<testPath>` 为根，`browserName` 保持缺失。
 

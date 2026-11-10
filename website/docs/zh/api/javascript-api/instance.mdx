@@ -191,7 +191,7 @@ await rstest.run(); // 仍使用配置中的 2。
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> 设置单个测试的额外执行次数，测试和套件自身的选项优先。详见 [repeats](/config/test/repeats)。
 
-`browser` <ApiMeta sup addedVersion="0.12.7" /> 覆盖本次 run 中 browser 项目的浏览器选项：`RunOptions.browser.browsers` 按 [CLI 过滤](/config/test/browser#cli-浏览器过滤) 的规则选择并过滤已配置的浏览器 —— 列出的名字配置了对应 entry 就保留它（连同其覆盖项），没有配置则回退为继承项目级默认值的 plain entry；传 `undefined` 保持配置列表不变。废弃的 `browser.name` 别名选择单个浏览器。选项语义见 [browser](/config/test/browser#browsers)。
+`browser` <ApiMeta sup addedVersion="0.13.0" /> 覆盖本次 run 中 browser 项目的浏览器选项：`RunOptions.browser.browsers` 按 [CLI 过滤](/config/test/browser#cli-浏览器过滤) 的规则选择并过滤已配置的浏览器 —— 列出的名字配置了对应 entry 就保留它（连同其覆盖项），没有配置则回退为继承项目级默认值的 plain entry；传 `undefined` 保持配置列表不变。废弃的 `browser.name` 别名选择单个浏览器。选项语义见 [browser](/config/test/browser#browsers)。
 
 - **类型：**
 

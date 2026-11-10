@@ -124,9 +124,9 @@ Metadata result fields are available on reporter results. JSON-serializable runt
 
 <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`, and — since v0.12.7 — the owning `browserName` in browser mode (absent on the node pool). A run that selects several browsers lists one entry per `(project, browser)`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Import `TestRunStartPayload` from `@rstest/core`.
+`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`, and — since v0.13.0 — the owning `browserName` in browser mode (absent on the node pool). A run that selects several browsers lists one entry per `(project, browser)`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Import `TestRunStartPayload` from `@rstest/core`.
 
-<ApiMeta addedVersion="0.12.7" />
+<ApiMeta addedVersion="0.13.0" />
 
 - **Type:**
 
@@ -183,7 +183,7 @@ interface TestResult {
 
 #### Browser attribution
 
-<ApiMeta addedVersion="0.12.7" />
+<ApiMeta addedVersion="0.13.0" />
 
 In browser mode every result payload (file, suite, case, and console log) carries the `browserName` of the browser that ran it, and task ids encode it: a case id is rooted at `file:<project>:<browserName>:<testPath>`, so the same test file run by two browsers produces two distinct results. On the node pool the id is rooted at `file:<project>:<testPath>` and `browserName` stays absent.
 
