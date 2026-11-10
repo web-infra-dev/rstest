@@ -18,6 +18,18 @@ it.for(['vmForks', 'vmThreads'] as const)(
   },
 );
 
+it.for(['vmForks', 'vmThreads'] as const)(
+  'cancels pending DOM immediate callbacks under %s',
+  async (pool) => {
+    for (const environment of ['jsdom', 'happy-dom']) {
+      const { expectExecSuccess } = await runCli('test/timers', environment, {
+        args: ['--pool', pool, '--pool.maxWorkers', '1'],
+      });
+      await expectExecSuccess();
+    }
+  },
+);
+
 it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   'formats React DOM assertions under %s',
   async (pool) => {
