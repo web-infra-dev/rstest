@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { TestEnvironmentModuleFallback } from '../../../pool/protocol';
 import type { TestEnvironmentModuleReference } from '../../../types';
+import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../../utils/constants';
+import { installGlobalProperty } from '../globalProperty';
 import { logger } from '../../../utils';
 import { finalizeDynamicImport } from '../resolveDynamicImport';
 
@@ -166,4 +168,20 @@ export const loadTestEnvironmentModule = (
     moduleCache.set(cacheKey, loaded);
   }
   return loaded;
+};
+
+export const installTestEnvironmentModule = async (
+  reference: TestEnvironmentModuleReference | undefined,
+  target: object,
+  onFallback?: (fallback: TestEnvironmentModuleFallback) => void,
+): Promise<() => void> => {
+  if (reference?.name !== 'jsdom') return () => {};
+  const loaded = await loadTestEnvironmentModule(reference, onFallback);
+  return installGlobalProperty(
+    target,
+    RSTEST_JSDOM_GLOBAL_PREFIX + reference.resolvedPath,
+    // CommonJS consumers may spy on exports. Keep their mutable facade separate
+    // from the cached namespace used to initialize the test environment.
+    { ...loaded?.module },
+  );
 };

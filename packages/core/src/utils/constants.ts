@@ -39,6 +39,8 @@ export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
  */
 export const RSTEST_API_GLOBAL_KEY = '@rstest/core';
 
+export const RSTEST_JSDOM_GLOBAL_PREFIX = '@rstest/jsdom/';
+
 /**
  * Key under which each executor publishes the per-file resolver used by the
  * native `import.meta.rstest` rewrite. It is separate from

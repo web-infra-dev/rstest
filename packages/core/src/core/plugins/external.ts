@@ -1,9 +1,13 @@
+import { realpathSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { InternalContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 import { isVmPoolType } from '../../utils/workers';
+import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../utils/constants';
+import { isBrowserProject } from '../environment/isBrowserProject';
+import { resolveTestEnvironmentModule } from '../environment/testEnvironmentModule';
 import { rstestCoreGlobalExternal } from './mockBuild';
 
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
@@ -311,6 +315,38 @@ export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
               config.externalsType = 'import';
             }
 
+            // User externals and automatic dependency externalization take precedence.
+            // Only requests still destined for bundling can share the environment.
+            if (
+              testEnvironment.name === 'jsdom' &&
+              !isBrowserProject(project) &&
+              testEnvironment.prebundle !== false
+            ) {
+              config.externals.push(
+                ({ context: issuer, request, getResolve }, callback) => {
+                  if (request !== 'jsdom' || !getResolve) return callback();
+                  const environmentPath = resolveTestEnvironmentModule(
+                    'jsdom',
+                    project.rootPath,
+                    context.rootPath,
+                  );
+                  if (!environmentPath) return callback();
+                  getResolve()(issuer!, request, (error, resolved) => {
+                    if (error || typeof resolved !== 'string')
+                      return callback();
+                    if (
+                      realpathSync(resolved) !== realpathSync(environmentPath)
+                    )
+                      return callback();
+                    callback(
+                      undefined,
+                      [RSTEST_JSDOM_GLOBAL_PREFIX + environmentPath],
+                      'global',
+                    );
+                  });
+                },
+              );
+            }
             config.externals.unshift(rstestCoreGlobalExternal);
 
             config.externalsPresets ??= {};

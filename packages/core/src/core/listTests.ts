@@ -129,6 +129,9 @@ const collectNodeTests = async ({
           ]);
 
           const { success, errors } = await runGlobalSetup(context, project, {
+            testEnvironmentModule: testEnvironmentModules?.modules.get(
+              project.environmentName,
+            ),
             globalSetupEntries,
             assetFiles,
             sourceMaps,

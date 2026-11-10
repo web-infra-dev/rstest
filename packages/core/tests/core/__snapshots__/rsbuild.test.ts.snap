@@ -759,6 +759,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     {
       "@rstest/core": "global @rstest/core",
     },
+    [Function],
   ],
   "externalsPresets": {
     "node": false,
@@ -3200,6 +3201,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     {
       "@rstest/core": "global @rstest/core",
     },
+    [Function],
   ],
   "externalsPresets": {
     "node": false,

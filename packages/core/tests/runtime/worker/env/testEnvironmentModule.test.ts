@@ -1,8 +1,12 @@
 import fs from 'node:fs';
+import { RSTEST_JSDOM_GLOBAL_PREFIX } from '../../../../src/utils/constants';
 import path from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { withTempDir } from '../../../helpers/tempDir';
-import { loadTestEnvironmentModule } from '../../../../src/runtime/worker/env/testEnvironmentModule';
+import {
+  installTestEnvironmentModule,
+  loadTestEnvironmentModule,
+} from '../../../../src/runtime/worker/env/testEnvironmentModule';
 
 const writeModule = (root: string, name: string, source: string): string => {
   const modulePath = path.join(root, name);
@@ -229,3 +233,61 @@ describe('loadTestEnvironmentModule', () => {
     });
   });
 });
+
+it.for(['success', 'import failure', 'probe failure'])(
+  'publishes the selected jsdom exports synchronously after %s',
+  async (mode) => {
+    await withTempDir('rstest-env-bridge-', async (root) => {
+      const resolvedPath = writeModule(
+        root,
+        'native.mjs',
+        createJSDOMModule('export class JSDOM {}'),
+      );
+      const bundlePath = writeModule(
+        root,
+        'bundle.mjs',
+        mode === 'import failure'
+          ? 'throw new Error("broken import");'
+          : createJSDOMModule(`export class JSDOM {
+            window = {
+              document: { documentElement: {} },
+              getComputedStyle() { ${mode === 'probe failure' ? 'throw new Error("broken probe")' : ''} },
+              close() {},
+            };
+          }`),
+      );
+      const reference = {
+        name: 'jsdom',
+        packageName: 'jsdom',
+        resolvedPath,
+        bundlePath,
+      } as const;
+      const target = {};
+      const fallback = rs.fn();
+      const restore = await installTestEnvironmentModule(
+        reference,
+        target,
+        fallback,
+      );
+      const loaded = await loadTestEnvironmentModule(reference);
+      if (loaded?.name !== 'jsdom') throw new Error('Expected jsdom');
+      expect(
+        Reflect.get(target, RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath),
+      ).toEqual({ ...loaded.module });
+      expect(fallback).toHaveBeenCalledTimes(mode === 'success' ? 0 : 1);
+      const exports = Reflect.get(
+        target,
+        RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath,
+      );
+      const original = loaded.module.JSDOM;
+      const spy = rs.spyOn(exports, 'JSDOM');
+      expect(exports.JSDOM).not.toBe(original);
+      expect(loaded.module.JSDOM).toBe(original);
+      spy.mockRestore();
+      restore();
+      expect(
+        Reflect.has(target, RSTEST_JSDOM_GLOBAL_PREFIX + resolvedPath),
+      ).toBe(false);
+    });
+  },
+);

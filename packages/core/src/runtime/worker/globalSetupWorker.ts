@@ -1,5 +1,10 @@
+import { installTestEnvironmentModule } from './env/testEnvironmentModule';
 import { install } from 'source-map-support';
-import type { AssetFiles, SerializedError } from '../../types';
+import type {
+  AssetFiles,
+  SerializedError,
+  TestEnvironmentModuleReference,
+} from '../../types';
 import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
@@ -71,6 +76,7 @@ function captureEnvChanges(): Record<string, string | undefined> {
 }
 
 const runGlobalSetup = async (data: {
+  testEnvironmentModule?: TestEnvironmentModuleReference;
   color: boolean;
   entries: {
     distPath: string;
@@ -116,6 +122,8 @@ const runGlobalSetup = async (data: {
     // worker-wide flag, so it must be set before any setup code is evaluated.
     (globalThis as Record<string, unknown>).__rstest_federation__ =
       data.federation === true;
+
+    await installTestEnvironmentModule(data.testEnvironmentModule, globalThis);
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;

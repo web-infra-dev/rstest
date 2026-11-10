@@ -39,7 +39,10 @@ import { runSetupFiles } from '../runner/setup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { applyRuntimeColors } from './color';
 import { environmentLoaders } from './env/registry';
-import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
+import {
+  installTestEnvironmentModule,
+  loadTestEnvironmentModule,
+} from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { loadTaskAssets } from './vm/assetCache';
@@ -581,6 +584,13 @@ const preparePool = async (
       Error: runtimeError,
     };
 
+    globalCleanups.push(
+      await installTestEnvironmentModule(
+        context.testEnvironmentModule,
+        runtimeGlobal,
+        onTestEnvironmentFallback,
+      ),
+    );
     Object.assign(rstestContext.global, {
       [RSTEST_API_GLOBAL_KEY]: withPackageExports(api),
       [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
