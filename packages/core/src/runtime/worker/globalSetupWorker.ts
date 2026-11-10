@@ -122,7 +122,7 @@ const runGlobalSetup = async (data: {
 
     let bridgeInstalled = false;
     for (const entry of data.entries) {
-      if (entry.usesJsdomBridge && !bridgeInstalled) {
+      if (entry.usesEnvironmentBridge && !bridgeInstalled) {
         await installTestEnvironmentModule(
           data.testEnvironmentModule,
           globalThis,

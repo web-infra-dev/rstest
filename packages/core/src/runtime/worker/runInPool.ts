@@ -223,7 +223,7 @@ const createOriginalLogWriter = () => {
 
 const preparePool = async (
   {
-    entryInfo: { distPath, testPath, usesJsdomBridge },
+    entryInfo: { distPath, testPath, usesEnvironmentBridge },
     setupEntries,
     updateSnapshot,
     context,
@@ -586,8 +586,8 @@ const preparePool = async (
     };
 
     if (
-      usesJsdomBridge ||
-      setupEntries.some((entry) => entry.usesJsdomBridge)
+      usesEnvironmentBridge ||
+      setupEntries.some((entry) => entry.usesEnvironmentBridge)
     ) {
       globalCleanups.push(
         await installTestEnvironmentModule(

@@ -231,7 +231,7 @@ export async function runGlobalSetup(
       color: resolveColorEnabled(env),
       entries: globalSetupEntries,
       testEnvironmentModule: globalSetupEntries.some(
-        (entry) => entry.usesJsdomBridge,
+        (entry) => entry.usesEnvironmentBridge,
       )
         ? testEnvironmentModule
         : undefined,

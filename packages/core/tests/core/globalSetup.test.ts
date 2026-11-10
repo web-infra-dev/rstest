@@ -111,7 +111,7 @@ describe('GlobalSetupWorker', () => {
 describe('runGlobalSetup', () => {
   it.for([false, true])(
     'only sends the environment reference when an entry uses the bridge: %s',
-    async (usesJsdomBridge) => {
+    async (usesEnvironmentBridge) => {
       const call = rs.spyOn(GlobalSetupWorker.prototype, 'call');
       const context = {
         workerEnv: {},
@@ -133,7 +133,7 @@ describe('runGlobalSetup', () => {
                 distPath: '/setup.js',
                 testPath: '/setup.ts',
                 chunks: [],
-                usesJsdomBridge,
+                usesEnvironmentBridge,
               },
             ],
             testEnvironmentModule: reference,
@@ -147,7 +147,9 @@ describe('runGlobalSetup', () => {
         expect(call).toHaveBeenCalledWith({
           type: 'setup',
           payload: expect.objectContaining({
-            testEnvironmentModule: usesJsdomBridge ? reference : undefined,
+            testEnvironmentModule: usesEnvironmentBridge
+              ? reference
+              : undefined,
           }),
         });
       } finally {
