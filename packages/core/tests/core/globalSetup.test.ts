@@ -109,6 +109,54 @@ describe('GlobalSetupWorker', () => {
 });
 
 describe('runGlobalSetup', () => {
+  it.for([false, true])(
+    'only sends the environment reference when an entry uses the bridge: %s',
+    async (usesJsdomBridge) => {
+      const call = rs.spyOn(GlobalSetupWorker.prototype, 'call');
+      const context = {
+        workerEnv: {},
+        globalTeardownCallbacks: [],
+        exitCode: createExitCode(),
+      } as unknown as InternalContext;
+      const reference = {
+        name: 'jsdom',
+        packageName: 'jsdom',
+        resolvedPath: '/native/jsdom.js',
+      } as const;
+      try {
+        await runGlobalSetup(
+          context,
+          { _globalSetups: false },
+          {
+            globalSetupEntries: [
+              {
+                distPath: '/setup.js',
+                testPath: '/setup.ts',
+                chunks: [],
+                usesJsdomBridge,
+              },
+            ],
+            testEnvironmentModule: reference,
+            assetFiles: {},
+            sourceMaps: {},
+            federation: false,
+            interopDefault: true,
+            outputModule: true,
+          },
+        );
+        expect(call).toHaveBeenCalledWith({
+          type: 'setup',
+          payload: expect.objectContaining({
+            testEnvironmentModule: usesJsdomBridge ? reference : undefined,
+          }),
+        });
+      } finally {
+        call.mockRestore();
+        await runGlobalTeardown(context);
+      }
+    },
+  );
+
   it('stores the worker env change-set without changing the host env', async () => {
     process.env.RSTEST_GS_UNIT = 'before-setup';
     const context = {

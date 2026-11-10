@@ -223,7 +223,8 @@ const createOriginalLogWriter = () => {
 
 const preparePool = async (
   {
-    entryInfo: { distPath, testPath },
+    entryInfo: { distPath, testPath, usesJsdomBridge },
+    setupEntries,
     updateSnapshot,
     context,
     deletedEnvKeys,
@@ -584,13 +585,18 @@ const preparePool = async (
       Error: runtimeError,
     };
 
-    globalCleanups.push(
-      await installTestEnvironmentModule(
-        context.testEnvironmentModule,
-        runtimeGlobal,
-        onTestEnvironmentFallback,
-      ),
-    );
+    if (
+      usesJsdomBridge ||
+      setupEntries.some((entry) => entry.usesJsdomBridge)
+    ) {
+      globalCleanups.push(
+        await installTestEnvironmentModule(
+          context.testEnvironmentModule,
+          runtimeGlobal,
+          onTestEnvironmentFallback,
+        ),
+      );
+    }
     Object.assign(rstestContext.global, {
       [RSTEST_API_GLOBAL_KEY]: withPackageExports(api),
       [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,

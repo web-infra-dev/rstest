@@ -13,6 +13,59 @@ import { rstestCoreGlobalExternal } from './mockBuild';
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
 const SCRIPT_EXTENSION_RE = /\.(?:[cm]?[jt]sx?)$/;
 
+export const jsdomBridgeEntries: WeakMap<
+  Rspack.Compilation,
+  Set<string>
+> = new WeakMap();
+
+const trackJsdomBridgeEntries = (compiler: Rspack.Compiler): void => {
+  compiler.hooks.thisCompilation.tap('rstest:jsdom-bridge', (compilation) => {
+    compilation.hooks.afterSeal.tap('rstest:jsdom-bridge', () => {
+      const consumers = new Set<string>();
+      const queue: Rspack.Module[] = [];
+      for (const module of compilation.modules) {
+        // Rspack exposes the external request through its identifier.
+        // The reserved global key survives persistent cache restores.
+        if (
+          module instanceof compiler.webpack.ExternalModule &&
+          module
+            .identifier()
+            .startsWith(`external global "${RSTEST_JSDOM_GLOBAL_PREFIX}`) &&
+          [...compilation.chunkGraph.getModuleChunksIterable(module)].length
+        ) {
+          queue.push(module);
+        }
+      }
+      for (let i = 0; i < queue.length; i++) {
+        const module = queue[i]!;
+        if (consumers.has(module.identifier())) continue;
+        consumers.add(module.identifier());
+        for (const connection of compilation.moduleGraph.getIncomingConnections(
+          module,
+        )) {
+          if (
+            connection.originModule &&
+            connection.getActiveState(undefined) !== false
+          ) {
+            queue.push(connection.originModule);
+          }
+        }
+      }
+      const entries = new Set<string>();
+      for (const [name, entry] of compilation.entries) {
+        if (
+          entry.dependencies.some((dependency) => {
+            const module = compilation.moduleGraph.getModule(dependency);
+            return module && consumers.has(module.identifier());
+          })
+        )
+          entries.add(name);
+      }
+      jsdomBridgeEntries.set(compilation, entries);
+    });
+  });
+};
+
 function hasInlineLoader(request: string): boolean {
   // has inline loader in request
   // eg: ./index.vue.ts?vue&type=template&id=20040a79&ts=true!=!node_modules/rspack-vue-loader/dist/index.js
@@ -322,6 +375,8 @@ export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
               !isBrowserProject(project) &&
               testEnvironment.prebundle !== false
             ) {
+              config.plugins ??= [];
+              config.plugins.push({ apply: trackJsdomBridgeEntries });
               config.externals.push(
                 ({ context: issuer, request, getResolve }, callback) => {
                   if (request !== 'jsdom' || !getResolve) return callback();

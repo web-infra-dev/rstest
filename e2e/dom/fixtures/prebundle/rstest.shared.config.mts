@@ -3,6 +3,7 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   testEnvironment: { name: 'jsdom', prebundle: true },
+  include: ['./imports.test.ts', './mock.test.ts', './dynamic.test.ts'],
   globalSetup: ['./global-setup.ts'],
   setupFiles: ['./require-jsdom.cjs'],
   tools: {

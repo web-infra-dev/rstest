@@ -230,7 +230,11 @@ export async function runGlobalSetup(
     payload: {
       color: resolveColorEnabled(env),
       entries: globalSetupEntries,
-      testEnvironmentModule,
+      testEnvironmentModule: globalSetupEntries.some(
+        (entry) => entry.usesJsdomBridge,
+      )
+        ? testEnvironmentModule
+        : undefined,
       assetFiles: prepareAssetFilesForIPC(assetFiles, 'forks'),
       interopDefault,
       outputModule,

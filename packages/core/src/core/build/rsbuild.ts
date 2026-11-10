@@ -18,7 +18,7 @@ import type {
 import { isDebug } from '../../utils';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
-import { pluginExternal } from '../plugins/external';
+import { jsdomBridgeEntries, pluginExternal } from '../plugins/external';
 import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
 import { pluginInspect } from '../plugins/inspect';
 import { isNodeProject } from '../environment/isBrowserProject';
@@ -560,6 +560,7 @@ export const createRsbuildServer = async ({
       // Entrypoint-level `assetsSize`/`assets[].size` are optional in the rspack
       // stats types, but the top-level `assets[].size` is always present.
       const assetSizes = new Map(assets!.map((a) => [a.name, a.size]));
+      const bridgedEntries = jsdomBridgeEntries.get(stats.compilation);
 
       for (const entry of Object.keys(entrypoints!)) {
         const e = entrypoints![entry]!;
@@ -574,6 +575,7 @@ export const createRsbuildServer = async ({
 
         if (setupFiles[environmentName]?.[entry]) {
           setupEntries.push({
+            usesJsdomBridge: bridgedEntries?.has(entry) || undefined,
             distPath,
             runtimeDistPath,
             testPath: setupFiles[environmentName][entry],
@@ -588,6 +590,7 @@ export const createRsbuildServer = async ({
             continue;
           }
           entries.push({
+            usesJsdomBridge: bridgedEntries?.has(entry) || undefined,
             distPath,
             runtimeDistPath,
             testPath: sourceEntries[entry],
@@ -602,6 +605,7 @@ export const createRsbuildServer = async ({
           });
         } else if (globalSetupFiles?.[environmentName]?.[entry]) {
           globalSetupEntries.push({
+            usesJsdomBridge: bridgedEntries?.has(entry) || undefined,
             distPath,
             runtimeDistPath,
             testPath: globalSetupFiles[environmentName][entry],

@@ -1393,6 +1393,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "affectedHooks": undefined,
       "name": "RstestPlugin",
     },
+    {
+      "apply": [Function],
+    },
   ],
   "resolve": {
     "alias": {
@@ -3834,6 +3837,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       ],
       "affectedHooks": undefined,
       "name": "RstestPlugin",
+    },
+    {
+      "apply": [Function],
     },
   ],
   "resolve": {
