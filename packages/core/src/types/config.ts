@@ -190,6 +190,13 @@ export type ProjectConfig = Omit<
 export const BROWSER_NAMES = ['chromium', 'firefox', 'webkit'] as const;
 
 /**
+ * Type guard over {@link BROWSER_NAMES}, dependency-free so config
+ * normalization and the browser wire share one predicate.
+ */
+export const isBrowserName = (value: unknown): value is BrowserName =>
+  (BROWSER_NAMES as readonly string[]).includes(value as string);
+
+/**
  * Canonical browser-engine name echoed on every browser-mode payload. Derived
  * from `BROWSER_NAMES` so the diagnostic list cannot drift from the type.
  */

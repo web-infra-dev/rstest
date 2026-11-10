@@ -49,10 +49,6 @@ export class RunnerSessionRegistry {
     return Array.from(this.sessionsById.values());
   }
 
-  listByRunToken(runToken: number): RunnerSessionRecord[] {
-    return this.list().filter((session) => session.runToken === runToken);
-  }
-
   deleteById(id: string): boolean {
     const record = this.sessionsById.get(id);
     if (!record) {

@@ -540,26 +540,18 @@ const run = async () => {
 
   // Find the runtime config for this project. Rows are `(project, browser)`
   // pairs, and every running document names its browser — headless pages at
-  // page level, headed frames per file through the window options — so the
-  // page resolves its row by requiring the browser it declares. Only collect
-  // pages — mode-aware pages that collect metadata for every configured
-  // browser at once — fall back to name-only lookup.
-  // `const` narrows for the callbacks below; TS drops narrowing for `let`.
-  const isCollect = options.mode === 'collect';
+  // page level, headed frames per file through the window options, collect
+  // pages at page level — so the page resolves its row by requiring the
+  // browser it declares. `const` narrows below; TS drops it for `let`.
   const pageBrowserName = options.browserName;
   const projectRuntime = options.projects.find(
-    (p) =>
-      p.name === currentProject.name &&
-      (isCollect || p.browserName === pageBrowserName),
+    (p) => p.name === currentProject.name && p.browserName === pageBrowserName,
   );
   if (!projectRuntime) {
     send({
       type: 'fatal',
       payload: {
-        message:
-          pageBrowserName === undefined
-            ? `Project ${currentProject.name} not found in runtime options`
-            : `Project ${currentProject.name} has no runtime row for browser ${pageBrowserName}`,
+        message: `Project ${currentProject.name} has no runtime row for browser ${pageBrowserName}`,
       },
     });
     window.__RSTEST_DONE__ = true;
@@ -673,7 +665,6 @@ const run = async () => {
           payload: {
             testPath,
             project: projectRuntime.name,
-            browserName: browserName,
             tests,
           },
         });

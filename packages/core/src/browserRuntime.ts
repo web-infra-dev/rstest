@@ -23,7 +23,7 @@ export { formatTestError, getRealTimers, setRealTimers } from './runtime/util';
 // `(project, browser, testPath)` task id and the canonical browser-name set —
 // dependency-free, so the browser wire shares the node pool's grammar and the
 // host validates wire rows against the same set the config accepts.
-export { BROWSER_NAMES } from './types';
+export { BROWSER_NAMES, isBrowserName } from './types';
 export { getFileTaskId } from './utils/taskId';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
@@ -32,6 +32,7 @@ export type { TaskContext } from './runtime/worker/taskContext';
 export type { FileCleanupHooks } from './runtime/runner';
 // Types for browser runtime
 export type {
+  BrowserExpectConfig,
   BrowserRuntimeConfig,
   CoverageMapData,
   CurrentTaskInfo,

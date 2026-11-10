@@ -190,7 +190,7 @@ export const createHeadedScheduler = async ({
       (file) => ({
         testPath: file.testPath,
         projectName: file.projectName,
-        browserName: file.browserName,
+        browserName: file.row.browserName,
       }),
     );
   let currentTestFiles = stampLaneFiles(allTestFiles);

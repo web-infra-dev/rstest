@@ -17,7 +17,7 @@ import type {
   RstestConfig,
   ResolvedBrowserEntry,
 } from './types';
-import { BROWSER_NAMES } from './types';
+import { BROWSER_NAMES, isBrowserName } from './types';
 import {
   castArray,
   DEFAULT_CONFIG_EXTENSIONS,
@@ -163,9 +163,6 @@ export const plainDeepMerge = <T>(base: T, override: T): T =>
     // `launch.logger`) into a prototype-less plain object.
     isMergeableObject: isPlainObject,
   }) as T;
-
-const isBrowserName = (value: unknown): value is BrowserName =>
-  BROWSER_NAMES.includes(value as BrowserName);
 
 const browserNameList = (): string =>
   BROWSER_NAMES.map((n) => `'${n}'`).join(', ');

@@ -3,9 +3,8 @@ import type {
   ExecutorRunCycleOptions,
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { BrowserName } from './protocol';
 import type { BrowserDispatchRequest, BrowserProjectRuntime } from './protocol';
-import type { BrowserProviderPage } from './providers';
+import type { BrowserProviderBrowser, BrowserProviderPage } from './providers';
 
 /**
  * The contract between the controller and whichever run branch executes a run.
@@ -94,8 +93,42 @@ export type DispatchLanes = {
 export type ScheduledTestFile = {
   testPath: string;
   projectName: string;
-  browserName: BrowserName;
   row: BrowserProjectRuntime;
+};
+
+/**
+ * Group rows by project name — the lookup `expandToRows` consumes. Lanes call
+ * it with their own row subset so each lane expands against the rows it owns.
+ */
+export const groupRowsByProject = (
+  rows: readonly BrowserProjectRuntime[],
+): Map<string, BrowserProjectRuntime[]> => {
+  const rowsByProject = new Map<string, BrowserProjectRuntime[]>();
+  for (const row of rows) {
+    const group = rowsByProject.get(row.name) ?? [];
+    group.push(row);
+    rowsByProject.set(row.name, group);
+  }
+  return rowsByProject;
+};
+
+/**
+ * The launched browser instance a row's launch key names, with the launch-key
+ * contract's miss error: a row can never name a launch key the runtime did
+ * not launch, so a miss is a host bug and names the row.
+ */
+export const browserForRow = (
+  browsers: ReadonlyMap<string, BrowserProviderBrowser>,
+  row: BrowserProjectRuntime,
+): BrowserProviderBrowser => {
+  const browser = browsers.get(row.launchKey);
+  if (!browser) {
+    throw new Error(
+      `No launched browser for (project, browser) ` +
+        `(${JSON.stringify(row.name)}, ${JSON.stringify(row.browserName)}) under key ${row.launchKey}.`,
+    );
+  }
+  return browser;
 };
 
 /**
@@ -119,7 +152,6 @@ export const expandToRows = (
       (rowsByProject.get(file.projectName) ?? []).map((row) => ({
         testPath: file.testPath,
         projectName: file.projectName,
-        browserName: row.browserName,
         row,
       })),
     )

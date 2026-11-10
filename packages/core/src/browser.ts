@@ -93,6 +93,7 @@ export { PhaseTracker } from './runtime/worker/phaseTracker';
 export { createFileCleanupTimeoutResult } from './runtime/runner/fileCleanup';
 // Types
 export type {
+  BrowserExpectConfig,
   BrowserRuntimeConfig,
   BrowserTestRunOptions,
   BrowserTestRunResult,

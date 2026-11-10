@@ -7,10 +7,11 @@ export type {
   BrowserViewport,
 } from '@rstest/core/internal/browser';
 import {
-  BROWSER_NAMES,
   getFileTaskId,
+  isBrowserName,
 } from '@rstest/core/internal/browser-runtime';
 import type {
+  BrowserExpectConfig,
   BrowserRuntimeConfig,
   RawTestFileResult,
   RawTestInfo,
@@ -45,12 +46,8 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
 // Shared with every surface of this package: the runtime entry's
-// dependency-free task-id grammar and the canonical browser-name set the wire
-// validates against.
-export { BROWSER_NAMES, getFileTaskId };
-/** Wire narrowing for `BROWSER_NAMES`. */
-export const isBrowserName = (value: string): value is BrowserName =>
-  (BROWSER_NAMES as readonly string[]).includes(value);
+// dependency-free task-id grammar and its browser-name wire guard.
+export { getFileTaskId, isBrowserName };
 
 /**
  * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the
@@ -73,6 +70,8 @@ export type BrowserProjectRuntime = {
   /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
   hasSetupFiles: boolean;
   screenshotFailures: boolean;
+  /** Host-only resolved per-entry `expect` (screenshot matcher config). */
+  expect?: BrowserExpectConfig;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
   /** Resolved per-entry provider options (launch + context) for `newContext`. */
@@ -252,8 +251,6 @@ export type BrowserClientMessage =
       payload: {
         testPath: string;
         project: string;
-        /** Owning browser of the collecting page; absent for project-level collection. */
-        browserName?: BrowserName;
         tests: RawTestInfo[];
       };
     }

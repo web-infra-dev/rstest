@@ -111,6 +111,7 @@ import {
 import { collectWatchTestFiles } from './watchRerunPlanner';
 import {
   expandToRows,
+  groupRowsByProject,
   type BrowserWatchSession,
   type DispatchLanes,
   type DispatchPageResolver,
@@ -378,12 +379,7 @@ export const runBrowserController = async (
   // contribute one entry per row through the lanes' shared file→row expansion;
   // node projects keep a single unattributed entry. This is the reporter
   // run-start list.
-  const rowsByProject = new Map<string, BrowserProjectRuntime[]>();
-  for (const row of projectRuntimeConfigs) {
-    const rows = rowsByProject.get(row.name) ?? [];
-    rows.push(row);
-    rowsByProject.set(row.name, rows);
-  }
+  const rowsByProject = groupRowsByProject(projectRuntimeConfigs);
   const expandSelectedFiles = (
     files: { testPath: string; projectName: string }[],
   ): SelectedTestFile[] =>
@@ -395,7 +391,7 @@ export const runBrowserController = async (
         toSelectedTestFile(
           file.testPath,
           file.projectName,
-          expanded.browserName,
+          expanded.row.browserName,
         ),
       );
     });
@@ -1055,16 +1051,16 @@ export const runBrowserController = async (
       request.kind === 'screenshot'
         ? projectByName.get(request.projectName)
         : undefined;
-    // `expect` is host-only config and can be overridden per browser entry;
-    // resolved entries already merge the project-level `.expect` defaults, so
-    // the request resolves against its own (project, browser) entry — falling
-    // back to the run-wide default browser when a request omits its own.
+    // `expect` is host-only config carried on the row itself; the request
+    // resolves against its own (project, browser) row — falling back to the
+    // run-wide default browser when a request omits its own.
     const screenshotBrowserName = request.browserName ?? browserName;
-    const screenshotEntry =
-      screenshotProject?.normalizedConfig.browser.browsers.find(
-        (entry) => entry.browserName === screenshotBrowserName,
-      );
-    const screenshotConfig = screenshotEntry?.expect?.toMatchScreenshot;
+    const screenshotRow = screenshotProject
+      ? rowsByProject
+          .get(screenshotProject.name)
+          ?.find((row) => row.browserName === screenshotBrowserName)
+      : undefined;
+    const screenshotConfig = screenshotRow?.expect?.toMatchScreenshot;
     const {
       comparatorOptions,
       screenshotDirectory,
@@ -1779,10 +1775,9 @@ export const runBrowserController = async (
   // Hybrid scope: at most one headed row (validated), the rest stay headless.
   // The headless lane keeps the watch ownership (its pool drives reruns); a
   // headed window joins the initial cycle beside it.
-  // The headless lane keeps the watch ownership (its pool drives reruns); a
-  // headed window joins the initial cycle beside it.
+  const headlessRowNames = new Set(headlessRows.map((row) => row.name));
   const headlessAllTestFiles = allTestFiles.filter((file) =>
-    headlessRows.some((row) => row.name === file.projectName),
+    headlessRowNames.has(file.projectName),
   );
 
   // Always composed lanes: each owns its own transport (headless page bridges,
@@ -1934,6 +1929,7 @@ export const listBrowserTests = async (
       forceHeadless: true, // Always use headless for list command
     },
   );
+  const listRowsByProject = groupRowsByProject(projectRuntimeConfigs);
 
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;
@@ -2024,9 +2020,6 @@ export const listBrowserTests = async (
 
   // The collect pages resolve only servers this function launched, so the
   // project lookup always resolves.
-  const browserProjectByName = new Map(
-    browserProjects.map((project) => [project.name, project]),
-  );
 
   const collectFromProject = async (
     server: BrowserProjectServer,
@@ -2058,11 +2051,9 @@ export const listBrowserTests = async (
             // entries keep the run dimension the reporters do. The pages run
             // only against servers this block launched, so the lookup always
             // resolves.
-            const browserNames = browserProjectByName
+            const browserNames = listRowsByProject
               .get(payload.project)!
-              .normalizedConfig.browser.browsers.map(
-                (entry) => entry.browserName,
-              );
+              .map((row) => row.browserName);
             results.push(
               ...browserNames.map((browserName) => ({
                 testPath: payload.testPath,
@@ -2103,6 +2094,7 @@ export const listBrowserTests = async (
       `window.__RSTEST_BROWSER_OPTIONS__ = ${serializeForInlineScript({
         ...hostOptions,
         projects: [projectRow],
+        browserName: projectRow.browserName,
       })};`,
     );
 

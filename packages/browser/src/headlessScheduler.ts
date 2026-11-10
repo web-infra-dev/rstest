@@ -50,14 +50,16 @@ import {
 } from './runSession';
 import { RunnerSessionRegistry } from './sessionRegistry';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
-import type {
-  BrowserV8CoverageRuntime,
-  BrowserWatchSession,
-  DispatchLanes,
-  ScheduledTestFile,
-  SchedulerRunResult,
+import {
+  browserForRow,
+  expandToRows,
+  groupRowsByProject,
+  type BrowserV8CoverageRuntime,
+  type BrowserWatchSession,
+  type DispatchLanes,
+  type ScheduledTestFile,
+  type SchedulerRunResult,
 } from './schedulerSeam';
-import { expandToRows } from './schedulerSeam';
 import type { WatchSignals } from './watchSignals';
 
 type HeadlessSchedulerContext = Pick<
@@ -112,7 +114,7 @@ type HeadlessSchedulerDeps = {
  * row with setup files always reloads per file. The batch builder and the
  * worker page lifecycle both read this one predicate.
  */
-export const shareWorkerFixtures = (row: BrowserProjectRuntime): boolean =>
+const shareWorkerFixtures = (row: BrowserProjectRuntime): boolean =>
   !row.hasSetupFiles && row.runtimeConfig?.isolate === false;
 
 export const createHeadlessScheduler = async ({
@@ -140,24 +142,7 @@ export const createHeadlessScheduler = async ({
     coverageCollectors: Set<() => Promise<void>>;
   };
 
-  const rowsByProject = new Map<string, BrowserProjectRuntime[]>();
-  for (const row of projectRuntimeConfigs) {
-    const rows = rowsByProject.get(row.name) ?? [];
-    rows.push(row);
-    rowsByProject.set(row.name, rows);
-  }
-  const browserForRow = (
-    row: BrowserProjectRuntime,
-  ): BrowserProviderBrowser => {
-    const browser = browsers.get(row.launchKey);
-    if (!browser) {
-      throw new Error(
-        `No launched browser for (project, browser) ` +
-          `(${JSON.stringify(row.name)}, ${JSON.stringify(row.browserName)}) under key ${row.launchKey}.`,
-      );
-    }
-    return browser;
-  };
+  const rowsByProject = groupRowsByProject(projectRuntimeConfigs);
 
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
@@ -303,7 +288,7 @@ export const createHeadlessScheduler = async ({
     const file = files[0]!;
     let activeFile = file;
     const row = file.row;
-    const browser = browserForRow(row);
+    const browser = browserForRow(browsers, row);
     const viewport = resolveViewport(row.viewport);
     const browserContext = await browser.newContext({
       providerOptions: row.providerOptions,
@@ -436,7 +421,7 @@ export const createHeadlessScheduler = async ({
       const session = sessionRegistry.register({
         testFile: file.testPath,
         projectName: file.projectName,
-        browserName: file.browserName,
+        browserName: file.row.browserName,
         runToken: run.token,
         mode: 'headless-page',
         context: browserContext,
@@ -492,7 +477,7 @@ export const createHeadlessScheduler = async ({
                     projectName: file.projectName,
                     result: state.result,
                     testPath: payload.testPath,
-                    browserName: file.browserName,
+                    browserName: file.row.browserName,
                   }),
                 );
                 for (const pendingFile of files) {
@@ -505,7 +490,7 @@ export const createHeadlessScheduler = async ({
                       message: `${message}; file was not run because the previous file cleanup timed out`,
                       projectName: pendingFile.projectName,
                       testPath: pendingFile.testPath,
-                      browserName: pendingFile.browserName,
+                      browserName: pendingFile.row.browserName,
                     }),
                   );
                 }
@@ -607,7 +592,7 @@ export const createHeadlessScheduler = async ({
         runId: `${run.token}:${session.id}`,
         // The runner resolves its `(project, browser)` runtime row through this
         // identity; results and screenshot RPCs attribute through it too.
-        browserName: file.browserName,
+        browserName: file.row.browserName,
       };
       const serializedOptions = serializeForInlineScript(inlineOptions);
       await page.addInitScript(
@@ -710,13 +695,13 @@ export const createHeadlessScheduler = async ({
     testId: getFileTaskId({
       project: file.projectName,
       testPath: file.testPath,
-      browserName: file.browserName,
+      browserName: file.row.browserName,
     }),
     status: 'skipped',
     name: '',
     testPath: file.testPath,
     project: file.projectName,
-    browserName: file.browserName,
+    browserName: file.row.browserName,
     results: [],
   });
 

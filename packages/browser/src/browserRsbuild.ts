@@ -827,7 +827,6 @@ export const browserLaunchKey = ({
   ]);
 
 export type BrowserLaunch = BrowserLaunchSpec & {
-  key: string;
   browser: BrowserProviderBrowser;
 };
 
@@ -902,6 +901,7 @@ export const buildBrowserRuntimeRows = (
         hasSetupFiles: (projectConfig.setupFiles?.length ?? 0) > 0,
         screenshotFailures: entry.screenshotFailures,
         viewport: entry.viewport,
+        expect: entry.expect,
         providerOptions: entry.providerOptions,
         runtimeConfig,
         launchKey: spec.key,

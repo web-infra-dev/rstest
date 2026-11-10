@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { relative } from 'pathe';
 import type { ListedTest } from '../api/types';
 import type { ListCommandCollectOptions, Location } from '../types';
-import { formatBrowserSuffix } from '../reporter/utils';
+import { formatBrowserSuffix, reporterFileKey } from '../reporter/utils';
 import { color, logger, prettyTestPath } from '../utils';
 
 export type ListCommandOptions = ListCommandCollectOptions & {
@@ -38,7 +38,13 @@ const getListSummaryCounts = (tests: InternalListedTest[]) => {
       projects.add(test.project);
     }
 
-    files.add(`${test.project ?? ''}\0${test.browser ?? ''}\0${test.file}`);
+    files.add(
+      reporterFileKey({
+        project: test.project ?? '',
+        browserName: test.browser,
+        testPath: test.file,
+      }),
+    );
 
     if (test.type === 'suite') {
       suites += 1;
