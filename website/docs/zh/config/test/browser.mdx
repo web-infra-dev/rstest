@@ -609,7 +609,7 @@ npx rstest --browser.browsers webkit
 
 在 Browser Mode 下使用 `projects` 时，每个项目会按自己的构建配置独立编译和执行（如 `plugins`、`include`、框架设置），不会复用其他项目的构建配置。
 
-Browser 构建作用域的选项按项目保留（`provider`、`port`、`strictPort`），而浏览器列表、默认值与按浏览器覆盖（`browsers`、`headless`、`viewport`、`providerOptions`）由项目自持：两个 browser 项目可以在一次 run 中运行不同浏览器；配置了相同 `(provider, browserName, headless, providerOptions.launch)` 的两个项目会共用同一个启动的浏览器。
+Browser 构建作用域的选项按项目保留（`provider`、`port`、`strictPort`），而浏览器列表、默认值与按浏览器覆盖（`browsers`、`headless`、`viewport`、`providerOptions`）由项目自持：两个 browser 项目可以在一次 run 中运行不同浏览器。若多个项目配置了相同的浏览器，会遵循[启动规则](#启动规则)共用浏览器实例。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

@@ -609,7 +609,7 @@ When a project selects more than one browser, Rstest attributes every payload to
 
 When using `projects` in Browser Mode, each project still compiles and executes with its own build config (for example `plugins`, `include`, and framework-specific setup).
 
-Browser build-scoped options stay per project (`provider`, `port`, `strictPort`), while the browser list, defaults, and per-browser overrides (`browsers`, `headless`, `viewport`, `providerOptions`) are project-owned: two browser projects may run different browsers in one run, and two projects configuring the same `(provider, browserName, headless, providerOptions.launch)` share one launched browser.
+Browser build-scoped options stay per project (`provider`, `port`, `strictPort`), while the browser list, defaults, and per-browser overrides (`browsers`, `headless`, `viewport`, `providerOptions`) are project-owned: two browser projects may run different browsers in one run. When two projects configure the same browser, [launch sharing](#launch-rules) applies.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
