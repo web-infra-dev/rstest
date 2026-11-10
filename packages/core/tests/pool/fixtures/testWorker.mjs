@@ -72,14 +72,10 @@ let cleanupShouldFail = false;
 // it keeps a literal copy. MUST match getFileTaskId in
 // packages/core/src/utils/helper.ts (the grammar is pinned by
 // tests/utils/helper.test.ts).
-const getFileTaskId = (file) =>
-  `file:${file.project}:${file.browserName !== undefined ? `${file.browserName}:` : ''}${file.testPath}`;
+const getFileTaskId = (testPath) => `file:${testPath}`;
 
 const makeRunResult = (request, extra) => ({
-  testId: getFileTaskId({
-    project: request.options?.context?.project ?? 'default',
-    testPath: request.options?.entryInfo?.testPath ?? '/test.ts',
-  }),
+  testId: getFileTaskId(request.options?.entryInfo?.testPath ?? '/test.ts'),
   testPath: request.options?.entryInfo?.testPath ?? '/test.ts',
   project: 'default',
   status: 'passed',

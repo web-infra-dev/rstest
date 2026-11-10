@@ -101,11 +101,7 @@ describe.concurrent('reporters', () => {
           const testPath = normalize(
             join(__dirname, 'fixtures/agent-md-pass', name),
           );
-          return {
-            testPath,
-            testId: `file:contract:${testPath}`,
-            project: 'contract',
-          };
+          return { testPath, testId: `file:${testPath}`, project: 'contract' };
         }),
       );
       const { events } = payload;

@@ -975,7 +975,7 @@ export const runInPool = async (
       : undefined,
   );
   let runResult: RawTestFileResult = {
-    testId: getFileTaskId({ project, testPath }),
+    testId: getFileTaskId(testPath),
     project,
     testPath,
     status: 'failed',
@@ -1015,7 +1015,7 @@ export const runInPool = async (
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       runResult = {
-        testId: getFileTaskId({ project, testPath }),
+        testId: getFileTaskId(testPath),
         project,
         testPath,
         status: 'skipped',
@@ -1051,7 +1051,7 @@ export const runInPool = async (
       // Observed for the same reason as `trackRunnerHook`.
       void rpc
         .onTestFileStart({
-          testId: getFileTaskId({ project, testPath }),
+          testId: getFileTaskId(testPath),
           testPath,
           project,
           tests: [],
@@ -1062,7 +1062,7 @@ export const runInPool = async (
       // Once the runner starts, suite/case tasks should own subsequent logs so
       // passed suite buffers are not replayed by the final file-level flush.
       taskContext.setFallback({
-        taskId: getFileTaskId({ project, testPath }),
+        taskId: getFileTaskId(testPath),
         taskType: 'file',
         testPath,
       });
@@ -1168,7 +1168,6 @@ export const runInPool = async (
               status: result.status,
               taskParentNames: result.parentNames,
               taskType: 'suite',
-              project,
               testPath: result.testPath,
             });
             await rpc.onTestSuiteResult(result);
@@ -1191,7 +1190,6 @@ export const runInPool = async (
               status: result.status,
               taskParentNames: result.parentNames,
               taskType: 'case',
-              project,
               testPath: result.testPath,
             });
             await rpc.onTestCaseResult(result);
@@ -1244,7 +1242,6 @@ export const runInPool = async (
       status: results.status,
       taskParentNames: results.parentNames,
       taskType: 'file',
-      project,
       testPath: results.testPath,
     });
 
@@ -1252,7 +1249,7 @@ export const runInPool = async (
     return runResult;
   } catch (err) {
     runResult = {
-      testId: getFileTaskId({ project, testPath }),
+      testId: getFileTaskId(testPath),
       project,
       testPath,
       status: 'failed',

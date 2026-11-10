@@ -780,9 +780,7 @@ describe('merge-reports lifecycle replay', () => {
       JSON.stringify({
         version: `${version}:3`,
         runStart: {
-          files: [
-            { testPath, project: 'rstest', testId: `file:rstest:${testPath}` },
-          ],
+          files: [{ testPath, project: 'rstest', testId: `file:${testPath}` }],
         },
         results: [],
         testResults: [],
@@ -812,7 +810,7 @@ describe('merge-reports lifecycle replay', () => {
               {
                 h: 'start',
                 test: {
-                  testId: `file:rstest:${testPath}`,
+                  testId: `file:${testPath}`,
                   testPath,
                   relativeTestPath: 'fatal.test.ts',
                   project: 'rstest',

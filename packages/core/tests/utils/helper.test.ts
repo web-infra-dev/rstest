@@ -4,6 +4,7 @@ import {
   formatError,
   toError,
   generateFilePathHash,
+  getFileTaskId,
   getWorkerSerialization,
   isPlainObject,
   needFlagExperimentalDetectModule,
@@ -19,6 +20,20 @@ it('isPlainObject accepts objects created in another realm', () => {
     isPlainObject(runInNewContext('new (class FixtureOptions {})()')),
   ).toBe(false);
   expect(isPlainObject(Object.create(null))).toBe(false);
+});
+
+it('getFileTaskId keeps node ids at file:<testPath> and roots browser ids at project and browser', () => {
+  expect(getFileTaskId({ project: 'node', testPath: '/a.test.ts' })).toBe(
+    'file:/a.test.ts',
+  );
+  expect(getFileTaskId('/a.test.ts')).toBe('file:/a.test.ts');
+  expect(
+    getFileTaskId({
+      project: 'web',
+      testPath: '/a.test.ts',
+      browserName: 'firefox',
+    }),
+  ).toBe('file:web:firefox:/a.test.ts');
 });
 
 it('generateFilePathHash keeps the node-pool seed byte-stable', () => {

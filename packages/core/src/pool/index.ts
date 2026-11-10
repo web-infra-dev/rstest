@@ -369,7 +369,7 @@ const workerErrorToResult = (
 
   return {
     fileResult: {
-      testId: getFileTaskId({ project: projectName, testPath }),
+      testId: getFileTaskId(testPath),
       project: projectName,
       testPath,
       status: 'failed',
