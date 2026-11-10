@@ -107,13 +107,13 @@ type HeadlessSchedulerDeps = {
 };
 
 /**
- * True when the row runs file-isolated (per-file fixtures torn down): a row
- * with setup files is always file-isolated and `isolate: false` opts the
- * whole row into one shared page per batch. The batch builder and the worker
- * page lifecycle both read this one predicate.
+ * True when the row may reuse one worker page across its consecutive batch
+ * files: `isolate: false` opts a row into one shared page per batch, and a
+ * row with setup files always reloads per file. The batch builder and the
+ * worker page lifecycle both read this one predicate.
  */
-export const isRowIsolated = (row: BrowserProjectRuntime): boolean =>
-  !row.hasSetupFiles && row.runtimeConfig?.isolate !== false;
+export const shareWorkerFixtures = (row: BrowserProjectRuntime): boolean =>
+  !row.hasSetupFiles && row.runtimeConfig?.isolate === false;
 
 export const createHeadlessScheduler = async ({
   context,
@@ -319,7 +319,7 @@ export const createHeadlessScheduler = async ({
     let workerCleanupTimer: ReturnType<typeof setTimeout> | undefined;
     let dispatchQueue = Promise.resolve();
     const completedFiles = new Set<string>();
-    const keepWorkerFixtures = !isRowIsolated(row);
+    const keepWorkerFixtures = shareWorkerFixtures(row);
     const fileCleanupStates = new Map<
       string,
       {
@@ -777,7 +777,7 @@ export const createHeadlessScheduler = async ({
           return;
         }
         const batch = [next];
-        if (!isRowIsolated(next.row)) {
+        if (shareWorkerFixtures(next.row)) {
           while (
             batch.length < nonIsolatedBatchSize &&
             queue[0] &&

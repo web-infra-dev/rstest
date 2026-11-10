@@ -370,11 +370,9 @@ export const runBrowserController = async (
   // row can run headed per run (validated), so the composition degrades to a
   // pure headless run when no row is headed; `useHeadlessDirect` only steers
   // the container window resolution and `setContainerOptions`.
-  const headedRow = projectRuntimeConfigs.find((row) => !row.headless);
-  const headlessRows = projectRuntimeConfigs.filter(
-    (row) => row !== headedRow || !row.headless,
-  );
-  const useHeadlessDirect = !headedRow;
+  const headedRows = projectRuntimeConfigs.filter((row) => !row.headless);
+  const headlessRows = projectRuntimeConfigs.filter((row) => row.headless);
+  const useHeadlessDirect = headedRows.length === 0;
 
   // `onSelected` receives one file entry per run of a file: browser projects
   // contribute one entry per row through the lanes' shared file→row expansion;
@@ -1285,7 +1283,7 @@ export const runBrowserController = async (
   // headless-only runs never render it; a headed window gets its headed rows
   // (at most one, validated), keeping `(project, browser)` lookups unambiguous.
   runtime.setContainerOptions(
-    useHeadlessDirect ? hostOptions : { ...hostOptions, projects: [headedRow] },
+    useHeadlessDirect ? hostOptions : { ...hostOptions, projects: headedRows },
   );
 
   // Track test results from browser runners
@@ -1805,12 +1803,12 @@ export const runBrowserController = async (
           handlers: { handleFatal, handleTestFileComplete },
         })
       : undefined,
-    headedRow
+    headedRows[0]
       ? createHeadedScheduler({
           ...schedulerDeps,
           allTestFiles,
           runtime,
-          headedRow,
+          headedRow: headedRows[0],
           v8Coverage,
           handlers: { handleTestFileComplete },
         })
