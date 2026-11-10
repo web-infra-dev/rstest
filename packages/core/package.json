@@ -117,7 +117,7 @@
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
-    "happy-dom": "^20.0.0",
+    "happy-dom": ">=20.0.0",
     "jsdom": ">=15.0.0"
   },
   "peerDependenciesMeta": {
