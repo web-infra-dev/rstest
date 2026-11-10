@@ -4,7 +4,7 @@ import { constants } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { prepareFixtures, runRstestCli, sleep } from '../scripts';
+import { prepareFixtures, sleep } from '../scripts';
 import { BROWSER_PORTS } from './fixtures/ports';
 import {
   deleteFixtureTarget,
@@ -153,7 +153,7 @@ describe('browser mode - globalSetup', () => {
       fixtureFs.update(path.join(target, 'rstest.config.mts'), (content) =>
         content.replace(
           'defineConfig({',
-          "defineConfig({ testEnvironment: 'jsdom',",
+          "defineConfig({ testEnvironment: 'jsdom', output: { bundleDependencies: ['jsdom'] },",
         ),
       );
       fixtureFs.update(
@@ -165,11 +165,7 @@ describe('browser mode - globalSetup', () => {
             "const dom = new JSDOM('<p>setup</p>'); dom.window.close(); console.log('[browser-global-setup] executed');",
           ),
       );
-      const { expectExecSuccess } = await runRstestCli({
-        command: 'rstest',
-        args: ['run'],
-        options: { nodeOptions: { cwd: target } },
-      });
+      const { expectExecSuccess } = await runBrowserCliWithCwd(target);
       await expectExecSuccess();
     } finally {
       await deleteFixtureTarget(fixtureFs, target);

@@ -31,7 +31,7 @@ it.for(['build', 'load'])(
           cwd,
           env: {
             PREBUNDLE_FAILURE: failure,
-            NODE_OPTIONS: `--require="${preload}"`,
+            NODE_OPTIONS: `--require=${JSON.stringify(preload)}`,
           },
         },
       },
