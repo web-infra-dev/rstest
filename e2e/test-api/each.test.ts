@@ -7,7 +7,7 @@ const mixedTable = [null, 42, ['a']];
 const mixedReceived: unknown[] = [];
 
 afterAll(() => {
-  expect(logs.length).toBe(13);
+  expect(logs.length).toBe(14);
   expect(mixedReceived).toEqual(mixedTable);
 });
 
@@ -59,6 +59,11 @@ it.each`
   ${false}
 `('template single column $value', ({ value }) => {
   expect(typeof value).toBe('boolean');
+  logs.push('executed');
+});
+
+it.each([{ value: null }])('nullable $value', () => {
+  expect(expect.getState().currentTestName).toBe('nullable null');
   logs.push('executed');
 });
 
