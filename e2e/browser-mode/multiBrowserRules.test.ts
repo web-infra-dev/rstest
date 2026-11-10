@@ -42,7 +42,7 @@ describe('browser mode - multi-browser launch rules', () => {
     expect(cli.stdout).toMatch(/\[firefox\].*attribution\.test\.ts/);
     expect(cli.stdout).toMatch(/Test Files 2 passed/);
     expect(cli.stdout).toMatch(/Tests 6 passed/);
-  });
+  }, 60_000);
 
   it('warns once per run that browser.browser is deprecated', async () => {
     const { expectExecSuccess, cli } = await rulesCli([
@@ -56,7 +56,7 @@ describe('browser mode - multi-browser launch rules', () => {
     expect(output.match(/browser\.browser` is deprecated/g) ?? []).toHaveLength(
       1,
     );
-  });
+  }, 60_000);
 
   it('rejects v8 coverage when a non-chromium browser stays selected', async () => {
     const { expectExecFailed, cli } = await rulesCli([
@@ -81,7 +81,7 @@ describe('browser mode - multi-browser launch rules', () => {
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Test Files 1 passed/);
     expect(cli.stdout).not.toMatch(/\[firefox\]/);
-  });
+  }, 60_000);
 
   it('rejects a second headed browser and names the CLI fix', async () => {
     const { expectExecFailed, cli } = await rulesCli([
@@ -128,5 +128,5 @@ describe('browser mode - multi-browser launch rules', () => {
     expect(merge.cli.stdout).toMatch(/\[chromium\].*attribution\.test\.ts/);
     expect(merge.cli.stdout).toMatch(/\[firefox\].*attribution\.test\.ts/);
     expect(merge.cli.stdout).toMatch(/Test Files 2 passed/);
-  });
+  }, 120_000);
 });

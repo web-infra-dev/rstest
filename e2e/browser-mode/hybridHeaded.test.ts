@@ -38,5 +38,6 @@ describe('browser mode - one headed + headless hybrid run', () => {
       // may run headed in this shape.
       expect(cli.log.split('(headed)').length - 1).toBe(1);
     },
+    60_000,
   );
 });

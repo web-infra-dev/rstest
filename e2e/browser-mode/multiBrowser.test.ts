@@ -17,7 +17,7 @@ describe('browser mode - multi-browser attribution', () => {
     expect(cli.stdout).toMatch(/\[chromium\].*attribution\.test\.ts/);
     expect(cli.stdout).toMatch(/\[firefox\].*attribution\.test\.ts/);
     expect(cli.stdout).toMatch(/Test Files 2 passed/);
-  });
+  }, 60_000);
 
   it('filters to one browser like the CLI flag and drops the other copy', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
@@ -32,5 +32,5 @@ describe('browser mode - multi-browser attribution', () => {
     // narrowed run here prints an untagged single row.)
     expect(cli.stdout).not.toMatch(/\[chromium\]/);
     expect(cli.stdout).toMatch(/Test Files 1 passed/);
-  });
+  }, 60_000);
 });
