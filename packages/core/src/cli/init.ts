@@ -293,27 +293,29 @@ export function mergeWithCLIOptions(
       }
       const cliBrowserNames = options.browser.browsers;
       const cliBrowserName = options.browser.name;
-      if (cliBrowserNames !== undefined || cliBrowserName !== undefined) {
-        const names = (() => {
-          if (cliBrowserNames !== undefined) {
-            if (cliBrowserName !== undefined) {
-              throw new Error(
-                'Use `--browser.browsers` (or `RunOptions.browser.browsers`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
-              );
-            }
-            return toCliBrowserNames(cliBrowserNames, '`--browser.browsers`');
-          }
-          if (!deprecatedBrowserNameOptionWarned) {
-            deprecatedBrowserNameOptionWarned = true;
-            logger.warn(
-              '`--browser.name` (and `RunOptions.browser.name`) is deprecated and will be removed in 1.0: use `--browser.browsers` / `browser.browsers` instead.',
-            );
-          }
-          return toCliBrowserNames(cliBrowserName, '`--browser.name`');
-        })();
-        // Raw selection for `@rstest/browser`, which filters this layer's
-        // configured browsers by it (see `resolveProjectBrowsers`).
-        config.browser.cliBrowsers = names;
+      if (cliBrowserNames !== undefined && cliBrowserName !== undefined) {
+        throw new Error(
+          'Use `--browser.browsers` (or `RunOptions.browser.browsers`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
+        );
+      }
+      // Raw selection for `@rstest/browser`, which filters this layer's
+      // configured browsers by it (see `resolveProjectBrowsers`).
+      if (cliBrowserNames !== undefined) {
+        config.browser.cliBrowsers = toCliBrowserNames(
+          cliBrowserNames,
+          '`--browser.browsers`',
+        );
+      } else if (cliBrowserName !== undefined) {
+        if (!deprecatedBrowserNameOptionWarned) {
+          deprecatedBrowserNameOptionWarned = true;
+          logger.warn(
+            '`--browser.name` (and `RunOptions.browser.name`) is deprecated and will be removed in 1.0: use `--browser.browsers` / `browser.browsers` instead.',
+          );
+        }
+        config.browser.cliBrowsers = toCliBrowserNames(
+          cliBrowserName,
+          '`--browser.name`',
+        );
       }
       if (options.browser.headless !== undefined) {
         config.browser.headless = options.browser.headless;

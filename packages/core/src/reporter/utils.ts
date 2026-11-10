@@ -75,6 +75,12 @@ export const toReportDuration = (duration: Duration): ReportDuration => ({
   tests: duration.testTime,
 });
 
+type FileIdentity = {
+  project: string;
+  testPath: string;
+  browserName?: string;
+};
+
 /**
  * Keys reporter-internal per-file state. A test path alone is ambiguous once
  * several projects run the same file, and several browsers of one project can
@@ -84,18 +90,8 @@ export const toReportDuration = (duration: Duration): ReportDuration => ({
  * change without a blob version bump, while this key is process-local and free
  * to stay cheap.
  */
-export const reporterFileKey = (file: {
-  project: string;
-  testPath: string;
-  browserName?: string;
-}): string =>
+export const reporterFileKey = (file: FileIdentity): string =>
   `${file.project}\u0000${file.browserName ?? ''}\u0000${file.testPath}`;
-
-type FileIdentity = {
-  project: string;
-  testPath: string;
-  browserName?: string;
-};
 
 export class PerFileEventBuffer<T> {
   private files = new Map<

@@ -240,12 +240,11 @@ const reportUnsupportedBrowserOptions = (
 
   if (
     isBrowserOnlyRun &&
-    browserProjects.some(
-      (project) =>
-        project.normalizedConfig.isolate === false &&
-        resolveProjectBrowsers(project).some(
-          (entry) => entry.headless === false,
-        ),
+    browserRows.some(
+      (row) =>
+        row.headed &&
+        browserProjects.find((project) => project.name === row.projectName)
+          ?.normalizedConfig.isolate === false,
     )
   ) {
     warnings.add(

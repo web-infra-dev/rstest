@@ -374,11 +374,10 @@ export const createHeadlessScheduler = async ({
       crashDeferred.resolve(reason);
     };
 
-    // Validation guarantees a v8 run selects only chromium rows, so plain
-    // membership in the v8 provider decides whether CDP collection applies.
-    const coverageEnabledOnRow = v8Coverage !== undefined;
+    // Validation guarantees a v8 run selects only chromium rows, so every
+    // row collects CDP coverage whenever the v8 provider is present.
     const collectCoverage = async (): Promise<void> => {
-      if (!page || !coverageEnabledOnRow) {
+      if (!page || !v8Coverage) {
         return;
       }
       if (!coverageCollection) {
@@ -403,9 +402,7 @@ export const createHeadlessScheduler = async ({
     };
     try {
       page = await browserContext.newPage();
-      if (coverageEnabledOnRow) {
-        await v8Coverage.start(page);
-      }
+      await v8Coverage?.start(page);
       run.coverageCollectors.add(collectCoverage);
       page.on('crash', () =>
         onPageDead(
@@ -765,8 +762,7 @@ export const createHeadlessScheduler = async ({
         if (shareWorkerFixtures(next.row)) {
           while (
             batch.length < nonIsolatedBatchSize &&
-            queue[0] &&
-            queue[0].row === next.row
+            queue[0]?.row === next.row
           ) {
             batch.push(queue.shift()!);
           }

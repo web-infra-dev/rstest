@@ -1169,6 +1169,7 @@ export const runInPool = async (
               taskParentNames: result.parentNames,
               taskType: 'suite',
               testPath: result.testPath,
+              project: result.project,
             });
             await rpc.onTestSuiteResult(result);
           })(),
@@ -1191,6 +1192,7 @@ export const runInPool = async (
               taskParentNames: result.parentNames,
               taskType: 'case',
               testPath: result.testPath,
+              project: result.project,
             });
             await rpc.onTestCaseResult(result);
           })(),
@@ -1243,6 +1245,7 @@ export const runInPool = async (
       taskParentNames: results.parentNames,
       taskType: 'file',
       testPath: results.testPath,
+      project: results.project,
     });
 
     runResult = results;

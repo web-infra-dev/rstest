@@ -94,11 +94,7 @@ export const notifyReportersOnTestRunStart = async (
   const payload: TestRunStartPayload = {
     files: files.map((file) => ({
       ...file,
-      testId: getFileTaskId({
-        project: file.project,
-        testPath: file.testPath,
-        browserName: file.browserName,
-      }),
+      testId: getFileTaskId(file),
     })),
   };
   // Selection can finish before workers exist; hold a referenced handle so a

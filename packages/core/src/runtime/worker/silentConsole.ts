@@ -12,31 +12,13 @@ type BufferedLogTask = {
   taskParentNames?: string[];
   taskType?: 'file' | 'suite' | 'case';
   testPath: string;
+  project: string;
   /** Browser rows only: the node pool's file id is just the test path. */
-  project?: string;
   browserName?: string;
 };
 
-const getBufferedFileTaskId = ({
-  project,
-  testPath,
-  browserName,
-}: {
-  project?: string;
-  testPath: string;
-  browserName?: string;
-}): string =>
-  project !== undefined && browserName !== undefined
-    ? getFileTaskId({ project, testPath, browserName })
-    : getFileTaskId(testPath);
-
-const getBufferedLogTaskId = (log: RawUserConsoleLog): string => {
-  if (log.taskId) {
-    return log.taskId;
-  }
-
-  return getBufferedFileTaskId(log);
-};
+const getBufferedLogTaskId = (log: RawUserConsoleLog): string =>
+  log.taskId || getFileTaskId(log);
 
 const getSuiteChainKey = (names: string[]): string => {
   return names.join('\u0000');
@@ -118,7 +100,7 @@ export const createSilentConsoleController = ({
       if (taskType === 'case') {
         pushTaskId(
           taskIdsToFlush,
-          getBufferedFileTaskId({ project, testPath, browserName }),
+          getFileTaskId({ project, testPath, browserName }),
         );
 
         const suiteNames = taskParentNames || [];
@@ -138,7 +120,7 @@ export const createSilentConsoleController = ({
       if (taskType === 'suite') {
         pushTaskId(
           taskIdsToFlush,
-          getBufferedFileTaskId({ project, testPath, browserName }),
+          getFileTaskId({ project, testPath, browserName }),
         );
         pushTaskId(taskIdsToFlush, taskId);
       }

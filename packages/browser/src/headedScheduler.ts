@@ -34,7 +34,9 @@ import {
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import {
+  browserForRow,
   expandToRows,
+  groupRowsByProject,
   type BrowserV8CoverageRuntime,
   type BrowserWatchSession,
   type DispatchLanes,
@@ -159,12 +161,7 @@ export const createHeadedScheduler = async ({
   // reuse a different browser process entirely (hybrid runs). The scheduler
   // constructor's caller only builds one with a headed row, so the row and
   // its provider options are required.
-  const headedLaunch = runtime.browsers.get(headedRow.launchKey);
-  if (!headedLaunch) {
-    throw new Error(
-      `No launched browser for the headed pair (${JSON.stringify(headedRow.browserName)}, launch key ${headedRow.launchKey}).`,
-    );
-  }
+  const headedLaunch = browserForRow(runtime.browsers, headedRow);
   const containerNewContextOptions = {
     providerOptions: headedRow.providerOptions,
     viewport: null,
@@ -183,16 +180,15 @@ export const createHeadedScheduler = async ({
   // browserName to the frames (browser-ui forwards it in the window options,
   // so a frame resolves its row strictly). Watch file-set updates commit
   // path-keyed sets, so every commit re-stamps through this helper.
+  const laneRowsByProject = groupRowsByProject([headedRow]);
   const stampLaneFiles = (
     files: readonly { testPath: string; projectName: string }[],
   ): TestFileInfo[] =>
-    expandToRows(files, new Map([[headedRow.name, [headedRow]]])).map(
-      (file) => ({
-        testPath: file.testPath,
-        projectName: file.projectName,
-        browserName: file.row.browserName,
-      }),
-    );
+    expandToRows(files, laneRowsByProject).map((file) => ({
+      testPath: file.testPath,
+      projectName: file.projectName,
+      browserName: file.row.browserName,
+    }));
   let currentTestFiles = stampLaneFiles(allTestFiles);
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but

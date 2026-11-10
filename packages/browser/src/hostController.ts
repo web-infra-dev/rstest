@@ -142,6 +142,21 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
     ),
   );
 
+/**
+ * `reporterFileKey` for the host's `projectName`-keyed shapes (file-start
+ * payloads, RPC requests, `TestFileInfo`).
+ */
+const projectFileKey = (file: {
+  projectName: string;
+  testPath: string;
+  browserName?: string;
+}): string =>
+  reporterFileKey({
+    project: file.projectName,
+    testPath: file.testPath,
+    browserName: file.browserName,
+  });
+
 const getFailureScreenshotKey = (
   project: string,
   testPath: string,
@@ -672,11 +687,7 @@ export const runBrowserController = async (
       return Promise.resolve();
     }
 
-    const cleanupKey = reporterFileKey({
-      project: testFile.projectName,
-      testPath: testFile.testPath,
-      browserName: testFile.browserName,
-    });
+    const cleanupKey = projectFileKey(testFile);
     const cleanup = (
       failureScreenshotCleanups.get(cleanupKey) ?? Promise.resolve()
     ).then(() => removeFailureScreenshotsForFiles([project], [testFile]));
@@ -1155,13 +1166,7 @@ export const runBrowserController = async (
             parentNames: testIdentity.parentNames,
             browserName: request.browserName,
           });
-          await failureScreenshotCleanups.get(
-            reporterFileKey({
-              project: request.projectName,
-              testPath: request.testPath,
-              browserName: request.browserName,
-            }),
-          );
+          await failureScreenshotCleanups.get(projectFileKey(request));
           await fs.mkdir(dirname(filepath), { recursive: true });
           await fs.writeFile(filepath, Buffer.from(result, 'base64'));
           failureScreenshots.set(
@@ -1220,11 +1225,7 @@ export const runBrowserController = async (
           resolvePath: resolveScreenshotPath,
           platform: process.platform,
         });
-        const key = reporterFileKey({
-          project: request.projectName,
-          testPath: request.testPath,
-          browserName: request.browserName,
-        });
+        const key = projectFileKey(request);
         const counts = screenshotCountsByFile.get(key) ?? {
           added: 0,
           updated: 0,
@@ -1239,11 +1240,7 @@ export const runBrowserController = async (
       return result;
     } catch (error) {
       if (error instanceof ScreenshotMismatchError) {
-        const key = reporterFileKey({
-          project: request.projectName,
-          testPath: request.testPath,
-          browserName: request.browserName,
-        });
+        const key = projectFileKey(request);
         const counts = screenshotCountsByFile.get(key) ?? {
           added: 0,
           updated: 0,
@@ -1427,13 +1424,8 @@ export const runBrowserController = async (
       browserName: payload.browserName,
       testPath: payload.testPath,
     });
-    screenshotCountsByFile.delete(
-      reporterFileKey({
-        project: payload.projectName,
-        testPath: payload.testPath,
-        browserName: payload.browserName,
-      }),
-    );
+    const fileKey = projectFileKey(payload);
+    screenshotCountsByFile.delete(fileKey);
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
         trace: {
@@ -1444,14 +1436,7 @@ export const runBrowserController = async (
         pid: nextBrowserFilePid++,
       });
       tracker.transition('prepare');
-      phaseTrackers.set(
-        reporterFileKey({
-          project: payload.projectName,
-          testPath: payload.testPath,
-          browserName: payload.browserName,
-        }),
-        tracker,
-      );
+      phaseTrackers.set(fileKey, tracker);
     }
     // The client sends `{ testPath, projectName, browserName }`; the sink
     // adapter builds the `TestFileInfo` the reporters and stateManager expect.
@@ -1471,45 +1456,21 @@ export const runBrowserController = async (
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
-    phaseTrackers
-      ?.get(
-        reporterFileKey({
-          project: payload.project,
-          testPath: payload.testPath,
-          browserName: payload.browserName,
-        }),
-      )
-      ?.transition('tests');
+    phaseTrackers?.get(reporterFileKey(payload))?.transition('tests');
     await sinkForProjectName(payload.project).onTestFileReady(payload);
   };
 
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
-    phaseTrackers
-      ?.get(
-        reporterFileKey({
-          project: payload.project,
-          testPath: payload.testPath,
-          browserName: payload.browserName,
-        }),
-      )
-      ?.recordSuiteStart(payload);
+    phaseTrackers?.get(reporterFileKey(payload))?.recordSuiteStart(payload);
     await sinkForProjectName(payload.project).onTestSuiteStart(payload);
   };
 
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
-    phaseTrackers
-      ?.get(
-        reporterFileKey({
-          project: payload.project,
-          testPath: payload.testPath,
-          browserName: payload.browserName,
-        }),
-      )
-      ?.recordSuiteResult(payload);
+    phaseTrackers?.get(reporterFileKey(payload))?.recordSuiteResult(payload);
     await sinkForProjectName(payload.project).onTestSuiteResult(payload);
 
     silentConsoleControllerForProjectName(
@@ -1528,15 +1489,7 @@ export const runBrowserController = async (
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
-    phaseTrackers
-      ?.get(
-        reporterFileKey({
-          project: payload.project,
-          testPath: payload.testPath,
-          browserName: payload.browserName,
-        }),
-      )
-      ?.recordCaseStart(payload);
+    phaseTrackers?.get(reporterFileKey(payload))?.recordCaseStart(payload);
     // Fire-and-forget on both transports (the sink does not await case-start).
     sinkForProjectName(payload.project).onTestCaseStart(payload);
   };
@@ -1572,15 +1525,7 @@ export const runBrowserController = async (
       payload,
     );
     caseResults.push(result);
-    phaseTrackers
-      ?.get(
-        reporterFileKey({
-          project: payload.project,
-          testPath: payload.testPath,
-          browserName: payload.browserName,
-        }),
-      )
-      ?.recordCaseResult(payload);
+    phaseTrackers?.get(reporterFileKey(payload))?.recordCaseResult(payload);
 
     silentConsoleControllerForProjectName(
       payload.project,
@@ -1607,11 +1552,7 @@ export const runBrowserController = async (
   const handleTestFileComplete = async (
     payload: RawTestFileResult,
   ): Promise<void> => {
-    const key = reporterFileKey({
-      project: payload.project,
-      testPath: payload.testPath,
-      browserName: payload.browserName,
-    });
+    const key = reporterFileKey(payload);
     const screenshotCounts = screenshotCountsByFile.get(key);
     screenshotCountsByFile.delete(key);
     if (screenshotCounts) {
@@ -1634,11 +1575,6 @@ export const runBrowserController = async (
       };
     }
     if (phaseTrackers) {
-      const key = reporterFileKey({
-        project: payload.project,
-        testPath: payload.testPath,
-        browserName: payload.browserName,
-      });
       const tracker = phaseTrackers.get(key);
       if (tracker) {
         tracker.end();
@@ -1786,7 +1722,7 @@ export const runBrowserController = async (
   // finalizes both outputs as one cycle. A pure headless run has one lane; a
   // single headed pair (validated) either joins headless lanes beside it or,
   // with no headless row at all, runs alone.
-  const schedulerRun = Promise.all([
+  const [headless, headed] = await Promise.all([
     headlessRows.length > 0
       ? createHeadlessScheduler({
           ...schedulerDeps,
@@ -1809,22 +1745,16 @@ export const runBrowserController = async (
           handlers: { handleTestFileComplete },
         })
       : undefined,
-  ]).then(([headless, headed]) => {
-    const mergedRawCoverage = [
-      ...(headless?.rawCoverage ?? []),
-      ...(headed?.rawCoverage ?? []),
-    ];
-    return {
-      testTime: Math.max(headless?.testTime ?? 0, headed?.testTime ?? 0),
-      rawCoverage: mergedRawCoverage,
-      watchSession: headless?.watchSession ?? headed?.watchSession,
-      close: async () => {
-        await Promise.all([headless?.close?.(), headed?.close?.()]);
-      },
-    };
-  });
-
-  const { testTime, rawCoverage, watchSession, close } = await schedulerRun;
+  ]);
+  const testTime = Math.max(headless?.testTime ?? 0, headed?.testTime ?? 0);
+  const rawCoverage = [
+    ...(headless?.rawCoverage ?? []),
+    ...(headed?.rawCoverage ?? []),
+  ];
+  const watchSession = headless?.watchSession ?? headed?.watchSession;
+  const close = async () => {
+    await Promise.all([headless?.close?.(), headed?.close?.()]);
+  };
 
   // The first build must not trigger a duplicate cycle, but a fatal test cycle
   // does not invalidate the session the scheduler already established.
@@ -2019,9 +1949,6 @@ export const listBrowserTests = async (
   // not hang `rstest list` forever.
   const collectTimeoutMs = 30_000;
 
-  // The collect pages resolve only servers this function launched, so the
-  // project lookup always resolves.
-
   const collectFromProject = async (
     server: BrowserProjectServer,
     projectRow: BrowserProjectRuntime,
@@ -2133,12 +2060,12 @@ export const listBrowserTests = async (
   // Collect one page per project concurrently — the default launch's browser
   // hosts every page against the project's own dev server.
   const collected = await Promise.all(
-    [...runtime.projectServers.values()].map((server) => {
-      const projectRow = projectRuntimeConfigs.find(
-        (row) => row.name === server.projectName,
-      )!;
-      return collectFromProject(server, projectRow);
-    }),
+    [...runtime.projectServers.values()].map((server) =>
+      collectFromProject(
+        server,
+        listRowsByProject.get(server.projectName)![0]!,
+      ),
+    ),
   );
   const collectResults = collected.flatMap((entry) => entry.results);
   const fatalError = collected.find((entry) => entry.error)?.error ?? null;

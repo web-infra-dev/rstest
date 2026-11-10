@@ -131,6 +131,9 @@ export const browserForRow = (
   return browser;
 };
 
+const compareStrings = (a: string, b: string): number =>
+  a < b ? -1 : a > b ? 1 : 0;
+
 /**
  * Build the scheduling queue as `(project, browser)` row groups: the files of
  * each row come in plan order, and whole rows follow each other. The batch
@@ -155,14 +158,8 @@ export const expandToRows = (
         row,
       })),
     )
-    .sort((a, b) =>
-      a.row.name === b.row.name
-        ? a.row.browserName === b.row.browserName
-          ? 0
-          : a.row.browserName < b.row.browserName
-            ? -1
-            : 1
-        : a.row.name < b.row.name
-          ? -1
-          : 1,
+    .sort(
+      (a, b) =>
+        compareStrings(a.row.name, b.row.name) ||
+        compareStrings(a.row.browserName, b.row.browserName),
     );

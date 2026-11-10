@@ -877,8 +877,7 @@ export const buildBrowserRuntimeRows = (
     throw new Error('No browser-enabled projects found.');
   }
   for (const project of browserProjects) {
-    const { browser } = project.normalizedConfig;
-    const projectConfig = project.normalizedConfig;
+    const { browser, setupFiles } = project.normalizedConfig;
     // Per-project and browser-agnostic: every row of a project shares the
     // projection so one Map entry backs all its rows.
     const runtimeConfig = serializableConfig(
@@ -899,7 +898,7 @@ export const buildBrowserRuntimeRows = (
         headless: spec.headless,
         environmentName: project.environmentName,
         projectRoot: normalize(project.rootPath),
-        hasSetupFiles: (projectConfig.setupFiles?.length ?? 0) > 0,
+        hasSetupFiles: (setupFiles?.length ?? 0) > 0,
         screenshotFailures: entry.screenshotFailures,
         viewport: entry.viewport,
         expect: entry.expect,
@@ -2144,14 +2143,6 @@ export const createBrowserRuntime = async ({
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
   const launched: BrowserLaunch[] = [];
-  const waitForBuildsAcrossLaunches = async (): Promise<void> => {
-    let generation;
-    do {
-      generation = buildGeneration;
-      await Promise.all(waitForBuilds.map((waitForBuild) => waitForBuild()));
-      // A finished project can rebuild while another project is still starting.
-    } while (generation !== buildGeneration);
-  };
   try {
     // One launch per unique launch-key row (provider, browserName, headless,
     // launch options); rows sharing a key reuse the same browser process.
@@ -2190,7 +2181,12 @@ export const createBrowserRuntime = async ({
     if (launchFailed) {
       throw launchFailureReason;
     }
-    await waitForBuildsAcrossLaunches();
+    let generation;
+    do {
+      generation = buildGeneration;
+      await Promise.all(waitForBuilds.map((waitForBuild) => waitForBuild()));
+      // A finished project can rebuild while another project is still starting.
+    } while (generation !== buildGeneration);
     return {
       projectServers,
       containerServer,
