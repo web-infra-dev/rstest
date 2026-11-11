@@ -62,6 +62,8 @@ import {
   takeBrowserV8Coverage,
   type BrowserV8CoverageResourceStore,
 } from './browserV8Coverage';
+import { getHeadlessConcurrency } from './concurrency';
+import { createConcurrencyLimiter } from './concurrencyLimiter';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
 import {
@@ -1741,6 +1743,15 @@ export const runBrowserController = async (
   // finalizes both outputs as one cycle. A pure headless run has one lane; a
   // single headed pair (validated) either joins headless lanes beside it or,
   // with no headless row at all, runs alone.
+  // A mixed run's two lanes share one file budget (`pool.maxWorkers`, or the
+  // headless default), so they never run more files at once than a single lane
+  // would. A single-lane run needs no limiter.
+  const fileLimiter =
+    headlessRows.length > 0 && headedRows[0]
+      ? createConcurrencyLimiter(
+          getHeadlessConcurrency(context, allTestFiles.length),
+        )
+      : undefined;
   const [headless, headed] = await Promise.all([
     headlessRows.length > 0
       ? createHeadlessScheduler({
@@ -1750,6 +1761,7 @@ export const runBrowserController = async (
           v8Coverage,
           allTestFiles: headlessAllTestFiles,
           projectRuntimeConfigs: headlessRows,
+          fileLimiter,
           watchState,
           handlers: { handleFatal, handleTestFileComplete },
         })
@@ -1760,6 +1772,7 @@ export const runBrowserController = async (
           allTestFiles,
           runtime,
           headedRow: headedRows[0],
+          fileLimiter,
           v8Coverage,
           handlers: { handleTestFileComplete },
         })

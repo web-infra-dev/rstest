@@ -37,4 +37,27 @@ describe('browser mode - one headed + headless hybrid run', () => {
     },
     60_000,
   );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'serializes the headed and headless lanes under pool.maxWorkers 1',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli(
+        'hybrid-headed-max-workers',
+      );
+
+      await expectExecSuccess();
+      const windows = [...cli.stdout.matchAll(/RUN_WINDOW (\d+) (\d+)/g)].map(
+        (match) => ({
+          start: Number(match[1]),
+          end: Number(match[2]),
+        }),
+      );
+      // One copy per project, one on each lane.
+      expect(windows).toHaveLength(2);
+      const [first, second] = windows.sort((a, b) => a.start - b.start);
+      // The later file starts only after the earlier one finished.
+      expect(second!.start).toBeGreaterThanOrEqual(first!.end);
+    },
+    90_000,
+  );
 });

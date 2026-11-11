@@ -15,6 +15,7 @@ import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
 } from './browserRsbuild';
+import type { ConcurrencyLimiter } from './concurrencyLimiter';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedRunRegistry } from './headedRunRegistry';
@@ -61,6 +62,8 @@ type HeadedSchedulerDeps = {
    * container's `projects` slice, so the full row is required.
    */
   headedRow: BrowserProjectRuntime;
+  /** Mixed runs only: the budget shared with the headless lane. */
+  fileLimiter?: ConcurrencyLimiter;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
   v8Coverage?: BrowserV8CoverageRuntime;
@@ -140,6 +143,7 @@ export const createHeadedScheduler = async ({
   context,
   runtime,
   headedRow,
+  fileLimiter,
   allTestFiles,
   hostOptions,
   v8Coverage,
@@ -656,7 +660,17 @@ export const createHeadedScheduler = async ({
         );
         return;
       }
-      await reloadTestFileAndWait(file, testNamePattern);
+      // A mixed run's headless workers hold slots of the same budget, so the
+      // headed file runs only once one is free.
+      const release = await fileLimiter?.acquire();
+      try {
+        if (aborted || fatalErrorRef.current) {
+          return;
+        }
+        await reloadTestFileAndWait(file, testNamePattern);
+      } finally {
+        release?.();
+      }
     });
   };
 

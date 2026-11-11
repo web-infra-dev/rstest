@@ -18,6 +18,7 @@ import {
   serializeForInlineScript,
 } from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
+import type { ConcurrencyLimiter } from './concurrencyLimiter';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
@@ -78,6 +79,8 @@ type HeadlessSchedulerDeps = {
   v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
+  /** Mixed runs only: the budget shared with the headed lane. */
+  fileLimiter?: ConcurrencyLimiter;
   hostOptions: BrowserHostConfig;
   watchState: BrowserRuntime['watchState'];
   isWatchMode: boolean;
@@ -125,6 +128,7 @@ export const createHeadlessScheduler = async ({
   v8Coverage,
   allTestFiles,
   projectRuntimeConfigs,
+  fileLimiter,
   hostOptions,
   watchState,
   isWatchMode,
@@ -729,36 +733,51 @@ export const createHeadlessScheduler = async ({
         !run.cancelled &&
         runLifecycle.isTokenActive(run.token)
       ) {
-        // Cross-file bail gate (parity with the node pool's pickup-time skip
-        // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
-        // drain the remaining files as skipped instead of running them. The
-        // count is cycle-scoped because core clears `stateManager` ahead of
-        // every cycle, a watch session's first one included — so a mixed
-        // launch cannot drain this queue on the node initial cycle's
-        // failures.
-        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-          let skipped = queue.shift();
-          while (skipped) {
-            await handleTestFileComplete(makeSkippedFileResult(skipped));
-            skipped = queue.shift();
-          }
-          return;
-        }
-        const next = queue.shift();
-        if (!next) {
-          return;
-        }
-        const batch = [next];
-        // Batches never mix rows: a page belongs to one context/viewport pair.
-        if (shareWorkerFixtures(next.row)) {
-          while (
-            batch.length < nonIsolatedBatchSize &&
-            queue[0]?.row === next.row
+        // Mixed runs share one file budget with the headed lane. Acquire ahead
+        // of the bail gate and the queue pop so a worker parked on the limiter
+        // never picks a file against stale state; every exit below releases.
+        const releaseSlot = await fileLimiter?.acquire();
+        try {
+          if (
+            queue.length === 0 ||
+            run.cancelled ||
+            !runLifecycle.isTokenActive(run.token)
           ) {
-            batch.push(queue.shift()!);
+            return;
           }
+          // Cross-file bail gate (parity with the node pool's pickup-time skip
+          // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
+          // drain the remaining files as skipped instead of running them. The
+          // count is cycle-scoped because core clears `stateManager` ahead of
+          // every cycle, a watch session's first one included — so a mixed
+          // launch cannot drain this queue on the node initial cycle's
+          // failures.
+          if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+            let skipped = queue.shift();
+            while (skipped) {
+              await handleTestFileComplete(makeSkippedFileResult(skipped));
+              skipped = queue.shift();
+            }
+            return;
+          }
+          const next = queue.shift();
+          if (!next) {
+            return;
+          }
+          const batch = [next];
+          // Batches never mix rows: a page belongs to one context/viewport pair.
+          if (shareWorkerFixtures(next.row)) {
+            while (
+              batch.length < nonIsolatedBatchSize &&
+              queue[0]?.row === next.row
+            ) {
+              batch.push(queue.shift()!);
+            }
+          }
+          await runWorkerFiles(run, batch, rawCoverage, updateSnapshot);
+        } finally {
+          releaseSlot?.();
         }
-        await runWorkerFiles(run, batch, rawCoverage, updateSnapshot);
       }
     };
 
