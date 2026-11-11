@@ -142,7 +142,7 @@ async function collect(
 async function prepare(
   source: string,
   name: string,
-  form: 'es2022' | 'es2016' | 'es5' | 'reordered',
+  form: 'es2022' | 'es2016' | 'es5' | 'reordered' | 'minified' | 'inlined',
 ) {
   const file = join(tmpdir(), 'rstest-converter', `${name}.ts`);
   const generated = join(tmpdir(), 'rstest-converter', `${name}-${form}.js`);
@@ -151,7 +151,22 @@ async function prepare(
     inlineSourcesContent: true,
     jsc: {
       parser: { syntax: 'typescript' },
-      target: form === 'reordered' ? 'es2022' : form,
+      target:
+        form === 'reordered' || form === 'minified' || form === 'inlined'
+          ? 'es2022'
+          : form,
+      ...(form === 'minified' || form === 'inlined'
+        ? {
+            minify: {
+              compress: {
+                defaults: form === 'inlined',
+                sequences: true,
+                conditionals: true,
+              },
+              mangle: false,
+            },
+          }
+        : {}),
     },
     sourceMaps: true,
   });
@@ -195,6 +210,341 @@ async function prepare(
 }
 
 describe('coverage-v8 converter regressions', () => {
+  it.each([undefined, 'export const invalid = ;'])(
+    'preserves covered and uncovered counters without usable original source: %s',
+    async (source) => {
+      const code = 'globalThis.make(1);';
+      const file = join(tmpdir(), 'rstest-converter-missing', 'original.ts');
+      for (const count of [0, 2]) {
+        const data = await convertV8CoverageWithAst({
+          code,
+          ast: parseSync(code, { sourceType: 'module', preserveParens: false }),
+          cacheKey: `missing-source-${source}-${count}`,
+          coverage: {
+            url: pathToFileURL(`${file}.js`).href,
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count }],
+              },
+            ],
+          },
+          sourceMap: {
+            version: 3,
+            names: [],
+            sources: [file],
+            sourcesContent: source === undefined ? undefined : [source],
+            mappings: [
+              [
+                [0, 0, 7, 0],
+                [code.indexOf('1'), 0, 2, 0],
+              ],
+            ],
+          },
+        });
+        expect(Object.values(data[file]!.s)).toEqual([count]);
+        const [location] = Object.values(data[file]!.statementMap);
+        expect(location!.start.line).toBe(8);
+        expect(location!.end.line).toBe(8);
+        expect(location!.end.column).toBeGreaterThanOrEqual(
+          location!.start.column,
+        );
+      }
+    },
+  );
+
+  it('skips parsing when all mapped sources are excluded', async () => {
+    const file = join(tmpdir(), 'rstest-converter-excluded.ts');
+    const code = 'globalThis.make(1), globalThis.make(2);';
+    const ast = rstest.fn(() => parseSync(code, { sourceType: 'module' }));
+    expect(
+      await convertV8CoverageWithAst({
+        code,
+        ast,
+        cacheKey: 'all-sources-excluded',
+        coverage: { url: pathToFileURL(`${file}.js`).href, functions: [] },
+        sourceMap: {
+          version: 3,
+          names: [],
+          sources: [file],
+          sourcesContent: [code],
+          mappings: [[[0, 0, 0, 0]]],
+        },
+        sourceFilter: () => false,
+      }),
+    ).toEqual({});
+    expect(ast).not.toHaveBeenCalled();
+  });
+
+  it('keeps included sequence children without reading an excluded source', async () => {
+    const code = 'globalThis.make(1), globalThis.make(2);';
+    const excluded = join(tmpdir(), 'excluded-sequence.ts');
+    const included = join(tmpdir(), 'included-sequence.ts');
+    const sourcesContent = ['globalThis.make(1);', 'globalThis.make(2);'];
+    Object.defineProperty(sourcesContent, 0, {
+      get() {
+        throw new Error('Excluded source was read');
+      },
+    });
+    const data = await convertV8CoverageWithAst({
+      code,
+      ast: parseSync(code, { sourceType: 'module', preserveParens: false }),
+      cacheKey: 'mixed-inclusion-sequence',
+      coverage: {
+        url: pathToFileURL(`${included}.js`).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 7 }],
+          },
+        ],
+      },
+      sourceFilter: (file) => file === included,
+      sourceMap: {
+        version: 3,
+        names: [],
+        sources: [excluded, included],
+        sourcesContent,
+        mappings: [
+          [
+            [0, 0, 0, 0],
+            [code.indexOf('globalThis', 1), 1, 0, 0],
+          ],
+        ],
+      },
+    });
+    expect(Object.keys(data)).toEqual([included]);
+    expect(Object.values(data[included]!.s)).toEqual([7]);
+  });
+
+  it('restores every statement in a large merged sequence', async () => {
+    const count = 16_000;
+    const source = `export function run(log: (value: number) => void) {\n${Array.from(
+      { length: count },
+      (_, i) => `log(${i});`,
+    ).join('\n')}\n}\nrun(globalThis.make);`;
+    const { file, options } = await prepare(
+      source,
+      'large-sequence',
+      'minified',
+    );
+    const data = (await convertV8CoverageWithAst(options))[file]!;
+    const hits = Object.entries(data.statementMap)
+      .filter(([, loc]) => loc.start.line >= 2 && loc.start.line < count + 2)
+      .sort(([, a], [, b]) => a.start.line - b.start.line)
+      .map(([id, loc]) => [loc.start.line, data.s[id]]);
+    expect(hits).toEqual(Array.from({ length: count }, (_, i) => [i + 2, 1]));
+  });
+
+  it('recovers source ranges after inlining callbacks, values and control flow', async () => {
+    const source = `export function callbacks(log: (value: unknown) => void) {
+  const callback = () => {
+    globalThis.callbackRan = true;
+  };
+  log(callback);
+  log('after');
+}
+export function value(log: (value: unknown) => void) {
+  const words = ['left', 'right'];
+  return log(words.join(':'));
+}
+export function unused(log: (value: unknown) => void) {
+  const words = ['unused'];
+  return log(words.join(':'));
+}
+export function branch(flag: boolean) {
+  const fallback = 'fallback';
+  if (flag) {
+    return fallback;
+  }
+  return 'other';
+}
+callbacks(globalThis.make);
+value(globalThis.make);
+branch(true);
+branch(false);
+export function sameLine(log: (value: unknown) => void) { const words = ['same']; return log(words); }
+sameLine(globalThis.make);
+`;
+    const { file, options } = await prepare(
+      source,
+      'inlined-ranges',
+      'inlined',
+    );
+    const coverage = (await convertV8CoverageWithAst(options))[file]!;
+    const statementsAt = (line: number) =>
+      Object.entries(coverage.statementMap)
+        .filter(([, location]) => location.start.line === line)
+        .map(([id]) => coverage.s[id]);
+    const locations = [
+      ...Object.values(coverage.statementMap),
+      ...Object.values(coverage.fnMap).flatMap(({ loc, decl }) => [loc, decl]),
+      ...Object.values(coverage.branchMap).flatMap(({ loc, locations }) => [
+        loc,
+        ...locations,
+      ]),
+    ];
+    for (const { start, end } of locations) {
+      expect(end.line).toBeGreaterThanOrEqual(start.line);
+      if (start.line === end.line) {
+        expect(end.column).toBeGreaterThanOrEqual(start.column);
+      }
+    }
+    expect(statementsAt(3)).toEqual([0]);
+    expect(statementsAt(5)).toEqual([1]);
+    expect(statementsAt(6)).toEqual([1]);
+    expect(statementsAt(10)).toEqual([1]);
+    expect(statementsAt(14)).toEqual([0]);
+    const returned = Object.values(coverage.statementMap).find(
+      ({ start }) => start.line === 10,
+    );
+    expect(returned?.end.line).toBe(10);
+
+    const original = await prepare(source, 'inlined-ranges', 'es2022');
+    const merged = createCoverageMap();
+    await applyV8CoverageWithAst({ ...options, coverageMap: merged });
+    await applyV8CoverageWithAst({
+      ...original.options,
+      coverageMap: merged,
+    });
+    const restoredReturns = Object.entries(
+      merged.fileCoverageFor(file).statementMap,
+    )
+      .filter(([, { start }]) => start.line === 10)
+      .map(([id]) => merged.fileCoverageFor(file).s[id]);
+    expect(restoredReturns).toEqual([2]);
+  });
+
+  it('keeps recovered locations in the source that owns the generated start', async () => {
+    const source = 'globalThis.make(1);';
+    const { file, options } = await prepare(
+      source,
+      'cross-source-range',
+      'es2022',
+    );
+    const coverage = await convertV8CoverageWithAst({
+      ...options,
+      sourceMap: {
+        version: 3,
+        names: [],
+        sources: [file, `${file}.other.ts`],
+        sourcesContent: [source, '\n\n\nother();'],
+        mappings: [
+          [
+            [0, 0, 0, 0],
+            [options.code.indexOf('1'), 1, 3, 0],
+          ],
+        ],
+      },
+    });
+    expect(Object.values(coverage[file]!.statementMap)).toEqual([
+      {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: source.length - 1 },
+      },
+    ]);
+    expect(Object.values(coverage[file]!.s)).toEqual([1]);
+  });
+
+  it('restores statements merged by minification without splitting source comma expressions', async () => {
+    const source = `function covered() {
+  globalThis.first = 1;
+  globalThis.second = 2;
+}
+function uncovered() {
+  globalThis.first = 3;
+  globalThis.second = 4;
+}
+function comma() {
+  (globalThis.first = 5,
+   globalThis.second = 6);
+}
+function sameLine() {
+  globalThis.first = 7; globalThis.second = 8;
+}
+function mixed() {
+  globalThis.first = 9;
+  (globalThis.first = 10,
+   globalThis.second = 11);
+  globalThis.second = 12;
+}
+covered();
+comma();
+sameLine();
+mixed();
+`;
+    const { file, options } = await prepare(
+      source,
+      'merged-statements',
+      'minified',
+    );
+    const coverage = (await convertV8CoverageWithAst(options))[file]!;
+    const statementsAt = (line: number) =>
+      Object.entries(coverage.statementMap)
+        .filter(([, location]) => location.start.line === line)
+        .map(([id]) => coverage.s[id]);
+
+    expect(statementsAt(2)).toEqual([1]);
+    expect(statementsAt(3)).toEqual([1]);
+    expect(statementsAt(6)).toEqual([0]);
+    expect(statementsAt(7)).toEqual([0]);
+    expect(statementsAt(10)).toEqual([1]);
+    expect(statementsAt(11)).toEqual([]);
+    expect(statementsAt(14)).toEqual([1, 1]);
+    expect(statementsAt(17)).toEqual([1]);
+    expect(statementsAt(18)).toEqual([1]);
+    expect(statementsAt(19)).toEqual([]);
+    expect(statementsAt(20)).toEqual([1]);
+  });
+
+  it('does not attribute compressed control flow to an enclosing source statement', async () => {
+    const source = `globalThis.make(function (flag: boolean) {
+  if (flag) globalThis.first = 1;
+  globalThis.second = 2;
+});
+`;
+    const { file, options } = await prepare(
+      source,
+      'merged-control-flow',
+      'minified',
+    );
+    const coverage = (await convertV8CoverageWithAst(options))[file]!;
+    const enclosing = Object.entries(coverage.statementMap).filter(
+      ([, loc]) => loc.start.line === 1,
+    );
+    expect(enclosing).toHaveLength(1);
+    expect(coverage.s[enclosing[0]![0]]).toBe(1);
+  });
+
+  it('merges minified and original statements without duplicating source locations', async () => {
+    const source = `function run() {
+  globalThis.first = 1;
+  globalThis.second = 2;
+  (globalThis.first = 3,
+   globalThis.second = 4);
+  globalThis.first = 5; globalThis.second = 6;
+}
+run();
+`;
+    const coverageMap = createCoverageMap();
+    for (const form of ['es2022', 'minified'] as const) {
+      const { options } = await prepare(source, 'merged-forms', form);
+      await applyV8CoverageWithAst({ ...options, coverageMap });
+    }
+    const coverage = coverageMap.fileCoverageFor(coverageMap.files()[0]!);
+    for (const line of [2, 3, 4, 6]) {
+      const statements = Object.entries(coverage.statementMap).filter(
+        ([, loc]) => loc.start.line === line,
+      );
+      expect(statements).toHaveLength(line === 6 ? 2 : 1);
+      expect(statements.map(([id]) => coverage.s[id])).toEqual(
+        line === 6 ? [2, 2] : [2],
+      );
+    }
+  });
+
   it.each([
     { name: 'two-form', source: collision, forms: ['es2022', 'es5'] as const },
     {

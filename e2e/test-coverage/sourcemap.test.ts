@@ -1,9 +1,11 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
+import { rspack } from '@rsbuild/core';
 import fs from 'fs-extra';
 import { normalize } from 'pathe';
 import { x } from 'tinyexec';
 import { getCoverageSummaryEntry, runRstestCli } from '../scripts';
+import { runBrowserCliWithCwd } from '../browser-mode/utils';
 import { coverageProviders } from './providers';
 
 const expectedSummary = {
@@ -16,6 +18,211 @@ const expectedSummary = {
     allFiles: /^Allfiles\|87\.5\|75\|100\|87\.5\|$/,
   },
 } as const;
+
+it.for(['forks', 'vmThreads', 'browser'] as const)(
+  'restores source ranges after merging and inlining under %s',
+  async (runtime, { onTestFinished }) => {
+    const fixturePath = join(__dirname, 'fixtures');
+    const generatedPath = join(fixturePath, 'test-temp-merged');
+    const reportsDirectory = `test-temp-merged-statements-${runtime}`;
+    const sourcePath = join(fixturePath, 'mergedStatements.ts');
+    onTestFinished(() => {
+      fs.removeSync(generatedPath);
+      fs.removeSync(join(fixturePath, reportsDirectory));
+    });
+    const result = await rspack.experiments.swc.transform(
+      fs.readFileSync(sourcePath, 'utf8'),
+      {
+        filename: sourcePath,
+        sourceMaps: true,
+        inlineSourcesContent: true,
+        jsc: {
+          parser: { syntax: 'typescript' },
+          target: 'es2022',
+          minify: {
+            compress: { defaults: true, sequences: true },
+            mangle: false,
+          },
+        },
+      },
+    );
+    expect(result.code).toMatch(/log\(.+\),\s*log\(/);
+    fs.outputFileSync(
+      join(generatedPath, 'index.js'),
+      `${result.code}\n//# sourceMappingURL=index.js.map`,
+    );
+    fs.outputFileSync(join(generatedPath, 'index.js.map'), result.map!);
+
+    const run = async (
+      include: string | undefined,
+      directory: string,
+      html: boolean,
+      native = false,
+    ) => {
+      const args = [
+        '-c',
+        'rstest.sourcemap.config.ts',
+        native
+          ? 'test/missingSource.fixture.ts'
+          : 'test/mergedStatements.fixture.ts',
+        ...(runtime === 'browser'
+          ? ['--browser', '--browser.headless']
+          : ['--pool', runtime]),
+        '--coverage.provider',
+        'v8',
+        ...(include ? ['--coverage.include', include] : []),
+        '--coverage.reporters',
+        'json',
+        ...(html ? ['--coverage.reporters', 'html'] : []),
+        '--coverage.reportsDirectory',
+        directory,
+      ];
+      const { expectExecSuccess } =
+        runtime === 'browser'
+          ? await runBrowserCliWithCwd(fixturePath, { args })
+          : await runRstestCli({
+              command: 'rstest',
+              args: ['run', ...args],
+              options: { nodeOptions: { cwd: fixturePath } },
+            });
+      await expectExecSuccess();
+    };
+    await run('mergedStatements.ts', reportsDirectory, true);
+
+    const report = fs.readJsonSync(
+      join(fixturePath, reportsDirectory, 'coverage-final.json'),
+    ) as Record<
+      string,
+      {
+        statementMap: Record<
+          string,
+          {
+            start: { line: number; column: number };
+            end: { line: number; column: number | null };
+          }
+        >;
+        s: Record<string, number>;
+      }
+    >;
+    const coverage = getCoverageSummaryEntry(report, sourcePath)!;
+    const statementsAt = (line: number) =>
+      Object.entries(coverage.statementMap)
+        .filter(([, location]) => location.start.line === line)
+        .map(([id]) => coverage.s[id]);
+    expect(statementsAt(2)).toEqual([1]);
+    expect(statementsAt(3)).toEqual([1]);
+    expect(statementsAt(7)).toEqual([0]);
+    expect(statementsAt(8)).toEqual([0]);
+    expect(statementsAt(12)).toEqual([1]);
+    expect(statementsAt(17)).toEqual([0]);
+    expect(statementsAt(19)).toEqual([1]);
+    expect(statementsAt(20)).toEqual([1]);
+    expect(statementsAt(25)).toEqual([1]);
+    expect(statementsAt(30)).toEqual([0]);
+    for (const { start, end } of Object.values(coverage.statementMap)) {
+      expect(end.line).toBeGreaterThanOrEqual(start.line);
+      if (end.line === start.line && end.column !== null) {
+        expect(end.column).toBeGreaterThanOrEqual(start.column);
+      }
+    }
+    const html = fs.readFileSync(
+      join(fixturePath, reportsDirectory, 'mergedStatements.ts.html'),
+      'utf8',
+    );
+    for (const message of ['third', 'fourth']) {
+      expect(html).toMatch(
+        new RegExp(
+          `<span class="cstat-no"[^>]*>[^<]*log\\('${message}'\\);</span>`,
+        ),
+      );
+    }
+    expect(html).toMatch(
+      /<span class="cstat-no"[^>]*>[^<]*return log\(words\.join\(':'\)\);<\/span>/,
+    );
+    if (runtime === 'browser') return;
+    for (const format of ['inline', 'external']) {
+      const directory = `${reportsDirectory}-disk-${format}`;
+      onTestFinished(() => fs.removeSync(join(fixturePath, directory)));
+      const map = JSON.stringify({
+        ...JSON.parse(result.map!),
+        sources: ['../mergedStatements.ts'],
+        sourcesContent: undefined,
+      });
+      const mapUrl =
+        format === 'inline'
+          ? `data:application/json;base64,${Buffer.from(map).toString('base64')}`
+          : 'index.js.map';
+      fs.outputFileSync(
+        join(generatedPath, 'index.js'),
+        `${result.code}\n//# sourceMappingURL=${mapUrl}`,
+      );
+      fs.outputFileSync(join(generatedPath, 'index.js.map'), map);
+      await run('mergedStatements.ts', directory, false, true);
+      const diskReport = fs.readJsonSync(
+        join(fixturePath, directory, 'coverage-final.json'),
+      ) as typeof report;
+      const diskSource = getCoverageSummaryEntry(diskReport, sourcePath)!;
+      for (const line of [7, 8]) {
+        const entries = Object.entries(diskSource.statementMap).filter(
+          ([, loc]) => loc.start.line === line,
+        );
+        expect(entries).toHaveLength(1);
+        expect(diskSource.s[entries[0]![0]]).toBe(0);
+      }
+    }
+    for (const [index, source] of [
+      null,
+      'export const invalid = ;',
+    ].entries()) {
+      const directory = `${reportsDirectory}-missing-${index}`;
+      onTestFinished(() => fs.removeSync(join(fixturePath, directory)));
+      const missingPath = join(fixturePath, 'missing-original.ts');
+      const code = [
+        'export function inlinedValue(log) {',
+        "log('returned');",
+        '}',
+        'export function inlinedUncovered(log) {',
+        "log('uncalled');",
+        '}',
+      ].join('\n');
+      // Map each call from line 25/30 back to line 3, independent of minifier choices.
+      const map = {
+        version: 3,
+        names: [],
+        sources: ['../missing-original.ts'],
+        sourcesContent: [source],
+        mappings: 'AAwBA;AAAA,IAtBA;AAAA;AA2BA;AAAA,IA3BA;AAAA',
+      };
+      fs.outputFileSync(
+        join(generatedPath, 'index.js'),
+        `${code}\n//# sourceMappingURL=index.js.map`,
+      );
+      fs.outputFileSync(
+        join(generatedPath, 'index.js.map'),
+        JSON.stringify(map),
+      );
+      // Explicit include globs retain only files found on disk.
+      await run(undefined, directory, false, true);
+      const missingReport = fs.readJsonSync(
+        join(fixturePath, directory, 'coverage-final.json'),
+      ) as typeof report;
+      const missing = getCoverageSummaryEntry(missingReport, missingPath)!;
+      expect(missing, Object.keys(missingReport).join(', ')).toBeDefined();
+      for (const [line, count] of [
+        [25, 1],
+        [30, 0],
+      ]) {
+        const entries = Object.entries(missing.statementMap).filter(
+          ([, loc]) => loc.start.line === line,
+        );
+        expect(entries).toHaveLength(1);
+        const [id, loc] = entries[0]!;
+        expect(missing.s[id]).toBe(count);
+        expect(loc.end.line).toBeGreaterThanOrEqual(loc.start.line);
+      }
+    }
+  },
+);
 
 for (const provider of coverageProviders) {
   describe(`coverage sourcemaps (${provider})`, () => {

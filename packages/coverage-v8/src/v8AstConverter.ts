@@ -42,7 +42,13 @@ import {
   type SourceMapInput,
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
-import type { Comment, ParseResult } from '@swc-next/parser';
+import {
+  type Comment,
+  langFromPath,
+  parseSync,
+  type ParseResult,
+  sourceTypeFromPath,
+} from '@swc-next/parser';
 import { walk, type NodeType } from '@swc-next/walker';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 
@@ -59,6 +65,13 @@ type AstNode = {
 type BranchType = 'if' | 'binary-expr' | 'cond-expr' | 'switch' | 'default-arg';
 type Position = Needle & { filename: string | null };
 type MappedLocation = { start: Position; end: Position };
+type SourceNode = {
+  start: number;
+  end: number;
+  type: NodeType;
+  parent: number;
+  statement: number;
+};
 type IstanbulLocation = {
   start: { line: number; column: number };
   end: { line: number; column: number };
@@ -207,23 +220,6 @@ async function getPreparedCoverage(
 async function prepareCoverage(
   options: ConvertOptions,
 ): Promise<PreparedCoverage | null> {
-  const parseResult =
-    typeof options.ast === 'function' ? options.ast() : options.ast;
-  const ignoreHints = options.code.includes('ignore')
-    ? getIgnoreHints(options.code, parseResult.comments)
-    : [];
-
-  if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
-    return null;
-  }
-
-  const error = parseResult.diagnostics.find(
-    (diagnostic) => diagnostic.severity === 'error',
-  );
-  if (error) {
-    throw new SyntaxError(error.message);
-  }
-
   const filename = options.coverage.url.startsWith('file://')
     ? fileURLToPath(options.coverage.url)
     : options.coverage.url;
@@ -236,16 +232,33 @@ async function prepareCoverage(
   const sourceMap = sourceMapResult?.sourceMap
     ? createTraceMap(sourceMapResult.sourceMap, sourceMapResult.sourceMapUrl)
     : null;
-  const locator = sourceMap
-    ? new SourceMapLocator(sourceMap, options.code)
-    : new IdentityLocator(filename, options.code);
-  const builder = new CoverageBuilder(
-    filename,
-    locator,
-    directory,
-    options.rawSourceFilter,
-    options.sourceFilter,
+  const sources = new Set(
+    (sourceMap?.resolvedSources ?? [filename]).filter(
+      (source) =>
+        (!options.rawSourceFilter || options.rawSourceFilter(source)) &&
+        (!options.sourceFilter ||
+          options.sourceFilter(resolveSourceFilename(source, directory))),
+    ),
   );
+  if (sources.size === 0) return null;
+
+  const parseResult =
+    typeof options.ast === 'function' ? options.ast() : options.ast;
+  const ignoreHints = options.code.includes('ignore')
+    ? getIgnoreHints(options.code, parseResult.comments)
+    : [];
+  if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
+    return null;
+  }
+  const error = parseResult.diagnostics.find(
+    (diagnostic) => diagnostic.severity === 'error',
+  );
+  if (error) throw new SyntaxError(error.message);
+
+  const locator = sourceMap
+    ? new SourceMapLocator(sourceMap, options.code, sources, directory)
+    : new IdentityLocator(filename, options.code);
+  const builder = new CoverageBuilder(filename, locator, directory);
   const skippedNodes = new WeakSet<AstNode>();
   const coveredNodes = new WeakSet<AstNode>();
 
@@ -532,8 +545,6 @@ class CoverageBuilder {
     filename: string,
     private locator: CoverageLocator,
     private directory: string,
-    rawSourceFilter?: (source: string) => boolean,
-    sourceFilter?: (filePath: string) => boolean,
   ) {
     const generatedDirectory = dirname(filename);
 
@@ -541,14 +552,7 @@ class CoverageBuilder {
       let filePath = filename;
 
       if (source) {
-        if (rawSourceFilter && !rawSourceFilter(source)) {
-          continue;
-        }
         filePath = resolveSourceFilename(source, generatedDirectory);
-      }
-
-      if (sourceFilter && !sourceFilter(filePath)) {
-        continue;
       }
 
       this.files[filePath] = {
@@ -627,29 +631,46 @@ class CoverageBuilder {
   }
 
   addStatement(node: AstNode, parent?: AstNode) {
-    const loc = this.locator.getLoc(node);
-    if (loc === null) return;
-
-    const filename = this.getSourceFilename(loc);
-    const fileCoverage = this.files[filename];
-    if (!fileCoverage) return;
-
-    const key = `s:${cacheKey(loc)}`;
-    let index = fileCoverage.seen[key];
-
-    if (index == null) {
-      index = fileCoverage.statementCount++;
-      fileCoverage.seen[key] = index;
-      fileCoverage.statementMap[index] = pickLocation(loc);
+    let statements: { node: AstNode; loc: MappedLocation }[] | null = null;
+    if (
+      node.type === 'ExpressionStatement' &&
+      this.locator instanceof SourceMapLocator
+    ) {
+      const expression = node.expression as AstNode;
+      if (expression.type === 'SequenceExpression') {
+        statements = this.locator.getSequenceStatements(
+          expression.expressions as AstNode[],
+        );
+      }
     }
 
-    const coverageNode = parent || node;
-    this.statements.push({
-      filename,
-      index,
-      startOffset: coverageNode.start,
-      endOffset: coverageNode.end,
-    });
+    if (!statements) {
+      const loc = this.locator.getLoc(node);
+      if (loc === null) return;
+      statements = [{ node: parent || node, loc }];
+    }
+
+    for (const statement of statements) {
+      const filename = this.getSourceFilename(statement.loc);
+      const fileCoverage = this.files[filename];
+      if (!fileCoverage) continue;
+
+      const key = `s:${cacheKey(statement.loc)}`;
+      let index = fileCoverage.seen[key];
+
+      if (index == null) {
+        index = fileCoverage.statementCount++;
+        fileCoverage.seen[key] = index;
+        fileCoverage.statementMap[index] = pickLocation(statement.loc);
+      }
+
+      this.statements.push({
+        filename,
+        index,
+        startOffset: statement.node.start,
+        endOffset: statement.node.end,
+      });
+    }
   }
 
   addBranch(
@@ -831,25 +852,168 @@ class IdentityLocator extends BaseLocator implements CoverageLocator {
   }
 }
 
+class OriginalSource extends BaseLocator {
+  private nodes: SourceNode[] = [];
+
+  constructor(source: string, filename: string) {
+    super(source);
+    const ast = parseSync(source, {
+      lang: langFromPath(filename),
+      sourceType: sourceTypeFromPath(filename),
+      errorRecovery: true,
+      preserveParens: false,
+    });
+    if (ast.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+      return;
+    }
+    const nodes = this.nodes;
+    walk(ast.program, {
+      enter(node: AstNode) {
+        if (node.type === 'Program' || node.end <= node.start) return;
+        nodes.push({
+          start: node.start,
+          end: node.end,
+          type: node.type,
+          parent: -1,
+          statement: -1,
+        });
+      },
+    });
+    nodes.sort((a, b) => a.start - b.start || b.end - a.end);
+    const parents: number[] = [];
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index]!;
+      while (parents.length) {
+        const parent = nodes[parents[parents.length - 1]!]!;
+        if (parent.end >= node.end && parent.end > node.start) break;
+        parents.pop();
+      }
+      node.parent = parents[parents.length - 1] ?? -1;
+      node.statement =
+        node.type.endsWith('Statement') || node.type.endsWith('Declaration')
+          ? index
+          : (nodes[node.parent]?.statement ?? -1);
+      parents.push(index);
+    }
+  }
+
+  private findNode(
+    position: Needle,
+    outermost: boolean,
+  ): SourceNode | undefined {
+    const lineStart = this.lineStarts[position.line - 1];
+    if (lineStart === undefined) return undefined;
+    const offset = lineStart + position.column;
+    let low = 0;
+    let high = this.nodes.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      const start = this.nodes[mid]!.start;
+      if (start < offset || (!outermost && start === offset)) low = mid + 1;
+      else high = mid;
+    }
+    // Equal starts are ordered outermost first; containment uses the innermost node.
+    if (outermost && this.nodes[low]?.start === offset) return this.nodes[low];
+    let index = low - 1;
+    while (index >= 0) {
+      const node = this.nodes[index]!;
+      if (node.end > offset) return node;
+      index = node.parent;
+    }
+    return undefined;
+  }
+
+  getStatement(position: Needle) {
+    const node = this.findNode(position, false);
+    return node ? this.nodes[node.statement] : undefined;
+  }
+
+  getEnd(position: Needle) {
+    const node = this.findNode(position, true);
+    return node ? this.offsetToNeedle(node.end - 1) : undefined;
+  }
+}
+
 class SourceMapLocator extends BaseLocator implements CoverageLocator {
   private ignoredLines = new Map<string, Set<number>>();
+  private originalSources = new Map<string, OriginalSource | undefined>();
 
   constructor(
     private sourceMap: TraceMap,
     code: string,
+    private sources: Set<string>,
+    private directory: string,
   ) {
     super(code);
   }
 
   getSourceFilenames(): string[] {
-    return this.sourceMap.resolvedSources;
+    return [...this.sources];
+  }
+
+  getSequenceStatements(expressions: AstNode[]) {
+    const statements = new Map<
+      string,
+      { node: AstNode; loc: MappedLocation }
+    >();
+    let filtered = false;
+    for (const node of expressions) {
+      const start = getPosition(
+        this.offsetToNeedle(node.start),
+        this.sourceMap,
+      );
+      if (start?.filename && !this.sources.has(start.filename)) {
+        filtered = true;
+        continue;
+      }
+      const mapped = this.getLoc(node);
+      const filename = mapped?.start.filename;
+      if (!mapped || !filename) return null;
+
+      const original = this.getOriginalSource(filename)?.getStatement(
+        mapped.start,
+      );
+      if (original?.type !== 'ExpressionStatement') return null;
+
+      // A source comma expression still represents one statement, even when
+      // the minifier flattens it together with adjacent source statements.
+      const key = `${filename}:${original.start}:${original.end}`;
+      const statement = statements.get(key);
+      if (statement) {
+        statement.loc.end = mapped.end;
+      } else {
+        statements.set(key, { node, loc: mapped });
+      }
+    }
+    return statements.size > 1 || filtered ? [...statements.values()] : null;
+  }
+
+  private getOriginalSource(filename: string) {
+    if (this.originalSources.has(filename))
+      return this.originalSources.get(filename);
+    const source = this.getSourceContent(filename);
+    const original =
+      source === undefined ? undefined : new OriginalSource(source, filename);
+    this.originalSources.set(filename, original);
+    return original;
+  }
+
+  private getSourceContent(filename: string) {
+    return (
+      sourceContentFor(this.sourceMap, filename) ??
+      tryReadFileSync(resolveSourceFilename(filename, this.directory))
+    );
   }
 
   getLoc(node: Pick<AstNode, 'start' | 'end'>): MappedLocation | null {
     const startNeedle = this.offsetToNeedle(node.start);
     const start = getPosition(startNeedle, this.sourceMap);
 
-    if (start === null) {
+    if (
+      start === null ||
+      !start.filename ||
+      !this.sources.has(start.filename)
+    ) {
       return null;
     }
 
@@ -876,23 +1040,29 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
       return null;
     }
 
-    const afterEndMappings = allGeneratedPositionsFor(this.sourceMap, {
-      source: loc.end.filename,
-      line: loc.end.line,
-      column: loc.end.column + 1,
-      bias: LEAST_UPPER_BOUND,
-    });
+    const recoverEnd =
+      loc.end.filename !== loc.start.filename ||
+      comparePositions(loc.end, loc.start) < 0;
 
-    if (afterEndMappings.length === 0) {
-      loc.end.column = Infinity;
-    } else {
-      for (const mapping of afterEndMappings) {
-        if (mapping.line === null) continue;
+    if (!recoverEnd) {
+      const afterEndMappings = allGeneratedPositionsFor(this.sourceMap, {
+        source: loc.end.filename,
+        line: loc.end.line,
+        column: loc.end.column + 1,
+        bias: LEAST_UPPER_BOUND,
+      });
 
-        const original = originalPositionFor(this.sourceMap, mapping);
-        if (original.line === loc.end.line) {
-          loc.end = { ...original, filename: original.source };
-          break;
+      if (afterEndMappings.length === 0) {
+        loc.end.column = Infinity;
+      } else {
+        for (const mapping of afterEndMappings) {
+          if (mapping.line === null) continue;
+
+          const original = originalPositionFor(this.sourceMap, mapping);
+          if (original.line === loc.end.line) {
+            loc.end = { ...original, filename: original.source };
+            break;
+          }
         }
       }
     }
@@ -902,11 +1072,22 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
       return null;
     }
 
+    if (
+      recoverEnd ||
+      loc.end.filename !== filename ||
+      comparePositions(loc.end, loc.start) < 0
+    ) {
+      // Inlining can map a generated node's end back to an earlier definition.
+      // Recover the source construct at its start instead of spanning the moved code.
+      const end = this.getOriginalSource(filename)?.getEnd(loc.start);
+      // A map can ship without its sources. Keep a point range and its counter.
+      loc.end = { ...(end ?? loc.start), filename };
+    }
+
     let ignoredLines = this.ignoredLines.get(filename);
 
     if (!ignoredLines) {
-      const sources = sourceContentFor(this.sourceMap, filename);
-      ignoredLines = getIgnoredLines(sources ?? tryReadFileSync(filename));
+      ignoredLines = getIgnoredLines(this.getSourceContent(filename));
       this.ignoredLines.set(filename, ignoredLines);
     }
 
@@ -1447,6 +1628,10 @@ function pickLocation(loc: PartialLocation): IstanbulLocation {
     start: { line: loc.start.line!, column: loc.start.column! },
     end: { line: loc.end.line!, column: loc.end.column! },
   };
+}
+
+function comparePositions(a: Needle, b: Needle) {
+  return a.line - b.line || a.column - b.column;
 }
 
 function cacheKey(loc: PartialLocation) {
