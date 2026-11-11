@@ -43,6 +43,16 @@ describe('browserLaunchKey', () => {
     expect(keyOf({ logger, fn })).toBe(keyOf({ fn, logger }));
   });
 
+  it('keys symbols by identity without throwing, including registered ones', () => {
+    expect(() => keyOf({ tag: Symbol.for('rstest.launch') })).not.toThrow();
+    expect(keyOf({ tag: Symbol.for('rstest.launch') })).toBe(
+      keyOf({ tag: Symbol.for('rstest.launch') }),
+    );
+    expect(keyOf({ tag: Symbol('a') })).not.toBe(keyOf({ tag: Symbol('a') }));
+    const local = Symbol('local');
+    expect(keyOf({ tag: local })).toBe(keyOf({ tag: local }));
+  });
+
   it('treats equal plain values as the same launch regardless of key order', () => {
     expect(keyOf({ args: ['--a', '--b'], timeout: 10 })).toBe(
       keyOf({ timeout: 10, args: ['--a', '--b'] }),

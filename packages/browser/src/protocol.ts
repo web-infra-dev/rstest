@@ -92,13 +92,15 @@ export type BrowserProjectRuntime = {
 };
 
 /** The row as serialized to the browser: the host-only `providerOptions` is stripped. */
-export type BrowserProjectWireRow = Omit<BrowserProjectRuntime, 'providerOptions'>;
+export type BrowserProjectWireRow = Omit<
+  BrowserProjectRuntime,
+  'providerOptions'
+>;
 
 export const toWireRow = ({
   providerOptions: _providerOptions,
   ...wire
 }: BrowserProjectRuntime): BrowserProjectWireRow => wire;
-
 
 /**
  * Test file info with associated project name, and (once scheduled) the browser

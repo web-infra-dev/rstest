@@ -10,11 +10,25 @@
 const identityIds = new WeakMap<object, number>();
 let nextIdentityId = 0;
 
+// Symbols cannot always be WeakMap keys (`Symbol.for()` registered ones throw),
+// so they get their own Map; the set of distinct symbols in launch options is
+// tiny, so the strong reference is harmless.
+const symbolIds = new Map<symbol, number>();
+
 const identityOf = (value: object): number => {
   let id = identityIds.get(value);
   if (id === undefined) {
     id = nextIdentityId++;
     identityIds.set(value, id);
+  }
+  return id;
+};
+
+const symbolIdentityOf = (value: symbol): number => {
+  let id = symbolIds.get(value);
+  if (id === undefined) {
+    id = nextIdentityId++;
+    symbolIds.set(value, id);
   }
   return id;
 };
@@ -36,8 +50,9 @@ const encode = (value: unknown, ancestors: object[]): string => {
     case 'bigint':
       return `${value}n`;
     case 'function':
+      return `#ref${identityOf(value)}`;
     case 'symbol':
-      return `#ref${identityOf(value as object)}`;
+      return `#sym${symbolIdentityOf(value)}`;
   }
   if (value === null) {
     return 'null';

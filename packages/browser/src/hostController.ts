@@ -1292,7 +1292,9 @@ export const runBrowserController = async (
   // headless-only runs never render it; a headed window gets its headed rows
   // (at most one, validated), keeping `(project, browser)` lookups unambiguous.
   runtime.setContainerOptions(
-    useHeadlessDirect ? hostOptions : { ...hostOptions, projects: headedRows.map(toWireRow) },
+    useHeadlessDirect
+      ? hostOptions
+      : { ...hostOptions, projects: headedRows.map(toWireRow) },
   );
 
   // Track test results from browser runners
