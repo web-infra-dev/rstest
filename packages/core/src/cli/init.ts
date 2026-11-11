@@ -331,6 +331,9 @@ export function mergeWithCLIOptions(
           options.browser.screenshotFailures,
         );
       }
+      if (options.browser.viewport !== undefined) {
+        config.browser.viewport = options.browser.viewport;
+      }
       if (options.browser.port !== undefined) {
         config.browser.port = Number(options.browser.port);
       }

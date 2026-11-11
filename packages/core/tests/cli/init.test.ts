@@ -622,6 +622,41 @@ describe('resolveProjects', () => {
       });
     });
 
+    it('should apply browser.viewport from run options and keep it when omitted', async () => {
+      const createConfig = (): RstestConfig => ({
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              viewport: { width: 800, height: 600 },
+            },
+          },
+        ],
+      });
+
+      const overridden = await resolveProjects({
+        config: createConfig(),
+        root: rootPath,
+        options: { browser: { viewport: { width: 1024, height: 768 } } },
+      });
+      expect(overridden[0]!.config.browser?.viewport).toEqual({
+        width: 1024,
+        height: 768,
+      });
+
+      const kept = await resolveProjects({
+        config: createConfig(),
+        root: rootPath,
+        options: { browser: { headless: true } },
+      });
+      expect(kept[0]!.config.browser?.viewport).toEqual({
+        width: 800,
+        height: 600,
+      });
+    });
+
     it('should override browser provider options with CLI options', async () => {
       const config: RstestConfig = {
         projects: [
