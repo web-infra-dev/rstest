@@ -30,6 +30,7 @@ import type {
 import {
   DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
+  toWireRow,
 } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
@@ -165,7 +166,7 @@ export const createHeadedScheduler = async ({
   // variant.
   const headedHostOptions: BrowserHostConfig = {
     ...hostOptions,
-    projects: [headedRow],
+    projects: [toWireRow(headedRow)],
   };
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
   // The headed lane runs its row's project only: it stamps each file with the

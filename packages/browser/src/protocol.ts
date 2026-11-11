@@ -81,11 +81,24 @@ export type BrowserProjectRuntime = {
   expect?: BrowserExpectConfig;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
-  /** Resolved per-entry provider options (launch + context) for `newContext`. */
+  /**
+   * Host-only resolved per-entry provider options (launch + context) for
+   * `newContext`. Opaque and possibly non-serializable: it never crosses to the
+   * browser, so everything that serializes a row goes through `toWireRow`.
+   */
   providerOptions: Record<string, unknown>;
   /** Which launched browser this row runs on (see `BrowserRuntime.browsers`). */
   launchKey: string;
 };
+
+/** The row as serialized to the browser: the host-only `providerOptions` is stripped. */
+export type BrowserProjectWireRow = Omit<BrowserProjectRuntime, 'providerOptions'>;
+
+export const toWireRow = ({
+  providerOptions: _providerOptions,
+  ...wire
+}: BrowserProjectRuntime): BrowserProjectWireRow => wire;
+
 
 /**
  * Test file info with associated project name, and (once scheduled) the browser
@@ -159,7 +172,7 @@ export type BrowserLogPayload = {
 
 export type BrowserHostConfig = {
   rootPath: string;
-  projects: BrowserProjectRuntime[];
+  projects: BrowserProjectWireRow[];
   snapshot: {
     updateSnapshot: SnapshotUpdateState;
   };

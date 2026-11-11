@@ -59,6 +59,7 @@ import type {
   BrowserProviderPage,
 } from './providers';
 import { getBrowserProviderImplementation } from './providers';
+import { encodeOpaqueValue } from './launchKey';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 import { collectWatchTestFiles } from './watchRerunPlanner';
 
@@ -828,12 +829,11 @@ export const browserLaunchKey = ({
   headless,
   providerOptions,
 }: Omit<BrowserLaunchSpec, 'key'>): string =>
-  JSON.stringify([
-    provider,
-    browserName,
-    headless,
+  // `providerOptions.launch` is opaque (may hold functions, class instances,
+  // cycles), so it is encoded structurally rather than JSON-serialized.
+  `${JSON.stringify([provider, browserName, headless])}|${encodeOpaqueValue(
     providerOptions.launch ?? null,
-  ]);
+  )}`;
 
 export type BrowserLaunch = BrowserLaunchSpec & {
   browser: BrowserProviderBrowser;

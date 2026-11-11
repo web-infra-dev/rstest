@@ -37,6 +37,7 @@ import {
   DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
   getFileTaskId,
+  toWireRow,
 } from './protocol';
 import type {
   BrowserProviderBrowser,
@@ -577,7 +578,7 @@ export const createHeadlessScheduler = async ({
         ...hostOptions,
         // The runner page resolves only its own `(project, browser)` row; a
         // worker page never needs the other rows of this run.
-        projects: [file.row],
+        projects: [toWireRow(file.row)],
         snapshot: {
           updateSnapshot,
         },
