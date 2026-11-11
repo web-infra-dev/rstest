@@ -50,6 +50,7 @@ import {
   type RunnerEventSink,
   sinkToRuntimeRpc,
 } from '../core/execution/runnerEventSink';
+import { reporterFileKey } from '../reporter/utils';
 import { MAX_OOM_ATTEMPTS, Pool } from './pool';
 import { WorkerOomKillError } from './poolRunner';
 import type { PoolTask, PoolWorkerKind } from './types';
@@ -324,10 +325,9 @@ const workerErrorToResult = (
     delete error.stack;
   }
 
-  const runningModule = context.stateManager.runningModuleFor({
-    project: projectName,
-    testPath,
-  });
+  const runningModule = context.stateManager.runningModules.get(
+    reporterFileKey(projectName, testPath),
+  );
   const runningTests = runningModule?.runningTests;
   const completedResults = runningModule?.results || [];
 

@@ -128,15 +128,6 @@ describe('resolveBrowserInstances', () => {
     }
   });
 
-  it('returns the same resolution for repeated calls on one project', () => {
-    const project = makeProject({
-      instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
-    });
-    expect(resolveBrowserInstances(project)).toBe(
-      resolveBrowserInstances(project),
-    );
-  });
-
   it('rejects setting browser.browser together with browser.instances', () => {
     expect(() =>
       resolveBrowserInstances(

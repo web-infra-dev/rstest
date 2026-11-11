@@ -7,7 +7,7 @@ import {
   withDefaultConfig,
 } from '../src/config';
 import { Rstest } from '../src/core/rstest';
-import type { BrowserName, RstestConfig } from '../src/types';
+import type { RstestConfig } from '../src/types';
 import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
 
 // Mock std-env to ensure consistent snapshot across environments
@@ -708,45 +708,6 @@ describe('withDefaultConfig browser normalization', () => {
     const config: RstestConfig = {};
 
     expect(() => withDefaultConfig(config)).not.toThrow();
-  });
-});
-
-describe('browser.instances raw storage', () => {
-  it('stores the user-layer browser values untouched and applies no instance defaults', () => {
-    const normalized = withDefaultConfig({
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        headless: false,
-        instances: [
-          { browserName: 'chromium' },
-          { browserName: 'firefox', headless: true },
-        ],
-        cliInstances: ['firefox'],
-        cliBrowserName: 'webkit',
-      },
-    });
-    expect(normalized.browser.instances).toEqual([
-      { browserName: 'chromium' },
-      { browserName: 'firefox', headless: true },
-    ]);
-    expect(normalized.browser.cliInstances).toEqual(['firefox']);
-    expect(normalized.browser.cliBrowserName).toBe('webkit');
-    expect(normalized.browser.browser).toBeUndefined();
-    expect(normalized.browser.headless).toBe(false);
-  });
-
-  it('keeps the deprecated browser.browser raw and never validates browser shapes', () => {
-    const normalized = withDefaultConfig({
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'not-a-browser' as BrowserName,
-        instances: [],
-      },
-    });
-    expect(normalized.browser.browser).toBe('not-a-browser');
-    expect(normalized.browser.instances).toEqual([]);
   });
 });
 

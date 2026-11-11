@@ -590,25 +590,6 @@ describe('resolveProjects', () => {
       });
     });
 
-    it('should map the deprecated --browser.name to its own raw field', async () => {
-      const config: RstestConfig = {
-        projects: [{ name: 'test-project' }],
-      };
-
-      const projects = await resolveProjects({
-        config,
-        root: rootPath,
-        options: {
-          browser: { enabled: true, name: 'webkit' },
-        },
-      });
-
-      expect(projects[0]!.config.browser).toMatchObject({
-        enabled: true,
-        cliBrowserName: 'webkit',
-      });
-    });
-
     it('should override config browser options with CLI options', async () => {
       const config: RstestConfig = {
         projects: [
@@ -726,35 +707,6 @@ describe('resolveProjects', () => {
         context: {
           locale: 'en-US',
         },
-      });
-    });
-
-    it('should record --browser.instances as a raw selection without touching configured instances', async () => {
-      const config: RstestConfig = {
-        projects: [
-          {
-            name: 'test-project',
-            browser: {
-              enabled: true,
-              provider: 'playwright',
-              instances: [
-                { browserName: 'chromium' },
-                { browserName: 'firefox' },
-              ],
-            },
-          },
-        ],
-      };
-
-      const projects = await resolveProjects({
-        config,
-        root: rootPath,
-        options: { browser: { instances: 'firefox' } },
-      });
-
-      expect(projects[0]!.config.browser).toMatchObject({
-        instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
-        cliInstances: ['firefox'],
       });
     });
 

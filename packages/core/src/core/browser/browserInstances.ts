@@ -79,14 +79,6 @@ const configuredInstancesOf = (
   return instances;
 };
 
-/** Names of the browsers a project configures (before any CLI selection). */
-export const getConfiguredBrowserNames = (
-  project: Pick<InternalProjectContext, 'normalizedConfig'>,
-): BrowserName[] =>
-  configuredInstancesOf(project.normalizedConfig.browser).map(
-    ({ browserName }) => browserName,
-  );
-
 const assertCliBrowserName = (name: string, source: string): BrowserName => {
   if (!isBrowserName(name)) {
     throw new Error(
@@ -164,18 +156,6 @@ const warnDeprecatedBrowserField = (): void => {
   );
 };
 
-const resolveBrowserInstanceConfigs = (
-  browser: ProjectBrowserConfig,
-): ResolvedBrowserInstance[] => {
-  const configured = configuredInstancesOf(browser);
-  if (browser.browser !== undefined && browser.cliBrowserName === undefined) {
-    warnDeprecatedBrowserField();
-  }
-  return selectCliInstances(browser, configured).map((instance) =>
-    resolveInstance(instance, browser),
-  );
-};
-
 /**
  * One `(project, browser)` pair of a browser project. Everything outside
  * `@rstest/browser` sees an instance as a plain project named {@link name}:
@@ -189,35 +169,34 @@ export type BrowserInstance = ResolvedBrowserInstance & {
   name: string;
 };
 
-const instancesByConfig = new WeakMap<object, BrowserInstance[]>();
-
 /**
  * The only place a project's browser instances are resolved: raw
  * `browser.instances` / deprecated `browser.browser` / CLI selection (stored
  * untouched by config normalization) → one instance per browser with the
  * project-level defaults merged. A CLI selection that matches none of the
- * project's instances yields an empty list: see {@link selectCliInstanceProjects}. Shape errors throw here; browser validation
- * calls it for every browser project, so they surface before any test or
- * browser launch. Memoized per project browser config so every caller of a
- * run sees the same instances and the deprecation warning fires once.
+ * project's instances yields an empty list: see
+ * {@link selectCliInstanceProjects}. Shape errors throw here; browser
+ * validation calls it for every browser project, so they surface before any
+ * test or browser launch.
  */
 export const resolveBrowserInstances = (
   project: Pick<InternalProjectContext, 'name' | 'normalizedConfig'>,
 ): BrowserInstance[] => {
   const { browser } = project.normalizedConfig;
-  let instances = instancesByConfig.get(browser);
-  if (!instances) {
-    const resolved = resolveBrowserInstanceConfigs(browser);
-    instances = resolved.map((instance) => ({
-      ...instance,
-      name:
-        resolved.length > 1
-          ? `${project.name} (${instance.browserName})`
-          : project.name,
-    }));
-    instancesByConfig.set(browser, instances);
+  const configured = configuredInstancesOf(browser);
+  if (browser.browser !== undefined && browser.cliBrowserName === undefined) {
+    warnDeprecatedBrowserField();
   }
-  return instances;
+  const resolved = selectCliInstances(browser, configured).map((instance) =>
+    resolveInstance(instance, browser),
+  );
+  return resolved.map((instance) => ({
+    ...instance,
+    name:
+      resolved.length > 1
+        ? `${project.name} (${instance.browserName})`
+        : project.name,
+  }));
 };
 
 /**
@@ -257,7 +236,9 @@ export const selectCliInstanceProjects = <
 
   const configured = browserProjects.map((project) => ({
     project,
-    names: getConfiguredBrowserNames(project),
+    names: configuredInstancesOf(project.normalizedConfig.browser).map(
+      ({ browserName }) => browserName,
+    ),
   }));
   for (const name of cliInstances) {
     if (!configured.some(({ names }) => names.includes(name as BrowserName))) {

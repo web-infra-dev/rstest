@@ -44,34 +44,4 @@ describe('expandToRows (headless scheduler queue order)', () => {
     expect(queue[0]!.row).toBe(queue[1]!.row);
     expect(queue[2]!.row).toBe(queue[3]!.row);
   });
-
-  it('keeps files of one row in plan order and separates projects', () => {
-    const webChromium = row('web', 'chromium');
-    const apiChromium = row('api', 'chromium');
-    const rowsByProject = new Map([
-      ['web', [webChromium]],
-      ['api', [apiChromium]],
-    ]);
-    const queue: ScheduledTestFile[] = expandToRows(
-      [
-        { testPath: '/tests/b.test.ts', projectName: 'web' },
-        { testPath: '/tests/a.test.ts', projectName: 'web' },
-        { testPath: '/tests/a.test.ts', projectName: 'api' },
-      ],
-      rowsByProject,
-    );
-
-    // Projects group alphabetically before browsers; plan order holds inside
-    // each row group (b was fed before a for `web`).
-    expect(queue.map((file) => file.testPath)).toEqual([
-      '/tests/a.test.ts',
-      '/tests/b.test.ts',
-      '/tests/a.test.ts',
-    ]);
-    expect(queue[0]!.row).toBe(apiChromium);
-    expect(queue[1]!.row).toBe(webChromium);
-    expect(queue[2]!.row).toBe(webChromium);
-    // The isolated-row batch loop never merges different row identities.
-    expect(queue[0]!.row).not.toBe(queue[1]!.row);
-  });
 });

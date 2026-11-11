@@ -164,9 +164,7 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
-  /**
-   * Project identity for the currently loaded runner page.
-   */
+  /** Project identity for the currently loaded runner page. */
   projectName?: string;
   /**
    * Browser identity for the currently loaded runner page. Runner documents
@@ -255,11 +253,7 @@ export type BrowserClientMessage =
   // Collect mode messages
   | {
       type: 'collect-result';
-      payload: {
-        testPath: string;
-        project: string;
-        tests: RawTestInfo[];
-      };
+      payload: { testPath: string; project: string; tests: RawTestInfo[] };
     }
   | { type: 'collect-complete' }
   // Unified RPC envelope for all runner -> container/host capability calls.

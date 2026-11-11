@@ -4,7 +4,8 @@ import type {
   RawTestResult,
   RawTestSuiteInfo,
 } from '@rstest/core/internal/browser';
-import type { BrowserName, BrowserLogPayload } from './protocol';
+import type { BrowserLogPayload, BrowserName } from './protocol';
+
 /** Payload for test file start event */
 export type TestFileStartPayload = {
   testPath: string;
