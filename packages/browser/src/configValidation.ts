@@ -134,6 +134,7 @@ type BrowserConfigRow = {
   projectName: string;
   browserName: BrowserName;
   headed: boolean;
+  isolate: boolean;
 };
 
 /**
@@ -148,6 +149,7 @@ const browserConfigRows = (context: InternalContext): BrowserConfigRow[] =>
           projectName: project.name,
           browserName: entry.browserName,
           headed: entry.headless === false,
+          isolate: project.normalizedConfig.isolate !== false,
         }))
       : [],
   );
@@ -241,12 +243,7 @@ const reportUnsupportedBrowserOptions = (
 
   if (
     isBrowserOnlyRun &&
-    browserRows.some(
-      (row) =>
-        row.headed &&
-        browserProjects.find((project) => project.name === row.projectName)
-          ?.normalizedConfig.isolate === false,
-    )
+    browserRows.some((row) => row.headed && !row.isolate)
   ) {
     warnings.add(
       'Browser mode keeps headed file frames isolated, so worker-scoped fixtures do not span files when browser.headless is false.',

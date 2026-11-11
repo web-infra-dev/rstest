@@ -237,15 +237,15 @@ export const selectCliInstanceProjects = <
   const configured = browserProjects.map((project) => ({
     project,
     names: configuredInstancesOf(project.normalizedConfig.browser).map(
-      ({ browserName }) => browserName,
+      ({ browserName }): string => browserName,
     ),
   }));
   for (const name of cliInstances) {
-    if (!configured.some(({ names }) => names.includes(name as BrowserName))) {
+    if (!configured.some(({ names }) => names.includes(name))) {
       const perProject = configured
         .map(
           ({ project, names }) =>
-            `${JSON.stringify(project.name ?? '')}: ${names.join(', ')}`,
+            `${JSON.stringify(project.name)}: ${names.join(', ')}`,
         )
         .join('; ');
       throw new Error(
@@ -254,10 +254,9 @@ export const selectCliInstanceProjects = <
     }
   }
 
-  const skipped = new Set(
-    browserProjects.filter(
-      (project) => resolveBrowserInstances(project).length === 0,
-    ),
+  return projects.filter(
+    (project) =>
+      !project.normalizedConfig.browser.enabled ||
+      resolveBrowserInstances(project).length > 0,
   );
-  return projects.filter((project) => !skipped.has(project));
 };

@@ -8,12 +8,10 @@ describe('runner session registry', () => {
     const session = registry.register({
       testFile: '/tests/a.test.ts',
       projectName: 'project',
-      browserName: 'chromium',
       runToken: 1,
       mode: 'headless-page',
     });
 
     expect(registry.getById(session.id)?.testFile).toBe('/tests/a.test.ts');
-    expect(registry.getById(session.id)?.browserName).toBe('chromium');
   });
 });

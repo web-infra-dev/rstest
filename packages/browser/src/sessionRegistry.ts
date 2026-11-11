@@ -1,11 +1,9 @@
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
-import type { BrowserName } from './protocol';
 
 type RunnerSessionRecord = {
   id: string;
   testFile: string;
   projectName: string;
-  browserName?: BrowserName;
   runToken: number;
   mode: 'headless-page' | 'headed-iframe';
   createdAt: number;

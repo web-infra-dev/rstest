@@ -21,7 +21,6 @@ import { getHeadlessConcurrency } from './concurrency';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
-import { getFileTaskId } from './protocol';
 import {
   createDeferredPromise,
   type FatalPayload,
@@ -37,6 +36,7 @@ import type {
 import {
   DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
+  getFileTaskId,
 } from './protocol';
 import type {
   BrowserProviderBrowser,
@@ -418,7 +418,6 @@ export const createHeadlessScheduler = async ({
       const session = sessionRegistry.register({
         testFile: file.testPath,
         projectName: file.projectName,
-        browserName: file.row.browserName,
         runToken: run.token,
         mode: 'headless-page',
         context: browserContext,
@@ -722,9 +721,6 @@ export const createHeadlessScheduler = async ({
       1,
       bail ? 1 : Math.ceil(queue.length / Math.max(concurrency, 1)),
     );
-    // Batches never mix browsers: a page belongs to one context/viewport pair.
-    // Non-isolated pages take consecutive files of the SAME row; the batch is
-    // bounded only when isolation is off (shared page accumulates module state).
 
     const worker = async (): Promise<void> => {
       while (
@@ -752,6 +748,7 @@ export const createHeadlessScheduler = async ({
           return;
         }
         const batch = [next];
+        // Batches never mix rows: a page belongs to one context/viewport pair.
         if (shareWorkerFixtures(next.row)) {
           while (
             batch.length < nonIsolatedBatchSize &&

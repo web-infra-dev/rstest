@@ -8,7 +8,6 @@ import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   logger,
 } from '@rstest/core/internal/browser';
-import type { BrowserProjectRuntime } from './protocol';
 import { normalize, relative } from 'pathe';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getTestPathKey } from './pathUtils';
@@ -24,6 +23,7 @@ import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
+  BrowserProjectRuntime,
   FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
@@ -35,8 +35,6 @@ import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import {
   browserForRow,
-  expandToRows,
-  groupRowsByProject,
   type BrowserV8CoverageRuntime,
   type BrowserWatchSession,
   type DispatchLanes,
@@ -162,10 +160,6 @@ export const createHeadedScheduler = async ({
   // constructor's caller only builds one with a headed row, so the row and
   // its provider options are required.
   const headedLaunch = browserForRow(runtime.browsers, headedRow);
-  const containerNewContextOptions = {
-    providerOptions: headedRow.providerOptions,
-    viewport: null,
-  };
   // The container window runs only this headed pair's row — its scheduler
   // owns the `projects` slice, so the base host config needs no headed
   // variant.
@@ -174,21 +168,22 @@ export const createHeadedScheduler = async ({
     projects: [headedRow],
   };
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
-  // The headed lane runs its row's project only: the lanes' shared file→row
-  // expansion stamps each file with the row it runs on, keeping the one-head
-  // lane's reload queue out of other rows' files and threading the row's
-  // browserName to the frames (browser-ui forwards it in the window options,
-  // so a frame resolves its row strictly). Watch file-set updates commit
-  // path-keyed sets, so every commit re-stamps through this helper.
-  const laneRowsByProject = groupRowsByProject([headedRow]);
+  // The headed lane runs its row's project only: it stamps each file with the
+  // row it runs on, keeping the one-head lane's reload queue out of other
+  // rows' files and threading the row's browserName to the frames (browser-ui
+  // forwards it in the window options, so a frame resolves its row strictly).
+  // Watch file-set updates commit path-keyed sets, so every commit re-stamps
+  // through this helper.
   const stampLaneFiles = (
     files: readonly { testPath: string; projectName: string }[],
   ): TestFileInfo[] =>
-    expandToRows(files, laneRowsByProject).map((file) => ({
-      testPath: file.testPath,
-      projectName: file.projectName,
-      browserName: file.row.browserName,
-    }));
+    files
+      .filter((file) => file.projectName === headedRow.name)
+      .map((file) => ({
+        testPath: file.testPath,
+        projectName: file.projectName,
+        browserName: headedRow.browserName,
+      }));
   let currentTestFiles = stampLaneFiles(allTestFiles);
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
@@ -302,9 +297,10 @@ export const createHeadedScheduler = async ({
     context: BrowserProviderContext;
     page: BrowserProviderPage;
   }> => {
-    const nextContext = await headedLaunch.newContext(
-      containerNewContextOptions,
-    );
+    const nextContext = await headedLaunch.newContext({
+      providerOptions: headedRow.providerOptions,
+      viewport: null,
+    });
     const nextPage = await nextContext.newPage();
     attachContainerPageHandlers(nextContext, nextPage);
     return { context: nextContext, page: nextPage };

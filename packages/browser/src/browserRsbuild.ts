@@ -832,31 +832,11 @@ export type BrowserLaunch = BrowserLaunchSpec & {
 };
 
 /**
- * The one launch-spec derivation every `(project, browser)` launch plan and
- * runtime row goes through (resolved entries), so row launch keys and launched
- * keys cannot drift.
- */
-const launchSpecForEntry = (
-  browser: { provider: BrowserProvider },
-  entry: { browserName: BrowserName; providerOptions: Record<string, unknown> },
-  headless: boolean,
-): BrowserLaunchSpec => {
-  const identity = {
-    provider: browser.provider,
-    browserName: entry.browserName,
-    headless,
-    providerOptions: entry.providerOptions,
-  };
-  return { ...identity, key: browserLaunchKey(identity) };
-};
-
-/**
  * One `(project, browser)` row per configured browser entry — the shared run
  * and list projection, and the single derivation of the launch plan:
  * `forceHeadless` is applied once here (`headless` on both rows and specs),
  * each row's `launchKey`
- * and its spec share one `{@link launchSpecForEntry }` result, and the specs
- * dedupe by key. A row can therefore never name a launch key the runtime did
+ * and its spec share one derivation, and the specs dedupe by key. A row can therefore never name a launch key the runtime did
  * not launch; list collection opts out of non-default launches by trimming
  * the specs instead of re-deriving.
  */
@@ -869,9 +849,7 @@ export const buildBrowserRuntimeRows = (
   } = {},
 ): { rows: BrowserProjectRuntime[]; launchSpecs: BrowserLaunchSpec[] } => {
   const rows: BrowserProjectRuntime[] = [];
-  // The launch plan deduped from the same derivation the rows go through:
-  // `launchSpecForEntry` produces the spec, `browserLaunchKey` is computed
-  // once per row, and rows sharing a key reuse one launch.
+  // Rows sharing a launch key reuse one launch.
   const specsByKey = new Map<string, BrowserLaunchSpec>();
   if (browserProjects.length === 0) {
     throw new Error('No browser-enabled projects found.');
@@ -888,7 +866,13 @@ export const buildBrowserRuntimeRows = (
     );
     for (const entry of resolveBrowserInstances(project)) {
       const headless = options.forceHeadless ?? entry.headless;
-      const spec = launchSpecForEntry(browser, entry, headless);
+      const identity = {
+        provider: browser.provider,
+        browserName: entry.browserName,
+        headless,
+        providerOptions: entry.providerOptions,
+      };
+      const spec = { ...identity, key: browserLaunchKey(identity) };
       if (!specsByKey.has(spec.key)) {
         specsByKey.set(spec.key, spec);
       }
@@ -896,7 +880,7 @@ export const buildBrowserRuntimeRows = (
         name: project.name,
         browserName: entry.browserName,
         instanceName: entry.name,
-        headless: spec.headless,
+        headless,
         environmentName: project.environmentName,
         projectRoot: normalize(project.rootPath),
         hasSetupFiles: (setupFiles?.length ?? 0) > 0,
@@ -1246,17 +1230,8 @@ const copyProxyResponseHeaders = (
 export const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
 ): Promise<void> => {
-  const closeLaunch = async (
-    browser?: BrowserProviderBrowser,
-  ): Promise<void> => {
-    try {
-      await browser?.close?.();
-    } catch {
-      // ignore
-    }
-  };
   await Promise.allSettled([
-    ...runtime.launches.map((launch) => closeLaunch(launch.browser)),
+    ...runtime.launches.map(({ browser }) => browser.close()),
     closeAllProjectServers(runtime.projectServers.values()),
   ]);
   try {
@@ -2169,18 +2144,17 @@ export const createBrowserRuntime = async ({
         } satisfies BrowserLaunch;
       }),
     );
-    let launchFailed = false;
-    let launchFailureReason: unknown;
     for (const settled of settledLaunches) {
       if (settled.status === 'fulfilled') {
         launched.push(settled.value);
-      } else {
-        launchFailed = true;
-        launchFailureReason ??= settled.reason;
       }
     }
-    if (launchFailed) {
-      throw launchFailureReason;
+    const failed = settledLaunches.find(
+      (settled): settled is PromiseRejectedResult =>
+        settled.status === 'rejected',
+    );
+    if (failed) {
+      throw failed.reason;
     }
     let generation;
     do {

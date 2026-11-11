@@ -73,6 +73,7 @@ import {
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
+  BrowserProjectRuntime,
   BrowserRpcRequest,
   RunnerEnvelope,
   SnapshotRpcMethod,
@@ -83,6 +84,7 @@ import type {
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_BROWSER,
+  getFileTaskId,
   NO_RPC_TIMEOUT,
   validateBrowserRpcRequest,
 } from './protocol';
@@ -93,7 +95,6 @@ import {
   type BrowserV8CoverageCollector,
   getBrowserProviderImplementation,
 } from './providers';
-import { type BrowserProjectRuntime, getFileTaskId } from './protocol';
 import {
   type FatalPayload,
   type LogPayload,
@@ -398,18 +399,14 @@ export const runBrowserController = async (
   const rowByInstance = new Map(
     projectRuntimeConfigs.map((row) => [row.instanceName, row]),
   );
-  const instanceNameByRow = new Map(
-    projectRuntimeConfigs.map((row) => [
-      `${row.name}\0${row.browserName}`,
-      row.instanceName,
-    ]),
-  );
+  const rowOf = (file: { projectName: string; browserName?: string }) =>
+    rowsByProject
+      .get(file.projectName)
+      ?.find((row) => row.browserName === file.browserName);
   const instanceNameOf = (file: {
     projectName: string;
     browserName?: string;
-  }): string =>
-    instanceNameByRow.get(`${file.projectName}\0${file.browserName}`) ??
-    file.projectName;
+  }): string => rowOf(file)?.instanceName ?? file.projectName;
   const fileKeyOf = (file: {
     projectName: string;
     testPath: string;
@@ -1083,9 +1080,10 @@ export const runBrowserController = async (
     // run-wide default browser when a request omits its own.
     const requestedBrowserName = request.browserName ?? browserName;
     const screenshotRow = screenshotProject
-      ? rowsByProject
-          .get(screenshotProject.name)
-          ?.find((row) => row.browserName === requestedBrowserName)
+      ? rowOf({
+          projectName: screenshotProject.name,
+          browserName: requestedBrowserName,
+        })
       : undefined;
     const screenshotBrowserName = screenshotRow?.browserName ?? browserName;
     const screenshotConfig = screenshotRow?.expect?.toMatchScreenshot;
