@@ -1,4 +1,4 @@
-import { mkdirSync, symlinkSync } from 'node:fs';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -188,7 +188,7 @@ it('uses the environment dependency after a rebuild', () => {
     },
   );
 
-  it.for(['list', 'commonjs', 'shared-worker'])(
+  it.for(['list', 'commonjs'])(
     'shares the environment during %s',
     async (mode, { onTestFinished }) => {
       const { expectExecSuccess } = await runRstestCli({
@@ -198,9 +198,6 @@ it('uses the environment dependency after a rebuild', () => {
           '--config',
           'rstest.shared.config.mts',
           ...(mode === 'commonjs' ? ['--output.module', 'false'] : []),
-          ...(mode === 'shared-worker'
-            ? ['--isolate', 'false', '--pool.maxWorkers', '1']
-            : []),
         ],
         options: {
           nodeOptions: { cwd, env: { PREBUNDLE_ENVIRONMENT: environment } },
@@ -210,6 +207,102 @@ it('uses the environment dependency after a rebuild', () => {
       await expectExecSuccess();
     },
   );
+
+  describe.for(['forks', 'threads'])('shared %s worker', (pool) => {
+    it.for([
+      'mock,imports,dynamic',
+      'mock,dynamic,imports',
+      'imports,mock,dynamic',
+      'dynamic,mock,imports',
+      'imports,dynamic,mock',
+      'dynamic,imports,mock',
+    ])(
+      'shares the environment in a shared worker with order %s',
+      async (order) => {
+        const target = path.join(
+          cwd,
+          `../fixtures-test-bridge-order-${environment}-${pool}-${order.replaceAll(',', '-')}`,
+        );
+        const { fs } = await prepareFixtures({
+          fixturesPath: cwd,
+          fixturesTargetPath: target,
+        });
+        try {
+          const files = order
+            .split(',')
+            .map(
+              (name) =>
+                `${environment === 'happy-dom' ? 'happy-' : ''}${name}.test.ts`,
+            );
+          fs.update(path.join(target, 'rstest.shared.config.mts'), (content) =>
+            content.replace(
+              'defineConfig({',
+              "defineConfig({ name: 'bridge-order',",
+            ),
+          );
+          for (const file of files) {
+            fs.update(
+              path.join(target, file),
+              (content) => `${content}\nconsole.log('bridge-order:${file}');\n`,
+            );
+          }
+          // The sequencer uses cached durations; control the order instead of relying
+          // on whichever timings a previous fixture run happened to leave behind.
+          const cacheDir = path.join(
+            target,
+            'node_modules/.cache/.rstest-results',
+          );
+          mkdirSync(cacheDir, { recursive: true });
+          writeFileSync(
+            path.join(cacheDir, 'results.json'),
+            JSON.stringify({
+              version: 2,
+              files: Object.fromEntries(
+                files.map((file, index) => [
+                  `bridge-order\0${file}`,
+                  {
+                    duration: (files.length - index) * 100,
+                    failed: false,
+                    at: Date.now(),
+                  },
+                ]),
+              ),
+            }),
+          );
+          const { cli, expectExecSuccess } = await runRstestCli({
+            command: 'rstest',
+            args: [
+              'run',
+              '--config',
+              'rstest.shared.config.mts',
+              '--pool',
+              pool,
+              '--isolate',
+              'false',
+              '--pool.maxWorkers',
+              '1',
+              '--retry',
+              '0',
+            ],
+            options: {
+              nodeOptions: {
+                cwd: target,
+                env: { PREBUNDLE_ENVIRONMENT: environment },
+              },
+            },
+          });
+          await expectExecSuccess();
+          expect(
+            [...cli.stdout.matchAll(/bridge-order:([\w.-]+)/g)].map(
+              (match) => match[1],
+            ),
+          ).toEqual(files);
+        } finally {
+          fs.delete(target);
+        }
+      },
+    );
+  });
 });
 
 it.for(['forks', 'threads', 'vmForks', 'vmThreads'])(
