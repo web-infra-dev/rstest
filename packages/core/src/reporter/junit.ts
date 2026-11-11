@@ -147,11 +147,28 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
-    const errors = 0; // No separate error tracking; set to 0 for clarity
+    // A file that fails outside of its tests (it throws while loading, or a
+    // `beforeAll` / `afterAll` hook fails) has no failed test case to carry the
+    // error, so report it as an errored test case named after the file.
+    const fileErrors =
+      fileResult.status === 'failed' ? (fileResult.errors ?? []) : [];
+    const errors = fileErrors.length > 0 ? 1 : 0;
+
+    if (errors) {
+      testCases.push({
+        name: fileResult.relativeTestPath,
+        classname: fileResult.relativeTestPath,
+        time: 0,
+        status: 'error',
+        errors: await Promise.all(
+          fileErrors.map((error) => this.formatError(error, getSourcemap)),
+        ),
+      });
+    }
 
     return {
       name: fileResult.relativeTestPath,
-      tests: fileResult.summary.total,
+      tests: fileResult.summary.total + errors,
       failures: fileResult.summary.failed,
       errors,
       skipped: fileResult.summary.skipped + fileResult.summary.todo,
@@ -180,10 +197,14 @@ export class JUnitReporter implements Reporter {
             if (testcase.status === 'skipped' || testcase.status === 'todo') {
               testcaseXml += `
       <skipped/>`;
-            } else if (testcase.status === 'failed' && testcase.errors) {
+            } else if (
+              (testcase.status === 'failed' || testcase.status === 'error') &&
+              testcase.errors
+            ) {
+              const tag = testcase.status === 'error' ? 'error' : 'failure';
               testcase.errors.forEach((error) => {
                 testcaseXml += `
-      <failure message="${error.message}" type="${error.type}">${error.details || ''}</failure>`;
+      <${tag} message="${error.message}" type="${error.type}">${error.details || ''}</${tag}>`;
               });
             }
 
@@ -235,6 +256,11 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
+    const fileErrors = testSuites.reduce(
+      (total, suite) => total + suite.errors,
+      0,
+    );
+
     if (unhandledErrors.length > 0) {
       const unhandledDetails = await Promise.all(
         unhandledErrors.map((error) => this.formatError(error, getSourcemap)),
@@ -252,9 +278,9 @@ export class JUnitReporter implements Reporter {
       });
     }
 
-    const totalTests = summary.tests.total;
+    const totalTests = summary.tests.total + fileErrors;
     const totalFailures = summary.tests.failed;
-    const totalErrors = unhandledErrors.length;
+    const totalErrors = unhandledErrors.length + fileErrors;
     const totalSkipped = summary.tests.skipped + summary.tests.todo;
     const totalTime = duration.testTime / 1000; // Convert to seconds
 
