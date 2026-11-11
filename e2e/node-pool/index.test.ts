@@ -29,6 +29,8 @@ describe('node pool e2e', () => {
             cwd: join(__dirname, './fixtures'),
             env: {
               ISOLATE: undefined,
+              RSTEST_EXPECT_VM:
+                pool === 'vmThreads' || pool === 'vmForks' ? '1' : undefined,
               NODE_OPTIONS:
                 pool === 'forks' || pool === 'threads'
                   ? `--import=${pathToFileURL(join(__dirname, './fixtures/nativePoolGuard.mjs')).href}`

@@ -332,6 +332,7 @@ class VmExternalModules {
   >();
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleClass: typeof Module | undefined;
+  private readonly moduleRegistrationGuards = new Map<string, () => never>();
   private processBuiltin: unknown;
   private interopDefault = true;
   private readonly activeSyncRequireRoots = new Set<string>();
@@ -1548,9 +1549,25 @@ class VmExternalModules {
 
   private getVmModuleClass(): typeof Module {
     if (!this.moduleClass) {
+      for (const name of ['register', 'registerHooks']) {
+        if (typeof Reflect.get(Module, name) === 'function') {
+          this.moduleRegistrationGuards.set(name, () => {
+            throw new this.vmError(
+              `module.${name}() is not supported in Rstest VM pools. Loader hooks do not apply to the VM module loader. Use the forks or threads pool instead.`,
+            );
+          });
+        }
+      }
       let vmModule: typeof Module;
       vmModule = new Proxy(Module, {
         get: (target, property) => {
+          const registrationGuard =
+            typeof property === 'string'
+              ? this.moduleRegistrationGuards.get(property)
+              : undefined;
+          if (registrationGuard) {
+            return registrationGuard;
+          }
           if (property === 'Module') {
             return vmModule;
           }
@@ -1569,15 +1586,26 @@ class VmExternalModules {
           }
           return this.getBuiltinProperty(target, property);
         },
-        getOwnPropertyDescriptor: (target, property) =>
-          property === '_cache'
+        getOwnPropertyDescriptor: (target, property) => {
+          const registrationGuard =
+            typeof property === 'string'
+              ? this.moduleRegistrationGuards.get(property)
+              : undefined;
+          if (registrationGuard) {
+            return {
+              ...Reflect.getOwnPropertyDescriptor(target, property),
+              value: registrationGuard,
+            };
+          }
+          return property === '_cache'
             ? {
                 configurable: true,
                 enumerable: true,
                 writable: false,
                 value: this.requireCache,
               }
-            : Reflect.getOwnPropertyDescriptor(target, property),
+            : Reflect.getOwnPropertyDescriptor(target, property);
+        },
         set: (target, property, value) =>
           property !== '_cache' && Reflect.set(target, property, value),
         defineProperty: (target, property, descriptor) =>
@@ -1666,6 +1694,10 @@ class VmExternalModules {
         syncBuiltinESMExports: this.syncBuiltinESMExports,
         default: moduleBuiltin,
       });
+      for (const [name, guard] of this.moduleRegistrationGuards) {
+        exports[name] = guard;
+        overrides.add(name);
+      }
       overrides.add('Module');
       overrides.add('createRequire');
       overrides.add('syncBuiltinESMExports');

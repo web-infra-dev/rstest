@@ -5,6 +5,33 @@ import * as source from '../src/index';
 const FILE_MARKER = '__rstest_threads_pool_file_marker__';
 
 describe('node pool - basic', () => {
+  it.for(['register', 'registerHooks'] as const)(
+    'rejects module.%s in VM pools',
+    async (name) => {
+      if (!process.env.RSTEST_EXPECT_VM) {
+        return;
+      }
+      const namespace = await import('node:module');
+      const entryPoints = [
+        require('module'),
+        require('node:module'),
+        namespace,
+        namespace.default,
+        namespace.Module,
+      ];
+      for (const entryPoint of entryPoints) {
+        const hook = Reflect.get(entryPoint, name);
+        if (hook === undefined) {
+          expect(name).toBe('registerHooks');
+          continue;
+        }
+        expect(() => Reflect.apply(hook, undefined, [])).toThrow(
+          `module.${name}() is not supported in Rstest VM pools`,
+        );
+      }
+    },
+  );
+
   it('runs sync tests', () => {
     expect(1 + 1).toBe(2);
   });
