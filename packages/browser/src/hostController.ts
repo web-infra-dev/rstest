@@ -1885,7 +1885,16 @@ export const listBrowserTests = async (
       context,
       projectEntries,
       browserProjects,
-      launchSpecs: [launchSpecs[0]!], // Collect boots the default launch only
+      // TODO: list collection boots only the first instance's launch, opens one
+      // page per project in a shared context with `viewport: null`, and copies
+      // the collected tree to every instance of the project. Declarations that
+      // depend on the browser engine, viewport, or context options (for example
+      // `test.skipIf(!CSS.supports(...))` or `test.runIf(window.innerWidth < 500)`)
+      // are therefore listed with that one page's result for every instance.
+      // Collect each instance in its own browser, context, and viewport instead
+      // (like vitest's `--no-static-parse`); the `filesOnly` path should then
+      // list instance names rather than project names too.
+      launchSpecs: [launchSpecs[0]!],
       shardedEntries: options?.shardedEntries,
       freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
