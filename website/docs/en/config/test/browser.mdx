@@ -4,7 +4,7 @@ description: Browser Mode configuration. When enabled, tests run in a real brows
 
 import { ApiMeta } from '@components/ApiMeta';
 
-# browser (experimental)
+# browser
 
 - **Type:**
 
@@ -151,18 +151,19 @@ export default defineConfig({
 });
 ```
 
-### browser
+### browser (deprecated) \{#browser-deprecated}
 
 <ApiMeta addedVersion="0.13.0" />
+
+:::warning Deprecated
+`browser.browser` is deprecated and will be removed in 1.0. Use [`instances`](#instances) instead, e.g. `instances: [{ browserName: 'firefox' }]`. Rstest prints a deprecation warning once per run when this field is set. `--browser.name` is the deprecated CLI form.
+:::
 
 - **Type:** `'chromium' | 'firefox' | 'webkit'`
 - **Default:** `'chromium'`
 - **CLI:** `--browser.name <name>` (deprecated)
-- **Deprecated:** use [`instances`](#instances) instead. Will be removed in 1.0.
 
-The single browser type to use for testing. Setting this field emits a deprecation warning once per run and is normalized to `instances: [{ browserName: browser }]`:
-
-> `browser.browser` is deprecated and will be removed in 1.0: use `browser.instances` instead, e.g. `instances: [{ browserName: 'chromium' }]`.
+The single browser type to use for testing. Setting this field is normalized to `instances: [{ browserName: browser }]`.
 
 Setting both `browser` and `instances` on a browser project is a config error.
 

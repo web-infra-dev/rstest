@@ -4,7 +4,7 @@ description: 浏览器模式配置。启用后，测试将在真实浏览器中�
 
 import { ApiMeta } from '@components/ApiMeta';
 
-# browser（实验性）
+# browser
 
 - **类型：**
 
@@ -151,18 +151,19 @@ export default defineConfig({
 });
 ```
 
-### browser
+### browser（已废弃） \{#browser-deprecated}
 
 <ApiMeta addedVersion="0.13.0" />
+
+:::warning 已废弃
+`browser.browser` 已废弃，将在 1.0 移除。请改用 [`instances`](#instances)，例如 `instances: [{ browserName: 'firefox' }]`。设置该字段时，每个 run 会输出一次废弃警告。`--browser.name` 是对应的已废弃 CLI 形式。
+:::
 
 - **类型：** `'chromium' | 'firefox' | 'webkit'`
 - **默认值：** `'chromium'`
 - **CLI：** `--browser.name <name>`（已废弃）
-- **已废弃：** 请改用 [`instances`](#instances)，将在 1.0 移除。
 
-用于测试的单个浏览器类型。设置该字段时每个 run 会输出一次废弃警告，并被规范化为 `instances: [{ browserName: browser }]`：
-
-> `browser.browser` 已废弃，将在 1.0 移除：请改用 `browser.instances`，例如 `instances: [{ browserName: 'chromium' }]`。
+用于测试的单个浏览器类型。设置该字段后会被规范化为 `instances: [{ browserName: browser }]`。
 
 在 browser 项目中同时设置 `browser` 和 `instances` 属于配置错误。
 

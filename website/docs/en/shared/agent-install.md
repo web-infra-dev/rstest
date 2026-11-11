@@ -77,7 +77,7 @@ If none of the above hold, stay on A. Seeing `react` in `dependencies` alone is 
 - **Vue** → follow https://rstest.rs/guide/framework/vue.md
 - Other frameworks (Svelte, Solid, Preact, Lit, etc.) → apply the same DOM-environment reasoning and install the framework's standard compiler/plugin if the adapter doesn't already cover it. Keep config minimal.
 
-#### C. Real browser behavior needed → browser mode (experimental)
+#### C. Real browser behavior needed → browser mode
 
 Choose **only** when tests explicitly require Canvas, WebGL, CSS computed styles, Web Workers, or cross-browser testing. This is opt-in, not a default escalation. Vue Browser Mode is **not yet supported**. See https://rstest.rs/config/test/browser.md.
 

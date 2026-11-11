@@ -1,6 +1,6 @@
 # @rstest/browser-react
 
-React component testing utilities for [Rstest](https://rstest.dev) browser mode (experimental).
+React component testing utilities for [Rstest](https://rstest.dev) browser mode.
 
 This package provides `render` and `renderHook` functions for testing React components in a real browser environment. Tests run in an actual browser rather than a simulated DOM like jsdom.
 
@@ -290,7 +290,7 @@ interface RenderConfiguration {
 ## Compatibility
 
 - React >= 18 (React 17 is not supported)
-- Rstest browser mode (experimental)
+- Rstest browser mode
 - Node.js >= 20.19.0
 
 ## License
