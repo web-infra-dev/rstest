@@ -135,6 +135,7 @@ define.lib({
           browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
+          prebundleWorker: './src/core/environment/prebundleWorker.ts',
         },
       },
       tools: {

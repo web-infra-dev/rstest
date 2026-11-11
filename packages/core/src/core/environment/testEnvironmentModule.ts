@@ -1,3 +1,4 @@
+import { fork } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
@@ -10,13 +11,14 @@ import {
 import { isBuiltin, createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
 import type {
   InternalProjectContext,
   TestEnvironmentModuleReference,
 } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, logger } from '../../utils';
+import { getHostExecArgv } from '../../utils/workers';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
@@ -356,17 +358,19 @@ const createBundleEntrySource = async (
   return `export * from 'jsdom';\nexport { convert as __rstestBlobConvert } from ${blobConverterModuleUrl};\n`;
 };
 
-const buildTestEnvironmentModule = async ({
-  bundleId,
-  projectRoot,
-  reference,
-  tempRoot,
-}: {
+type BuildTestEnvironmentModuleOptions = {
   bundleId: number;
   projectRoot: string;
   reference: TestEnvironmentModuleReference;
   tempRoot: string;
-}): Promise<string> => {
+};
+
+export const buildTestEnvironmentModule = async ({
+  bundleId,
+  projectRoot,
+  reference,
+  tempRoot,
+}: BuildTestEnvironmentModuleOptions): Promise<string> => {
   // Keep bundled third-party code under a node_modules segment. Besides
   // preserving its dependency provenance for Node diagnostics, this prevents
   // old jsdom internals such as bare `require('punycode')` from being reported
@@ -401,6 +405,51 @@ const buildTestEnvironmentModule = async ({
   // workers and source-map-support identify the generated file consistently.
   return realpath(bundlePath);
 };
+
+export type PrebundleWorkerMessage = { bundlePath: string } | { error: string };
+
+// Rspack's native allocator keeps its pages after a build, so building in this
+// process would raise its peak memory for the whole run. The child exits as
+// soon as the build finishes and returns that memory to the OS. It inherits
+// the host's Node flags and NODE_OPTIONS like a pool worker does.
+const buildTestEnvironmentModuleInChild = (
+  options: BuildTestEnvironmentModuleOptions,
+  signal: AbortSignal,
+): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const child = fork(
+      join(dirname(fileURLToPath(import.meta.url)), 'prebundleWorker.js'),
+      [JSON.stringify(options)],
+      {
+        execArgv: getHostExecArgv('forks', process.execArgv),
+        signal,
+        stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      },
+    );
+    let message: PrebundleWorkerMessage | undefined;
+    child.once('message', (value: PrebundleWorkerMessage) => {
+      message = value;
+    });
+    let spawnError: Error | undefined;
+    child.once('error', (error) => {
+      spawnError = error;
+    });
+    // `close` fires exactly once, after the process is gone, including when
+    // spawning or aborting failed with an `error` first.
+    child.once('close', (code, exitSignal) => {
+      if (message && 'bundlePath' in message) {
+        resolve(message.bundlePath);
+      } else {
+        reject(
+          spawnError ??
+            new Error(
+              message?.error ??
+                `The prebundle process exited with ${exitSignal ?? `code ${code}`}.`,
+            ),
+        );
+      }
+    });
+  });
 
 const shouldPrebundle = async ({
   name,
@@ -438,14 +487,23 @@ const shouldPrebundle = async ({
 export const prepareTestEnvironmentModules = async ({
   projects,
   rootPath,
+  buildModule = buildTestEnvironmentModuleInChild,
 }: {
   projects: InternalProjectContext[];
   rootPath: string;
+  buildModule?: (
+    options: BuildTestEnvironmentModuleOptions,
+    signal: AbortSignal,
+  ) => Promise<string>;
 }): Promise<PreparedTestEnvironmentModules> => {
   const modules = new Map<string, TestEnvironmentModuleReference>();
   const bundlePaths = new Map<string, Promise<string | undefined>>();
+  const abortController = new AbortController();
   let tempRoot: string | undefined;
   const cleanup = async (): Promise<void> => {
+    abortController.abort();
+    // A killed child must be gone before its output directory is removed.
+    await Promise.all(bundlePaths.values());
     if (tempRoot) {
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -502,15 +560,20 @@ export const prepareTestEnvironmentModules = async ({
       let bundlePathPromise = bundlePaths.get(bundleKey);
       if (!bundlePathPromise) {
         tempRoot ??= await mkdtemp(join(tmpdir(), 'rstest-test-environments-'));
-        bundlePathPromise = buildTestEnvironmentModule({
-          bundleId: bundlePaths.size,
-          projectRoot: project.rootPath,
-          reference,
-          tempRoot,
-        }).catch((error: unknown) => {
-          logger.warn(
-            formatTestEnvironmentPrebundleFallbackWarning(packageName, error),
-          );
+        bundlePathPromise = buildModule(
+          {
+            bundleId: bundlePaths.size,
+            projectRoot: project.rootPath,
+            reference,
+            tempRoot,
+          },
+          abortController.signal,
+        ).catch((error: unknown) => {
+          if (!abortController.signal.aborted) {
+            logger.warn(
+              formatTestEnvironmentPrebundleFallbackWarning(packageName, error),
+            );
+          }
           return undefined;
         });
         bundlePaths.set(bundleKey, bundlePathPromise);
