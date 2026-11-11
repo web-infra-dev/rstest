@@ -402,11 +402,11 @@ sameLine(globalThis.make);
     );
     expect(returned?.end.line).toBe(10);
 
-    const unminified = await prepare(source, 'inlined-ranges', 'es2022');
+    const original = await prepare(source, 'inlined-ranges', 'es2022');
     const merged = createCoverageMap();
     await applyV8CoverageWithAst({ ...options, coverageMap: merged });
     await applyV8CoverageWithAst({
-      ...unminified.options,
+      ...original.options,
       coverageMap: merged,
     });
     const restoredReturns = Object.entries(
@@ -518,7 +518,7 @@ mixed();
     expect(coverage.s[enclosing[0]![0]]).toBe(1);
   });
 
-  it('merges minified and unminified statements without duplicating source locations', async () => {
+  it('merges minified and original statements without duplicating source locations', async () => {
     const source = `function run() {
   globalThis.first = 1;
   globalThis.second = 2;

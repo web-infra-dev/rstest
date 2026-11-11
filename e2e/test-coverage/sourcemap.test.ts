@@ -136,6 +136,36 @@ it.for(['forks', 'vmThreads', 'browser'] as const)(
       /<span class="cstat-no"[^>]*>[^<]*return log\(words\.join\(':'\)\);<\/span>/,
     );
     if (runtime === 'browser') return;
+    for (const format of ['inline', 'external']) {
+      const directory = `${reportsDirectory}-disk-${format}`;
+      onTestFinished(() => fs.removeSync(join(fixturePath, directory)));
+      const map = JSON.stringify({
+        ...JSON.parse(result.map!),
+        sources: ['../mergedStatements.ts'],
+        sourcesContent: undefined,
+      });
+      const mapUrl =
+        format === 'inline'
+          ? `data:application/json;base64,${Buffer.from(map).toString('base64')}`
+          : 'index.js.map';
+      fs.outputFileSync(
+        join(generatedPath, 'index.js'),
+        `${result.code}\n//# sourceMappingURL=${mapUrl}`,
+      );
+      fs.outputFileSync(join(generatedPath, 'index.js.map'), map);
+      await run('mergedStatements.ts', directory, false, true);
+      const diskReport = fs.readJsonSync(
+        join(fixturePath, directory, 'coverage-final.json'),
+      ) as typeof report;
+      const diskSource = getCoverageSummaryEntry(diskReport, sourcePath)!;
+      for (const line of [7, 8]) {
+        const entries = Object.entries(diskSource.statementMap).filter(
+          ([, loc]) => loc.start.line === line,
+        );
+        expect(entries).toHaveLength(1);
+        expect(diskSource.s[entries[0]![0]]).toBe(0);
+      }
+    }
     for (const [index, source] of [
       null,
       'export const invalid = ;',

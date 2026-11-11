@@ -134,6 +134,54 @@ function parseModule(code: string) {
 }
 
 describe('coverage-v8 provider', () => {
+  it.for(['inline', 'external'])(
+    'reads disk-only sources relative to the generated file for %s maps',
+    async (format, { onTestFinished }) => {
+      const root = mkdtempSync(join(tmpdir(), 'rstest-disk-source-'));
+      onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+      mkdirSync(join(root, 'src'));
+      mkdirSync(join(root, 'dist'));
+      const originalFile = join(root, 'src', 'original.ts');
+      const generatedFile = join(root, 'dist', 'bundle.js');
+      writeFileSync(
+        originalFile,
+        'globalThis.first = 1;\nglobalThis.second = 2;\n',
+      );
+      const map = JSON.stringify({
+        version: 3,
+        names: [],
+        sources: ['../src/original.ts'],
+        mappings: 'AAAA,mBACA', // cspell:ignore BACA
+      });
+      writeFileSync(`${generatedFile}.map`, map);
+      const mapUrl =
+        format === 'inline'
+          ? `data:application/json;base64,${Buffer.from(map).toString('base64')}`
+          : 'bundle.js.map';
+      const code = `globalThis.first=1,globalThis.second=2;\n//# sourceMappingURL=${mapUrl}`;
+      const coverage = await convertV8CoverageWithAst({
+        ast: parseModule(code),
+        cacheKey: generatedFile,
+        code,
+        coverage: {
+          url: pathToFileURL(generatedFile).href,
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      });
+      const original = coverage[originalFile]!;
+      expect(
+        Object.values(original.statementMap).map((loc) => loc.start.line),
+      ).toEqual([1, 2]);
+      expect(Object.values(original.s)).toEqual([1, 1]);
+    },
+  );
+
   it('reads charset base64 inline source maps in the AST converter', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-inline-map-charset');
     const generatedFile = join(root, 'dist', 'bundle.js');

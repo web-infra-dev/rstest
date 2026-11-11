@@ -256,7 +256,7 @@ async function prepareCoverage(
   if (error) throw new SyntaxError(error.message);
 
   const locator = sourceMap
-    ? new SourceMapLocator(sourceMap, options.code, sources)
+    ? new SourceMapLocator(sourceMap, options.code, sources, directory)
     : new IdentityLocator(filename, options.code);
   const builder = new CoverageBuilder(filename, locator, directory);
   const skippedNodes = new WeakSet<AstNode>();
@@ -942,6 +942,7 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
     private sourceMap: TraceMap,
     code: string,
     private sources: Set<string>,
+    private directory: string,
   ) {
     super(code);
   }
@@ -990,12 +991,18 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
   private getOriginalSource(filename: string) {
     if (this.originalSources.has(filename))
       return this.originalSources.get(filename);
-    const source =
-      sourceContentFor(this.sourceMap, filename) ?? tryReadFileSync(filename);
+    const source = this.getSourceContent(filename);
     const original =
       source === undefined ? undefined : new OriginalSource(source, filename);
     this.originalSources.set(filename, original);
     return original;
+  }
+
+  private getSourceContent(filename: string) {
+    return (
+      sourceContentFor(this.sourceMap, filename) ??
+      tryReadFileSync(resolveSourceFilename(filename, this.directory))
+    );
   }
 
   getLoc(node: Pick<AstNode, 'start' | 'end'>): MappedLocation | null {
@@ -1080,8 +1087,7 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
     let ignoredLines = this.ignoredLines.get(filename);
 
     if (!ignoredLines) {
-      const sources = sourceContentFor(this.sourceMap, filename);
-      ignoredLines = getIgnoredLines(sources ?? tryReadFileSync(filename));
+      ignoredLines = getIgnoredLines(this.getSourceContent(filename));
       this.ignoredLines.set(filename, ignoredLines);
     }
 
