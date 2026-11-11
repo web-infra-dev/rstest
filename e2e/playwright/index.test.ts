@@ -265,7 +265,7 @@ describe('@rstest/playwright', () => {
 
     await expectExecFailed();
     expect(cli.stdout).toContain('Expected locator to be visible.');
-    expect(cli.stdout).not.toContain('Test timed out in 1000ms');
+    expect(cli.stdout).not.toMatch(/test timed out in \d+ms/i);
   });
 
   it('reuses and cleans up a browser across worker files', async () => {
