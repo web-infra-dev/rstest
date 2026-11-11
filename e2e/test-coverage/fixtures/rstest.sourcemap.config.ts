@@ -1,7 +1,10 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['test/sourcemapMapping.test.ts'],
+  include: [
+    'test/sourcemapMapping.test.ts',
+    'test/mergedStatements.fixture.ts',
+  ],
   coverage: {
     enabled: true,
     clean: true,

@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
+import { rspack } from '@rsbuild/core';
 import fs from 'fs-extra';
 import { normalize } from 'pathe';
 import { x } from 'tinyexec';
@@ -16,6 +17,118 @@ const expectedSummary = {
     allFiles: /^Allfiles\|87\.5\|75\|100\|87\.5\|$/,
   },
 } as const;
+
+it.for(['forks', 'vmThreads', 'browser'] as const)(
+  'restores source ranges after merging and inlining under %s',
+  async (runtime, { onTestFinished }) => {
+    const fixturePath = join(__dirname, 'fixtures');
+    const generatedPath = join(fixturePath, 'test-temp-merged');
+    const reportsDirectory = `test-temp-merged-statements-${runtime}`;
+    const sourcePath = join(fixturePath, 'mergedStatements.ts');
+    onTestFinished(() => {
+      fs.removeSync(generatedPath);
+      fs.removeSync(join(fixturePath, reportsDirectory));
+    });
+    const result = await rspack.experiments.swc.transform(
+      fs.readFileSync(sourcePath, 'utf8'),
+      {
+        filename: sourcePath,
+        sourceMaps: true,
+        inlineSourcesContent: true,
+        jsc: {
+          parser: { syntax: 'typescript' },
+          target: 'es2022',
+          minify: {
+            compress: { defaults: true, sequences: true },
+            mangle: false,
+          },
+        },
+      },
+    );
+    expect(result.code).toMatch(/log\(.+\),\s*log\(/);
+    fs.outputFileSync(
+      join(generatedPath, 'index.js'),
+      `${result.code}\n//# sourceMappingURL=index.js.map`,
+    );
+    fs.outputFileSync(join(generatedPath, 'index.js.map'), result.map!);
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.sourcemap.config.ts',
+        'test/mergedStatements.fixture.ts',
+        ...(runtime === 'browser'
+          ? ['--browser', '--browser.headless']
+          : ['--pool', runtime]),
+        '--coverage.provider',
+        'v8',
+        '--coverage.include',
+        'mergedStatements.ts',
+        '--coverage.reporters',
+        'json',
+        '--coverage.reporters',
+        'html',
+        '--coverage.reportsDirectory',
+        reportsDirectory,
+      ],
+      options: { nodeOptions: { cwd: fixturePath } },
+    });
+    await expectExecSuccess();
+
+    const report = fs.readJsonSync(
+      join(fixturePath, reportsDirectory, 'coverage-final.json'),
+    ) as Record<
+      string,
+      {
+        statementMap: Record<
+          string,
+          {
+            start: { line: number; column: number };
+            end: { line: number; column: number | null };
+          }
+        >;
+        s: Record<string, number>;
+      }
+    >;
+    const coverage = getCoverageSummaryEntry(report, sourcePath)!;
+    const statementsAt = (line: number) =>
+      Object.entries(coverage.statementMap)
+        .filter(([, location]) => location.start.line === line)
+        .map(([id]) => coverage.s[id]);
+    expect(statementsAt(2)).toEqual([1]);
+    expect(statementsAt(3)).toEqual([1]);
+    expect(statementsAt(7)).toEqual([0]);
+    expect(statementsAt(8)).toEqual([0]);
+    expect(statementsAt(12)).toEqual([1]);
+    expect(statementsAt(17)).toEqual([0]);
+    expect(statementsAt(19)).toEqual([1]);
+    expect(statementsAt(20)).toEqual([1]);
+    expect(statementsAt(25)).toEqual([1]);
+    expect(statementsAt(30)).toEqual([0]);
+    for (const { start, end } of Object.values(coverage.statementMap)) {
+      expect(end.line).toBeGreaterThanOrEqual(start.line);
+      if (end.line === start.line && end.column !== null) {
+        expect(end.column).toBeGreaterThanOrEqual(start.column);
+      }
+    }
+    const html = fs.readFileSync(
+      join(fixturePath, reportsDirectory, 'mergedStatements.ts.html'),
+      'utf8',
+    );
+    for (const message of ['third', 'fourth']) {
+      expect(html).toMatch(
+        new RegExp(
+          `<span class="cstat-no"[^>]*>[^<]*log\\('${message}'\\);</span>`,
+        ),
+      );
+    }
+    expect(html).toMatch(
+      /<span class="cstat-no"[^>]*>[^<]*return log\(words\.join\(':'\)\);<\/span>/,
+    );
+  },
+);
 
 for (const provider of coverageProviders) {
   describe(`coverage sourcemaps (${provider})`, () => {
