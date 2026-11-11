@@ -109,7 +109,7 @@ it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   async (pool, { onTestFinished }) => {
     // DEBUG writes runtime chunks to disk, so sibling test files cannot share cwd.
     const cwd = fileURLToPath(
-      new URL(`./fixtures-test-prebundle-${pool}`, import.meta.url),
+      new URL(`./fixtures/fixtures-test-prebundle-${pool}`, import.meta.url),
     );
     const { fs } = await prepareFixtures({
       fixturesPath: fileURLToPath(
