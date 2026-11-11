@@ -33,9 +33,11 @@ const rootPath = join(__dirname, '../..');
 
 const createFakeRsbuild = ({
   compiler,
+  environments,
   inspectConfigError,
 }: {
   compiler?: Rspack.Compiler;
+  environments?: Record<string, unknown>;
   inspectConfigError?: Error;
 } = {}) => {
   const close = rs.fn(async () => undefined);
@@ -52,7 +54,7 @@ const createFakeRsbuild = ({
         });
         await onAfterCreateCompiler?.({ compiler, environments: {} });
       }
-      return { close };
+      return { close, environments };
     },
     async inspectConfig() {
       throw inspectConfigError;
@@ -315,6 +317,55 @@ describe('prepareRsbuild', () => {
     );
     expect(close).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    { isWatchMode: false, reads: 1 },
+    { isWatchMode: true, reads: 2 },
+  ])(
+    'reads a built file $reads time(s) when isWatchMode is $isWatchMode',
+    async ({ isWatchMode, reads }) => {
+      const assetPath = '/out/a.js';
+      const readFile = rs.fn(
+        (_name: string, cb: (err: Error | null, data?: Buffer) => void) =>
+          cb(null, Buffer.from('code')),
+      );
+      const { rsbuildInstance } = createFakeRsbuild({
+        compiler: {
+          outputFileSystem: { readFile },
+        } as unknown as Rspack.Compiler,
+        environments: {
+          node: {
+            getStats: async () => ({
+              compilation: { options: {} },
+              toJson: () => ({
+                outputPath: '/out',
+                chunks: [],
+                entrypoints: {},
+                assets: [{ name: 'a.js', size: 4, info: {} }],
+              }),
+            }),
+            context: { manifest: { entries: {} } },
+          },
+        },
+      });
+
+      const { getRsbuildStats } = await createRsbuildServer({
+        globTestSourceEntries: async () => ({}),
+        setupFiles: {},
+        globalSetupFiles: {},
+        rsbuildInstance,
+        isWatchMode,
+        rootPath,
+      });
+      const { getAssetFiles } = await getRsbuildStats({
+        environmentName: 'node',
+      });
+      await getAssetFiles([assetPath]);
+      await getAssetFiles([assetPath]);
+
+      expect(readFile).toHaveBeenCalledTimes(reads);
+    },
+  );
 
   it('closes the dev server when config inspection fails', async () => {
     const debug = process.env.DEBUG;

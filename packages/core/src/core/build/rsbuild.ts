@@ -474,7 +474,11 @@ export const createRsbuildServer = async ({
       );
     }
 
-    // Ensure that when readFile is called in parallel, the file content will not be read into memory repeatedly
+    // Ensure that when readFile is called in parallel, the file content will not be read into memory repeatedly.
+    // The memory file system returns a fresh copy per read, and the pool reads
+    // every asset and source map once per task. Run mode never rebuilds, so a
+    // successful read is kept to avoid those copies; watch mode drops it so a
+    // rebuild is read again.
     const cachedReadFilePromises = new Map<string, Promise<Buffer>>();
     const readFile = async (fileName: string) => {
       if (cachedReadFilePromises.has(fileName))
@@ -489,7 +493,12 @@ export const createRsbuildServer = async ({
         });
       });
       cachedReadFilePromises.set(fileName, promise);
-      promise.finally(() => cachedReadFilePromises.delete(fileName));
+      promise.then(
+        () => {
+          if (isWatchMode) cachedReadFilePromises.delete(fileName);
+        },
+        () => cachedReadFilePromises.delete(fileName),
+      );
       return promise;
     };
 
