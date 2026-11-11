@@ -65,7 +65,13 @@ type AstNode = {
 type BranchType = 'if' | 'binary-expr' | 'cond-expr' | 'switch' | 'default-arg';
 type Position = Needle & { filename: string | null };
 type MappedLocation = { start: Position; end: Position };
-type SourceNode = MappedLocation & { type: string };
+type SourceNode = {
+  start: number;
+  end: number;
+  type: NodeType;
+  parent: number;
+  statement: number;
+};
 type IstanbulLocation = {
   start: { line: number; column: number };
   end: { line: number; column: number };
@@ -214,23 +220,6 @@ async function getPreparedCoverage(
 async function prepareCoverage(
   options: ConvertOptions,
 ): Promise<PreparedCoverage | null> {
-  const parseResult =
-    typeof options.ast === 'function' ? options.ast() : options.ast;
-  const ignoreHints = options.code.includes('ignore')
-    ? getIgnoreHints(options.code, parseResult.comments)
-    : [];
-
-  if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
-    return null;
-  }
-
-  const error = parseResult.diagnostics.find(
-    (diagnostic) => diagnostic.severity === 'error',
-  );
-  if (error) {
-    throw new SyntaxError(error.message);
-  }
-
   const filename = options.coverage.url.startsWith('file://')
     ? fileURLToPath(options.coverage.url)
     : options.coverage.url;
@@ -243,16 +232,33 @@ async function prepareCoverage(
   const sourceMap = sourceMapResult?.sourceMap
     ? createTraceMap(sourceMapResult.sourceMap, sourceMapResult.sourceMapUrl)
     : null;
-  const locator = sourceMap
-    ? new SourceMapLocator(sourceMap, options.code)
-    : new IdentityLocator(filename, options.code);
-  const builder = new CoverageBuilder(
-    filename,
-    locator,
-    directory,
-    options.rawSourceFilter,
-    options.sourceFilter,
+  const sources = new Set(
+    (sourceMap?.resolvedSources ?? [filename]).filter(
+      (source) =>
+        (!options.rawSourceFilter || options.rawSourceFilter(source)) &&
+        (!options.sourceFilter ||
+          options.sourceFilter(resolveSourceFilename(source, directory))),
+    ),
   );
+  if (sources.size === 0) return null;
+
+  const parseResult =
+    typeof options.ast === 'function' ? options.ast() : options.ast;
+  const ignoreHints = options.code.includes('ignore')
+    ? getIgnoreHints(options.code, parseResult.comments)
+    : [];
+  if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
+    return null;
+  }
+  const error = parseResult.diagnostics.find(
+    (diagnostic) => diagnostic.severity === 'error',
+  );
+  if (error) throw new SyntaxError(error.message);
+
+  const locator = sourceMap
+    ? new SourceMapLocator(sourceMap, options.code, sources)
+    : new IdentityLocator(filename, options.code);
+  const builder = new CoverageBuilder(filename, locator, directory);
   const skippedNodes = new WeakSet<AstNode>();
   const coveredNodes = new WeakSet<AstNode>();
 
@@ -539,8 +545,6 @@ class CoverageBuilder {
     filename: string,
     private locator: CoverageLocator,
     private directory: string,
-    rawSourceFilter?: (source: string) => boolean,
-    sourceFilter?: (filePath: string) => boolean,
   ) {
     const generatedDirectory = dirname(filename);
 
@@ -548,14 +552,7 @@ class CoverageBuilder {
       let filePath = filename;
 
       if (source) {
-        if (rawSourceFilter && !rawSourceFilter(source)) {
-          continue;
-        }
         filePath = resolveSourceFilename(source, generatedDirectory);
-      }
-
-      if (sourceFilter && !sourceFilter(filePath)) {
-        continue;
       }
 
       this.files[filePath] = {
@@ -634,23 +631,23 @@ class CoverageBuilder {
   }
 
   addStatement(node: AstNode, parent?: AstNode) {
-    const loc = this.locator.getLoc(node);
-    if (loc === null) return;
-
-    let statements = [{ node: parent || node, loc }];
+    let statements: { node: AstNode; loc: MappedLocation }[] | null = null;
     if (
       node.type === 'ExpressionStatement' &&
       this.locator instanceof SourceMapLocator
     ) {
       const expression = node.expression as AstNode;
       if (expression.type === 'SequenceExpression') {
-        const originals = this.locator.getSequenceStatements(
+        statements = this.locator.getSequenceStatements(
           expression.expressions as AstNode[],
         );
-        if (originals && originals.length > 1) {
-          statements = originals;
-        }
       }
+    }
+
+    if (!statements) {
+      const loc = this.locator.getLoc(node);
+      if (loc === null) return;
+      statements = [{ node: parent || node, loc }];
     }
 
     for (const statement of statements) {
@@ -855,67 +852,11 @@ class IdentityLocator extends BaseLocator implements CoverageLocator {
   }
 }
 
-class SourceMapLocator extends BaseLocator implements CoverageLocator {
-  private ignoredLines = new Map<string, Set<number>>();
-  private originalSources = new Map<
-    string,
-    { nodes: SourceNode[]; statements: SourceNode[] }
-  >();
+class OriginalSource extends BaseLocator {
+  private nodes: SourceNode[] = [];
 
-  constructor(
-    private sourceMap: TraceMap,
-    code: string,
-  ) {
-    super(code);
-  }
-
-  getSourceFilenames(): string[] {
-    return this.sourceMap.resolvedSources;
-  }
-
-  getSequenceStatements(expressions: AstNode[]) {
-    const statements = new Map<
-      string,
-      { node: AstNode; loc: MappedLocation }
-    >();
-    for (const node of expressions) {
-      const mapped = this.getLoc(node);
-      const filename = mapped?.start.filename;
-      if (!mapped || !filename) return null;
-
-      const original = this.getOriginalSource(filename).statements.findLast(
-        ({ start, end }) =>
-          comparePositions(start, mapped.start) <= 0 &&
-          comparePositions(end, mapped.start) >= 0,
-      );
-      if (original?.type !== 'ExpressionStatement') return null;
-
-      // A source comma expression still represents one statement, even when
-      // the minifier flattens it together with adjacent source statements.
-      const key = `${filename}:${cacheKey(original)}`;
-      const statement = statements.get(key);
-      if (statement) {
-        statement.loc.end = mapped.end;
-      } else {
-        statements.set(key, { node, loc: mapped });
-      }
-    }
-    return [...statements.values()];
-  }
-
-  private getOriginalSource(filename: string) {
-    const cached = this.originalSources.get(filename);
-    if (cached) return cached;
-
-    const original: { nodes: SourceNode[]; statements: SourceNode[] } = {
-      nodes: [],
-      statements: [],
-    };
-    this.originalSources.set(filename, original);
-    const source =
-      sourceContentFor(this.sourceMap, filename) ?? tryReadFileSync(filename);
-    if (source === undefined) return original;
-
+  constructor(source: string, filename: string) {
+    super(source);
     const ast = parseSync(source, {
       lang: langFromPath(filename),
       sourceType: sourceTypeFromPath(filename),
@@ -923,25 +864,137 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
       preserveParens: false,
     });
     if (ast.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
-      return original;
+      return;
     }
-
-    const locator = new IdentityLocator(filename, source);
+    const nodes = this.nodes;
     walk(ast.program, {
       enter(node: AstNode) {
         if (node.type === 'Program' || node.end <= node.start) return;
-        const loc = locator.getLoc(node);
-        if (!loc) return;
-        const sourceNode = { ...loc, type: node.type };
-        original.nodes.push(sourceNode);
-        if (
-          node.type.endsWith('Statement') ||
-          node.type.endsWith('Declaration')
-        ) {
-          original.statements.push(sourceNode);
-        }
+        nodes.push({
+          start: node.start,
+          end: node.end,
+          type: node.type,
+          parent: -1,
+          statement: -1,
+        });
       },
     });
+    nodes.sort((a, b) => a.start - b.start || b.end - a.end);
+    const parents: number[] = [];
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index]!;
+      while (parents.length) {
+        const parent = nodes[parents[parents.length - 1]!]!;
+        if (parent.end >= node.end && parent.end > node.start) break;
+        parents.pop();
+      }
+      node.parent = parents[parents.length - 1] ?? -1;
+      node.statement =
+        node.type.endsWith('Statement') || node.type.endsWith('Declaration')
+          ? index
+          : (nodes[node.parent]?.statement ?? -1);
+      parents.push(index);
+    }
+  }
+
+  private findNode(
+    position: Needle,
+    outermost: boolean,
+  ): SourceNode | undefined {
+    const lineStart = this.lineStarts[position.line - 1];
+    if (lineStart === undefined) return undefined;
+    const offset = lineStart + position.column;
+    let low = 0;
+    let high = this.nodes.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      const start = this.nodes[mid]!.start;
+      if (start < offset || (!outermost && start === offset)) low = mid + 1;
+      else high = mid;
+    }
+    // Equal starts are ordered outermost first; containment uses the innermost node.
+    if (outermost && this.nodes[low]?.start === offset) return this.nodes[low];
+    let index = low - 1;
+    while (index >= 0) {
+      const node = this.nodes[index]!;
+      if (node.end > offset) return node;
+      index = node.parent;
+    }
+    return undefined;
+  }
+
+  getStatement(position: Needle) {
+    const node = this.findNode(position, false);
+    return node ? this.nodes[node.statement] : undefined;
+  }
+
+  getEnd(position: Needle) {
+    const node = this.findNode(position, true);
+    return node ? this.offsetToNeedle(node.end - 1) : undefined;
+  }
+}
+
+class SourceMapLocator extends BaseLocator implements CoverageLocator {
+  private ignoredLines = new Map<string, Set<number>>();
+  private originalSources = new Map<string, OriginalSource | undefined>();
+
+  constructor(
+    private sourceMap: TraceMap,
+    code: string,
+    private sources: Set<string>,
+  ) {
+    super(code);
+  }
+
+  getSourceFilenames(): string[] {
+    return [...this.sources];
+  }
+
+  getSequenceStatements(expressions: AstNode[]) {
+    const statements = new Map<
+      string,
+      { node: AstNode; loc: MappedLocation }
+    >();
+    let filtered = false;
+    for (const node of expressions) {
+      const start = getPosition(
+        this.offsetToNeedle(node.start),
+        this.sourceMap,
+      );
+      if (start?.filename && !this.sources.has(start.filename)) {
+        filtered = true;
+        continue;
+      }
+      const mapped = this.getLoc(node);
+      const filename = mapped?.start.filename;
+      if (!mapped || !filename) return null;
+
+      const original = this.getOriginalSource(filename)?.getStatement(
+        mapped.start,
+      );
+      if (original?.type !== 'ExpressionStatement') return null;
+
+      // A source comma expression still represents one statement, even when
+      // the minifier flattens it together with adjacent source statements.
+      const key = `${filename}:${original.start}:${original.end}`;
+      const statement = statements.get(key);
+      if (statement) {
+        statement.loc.end = mapped.end;
+      } else {
+        statements.set(key, { node, loc: mapped });
+      }
+    }
+    return statements.size > 1 || filtered ? [...statements.values()] : null;
+  }
+
+  private getOriginalSource(filename: string) {
+    if (this.originalSources.has(filename))
+      return this.originalSources.get(filename);
+    const source =
+      sourceContentFor(this.sourceMap, filename) ?? tryReadFileSync(filename);
+    const original =
+      source === undefined ? undefined : new OriginalSource(source, filename);
+    this.originalSources.set(filename, original);
     return original;
   }
 
@@ -949,7 +1002,11 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
     const startNeedle = this.offsetToNeedle(node.start);
     const start = getPosition(startNeedle, this.sourceMap);
 
-    if (start === null) {
+    if (
+      start === null ||
+      !start.filename ||
+      !this.sources.has(start.filename)
+    ) {
       return null;
     }
 
@@ -1015,16 +1072,9 @@ class SourceMapLocator extends BaseLocator implements CoverageLocator {
     ) {
       // Inlining can map a generated node's end back to an earlier definition.
       // Recover the source construct at its start instead of spanning the moved code.
-      const { nodes } = this.getOriginalSource(filename);
-      const original =
-        nodes.find(({ start }) => comparePositions(start, loc.start) === 0) ??
-        nodes.findLast(
-          ({ start, end }) =>
-            comparePositions(start, loc.start) < 0 &&
-            comparePositions(end, loc.start) >= 0,
-        );
-      if (!original) return null;
-      loc.end = original.end;
+      const end = this.getOriginalSource(filename)?.getEnd(loc.start);
+      // A map can ship without its sources. Keep a point range and its counter.
+      loc.end = { ...(end ?? loc.start), filename };
     }
 
     let ignoredLines = this.ignoredLines.get(filename);

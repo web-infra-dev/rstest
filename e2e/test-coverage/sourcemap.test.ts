@@ -52,30 +52,38 @@ it.for(['forks', 'vmThreads', 'browser'] as const)(
     );
     fs.outputFileSync(join(generatedPath, 'index.js.map'), result.map!);
 
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        '-c',
-        'rstest.sourcemap.config.ts',
-        'test/mergedStatements.fixture.ts',
-        ...(runtime === 'browser'
-          ? ['--browser', '--browser.headless']
-          : ['--pool', runtime]),
-        '--coverage.provider',
-        'v8',
-        '--coverage.include',
-        'mergedStatements.ts',
-        '--coverage.reporters',
-        'json',
-        '--coverage.reporters',
-        'html',
-        '--coverage.reportsDirectory',
-        reportsDirectory,
-      ],
-      options: { nodeOptions: { cwd: fixturePath } },
-    });
-    await expectExecSuccess();
+    const run = async (
+      include: string | undefined,
+      directory: string,
+      html: boolean,
+      native = false,
+    ) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'rstest.sourcemap.config.ts',
+          native
+            ? 'test/missingSource.fixture.ts'
+            : 'test/mergedStatements.fixture.ts',
+          ...(runtime === 'browser'
+            ? ['--browser', '--browser.headless']
+            : ['--pool', runtime]),
+          '--coverage.provider',
+          'v8',
+          ...(include ? ['--coverage.include', include] : []),
+          '--coverage.reporters',
+          'json',
+          ...(html ? ['--coverage.reporters', 'html'] : []),
+          '--coverage.reportsDirectory',
+          directory,
+        ],
+        options: { nodeOptions: { cwd: fixturePath } },
+      });
+      await expectExecSuccess();
+    };
+    await run('mergedStatements.ts', reportsDirectory, true);
 
     const report = fs.readJsonSync(
       join(fixturePath, reportsDirectory, 'coverage-final.json'),
@@ -127,6 +135,58 @@ it.for(['forks', 'vmThreads', 'browser'] as const)(
     expect(html).toMatch(
       /<span class="cstat-no"[^>]*>[^<]*return log\(words\.join\(':'\)\);<\/span>/,
     );
+    if (runtime === 'browser') return;
+    for (const [index, source] of [
+      null,
+      'export const invalid = ;',
+    ].entries()) {
+      const directory = `${reportsDirectory}-missing-${index}`;
+      onTestFinished(() => fs.removeSync(join(fixturePath, directory)));
+      const missingPath = join(fixturePath, 'missing-original.ts');
+      const code = [
+        'export function inlinedValue(log) {',
+        "log('returned');",
+        '}',
+        'export function inlinedUncovered(log) {',
+        "log('uncalled');",
+        '}',
+      ].join('\n');
+      // Map each call from line 25/30 back to line 3, independent of minifier choices.
+      const map = {
+        version: 3,
+        names: [],
+        sources: [missingPath],
+        sourcesContent: [source],
+        mappings: 'AAwBA;AAAA,IAtBA;AAAA;AA2BA;AAAA,IA3BA;AAAA',
+      };
+      fs.outputFileSync(
+        join(generatedPath, 'index.js'),
+        `${code}\n//# sourceMappingURL=index.js.map`,
+      );
+      fs.outputFileSync(
+        join(generatedPath, 'index.js.map'),
+        JSON.stringify(map),
+      );
+      // Explicit include globs retain only files found on disk.
+      await run(undefined, directory, false, true);
+      const missingReport = fs.readJsonSync(
+        join(fixturePath, directory, 'coverage-final.json'),
+      ) as typeof report;
+      const missing = getCoverageSummaryEntry(missingReport, missingPath)!;
+      expect(missing, Object.keys(missingReport).join(', ')).toBeDefined();
+      for (const [line, count] of [
+        [25, 1],
+        [30, 0],
+      ]) {
+        const entries = Object.entries(missing.statementMap).filter(
+          ([, loc]) => loc.start.line === line,
+        );
+        expect(entries).toHaveLength(1);
+        const [id, loc] = entries[0]!;
+        expect(missing.s[id]).toBe(count);
+        expect(loc.end.line).toBeGreaterThanOrEqual(loc.start.line);
+      }
+    }
   },
 );
 

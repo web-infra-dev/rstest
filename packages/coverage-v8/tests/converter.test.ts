@@ -210,6 +210,134 @@ async function prepare(
 }
 
 describe('coverage-v8 converter regressions', () => {
+  it.each([undefined, 'export const invalid = ;'])(
+    'preserves covered and uncovered counters without usable original source: %s',
+    async (source) => {
+      const code = 'globalThis.make(1);';
+      const file = join(tmpdir(), 'rstest-converter-missing', 'original.ts');
+      for (const count of [0, 2]) {
+        const data = await convertV8CoverageWithAst({
+          code,
+          ast: parseSync(code, { sourceType: 'module', preserveParens: false }),
+          cacheKey: `missing-source-${source}-${count}`,
+          coverage: {
+            url: pathToFileURL(`${file}.js`).href,
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count }],
+              },
+            ],
+          },
+          sourceMap: {
+            version: 3,
+            names: [],
+            sources: [file],
+            sourcesContent: source === undefined ? undefined : [source],
+            mappings: [
+              [
+                [0, 0, 7, 0],
+                [code.indexOf('1'), 0, 2, 0],
+              ],
+            ],
+          },
+        });
+        expect(Object.values(data[file]!.s)).toEqual([count]);
+        const [location] = Object.values(data[file]!.statementMap);
+        expect(location!.start.line).toBe(8);
+        expect(location!.end.line).toBe(8);
+        expect(location!.end.column).toBeGreaterThanOrEqual(
+          location!.start.column,
+        );
+      }
+    },
+  );
+
+  it('skips parsing when all mapped sources are excluded', async () => {
+    const file = join(tmpdir(), 'rstest-converter-excluded.ts');
+    const code = 'globalThis.make(1), globalThis.make(2);';
+    const ast = rstest.fn(() => parseSync(code, { sourceType: 'module' }));
+    expect(
+      await convertV8CoverageWithAst({
+        code,
+        ast,
+        cacheKey: 'all-sources-excluded',
+        coverage: { url: pathToFileURL(`${file}.js`).href, functions: [] },
+        sourceMap: {
+          version: 3,
+          names: [],
+          sources: [file],
+          sourcesContent: [code],
+          mappings: [[[0, 0, 0, 0]]],
+        },
+        sourceFilter: () => false,
+      }),
+    ).toEqual({});
+    expect(ast).not.toHaveBeenCalled();
+  });
+
+  it('keeps included sequence children without reading an excluded source', async () => {
+    const code = 'globalThis.make(1), globalThis.make(2);';
+    const excluded = join(tmpdir(), 'excluded-sequence.ts');
+    const included = join(tmpdir(), 'included-sequence.ts');
+    const sourcesContent = ['globalThis.make(1);', 'globalThis.make(2);'];
+    Object.defineProperty(sourcesContent, 0, {
+      get() {
+        throw new Error('Excluded source was read');
+      },
+    });
+    const data = await convertV8CoverageWithAst({
+      code,
+      ast: parseSync(code, { sourceType: 'module', preserveParens: false }),
+      cacheKey: 'mixed-inclusion-sequence',
+      coverage: {
+        url: pathToFileURL(`${included}.js`).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 7 }],
+          },
+        ],
+      },
+      sourceFilter: (file) => file === included,
+      sourceMap: {
+        version: 3,
+        names: [],
+        sources: [excluded, included],
+        sourcesContent,
+        mappings: [
+          [
+            [0, 0, 0, 0],
+            [code.indexOf('globalThis', 1), 1, 0, 0],
+          ],
+        ],
+      },
+    });
+    expect(Object.keys(data)).toEqual([included]);
+    expect(Object.values(data[included]!.s)).toEqual([7]);
+  });
+
+  it('restores every statement in a large merged sequence', async () => {
+    const count = 16_000;
+    const source = `export function run(log: (value: number) => void) {\n${Array.from(
+      { length: count },
+      (_, i) => `log(${i});`,
+    ).join('\n')}\n}\nrun(globalThis.make);`;
+    const { file, options } = await prepare(
+      source,
+      'large-sequence',
+      'minified',
+    );
+    const data = (await convertV8CoverageWithAst(options))[file]!;
+    const hits = Object.entries(data.statementMap)
+      .filter(([, loc]) => loc.start.line >= 2 && loc.start.line < count + 2)
+      .sort(([, a], [, b]) => a.start.line - b.start.line)
+      .map(([id, loc]) => [loc.start.line, data.s[id]]);
+    expect(hits).toEqual(Array.from({ length: count }, (_, i) => [i + 2, 1]));
+  });
+
   it('recovers source ranges after inlining callbacks, values and control flow', async () => {
     const source = `export function callbacks(log: (value: unknown) => void) {
   const callback = () => {

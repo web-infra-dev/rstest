@@ -4,6 +4,7 @@ export default defineConfig({
   include: [
     'test/sourcemapMapping.test.ts',
     'test/mergedStatements.fixture.ts',
+    'test/missingSource.fixture.ts',
   ],
   coverage: {
     enabled: true,
