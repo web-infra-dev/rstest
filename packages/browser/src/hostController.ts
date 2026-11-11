@@ -398,13 +398,17 @@ export const runBrowserController = async (
   const rowByInstance = new Map(
     projectRuntimeConfigs.map((row) => [row.instanceName, row]),
   );
+  const instanceNameByRow = new Map(
+    projectRuntimeConfigs.map((row) => [
+      `${row.name}\0${row.browserName}`,
+      row.instanceName,
+    ]),
+  );
   const instanceNameOf = (file: {
     projectName: string;
     browserName?: string;
   }): string =>
-    rowsByProject
-      .get(file.projectName)
-      ?.find((row) => row.browserName === file.browserName)?.instanceName ??
+    instanceNameByRow.get(`${file.projectName}\0${file.browserName}`) ??
     file.projectName;
   const fileKeyOf = (file: {
     projectName: string;
@@ -1342,19 +1346,20 @@ export const runBrowserController = async (
     string,
     ReturnType<typeof createSilentConsoleController>
   >(
-    projectRuntimeConfigs.map((row) => [
-      row.instanceName,
-      createSilentConsoleController({
-        runtimeConfig: {
-          silent: projectByName.get(row.name)!.normalizedConfig.silent,
-          disableConsoleIntercept: projectByName.get(row.name)!.normalizedConfig
-            .disableConsoleIntercept,
-        },
-        emitInterceptedLog: (log) =>
-          sinkForProjectName(log.project).onConsoleLog(log),
-        writeOriginalLog: () => {},
-      }),
-    ]),
+    projectRuntimeConfigs.map((row) => {
+      const { silent, disableConsoleIntercept } = projectByName.get(
+        row.name,
+      )!.normalizedConfig;
+      return [
+        row.instanceName,
+        createSilentConsoleController({
+          runtimeConfig: { silent, disableConsoleIntercept },
+          emitInterceptedLog: (log) =>
+            sinkForProjectName(log.project).onConsoleLog(log),
+          writeOriginalLog: () => {},
+        }),
+      ];
+    }),
   );
   const silentConsoleControllerForProjectName = (projectName: string) => {
     const controller = silentConsoleControllers.get(projectName);
