@@ -35,7 +35,7 @@ import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
   BrowserName,
-  BrowserProjectRuntime,
+  BrowserProjectWireRow,
   FileCleanupDispatchMethod,
   FileCleanupDispatchPayload,
   RunnerEnvelope,
@@ -185,7 +185,7 @@ type GlobalWithRuntimeEnv = typeof globalThis &
   };
 
 const restoreRuntimeConfig = (
-  config: BrowserProjectRuntime['runtimeConfig'],
+  config: BrowserProjectWireRow['runtimeConfig'],
 ): RuntimeConfig => {
   const { testNamePattern } = config;
   // The browser wire (BrowserRuntimeConfig) omits node-only fields
