@@ -18,6 +18,74 @@ const shouldRunHeadedPlaywrightTests =
   Boolean(process.env.CI || process.env.RSTEST_E2E_RUN_HEADED);
 
 describe('@rstest/playwright', () => {
+  it.for([
+    { stage: 'trace', result: 'pass' },
+    { stage: 'trace', result: 'fail' },
+    { stage: 'trace', result: 'timeout' },
+    { stage: 'close', result: 'pass' },
+    { stage: 'close', result: 'fail' },
+    { stage: 'close', result: 'timeout' },
+    { stage: 'browser', result: 'fail' },
+  ])(
+    'bounds stalled $stage cleanup after body $result',
+    async ({ stage, result }) => {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          'cleanup-timeout.test.ts',
+          '--pool.maxWorkers=1',
+          '--pool',
+          process.env.RSTEST_POOL_TYPE ?? 'forks',
+          '--testTimeout=2000',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+            env: {
+              RSTEST_E2E_CLEANUP_STAGE: stage,
+              RSTEST_E2E_CLEANUP_RESULT: result,
+            },
+          },
+        },
+      });
+      // This deadline belongs to the parent process, independently of fixture hooks.
+      const deadline = setTimeout(() => cli.exec.kill(), 15_000);
+      try {
+        await cli.exec;
+        expect(cli.exec.process?.signalCode).toBeNull();
+        expect(cli.exec.process?.exitCode).toBe(1);
+        expect(cli.log).toContain(`RSTEST_PLAYWRIGHT_STALLED_${stage}`);
+        const operation =
+          stage === 'trace'
+            ? 'tracing.stop'
+            : stage === 'close'
+              ? 'context.close'
+              : 'browser.close';
+        expect(cli.log).toContain(`Playwright ${operation} timed out in 200ms`);
+        if (stage !== 'browser') {
+          expect(cli.stdout).toContain(
+            'RSTEST_PLAYWRIGHT_TIMEOUT_BROWSER_CLOSED',
+          );
+          expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TIMEOUT_RECOVERED');
+        }
+        if (stage === 'trace') {
+          expect(cli.stdout).toContain(
+            'RSTEST_PLAYWRIGHT_TIMEOUT_CONTEXT_CLOSED',
+          );
+        }
+        if (result === 'fail') {
+          expect(cli.log).toContain('original body failure');
+        } else if (result === 'timeout') {
+          expect(cli.log).toContain('test timed out in 2000ms');
+        }
+      } finally {
+        clearTimeout(deadline);
+        await cli.killProcessTree();
+      }
+    },
+  );
+
   it('runs with Playwright fixtures and assertions', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -237,7 +305,7 @@ describe('@rstest/playwright', () => {
   it('writes Playwright trace debug artifacts', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'trace.test.ts', '--hookTimeout', '1'],
+      args: ['run', 'trace.test.ts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -296,7 +364,7 @@ describe('@rstest/playwright', () => {
   it('retains Playwright trace when onTestFinished fails', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'trace-on-finished-failure.test.ts', '--hookTimeout', '1'],
+      args: ['run', 'trace-on-finished-failure.test.ts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),

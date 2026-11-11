@@ -191,6 +191,8 @@ These defaults apply only when using `definePlaywrightConfig`; importing `test` 
 
 Matching the timeout values does not change Rstest's hook/fixture timeout accounting to Playwright Test's shared test budget. Polling still uses Rstest's fixed interval (`50ms` by default), rather than Playwright Test's backoff intervals. Worker count and `isolate` also retain Rstest's defaults; configure them explicitly at the root when needed.
 
+Playwright trace saving, context closing, and browser closing each use `hookTimeout` as a separate cleanup budget, including after the test body times out. A cleanup timeout fails the test and allows the remaining cleanup to run. Set `hookTimeout: 0` to disable these deadlines. `testTimeout` only limits the test body and setup; `teardownTimeout` starts after the run finishes and cannot stop a stalled test cleanup.
+
 ## Fixtures
 
 `@rstest/playwright` provides these fixtures:
