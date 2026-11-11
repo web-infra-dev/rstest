@@ -512,7 +512,11 @@ test('fails in both projects', () => {
 
   it('removes stale screenshots when test and file identities change', async () => {
     const result = await runBrowserWatchCliWithCwd(fixtureDir, {
-      args: ['--project=project-a', 'tests/failure.test.ts'],
+      args: [
+        '--browser.port=0',
+        '--project=project-a',
+        'tests/failure.test.ts',
+      ],
     });
     cliToKill = result.cli;
     const getFailureScreenshots = () =>
@@ -667,6 +671,7 @@ test('captures a shared name', async () => {
       );
       const relocatedRun = await runBrowserCliWithCwd(relocatedFixture, {
         args: [
+          '--browser.port=0',
           '--reporters=json',
           '--config=rstest.shared-screenshots.config.mts',
         ],
