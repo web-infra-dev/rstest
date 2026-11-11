@@ -380,6 +380,76 @@ describe('loadEsModule', () => {
     expect(module.default).toBe(true);
   });
 
+  it.for(['register', 'registerHooks'] as const)(
+    'rejects Node module hook registration through %s in the VM',
+    async (name) => {
+      const nativeModule = createRequire(__filename)(
+        'node:module',
+      ) as typeof import('node:module');
+      const context = vm.createContext({});
+      const executor = getVmExternalModules(context);
+      const nativeHook = Reflect.get(nativeModule, name);
+      const spy =
+        typeof nativeHook === 'function'
+          ? rs.spyOn(nativeModule, name).mockImplementation(() => {
+              throw new Error('Native loader hook must not be called');
+            })
+          : undefined;
+      nativeModule.syncBuiltinESMExports();
+
+      try {
+        const commonjs = executor.require(
+          'module',
+          __filename,
+        ) as typeof nativeModule;
+        const namespace = (await executor.import(
+          'node:module',
+          false,
+          false,
+        )) as Record<string, unknown>;
+        commonjs.syncBuiltinESMExports();
+        const entryPoints = [
+          commonjs,
+          commonjs.Module,
+          executor.require('node:module', __filename),
+          namespace,
+          namespace.default,
+          namespace.Module,
+          { [name]: Object.getOwnPropertyDescriptor(commonjs, name)?.value },
+        ];
+        const VmError = vm.runInContext('Error', context) as ErrorConstructor;
+
+        for (const entryPoint of entryPoints) {
+          const hook = Reflect.get(entryPoint as object, name);
+          if (typeof nativeHook !== 'function') {
+            expect(hook).toBeUndefined();
+            continue;
+          }
+          let error: unknown;
+          try {
+            Reflect.apply(hook, undefined, []);
+          } catch (caught) {
+            error = caught;
+          }
+          expect(error).toBeInstanceOf(VmError);
+          expect(error).toMatchObject({
+            message: expect.stringContaining(
+              `module.${name}() is not supported in Rstest VM pools`,
+            ),
+          });
+          expect(error).toMatchObject({
+            message: expect.stringContaining('forks or threads'),
+          });
+        }
+        expect(spy?.mock.calls.length ?? 0).toBe(0);
+      } finally {
+        spy?.mockRestore();
+        nativeModule.syncBuiltinESMExports();
+        executor.dispose();
+      }
+    },
+  );
+
   it('keeps CommonJS compilation errors in the VM realm', () => {
     const directory = mkdtempSync(join(tmpdir(), 'rstest-vm-compile-error-'));
     const invalid = join(directory, 'invalid.cjs');

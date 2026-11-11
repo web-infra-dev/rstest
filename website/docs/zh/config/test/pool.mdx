@@ -312,6 +312,8 @@ export default defineConfig({
 
 测试和 setup bundle、external JavaScript ESM 与 CommonJS 均可在 VM 中执行。自定义 Node.js loader 和 external TypeScript 执行不受支持，请先编译或 bundle。
 
+在 VM pool 中调用 `module.register()` 或 `module.registerHooks()` 会抛出错误。需要注册 Node.js loader hook 的测试请使用 `forks` 或 `threads`。
+
 同步 `require(esm)` 需要 Node.js 24.9+、VM graph API 可用且依赖图不含 top-level await，否则应改用动态 `import()`。native addon 仅支持通过 CommonJS `require()` 直接加载，其状态不受 VM 隔离。
 
 VM pool 不支持 WebAssembly source-phase import（`import source` 和 `import.source()`），因为 `node:vm` 尚未提供设置模块 source 对象的公开 API。依赖这类导入的测试请使用 `forks`。

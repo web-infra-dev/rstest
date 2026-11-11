@@ -313,6 +313,8 @@ Values from Node.js, workers, or DOM environments may use different constructors
 
 Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
 
+Calling `module.register()` or `module.registerHooks()` in a VM pool throws an error. Use `forks` or `threads` for tests that register Node.js loader hooks.
+
 Synchronous `require(esm)` requires Node.js 24.9+, VM graph support, and a dependency graph without top-level await. Otherwise, use dynamic `import()`. Native addons can only be loaded through direct CommonJS `require()`, and their state is outside VM isolation.
 
 WebAssembly source-phase imports (`import source` and `import.source()`) are unsupported in VM pools because `node:vm` does not expose an API for providing a module source object. Use `forks` for tests that depend on these imports.
