@@ -1,4 +1,4 @@
-import { expect, it, rs } from '@rstest/core';
+import { afterAll, expect, it, rs } from '@rstest/core';
 import { Window } from 'happy-dom';
 
 rs.mock('happy-dom', () => ({
@@ -10,4 +10,9 @@ rs.mock('happy-dom', () => ({
 it('can mock happy-dom without mocking the environment', () => {
   expect(new Window().name).toBe('mocked');
   expect(document.createElement('p').tagName).toBe('P');
+});
+
+// The shared-worker variant keeps module mocks across test files.
+afterAll(() => {
+  rs.doUnmock('happy-dom');
 });
