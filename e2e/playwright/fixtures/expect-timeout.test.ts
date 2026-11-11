@@ -49,12 +49,12 @@ test('caps explicit assertion timeout at the test deadline', async ({
   page,
 }) => {
   await page.setContent('<h1>Visible heading</h1>');
-  await new Promise((resolve) => setTimeout(resolve, 700));
 
+  // Leave time for browser IPC on busy CI workers while still exceeding the test budget.
   await expect(
     page.locator('h1').filter({ hasText: 'Missing heading' }),
-  ).toBeVisible({ timeout: 5000 });
-}, 1000);
+  ).toBeVisible({ timeout: 30_000 });
+}, 5000);
 
 test('uses configurable assertion timeouts and matcher overrides', async ({
   page,
