@@ -28,7 +28,10 @@ import {
 } from './environment/isBrowserProject';
 import { createTestPlanner, type TestPlanner } from './execution/planner';
 import type { Rstest } from './rstest';
-import { prepareTestEnvironmentModules } from './environment/testEnvironmentModule';
+import {
+  prepareTestEnvironmentModules,
+  settleServerAndTestEnvironmentModules,
+} from './environment/testEnvironmentModule';
 
 /**
  * Collect tests from node mode projects using the planner's node build and the
@@ -56,22 +59,33 @@ const collectNodeTests = async ({
 
   const { rsbuildInstance, setupFileState, globTestSourceEntries } = nodeBuild;
 
-  const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    globTestSourceEntries,
-    globalSetupFiles: setupFileState.globalSetupFiles,
-    isWatchMode: false,
-    inspectedConfig: {
-      ...context.normalizedConfig,
-      projects: nodeProjects.map((p) => p.normalizedConfig),
-    },
-    setupFiles: setupFileState.setupFiles,
-    rsbuildInstance,
-    rootPath: context.rootPath,
+  await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath, {
+    confirm: context.packageInstallerConfirm,
   });
+  // The prebundle runs in a child process and `createRsbuildServer` does not
+  // await the first compile, so build them together.
+  const { server, testEnvironmentModules } =
+    await settleServerAndTestEnvironmentModules({
+      modules: prepareTestEnvironmentModules({
+        projects: nodeProjects,
+        rootPath: context.rootPath,
+      }),
+      server: createRsbuildServer({
+        globTestSourceEntries,
+        globalSetupFiles: setupFileState.globalSetupFiles,
+        isWatchMode: false,
+        inspectedConfig: {
+          ...context.normalizedConfig,
+          projects: nodeProjects.map((p) => p.normalizedConfig),
+        },
+        setupFiles: setupFileState.setupFiles,
+        rsbuildInstance,
+        rootPath: context.rootPath,
+      }),
+    });
+  const { getRsbuildStats, closeServer } = server;
 
   let pool: Awaited<ReturnType<typeof createPool>> | undefined;
-  let testEnvironmentModules:
-    Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
   const closeResources = async (): Promise<void> => {
     try {
       await closeServer();
@@ -79,20 +93,12 @@ const collectNodeTests = async ({
       try {
         await pool?.close();
       } finally {
-        await testEnvironmentModules?.cleanup();
+        await testEnvironmentModules.cleanup();
       }
     }
   };
 
   try {
-    await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath, {
-      confirm: context.packageInstallerConfirm,
-    });
-    testEnvironmentModules = await prepareTestEnvironmentModules({
-      projects: nodeProjects,
-      rootPath: context.rootPath,
-    });
-
     pool = await createPool({
       context,
       testEnvironmentModules: testEnvironmentModules.modules,
@@ -129,7 +135,7 @@ const collectNodeTests = async ({
           ]);
 
           const { success, errors } = await runGlobalSetup(context, project, {
-            testEnvironmentModule: testEnvironmentModules?.modules.get(
+            testEnvironmentModule: testEnvironmentModules.modules.get(
               project.environmentName,
             ),
             globalSetupEntries,

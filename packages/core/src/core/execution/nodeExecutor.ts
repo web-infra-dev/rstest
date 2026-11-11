@@ -31,7 +31,10 @@ import {
 } from './resultsCache';
 import type { Rstest } from '../rstest';
 import type { SetupFileState } from '../config/setupFileState';
-import { prepareTestEnvironmentModules } from '../environment/testEnvironmentModule';
+import {
+  prepareTestEnvironmentModules,
+  settleServerAndTestEnvironmentModules,
+} from '../environment/testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from './testSequencer';
 
 type RsbuildStats = Awaited<
@@ -266,30 +269,31 @@ export function createNodeExecutor(
   > => {
     const { nodeProjectsToRun: projects, entriesCache } = getPlan();
     await validateRunDependencies();
-    const { getRsbuildStats, closeServer } = await createRsbuildServer({
-      inspectedConfig: {
-        ...context.normalizedConfig,
-        projects: projects.map((p) => p.normalizedConfig),
-      },
-      isWatchMode,
-      globTestSourceEntries,
-      setupFiles: setupFileState.setupFiles,
-      globalSetupFiles: setupFileState.globalSetupFiles,
-      rsbuildInstance,
-      rootPath,
-      onCompileFailed: (hint) => notifyCompileFailed?.(hint),
+    // The prebundle runs in a child process and `createRsbuildServer` does not
+    // await the first compile, so build them together. Watch projects stay
+    // prepared even before they have entries: adding a matching file must reuse
+    // the existing pool with the correct dependency.
+    const {
+      server: { getRsbuildStats, closeServer },
+      testEnvironmentModules,
+    } = await settleServerAndTestEnvironmentModules({
+      modules: prepareTestEnvironmentModules({ projects, rootPath }),
+      server: createRsbuildServer({
+        inspectedConfig: {
+          ...context.normalizedConfig,
+          projects: projects.map((p) => p.normalizedConfig),
+        },
+        isWatchMode,
+        globTestSourceEntries,
+        setupFiles: setupFileState.setupFiles,
+        globalSetupFiles: setupFileState.globalSetupFiles,
+        rsbuildInstance,
+        rootPath,
+        onCompileFailed: (hint) => notifyCompileFailed?.(hint),
+      }),
     });
 
-    let testEnvironmentModules:
-      Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
     try {
-      // Watch projects stay prepared even before they have entries: adding a
-      // matching file must reuse the existing pool with the correct dependency.
-      testEnvironmentModules = await prepareTestEnvironmentModules({
-        projects,
-        rootPath,
-      });
-
       entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
         (acc, entry) => acc.concat(Object.values(entry.entries) || []),
         [],
@@ -312,7 +316,7 @@ export function createNodeExecutor(
       try {
         await closeServer();
       } finally {
-        await testEnvironmentModules?.cleanup();
+        await testEnvironmentModules.cleanup();
       }
       throw error;
     }

@@ -612,3 +612,39 @@ export const prepareTestEnvironmentModules = async ({
     cleanup,
   };
 };
+
+/**
+ * Await the dev server and the prepared environment modules, which are built
+ * concurrently. When one side fails, release the other before rethrowing.
+ */
+export const settleServerAndTestEnvironmentModules = async <
+  Server extends { closeServer: () => Promise<void> },
+>({
+  modules,
+  server,
+}: {
+  modules: Promise<PreparedTestEnvironmentModules>;
+  server: Promise<Server>;
+}): Promise<{
+  server: Server;
+  testEnvironmentModules: PreparedTestEnvironmentModules;
+}> => {
+  const [modulesResult, serverResult] = await Promise.allSettled([
+    modules,
+    server,
+  ]);
+  if (serverResult.status === 'rejected') {
+    if (modulesResult.status === 'fulfilled') {
+      await modulesResult.value.cleanup();
+    }
+    throw serverResult.reason;
+  }
+  if (modulesResult.status === 'rejected') {
+    await serverResult.value.closeServer();
+    throw modulesResult.reason;
+  }
+  return {
+    server: serverResult.value,
+    testEnvironmentModules: modulesResult.value,
+  };
+};
