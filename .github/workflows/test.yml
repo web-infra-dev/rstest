@@ -148,10 +148,10 @@ jobs:
     needs: [prepare, lint, ut]
     if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
-    # Full runs execute all four e2e scripts sequentially in one job; the
-    # slowest measured combo (windows/20) takes ~31 min; keep extra room for
-    # runner and browser startup variance.
-    timeout-minutes: 60
+    # Full runs execute all four e2e scripts sequentially. macOS can spend
+    # over 60 minutes across successful steps, so allow room for the whole
+    # matrix without changing individual test or teardown deadlines.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

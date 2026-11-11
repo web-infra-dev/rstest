@@ -32,7 +32,9 @@ describe.sequential('browser mode - screenshot matching', () => {
     Awaited<ReturnType<typeof runBrowserCliWithCwd>>['cli'] | undefined;
 
   const runScreenshot = async (args: string[] = []) => {
-    const result = await runBrowserCliWithCwd(fixtureDir, { args });
+    const result = await runBrowserCliWithCwd(fixtureDir, {
+      args: ['--browser.port=0', ...args],
+    });
     cliToKill = result.cli;
     return result;
   };
