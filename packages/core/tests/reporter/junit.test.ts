@@ -227,6 +227,7 @@ describe('JUnitReporter', () => {
       relativeTestPath: string,
       results: TestResult[],
       message: string,
+      name = 'Error',
     ): TestFileResult => ({
       testId: `file:${relativeTestPath}`,
       status: 'failed',
@@ -236,7 +237,7 @@ describe('JUnitReporter', () => {
       relativeTestPath,
       results,
       project: 'default',
-      errors: [{ name: 'Error', message }],
+      errors: [{ name, message }],
       summary: {
         ...emptyRunSummary.tests,
         total: results.length,
@@ -249,7 +250,7 @@ describe('JUnitReporter', () => {
       ...emptyRunEndPayload,
       status: 'failed',
       results: [
-        fileResult('load.test.ts', [], 'failed <while> loading'),
+        fileResult('load.test.ts', [], 'failed <while> loading', 'Load&Error'),
         fileResult('hook.test.ts', [skippedTest], 'beforeAll failed'),
       ],
       testResults: [skippedTest],
@@ -270,7 +271,7 @@ describe('JUnitReporter', () => {
       '<testcase name="load.test.ts" classname="load.test.ts" time="0">',
     );
     expect(xml).toContain(
-      '<error message="failed &lt;while&gt; loading" type="Error">failed &lt;while&gt; loading</error>',
+      '<error message="failed &lt;while&gt; loading" type="Load&amp;Error">failed &lt;while&gt; loading</error>',
     );
     expect(xml).toContain(
       '<testsuite name="hook.test.ts" tests="2" failures="0" errors="1" skipped="1"',

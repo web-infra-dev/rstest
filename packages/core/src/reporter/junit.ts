@@ -112,7 +112,7 @@ export class JUnitReporter implements Reporter {
     }
     return {
       message: this.escapeXml(error.message),
-      type: error.name || 'Error',
+      type: this.escapeXml(error.name || 'Error'),
       details: this.escapeXml(details),
     };
   }
