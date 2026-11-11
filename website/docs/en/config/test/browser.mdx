@@ -38,7 +38,7 @@ type DevicePreset =
 type BrowserModeConfig = {
   enabled?: boolean;
   provider: 'playwright';
-  /** @deprecated Use `browsers` instead. Will be removed in 1.0. */
+  /** @deprecated Use `instances` instead. Will be removed in 1.0. */
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
   screenshotFailures?: boolean;
@@ -46,8 +46,8 @@ type BrowserModeConfig = {
   viewport?: BrowserViewport;
   strictPort?: boolean;
   providerOptions?: Record<string, unknown>;
-  /** @default 'chromium' */
-  browsers?: BrowserName | (BrowserName | BrowserEntry)[];
+  /** @default [{ browserName: 'chromium' }] */
+  instances?: BrowserInstanceConfig[];
   expect?: BrowserExpectConfig;
 };
 
@@ -55,7 +55,7 @@ type BrowserExpectConfig = {
   toMatchScreenshot?: BrowserScreenshotMatcherConfig;
 };
 
-type BrowserEntry = {
+type BrowserInstanceConfig = {
   browserName: BrowserName;
   headless?: boolean;
   viewport?: BrowserViewport;
@@ -80,7 +80,7 @@ type BrowserScreenshotPathOptions = {
 const defaultBrowser = {
   enabled: false,
   provider: 'playwright',
-  browsers: 'chromium',
+  instances: [{ browserName: 'chromium' }],
   headless: true, // CI environment; false for local development
   screenshotFailures: true, // Defaults to the headless setting
   port: undefined, // Random available port
@@ -158,13 +158,13 @@ export default defineConfig({
 - **Type:** `'chromium' | 'firefox' | 'webkit'`
 - **Default:** `'chromium'`
 - **CLI:** `--browser.name <name>` (deprecated)
-- **Deprecated:** use [`browsers`](#browsers) instead. Will be removed in 1.0.
+- **Deprecated:** use [`instances`](#instances) instead. Will be removed in 1.0.
 
-The single browser type to use for testing. Setting this field emits a deprecation warning once per run and is normalized to `browsers: [browser]`:
+The single browser type to use for testing. Setting this field emits a deprecation warning once per run and is normalized to `instances: [{ browserName: browser }]`:
 
-> `browser.browser` is deprecated and will be removed in 1.0: use `browser.browsers` instead, e.g. `browsers: ['chromium']` or `[{ browserName: 'firefox' }]`.
+> `browser.browser` is deprecated and will be removed in 1.0: use `browser.instances` instead, e.g. `instances: [{ browserName: 'chromium' }]`.
 
-Setting both `browser` and `browsers` on a browser project is a config error.
+Setting both `browser` and `instances` on a browser project is a config error.
 
 - `chromium` - Google Chrome, Microsoft Edge
 - `firefox` - Mozilla Firefox
@@ -177,7 +177,7 @@ export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
-    browser: 'firefox', // deprecated; prefer browsers: ['firefox']
+    browser: 'firefox', // deprecated; prefer instances: [{ browserName: 'firefox' }]
   },
 });
 ```
@@ -198,15 +198,15 @@ npx playwright install webkit
 npx playwright install
 ```
 
-### browsers
+### instances
 
 <ApiMeta addedVersion="0.13.0" />
 
-- **Type:** `BrowserName | (BrowserName | BrowserEntry)[]`
-- **Default:** `'chromium'`
-- **CLI:** `--browser.browsers <names>` (comma-separated and/or repeatable)
+- **Type:** `BrowserInstanceConfig[]`
+- **Default:** `[{ browserName: 'chromium' }]`
+- **CLI:** `--browser.instances <names>` (comma-separated and/or repeatable; filters the configured instances)
 
-Browsers this project runs on. Every browser of a project shares one build and one dev server — multi-browser runs do not multiply build time.
+Browser instances this project runs on, one per browser. Every instance of a project shares one build and one dev server — multi-browser runs do not multiply build time.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -215,12 +215,12 @@ export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
-    browsers: ['chromium', 'firefox'],
+    instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
   },
 });
 ```
 
-Each entry is either a browser name (a plain entry inheriting every project-level default) or a `BrowserEntry` object that overrides fields per browser:
+Each item is a `BrowserInstanceConfig` object: `browserName` is required, and every other field overrides the project-level value for that browser. A bare browser name such as `instances: ['chromium']` is a config error; write `{ browserName: 'chromium' }`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -233,8 +233,8 @@ export default defineConfig({
       launch: { slowMo: 100 },
       context: { locale: 'en-US' },
     },
-    browsers: [
-      'firefox',
+    instances: [
+      { browserName: 'firefox' },
       {
         browserName: 'chromium',
         viewport: { width: 800, height: 600 },
@@ -247,7 +247,7 @@ export default defineConfig({
 });
 ```
 
-`BrowserEntry` accepts only runtime-effective overrides; build-scoped options (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level `browser` config:
+`BrowserInstanceConfig` accepts only runtime-effective overrides; build-scoped options (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level `browser` config:
 
 | Field                | Default                              |
 | -------------------- | ------------------------------------ |
@@ -258,14 +258,14 @@ export default defineConfig({
 | `expect`             | project `browser.expect`             |
 | `providerOptions`    | project `browser.providerOptions`    |
 
-Merge rules per entry: an entry field wins, then the project-level `browser.*` field, then the built-in default. `providerOptions` merges per top-level key (`launch`, `context`) instead of whole-field: an entry `launch` replaces the project `launch` key entirely (Playwright options may contain functions and class instances, so sibling keys under it are not merged), while keys the entry does not set keep the project value — in the example above the chromium entry launches with `channel: 'chrome'` alone, and its context keeps the project-level `locale: 'en-US'`.
+Merge rules per instance: an instance field wins, then the project-level `browser.*` field, then the built-in default. `providerOptions` merges per top-level key (`launch`, `context`) instead of whole-field: an instance `launch` replaces the project `launch` key entirely (Playwright options may contain functions and class instances, so sibling keys under it are not merged), while keys the instance does not set keep the project value — in the example above the chromium instance launches with `channel: 'chrome'` alone, and its context keeps the project-level `locale: 'en-US'`.
 
-A project runs exactly one browser per entry; two result rows come back for the same file, each reported under its own project name — see [Multi-browser reporting](#multi-browser-reporting).
+A project runs exactly one browser per instance; two result rows come back for the same file, each reported under its own project name — see [Multi-browser reporting](#multi-browser-reporting).
 
 Validation rules:
 
 - The same `browserName` may be configured at most once per project (duplicate names are a config error).
-- `browsers` must not be empty — remove the option to run the default Chromium instead.
+- `instances` must not be empty — remove the option to run the default Chromium instead.
 - At most one `(project, browser)` pair may run headed (`headless: false`) per run; see [Launch rules](#launch-rules).
 - [`coverage.provider: 'v8'`](/config/test/coverage) requires every selected browser to be Chromium; see [Launch rules](#launch-rules).
 
@@ -275,7 +275,7 @@ Validation rules:
 - **Default:** `true` in CI environments, `false` for local development
 - **CLI:** `--browser.headless`
 
-Whether to run the browser in headless mode (without UI). Entries in [`browsers`](#browsers) can override it per browser, subject to the [one headed browser per run](#launch-rules) rule.
+Whether to run the browser in headless mode (without UI). Items in [`instances`](#instances) can override it per browser, subject to the [one headed browser per run](#launch-rules) rule.
 
 import { Tab, Tabs } from '@theme';
 
@@ -334,7 +334,7 @@ export default defineConfig({
 - **Type:** `BrowserViewport`
 - **Default:** `undefined`
 
-Set the default runner iframe viewport for Browser Mode tests. When not specified, the Browser UI fills the preview panel. Entries in [`browsers`](#browsers) can override the viewport per browser.
+Set the default runner iframe viewport for Browser Mode tests. When not specified, the Browser UI fills the preview panel. Items in [`instances`](#instances) can override the viewport per browser.
 
 ```ts
 type BrowserViewport =
@@ -455,7 +455,7 @@ export default defineConfig({
 
 Playwright options passed through to browser launch and context creation. Rstest does not validate or interpret the contents of this object — it forwards the values as-is to Playwright.
 
-Each `BrowserEntry` in [`browsers`](#browsers) can carry its own `providerOptions`: top-level keys (`launch`, `context`) set on the entry replace the project-level keys, and keys the entry does not set keep the project-level value.
+Each `BrowserInstanceConfig` in [`instances`](#instances) can carry its own `providerOptions`: top-level keys (`launch`, `context`) set on the instance replace the project-level keys, and keys the instance does not set keep the project-level value.
 
 See [Playwright provider options](#provider-options) below for the supported fields.
 
@@ -577,25 +577,29 @@ The following rules are validated before any browser launches:
 
 - **One headed browser per run.** Browser mode opens a single debug window, so at most one `(project, browser)` pair may set `headless: false`; every other browser must set `headless: true`. The error names the concrete fix:
 
-  > Only one (project, browser) pair can run headed per run: "web" ("chromium"). Browser mode opens one debug window, so every other browser must set headless: true. Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.browsers <name>` or narrow the projects with `--project`.
+  > Only one (project, browser) pair can run headed per run: "web" ("chromium"). Browser mode opens one debug window, so every other browser must set headless: true. Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.
 
 - **Watch mode does not support mixing headed and headless browsers.** A watch session where one browser runs headed and another headless is rejected at validation; every configured browser must set `headless: true`, or run without watch.
 
-- **Coverage provider `v8` requires Chromium.** With `coverage.enabled` and `coverage.provider: 'v8'`, a browser project selecting a non-Chromium browser fails validation. Switch to `coverage.provider: 'istanbul'`, or select Chromium only (`--browser.browsers chromium`).
+- **Coverage provider `v8` requires Chromium.** With `coverage.enabled` and `coverage.provider: 'v8'`, a browser project selecting a non-Chromium browser fails validation. Switch to `coverage.provider: 'istanbul'`, or select Chromium only (`--browser.instances chromium`).
 
-For strict browser-per-environment coverage you can still run separate executions (for example, in a CI matrix) with the `--browser.browsers` filter:
+For strict browser-per-environment coverage you can still run separate executions (for example, in a CI matrix) with the `--browser.instances` filter:
 
 ```bash
-npx rstest --browser.browsers chromium
-npx rstest --browser.browsers firefox
-npx rstest --browser.browsers webkit
+npx rstest --browser.instances chromium
+npx rstest --browser.instances firefox
+npx rstest --browser.instances webkit
 ```
 
 ## CLI browser filters
 
-`--browser.browsers <names>` (repeatable and/or comma-separated) overrides and filters the configured browsers: a listed name with a configured entry keeps that entry together with its overrides, and a listed name the project does not configure falls back to a plain entry — a single name inheriting every project-level default. The resolved list replaces the project's `browsers`.
+`--browser.instances <names>` (repeatable and/or comma-separated) only filters, like `--project`: it selects the configured instances whose `browserName` is listed and never creates an instance from a name. The default Chromium instance (when nothing is configured) and the instance of the deprecated `browser.browser` count as configured instances.
 
-`--browser.name <name>` stays as a deprecated alias of `--browser.browsers` and emits a deprecation warning once per run.
+- A browser project where none of its instances match is skipped for the run; node projects are unaffected.
+- A listed name that no selected browser project configures is an error naming the name and the configured browsers per project.
+- Duplicated names and names other than `chromium`, `firefox` and `webkit` are errors.
+
+`--browser.name <name>` stays as a deprecated option and emits a deprecation warning once per run. The project runs that single browser: with the configured instance's overrides when one has that `browserName`, otherwise as a plain instance with project-level defaults. It cannot be combined with `--browser.instances`.
 
 ## Multi-browser reporting
 
@@ -609,7 +613,7 @@ Reporters do not see browsers. When a project selects more than one browser, eac
 
 When using `projects` in Browser Mode, each project still compiles and executes with its own build config (for example `plugins`, `include`, and framework-specific setup).
 
-Browser build-scoped options stay per project (`provider`, `port`, `strictPort`), while the browser list, defaults, and per-browser overrides (`browsers`, `headless`, `viewport`, `providerOptions`) are project-owned: two browser projects may run different browsers in one run. When two projects configure the same browser, [launch sharing](#launch-rules) applies.
+Browser build-scoped options stay per project (`provider`, `port`, `strictPort`), while the browser instances, defaults, and per-browser overrides (`instances`, `headless`, `viewport`, `providerOptions`) are project-owned: two browser projects may run different browsers in one run. When two projects configure the same browser, [launch sharing](#launch-rules) applies.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

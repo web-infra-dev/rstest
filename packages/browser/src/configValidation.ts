@@ -201,7 +201,7 @@ const reportUnsupportedBrowserOptions = (
         "Coverage provider 'v8' in browser mode requires Chromium. Project " +
           `${JSON.stringify(projectName)} selects ${JSON.stringify(browserName)}. ` +
           "Switch to coverage.provider: 'istanbul', or select Chromium only " +
-          '(e.g. CLI `--browser.browsers chromium`).',
+          '(e.g. CLI `--browser.instances chromium`).',
       );
     }
   }
@@ -339,7 +339,7 @@ export const validateBrowserConfig = (context: InternalContext): void => {
       .join(', ');
     throw new Error(
       `Only one (project, browser) pair can run headed per run: ${listed}. Browser mode opens one debug window, so every other browser must set headless: true.` +
-        ' Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.browsers <name>` or narrow the projects with `--project`.',
+        ' Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.',
     );
   }
 

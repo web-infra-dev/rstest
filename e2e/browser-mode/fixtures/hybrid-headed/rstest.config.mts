@@ -9,7 +9,7 @@ export default defineConfig({
     provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS['hybrid-headed'],
-    browsers: [
+    instances: [
       {
         browserName: 'chromium',
         headless: false,

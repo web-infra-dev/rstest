@@ -711,22 +711,27 @@ describe('withDefaultConfig browser normalization', () => {
   });
 });
 
-describe('browser.browsers raw storage', () => {
-  it('stores the user-layer browser values untouched and applies no entry defaults', () => {
+describe('browser.instances raw storage', () => {
+  it('stores the user-layer browser values untouched and applies no instance defaults', () => {
     const normalized = withDefaultConfig({
       browser: {
         enabled: true,
         provider: 'playwright',
         headless: false,
-        browsers: ['chromium', { browserName: 'firefox', headless: true }],
-        cliBrowsers: ['firefox'],
+        instances: [
+          { browserName: 'chromium' },
+          { browserName: 'firefox', headless: true },
+        ],
+        cliInstances: ['firefox'],
+        cliBrowserName: 'webkit',
       },
     });
-    expect(normalized.browser.browsers).toEqual([
-      'chromium',
+    expect(normalized.browser.instances).toEqual([
+      { browserName: 'chromium' },
       { browserName: 'firefox', headless: true },
     ]);
-    expect(normalized.browser.cliBrowsers).toEqual(['firefox']);
+    expect(normalized.browser.cliInstances).toEqual(['firefox']);
+    expect(normalized.browser.cliBrowserName).toBe('webkit');
     expect(normalized.browser.browser).toBeUndefined();
     expect(normalized.browser.headless).toBe(false);
   });
@@ -737,11 +742,11 @@ describe('browser.browsers raw storage', () => {
         enabled: true,
         provider: 'playwright',
         browser: 'not-a-browser' as BrowserName,
-        browsers: [],
+        instances: [],
       },
     });
     expect(normalized.browser.browser).toBe('not-a-browser');
-    expect(normalized.browser.browsers).toEqual([]);
+    expect(normalized.browser.instances).toEqual([]);
   });
 });
 

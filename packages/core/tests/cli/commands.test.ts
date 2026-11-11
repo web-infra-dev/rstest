@@ -42,7 +42,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '-r',
         '-t',
         '--bail',
-        '--browser.browsers',
+        '--browser.instances',
         '--browser.name',
         '--browser.port',
         '--changed',
@@ -96,7 +96,7 @@ describe('requiredDotOptions (derived from option definitions)', () => {
   it('derives the required dot-notation option names', () => {
     expect([...requiredDotOptions].sort()).toEqual(
       [
-        '--browser.browsers',
+        '--browser.instances',
         '--browser.name',
         '--browser.port',
         '--coverage.exclude',

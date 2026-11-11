@@ -75,7 +75,7 @@ const normalizeBooleanLikeCliValue = (
  */
 const toCliBrowserNames = (
   values: string | string[] | undefined,
-  source: '`--browser.browsers`' | '`--browser.name`',
+  source: '`--browser.instances`' | '`--browser.name`',
 ): string[] => {
   const names = castArray(values)
     .flatMap((value) => String(value).split(','))
@@ -291,31 +291,37 @@ export function mergeWithCLIOptions(
       if (browserEnabled !== undefined) {
         config.browser.enabled = browserEnabled;
       }
-      const cliBrowserNames = options.browser.browsers;
+      const cliInstanceNames = options.browser.instances;
       const cliBrowserName = options.browser.name;
-      if (cliBrowserNames !== undefined && cliBrowserName !== undefined) {
+      if (cliInstanceNames !== undefined && cliBrowserName !== undefined) {
         throw new Error(
-          'Use `--browser.browsers` (or `RunOptions.browser.browsers`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
+          'Use `--browser.instances` (or `RunOptions.browser.instances`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
         );
       }
       // Raw selection; `resolveBrowserInstances` filters this layer's
-      // configured browsers by it.
-      if (cliBrowserNames !== undefined) {
-        config.browser.cliBrowsers = toCliBrowserNames(
-          cliBrowserNames,
-          '`--browser.browsers`',
+      // configured instances by it.
+      if (cliInstanceNames !== undefined) {
+        config.browser.cliInstances = toCliBrowserNames(
+          cliInstanceNames,
+          '`--browser.instances`',
         );
       } else if (cliBrowserName !== undefined) {
         if (!deprecatedBrowserNameOptionWarned) {
           deprecatedBrowserNameOptionWarned = true;
           logger.warn(
-            '`--browser.name` (and `RunOptions.browser.name`) is deprecated and will be removed in 1.0: use `--browser.browsers` / `browser.browsers` instead.',
+            '`--browser.name` (and `RunOptions.browser.name`) is deprecated and will be removed in 1.0: use `--browser.instances` / `browser.instances` instead.',
           );
         }
-        config.browser.cliBrowsers = toCliBrowserNames(
+        const [name, ...rest] = toCliBrowserNames(
           cliBrowserName,
           '`--browser.name`',
         );
+        if (rest.length > 0) {
+          throw new Error(
+            '`--browser.name` takes a single browser name: use `--browser.instances` to select several.',
+          );
+        }
+        config.browser.cliBrowserName = name;
       }
       if (options.browser.headless !== undefined) {
         config.browser.headless = options.browser.headless;

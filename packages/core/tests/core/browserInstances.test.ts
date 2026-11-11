@@ -1,5 +1,8 @@
 import { describe, expect, it, rs } from '@rstest/core';
-import { resolveBrowserInstances } from '../../src/core/browser/browserInstances';
+import {
+  resolveBrowserInstances,
+  selectCliInstanceProjects,
+} from '../../src/core/browser/browserInstances';
 import type { InternalProjectContext } from '../../src/types';
 import { logger } from '../../src/utils/logger';
 
@@ -22,7 +25,7 @@ const makeProject = (
   }) as unknown as InternalProjectContext;
 
 describe('resolveBrowserInstances', () => {
-  it('resolves the default single chromium entry with project defaults merged', () => {
+  it('resolves the default single chromium instance with project defaults merged', () => {
     expect(resolveBrowserInstances(makeProject())).toEqual([
       {
         name: 'p',
@@ -34,14 +37,14 @@ describe('resolveBrowserInstances', () => {
     ]);
   });
 
-  it('expands a browser-name list into one plain entry per browser', () => {
+  it('expands an instance list into one plain instance per browser', () => {
     expect(
       resolveBrowserInstances(
         makeProject({
           headless: false,
           screenshotFailures: false,
           viewport: 'iPhone12Pro',
-          browsers: ['chromium', 'firefox'],
+          instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
         }),
       ),
     ).toEqual([
@@ -72,8 +75,8 @@ describe('resolveBrowserInstances', () => {
           launch: { channel: 'chromium', args: ['--no-sandbox'] },
           context: { locale: 'en-US' },
         },
-        browsers: [
-          'chromium',
+        instances: [
+          { browserName: 'chromium' },
           { browserName: 'firefox', headless: false, viewport: 'GalaxyZFold5' },
           {
             browserName: 'webkit',
@@ -126,88 +129,187 @@ describe('resolveBrowserInstances', () => {
   });
 
   it('returns the same resolution for repeated calls on one project', () => {
-    const project = makeProject({ browsers: ['chromium', 'firefox'] });
+    const project = makeProject({
+      instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
+    });
     expect(resolveBrowserInstances(project)).toBe(
       resolveBrowserInstances(project),
     );
   });
 
-  it('rejects setting browser.browser together with browser.browsers', () => {
+  it('rejects setting browser.browser together with browser.instances', () => {
     expect(() =>
       resolveBrowserInstances(
-        makeProject({ browser: 'chromium', browsers: ['firefox'] }),
+        makeProject({
+          browser: 'chromium',
+          instances: [{ browserName: 'firefox' }],
+        }),
       ),
     ).toThrow(/cannot be set together/);
   });
 
-  it('rejects an empty browsers list', () => {
+  it('rejects an empty instances list', () => {
     expect(() =>
-      resolveBrowserInstances(makeProject({ browsers: [] })),
+      resolveBrowserInstances(makeProject({ instances: [] })),
     ).toThrow(/must not be empty/);
   });
 
   it('rejects duplicate browser names within one project', () => {
     expect(() =>
       resolveBrowserInstances(
-        makeProject({ browsers: ['chromium', { browserName: 'chromium' }] }),
+        makeProject({
+          instances: [{ browserName: 'chromium' }, { browserName: 'chromium' }],
+        }),
       ),
     ).toThrow(/appears twice/);
   });
 
   it('rejects unknown browser names in config', () => {
     expect(() =>
-      resolveBrowserInstances(makeProject({ browsers: ['safari'] })),
-    ).toThrow(/must either be a browser name/);
-    expect(() =>
       resolveBrowserInstances(
-        makeProject({ browsers: [{ browserName: 'macOS' }] }),
+        makeProject({ instances: [{ browserName: 'macOS' }] }),
       ),
-    ).toThrow(/must either be a browser name/);
+    ).toThrow(/must be an object with a `browserName` field/);
+  });
+
+  it('rejects a string item and shows the object form', () => {
+    expect(() =>
+      resolveBrowserInstances(makeProject({ instances: ['chromium'] })),
+    ).toThrow(/Use `\{ browserName: "chromium" \}`/);
+  });
+
+  it('rejects a non-array instances value', () => {
+    expect(() =>
+      resolveBrowserInstances(makeProject({ instances: 'chromium' })),
+    ).toThrow(/must be an array of objects/);
   });
 
   describe('CLI selection', () => {
-    it('keeps the configured entry (with overrides) of a selected browser', () => {
+    const configured = [
+      { browserName: 'chromium' },
+      { browserName: 'firefox', headless: false },
+    ];
+
+    it('keeps the configured instance (with overrides) of a selected browser', () => {
+      expect(
+        resolveBrowserInstances(
+          makeProject({ instances: configured, cliInstances: ['firefox'] }),
+        ),
+      ).toMatchObject([{ name: 'p', browserName: 'firefox', headless: false }]);
+    });
+
+    it('never creates an instance from a name: unmatched names select nothing', () => {
       expect(
         resolveBrowserInstances(
           makeProject({
-            browsers: ['chromium', { browserName: 'firefox', headless: false }],
-            cliBrowsers: ['firefox'],
+            instances: [{ browserName: 'chromium' }],
+            cliInstances: ['firefox'],
           }),
         ),
-      ).toMatchObject([{ browserName: 'firefox', headless: false }]);
+      ).toEqual([]);
     });
 
-    it('falls back to a plain entry for a selected browser without a configured entry', () => {
+    it('selects the default chromium instance when nothing is configured', () => {
       expect(
         resolveBrowserInstances(
-          makeProject({
-            browsers: ['chromium'],
-            cliBrowsers: ['chromium', 'firefox'],
-          }),
-        ).map((entry) => entry.browserName),
-      ).toEqual(['chromium', 'firefox']);
+          makeProject({ cliInstances: ['chromium'] }),
+        ).map((instance) => instance.browserName),
+      ).toEqual(['chromium']);
     });
 
-    it('absorbs the deprecated browser.browser instead of reporting a conflict', () => {
+    it('selects the instance of the deprecated browser.browser', () => {
       expect(
         resolveBrowserInstances(
-          makeProject({ browser: 'chromium', cliBrowsers: ['webkit'] }),
-        ).map((entry) => entry.browserName),
+          makeProject({ browser: 'webkit', cliInstances: ['webkit'] }),
+        ).map((instance) => instance.browserName),
       ).toEqual(['webkit']);
+      expect(
+        resolveBrowserInstances(
+          makeProject({ browser: 'webkit', cliInstances: ['chromium'] }),
+        ),
+      ).toEqual([]);
     });
 
     it('rejects unknown names', () => {
       expect(() =>
-        resolveBrowserInstances(makeProject({ cliBrowsers: ['safari'] })),
+        resolveBrowserInstances(makeProject({ cliInstances: ['safari'] })),
       ).toThrow(/Unknown browser value "safari"/);
     });
 
     it('rejects a duplicated selection', () => {
       expect(() =>
         resolveBrowserInstances(
-          makeProject({ cliBrowsers: ['chromium', 'chromium'] }),
+          makeProject({ cliInstances: ['chromium', 'chromium'] }),
         ),
       ).toThrow(/appears twice/);
     });
+  });
+
+  describe('deprecated --browser.name', () => {
+    it('runs the configured instance with its overrides', () => {
+      expect(
+        resolveBrowserInstances(
+          makeProject({
+            instances: [
+              { browserName: 'chromium' },
+              { browserName: 'firefox', headless: false },
+            ],
+            cliBrowserName: 'firefox',
+          }),
+        ),
+      ).toMatchObject([{ name: 'p', browserName: 'firefox', headless: false }]);
+    });
+
+    it('falls back to a plain instance with project defaults', () => {
+      expect(
+        resolveBrowserInstances(
+          makeProject({
+            instances: [{ browserName: 'chromium', headless: false }],
+            cliBrowserName: 'webkit',
+          }),
+        ),
+      ).toMatchObject([{ browserName: 'webkit', headless: true }]);
+    });
+  });
+});
+
+describe('selectCliInstanceProjects', () => {
+  const named = (name: string, browser: Record<string, unknown> = {}) => ({
+    ...makeProject(browser),
+    name,
+  });
+  const nodeProject = {
+    name: 'node',
+    normalizedConfig: { browser: { enabled: false } },
+  } as unknown as InternalProjectContext;
+
+  it('returns the projects untouched without a CLI selection', () => {
+    const projects = [named('a'), nodeProject];
+    expect(selectCliInstanceProjects(projects)).toBe(projects);
+  });
+
+  it('skips a browser project with no matching instance and keeps node projects', () => {
+    const web = named('web', {
+      instances: [{ browserName: 'chromium' }, { browserName: 'webkit' }],
+      cliInstances: ['webkit'],
+    });
+    const other = named('other', {
+      instances: [{ browserName: 'chromium' }],
+      cliInstances: ['webkit'],
+    });
+    expect(selectCliInstanceProjects([web, other, nodeProject])).toEqual([
+      web,
+      nodeProject,
+    ]);
+  });
+
+  it('errors on a name no browser project configures, naming the configured browsers', () => {
+    const web = named('web', {
+      instances: [{ browserName: 'chromium' }, { browserName: 'webkit' }],
+      cliInstances: ['firefox'],
+    });
+    expect(() => selectCliInstanceProjects([web])).toThrow(
+      /Browser "firefox" from `--browser\.instances` is not configured by any selected browser project\. Configured browsers per project: "web": chromium, webkit\./,
+    );
   });
 });

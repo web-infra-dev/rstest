@@ -1,7 +1,7 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { config } from 'chai';
-import type { BrowserEntry } from './browser';
+import type { BrowserInstanceConfig } from './browser';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -314,14 +314,14 @@ export type BrowserModeConfig = {
    */
   provider: BrowserProvider;
   /**
-   * Browsers this project runs on: browser names or {@link BrowserEntry}
-   * objects overriding fields per browser.
+   * Browser instances this project runs on, each a
+   * {@link BrowserInstanceConfig} overriding fields per browser.
    *
-   * @default 'chromium'
+   * @default [{ browserName: 'chromium' }]
    */
-  browsers?: BrowserName | (BrowserName | BrowserEntry)[];
+  instances?: BrowserInstanceConfig[];
   /**
-   * @deprecated Use `browsers` instead. Will be removed in 1.0.
+   * @deprecated Use `instances: [{ browserName: '...' }]` instead. Will be removed in 1.0.
    */
   browser?: BrowserName;
   /**
@@ -798,7 +798,7 @@ export type ShardConfig = { count: number; index: number };
  */
 export type ResolvedRstestConfig = RstestConfig & {
   shard?: ShardConfig;
-  browser?: { cliBrowsers?: string[] };
+  browser?: { cliInstances?: string[]; cliBrowserName?: string };
 };
 
 type OptionalKeys =
@@ -819,11 +819,12 @@ type OptionalKeys =
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: BrowserProvider;
-  // `browsers`/`browser`/`cliBrowsers` hold the raw user and CLI values; only
-  // `@rstest/browser` resolves them.
-  browsers?: BrowserModeConfig['browsers'];
+  // `instances`/`browser`/`cliInstances`/`cliBrowserName` hold the raw user and
+  // CLI values; only `resolveBrowserInstances` resolves them.
+  instances?: BrowserModeConfig['instances'];
   browser?: BrowserModeConfig['browser'];
-  cliBrowsers?: string[];
+  cliInstances?: string[];
+  cliBrowserName?: string;
   headless: boolean;
   screenshotFailures: boolean;
   port?: number;

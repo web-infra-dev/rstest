@@ -341,17 +341,23 @@ const createDefaultConfig = (): NormalizedConfig => ({
 
 type RawBrowserFields = Pick<
   NormalizedBrowserModeConfig,
-  'browsers' | 'browser' | 'cliBrowsers'
+  'instances' | 'browser' | 'cliInstances' | 'cliBrowserName'
 >;
 
 const rawBrowserFields = (
   browser: ResolvedRstestConfig['browser'],
 ): RawBrowserFields => {
-  const { browsers, browser: single, cliBrowsers } = browser ?? {};
+  const {
+    instances,
+    browser: single,
+    cliInstances,
+    cliBrowserName,
+  } = browser ?? {};
   return {
-    ...(browsers === undefined ? {} : { browsers }),
+    ...(instances === undefined ? {} : { instances }),
     ...(single === undefined ? {} : { browser: single }),
-    ...(cliBrowsers === undefined ? {} : { cliBrowsers }),
+    ...(cliInstances === undefined ? {} : { cliInstances }),
+    ...(cliBrowserName === undefined ? {} : { cliBrowserName }),
   };
 };
 

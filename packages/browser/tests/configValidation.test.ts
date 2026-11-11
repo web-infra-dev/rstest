@@ -41,7 +41,7 @@ describe('browser config validation errors', () => {
           screenshotFailures: false,
           strictPort: false,
           providerOptions: {},
-          browsers: [
+          instances: [
             {
               browserName: 'chromium',
               headless: true,
@@ -72,7 +72,7 @@ describe('browser config validation errors', () => {
     const context = makeContext([
       makeProject('p', {
         enabled: true,
-        browsers: [
+        instances: [
           {
             browserName: 'chromium',
             headless: true,
@@ -108,7 +108,7 @@ describe('browser config validation errors', () => {
     const hybrid = [
       makeProject('p', {
         enabled: true,
-        browsers: [
+        instances: [
           {
             browserName: 'chromium',
             headless: false,
@@ -135,7 +135,7 @@ describe('browser config validation errors', () => {
     const headlessOnly = [
       makeProject('p', {
         enabled: true,
-        browsers: [
+        instances: [
           {
             browserName: 'chromium',
             headless: true,
@@ -161,7 +161,7 @@ describe('browser config validation errors', () => {
     // the same shape checks as the project-level value.
     const badWidth = makeProject('a', {
       enabled: true,
-      browsers: [
+      instances: [
         {
           browserName: 'chromium',
           headless: true,
@@ -177,7 +177,7 @@ describe('browser config validation errors', () => {
 
     const badPreset = makeProject('b', {
       enabled: true,
-      browsers: [
+      instances: [
         {
           browserName: 'firefox',
           headless: true,
@@ -196,7 +196,7 @@ describe('browser config validation errors', () => {
     const context = makeContext([
       makeProject('a', {
         enabled: true,
-        browsers: [
+        instances: [
           {
             browserName: 'chromium',
             headless: false,
@@ -207,7 +207,7 @@ describe('browser config validation errors', () => {
       }),
       makeProject('b', {
         enabled: true,
-        browsers: [
+        instances: [
           {
             browserName: 'firefox',
             headless: false,
@@ -218,7 +218,7 @@ describe('browser config validation errors', () => {
       }),
     ]);
     expect(() => validateBrowserConfig(context)).toThrow(
-      /Only one \(project, browser\) pair can run headed[\s\S]*--browser\.headless=false[\s\S]*--browser\.browsers <name>` or narrow the projects with `--project`/,
+      /Only one \(project, browser\) pair can run headed[\s\S]*--browser\.headless=false[\s\S]*--browser\.instances <name>` or narrow the projects with `--project`/,
     );
   });
 
@@ -231,7 +231,7 @@ describe('browser config validation errors', () => {
       [
         makeProject('p', {
           enabled: true,
-          browsers: [
+          instances: [
             {
               browserName: 'firefox',
               headless: true,
@@ -251,7 +251,7 @@ describe('browser config validation errors', () => {
       [
         makeProject('p', {
           enabled: true,
-          browsers: [
+          instances: [
             {
               browserName: 'firefox',
               headless: true,

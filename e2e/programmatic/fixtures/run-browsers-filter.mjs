@@ -10,7 +10,7 @@ const fixtureDir = dirname(fileURLToPath(import.meta.url));
 // filter = 'none' | 'firefox' | 'chromium'
 const filter = process.argv[3];
 const runOptions =
-  filter === 'none' ? undefined : { browser: { browsers: filter } };
+  filter === 'none' ? undefined : { browser: { instances: filter } };
 const root = join(fixtureDir, `.browsers-filter-${process.pid}`);
 
 try {
@@ -40,7 +40,7 @@ it('runs in the selected browser', () => {
       strictPort: true,
       // Each browser of a run gets its own row; the CI runners install only
       // the chrome channel (mirroring run-browser.mjs), firefox stays bundled.
-      browsers: [
+      instances: [
         {
           browserName: 'chromium',
           viewport: { width: 800, height: 600 },

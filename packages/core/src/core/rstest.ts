@@ -41,7 +41,10 @@ import {
   TS_CONFIG_FILE,
 } from '../utils';
 import { createExitCode, type RstestExitCode } from './execution/exitCode';
-import { getReportedProjects } from './browser/browserInstances';
+import {
+  getReportedProjects,
+  selectCliInstanceProjects,
+} from './browser/browserInstances';
 import { TestStateManager } from './execution/stateManager';
 
 /**
@@ -293,6 +296,9 @@ export class Rstest implements InternalContext {
             normalizedConfig: rstestConfig,
           },
         ];
+    // `--browser.instances` filters like `--project`: browser projects without
+    // a matching instance leave the run.
+    this.projects = selectCliInstanceProjects(this.projects);
 
     this.reportersInitialized = !initializeReporters || command === 'list';
   }

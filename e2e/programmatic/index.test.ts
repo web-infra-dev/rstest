@@ -642,7 +642,7 @@ describe('programmatic createRstest', () => {
   });
 
   it.for(['firefox', 'chromium'] as const)(
-    'filters configured browsers via RunOptions.browser.browsers to %s like the CLI flag',
+    'filters configured instances via RunOptions.browser.instances to %s like the CLI flag',
     async (filter, { onTestFinished }) => {
       const { cli } = await runRstestCli({
         command: 'node',

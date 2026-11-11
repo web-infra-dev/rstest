@@ -9,7 +9,7 @@ export default defineConfig({
     provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS['multi-browser'],
-    browsers: [
+    instances: [
       {
         browserName: 'firefox',
         headless: false,

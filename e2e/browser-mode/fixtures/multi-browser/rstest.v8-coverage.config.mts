@@ -2,7 +2,7 @@ import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
 
 // v8 coverage with a multi-browser selection: validation must reject any
-// selected non-chromium browser, and `--browser.browsers chromium` must
+// selected non-chromium browser, and `--browser.instances chromium` must
 // unblock the same config (the check runs after CLI filtering).
 export default defineConfig({
   coverage: {
@@ -14,12 +14,12 @@ export default defineConfig({
     provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS['multi-browser'],
-    browsers: [
+    instances: [
       {
         browserName: 'chromium',
         ...ciChromeEntry(),
       },
-      'firefox',
+      { browserName: 'firefox' },
     ],
   },
   include: ['tests/basic.test.ts'],

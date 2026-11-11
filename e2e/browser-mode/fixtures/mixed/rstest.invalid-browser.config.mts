@@ -20,7 +20,7 @@ export default defineConfig({
         headless: true,
         port: BROWSER_PORTS.mixed,
         // @ts-expect-error deliberately outside the `BrowserName` union
-        browsers: ['safari'],
+        instances: [{ browserName: 'safari' }],
       },
     },
   ],

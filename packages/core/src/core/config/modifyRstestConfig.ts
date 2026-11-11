@@ -76,8 +76,8 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     get: (config) => config.browser?.provider,
   },
   {
-    path: 'browser.browsers',
-    get: (config) => config.browser?.browsers,
+    path: 'browser.instances',
+    get: (config) => config.browser?.instances,
   },
   {
     path: 'browser.headless',

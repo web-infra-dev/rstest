@@ -27,7 +27,7 @@ describe('browser mode - multi-browser launch rules', () => {
 
   it('filters to one browser like the CLI flag and drops the other copy', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
-      args: ['--browser.browsers=firefox'],
+      args: ['--browser.instances=firefox'],
     });
 
     await expectExecSuccess();
@@ -37,6 +37,26 @@ describe('browser mode - multi-browser launch rules', () => {
     expect(cli.stdout).not.toMatch(/\(chromium\)/);
     expect(cli.stdout).toMatch(/Test Files 1 passed/);
   }, 60_000);
+
+  it('rejects a --browser.instances name that no browser project configures', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
+      args: ['--browser.instances=webkit'],
+    });
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'Browser "webkit" from `--browser.instances` is not configured by any selected browser project. Configured browsers per project: "rstest": chromium, firefox.',
+    );
+  });
+
+  it('rejects a bare browser name in browser.instances and shows the object form', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
+      args: ['-c', 'rstest.string-instance.config.mts'],
+    });
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'Use `{ browserName: "chromium" }` instead of "chromium" in `browser.instances`.',
+    );
+  });
 
   it('warns once per run that browser.browser is deprecated', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
@@ -61,7 +81,7 @@ describe('browser mode - multi-browser launch rules', () => {
     );
   });
 
-  it('unlocks v8 coverage once --browser.browsers selects only chromium', async () => {
+  it('unlocks v8 coverage once --browser.instances selects only chromium', async () => {
     // The v8 guard runs AFTER CLI browser filtering (Vitest #7306): with the
     // filter narrowing the multi-browser project to chromium, the same
     // config runs successfully and collects coverage.
@@ -69,7 +89,7 @@ describe('browser mode - multi-browser launch rules', () => {
       args: [
         '-c',
         'rstest.v8-coverage.config.mts',
-        '--browser.browsers=chromium',
+        '--browser.instances=chromium',
       ],
     });
     await expectExecSuccess();
@@ -84,7 +104,7 @@ describe('browser mode - multi-browser launch rules', () => {
     await expectExecFailed();
     const output = `${cli.stdout}\n${cli.stderr}`;
     expect(output).toMatch(/Only one \(project, browser\) pair can run headed/);
-    expect(output).toContain('--browser.browsers');
+    expect(output).toContain('--browser.instances');
   });
 
   it('rejects watch with one headed and one headless browser', async () => {

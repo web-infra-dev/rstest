@@ -7,7 +7,7 @@ export default defineConfig({
     provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS['multi-browser'],
-    browsers: [
+    instances: [
       {
         browserName: 'chromium',
         // Per-entry overrides: the viewports must differ so the in-page

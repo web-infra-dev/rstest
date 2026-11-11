@@ -191,7 +191,7 @@ await rstest.run(); // 仍使用配置中的 2。
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> 设置单个测试的额外执行次数，测试和套件自身的选项优先。详见 [repeats](/config/test/repeats)。
 
-`browser` <ApiMeta sup addedVersion="0.13.0" /> 覆盖本次 run 中 browser 项目的浏览器选项：`RunOptions.browser.browsers` 按 [CLI 过滤](/config/test/browser#cli-浏览器过滤) 的规则选择并过滤已配置的浏览器 —— 列出的名字配置了对应 entry 就保留它（连同其覆盖项），没有配置则回退为继承项目级默认值的 plain entry；传 `undefined` 保持配置列表不变。废弃的 `browser.name` 别名选择单个浏览器。选项语义见 [browser](/config/test/browser#browsers)。
+`browser` <ApiMeta sup addedVersion="0.13.0" /> 覆盖本次 run 中 browser 项目的浏览器选项：`RunOptions.browser.instances` 按 [CLI 过滤](/config/test/browser#cli-浏览器过滤) 的规则过滤已配置的浏览器 instance —— 只运行 `browserName` 在列表中的 instance，没有匹配 instance 的 browser 项目会被跳过，名字没有被任何选中的 browser 项目配置则报错；传 `undefined` 保留全部已配置的 instance。已废弃的 `browser.name` 选择单个浏览器。选项语义见 [instances](/config/test/browser#instances)。
 
 - **类型：**
 
@@ -205,9 +205,9 @@ interface RunOptions {
     | boolean
     | {
         enabled?: boolean;
-        /** @deprecated 请改用 `browsers`，将在 1.0 移除。 */
+        /** @deprecated 请改用 `instances`，将在 1.0 移除。 */
         name?: BrowserName;
-        browsers?: BrowserName | BrowserName[];
+        instances?: BrowserName | BrowserName[];
         headless?: boolean;
         screenshotFailures?: boolean;
         viewport?: BrowserViewport;

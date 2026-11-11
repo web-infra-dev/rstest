@@ -1,6 +1,6 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
-  BrowserEntry,
+  BrowserInstanceConfig,
   BrowserExpectConfig,
   BrowserName,
   BrowserViewport,
@@ -30,7 +30,7 @@ export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
 export { registerFileCleanup } from './runtime/runner/fileCleanup';
 
 export type {
-  BrowserEntry,
+  BrowserInstanceConfig,
   BrowserExpectConfig,
   BrowserName,
   BrowserViewport,

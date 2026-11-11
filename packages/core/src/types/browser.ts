@@ -11,15 +11,16 @@ import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
 
 /**
- * Per-browser override entry inside `browser.browsers`.
+ * One browser instance inside `browser.instances`: a browser plus its
+ * per-browser overrides.
  *
  * Only runtime-effective fields are overridable per browser: every browser of a
  * project shares one build and one dev server, so build-scoped options
  * (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level
- * `browser` config and are inherited untouched by each entry.
+ * `browser` config and are inherited untouched by each instance.
  */
-export type BrowserEntry = {
-  /** Required on the object form of a `browser.browsers` entry. */
+export type BrowserInstanceConfig = {
+  /** Required: the browser this instance runs on. */
   browserName: BrowserName;
   /** @default project `browser.headless` (which defaults to `true` in CI). */
   headless?: boolean;

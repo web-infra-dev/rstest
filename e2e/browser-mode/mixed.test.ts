@@ -67,7 +67,9 @@ describe('browser mode - mixed node + browser run', () => {
 
     expect(cli.exec.exitCode).not.toBe(0);
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toMatch(/Browser entry must either be a browser name/);
+    expect(output).toMatch(
+      /Browser instance must be an object with a `browserName` field/,
+    );
     // The node project has real tests too; none of them may have started, and
     // no file result of either side was reported.
     expect(output).not.toMatch(/node\.test\.ts|browser\.test\.ts/);

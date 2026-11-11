@@ -1329,7 +1329,7 @@ export const createBrowserRuntime = async ({
   };
 
   // Launch specs resolve once at the caller (the fields that would change
-  // them — `browser.browsers`/`provider`/`headless`/`port` — are forbidden to
+  // them — `browser.instances`/`provider`/`headless`/`port` — are forbidden to
   // `modifyRstestConfig`, so a first-cycle hook can never add launches), and
   // one resolution feeds both the launch list and every default-launch
   // reader (`launches[0]`).

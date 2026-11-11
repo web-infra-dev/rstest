@@ -572,7 +572,7 @@ describe('resolveProjects', () => {
         options: {
           browser: {
             enabled: true,
-            browsers: 'webkit',
+            instances: 'webkit',
             headless: false,
             port: 4000,
             strictPort: true,
@@ -583,14 +583,14 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.browser).toEqual({
         enabled: true,
         provider: 'playwright',
-        cliBrowsers: ['webkit'],
+        cliInstances: ['webkit'],
         headless: false,
         port: 4000,
         strictPort: true,
       });
     });
 
-    it('should map the deprecated --browser.name to a browser selection', async () => {
+    it('should map the deprecated --browser.name to its own raw field', async () => {
       const config: RstestConfig = {
         projects: [{ name: 'test-project' }],
       };
@@ -605,7 +605,7 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toMatchObject({
         enabled: true,
-        cliBrowsers: ['webkit'],
+        cliBrowserName: 'webkit',
       });
     });
 
@@ -635,7 +635,7 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toMatchObject({
         enabled: true, // preserved from config
-        cliBrowsers: ['firefox'], // selected by CLI (deprecated --browser.name)
+        cliBrowserName: 'firefox', // selected by CLI (deprecated --browser.name)
         headless: true, // preserved from config
         port: 6000, // overridden by CLI
       });
@@ -729,7 +729,7 @@ describe('resolveProjects', () => {
       });
     });
 
-    it('should record --browser.browsers as a raw selection without touching configured browsers', async () => {
+    it('should record --browser.instances as a raw selection without touching configured instances', async () => {
       const config: RstestConfig = {
         projects: [
           {
@@ -737,7 +737,10 @@ describe('resolveProjects', () => {
             browser: {
               enabled: true,
               provider: 'playwright',
-              browsers: ['chromium', { browserName: 'firefox' }],
+              instances: [
+                { browserName: 'chromium' },
+                { browserName: 'firefox' },
+              ],
             },
           },
         ],
@@ -746,36 +749,36 @@ describe('resolveProjects', () => {
       const projects = await resolveProjects({
         config,
         root: rootPath,
-        options: { browser: { browsers: 'firefox' } },
+        options: { browser: { instances: 'firefox' } },
       });
 
       expect(projects[0]!.config.browser).toMatchObject({
-        browsers: ['chromium', { browserName: 'firefox' }],
-        cliBrowsers: ['firefox'],
+        instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
+        cliInstances: ['firefox'],
       });
     });
 
-    it('should split comma-separated and repeated --browser.browsers values without validating names', async () => {
+    it('should split comma-separated and repeated --browser.instances values without validating names', async () => {
       const projects = await resolveProjects({
         config: { projects: [{ name: 'test-project' }] },
         root: rootPath,
         // CLI level: cac hands a comma-joined value as one string, or an array
         // when the flag repeats. Names are validated by `@rstest/browser`.
         options: {
-          browser: { browsers: ['chromium, firefox', 'not-a-browser'] as any },
+          browser: { instances: ['chromium, firefox', 'not-a-browser'] as any },
         },
       });
 
       expect(projects[0]!.config.browser).toMatchObject({
-        cliBrowsers: ['chromium', 'firefox', 'not-a-browser'],
+        cliInstances: ['chromium', 'firefox', 'not-a-browser'],
       });
     });
 
-    it('should reject --browser.name together with --browser.browsers', () => {
+    it('should reject --browser.name together with --browser.instances', () => {
       expect(() =>
         mergeWithCLIOptions(
           { browser: { enabled: true, provider: 'playwright' } },
-          { browser: { browsers: 'firefox', name: 'chromium' } },
+          { browser: { instances: 'firefox', name: 'chromium' } },
         ),
       ).toThrow(/deprecated alias|cannot be set together/);
     });
