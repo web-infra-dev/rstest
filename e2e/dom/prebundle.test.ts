@@ -187,7 +187,10 @@ it('uses the environment dependency after a rebuild', () => {
       expect(cli.log).toContain('falling back to its native entry');
       if (failure === 'build') expect(cli.log).toContain('Build error');
       if (failure === 'crash') {
-        expect(cli.log).toContain('The prebundle process exited with SIGKILL');
+        // Windows has no signals: SIGKILL ends the process with exit code 1.
+        expect(cli.log).toContain(
+          `The prebundle process exited with ${process.platform === 'win32' ? 'code 1' : 'SIGKILL'}.`,
+        );
       }
     },
   );
