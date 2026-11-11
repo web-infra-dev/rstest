@@ -374,11 +374,19 @@ const createBrowserLazyCompilationConfig = (
  * lazyCompilation's accept-chain walk abort the next spec when no boundary
  * exists (#1472). Disabling HMR does not make watch rebuilds any less
  * incremental — HMR is only the client push transport.
+ *
+ * The gate reads the project's resolved instances, not the project-level
+ * `headless`: an instance can override it, and a project whose instances are
+ * all headless must not get HMR just because the project-level default is
+ * headed. Watch forbids mixing headed and headless, so "every" instance headed
+ * and "any" instance headed agree.
  */
-const shouldEnableBrowserHmr = (
+export const shouldEnableBrowserHmr = (
   isWatchMode: boolean,
-  isHeadless: boolean,
-): boolean => isWatchMode && !isHeadless;
+  project: Pick<InternalProjectContext, 'name' | 'normalizedConfig'>,
+): boolean =>
+  isWatchMode &&
+  resolveBrowserInstances(project).every((instance) => !instance.headless);
 
 const createBrowserRsbuildDevConfig = (
   enableHmr: boolean,
@@ -1578,10 +1586,7 @@ export const createBrowserRuntime = async ({
       ...staticRstestAliases,
     };
 
-    const enableHmr = shouldEnableBrowserHmr(
-      isWatchMode,
-      project.normalizedConfig.browser.headless,
-    );
+    const enableHmr = shouldEnableBrowserHmr(isWatchMode, project);
 
     const rsbuildInstance = await createRsbuild({
       callerName: 'rstest',
