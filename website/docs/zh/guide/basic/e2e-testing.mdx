@@ -191,6 +191,8 @@ export default defineConfig({
 
 对齐超时数值不会改变 Rstest 的 hook/fixture 计时机制，它们仍与 Playwright Test 共用测试时间额度的机制有差异。轮询仍使用 Rstest 的固定间隔（默认 `50ms`），不采用 Playwright Test 的退避间隔。worker 数量和 `isolate` 也保留 Rstest 的默认值，需要调整时请在根配置中显式设置。
 
+Playwright 保存 trace、关闭 Context 和关闭 Browser 各自使用 `hookTimeout` 作为独立的清理时间额度，测试体超时后也同样适用。清理超时会使测试失败，并允许其余清理继续执行。设置 `hookTimeout: 0` 可禁用这些截止时间。`testTimeout` 只限制测试体和 setup；`teardownTimeout` 在测试运行结束后才开始计时，无法终止卡住的测试清理。
+
 ## Fixtures
 
 `@rstest/playwright` 提供以下 fixtures：

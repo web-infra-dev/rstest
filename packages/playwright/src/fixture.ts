@@ -10,6 +10,7 @@ import {
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
+import { clearTimeout, setTimeout } from 'node:timers';
 import {
   basename,
   dirname,
@@ -28,6 +29,7 @@ import {
   describe as rstestDescribe,
   expect as rstestExpect,
   registerWorkerCleanup,
+  rstest,
   test as base,
 } from '@rstest/core';
 import type {
@@ -235,6 +237,30 @@ let browserWorkerCleanupRegistered = false;
 const browserTypes = {
   chromium,
 } satisfies Record<PlaywrightBrowserName, BrowserType>;
+
+const withCleanupTimeout = async <T>(
+  name: string,
+  cleanup: () => Promise<T>,
+  timeout = rstest.getConfig().hookTimeout,
+): Promise<T> => {
+  if (timeout === 0 || timeout === Infinity) {
+    return cleanup();
+  }
+
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      cleanup(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Playwright ${name} timed out in ${timeout}ms`));
+        }, timeout);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 export const getDebugOptions = (
   debug: PlaywrightOptions['debug'],
@@ -599,12 +625,22 @@ const getBrowser = async (options: PlaywrightOptions) => {
   return browser;
 };
 
-const closeBrowser = async (): Promise<void> => {
+const closeBrowser = async (
+  timeout = rstest.getConfig().hookTimeout,
+): Promise<void> => {
   const browsers = [...browserCache.values()];
   browserCache.clear();
   browserCleanupRequested = false;
 
-  await Promise.all(browsers.map(async (browser) => (await browser).close()));
+  await Promise.all(
+    browsers.map((browser) =>
+      withCleanupTimeout(
+        'browser.close',
+        async () => (await browser).close(),
+        timeout,
+      ),
+    ),
+  );
 };
 
 const registerBrowserWorkerCleanup = () => {
@@ -613,9 +649,10 @@ const registerBrowserWorkerCleanup = () => {
   }
 
   browserWorkerCleanupRegistered = true;
+  const timeout = rstest.getConfig().hookTimeout;
   const cleanup = async () => {
     browserWorkerCleanupRegistered = false;
-    await closeBrowser();
+    await closeBrowser(timeout);
   };
   registerWorkerCleanup(cleanup);
 };
@@ -844,9 +881,10 @@ const cleanupBrowserFixture = [
   ) => {
     const release = retainBrowser();
 
+    // closeBrowser owns the deadline so its operation-specific error is reported.
     onTestFailed(async () => {
       await release(false);
-    }, DEBUG_PAUSE_TIMEOUT);
+    }, 0);
 
     try {
       await use(undefined);
@@ -984,10 +1022,11 @@ const playwrightFixtures = {
 
               if (shouldSaveTrace) {
                 activeArtifacts = await reserveTraceArtifacts(artifacts);
+                const tracePath = activeArtifacts.tracePath;
                 try {
-                  await context.tracing.stop({
-                    path: activeArtifacts.tracePath,
-                  });
+                  await withCleanupTimeout('tracing.stop', () =>
+                    context.tracing.stop({ path: tracePath }),
+                  );
                 } catch (error) {
                   await rm(activeArtifacts.dir, {
                     recursive: true,
@@ -1002,7 +1041,9 @@ const playwrightFixtures = {
                 );
                 stagedTracePath = join(stagedTraceDir, 'trace.zip');
                 try {
-                  await context.tracing.stop({ path: stagedTracePath });
+                  await withCleanupTimeout('tracing.stop', () =>
+                    context.tracing.stop({ path: stagedTracePath }),
+                  );
                 } catch (error) {
                   await rm(stagedTraceDir, {
                     recursive: true,
@@ -1013,11 +1054,13 @@ const playwrightFixtures = {
                   throw error;
                 }
               } else {
-                await context.tracing.stop();
+                await withCleanupTimeout('tracing.stop', () =>
+                  context.tracing.stop(),
+                );
               }
             }
           } finally {
-            await context.close();
+            await withCleanupTimeout('context.close', () => context.close());
           }
         } catch (error) {
           if (task.result?.status === 'failed') {
@@ -1032,6 +1075,8 @@ const playwrightFixtures = {
       return cleanupPromise;
     };
 
+    // Each Playwright operation has its own hookTimeout budget so a stalled
+    // trace still reaches context.close and browser recovery before returning.
     onTestFailed(cleanupContext, 0);
 
     if (artifacts) {
@@ -1074,16 +1119,19 @@ const playwrightFixtures = {
   ) => {
     const page = await context.newPage();
 
-    onTestFailed(async () => {
-      if (!shouldPauseOnFailure(playwright)) {
-        await page.close();
-        return;
-      }
+    onTestFailed(
+      async () => {
+        if (!shouldPauseOnFailure(playwright)) {
+          await page.close();
+          return;
+        }
 
-      console.log('[rstest-playwright] Paused on failed test for debugging.');
-      await page.pause();
-      await page.close();
-    }, DEBUG_PAUSE_TIMEOUT);
+        console.log('[rstest-playwright] Paused on failed test for debugging.');
+        await page.pause();
+        await page.close();
+      },
+      shouldPauseOnFailure(playwright) ? DEBUG_PAUSE_TIMEOUT : undefined,
+    );
 
     try {
       await use(page);
