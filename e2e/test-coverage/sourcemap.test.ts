@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import { normalize } from 'pathe';
 import { x } from 'tinyexec';
 import { getCoverageSummaryEntry, runRstestCli } from '../scripts';
+import { runBrowserCliWithCwd } from '../browser-mode/utils';
 import { coverageProviders } from './providers';
 
 const expectedSummary = {
@@ -58,29 +59,32 @@ it.for(['forks', 'vmThreads', 'browser'] as const)(
       html: boolean,
       native = false,
     ) => {
-      const { expectExecSuccess } = await runRstestCli({
-        command: 'rstest',
-        args: [
-          'run',
-          '-c',
-          'rstest.sourcemap.config.ts',
-          native
-            ? 'test/missingSource.fixture.ts'
-            : 'test/mergedStatements.fixture.ts',
-          ...(runtime === 'browser'
-            ? ['--browser', '--browser.headless']
-            : ['--pool', runtime]),
-          '--coverage.provider',
-          'v8',
-          ...(include ? ['--coverage.include', include] : []),
-          '--coverage.reporters',
-          'json',
-          ...(html ? ['--coverage.reporters', 'html'] : []),
-          '--coverage.reportsDirectory',
-          directory,
-        ],
-        options: { nodeOptions: { cwd: fixturePath } },
-      });
+      const args = [
+        '-c',
+        'rstest.sourcemap.config.ts',
+        native
+          ? 'test/missingSource.fixture.ts'
+          : 'test/mergedStatements.fixture.ts',
+        ...(runtime === 'browser'
+          ? ['--browser', '--browser.headless']
+          : ['--pool', runtime]),
+        '--coverage.provider',
+        'v8',
+        ...(include ? ['--coverage.include', include] : []),
+        '--coverage.reporters',
+        'json',
+        ...(html ? ['--coverage.reporters', 'html'] : []),
+        '--coverage.reportsDirectory',
+        directory,
+      ];
+      const { expectExecSuccess } =
+        runtime === 'browser'
+          ? await runBrowserCliWithCwd(fixturePath, { args })
+          : await runRstestCli({
+              command: 'rstest',
+              args: ['run', ...args],
+              options: { nodeOptions: { cwd: fixturePath } },
+            });
       await expectExecSuccess();
     };
     await run('mergedStatements.ts', reportsDirectory, true);
@@ -185,7 +189,7 @@ it.for(['forks', 'vmThreads', 'browser'] as const)(
       const map = {
         version: 3,
         names: [],
-        sources: [missingPath],
+        sources: ['../missing-original.ts'],
         sourcesContent: [source],
         mappings: 'AAwBA;AAAA,IAtBA;AAAA;AA2BA;AAAA,IA3BA;AAAA',
       };
