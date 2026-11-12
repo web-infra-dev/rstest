@@ -32,8 +32,10 @@ describe('browser mode - one headed + headless hybrid run', () => {
         cli.log.split('launching playwright/firefox (headless)').length - 1,
       ).toBe(1);
       // The headed count must own the single headed launch: no other browser
-      // may run headed in this shape.
-      expect(cli.log.split('(headed)').length - 1).toBe(1);
+      // may launch headed in this shape (close lines also say "(headed)").
+      expect(
+        cli.log.match(/\[Browser\] launching \S+ \(headed\)/g),
+      ).toHaveLength(1);
     },
     60_000,
   );
