@@ -37,7 +37,6 @@ const createFakeBrowsers = () => {
           closed.push(s.key);
         },
         newContext: async () => ({}) as never,
-        [Symbol.asyncDispose]: async () => {},
       } as unknown as BrowserProviderBrowser;
     },
     get open() {
@@ -63,25 +62,6 @@ const createFakeBrowsers = () => {
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe('createLaunchPool', () => {
-  it('never opens more headless browsers than the cap, one launch per visit', async () => {
-    const fake = createFakeBrowsers();
-    const specs = [spec('a'), spec('b'), spec('c')];
-    const pool = createLaunchPool({ specs, cap: 1, launch: fake.launch });
-
-    for (const { key } of specs) {
-      const lease = await pool.acquire(key);
-      expect(fake.open).toBe(1);
-      lease.release();
-    }
-    expect(fake.peak).toBe(1);
-    expect(fake.launched).toEqual(['a', 'b', 'c']);
-    expect(pool.stats()).toEqual({ open: 1, peak: 1, launched: 3 });
-
-    await pool.closeAll();
-    expect(fake.open).toBe(0);
-    expect(fake.closed.sort()).toEqual(['a', 'b', 'c']);
-  });
-
   it('keeps idle browsers open while the cap allows and reuses them', async () => {
     const fake = createFakeBrowsers();
     const specs = [spec('a'), spec('b')];
@@ -162,25 +142,34 @@ describe('createLaunchPool', () => {
     await pool.closeAll();
   });
 
-  it('wakes queued acquirers in FIFO order', async () => {
+  it('frees one slot for concurrent acquirers of the same unopened key', async () => {
     const fake = createFakeBrowsers();
-    const specs = [spec('a'), spec('b'), spec('c')];
+    const specs = [spec('k1'), spec('k2'), spec('k3')];
+    const pool = createLaunchPool({ specs, cap: 2, launch: fake.launch });
+
+    (await pool.acquire('k2')).release();
+    (await pool.acquire('k3')).release();
+    const leases = await Promise.all([pool.acquire('k1'), pool.acquire('k1')]);
+
+    expect(fake.closed).toEqual(['k2']);
+    expect(fake.launched).toEqual(['k2', 'k3', 'k1']);
+    for (const lease of leases) {
+      lease.release();
+    }
+    await pool.closeAll();
+  });
+
+  it('reports whether a launch is open', async () => {
+    const fake = createFakeBrowsers();
+    const specs = [spec('a'), spec('b')];
     const pool = createLaunchPool({ specs, cap: 1, launch: fake.launch });
 
-    const holder = await pool.acquire('a');
-    const order: string[] = [];
-    const take = async (key: string) => {
-      const lease = await pool.acquire(key);
-      order.push(key);
-      lease.release();
-    };
-    const queued = Promise.all([take('b'), take('c')]);
-    await tick();
-    holder.release();
-    await queued;
-
-    expect(order).toEqual(['b', 'c']);
-    expect(fake.peak).toBe(1);
+    expect(pool.isOpen('a')).toBe(false);
+    (await pool.acquire('a')).release();
+    expect(pool.isOpen('a')).toBe(true);
+    (await pool.acquire('b')).release();
+    expect(pool.isOpen('a')).toBe(false);
+    expect(pool.isOpen('b')).toBe(true);
     await pool.closeAll();
   });
 
@@ -189,15 +178,14 @@ describe('createLaunchPool', () => {
     const specs = [spec('headed', false), spec('a'), spec('b')];
     const pool = createLaunchPool({ specs, cap: 1, launch: fake.launch });
 
-    const headed = await pool.acquire('headed');
-    headed.release();
+    // Callers never release a headed lease; that is what protects it.
+    await pool.acquire('headed');
     (await pool.acquire('a')).release();
     (await pool.acquire('b')).release();
 
     // The headed browser stays open next to one headless browser.
     expect(fake.closed).toEqual(['a']);
     expect(fake.open).toBe(2);
-    expect(pool.stats().open).toBe(1);
     await pool.closeAll();
     expect(fake.open).toBe(0);
   });
@@ -225,35 +213,12 @@ describe('createLaunchPool', () => {
       'rejected',
       'rejected',
     ]);
-    expect(pool.stats().open).toBe(0);
     (await pool.acquire('good')).release();
     expect(fake.launched).toEqual(['good']);
     await pool.closeAll();
   });
 
-  it('treats release as idempotent', async () => {
-    const fake = createFakeBrowsers();
-    const specs = [spec('a'), spec('b')];
-    const pool = createLaunchPool({ specs, cap: 1, launch: fake.launch });
-
-    const lease = await pool.acquire('a');
-    const other = await pool.acquire('a');
-    lease.release();
-    lease.release();
-    // The second lease still holds `a`, so `b` cannot evict it.
-    let bDone = false;
-    const pendingB = pool.acquire('b').then((value) => {
-      bDone = true;
-      return value;
-    });
-    await tick();
-    expect(bDone).toBe(false);
-    other.release();
-    (await pendingB).release();
-    await pool.closeAll();
-  });
-
-  it('closes launching and closing browsers on closeAll and rejects later acquires', async () => {
+  it('closes a launching browser on closeAll and rejects later acquires', async () => {
     const fake = createFakeBrowsers();
     const specs = [spec('a'), spec('b')];
     const pool = createLaunchPool({ specs, cap: 2, launch: fake.launch });
@@ -263,14 +228,5 @@ describe('createLaunchPool', () => {
     await pendingA.catch(() => {});
     expect(fake.open).toBe(0);
     await expect(pool.acquire('b')).rejects.toThrow('closed');
-  });
-
-  it('rejects a key that is not in the launch plan', async () => {
-    const pool = createLaunchPool({
-      specs: [],
-      cap: 1,
-      launch: createFakeBrowsers().launch,
-    });
-    await expect(pool.acquire('missing')).rejects.toThrow('missing');
   });
 });

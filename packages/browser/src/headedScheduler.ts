@@ -16,7 +16,6 @@ import {
   drainPendingAffectedTestFiles,
 } from './browserRsbuild';
 import type { ConcurrencyLimiter } from './concurrencyLimiter';
-import type { LaunchLease } from './launchPool';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedRunRegistry } from './headedRunRegistry';
@@ -34,7 +33,11 @@ import {
   DISPATCH_NAMESPACE_RUNNER,
   toWireRow,
 } from './protocol';
-import type { BrowserProviderContext, BrowserProviderPage } from './providers';
+import type {
+  BrowserProviderBrowser,
+  BrowserProviderContext,
+  BrowserProviderPage,
+} from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import {
   type BrowserV8CoverageRuntime,
@@ -166,7 +169,7 @@ export const createHeadedScheduler = async ({
   // its provider options are required. A headed launch is pinned in the pool
   // (never evicted, outside the headless cap), so this lease is held until the
   // runtime closes the pool and never released.
-  let headedLease: LaunchLease | undefined;
+  let headedBrowser: BrowserProviderBrowser | undefined;
   // The container window runs only this headed pair's row — its scheduler
   // owns the `projects` slice, so the base host config needs no headed
   // variant.
@@ -304,8 +307,9 @@ export const createHeadedScheduler = async ({
     context: BrowserProviderContext;
     page: BrowserProviderPage;
   }> => {
-    headedLease ??= await runtime.launchPool.acquire(headedRow.launchKey);
-    const nextContext = await headedLease.browser.newContext({
+    headedBrowser ??= (await runtime.launchPool.acquire(headedRow.launchKey))
+      .browser;
+    const nextContext = await headedBrowser.newContext({
       providerOptions: headedRow.providerOptions,
       viewport: null,
     });

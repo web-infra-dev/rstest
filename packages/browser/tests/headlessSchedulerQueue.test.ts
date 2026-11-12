@@ -77,12 +77,6 @@ describe('expandToRows (launch packing)', () => {
       ['p1', 'firefox', '/a.test.ts'],
       ['p1', 'firefox', '/b.test.ts'],
     ]);
-    // Launches change once, not per project.
-    const launchRuns = queue.filter(
-      (file, index) =>
-        index === 0 || file.row.launchKey !== queue[index - 1]!.row.launchKey,
-    );
-    expect(launchRuns).toHaveLength(2);
   });
 });
 

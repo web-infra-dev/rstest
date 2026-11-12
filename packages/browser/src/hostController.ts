@@ -63,7 +63,6 @@ import {
   type BrowserV8CoverageResourceStore,
 } from './browserV8Coverage';
 import { createConcurrencyLimiter } from './concurrencyLimiter';
-import type { LaunchLease } from './launchPool';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
 import {
@@ -93,6 +92,7 @@ import {
 } from './protocol';
 import {
   type BrowserProvider,
+  type BrowserProviderBrowser,
   type BrowserProviderImplementation,
   type BrowserProviderPage,
   type BrowserV8CoverageCollector,
@@ -640,8 +640,7 @@ export const runBrowserController = async (
         isWatchMode,
         containerDistPath,
         containerDevServer,
-        skipProviderLaunch:
-          filesOnly || Boolean(browserCoverageCapabilityError),
+        configOnly: filesOnly || Boolean(browserCoverageCapabilityError),
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
       });
@@ -1758,7 +1757,7 @@ export const runBrowserController = async (
           }),
         )
       : undefined;
-  const lanes = await Promise.all([
+  const [headless, headed] = await Promise.all([
     headlessRows.length > 0
       ? createHeadlessScheduler({
           ...schedulerDeps,
@@ -1790,7 +1789,6 @@ export const runBrowserController = async (
     await closeRuntime();
     throw error;
   });
-  const [headless, headed] = lanes;
   const testTime = Math.max(headless?.testTime ?? 0, headed?.testTime ?? 0);
   const rawCoverage = [
     ...(headless?.rawCoverage ?? []),
@@ -1914,23 +1912,14 @@ export const listBrowserTests = async (
       context,
       projectEntries,
       browserProjects,
-      // TODO: list collection boots only the first instance's launch, opens one
-      // page per project in a shared context with `viewport: null`, and copies
-      // the collected tree to every instance of the project. Declarations that
-      // depend on the browser engine, viewport, or context options (for example
-      // `test.skipIf(!CSS.supports(...))` or `test.runIf(window.innerWidth < 500)`)
-      // are therefore listed with that one page's result for every instance.
-      // Collect each instance in its own browser, context, and viewport instead
-      // (like vitest's `--no-static-parse`); the `filesOnly` path should then
-      // list instance names rather than project names too.
-      launchSpecs: [launchSpecs[0]!],
+      launchSpecs,
       shardedEntries: options?.shardedEntries,
       freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
       containerDevServer: undefined,
-      skipProviderLaunch: options?.filesOnly,
+      configOnly: options?.filesOnly,
       appliedModifyRstestConfigEnvironments:
         options?.appliedModifyRstestConfigEnvironments,
     });
@@ -1976,10 +1965,20 @@ export const listBrowserTests = async (
   // for every collect page: one context shared per project, with per-browser
   // attribution stamped onto the results post-capture (test structure
   // collection is browser-independent).
+  // TODO: list collection leases only the first instance's launch, opens one
+  // page per project in a shared context with `viewport: null`, and copies
+  // the collected tree to every instance of the project. Declarations that
+  // depend on the browser engine, viewport, or context options (for example
+  // `test.skipIf(!CSS.supports(...))` or `test.runIf(window.innerWidth < 500)`)
+  // are therefore listed with that one page's result for every instance.
+  // Collect each instance in its own browser, context, and viewport instead
+  // (like vitest's `--no-static-parse`); the `filesOnly` path should then
+  // list instance names rather than project names too.
   const defaultLaunch = runtime.launchSpecs[0]!;
-  let defaultLease: LaunchLease;
+  let browser: BrowserProviderBrowser;
   try {
-    defaultLease = await runtime.launchPool.acquire(defaultLaunch.key);
+    // The lease is never released: `destroyBrowserRuntime` closes the pool.
+    ({ browser } = await runtime.launchPool.acquire(defaultLaunch.key));
   } catch (error) {
     logger.error(
       color.red(
@@ -1990,7 +1989,6 @@ export const listBrowserTests = async (
     await destroyBrowserRuntime(runtime);
     throw error;
   }
-  const browser = defaultLease.browser;
 
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),

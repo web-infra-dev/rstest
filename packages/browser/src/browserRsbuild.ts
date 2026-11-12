@@ -844,10 +844,9 @@ export const browserLaunchKey = ({
  * One `(project, browser)` row per configured browser entry — the shared run
  * and list projection, and the single derivation of the launch plan:
  * `forceHeadless` is applied once here (`headless` on both rows and specs),
- * each row's `launchKey`
- * and its spec share one derivation, and the specs dedupe by key. A row can therefore never name a launch key the runtime did
- * not launch; list collection opts out of non-default launches by trimming
- * the specs instead of re-deriving.
+ * each row's `launchKey` and its spec share one derivation, and the specs
+ * dedupe by key. A row can therefore never name a launch key the plan does not
+ * contain.
  */
 export const buildBrowserRuntimeRows = (
   browserProjects: InternalProjectContext[],
@@ -1239,10 +1238,6 @@ const copyProxyResponseHeaders = (
 const launchBrowser = async (
   spec: BrowserLaunchSpec,
 ): Promise<BrowserProviderBrowser> => {
-  logger.debug(
-    `[Browser] launching ${spec.provider}/${spec.browserName}` +
-      (spec.headless ? ' (headless)' : ' (headed)'),
-  );
   const runtimeLaunch = await getBrowserProviderImplementation(
     spec.provider,
   ).launchRuntime({
@@ -1281,7 +1276,7 @@ export const createBrowserRuntime = async ({
   isWatchMode,
   containerDistPath,
   containerDevServer,
-  skipProviderLaunch,
+  configOnly,
   appliedModifyRstestConfigEnvironments,
 }: {
   context: InternalContext;
@@ -1293,9 +1288,8 @@ export const createBrowserRuntime = async ({
   browserProjects: InternalProjectContext[];
   /**
    * The launch plan deduped from the caller's rows: one derivation owns
-   * forces-headless and the launch keys, so the runtime boots exactly the
-   * launches the rows name. List collection opts out of non-default launches
-   * by trimming this list instead of re-deriving.
+   * forces-headless and the launch keys, so the pool plans exactly the
+   * launches the rows name.
    */
   launchSpecs: BrowserLaunchSpec[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
@@ -1304,7 +1298,7 @@ export const createBrowserRuntime = async ({
   isWatchMode: boolean;
   containerDistPath?: string;
   containerDevServer?: string;
-  skipProviderLaunch?: boolean;
+  configOnly?: boolean;
   appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<BrowserRuntime> => {
   // ---- Shared singletons (created once, wired into every project server) ----
@@ -1333,7 +1327,7 @@ export const createBrowserRuntime = async ({
   // them — `browser.instances`/`provider`/`headless`/`port` — are forbidden to
   // `modifyRstestConfig`, so a first-cycle hook can never add launches), and
   // one resolution feeds both the launch list and every default-launch
-  // reader (`launches[0]`).
+  // reader (`launchSpecs[0]`).
   let projectEntries = initialProjectEntries;
   // Created with the runtime so the per-project watch plugins and the
   // controller's rerun closures share one state whose lifetime matches the
@@ -1345,6 +1339,13 @@ export const createBrowserRuntime = async ({
     modules: Record<string, string>;
     virtualModules: Record<string, string>;
   }> = [];
+
+  // No browser launches at construction, so the config-only runtime shares it.
+  const launchPool = createLaunchPool({
+    specs: launchSpecs,
+    cap: getHeadlessConcurrency(context, Number.POSITIVE_INFINITY),
+    launch: launchBrowser,
+  });
 
   const createRuntimeWithoutProvider = (): BrowserRuntime => {
     const firstProject = browserProjects[0]!;
@@ -1359,11 +1360,7 @@ export const createBrowserRuntime = async ({
         manifestPath: '',
       },
       launchSpecs,
-      launchPool: createLaunchPool({
-        specs: [],
-        cap: 1,
-        launch: launchBrowser,
-      }),
+      launchPool,
       wsPort: 0,
       tempDir,
       setContainerOptions,
@@ -1797,7 +1794,7 @@ export const createBrowserRuntime = async ({
                       );
                       rspackConfig.plugins.push(virtualModulesPlugin);
 
-                      if (!skipProviderLaunch) {
+                      if (!configOnly) {
                         rspackConfig.plugins.push({
                           apply(compiler: Rspack.Compiler) {
                             let build = createDeferredPromise<
@@ -1982,7 +1979,7 @@ export const createBrowserRuntime = async ({
       ]);
     }
 
-    if (skipProviderLaunch) {
+    if (configOnly) {
       await rsbuildInstance.initConfigs({ action: 'dev' });
       return {
         projectName: project.name,
@@ -2126,7 +2123,7 @@ export const createBrowserRuntime = async ({
     throw error;
   }
 
-  if (skipProviderLaunch) {
+  if (configOnly) {
     return createRuntimeWithoutProvider();
   }
 
@@ -2145,20 +2142,8 @@ export const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  // No browser launches here. The pool starts each launch the first time a
-  // row leases it, so a launch failure surfaces from the lane that needed it
-  // and `pool.maxWorkers` can bound how many headless browsers are open.
-  const launchPool = createLaunchPool({
-    specs: launchSpecs,
-    cap: getHeadlessConcurrency(context, Number.POSITIVE_INFINITY),
-    launch: launchBrowser,
-    onClosed: (spec) => {
-      logger.debug(
-        `[Browser] closed ${spec.provider}/${spec.browserName}` +
-          (spec.headless ? ' (headless)' : ' (headed)'),
-      );
-    },
-  });
+  // No browser launches here: the pool starts each one the first time a row
+  // leases it, so a launch failure surfaces from the lane that needed it.
   try {
     let generation;
     do {
@@ -2180,7 +2165,7 @@ export const createBrowserRuntime = async ({
       watchState,
     };
   } catch (error) {
-    await Promise.allSettled([closeAllProjectServers(projectServers.values())]);
+    await closeAllProjectServers(projectServers.values());
     await closeWebSocketServer(wss);
     throw error;
   }

@@ -145,9 +145,9 @@ export const expandToRows = (
         compareStrings(a.row.name, b.row.name) ||
         compareStrings(a.row.browserName, b.row.browserName),
     );
-  // Pack by launch: runs of one browser stay consecutive, so a capped pool
-  // finishes a browser before moving to the next instead of reopening it.
-  // `sort` is stable, so rows keep the order above inside a launch.
+  // Pack by launch (in order of first appearance, so row order still decides
+  // which browser goes first): a capped pool finishes a browser before moving
+  // to the next instead of reopening it. `sort` is stable.
   const launchOrder = new Map<string, number>();
   for (const { row } of expanded) {
     if (!launchOrder.has(row.launchKey)) {

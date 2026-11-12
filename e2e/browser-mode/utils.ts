@@ -35,6 +35,7 @@ const SELF_MANAGED_CHANNEL_FIXTURES = new Set([
   'multi-browser',
   'hybrid-headed',
   'launch-cap',
+  'launch-cap-failure',
 ]);
 
 const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {
@@ -162,6 +163,29 @@ export const deleteFixtureTarget = async (
       // handles a little after the kill callback fires.
     }
   }
+};
+
+/**
+ * Browser launches and closes are logged by the host's launch pool under
+ * `DEBUG=rstest`; replaying them in order gives the number of browsers open at
+ * once.
+ */
+export const replayLaunchLog = (log: string) => {
+  let open = 0;
+  let peak = 0;
+  let launched = 0;
+  let closed = 0;
+  for (const line of log.split('\n')) {
+    if (line.includes('[Browser] launching')) {
+      launched++;
+      open++;
+      peak = Math.max(peak, open);
+    } else if (line.includes('[Browser] closed')) {
+      closed++;
+      open--;
+    }
+  }
+  return { peak, launched, closed };
 };
 
 /**

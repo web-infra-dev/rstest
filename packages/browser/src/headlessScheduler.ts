@@ -19,7 +19,7 @@ import {
 } from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
 import type { ConcurrencyLimiter } from './concurrencyLimiter';
-import type { LaunchLease, LaunchPool } from './launchPool';
+import type { LaunchPool } from './launchPool';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
@@ -141,8 +141,6 @@ export const createHeadlessScheduler = async ({
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
     coverageCollectors: Set<() => Promise<void>>;
-    /** First browser launch failure of the run; rethrown by the cycle. */
-    launchError?: Error;
   };
 
   const rowsByProject = groupRowsByProject(projectRuntimeConfigs);
@@ -291,17 +289,8 @@ export const createHeadlessScheduler = async ({
     const file = files[0]!;
     let activeFile = file;
     const row = file.row;
-    // The browser launches on first lease. A failed launch is the run's
-    // failure, not this file's: stop every worker from picking more files and
-    // let the cycle rethrow it once the workers settle.
-    let lease: LaunchLease;
-    try {
-      lease = await launchPool.acquire(row.launchKey);
-    } catch (error) {
-      run.launchError ??= toError(error);
-      await cancelRun(run, false);
-      return;
-    }
+    // The browser launches on first lease.
+    const lease = await launchPool.acquire(row.launchKey);
     const viewport = resolveViewport(row.viewport);
     let browserContext: BrowserProviderContext;
     try {
@@ -741,7 +730,14 @@ export const createHeadlessScheduler = async ({
       coverageCollectors: new Set<() => Promise<void>>(),
     }));
 
-    const queue = expandToRows(files, rowsByProject);
+    // Launch groups whose browser is already open go first, so a capped watch
+    // pool reuses them before evicting them. `expandToRows` keeps each group
+    // contiguous and the partition is stable.
+    const expanded = expandToRows(files, rowsByProject);
+    const queue = [
+      ...expanded.filter((file) => launchPool.isOpen(file.row.launchKey)),
+      ...expanded.filter((file) => !launchPool.isOpen(file.row.launchKey)),
+    ];
     const concurrency = getHeadlessConcurrency(context, queue.length);
     const bail = context.normalizedConfig.bail;
     const nonIsolatedBatchSize = Math.max(
@@ -803,17 +799,24 @@ export const createHeadlessScheduler = async ({
       }
     };
 
-    run.done = Promise.all(
+    // Any worker failure (a launch failure included) rejects the cycle: stop
+    // the other workers from taking files, wait for them, then rethrow.
+    let failure: { error: unknown } | undefined;
+    run.done = Promise.allSettled(
       Array.from(
         { length: Math.min(queue.length, Math.max(concurrency, 1)) },
-        () => worker(),
+        () =>
+          worker().catch(async (error) => {
+            failure ??= { error };
+            await cancelRun(run, false);
+          }),
       ),
     ).then(() => {});
 
     await run.done;
     runLifecycle.clearIfActive(run);
-    if (run.launchError) {
-      throw run.launchError;
+    if (failure) {
+      throw failure.error;
     }
     return rawCoverage;
   };
