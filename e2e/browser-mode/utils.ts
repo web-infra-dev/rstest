@@ -34,6 +34,7 @@ const useGithubActionsChrome = (fixtureName?: string): boolean =>
 const SELF_MANAGED_CHANNEL_FIXTURES = new Set([
   'multi-browser',
   'hybrid-headed',
+  'launch-cap',
 ]);
 
 const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {

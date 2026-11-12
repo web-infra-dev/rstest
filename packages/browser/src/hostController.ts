@@ -63,6 +63,7 @@ import {
   type BrowserV8CoverageResourceStore,
 } from './browserV8Coverage';
 import { createConcurrencyLimiter } from './concurrencyLimiter';
+import type { LaunchLease } from './launchPool';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
 import {
@@ -927,7 +928,7 @@ export const runBrowserController = async (
   const { wsPort } = runtime;
   // The v8 provider resolves per collector; under a v8 run validation
   // guarantees every launch is chromium, so the default launch names both.
-  const defaultLaunch = runtime.launches[0]!;
+  const defaultLaunch = runtime.launchSpecs[0]!;
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
@@ -1757,11 +1758,11 @@ export const runBrowserController = async (
           }),
         )
       : undefined;
-  const [headless, headed] = await Promise.all([
+  const lanes = await Promise.all([
     headlessRows.length > 0
       ? createHeadlessScheduler({
           ...schedulerDeps,
-          browsers: runtime.browsers,
+          launchPool: runtime.launchPool,
           projectServers: runtime.projectServers,
           v8Coverage,
           allTestFiles: headlessAllTestFiles,
@@ -1782,7 +1783,14 @@ export const runBrowserController = async (
           handlers: { handleTestFileComplete },
         })
       : undefined,
-  ]);
+  ]).catch(async (error) => {
+    // A browser launch failure surfaces from a lane, after the runtime exists.
+    // A rejected non-watch cycle has no deferred close, so the runtime closes
+    // here; in watch the cycle ends the session and this is its teardown.
+    await closeRuntime();
+    throw error;
+  });
+  const [headless, headed] = lanes;
   const testTime = Math.max(headless?.testTime ?? 0, headed?.testTime ?? 0);
   const rawCoverage = [
     ...(headless?.rawCoverage ?? []),
@@ -1968,8 +1976,21 @@ export const listBrowserTests = async (
   // for every collect page: one context shared per project, with per-browser
   // attribution stamped onto the results post-capture (test structure
   // collection is browser-independent).
-  const defaultLaunch = runtime.launches[0]!;
-  const browser = defaultLaunch.browser;
+  const defaultLaunch = runtime.launchSpecs[0]!;
+  let defaultLease: LaunchLease;
+  try {
+    defaultLease = await runtime.launchPool.acquire(defaultLaunch.key);
+  } catch (error) {
+    logger.error(
+      color.red(
+        `Failed to initialize browser provider runtime (${defaultLaunch.provider}).`,
+      ),
+      error,
+    );
+    await destroyBrowserRuntime(runtime);
+    throw error;
+  }
+  const browser = defaultLease.browser;
 
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),

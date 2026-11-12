@@ -46,6 +46,46 @@ describe('expandToRows (headless scheduler queue order)', () => {
   });
 });
 
+describe('expandToRows (launch packing)', () => {
+  it('keeps runs of one launch consecutive across projects, rows stay consecutive', () => {
+    // p1 and p2 share the chromium launch; the name/browser sort alone would
+    // interleave it as chromium, firefox, chromium.
+    const rows = [
+      row('p1', 'chromium'),
+      row('p1', 'firefox'),
+      row('p2', 'chromium'),
+    ];
+    const rowsByProject = new Map([
+      ['p1', [rows[0]!, rows[1]!]],
+      ['p2', [rows[2]!]],
+    ]);
+    const queue = expandToRows(
+      [
+        { testPath: '/a.test.ts', projectName: 'p1' },
+        { testPath: '/b.test.ts', projectName: 'p1' },
+        { testPath: '/c.test.ts', projectName: 'p2' },
+      ],
+      rowsByProject,
+    );
+
+    expect(
+      queue.map((file) => [file.row.name, file.row.browserName, file.testPath]),
+    ).toEqual([
+      ['p1', 'chromium', '/a.test.ts'],
+      ['p1', 'chromium', '/b.test.ts'],
+      ['p2', 'chromium', '/c.test.ts'],
+      ['p1', 'firefox', '/a.test.ts'],
+      ['p1', 'firefox', '/b.test.ts'],
+    ]);
+    // Launches change once, not per project.
+    const launchRuns = queue.filter(
+      (file, index) =>
+        index === 0 || file.row.launchKey !== queue[index - 1]!.row.launchKey,
+    );
+    expect(launchRuns).toHaveLength(2);
+  });
+});
+
 describe('getMixedLaneConcurrency', () => {
   const files = [{ testPath: '/tests/a.test.ts', projectName: 'web' }];
   const headlessRows = [row('web', 'chromium'), row('web', 'firefox')];

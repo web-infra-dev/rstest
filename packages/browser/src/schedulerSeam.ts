@@ -5,7 +5,7 @@ import type {
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getHeadlessConcurrency } from './concurrency';
 import type { BrowserDispatchRequest, BrowserProjectRuntime } from './protocol';
-import type { BrowserProviderBrowser, BrowserProviderPage } from './providers';
+import type { BrowserProviderPage } from './providers';
 
 /**
  * The contract between the controller and whichever run branch executes a run.
@@ -113,25 +113,6 @@ export const groupRowsByProject = (
   return rowsByProject;
 };
 
-/**
- * The launched browser instance a row's launch key names, with the launch-key
- * contract's miss error: a row can never name a launch key the runtime did
- * not launch, so a miss is a host bug and names the row.
- */
-export const browserForRow = (
-  browsers: ReadonlyMap<string, BrowserProviderBrowser>,
-  row: BrowserProjectRuntime,
-): BrowserProviderBrowser => {
-  const browser = browsers.get(row.launchKey);
-  if (!browser) {
-    throw new Error(
-      `No launched browser for (project, browser) ` +
-        `(${JSON.stringify(row.name)}, ${JSON.stringify(row.browserName)}) under key ${row.launchKey}.`,
-    );
-  }
-  return browser;
-};
-
 const compareStrings = (a: string, b: string): number =>
   a < b ? -1 : a > b ? 1 : 0;
 
@@ -150,8 +131,8 @@ export const expandToRows = (
     projectName: string;
   }[],
   rowsByProject: ReadonlyMap<string, BrowserProjectRuntime[]>,
-): ScheduledTestFile[] =>
-  files
+): ScheduledTestFile[] => {
+  const expanded = files
     .flatMap((file) =>
       (rowsByProject.get(file.projectName) ?? []).map((row) => ({
         testPath: file.testPath,
@@ -164,6 +145,20 @@ export const expandToRows = (
         compareStrings(a.row.name, b.row.name) ||
         compareStrings(a.row.browserName, b.row.browserName),
     );
+  // Pack by launch: runs of one browser stay consecutive, so a capped pool
+  // finishes a browser before moving to the next instead of reopening it.
+  // `sort` is stable, so rows keep the order above inside a launch.
+  const launchOrder = new Map<string, number>();
+  for (const { row } of expanded) {
+    if (!launchOrder.has(row.launchKey)) {
+      launchOrder.set(row.launchKey, launchOrder.size);
+    }
+  }
+  return expanded.sort(
+    (a, b) =>
+      launchOrder.get(a.row.launchKey)! - launchOrder.get(b.row.launchKey)!,
+  );
+};
 
 /**
  * The shared file budget of a mixed run: `pool.maxWorkers` (or the headless

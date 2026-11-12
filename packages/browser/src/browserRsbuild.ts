@@ -59,7 +59,9 @@ import type {
   BrowserProviderPage,
 } from './providers';
 import { getBrowserProviderImplementation } from './providers';
+import { getHeadlessConcurrency } from './concurrency';
 import { encodeOpaqueValue } from './launchKey';
+import { createLaunchPool, type LaunchPool } from './launchPool';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 import { collectWatchTestFiles } from './watchRerunPlanner';
 
@@ -264,13 +266,16 @@ export type BrowserRuntime = {
   // server below is shared and reachable from any origin.
   containerServer: BrowserProjectServer;
   /**
-   * One Playwright browser per resolved launch key; `launches` is the single
-   * source of truth. Rows pick their launch from the `browsers` map by
-   * `launchKey`; `launches[0]` is the default launch the list/collect page
-   * and any default-browser caller use.
+   * The resolved launch plan, one spec per launch key; `launchSpecs[0]` is the
+   * default launch the list/collect page and any default-browser caller use.
    */
-  launches: BrowserLaunch[];
-  browsers: Map<string, BrowserProviderBrowser>;
+  launchSpecs: BrowserLaunchSpec[];
+  /**
+   * Owner of every browser process. Browsers launch on demand through the pool
+   * (rows lease theirs by `launchKey`) and at most `pool.maxWorkers` headless
+   * ones are open at once.
+   */
+  launchPool: LaunchPool;
   wsPort: number;
   tempDir: string;
   containerPage?: BrowserProviderPage;
@@ -835,10 +840,6 @@ export const browserLaunchKey = ({
     providerOptions.launch ?? null,
   )}`;
 
-export type BrowserLaunch = BrowserLaunchSpec & {
-  browser: BrowserProviderBrowser;
-};
-
 /**
  * One `(project, browser)` row per configured browser entry — the shared run
  * and list projection, and the single derivation of the launch plan:
@@ -1235,11 +1236,28 @@ const copyProxyResponseHeaders = (
   });
 };
 
+const launchBrowser = async (
+  spec: BrowserLaunchSpec,
+): Promise<BrowserProviderBrowser> => {
+  logger.debug(
+    `[Browser] launching ${spec.provider}/${spec.browserName}` +
+      (spec.headless ? ' (headless)' : ' (headed)'),
+  );
+  const runtimeLaunch = await getBrowserProviderImplementation(
+    spec.provider,
+  ).launchRuntime({
+    browserName: spec.browserName,
+    headless: spec.headless,
+    providerOptions: spec.providerOptions,
+  });
+  return runtimeLaunch.browser;
+};
+
 export const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
 ): Promise<void> => {
   await Promise.allSettled([
-    ...runtime.launches.map(({ browser }) => browser.close()),
+    runtime.launchPool.closeAll(),
     closeAllProjectServers(runtime.projectServers.values()),
   ]);
   try {
@@ -1340,8 +1358,12 @@ export const createBrowserRuntime = async ({
         port: 0,
         manifestPath: '',
       },
-      launches: [],
-      browsers: new Map(),
+      launchSpecs,
+      launchPool: createLaunchPool({
+        specs: [],
+        cap: 1,
+        launch: launchBrowser,
+      }),
       wsPort: 0,
       tempDir,
       setContainerOptions,
@@ -2123,44 +2145,21 @@ export const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  const launched: BrowserLaunch[] = [];
+  // No browser launches here. The pool starts each launch the first time a
+  // row leases it, so a launch failure surfaces from the lane that needed it
+  // and `pool.maxWorkers` can bound how many headless browsers are open.
+  const launchPool = createLaunchPool({
+    specs: launchSpecs,
+    cap: getHeadlessConcurrency(context, Number.POSITIVE_INFINITY),
+    launch: launchBrowser,
+    onClosed: (spec) => {
+      logger.debug(
+        `[Browser] closed ${spec.provider}/${spec.browserName}` +
+          (spec.headless ? ' (headless)' : ' (headed)'),
+      );
+    },
+  });
   try {
-    // One launch per unique launch-key row (provider, browserName, headless,
-    // launch options); rows sharing a key reuse the same browser process.
-    // Launches are independent processes, so they boot concurrently next to
-    // the per-project builds; a failure closes the ones that landed.
-    const settledLaunches = await Promise.allSettled(
-      launchSpecs.map(async (spec) => {
-        logger.debug(
-          `[Browser] launching ${spec.provider}/${spec.browserName}` +
-            (spec.headless ? ' (headless)' : ' (headed)'),
-        );
-        const providerImplementation = getBrowserProviderImplementation(
-          spec.provider,
-        );
-        const runtimeLaunch = await providerImplementation.launchRuntime({
-          browserName: spec.browserName,
-          headless: spec.headless,
-          providerOptions: spec.providerOptions,
-        });
-        return {
-          ...spec,
-          browser: runtimeLaunch.browser,
-        } satisfies BrowserLaunch;
-      }),
-    );
-    for (const settled of settledLaunches) {
-      if (settled.status === 'fulfilled') {
-        launched.push(settled.value);
-      }
-    }
-    const failed = settledLaunches.find(
-      (settled): settled is PromiseRejectedResult =>
-        settled.status === 'rejected',
-    );
-    if (failed) {
-      throw failed.reason;
-    }
     let generation;
     do {
       generation = buildGeneration;
@@ -2170,8 +2169,8 @@ export const createBrowserRuntime = async ({
     return {
       projectServers,
       containerServer,
-      launches: launched,
-      browsers: new Map(launched.map((launch) => [launch.key, launch.browser])),
+      launchSpecs,
+      launchPool,
       wsPort,
       tempDir,
       setContainerOptions,
@@ -2181,10 +2180,7 @@ export const createBrowserRuntime = async ({
       watchState,
     };
   } catch (error) {
-    await Promise.allSettled([
-      ...launched.map((launch) => launch.browser.close()),
-      closeAllProjectServers(projectServers.values()),
-    ]);
+    await Promise.allSettled([closeAllProjectServers(projectServers.values())]);
     await closeWebSocketServer(wss);
     throw error;
   }
