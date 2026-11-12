@@ -216,6 +216,7 @@ catalogs:
 packageExtensionsChecksum: sha256-/oXUNlAVRCvDfhpsbH+E7MlrA1cfGnTrmqgmHjY2sMM=
 
 patchedDependencies:
+  chai@6.3.0: 4a6496f6c3dec08ff58c72a075f1fd5b3d3ea741386c235ac7517e58eab5660f
   webpack-license-plugin@4.5.1: 81ef529661db8cd15383f446caaeb02a0e8e8909c386ebe9b91ec16cf3a7b0d6
 
 importers:
@@ -1503,7 +1504,7 @@ importers:
         version: 7.1.0
       chai:
         specifier: ^6.3.0
-        version: 6.3.0
+        version: 6.3.0(patch_hash=4a6496f6c3dec08ff58c72a075f1fd5b3d3ea741386c235ac7517e58eab5660f)
       chokidar:
         specifier: ^5.0.0
         version: 5.0.0
@@ -11568,7 +11569,7 @@ snapshots:
       '@types/chai': 5.2.3
       '@vitest/spy': 4.1.12
       '@vitest/utils': 4.1.12
-      chai: 6.3.0
+      chai: 6.3.0(patch_hash=4a6496f6c3dec08ff58c72a075f1fd5b3d3ea741386c235ac7517e58eab5660f)
       tinyrainbow: 3.1.0
 
   '@vitest/pretty-format@4.1.12':
@@ -12082,7 +12083,7 @@ snapshots:
 
   ccount@2.0.1: {}
 
-  chai@6.3.0: {}
+  chai@6.3.0(patch_hash=4a6496f6c3dec08ff58c72a075f1fd5b3d3ea741386c235ac7517e58eab5660f): {}
 
   chalk-template@0.4.0:
     dependencies:

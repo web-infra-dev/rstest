@@ -108,6 +108,27 @@ it('compares binary values from an iframe by their bytes', ({
   }
 });
 
+it('formats ordinary objects from an iframe in assertion messages', ({
+  onTestFinished,
+}) => {
+  const iframe = document.createElement('iframe');
+  document.body.appendChild(iframe);
+  onTestFinished(() => iframe.remove());
+  const realm = iframe.contentWindow;
+  if (!realm) {
+    throw new Error('iframe window is unavailable');
+  }
+  // Window's DOM type omits the realm's JavaScript constructors.
+  const foreign = realm as Window & typeof globalThis;
+  const value = Object.assign(new foreign.Object(), { value: 1 });
+  expect(() => expect(value).equal(null)).toThrow(
+    'expected { value: 1 } to equal null',
+  );
+  expect(() => expect({ nested: value }).equal(null)).toThrow(
+    'expected { nested: { value: 1 } } to equal null',
+  );
+});
+
 it('compares ordinary objects with an ArrayBuffer toStringTag', () => {
   const value = { [Symbol.toStringTag]: 'ArrayBuffer', value: 1 };
   expect(value).toStrictEqual({ ...value });
