@@ -3,6 +3,7 @@ import type {
   ExecutorRunCycleOptions,
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import { getHeadlessConcurrency } from './concurrency';
 import type { BrowserDispatchRequest, BrowserProjectRuntime } from './protocol';
 import type { BrowserProviderBrowser, BrowserProviderPage } from './providers';
 
@@ -163,3 +164,26 @@ export const expandToRows = (
         compareStrings(a.row.name, b.row.name) ||
         compareStrings(a.row.browserName, b.row.browserName),
     );
+
+/**
+ * The shared file budget of a mixed run: `pool.maxWorkers` (or the headless
+ * default) clamped by the runs actually scheduled — `file x row` on the
+ * headless lane (the same expansion its queue uses) plus the headed lane's
+ * runs — so one file fanned out over several rows is not clamped to one slot.
+ */
+export const getMixedLaneConcurrency = (
+  context: Parameters<typeof getHeadlessConcurrency>[0],
+  lanes: {
+    headlessFiles: readonly { testPath: string; projectName: string }[];
+    headlessRows: readonly BrowserProjectRuntime[];
+    headedFiles: readonly { testPath: string; projectName: string }[];
+    headedRow: BrowserProjectRuntime;
+  },
+): number =>
+  getHeadlessConcurrency(
+    context,
+    expandToRows(lanes.headlessFiles, groupRowsByProject(lanes.headlessRows))
+      .length +
+      expandToRows(lanes.headedFiles, groupRowsByProject([lanes.headedRow]))
+        .length,
+  );

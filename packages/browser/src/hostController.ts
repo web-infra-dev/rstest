@@ -62,7 +62,6 @@ import {
   takeBrowserV8Coverage,
   type BrowserV8CoverageResourceStore,
 } from './browserV8Coverage';
-import { getHeadlessConcurrency } from './concurrency';
 import { createConcurrencyLimiter } from './concurrencyLimiter';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
@@ -116,6 +115,7 @@ import {
 import { collectWatchTestFiles } from './watchRerunPlanner';
 import {
   expandToRows,
+  getMixedLaneConcurrency,
   groupRowsByProject,
   type BrowserWatchSession,
   type DispatchLanes,
@@ -1749,7 +1749,12 @@ export const runBrowserController = async (
   const fileLimiter =
     headlessRows.length > 0 && headedRows[0]
       ? createConcurrencyLimiter(
-          getHeadlessConcurrency(context, allTestFiles.length),
+          getMixedLaneConcurrency(context, {
+            headlessFiles: headlessAllTestFiles,
+            headlessRows,
+            headedFiles: allTestFiles,
+            headedRow: headedRows[0],
+          }),
         )
       : undefined;
   const [headless, headed] = await Promise.all([

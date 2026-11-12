@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import type { BrowserProjectRuntime } from '../src/protocol';
 import type { ScheduledTestFile } from '../src/schedulerSeam';
-import { expandToRows } from '../src/schedulerSeam';
+import { expandToRows, getMixedLaneConcurrency } from '../src/schedulerSeam';
 
 const row = (
   name: string,
@@ -43,5 +43,37 @@ describe('expandToRows (headless scheduler queue order)', () => {
     // must span both files of the non-first rows too.
     expect(queue[0]!.row).toBe(queue[1]!.row);
     expect(queue[2]!.row).toBe(queue[3]!.row);
+  });
+});
+
+describe('getMixedLaneConcurrency', () => {
+  const files = [{ testPath: '/tests/a.test.ts', projectName: 'web' }];
+  const headlessRows = [row('web', 'chromium'), row('web', 'firefox')];
+  const headedRow = row('web', 'webkit');
+  const contextWith = (maxWorkers: number) =>
+    ({ command: 'run', normalizedConfig: { pool: { maxWorkers } } }) as const;
+
+  it('sizes the budget by file x row runs, not by file count', () => {
+    // One file on two headless rows plus the headed run is three runs, so
+    // maxWorkers 2 stays 2 instead of clamping to the single file.
+    expect(
+      getMixedLaneConcurrency(contextWith(2), {
+        headlessFiles: files,
+        headlessRows,
+        headedFiles: files,
+        headedRow,
+      }),
+    ).toBe(2);
+  });
+
+  it('keeps maxWorkers 1 serial', () => {
+    expect(
+      getMixedLaneConcurrency(contextWith(1), {
+        headlessFiles: files,
+        headlessRows,
+        headedFiles: files,
+        headedRow,
+      }),
+    ).toBe(1);
   });
 });
