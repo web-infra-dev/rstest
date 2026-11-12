@@ -385,6 +385,9 @@ export const initSpy = (
     Object.defineProperty(spyFn, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
+          if (getRealmArray() === Array) {
+            return spyState.calls.slice();
+          }
           return toRealmArray(
             spyState.calls.map((call) => toRealmCall(call)),
           ) as MockContext<T>['calls'];
