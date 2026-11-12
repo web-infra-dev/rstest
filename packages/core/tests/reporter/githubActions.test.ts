@@ -552,6 +552,122 @@ describe('GithubActionsReporter step summary', () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('keeps Markdown and HTML in test names as literal text', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+    const summaryPath = path.join(tempDir, 'summary.md');
+    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+    const testPath = path.join(tempDir, 'tests/button.test.tsx');
+    const testFile = {
+      testPath,
+      relativeTestPath: 'tests/button.test.tsx',
+      project: 'rstest',
+    };
+
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    process.env.GITHUB_WORKSPACE = tempDir;
+
+    try {
+      const reporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+        },
+      });
+
+      await reporter.onTestRunEnd({
+        ...emptyRunEndPayload,
+        status: 'failed',
+        summary: {
+          files: { total: 1, failed: 1 },
+          tests: {
+            total: 3,
+            passed: 1,
+            failed: 2,
+            skipped: 0,
+            todo: 0,
+            flaky: 1,
+          },
+        },
+        results: [
+          {
+            ...testFile,
+            testId: 'file-1',
+            status: 'failed',
+            name: 'button.test.tsx',
+            fullName: 'button.test.tsx',
+            results: [],
+            summary: {
+              total: 3,
+              passed: 1,
+              failed: 2,
+              skipped: 0,
+              todo: 0,
+              flaky: 1,
+            },
+          },
+        ],
+        testResults: [
+          {
+            ...testFile,
+            testId: 'test-1',
+            status: 'failed',
+            name: 'renders `children` in *bold*',
+            fullName: '<Button /> > renders `children` in *bold*',
+            parentNames: ['<Button />'],
+            errors: [{ name: 'AssertionError', message: 'expected 1 to be 2' }],
+          },
+          {
+            ...testFile,
+            testId: 'test-2',
+            status: 'failed',
+            name: 'keeps __init__, [docs](url), ~old~, &amp; and \\ as text',
+            fullName:
+              'markdown > keeps __init__, [docs](url), ~old~, &amp; and \\ as text',
+            parentNames: ['markdown'],
+            errors: [{ name: 'AssertionError', message: 'expected 1 to be 2' }],
+          },
+          {
+            ...testFile,
+            testId: 'test-3',
+            status: 'passed',
+            name: 'returns `undefined`',
+            fullName: '<Button /> > returns `undefined`',
+            parentNames: ['<Button />'],
+            retryCount: 1,
+            errors: [{ name: 'AssertionError', message: 'expected 1 to be 2' }],
+          },
+        ],
+      });
+
+      const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain(
+        '### ❌ FAIL tests/button.test.tsx > \\<Button /> > renders \\`children\\` in \\*bold\\*',
+      );
+      expect(summary).toContain(
+        '### ❌ FAIL tests/button.test.tsx > markdown > keeps \\_\\_init\\_\\_, \\[docs\\](url), \\~old\\~, \\&amp; and \\\\ as text',
+      );
+      expect(summary).toContain(
+        '- `` tests/button.test.tsx > <Button /> > returns `undefined` `` (passed after retry x1)',
+      );
+    } finally {
+      if (previousSummaryPath === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY;
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+      }
+
+      if (previousWorkspacePath === undefined) {
+        delete process.env.GITHUB_WORKSPACE;
+      } else {
+        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+      }
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('GithubActionsReporter annotations', () => {
