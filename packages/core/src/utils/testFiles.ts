@@ -71,7 +71,6 @@ export const filterFiles = (
   const exactFilters = new Set<string>();
   const absolutePrefixes: string[] = [];
   // Unquoted filters match case-insensitive substrings: foo also matches foobar.
-  // The raw and root-relative forms may coincide, so keep each substring once.
   const fuzzyFilters = new Set<string>();
   for (const filter of fileFilters) {
     if (isQuotedFilter(filter)) {
