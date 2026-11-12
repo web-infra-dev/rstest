@@ -67,17 +67,33 @@ export const filterFiles = (
       ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
 
+  // Quotes opt into whole-path matching: "foo.test.ts" excludes foo.test.tsx.
   const exactFilters = new Set<string>();
-  const fuzzyFilters: string[] = [];
+  const absolutePrefixes: string[] = [];
+  // Unquoted filters match case-insensitive substrings: foo also matches foobar.
+  const fuzzyFilters = new Set<string>();
   for (const filter of fileFilters) {
     if (isQuotedFilter(filter)) {
       exactFilters.add(normalizeExactPathMatch(unquoteFilter(filter)));
-    } else {
-      fuzzyFilters.push(filter);
+      continue;
     }
+
+    if (pathe.isAbsolute(filter)) {
+      absolutePrefixes.push(filter);
+    }
+    // Keep the trailing slash so src/ does not also match src-extra/.
+    const relativePath = filter.endsWith('/')
+      ? pathe.join(pathe.relative(dir, filter), '/')
+      : pathe.relative(dir, filter);
+    fuzzyFilters.add(filter.toLocaleLowerCase());
+    fuzzyFilters.add(relativePath.toLocaleLowerCase());
   }
 
   return testFiles.filter((t) => {
+    // A prefix hit needs no relative-path resolution or case conversion.
+    if (absolutePrefixes.some((prefix) => t.startsWith(prefix))) {
+      return true;
+    }
     const relativePath = pathe.relative(dir, t);
     if (
       exactFilters.size > 0 &&
@@ -86,24 +102,16 @@ export const filterFiles = (
     ) {
       return true;
     }
-    if (fuzzyFilters.length === 0) {
+    if (fuzzyFilters.size === 0) {
       return false;
     }
     const testFile = relativePath.toLocaleLowerCase();
-    return fuzzyFilters.some((f) => {
-      // if filter is a full file path, we should include it if it's in the same folder
-      if (pathe.isAbsolute(f) && t.startsWith(f)) {
+    for (const filter of fuzzyFilters) {
+      if (testFile.includes(filter)) {
         return true;
       }
-
-      const relativePath = f.endsWith('/')
-        ? pathe.join(pathe.relative(dir, f), '/')
-        : pathe.relative(dir, f);
-      return (
-        testFile.includes(f.toLocaleLowerCase()) ||
-        testFile.includes(relativePath.toLocaleLowerCase())
-      );
-    });
+    }
+    return false;
   });
 };
 

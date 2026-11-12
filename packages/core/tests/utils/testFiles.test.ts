@@ -35,6 +35,15 @@ describe('test filterFiles', () => {
 
     expect(filterFiles(testFiles, [], __dirname)).toEqual([]);
   });
+
+  it('preserves trailing slashes in directory filters', () => {
+    const root = process.cwd();
+    const files = ['src/foo.test.ts', 'src-extra/foo.test.ts'].map((file) =>
+      pathe.resolve(root, file),
+    );
+
+    expect(filterFiles(files, ['src/'], root)).toEqual([files[0]]);
+  });
 });
 
 test('formatTestEntryName', () => {

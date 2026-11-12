@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { prepareFixtures, runRstestCli } from '../scripts';
 import { runCli } from './utils';
 
 const appFilters = 'test/App';
@@ -107,9 +107,23 @@ it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
 it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
   'loads default and forced DOM prebundles without fallback under %s',
   async (pool, { onTestFinished }) => {
-    const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
-    const run = (config?: string) =>
-      runRstestCli({
+    // DEBUG writes runtime chunks to disk, so sibling test files cannot share cwd.
+    const cwd = fileURLToPath(
+      new URL(`./fixtures/fixtures-test-prebundle-${pool}`, import.meta.url),
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: fileURLToPath(
+        new URL('./fixtures/prebundle', import.meta.url),
+      ),
+      fixturesTargetPath: cwd,
+    });
+    const clis: Awaited<ReturnType<typeof runRstestCli>>['cli'][] = [];
+    onTestFinished(async () => {
+      await Promise.all(clis.map((cli) => cli.killProcessTree()));
+      fs.delete(cwd);
+    });
+    const run = async (config?: string) => {
+      const result = await runRstestCli({
         command: 'rstest',
         args: ['run', '--pool', pool, ...(config ? ['--config', config] : [])],
         onTestFinished,
@@ -120,6 +134,9 @@ it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
           },
         },
       });
+      clis.push(result.cli);
+      return result;
+    };
 
     const defaultConfig = await run();
     await defaultConfig.expectExecSuccess();
