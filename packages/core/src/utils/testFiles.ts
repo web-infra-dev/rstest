@@ -67,8 +67,11 @@ export const filterFiles = (
       ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
 
+  // Quotes opt into whole-path matching: "foo.test.ts" excludes foo.test.tsx.
   const exactFilters = new Set<string>();
   const absolutePrefixes: string[] = [];
+  // Unquoted filters match case-insensitive substrings: foo also matches foobar.
+  // The raw and root-relative forms may coincide, so keep each substring once.
   const fuzzyFilters = new Set<string>();
   for (const filter of fileFilters) {
     if (isQuotedFilter(filter)) {
@@ -79,6 +82,7 @@ export const filterFiles = (
     if (pathe.isAbsolute(filter)) {
       absolutePrefixes.push(filter);
     }
+    // Keep the trailing slash so src/ does not also match src-extra/.
     const relativePath = filter.endsWith('/')
       ? pathe.join(pathe.relative(dir, filter), '/')
       : pathe.relative(dir, filter);
@@ -87,6 +91,7 @@ export const filterFiles = (
   }
 
   return testFiles.filter((t) => {
+    // A prefix hit needs no relative-path resolution or case conversion.
     if (absolutePrefixes.some((prefix) => t.startsWith(prefix))) {
       return true;
     }

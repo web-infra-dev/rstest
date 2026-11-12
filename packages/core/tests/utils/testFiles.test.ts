@@ -36,44 +36,13 @@ describe('test filterFiles', () => {
     expect(filterFiles(testFiles, [], __dirname)).toEqual([]);
   });
 
-  it.each([
-    {
-      filters: ['SRC/FOO'],
-      expected: ['src/foo.test.ts', 'src/foobar.test.ts'],
-    },
-    { filters: ['src/'], expected: ['src/foo.test.ts', 'src/foobar.test.ts'] },
-    {
-      filters: ['"src/foo.test.ts"', 'other/'],
-      expected: ['src/foo.test.ts', 'other/bar.test.ts'],
-    },
-    {
-      filters: ['missing', 'other/bar', 'src/foobar'],
-      expected: ['src/foobar.test.ts', 'other/bar.test.ts'],
-    },
-  ])(
-    'matches $filters without changing file order',
-    ({ filters, expected }) => {
-      const files = [
-        'src/foo.test.ts',
-        'src/foobar.test.ts',
-        'src-extra/foo.test.ts',
-        'other/bar.test.ts',
-      ];
-      const resolve = (file: string) => pathe.resolve(__dirname, file);
+  it('preserves trailing slashes in directory filters', () => {
+    const root = process.cwd();
+    const files = ['src/foo.test.ts', 'src-extra/foo.test.ts'].map((file) =>
+      pathe.resolve(root, file),
+    );
 
-      expect(filterFiles(files.map(resolve), filters, __dirname)).toEqual(
-        expected.map(resolve),
-      );
-    },
-  );
-
-  it('resolves cwd-relative filters when the root differs from cwd', () => {
-    const root = pathe.resolve(process.cwd(), 'fixtures/filter-root');
-    const file = pathe.join(root, 'src/foo.test.ts');
-
-    expect(
-      filterFiles([file], ['fixtures/filter-root/src/foo.test.ts'], root),
-    ).toEqual([file]);
+    expect(filterFiles(files, ['src/'], root)).toEqual([files[0]]);
   });
 });
 

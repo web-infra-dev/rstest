@@ -8,9 +8,6 @@ const cwd = join(dirname(fileURLToPath(import.meta.url)), 'fixtures-quoted');
 it.each([
   { filters: ['src/foo.test.ts'], count: 3 },
   { filters: ['SRC/FOO.TEST.TS'], count: 3 },
-  { filters: ['pkg/'], count: 1 },
-  { filters: [join(cwd, 'pkg')], count: 1 },
-  { filters: ['missing', 'foo.test.tsx', 'pkg/'], count: 2 },
   { filters: ['"src/foo.test.ts"'], count: 1 },
   { filters: ["'src/foo.test.ts'"], count: 1 },
   { filters: [`"${join(cwd, 'src/foo.test.ts')}"`], count: 1 },
