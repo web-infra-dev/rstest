@@ -96,5 +96,6 @@ export default defineConfig({
   ].concat(
     process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : [],
     process.env.RSTEST_POOL_TYPE === 'threads' ? THREADS_EXCLUDES : [],
+    process.env.RSTEST_E2E_SKIP_PLAYWRIGHT === 'true' ? ['playwright/**'] : [],
   ),
 });
