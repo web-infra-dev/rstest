@@ -233,15 +233,25 @@ jobs:
       # steps.
       - name: E2E Test (test:commonjs)
         if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        # Playwright keeps default-mode coverage on every OS/Node combination;
+        # CommonJS only needs one extra pass, on the oldest supported Node.
         run: cd e2e && pnpm test:commonjs
+        env:
+          RSTEST_E2E_SKIP_PLAYWRIGHT: ${{ matrix.os != 'ubuntu-latest' || matrix.node_version != '20' }}
 
+      # Playwright fixtures already use isolate:false and explicitly cover pools.
+      # These outer-runner modes do not add fixture coverage.
       - name: E2E Test (test:no-isolate)
         if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
         run: cd e2e && pnpm test:no-isolate
+        env:
+          RSTEST_E2E_SKIP_PLAYWRIGHT: 'true'
 
       - name: E2E Test (test:threads)
         if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
         run: cd e2e && pnpm test:threads
+        env:
+          RSTEST_E2E_SKIP_PLAYWRIGHT: 'true'
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
