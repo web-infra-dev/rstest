@@ -190,6 +190,8 @@ export default defineConfig({
 
 The default is computed from the CPU count and the command mode. You can provide a positive integer or a percentage of the available CPU count.
 
+In [Browser Mode](/config/test/browser), `maxWorkers` also limits how many browsers are open at the same time. A browser launches the first time a test file needs it, and an idle browser is closed when another one needs its slot, so with three browsers and `maxWorkers: 1` only one browser is open at a time. A headed browser window is not counted: it stays open for the whole run.
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 

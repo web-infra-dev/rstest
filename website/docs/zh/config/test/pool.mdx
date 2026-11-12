@@ -189,6 +189,8 @@ export default defineConfig({
 
 默认值会根据 CPU 数量和运行模式自动计算。你可以传入正整数，或传入可用 CPU 数量的百分比。
 
+在 [Browser Mode](/config/test/browser) 下，`maxWorkers` 还会限制同时打开的浏览器数量。浏览器在第一个测试文件需要它时才会启动，空闲的浏览器会在其他浏览器需要名额时关闭，因此有三个浏览器且 `maxWorkers: 1` 时，同一时间只会打开一个浏览器。headed 浏览器窗口不计入该数量，它会在整个 run 期间保持打开。
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 

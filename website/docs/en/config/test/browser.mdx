@@ -574,6 +574,8 @@ export default defineConfig({
 
 Every `rstest` run launches one browser per `(provider, browserName, headless, providerOptions.launch)` combination across all Browser Mode projects. Two projects that configure the same browser with the same launch key share one browser instance; different `providerOptions.launch` values or a different `headless` setting produce separate launches. Within a project, every browser of the project shares one build and one dev server.
 
+Browsers start on demand: a launch starts the first time a test file needs it, so a launch that cannot start (for example a missing executable) fails the run when that file is reached, not before the run begins. At most [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) headless browsers are open at once; when another launch needs a slot, an idle browser is closed, least recently used first. In watch mode idle browsers stay open between runs until a slot is needed. A headed browser is not counted and stays open for the whole run.
+
 The following rules are validated before any browser launches:
 
 - **One headed browser per run.** Browser mode opens a single debug window, so at most one `(project, browser)` pair may set `headless: false`; every other browser must set `headless: true`. The error names the concrete fix:
