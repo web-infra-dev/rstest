@@ -218,6 +218,22 @@ describe('initSpy fn()', () => {
     ]);
   });
 
+  it('records settled results of a promise with a custom string tag', async () => {
+    class TaggedPromise<T> extends Promise<T> {
+      get [Symbol.toStringTag]() {
+        return 'TaggedPromise';
+      }
+    }
+    const { fn } = initSpy();
+    const spy = fn(() => TaggedPromise.resolve('ok'));
+
+    await spy();
+
+    expect(spy.mock.settledResults).toEqual([
+      { type: 'fulfilled', value: 'ok' },
+    ]);
+  });
+
   it('records the instance as the result of a `new` call', () => {
     const { fn } = initSpy();
     const Mock = fn(function (this: { value?: number }) {
