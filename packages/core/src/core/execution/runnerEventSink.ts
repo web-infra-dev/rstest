@@ -209,7 +209,7 @@ export function createRunnerEventSink(
     hook: K,
     payload: HookPayload<K>,
   ): Promise<void> => {
-    const dispatched: Promise<void>[] = [];
+    let dispatched: Promise<void>[] | undefined;
     for (let index = 0; index < reporters.length; index += 1) {
       const reporter = reporters[index]!;
       let result: MaybePromise<void>;
@@ -226,7 +226,7 @@ export function createRunnerEventSink(
         continue;
       }
       if (!result?.then) continue;
-      dispatched.push(
+      (dispatched ??= []).push(
         Promise.resolve(result).catch((error) => {
           recordReporterError(
             context,
@@ -235,7 +235,9 @@ export function createRunnerEventSink(
         }),
       );
     }
-    await Promise.all(dispatched);
+    if (dispatched) {
+      await Promise.all(dispatched);
+    }
   };
 
   // State is recorded the moment an event arrives; reporters hear it only once
