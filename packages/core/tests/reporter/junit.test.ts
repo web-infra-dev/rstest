@@ -1,6 +1,6 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { JUnitReporter } from '../../src/reporter/junit';
-import { emptyRunEndPayload } from './helpers';
+import { emptyRunEndPayload, emptyRunSummary } from './helpers';
 import type { Duration, TestFileResult, TestResult } from '../../src/types';
 
 describe('JUnitReporter', () => {
@@ -206,6 +206,80 @@ describe('JUnitReporter', () => {
     expect(xml).toContain(
       '<testcase name="suite &gt; authoritative name" classname="payload/test.test.ts" time="0.01">',
     );
+  });
+
+  it('reports a file-level failure as an errored test case', async () => {
+    const logs: string[] = [];
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    const skippedTest: TestResult = {
+      testId: 'hook-1',
+      status: 'skipped',
+      name: 'never runs',
+      fullName: 'never runs',
+      testPath: '/test/root/hook.test.ts',
+      relativeTestPath: 'hook.test.ts',
+      project: 'default',
+    };
+    const fileResult = (
+      relativeTestPath: string,
+      results: TestResult[],
+      message: string,
+      name = 'Error',
+    ): TestFileResult => ({
+      testId: `file:${relativeTestPath}`,
+      status: 'failed',
+      name: '',
+      fullName: '',
+      testPath: `/test/root/${relativeTestPath}`,
+      relativeTestPath,
+      results,
+      project: 'default',
+      errors: [{ name, message }],
+      summary: {
+        ...emptyRunSummary.tests,
+        total: results.length,
+        skipped: results.length,
+      },
+    });
+
+    const reporter = new JUnitReporter({ rootPath: '/test/root' });
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      status: 'failed',
+      results: [
+        fileResult('load.test.ts', [], 'failed <while> loading', 'Load&Error'),
+        fileResult('hook.test.ts', [skippedTest], 'beforeAll failed'),
+      ],
+      testResults: [skippedTest],
+      summary: {
+        tests: { ...emptyRunSummary.tests, total: 1, skipped: 1 },
+        files: { total: 2, failed: 2 },
+      },
+    });
+
+    const xml = logs.join('\n');
+    expect(xml).toContain(
+      '<testsuites name="rstest tests" tests="3" failures="0" errors="2" skipped="1"',
+    );
+    expect(xml).toContain(
+      '<testsuite name="load.test.ts" tests="1" failures="0" errors="1" skipped="0"',
+    );
+    expect(xml).toContain(
+      '<testcase name="load.test.ts" classname="load.test.ts" time="0">',
+    );
+    expect(xml).toContain(
+      '<error message="failed &lt;while&gt; loading" type="Load&amp;Error">failed &lt;while&gt; loading</error>',
+    );
+    expect(xml).toContain(
+      '<testsuite name="hook.test.ts" tests="2" failures="0" errors="1" skipped="1"',
+    );
+    expect(xml).toContain(
+      '<error message="beforeAll failed" type="Error">beforeAll failed</error>',
+    );
+    expect(xml).not.toContain('<failure');
   });
 
   it('reports escaped unhandled errors as suite stderr', async () => {
