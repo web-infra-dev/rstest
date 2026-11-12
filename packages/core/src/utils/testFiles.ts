@@ -77,6 +77,18 @@ export const filterFiles = (
     }
   }
 
+  const patterns = fuzzyFilters.map((filter) => {
+    const relativePath = filter.endsWith('/')
+      ? pathe.join(pathe.relative(dir, filter), '/')
+      : pathe.relative(dir, filter);
+    return {
+      filter,
+      isAbsolute: pathe.isAbsolute(filter),
+      lowerCase: filter.toLocaleLowerCase(),
+      relativeLowerCase: relativePath.toLocaleLowerCase(),
+    };
+  });
+
   return testFiles.filter((t) => {
     const relativePath = pathe.relative(dir, t);
     if (
@@ -90,18 +102,15 @@ export const filterFiles = (
       return false;
     }
     const testFile = relativePath.toLocaleLowerCase();
-    return fuzzyFilters.some((f) => {
+    return patterns.some((pattern) => {
       // if filter is a full file path, we should include it if it's in the same folder
-      if (pathe.isAbsolute(f) && t.startsWith(f)) {
+      if (pattern.isAbsolute && t.startsWith(pattern.filter)) {
         return true;
       }
 
-      const relativePath = f.endsWith('/')
-        ? pathe.join(pathe.relative(dir, f), '/')
-        : pathe.relative(dir, f);
       return (
-        testFile.includes(f.toLocaleLowerCase()) ||
-        testFile.includes(relativePath.toLocaleLowerCase())
+        testFile.includes(pattern.lowerCase) ||
+        testFile.includes(pattern.relativeLowerCase)
       );
     });
   });
