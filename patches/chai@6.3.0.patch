@@ -1,26 +1,29 @@
 diff --git a/index.js b/index.js
-index fa5d67e9e5b98ca10a617b484d25f199b1a6de1b..98e99446ab75ff6467a71cf43ea6843f11b1187d 100644
+index fa5d67e9e5b98ca10a617b484d25f199b1a6de1b..94e1c3cd4b7a3b8c2a1212bdf3ee3809775f05ff 100644
 --- a/index.js
 +++ b/index.js
-@@ -772,6 +772,8 @@ var inspectCustom = /* @__PURE__ */ __name((value, options, type3, inspectFn) =>
+@@ -772,6 +772,7 @@ var inspectCustom = /* @__PURE__ */ __name((value, options, type3, inspectFn) =>
    return "";
  }, "inspectCustom");
  var toString = Object.prototype.toString;
-+// Compare native Object constructors across realms without matching user classes.
 +var objectConstructorSource = Function.prototype.toString.call(Object);
  function inspect(value, opts = {}) {
    const options = normaliseOptions(opts, inspect);
    const { customInspect } = options;
-@@ -791,7 +793,11 @@ function inspect(value, opts = {}) {
-     }
+@@ -794,6 +795,16 @@ function inspect(value, opts = {}) {
+   if (proto === Object.prototype || proto === null) {
+     return inspectObject(value, options);
    }
-   const proto = value ? Object.getPrototypeOf(value) : false;
--  if (proto === Object.prototype || proto === null) {
-+  if (proto === Object.prototype || proto === null ||
++  // Objects from VM tests and iframes have a different Object prototype.
++  // Match their native Object constructor while preserving user class names.
++  if (
 +    Object.getPrototypeOf(proto) === null &&
 +    Object.prototype.hasOwnProperty.call(proto, "constructor") &&
 +    typeof proto.constructor === "function" &&
-+    Function.prototype.toString.call(proto.constructor) === objectConstructorSource) {
-     return inspectObject(value, options);
-   }
++    Function.prototype.toString.call(proto.constructor) === objectConstructorSource
++  ) {
++    return inspectObject(value, options);
++  }
    if (value && typeof HTMLElement === "function" && value instanceof HTMLElement) {
+     return inspectHTML(value, options);
+   }
