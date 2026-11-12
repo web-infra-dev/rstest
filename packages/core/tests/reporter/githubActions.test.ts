@@ -623,9 +623,9 @@ describe('GithubActionsReporter step summary', () => {
             ...testFile,
             testId: 'test-2',
             status: 'failed',
-            name: 'keeps __init__, [docs](url), ~old~, &amp; and \\ as text',
+            name: 'keeps __init__, [docs](url), ~old~, &amp; and \\ as text #',
             fullName:
-              'markdown > keeps __init__, [docs](url), ~old~, &amp; and \\ as text',
+              'markdown > keeps __init__, [docs](url), ~old~, &amp; and \\ as text #',
             parentNames: ['markdown'],
             errors: [{ name: 'AssertionError', message: 'expected 1 to be 2' }],
           },
@@ -647,7 +647,7 @@ describe('GithubActionsReporter step summary', () => {
         '### ❌ FAIL tests/button.test.tsx > \\<Button /> > renders \\`children\\` in \\*bold\\*',
       );
       expect(summary).toContain(
-        '### ❌ FAIL tests/button.test.tsx > markdown > keeps \\_\\_init\\_\\_, \\[docs\\](url), \\~old\\~, \\&amp; and \\\\ as text',
+        '### ❌ FAIL tests/button.test.tsx > markdown > keeps \\_\\_init\\_\\_, \\[docs\\](url), \\~old\\~, \\&amp; and \\\\ as text \\#',
       );
       expect(summary).toContain(
         '- `` tests/button.test.tsx > <Button /> > returns `undefined` `` (passed after retry x1)',

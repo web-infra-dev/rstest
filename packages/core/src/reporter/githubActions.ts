@@ -183,9 +183,10 @@ function escapeProperty(s: string): string {
 
 // Test names are plain text, but GitHub renders the step summary as Markdown:
 // it drops `<Button />` as an unknown HTML tag and turns `*`, `_`, `~`,
-// backticks or `[x](y)` into formatting.
+// backticks or `[x](y)` into formatting. It also drops a `#` that ends a
+// heading, as the heading's closing sequence.
 function escapeMarkdown(s: string): string {
-  return s.replace(/[\\`*_[\]<&~]/g, '\\$&');
+  return s.replace(/[\\`*_[\]<&~#]/g, '\\$&');
 }
 
 // A code span ends at the first backtick run as long as its fence, so the
