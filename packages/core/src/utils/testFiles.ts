@@ -68,28 +68,28 @@ export const filterFiles = (
       : filters;
 
   const exactFilters = new Set<string>();
-  const fuzzyFilters: string[] = [];
+  const absolutePrefixes: string[] = [];
+  const fuzzyFilters = new Set<string>();
   for (const filter of fileFilters) {
     if (isQuotedFilter(filter)) {
       exactFilters.add(normalizeExactPathMatch(unquoteFilter(filter)));
-    } else {
-      fuzzyFilters.push(filter);
+      continue;
     }
-  }
 
-  const patterns = fuzzyFilters.map((filter) => {
+    if (pathe.isAbsolute(filter)) {
+      absolutePrefixes.push(filter);
+    }
     const relativePath = filter.endsWith('/')
       ? pathe.join(pathe.relative(dir, filter), '/')
       : pathe.relative(dir, filter);
-    return {
-      filter,
-      isAbsolute: pathe.isAbsolute(filter),
-      lowerCase: filter.toLocaleLowerCase(),
-      relativeLowerCase: relativePath.toLocaleLowerCase(),
-    };
-  });
+    fuzzyFilters.add(filter.toLocaleLowerCase());
+    fuzzyFilters.add(relativePath.toLocaleLowerCase());
+  }
 
   return testFiles.filter((t) => {
+    if (absolutePrefixes.some((prefix) => t.startsWith(prefix))) {
+      return true;
+    }
     const relativePath = pathe.relative(dir, t);
     if (
       exactFilters.size > 0 &&
@@ -98,21 +98,16 @@ export const filterFiles = (
     ) {
       return true;
     }
-    if (fuzzyFilters.length === 0) {
+    if (fuzzyFilters.size === 0) {
       return false;
     }
     const testFile = relativePath.toLocaleLowerCase();
-    return patterns.some((pattern) => {
-      // if filter is a full file path, we should include it if it's in the same folder
-      if (pattern.isAbsolute && t.startsWith(pattern.filter)) {
+    for (const filter of fuzzyFilters) {
+      if (testFile.includes(filter)) {
         return true;
       }
-
-      return (
-        testFile.includes(pattern.lowerCase) ||
-        testFile.includes(pattern.relativeLowerCase)
-      );
-    });
+    }
+    return false;
   });
 };
 
