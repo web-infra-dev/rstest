@@ -7,8 +7,21 @@ import type {
   InternalProjectContext,
   TestEnvironmentPrebundle,
 } from '../../src/types';
-import { prepareTestEnvironmentModules } from '../../src/core/environment/testEnvironmentModule';
+import {
+  buildTestEnvironmentModule,
+  prepareTestEnvironmentModules,
+} from '../../src/core/environment/testEnvironmentModule';
 import { logger } from '../../src/utils';
+
+// The prebundle child entry only exists in the built package; build in-process
+// so these tests keep exercising the source.
+const prepare = (
+  options: Parameters<typeof prepareTestEnvironmentModules>[0],
+) =>
+  prepareTestEnvironmentModules({
+    buildModule: buildTestEnvironmentModule,
+    ...options,
+  });
 
 const createProject = (
   rootPath: string,
@@ -117,7 +130,7 @@ exports.canvasToken = canvas.token;
         { type: 'commonjs' },
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(projectRoot, { prebundle: 'auto' })],
         rootPath: root,
       });
@@ -186,7 +199,7 @@ export const aliasToken = token;
 `,
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: true })],
         rootPath: root,
       });
@@ -215,7 +228,7 @@ export const readNodeEnv = () => process.env.NODE_ENV;
 `,
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: true })],
         rootPath: root,
       });
@@ -251,7 +264,7 @@ export const loadModule = (specifier) => import(specifier);
 `,
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: true })],
         rootPath: root,
       });
@@ -289,7 +302,7 @@ export const loadModule = (specifier) => import(specifier);
         },
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [
           createProject(projectRoot, {
             environmentName: 'happy-dom',
@@ -331,7 +344,7 @@ export const canvasToken = canvas.token;
 `,
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(projectRoot, { prebundle: true })],
         rootPath: root,
       });
@@ -365,7 +378,7 @@ exports.JSDOM = class JSDOM {};
         { type: 'commonjs' },
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: true })],
         rootPath: root,
       });
@@ -397,7 +410,7 @@ exports.canvasInstalled = canvasInstalled;
         { type: 'commonjs', version: '15.2.0' },
       );
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: 'auto' })],
         rootPath: root,
       });
@@ -426,7 +439,7 @@ exports.canvasInstalled = canvasInstalled;
       await withTempDir('rstest-env-unsupported-version-', async (root) => {
         createPackage(root, 'export class JSDOM {}', { version });
 
-        const result = await prepareTestEnvironmentModules({
+        const result = await prepare({
           projects: [createProject(root, { prebundle: 'auto' })],
           rootPath: root,
         });
@@ -448,7 +461,7 @@ exports.canvasInstalled = canvasInstalled;
       await withTempDir('rstest-env-cssstyle-resolution-', async (root) => {
         createPackage(root, 'export class JSDOM {}', { version });
 
-        const result = await prepareTestEnvironmentModules({
+        const result = await prepare({
           projects: [createProject(root, { prebundle: 'auto' })],
           rootPath: root,
         });
@@ -470,7 +483,7 @@ exports.canvasInstalled = canvasInstalled;
         version: '22.0.0',
       });
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [
           createProject(root, {
             environmentName: 'happy-dom',
@@ -499,7 +512,7 @@ exports.canvasInstalled = canvasInstalled;
           version,
         });
 
-        const result = await prepareTestEnvironmentModules({
+        const result = await prepare({
           projects: [
             createProject(root, {
               environmentName: 'happy-dom',
@@ -533,7 +546,7 @@ exports.canvasInstalled = canvasInstalled;
         version: '22.0.0',
       });
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [
           createProject(root, {
             environmentName: 'happy-dom',
@@ -563,7 +576,7 @@ exports.canvasInstalled = canvasInstalled;
     await withTempDir('rstest-env-cjs-', async (root) => {
       createPackage(root, 'export class JSDOM {}');
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [
           createProject(root, { outputModule: false, prebundle: true }),
         ],
@@ -591,7 +604,7 @@ exports.canvasInstalled = canvasInstalled;
     await withTempDir('rstest-env-native-', async (root) => {
       createPackage(root, 'export class JSDOM {}');
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: false })],
         rootPath: root,
       });
@@ -611,7 +624,7 @@ exports.canvasInstalled = canvasInstalled;
     await withTempDir('rstest-env-default-auto-', async (root) => {
       createPackage(root, 'export class JSDOM {}');
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root)],
         rootPath: root,
       });
@@ -637,7 +650,7 @@ export class JSDOM {}`,
       );
 
       try {
-        const result = await prepareTestEnvironmentModules({
+        const result = await prepare({
           projects: [
             createProject(root, { prebundle: true }),
             createProject(root, { prebundle: true }),
@@ -670,11 +683,69 @@ export class JSDOM {}`,
     });
   });
 
+  it('falls back to the native entry when the prebundle process crashes', async () => {
+    await withTempDir('rstest-env-crash-fallback-', async (root) => {
+      const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
+      createPackage(root, 'export class JSDOM {}');
+
+      try {
+        const result = await prepare({
+          projects: [createProject(root, { prebundle: true })],
+          rootPath: root,
+          buildModule: async () => {
+            throw new Error('The prebundle process exited with SIGSEGV.');
+          },
+        });
+
+        try {
+          expect(result.modules.get('jsdom')?.bundlePath).toBeUndefined();
+          expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining(
+              'The prebundle process exited with SIGSEGV.',
+            ),
+          );
+        } finally {
+          await result.cleanup();
+        }
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
+
+  it('stops an in-flight prebundle process on cleanup without a fallback warning', async () => {
+    await withTempDir('rstest-env-cleanup-child-', async (root) => {
+      const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
+      createPackage(root, 'export class JSDOM {}');
+
+      try {
+        const result = await prepare({
+          projects: [],
+          rootPath: root,
+          buildModule: (_options, signal) =>
+            new Promise((_resolve, reject) => {
+              const stop = () => reject(signal.reason);
+              if (signal.aborted) stop();
+              else signal.addEventListener('abort', stop, { once: true });
+            }),
+        });
+        const updating = result.update([
+          createProject(root, { prebundle: true }),
+        ]);
+        await result.cleanup();
+        await updating;
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
+
   it('forces the prebundle outside the automatic version matrix', async () => {
     await withTempDir('rstest-env-force-', async (root) => {
       createPackage(root, 'export class JSDOM {}', { version: '31.0.0' });
 
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [createProject(root, { prebundle: true })],
         rootPath: root,
       });
@@ -695,7 +766,7 @@ export class JSDOM {}`,
         version: '20.11.1',
       });
       const environmentName = 'default-environment-1';
-      const result = await prepareTestEnvironmentModules({
+      const result = await prepare({
         projects: [
           createProject(root, {
             environmentName: 'jsdom',

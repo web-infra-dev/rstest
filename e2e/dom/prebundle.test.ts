@@ -162,7 +162,7 @@ it('uses the environment dependency after a rebuild', () => {
     },
   );
 
-  it.for(['build', 'load'])(
+  it.for(['build', 'load', 'crash'])(
     'keeps require and import usable after prebundle %s failure',
     async (failure, { onTestFinished }) => {
       const preload = fileURLToPath(
@@ -185,6 +185,13 @@ it('uses the environment dependency after a rebuild', () => {
       });
       await expectExecSuccess();
       expect(cli.log).toContain('falling back to its native entry');
+      if (failure === 'build') expect(cli.log).toContain('Build error');
+      if (failure === 'crash') {
+        // Windows has no signals: SIGKILL ends the process with exit code 1.
+        expect(cli.log).toContain(
+          `The prebundle process exited with ${process.platform === 'win32' ? 'code 1' : 'SIGKILL'}.`,
+        );
+      }
     },
   );
 
