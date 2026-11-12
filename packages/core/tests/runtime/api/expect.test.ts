@@ -53,6 +53,33 @@ afterEach(() => {
   registerElementExpect(() => undefined);
 });
 
+it.each([
+  ['({ value: 1 })', '{ value: 1 }'],
+  ['({ nested: { value: 1 } })', '{ nested: { value: 1 } }'],
+  ['Object.assign(Object.create(null), { value: 1 })', '{ value: 1 }'],
+  [
+    "({ constructor: 'custom', value: 1 })",
+    "{ constructor: 'custom', value: 1 }",
+  ],
+  ['new (class Item { value = 1 })()', 'Item{ value: 1 }'],
+  ['new (class Object { value = 1 })()', 'Object{ value: 1 }'],
+  [
+    'Object.assign(Object.create({ inherited: true }), { value: 1 })',
+    'Object{ value: 1 }',
+  ],
+  [
+    "({ [Symbol.for('chai/inspect')]() { return 'custom value' } })",
+    'custom value',
+  ],
+  [
+    "({ [Symbol.for('nodejs.util.inspect.custom')]() { return 'custom value' } })",
+    'custom value',
+  ],
+])('formats cross-realm values: %s', (source, expected) => {
+  const value: unknown = vm.runInNewContext(source);
+  expect(util.inspect(value)).toBe(expected);
+});
+
 it('resets omitted Chai options before applying the next project config', () => {
   setupChaiConfig({ showDiff: false, truncateThreshold: 0 });
   setupChaiConfig({ showDiff: true });

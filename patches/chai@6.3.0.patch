@@ -1,0 +1,22 @@
+diff --git a/index.js b/index.js
+index fa5d67e9e5b98ca10a617b484d25f199b1a6de1b..bc619ad525c646d508680fbb145afe3e12e4e715 100644
+--- a/index.js
++++ b/index.js
+@@ -794,6 +794,17 @@ function inspect(value, opts = {}) {
+   if (proto === Object.prototype || proto === null) {
+     return inspectObject(value, options);
+   }
++  // Objects from VM tests and iframes have a different Object prototype.
++  // Match their native Object constructor while preserving user class names.
++  const objectConstructorSource = Function.prototype.toString.call(Object);
++  if (
++    Object.getPrototypeOf(proto) === null &&
++    Object.prototype.hasOwnProperty.call(proto, "constructor") &&
++    typeof proto.constructor === "function" &&
++    Function.prototype.toString.call(proto.constructor) === objectConstructorSource
++  ) {
++    return inspectObject(value, options);
++  }
+   if (value && typeof HTMLElement === "function" && value instanceof HTMLElement) {
+     return inspectHTML(value, options);
+   }

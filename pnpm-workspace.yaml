@@ -69,6 +69,8 @@ packageExtensions:
       vue: ^3.5.17
 
 patchedDependencies:
+  # Chai bundles Loupe; fix plain-object inspection across VM/iframe realms.
+  chai@6.3.0: patches/chai@6.3.0.patch
   webpack-license-plugin@4.5.1: patches/webpack-license-plugin@4.5.1.patch
 
 # Prevent un-reviewed build scripts

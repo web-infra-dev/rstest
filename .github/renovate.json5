@@ -82,6 +82,12 @@
       matchPackageNames: ['happy-dom'],
       enabled: false,
     },
+    {
+      // Chai upgrades require reviewing the bundled Loupe patch.
+      matchPackageNames: ['chai'],
+      groupName: null,
+      automerge: false,
+    },
   ],
   ignoreDeps: [
     // align Node.js version minimum requirements
