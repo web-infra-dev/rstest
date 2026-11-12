@@ -4,7 +4,7 @@ description: 浏览器模式配置。启用后，测试将在真实浏览器中�
 
 import { ApiMeta } from '@components/ApiMeta';
 
-# browser（实验性）
+# browser
 
 - **类型：**
 
@@ -38,6 +38,7 @@ type DevicePreset =
 type BrowserModeConfig = {
   enabled?: boolean;
   provider: 'playwright';
+  /** @deprecated 请改用 `instances`，将在 1.0 移除。 */
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
   screenshotFailures?: boolean;
@@ -45,23 +46,22 @@ type BrowserModeConfig = {
   viewport?: BrowserViewport;
   strictPort?: boolean;
   providerOptions?: Record<string, unknown>;
-  expect?: {
-    toMatchScreenshot?: {
-      comparatorOptions?: {
-        threshold?: number;
-        maxDiffPixels?: number;
-        maxDiffPixelRatio?: number;
-      };
-      stabilityTimeout?: number;
-      maskColor?: string;
-      style?: string;
-      caret?: 'hide' | 'initial';
-      scale?: 'css' | 'device';
-      omitBackground?: boolean;
-      screenshotDirectory?: string;
-      resolveScreenshotPath?: (options: BrowserScreenshotPathOptions) => string;
-    };
-  };
+  /** @default 'chromium' */
+  instances?: BrowserInstanceConfig[];
+  expect?: BrowserExpectConfig;
+};
+
+type BrowserExpectConfig = {
+  toMatchScreenshot?: BrowserScreenshotMatcherConfig;
+};
+
+type BrowserInstanceConfig = {
+  browserName: BrowserName;
+  headless?: boolean;
+  viewport?: BrowserViewport;
+  screenshotFailures?: boolean;
+  expect?: BrowserExpectConfig;
+  providerOptions?: Record<string, unknown>;
 };
 
 type BrowserScreenshotPathOptions = {
@@ -80,7 +80,7 @@ type BrowserScreenshotPathOptions = {
 const defaultBrowser = {
   enabled: false,
   provider: 'playwright',
-  browser: 'chromium',
+  instances: [{ browserName: 'chromium' }],
   headless: true, // CI 环境；本地开发为 false
   screenshotFailures: true, // 默认与 headless 设置一致
   port: undefined, // 随机可用端口
@@ -151,13 +151,21 @@ export default defineConfig({
 });
 ```
 
-### browser
+### browser（已废弃） \{#browser-deprecated}
+
+<ApiMeta addedVersion="0.13.0" />
+
+:::warning 已废弃
+`browser.browser` 已废弃，将在 1.0 移除。请改用 [`instances`](#instances)，例如 `instances: [{ browserName: 'firefox' }]`。设置该字段时，每个 run 会输出一次废弃警告。`--browser.name` 是对应的已废弃 CLI 形式。
+:::
 
 - **类型：** `'chromium' | 'firefox' | 'webkit'`
 - **默认值：** `'chromium'`
-- **CLI：** `--browser.name <name>`
+- **CLI：** `--browser.name <name>`（已废弃）
 
-用于测试的浏览器类型。
+用于测试的单个浏览器类型。设置该字段后会被规范化为 `instances: [{ browserName: browser }]`。
+
+在 browser 项目中同时设置 `browser` 和 `instances` 属于配置错误。
 
 - `chromium` - Google Chrome、Microsoft Edge
 - `firefox` - Mozilla Firefox
@@ -170,7 +178,7 @@ export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
-    browser: 'firefox',
+    browser: 'firefox', // 已废弃；推荐 instances: [{ browserName: 'firefox' }]
   },
 });
 ```
@@ -191,13 +199,84 @@ npx playwright install webkit
 npx playwright install
 ```
 
+### instances
+
+<ApiMeta addedVersion="0.13.0" />
+
+- **类型：** `BrowserInstanceConfig[]`
+- **默认值：** `[{ browserName: 'chromium' }]`
+- **CLI：** `--browser.instances <names>`（逗号分隔和/或可重复传入，用于过滤已配置的 instance）
+
+项目运行的浏览器 instance 列表，每个 instance 对应一个浏览器。一个项目的所有 instance共用同一次构建和同一个 dev server —— multi-browser run 并不会成倍增加构建时间。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    instances: [{ browserName: 'chromium' }, { browserName: 'firefox' }],
+  },
+});
+```
+
+每一项都是 `BrowserInstanceConfig` 对象：`browserName` 必填，其余字段按浏览器覆盖项目级的值。只写浏览器名（例如 `instances: ['chromium']`）属于配置错误，请写成 `{ browserName: 'chromium' }`：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions: {
+      launch: { slowMo: 100 },
+      context: { locale: 'en-US' },
+    },
+    instances: [
+      { browserName: 'firefox' },
+      {
+        browserName: 'chromium',
+        viewport: { width: 800, height: 600 },
+        providerOptions: {
+          launch: { channel: 'chrome' },
+        },
+      },
+    ],
+  },
+});
+```
+
+`BrowserInstanceConfig` 只支持运行时生效的覆盖字段；构建作用域的选项（`enabled`、`provider`、`port`、`strictPort`）仍留在项目级 `browser` 配置上：
+
+| 字段                 | 默认值                              |
+| -------------------- | ----------------------------------- |
+| `browserName`        | 必填                                |
+| `headless`           | 项目级 `browser.headless`           |
+| `viewport`           | 项目级 `browser.viewport`           |
+| `screenshotFailures` | 项目级 `browser.screenshotFailures` |
+| `expect`             | 项目级 `browser.expect`             |
+| `providerOptions`    | 项目级 `browser.providerOptions`    |
+
+每个 instance 的合并规则：instance 字段优先，其次是项目级 `browser.*` 字段，最后是内置默认值。`providerOptions` 按顶层键（`launch`、`context`）合并，而不是整字段合并：instance 的某个顶层键（如 `launch`）会整体替换项目级的同名键（Playwright 选项可能包含函数和类实例，因此不在其内部逐层合并），instance 未设置的键保留项目级值 —— 上例中的 chromium instance 仅以 `channel: 'chrome'` 启动，其 context 保留项目级的 `locale: 'en-US'`。
+
+一个项目按 instance 各运行一份浏览器；同一个文件会得到多条结果，每条结果以各自的项目名上报 —— 见 [多浏览器的 reporter 表现](#多浏览器的-reporter-表现)。
+
+校验规则：
+
+- 同一个 `browserName` 在一个项目中最多配置一次（重复为配置错误）。
+- `instances` 不能为空 —— 移除该选项即可运行默认的 Chromium。
+- 每次 run 最多只有一对 `(project, browser)` 以 headed 模式（`headless: false`）运行，见 [启动规则](#启动规则)。
+- [`coverage.provider: 'v8'`](/config/test/coverage) 要求所有选中的浏览器都是 Chromium，见 [启动规则](#启动规则)。
+
 ### headless
 
 - **类型：** `boolean`
 - **默认值：** CI 环境为 `true`，本地开发为 `false`
 - **CLI：** `--browser.headless`
 
-是否以无界面模式运行浏览器。
+是否以无界面模式运行浏览器。[`instances`](#instances) 的每一项可以按浏览器覆盖它，并受 [每次 run 只能有一个 headed 浏览器](#启动规则) 规则约束。
 
 import { Tab, Tabs } from '@theme';
 
@@ -256,7 +335,7 @@ export default defineConfig({
 - **类型：** `BrowserViewport`
 - **默认值：** `undefined`
 
-设置 Browser Mode 测试的默认 runner iframe viewport。如果未指定，Browser UI 会填满预览面板。
+设置 Browser Mode 测试的默认 runner iframe viewport。如果未指定，Browser UI 会填满预览面板。[`instances`](#instances) 的每一项可以按浏览器覆盖 viewport。
 
 ```ts
 type BrowserViewport =
@@ -377,6 +456,8 @@ export default defineConfig({
 
 传递给 Playwright 浏览器启动和 context 创建过程的选项。Rstest 不会验证或解析该对象，而是将值原样转发给 Playwright。
 
+[`instances`](#instances) 的每个 `BrowserInstanceConfig` 可以携带自己的 `providerOptions`：instance 设置的顶层键（`launch`、`context`）会替换项目级的同名键，instance 未设置的键保留项目级值。
+
 支持的字段详见下方 [Playwright provider 选项](#provider-选项)。
 
 ```ts title="rstest.config.ts"
@@ -489,30 +570,51 @@ export default defineConfig({
 });
 ```
 
-## 当前限制：同一次 run 的 browser 启动配置必须一致
+## 启动规则
 
-在一个 `rstest` 进程内，所有启用 Browser Mode 的项目需要共享同一组 browser 启动配置：
+每次 `rstest` run 会按 `(provider, browserName, headless, providerOptions.launch)` 组合为所有 Browser Mode 项目启动浏览器：两个项目若配置了相同且 launch key 一致的浏览器，会共用同一个浏览器实例；`providerOptions.launch` 或 `headless` 不同则各自启动。一个项目的所有浏览器共享同一次构建和同一个 dev server。
 
-- `provider`
-- `browser`
-- `headless`
-- `providerOptions`
+以下规则在任何浏览器启动之前完成校验：
 
-同一次 run 中的所有 Browser Mode 项目共用一个 browser engine，因此 Chromium、Firefox 和 WebKit 需要分开执行。
+- **每次 run 只能有一个 headed 浏览器。** Browser Mode 只打开一个调试窗口，因此最多允许一对 `(project, browser)` 设置 `headless: false`，其余浏览器必须设置 `headless: true`。报错信息会给出具体修复方式：
 
-如果你需要跨浏览器覆盖，建议拆成多次执行（例如在 CI matrix 中分别跑）：
+  > Only one (project, browser) pair can run headed per run: "web" ("chromium"). Browser mode opens one debug window, so every other browser must set headless: true. Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.
+
+- **Watch 模式不支持混合 headed 与 headless 浏览器。** 当一个浏览器 headed、另一个 headless 时，watch 会话在校验阶段被拒绝：所有配置的浏览器必须设置 `headless: true`，或改用非 watch 方式运行。
+
+- **Coverage provider `v8` 需要 Chromium。** 当设置 `coverage.enabled` 且 `coverage.provider: 'v8'` 时，browser 项目选中任何非 Chromium 浏览器都会校验失败。可切换到 `coverage.provider: 'istanbul'`，或只选择 Chromium（`--browser.instances chromium`）。
+
+如需浏览器与运行环境一一对应的严格覆盖策略，仍可将测试拆成多次执行（例如在 CI matrix 中分别跑），并用 `--browser.instances` 过滤：
 
 ```bash
-npx rstest --browser.name chromium
-npx rstest --browser.name firefox
-npx rstest --browser.name webkit
+npx rstest --browser.instances chromium
+npx rstest --browser.instances firefox
+npx rstest --browser.instances webkit
 ```
+
+## CLI 浏览器过滤
+
+`--browser.instances <names>`（可重复和/或逗号分隔）与 `--project` 一样只做过滤：只运行 `browserName` 在列表中的已配置 instance，不会根据名字新建 instance。未配置任何 instance 时的默认 Chromium instance，以及已废弃的 `browser.browser` 对应的 instance，都算作已配置的 instance。
+
+- 某个 browser 项目的 instance 一个都没匹配上时，该项目在本次 run 中被跳过；node 项目不受影响。
+- 列出的名字如果没有任何被选中的 browser 项目配置，会报错，并给出该名字和各项目已配置的浏览器。
+- 重复的名字，以及 `chromium`、`firefox`、`webkit` 之外的名字，都会报错。
+
+`--browser.name <name>` 作为已废弃的选项保留，每个 run 输出一次废弃警告。项目只运行该浏览器：配置了同名 `browserName` 的 instance 时沿用它的覆盖项，否则使用继承项目级默认值的普通 instance。它不能与 `--browser.instances` 同时使用。
+
+## 多浏览器的 reporter 表现
+
+Reporter 不感知浏览器。当项目选择了多个浏览器时，每个 `(project, browser)` 组合会作为一个独立项目上报，名称为 `<project> (<browserName>)`，例如 `web (chromium)` 与 `web (firefox)`。只选择一个浏览器的项目保留原名。
+
+- Reporter payload、`rstest list` 结果和 blob 报告都以该名称作为 `project`，因此同一文件在两个浏览器下运行会得到两条互不覆盖的结果。内置 reporter 像展示其他项目名一样展示它，例如 `✓ [web (chromium)] tests/basic.test.ts`。
+- 这些组合只影响上报：同一项目的所有浏览器仍共用一次构建和一个 dev server，`--project` 仍按配置中的项目名过滤。
+- 配置中的项目名不能与生成的 `<project> (<browserName>)` 名称冲突，冲突会作为配置错误报出。
 
 ## 多项目配置隔离
 
 在 Browser Mode 下使用 `projects` 时，每个项目会按自己的构建配置独立编译和执行（如 `plugins`、`include`、框架设置），不会复用其他项目的构建配置。
 
-但 browser 启动配置仍需保持一致：`provider`、`browser`、`headless`、`providerOptions` 必须在所有 browser 项目中对齐。
+Browser 构建作用域的选项按项目保留（`provider`、`port`、`strictPort`），而浏览器列表、默认值与按浏览器覆盖（`instances`、`headless`、`viewport`、`providerOptions`）由项目自持：两个 browser 项目可以在一次 run 中运行不同浏览器。若多个项目配置了相同的浏览器，会遵循[启动规则](#启动规则)共用浏览器实例。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

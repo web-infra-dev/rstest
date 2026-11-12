@@ -1,8 +1,62 @@
 import { describe, expect, it } from '@rstest/core';
+import type { InternalProjectContext } from '@rstest/core/internal/browser';
 import {
   createBrowserContextExcludeRegExp,
+  shouldEnableBrowserHmr,
   toContextKey,
 } from '../src/browserRsbuild';
+
+const makeProject = (
+  headless: boolean,
+  instances: { browserName: 'chromium' | 'webkit'; headless?: boolean }[],
+) =>
+  ({
+    name: 'p',
+    normalizedConfig: {
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless,
+        screenshotFailures: true,
+        providerOptions: {},
+        instances,
+      },
+    },
+  }) as unknown as InternalProjectContext;
+
+describe('shouldEnableBrowserHmr', () => {
+  it('stays off when every instance is headless even if the project default is headed', () => {
+    const project = makeProject(false, [
+      { browserName: 'chromium', headless: true },
+      { browserName: 'webkit', headless: true },
+    ]);
+    expect(shouldEnableBrowserHmr(true, project)).toBe(false);
+  });
+
+  it('turns on in watch when every instance is headed', () => {
+    expect(
+      shouldEnableBrowserHmr(
+        true,
+        makeProject(true, [{ browserName: 'chromium', headless: false }]),
+      ),
+    ).toBe(true);
+    expect(
+      shouldEnableBrowserHmr(
+        true,
+        makeProject(false, [{ browserName: 'chromium' }]),
+      ),
+    ).toBe(true);
+  });
+
+  it('stays off outside watch mode', () => {
+    expect(
+      shouldEnableBrowserHmr(
+        false,
+        makeProject(false, [{ browserName: 'chromium' }]),
+      ),
+    ).toBe(false);
+  });
+});
 
 describe('browser config resolution', () => {
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {

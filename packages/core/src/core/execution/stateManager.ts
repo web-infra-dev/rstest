@@ -5,6 +5,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../../types';
+import { reporterFileKey } from '../../reporter/utils';
 
 export class TestStateManager {
   public runningModules: ReturnType<RstestTestState['getRunningModules']> =
@@ -15,16 +16,18 @@ export class TestStateManager {
   private failedTestCount = 0;
 
   onTestFileStart({
+    project,
     testPath,
     relativeTestPath,
-  }: Pick<TestFileInfo, 'testPath' | 'relativeTestPath'>): void {
-    const currentModule = this.runningModules.get(testPath);
+  }: Pick<TestFileInfo, 'project' | 'testPath' | 'relativeTestPath'>): void {
+    const key = reporterFileKey(project, testPath);
+    const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
         (result) => result.status === 'failed',
       ).length;
     }
-    this.runningModules.set(testPath, {
+    this.runningModules.set(key, {
       relativeTestPath,
       runningTests: [],
       results: [],
@@ -32,9 +35,10 @@ export class TestStateManager {
   }
 
   onTestCaseResult(result: TestResult): void {
-    const currentModule = this.runningModules.get(result.testPath);
+    const key = reporterFileKey(result.project, result.testPath);
+    const currentModule = this.runningModules.get(key);
     if (!currentModule) {
-      this.runningModules.set(result.testPath, {
+      this.runningModules.set(key, {
         relativeTestPath: result.relativeTestPath,
         runningTests: [],
         results: [result],
@@ -54,9 +58,10 @@ export class TestStateManager {
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    const currentModule = this.runningModules.get(test.testPath);
+    const key = reporterFileKey(test.project, test.testPath);
+    const currentModule = this.runningModules.get(key);
     if (!currentModule) {
-      this.runningModules.set(test.testPath, {
+      this.runningModules.set(key, {
         relativeTestPath: test.relativeTestPath,
         runningTests: [test],
         results: [],
@@ -77,13 +82,14 @@ export class TestStateManager {
   }
 
   onTestFileResult(test: TestFileResult): void {
-    const currentModule = this.runningModules.get(test.testPath);
+    const key = reporterFileKey(test.project, test.testPath);
+    const currentModule = this.runningModules.get(key);
     if (currentModule) {
       this.failedTestCount -= currentModule.results.filter(
         (result) => result.status === 'failed',
       ).length;
     }
-    this.runningModules.delete(test.testPath);
+    this.runningModules.delete(key);
     this.failedTestCount +=
       test.results.length > 0
         ? test.results.filter((result) => result.status === 'failed').length

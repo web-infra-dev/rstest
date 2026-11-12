@@ -3,8 +3,9 @@ import type {
   ExecutorRunCycleOptions,
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { BrowserDispatchRequest } from './protocol';
-import type { BrowserProviderPage } from './providers';
+import { getHeadlessConcurrency } from './concurrency';
+import type { BrowserDispatchRequest, BrowserProjectRuntime } from './protocol';
+import type { BrowserProviderBrowser, BrowserProviderPage } from './providers';
 
 /**
  * The contract between the controller and whichever run branch executes a run.
@@ -70,3 +71,119 @@ export type DispatchPageResolver = (
   containerPage?: BrowserProviderPage;
   isRunCurrent?: () => boolean;
 };
+
+/**
+ * The dispatch lanes a run's schedulers install, keyed by request shape: a
+ * session target shot resolves in the headless lane's registry, a runId-named
+ * shot resolves in the headed container lane. No cross-lane fallback — a
+ * request that misses its own lane produces `{}` and the dispatch layer's
+ * existing errors surface instead.
+ */
+export type DispatchLanes = {
+  headless?: DispatchPageResolver;
+  headed?: DispatchPageResolver;
+};
+
+/**
+ * One `(project, browserName, testPath)` scheduling unit: plan-level files are
+ * keyed by `(project, testPath)`, and the browser dimension is added once per
+ * scheduling boundary so every consumer — page batches, sessions, page
+ * options, coverage guards — sees the full unit and reads the row's
+ * runtime-effective fields off it instead of a per-key side map.
+ */
+export type ScheduledTestFile = {
+  testPath: string;
+  projectName: string;
+  row: BrowserProjectRuntime;
+};
+
+/**
+ * Group rows by project name — the lookup `expandToRows` consumes. Lanes call
+ * it with their own row subset so each lane expands against the rows it owns.
+ */
+export const groupRowsByProject = (
+  rows: readonly BrowserProjectRuntime[],
+): Map<string, BrowserProjectRuntime[]> => {
+  const rowsByProject = new Map<string, BrowserProjectRuntime[]>();
+  for (const row of rows) {
+    const group = rowsByProject.get(row.name) ?? [];
+    group.push(row);
+    rowsByProject.set(row.name, group);
+  }
+  return rowsByProject;
+};
+
+/**
+ * The launched browser instance a row's launch key names, with the launch-key
+ * contract's miss error: a row can never name a launch key the runtime did
+ * not launch, so a miss is a host bug and names the row.
+ */
+export const browserForRow = (
+  browsers: ReadonlyMap<string, BrowserProviderBrowser>,
+  row: BrowserProjectRuntime,
+): BrowserProviderBrowser => {
+  const browser = browsers.get(row.launchKey);
+  if (!browser) {
+    throw new Error(
+      `No launched browser for (project, browser) ` +
+        `(${JSON.stringify(row.name)}, ${JSON.stringify(row.browserName)}) under key ${row.launchKey}.`,
+    );
+  }
+  return browser;
+};
+
+const compareStrings = (a: string, b: string): number =>
+  a < b ? -1 : a > b ? 1 : 0;
+
+/**
+ * Build the scheduling queue as `(project, browser)` row groups: the files of
+ * each row come in plan order, and whole rows follow each other. The batch
+ * loop needs same-row files consecutive (a non-isolated page reuses its
+ * fixtures per row), so interleaving browsers — flatMap's natural file-major
+ * order — would make every batch a single file. Concurrency keeps this fair
+ * (workers drain from one queue), so grouping is a scheduling-order change,
+ * not a serialization.
+ */
+export const expandToRows = (
+  files: readonly {
+    testPath: string;
+    projectName: string;
+  }[],
+  rowsByProject: ReadonlyMap<string, BrowserProjectRuntime[]>,
+): ScheduledTestFile[] =>
+  files
+    .flatMap((file) =>
+      (rowsByProject.get(file.projectName) ?? []).map((row) => ({
+        testPath: file.testPath,
+        projectName: file.projectName,
+        row,
+      })),
+    )
+    .sort(
+      (a, b) =>
+        compareStrings(a.row.name, b.row.name) ||
+        compareStrings(a.row.browserName, b.row.browserName),
+    );
+
+/**
+ * The shared file budget of a mixed run: `pool.maxWorkers` (or the headless
+ * default) clamped by the runs actually scheduled — `file x row` on the
+ * headless lane (the same expansion its queue uses) plus the headed lane's
+ * runs — so one file fanned out over several rows is not clamped to one slot.
+ */
+export const getMixedLaneConcurrency = (
+  context: Parameters<typeof getHeadlessConcurrency>[0],
+  lanes: {
+    headlessFiles: readonly { testPath: string; projectName: string }[];
+    headlessRows: readonly BrowserProjectRuntime[];
+    headedFiles: readonly { testPath: string; projectName: string }[];
+    headedRow: BrowserProjectRuntime;
+  },
+): number =>
+  getHeadlessConcurrency(
+    context,
+    expandToRows(lanes.headlessFiles, groupRowsByProject(lanes.headlessRows))
+      .length +
+      expandToRows(lanes.headedFiles, groupRowsByProject([lanes.headedRow]))
+        .length,
+  );

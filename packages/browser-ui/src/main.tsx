@@ -790,6 +790,11 @@ const BrowserRunner: React.FC<{
                         payload: {
                           ...options,
                           testFile: fileInfo.testPath,
+                          // Frames resolve their `(project, browser)` runtime
+                          // row through both ids.
+                          ...(fileInfo.browserName === undefined
+                            ? {}
+                            : { browserName: fileInfo.browserName }),
                           runId: currentLease.runId,
                         },
                       },

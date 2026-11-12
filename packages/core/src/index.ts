@@ -1,5 +1,9 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
+  BrowserInstanceConfig,
+  BrowserExpectConfig,
+  BrowserName,
+  BrowserViewport,
   CoverageOptions,
   CoverageProvider,
   ExpectConfig,
@@ -26,6 +30,10 @@ export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
 export { registerFileCleanup } from './runtime/runner/fileCleanup';
 
 export type {
+  BrowserInstanceConfig,
+  BrowserExpectConfig,
+  BrowserName,
+  BrowserViewport,
   CoverageOptions,
   CoverageProvider,
   ExpectConfig,

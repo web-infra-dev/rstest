@@ -277,6 +277,7 @@ export function createRunnerEventSink(
       // bounded without walking it.
       relativeTestPathCache.clear();
       context.stateManager.onTestFileStart({
+        project: projectConfig.name,
         testPath,
         relativeTestPath: relative(context.rootPath, testPath),
       });

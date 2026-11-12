@@ -24,6 +24,7 @@ export type {
   ExecutorCycleOutcome,
   ExecutorInvalidationCallback,
   ExecutorRunCycleOptions,
+  SelectedTestFile,
   TestExecutor,
 } from './types';
 // The executor-capability table's list of RuntimeConfig keys the browser wire
@@ -45,8 +46,10 @@ export {
   SNAPSHOT_HEADER,
 } from './utils/snapshotPath';
 // Shared selection projection so the browser host's `onSelected` entries carry
-// the same shape as the node executor's.
+// the same shape as the node executor's; shared (project, testPath) reporter
+// key so the host's maps key exactly what the core reporters key.
 export { toSelectedTestFile } from './utils/selectedTestFile';
+export { reporterFileKey } from './reporter/utils';
 // Shared watch-ready banner so the browser host prints the same hint text as
 // the node watch loop.
 export { logWatchReadyMessage } from './core/watch/cliShortcuts';
@@ -90,6 +93,7 @@ export { PhaseTracker } from './runtime/worker/phaseTracker';
 export { createFileCleanupTimeoutResult } from './runtime/runner/fileCleanup';
 // Types
 export type {
+  BrowserExpectConfig,
   BrowserRuntimeConfig,
   BrowserTestRunOptions,
   BrowserTestRunResult,
@@ -132,6 +136,13 @@ export {
   RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
+export type { BrowserName } from './types';
+// Browser instance resolution: one `(project, browser)` pair reported to
+// core as its own project.
+export {
+  getReportedProjects,
+  resolveBrowserInstances,
+} from './core/browser/browserInstances';
 export {
   getSetupFiles,
   materializeVirtualSetupFiles,

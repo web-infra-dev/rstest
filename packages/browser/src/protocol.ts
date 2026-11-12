@@ -1,5 +1,13 @@
-import type { BrowserViewport } from '@rstest/core/internal/browser';
 import type {
+  BrowserViewport,
+  BrowserName,
+} from '@rstest/core/internal/browser';
+export type {
+  BrowserName,
+  BrowserViewport,
+} from '@rstest/core/internal/browser';
+import type {
+  BrowserExpectConfig,
   BrowserRuntimeConfig,
   RawTestFileResult,
   RawTestInfo,
@@ -33,29 +41,76 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 
 export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
-// `BrowserViewport` is a core config type (`@rstest/core` owns the canonical
-// definition used by `NormalizedBrowserModeConfig`). Re-export it so the host
-// assigns the SAME type across the seam instead of a hand-copied duplicate.
-export type { BrowserViewport };
+/**
+ * The `file:` task id core's runner assigns a file. Kept as a dependency-free
+ * copy so host and runner surfaces share it without importing core runtime
+ * internals.
+ */
+export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
 
+/**
+ * One `(project, browser)` runtime row. `BrowserHostConfig.projects` and the
+ * scheduler's task list are keyed by this pair: every browser of a project
+ * shares the project's build, dev server and runtime config (it is
+ * browser-agnostic), while `screenshotFailures` / `viewport` come from the
+ * per-browser entry and `launchKey` names which Playwright launch the row
+ * runs on.
+ */
 export type BrowserProjectRuntime = {
+  /** The project the row builds and serves under. */
   name: string;
+  browserName: BrowserName;
+  /**
+   * The project name the row reports to core under (core's browser instance
+   * name): every payload core receives from this row carries it as `project`
+   * and no browser, so core and reporters see each row as its own project.
+   */
+  instanceName: string;
+  /**
+   * The resolved launch's headless value (entry config, with the list
+   * collect's `forceHeadless` applied), so run/list partitioning and the
+   * container's headed-only row set derive from the row itself.
+   */
+  headless: boolean;
   environmentName: string;
   projectRoot: string;
   /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
   hasSetupFiles: boolean;
   screenshotFailures: boolean;
+  /** Host-only resolved per-entry `expect` (screenshot matcher config). */
+  expect?: BrowserExpectConfig;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
+  /**
+   * Host-only resolved per-entry provider options (launch + context) for
+   * `newContext`. Opaque and possibly non-serializable: it never crosses to the
+   * browser, so everything that serializes a row goes through `toWireRow`.
+   */
+  providerOptions: Record<string, unknown>;
+  /** Which launched browser this row runs on (see `BrowserRuntime.browsers`). */
+  launchKey: string;
 };
 
+/** The row as serialized to the browser: the host-only `providerOptions` is stripped. */
+export type BrowserProjectWireRow = Omit<
+  BrowserProjectRuntime,
+  'providerOptions'
+>;
+
+export const toWireRow = ({
+  providerOptions: _providerOptions,
+  ...wire
+}: BrowserProjectRuntime): BrowserProjectWireRow => wire;
+
 /**
- * Test file info with associated project name.
- * Used to track which project a test file belongs to.
+ * Test file info with associated project name, and (once scheduled) the browser
+ * it runs on. Host planning stays keyed by `(project, testPath)`; the browser
+ * dimension is added when the work list is expanded for scheduling.
  */
 export type TestFileInfo = {
   testPath: string;
   projectName: string;
+  browserName?: BrowserName;
 };
 
 export type FileCleanupDispatchMethod =
@@ -63,6 +118,8 @@ export type FileCleanupDispatchMethod =
 
 export type FileCleanupDispatchPayload = {
   projectName: string;
+  /** Owning browser of the running file; absent only on collect paths. */
+  browserName?: BrowserName;
   result?: RawTestFileResult;
   runId?: string;
   testPath: string;
@@ -101,6 +158,11 @@ export type BrowserLogPayload = {
    * file, so a path-keyed lookup can attribute the log to the wrong project.
    */
   projectName: string;
+  /**
+   * Owning browser, stamped by the client from the page options. The host must
+   * not re-derive it — several browsers of one project run the same file.
+   */
+  browserName?: BrowserName;
   taskId?: string;
   taskName?: string;
   taskParentNames?: string[];
@@ -112,13 +174,20 @@ export type BrowserLogPayload = {
 
 export type BrowserHostConfig = {
   rootPath: string;
-  projects: BrowserProjectRuntime[];
+  projects: BrowserProjectWireRow[];
   snapshot: {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
   /** Project identity for the currently loaded runner page. */
   projectName?: string;
+  /**
+   * Browser identity for the currently loaded runner page. Runner documents
+   * resolve their `(project, browser)` runtime row through this plus
+   * `projectName`; absent only on documents that never got per-page options
+   * (collect pages), where name-only lookup is unambiguous enough.
+   */
+  browserName?: BrowserName;
   /** Test files assigned to one browser worker session. */
   testFiles?: string[];
   /**
@@ -179,7 +248,14 @@ export type BrowserClientMessage =
   | { type: 'ready' }
   | {
       type: 'file-start';
-      payload: { testPath: string; projectName: string };
+      payload: {
+        testPath: string;
+        projectName: string;
+        /**
+         * Owning browser, from the page options; absent only on collect pages.
+         */
+        browserName?: BrowserName;
+      };
     }
   | { type: 'case-result'; payload: RawTestResult }
   | { type: 'file-complete'; payload: RawTestFileResult }

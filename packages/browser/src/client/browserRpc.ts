@@ -1,4 +1,4 @@
-import type { BrowserDispatchRequest } from '../protocol';
+import type { BrowserDispatchRequest, BrowserName } from '../protocol';
 import { DISPATCH_METHOD_RPC, DISPATCH_NAMESPACE_BROWSER } from '../protocol';
 import type { BrowserRpcRequest } from '../rpcProtocol';
 import {
@@ -39,6 +39,9 @@ const getCurrentProjectName = (): string => {
   return projectName;
 };
 
+const getCurrentBrowserName = (): BrowserName | undefined =>
+  window.__RSTEST_BROWSER_OPTIONS__?.browserName;
+
 const createBrowserDispatchRequest = (
   requestId: string,
   request: BrowserRpcRequest,
@@ -56,7 +59,10 @@ const createBrowserDispatchRequest = (
 };
 
 export const callBrowserRpc = async <T>(
-  payload: Omit<BrowserRpcRequest, 'id' | 'testPath' | 'projectName'>,
+  payload: Omit<
+    BrowserRpcRequest,
+    'id' | 'testPath' | 'projectName' | 'browserName'
+  >,
 ): Promise<T> => {
   if (
     payload.kind === 'config' &&
@@ -67,10 +73,12 @@ export const callBrowserRpc = async <T>(
 
   const id = createRequestId('browser-rpc');
   const rpcTimeout = getRpcTimeout();
+  const browserName = getCurrentBrowserName();
   const request: BrowserRpcRequest = {
     id,
     testPath: getCurrentTestPath(),
     projectName: getCurrentProjectName(),
+    ...(browserName === undefined ? {} : { browserName }),
     ...payload,
   };
   const dispatchRequest = createBrowserDispatchRequest(id, request);

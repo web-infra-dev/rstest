@@ -9,7 +9,7 @@ import {
   emptyKey,
   projectKey as toProjectKey,
 } from '../core/treeNodeKey';
-import type { BrowserProjectRuntime, TestFileInfo } from '../types';
+import type { BrowserProjectWireRow, TestFileInfo } from '../types';
 import { openInEditor, toRelativePath } from '../utils';
 import {
   CASE_STATUS_META,
@@ -31,7 +31,7 @@ type TestFilesTreeProps = {
   statusMap: Record<string, TestStatus>;
   caseMap: Record<string, Record<string, CaseInfo>>;
   rootPath?: string;
-  projects: BrowserProjectRuntime[];
+  projects: BrowserProjectWireRow[];
   loading: boolean;
   connected: boolean;
   openFiles: string[];

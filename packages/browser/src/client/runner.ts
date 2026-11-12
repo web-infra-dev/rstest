@@ -34,7 +34,8 @@ import {
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
-  BrowserProjectRuntime,
+  BrowserName,
+  BrowserProjectWireRow,
   FileCleanupDispatchMethod,
   FileCleanupDispatchPayload,
   RunnerEnvelope,
@@ -43,6 +44,7 @@ import type {
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_FILE_CLEANUP,
+  getFileTaskId,
   RSTEST_BROWSER_CACHE_CLEANERS_KEY,
   RSTEST_CONFIG_MESSAGE_TYPE,
 } from '../protocol';
@@ -183,7 +185,7 @@ type GlobalWithRuntimeEnv = typeof globalThis &
   };
 
 const restoreRuntimeConfig = (
-  config: BrowserProjectRuntime['runtimeConfig'],
+  config: BrowserProjectWireRow['runtimeConfig'],
 ): RuntimeConfig => {
   const { testNamePattern } = config;
   // The browser wire (BrowserRuntimeConfig) omits node-only fields
@@ -233,16 +235,13 @@ const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
   }
 };
 
-const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
-};
-
 /**
  * Intercept console methods and forward to host via send().
  * Returns a restore function to revert console to original.
  */
 const interceptConsole = (
   projectName: string,
+  browserName: BrowserName | undefined,
   getCurrentTask: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
 ): (() => void) => {
@@ -278,6 +277,7 @@ const interceptConsole = (
           level,
           content,
           projectName,
+          browserName,
           taskId: currentTask?.taskId,
           taskName: currentTask?.taskName,
           taskParentNames: currentTask?.taskParentNames,
@@ -538,23 +538,37 @@ const run = async () => {
     return;
   }
 
-  // Find the runtime config for this project
+  // Find the runtime config for this project. Rows are `(project, browser)`
+  // pairs, and every running document names its browser — headless pages at
+  // page level, headed frames per file through the window options, collect
+  // pages at page level — so the page resolves its row by requiring the
+  // browser it declares. `const` narrows below; TS drops it for `let`.
+  const pageBrowserName = options.browserName;
   const projectRuntime = options.projects.find(
-    (p) => p.name === currentProject.name,
+    (p) => p.name === currentProject.name && p.browserName === pageBrowserName,
   );
   if (!projectRuntime) {
     send({
       type: 'fatal',
       payload: {
-        message: `Project ${currentProject.name} not found in runtime options`,
+        message: `Project ${currentProject.name} has no runtime row for browser ${pageBrowserName}`,
       },
     });
     window.__RSTEST_DONE__ = true;
     return;
   }
 
-  options = { ...options, projectName: currentProject.name };
+  options = {
+    ...options,
+    projectName: currentProject.name,
+    browserName: projectRuntime.browserName,
+  };
   window.__RSTEST_BROWSER_OPTIONS__ = options;
+
+  // The page's own messages (file start, logs, cleanup) name the RESOLVED
+  // row by `(project, browserName)`; the host translates them to the row's
+  // instance name, which core's runner payloads already carry.
+  const { browserName } = projectRuntime;
 
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
   ensureRuntimeEnv(runtimeConfig.env);
@@ -607,7 +621,7 @@ const run = async () => {
       const testPath = toAbsolutePath(key, currentProject.projectRoot);
 
       const workerState: WorkerState = {
-        project: projectRuntime.name,
+        project: projectRuntime.instanceName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -651,7 +665,7 @@ const run = async () => {
           type: 'collect-result',
           payload: {
             testPath,
-            project: projectRuntime.name,
+            project: projectRuntime.instanceName,
             tests,
           },
         });
@@ -745,6 +759,7 @@ const run = async () => {
       const restoreConsole = shouldInterceptConsole
         ? interceptConsole(
             projectRuntime.name,
+            browserName,
             () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
             runtimeConfig.disableConsoleIntercept
               ? false
@@ -760,7 +775,9 @@ const run = async () => {
       }
 
       const workerState: WorkerState = {
-        project: projectRuntime.name,
+        // Core sees the row as its own project: every id and payload the
+        // runtime derives carries the instance name, never a browser.
+        project: projectRuntime.instanceName,
         projectRoot: projectRuntime.projectRoot,
         rootPath: options.rootPath,
         runtimeConfig,
@@ -819,6 +836,7 @@ const run = async () => {
           method,
           args: {
             projectName: projectRuntime.name,
+            browserName,
             result,
             runId: getRunIdentity(),
             testPath,
@@ -950,6 +968,7 @@ const run = async () => {
         payload: {
           testPath,
           projectName: projectRuntime.name,
+          browserName,
         },
       });
 
@@ -988,7 +1007,7 @@ const run = async () => {
         } catch (error) {
           result = {
             testId: getFileTaskId(testPath),
-            project: projectRuntime.name,
+            project: projectRuntime.instanceName,
             testPath,
             status: 'failed',
             name: '',

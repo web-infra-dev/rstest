@@ -12,17 +12,35 @@ const __dirname = dirname(__filename);
  * from being created. Since e2e tests often delete and recreate snapshots,
  * this causes all snapshot tests to fail in CI.
  */
-const defaultEnvOverrides: Record<string, string> = {
+export const defaultEnvOverrides: Record<string, string> = {
   CI: '',
   GITHUB_ACTIONS: '',
 };
 
+/**
+ * CI installs the channel-based Chrome only (see `.github/actions/setup-playwright`),
+ * so under CI every spawned CLI gets the channel one way: the helpers always
+ * hand the spawned CLI `RSTEST_E2E_CHROME_CHANNEL`, and configs read it inside
+ * their own chromium entries via `ciChromeEntry()` — the fixture owns the
+ * per-entry decision. For fixtures whose whole browser set is one chromium
+ * entry, an argument-level push saves each fixture from declaring an entry:
+ * it injects `launch.channel=chrome` at the CLI (never for the self-managed
+ * mixed fixtures, where the push would hit their firefox/webkit launches).
+ */
 const useGithubActionsChrome = (fixtureName?: string): boolean =>
   Boolean(process.env.CI) && fixtureName !== 'webkit';
+
+/** Fixtures that declare the channel per chromium entry (mixed browser sets). */
+const SELF_MANAGED_CHANNEL_FIXTURES = new Set([
+  'multi-browser',
+  'hybrid-headed',
+]);
 
 const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {
   if (
     !useGithubActionsChrome(fixtureName) ||
+    (fixtureName !== undefined &&
+      SELF_MANAGED_CHANNEL_FIXTURES.has(fixtureName)) ||
     args.some((arg) => arg.startsWith('--browser.providerOptions.launch.'))
   ) {
     return;
@@ -30,6 +48,25 @@ const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {
 
   args.push('--browser.providerOptions.launch.channel=chrome');
 };
+
+const chromeChannelEnvOverride = (
+  fixtureName?: string,
+): Record<string, string> =>
+  useGithubActionsChrome(fixtureName)
+    ? { RSTEST_E2E_CHROME_CHANNEL: 'chrome' }
+    : {};
+
+/** One env block for all four browser CLI runners. */
+const browserCliEnv = (
+  fixtureName: string | undefined,
+  options: { debug?: boolean } = {},
+  extra?: Record<string, string>,
+): Record<string, string> => ({
+  ...defaultEnvOverrides,
+  ...chromeChannelEnvOverride(fixtureName),
+  ...(options.debug ? { DEBUG: 'rstest' } : {}),
+  ...extra,
+});
 
 const canRunHeadedBrowser =
   process.platform === 'darwin' ||
@@ -147,7 +184,7 @@ export const runBrowserCli = async (
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
-        env: { ...defaultEnvOverrides, ...extra?.env },
+        env: browserCliEnv(fixtureName, {}, extra?.env),
       },
     },
   });
@@ -180,7 +217,7 @@ export const runBrowserWatchCli = async (
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
-        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
+        env: browserCliEnv(fixtureName, { debug: true }, extra?.env),
       },
     },
   });
@@ -210,7 +247,7 @@ export const runBrowserWatchCliWithCwd = async (
     options: {
       nodeOptions: {
         cwd,
-        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
+        env: browserCliEnv(undefined, { debug: true }, extra?.env),
       },
     },
   });
@@ -315,7 +352,7 @@ export const runBrowserCliWithCwd = async (
     options: {
       nodeOptions: {
         cwd,
-        env: { ...defaultEnvOverrides, ...extra?.env },
+        env: browserCliEnv(undefined, {}, extra?.env),
       },
     },
   });

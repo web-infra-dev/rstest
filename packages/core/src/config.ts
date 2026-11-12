@@ -10,8 +10,10 @@ import { isCI } from 'std-env';
 import type {
   BuiltInReporterNames,
   ExtendConfig,
+  NormalizedBrowserModeConfig,
   NormalizedConfig,
   ProjectConfig,
+  ResolvedRstestConfig,
   RstestConfig,
 } from './types';
 import {
@@ -308,7 +310,6 @@ const createDefaultConfig = (): NormalizedConfig => ({
   browser: {
     enabled: false,
     provider: 'playwright',
-    browser: 'chromium',
     headless: isCI,
     screenshotFailures: isCI,
     strictPort: false,
@@ -338,7 +339,31 @@ const createDefaultConfig = (): NormalizedConfig => ({
   },
 });
 
-export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
+type RawBrowserFields = Pick<
+  NormalizedBrowserModeConfig,
+  'instances' | 'browser' | 'cliInstances' | 'cliBrowserName'
+>;
+
+const rawBrowserFields = (
+  browser: ResolvedRstestConfig['browser'],
+): RawBrowserFields => {
+  const {
+    instances,
+    browser: single,
+    cliInstances,
+    cliBrowserName,
+  } = browser ?? {};
+  return {
+    ...(instances === undefined ? {} : { instances }),
+    ...(single === undefined ? {} : { browser: single }),
+    ...(cliInstances === undefined ? {} : { cliInstances }),
+    ...(cliBrowserName === undefined ? {} : { cliBrowserName }),
+  };
+};
+
+export const withDefaultConfig = (
+  config: ResolvedRstestConfig,
+): NormalizedConfig => {
   const merged = mergeRstestConfig(
     createDefaultConfig(),
     config,
@@ -394,7 +419,6 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.browser = {
     enabled: merged.browser?.enabled ?? false,
     provider: merged.browser?.provider ?? 'playwright',
-    browser: merged.browser?.browser ?? 'chromium',
     headless: merged.browser?.headless ?? isCI,
     screenshotFailures:
       config.browser?.screenshotFailures ?? merged.browser?.headless ?? isCI,
@@ -405,6 +429,8 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     ...(merged.browser?.expect === undefined
       ? {}
       : { expect: merged.browser.expect }),
+    // Raw user-layer values: only `@rstest/browser` resolves them.
+    ...rawBrowserFields(config.browser),
   };
 
   return {

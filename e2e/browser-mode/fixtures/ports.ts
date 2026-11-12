@@ -59,6 +59,11 @@ export const BROWSER_PORTS = {
   'browser-coverage-v8-webkit': 5282,
   'empty-suite': 5284,
   'programmatic-runner': 5286,
+  // The programmatic browser-filter cases run sequentially in one test file
+  // (each child exits before the next spawns), so one port serves all of them.
+  'programmatic-browsers-filter': 5302,
+  'multi-browser': 5308,
+  'hybrid-headed': 5312,
   'browser-coverage-virtual-setup': 5288,
   'browser-coverage-virtual-setup-v8': 5290,
   'watch-setup': 5278,
@@ -81,3 +86,21 @@ if (new Set(browserPortValues).size !== browserPortValues.length) {
 
 export const BROWSER_TEST_TIMEOUT =
   process.platform === 'win32' ? 20_000 : 10_000;
+
+/**
+ * CI installs the channel-based Chrome only, and the e2e helpers clear `CI`
+ * in the spawned CLI while passing `RSTEST_E2E_CHROME_CHANNEL` through (see
+ * `utils.ts`). Every chromium entry of a fixture that declares entries
+ * spreads this so the CI runner gets a launchable channel; locally it is a
+ * no-op and bundled Chromium is used.
+ */
+export const ciChromeEntry = (): {
+  providerOptions?: { launch: { channel: string } };
+} =>
+  process.env.RSTEST_E2E_CHROME_CHANNEL
+    ? {
+        providerOptions: {
+          launch: { channel: process.env.RSTEST_E2E_CHROME_CHANNEL },
+        },
+      }
+    : {};

@@ -1,6 +1,7 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { config } from 'chai';
+import type { BrowserInstanceConfig } from './browser';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -313,9 +314,14 @@ export type BrowserModeConfig = {
    */
   provider: BrowserProvider;
   /**
-   * Which browser to use for testing.
+   * Browser instances this project runs on, each a
+   * {@link BrowserInstanceConfig} overriding fields per browser.
    *
-   * @default 'chromium'
+   * @default [{ browserName: 'chromium' }]
+   */
+  instances?: BrowserInstanceConfig[];
+  /**
+   * @deprecated Use `instances: [{ browserName: '...' }]` instead. Will be removed in 1.0.
    */
   browser?: BrowserName;
   /**
@@ -790,7 +796,10 @@ export type ShardConfig = { count: number; index: number };
  * `RstestConfig` after CLI options are merged in. Carries the resolved
  * `shard` value, which the CLI injects but the public config type omits.
  */
-export type ResolvedRstestConfig = RstestConfig & { shard?: ShardConfig };
+export type ResolvedRstestConfig = RstestConfig & {
+  shard?: ShardConfig;
+  browser?: { cliInstances?: string[]; cliBrowserName?: string };
+};
 
 type OptionalKeys =
   | 'testNamePattern'
@@ -810,7 +819,12 @@ type OptionalKeys =
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: BrowserProvider;
-  browser: BrowserName;
+  // `instances`/`browser`/`cliInstances`/`cliBrowserName` hold the raw user and
+  // CLI values; only `resolveBrowserInstances` resolves them.
+  instances?: BrowserModeConfig['instances'];
+  browser?: BrowserModeConfig['browser'];
+  cliInstances?: string[];
+  cliBrowserName?: string;
   headless: boolean;
   screenshotFailures: boolean;
   port?: number;

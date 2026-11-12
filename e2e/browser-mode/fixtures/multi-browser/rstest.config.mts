@@ -1,0 +1,29 @@
+import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+    port: BROWSER_PORTS['multi-browser'],
+    instances: [
+      {
+        browserName: 'chromium',
+        // Per-entry overrides: the viewports must differ so the in-page
+        // attribution assertion can tell the two entries apart.
+        viewport: { width: 800, height: 600 },
+        // CI chrome runners install the chrome channel on this entry without
+        // touching the firefox launch (see ciChromeEntry/ports.ts).
+        ...ciChromeEntry(),
+      },
+      {
+        browserName: 'firefox',
+        viewport: { width: 900, height: 600 },
+      },
+    ],
+  },
+  // Pinned so the rules configs' basic.test.ts stays out of this run's count.
+  include: ['tests/attribution.test.ts'],
+  testTimeout: BROWSER_TEST_TIMEOUT,
+});

@@ -31,10 +31,15 @@ describe('browser protocol types', () => {
     it('should accept valid project runtime with minimal config', () => {
       const runtime: BrowserProjectRuntime = {
         name: 'default',
+        browserName: 'chromium',
+        instanceName: 'default',
+        headless: true,
         environmentName: 'browser',
         projectRoot: '/root',
         hasSetupFiles: false,
         screenshotFailures: true,
+        providerOptions: {},
+        launchKey: '[playwright,chromium]',
         runtimeConfig: {} as BrowserProjectRuntime['runtimeConfig'],
       };
 

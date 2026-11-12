@@ -41,6 +41,10 @@ import {
   TS_CONFIG_FILE,
 } from '../utils';
 import { createExitCode, type RstestExitCode } from './execution/exitCode';
+import {
+  getReportedProjects,
+  selectCliInstanceProjects,
+} from './browser/browserInstances';
 import { TestStateManager } from './execution/stateManager';
 
 /**
@@ -292,6 +296,9 @@ export class Rstest implements InternalContext {
             normalizedConfig: rstestConfig,
           },
         ];
+    // `--browser.instances` filters like `--project`: browser projects without
+    // a matching instance leave the run.
+    this.projects = selectCliInstanceProjects(this.projects);
 
     this.reportersInitialized = !initializeReporters || command === 'list';
   }
@@ -390,14 +397,16 @@ const isBuiltInReporterName = (name: string): name is BuiltInReporterNames =>
 
 async function createReporters(context: InternalContext): Promise<Reporter[]> {
   const result: Reporter[] = [];
+  // Reporters see each browser instance as its own project.
+  const reportedProjects = getReportedProjects(context.projects);
   const initConfig = {
     rootPath: context.rootPath,
     config: context.normalizedConfig,
     testState: context.testState,
     fileFilters: context.fileFilters,
     projectConfigs: new Map(
-      context.projects.map((project) => [
-        project.name,
+      reportedProjects.map(({ name, project }) => [
+        name,
         project.normalizedConfig,
       ]),
     ),
@@ -431,7 +440,7 @@ async function createReporters(context: InternalContext): Promise<Reporter[]> {
             new Reporter({
               ...initConfig,
               options: {
-                showProjectName: context.projects.length > 1,
+                showProjectName: reportedProjects.length > 1,
                 ...options,
               },
             }),

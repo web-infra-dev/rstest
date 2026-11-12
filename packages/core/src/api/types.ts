@@ -1,6 +1,8 @@
 import type { LoadConfigOptions } from '@rsbuild/core';
 import type {
+  BrowserInstanceConfig,
   BrowserName,
+  BrowserViewport,
   Location as TestLocation,
   NormalizedConfig,
   RstestConfig,
@@ -20,6 +22,9 @@ export type {
 
 /** @experimental Subject to change until 1.0.0. */
 export type {
+  BrowserInstanceConfig,
+  BrowserName,
+  BrowserViewport,
   NormalizedConfig,
   RstestConfig,
   TestLocation,
@@ -83,9 +88,20 @@ export interface RunOptions {
     | boolean
     | {
         enabled?: boolean;
+        /**
+         * @deprecated Use `instances` instead. Will be removed in 1.0.
+         */
         name?: BrowserName;
+        /**
+         * Run only the configured browser instances with these `browserName`
+         * values. Like `project`, this only filters: a browser project with no
+         * matching instance is skipped, and a name no selected browser project
+         * configures is an error.
+         */
+        instances?: BrowserName | BrowserName[];
         headless?: boolean;
         screenshotFailures?: boolean;
+        viewport?: BrowserViewport;
         port?: number;
         strictPort?: boolean;
         providerOptions?: Record<string, unknown>;

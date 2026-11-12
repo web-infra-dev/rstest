@@ -68,6 +68,27 @@ const normalizeBooleanLikeCliValue = (
   return value;
 };
 
+/**
+ * Generic list parsing for the browser names handed in through CLI/API browser
+ * options: values may be comma-separated and the flags may be repeated. The
+ * names are not validated here; `@rstest/browser` owns that.
+ */
+const toCliBrowserNames = (
+  values: string | string[] | undefined,
+  source: '`--browser.instances`' | '`--browser.name`',
+): string[] => {
+  const names = castArray(values)
+    .flatMap((value) => String(value).split(','))
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (names.length === 0) {
+    throw new Error(`${source} needs at least one browser name.`);
+  }
+  return names;
+};
+
+let deprecatedBrowserNameOptionWarned = false;
+
 export function mergeWithCLIOptions(
   config: ResolvedRstestConfig,
   options: CommonOptions,
@@ -270,8 +291,37 @@ export function mergeWithCLIOptions(
       if (browserEnabled !== undefined) {
         config.browser.enabled = browserEnabled;
       }
-      if (options.browser.name !== undefined) {
-        config.browser.browser = options.browser.name;
+      const cliInstanceNames = options.browser.instances;
+      const cliBrowserName = options.browser.name;
+      if (cliInstanceNames !== undefined && cliBrowserName !== undefined) {
+        throw new Error(
+          'Use `--browser.instances` (or `RunOptions.browser.instances`) — `browser.name` / `--browser.name` is its deprecated alias and they cannot be set together.',
+        );
+      }
+      // Raw selection; `resolveBrowserInstances` filters this layer's
+      // configured instances by it.
+      if (cliInstanceNames !== undefined) {
+        config.browser.cliInstances = toCliBrowserNames(
+          cliInstanceNames,
+          '`--browser.instances`',
+        );
+      } else if (cliBrowserName !== undefined) {
+        if (!deprecatedBrowserNameOptionWarned) {
+          deprecatedBrowserNameOptionWarned = true;
+          logger.warn(
+            '`--browser.name` (and `RunOptions.browser.name`) is deprecated and will be removed in 1.0: use `--browser.instances` / `browser.instances` instead.',
+          );
+        }
+        const [name, ...rest] = toCliBrowserNames(
+          cliBrowserName,
+          '`--browser.name`',
+        );
+        if (rest.length > 0) {
+          throw new Error(
+            '`--browser.name` takes a single browser name: use `--browser.instances` to select several.',
+          );
+        }
+        config.browser.cliBrowserName = name;
       }
       if (options.browser.headless !== undefined) {
         config.browser.headless = options.browser.headless;
@@ -280,6 +330,9 @@ export function mergeWithCLIOptions(
         config.browser.screenshotFailures = coerceCliBoolean(
           options.browser.screenshotFailures,
         );
+      }
+      if (options.browser.viewport !== undefined) {
+        config.browser.viewport = options.browser.viewport;
       }
       if (options.browser.port !== undefined) {
         config.browser.port = Number(options.browser.port);

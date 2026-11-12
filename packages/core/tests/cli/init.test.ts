@@ -572,7 +572,7 @@ describe('resolveProjects', () => {
         options: {
           browser: {
             enabled: true,
-            name: 'webkit',
+            instances: 'webkit',
             headless: false,
             port: 4000,
             strictPort: true,
@@ -583,7 +583,7 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.browser).toEqual({
         enabled: true,
         provider: 'playwright',
-        browser: 'webkit',
+        cliInstances: ['webkit'],
         headless: false,
         port: 4000,
         strictPort: true,
@@ -616,9 +616,44 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toMatchObject({
         enabled: true, // preserved from config
-        browser: 'firefox', // overridden by CLI
+        cliBrowserName: 'firefox', // selected by CLI (deprecated --browser.name)
         headless: true, // preserved from config
         port: 6000, // overridden by CLI
+      });
+    });
+
+    it('should apply browser.viewport from run options and keep it when omitted', async () => {
+      const createConfig = (): RstestConfig => ({
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              viewport: { width: 800, height: 600 },
+            },
+          },
+        ],
+      });
+
+      const overridden = await resolveProjects({
+        config: createConfig(),
+        root: rootPath,
+        options: { browser: { viewport: { width: 1024, height: 768 } } },
+      });
+      expect(overridden[0]!.config.browser?.viewport).toEqual({
+        width: 1024,
+        height: 768,
+      });
+
+      const kept = await resolveProjects({
+        config: createConfig(),
+        root: rootPath,
+        options: { browser: { headless: true } },
+      });
+      expect(kept[0]!.config.browser?.viewport).toEqual({
+        width: 800,
+        height: 600,
       });
     });
 
@@ -708,6 +743,31 @@ describe('resolveProjects', () => {
           locale: 'en-US',
         },
       });
+    });
+
+    it('should split comma-separated and repeated --browser.instances values without validating names', async () => {
+      const projects = await resolveProjects({
+        config: { projects: [{ name: 'test-project' }] },
+        root: rootPath,
+        // CLI level: cac hands a comma-joined value as one string, or an array
+        // when the flag repeats. Names are validated by `@rstest/browser`.
+        options: {
+          browser: { instances: ['chromium, firefox', 'not-a-browser'] as any },
+        },
+      });
+
+      expect(projects[0]!.config.browser).toMatchObject({
+        cliInstances: ['chromium', 'firefox', 'not-a-browser'],
+      });
+    });
+
+    it('should reject --browser.name together with --browser.instances', () => {
+      expect(() =>
+        mergeWithCLIOptions(
+          { browser: { enabled: true, provider: 'playwright' } },
+          { browser: { instances: 'firefox', name: 'chromium' } },
+        ),
+      ).toThrow(/deprecated alias|cannot be set together/);
     });
   });
 

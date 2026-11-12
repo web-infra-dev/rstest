@@ -191,6 +191,8 @@ await rstest.run(); // Uses the configured 2 again.
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> sets the number of additional runs for each individual test. Test and suite options take precedence; see [repeats](/config/test/repeats).
 
+`browser` overrides the browser options for browser projects on this run: `RunOptions.browser.instances` <ApiMeta sup addedVersion="0.13.0" /> filters the configured browser instances the way the [CLI filter](/config/test/browser#cli-browser-filters) does — only instances whose `browserName` is listed run, a browser project with no match is skipped, and a name no selected browser project configures is an error; `undefined` keeps all configured instances. The deprecated `browser.name` selects a single browser. See [instances](/config/test/browser#instances) for the option semantics.
+
 - **Type:**
 
 ```ts
@@ -198,6 +200,21 @@ interface RunOptions {
   filters?: string[];
   trace?: boolean;
   repeats?: number;
+  // `true` is shorthand for `browser.enabled: true`.
+  browser?:
+    | boolean
+    | {
+        enabled?: boolean;
+        /** @deprecated Use `instances` instead. Will be removed in 1.0. */
+        name?: BrowserName;
+        instances?: BrowserName | BrowserName[];
+        headless?: boolean;
+        screenshotFailures?: boolean;
+        viewport?: BrowserViewport;
+        port?: number;
+        strictPort?: boolean;
+        providerOptions?: Record<string, unknown>;
+      };
   // ...plus other supported run options as overrides of the config option
   // of the same name, e.g. `testTimeout`, `coverage`, `reporters`.
 }

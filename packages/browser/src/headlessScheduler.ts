@@ -14,16 +14,16 @@ import { createSerialTaskQueue } from './serialTaskQueue';
 import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
-  mapViewportByProject,
+  resolveViewport,
   serializeForInlineScript,
 } from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
+import type { ConcurrencyLimiter } from './concurrencyLimiter';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
 import {
   createDeferredPromise,
-  getFileTaskId,
   type FatalPayload,
   toError,
 } from './hostPayloads';
@@ -37,6 +37,8 @@ import type {
 import {
   DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
+  getFileTaskId,
+  toWireRow,
 } from './protocol';
 import type {
   BrowserProviderBrowser,
@@ -50,11 +52,15 @@ import {
 } from './runSession';
 import { RunnerSessionRegistry } from './sessionRegistry';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
-import type {
-  BrowserV8CoverageRuntime,
-  BrowserWatchSession,
-  DispatchPageResolver,
-  SchedulerRunResult,
+import {
+  browserForRow,
+  expandToRows,
+  groupRowsByProject,
+  type BrowserV8CoverageRuntime,
+  type BrowserWatchSession,
+  type DispatchLanes,
+  type ScheduledTestFile,
+  type SchedulerRunResult,
 } from './schedulerSeam';
 import type { WatchSignals } from './watchSignals';
 
@@ -67,12 +73,14 @@ type HeadlessSchedulerContext = Pick<
 
 type HeadlessSchedulerDeps = {
   context: HeadlessSchedulerContext;
-  browser: BrowserProviderBrowser;
-  browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
+  /** One launched browser per launch key (see `BrowserRuntime.browsers`). */
+  browsers: Map<string, BrowserProviderBrowser>;
   projectServers: BrowserRuntime['projectServers'];
   v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
+  /** Mixed runs only: the budget shared with the headed lane. */
+  fileLimiter?: ConcurrencyLimiter;
   hostOptions: BrowserHostConfig;
   watchState: BrowserRuntime['watchState'];
   isWatchMode: boolean;
@@ -90,7 +98,7 @@ type HeadlessSchedulerDeps = {
     | 'signalInvalidation'
     | 'queueInvalidationAfter'
   >;
-  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
+  setDispatchPageResolver: (lanes: Pick<DispatchLanes, 'headless'>) => void;
   createWatchSession: (
     execute: (
       testPaths: string[],
@@ -104,14 +112,23 @@ type HeadlessSchedulerDeps = {
   destroyRuntime: () => Promise<void>;
 };
 
+/**
+ * True when the row may reuse one worker page across its consecutive batch
+ * files: `isolate: false` opts a row into one shared page per batch, and a
+ * row with setup files always reloads per file. The batch builder and the
+ * worker page lifecycle both read this one predicate.
+ */
+const shareWorkerFixtures = (row: BrowserProjectRuntime): boolean =>
+  !row.hasSetupFiles && row.runtimeConfig?.isolate === false;
+
 export const createHeadlessScheduler = async ({
   context,
-  browser,
-  browserLaunchOptions,
+  browsers,
   projectServers,
   v8Coverage,
   allTestFiles,
   projectRuntimeConfigs,
+  fileLimiter,
   hostOptions,
   watchState,
   isWatchMode,
@@ -124,33 +141,23 @@ export const createHeadlessScheduler = async ({
   logWatchReady,
   destroyRuntime,
 }: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
-  if (isWatchMode) {
-    watchState.lastTestFiles = allTestFiles;
-  }
-
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
     coverageCollectors: Set<() => Promise<void>>;
   };
 
-  const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
-  const projectRootByName = new Map(
-    projectRuntimeConfigs.map((project) => [project.name, project.projectRoot]),
-  );
-  const projectIsolation = new Map(
-    projectRuntimeConfigs.map((project) => [
-      project.name,
-      project.hasSetupFiles || project.runtimeConfig?.isolate !== false,
-    ]),
-  );
+  const rowsByProject = groupRowsByProject(projectRuntimeConfigs);
+
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
-  setDispatchPageResolver((target) => ({
-    runnerPage: target?.sessionId
-      ? sessionRegistry.getById(target.sessionId)?.page
-      : undefined,
-  }));
+  setDispatchPageResolver({
+    headless: (target) => ({
+      runnerPage: target?.sessionId
+        ? sessionRegistry.getById(target.sessionId)?.page
+        : undefined,
+    }),
+  });
   let dispatchRequestCounter = 0;
 
   const nextDispatchRequestId = (namespace: string): string => {
@@ -237,7 +244,7 @@ export const createHeadlessScheduler = async ({
 
   const dispatchRunnerMessage = async (
     run: ActiveHeadlessRun,
-    files: TestFileInfo[],
+    files: ScheduledTestFile[],
     sessionId: string,
     message: BrowserClientMessage,
   ): Promise<void> => {
@@ -275,7 +282,7 @@ export const createHeadlessScheduler = async ({
 
   const runWorkerFiles = async (
     run: ActiveHeadlessRun,
-    files: TestFileInfo[],
+    files: ScheduledTestFile[],
     rawCoverage: unknown[],
     updateSnapshot: SnapshotUpdateState,
   ): Promise<void> => {
@@ -285,9 +292,11 @@ export const createHeadlessScheduler = async ({
 
     const file = files[0]!;
     let activeFile = file;
-    const viewport = viewportByProject.get(file.projectName);
+    const row = file.row;
+    const browser = browserForRow(browsers, row);
+    const viewport = resolveViewport(row.viewport);
     const browserContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
+      providerOptions: row.providerOptions,
       viewport: viewport ?? null,
     });
     run.contexts.add(browserContext);
@@ -300,7 +309,7 @@ export const createHeadlessScheduler = async ({
     let workerCleanupTimer: ReturnType<typeof setTimeout> | undefined;
     let dispatchQueue = Promise.resolve();
     const completedFiles = new Set<string>();
-    const keepWorkerFixtures = projectIsolation.get(file.projectName) === false;
+    const keepWorkerFixtures = shareWorkerFixtures(row);
     const fileCleanupStates = new Map<
       string,
       {
@@ -370,6 +379,8 @@ export const createHeadlessScheduler = async ({
       crashDeferred.resolve(reason);
     };
 
+    // Validation guarantees a v8 run selects only chromium rows, so every
+    // row collects CDP coverage whenever the v8 provider is present.
     const collectCoverage = async (): Promise<void> => {
       if (!page || !v8Coverage) {
         return;
@@ -378,7 +389,7 @@ export const createHeadlessScheduler = async ({
         coverageCollection = (async () => {
           const coverage = await v8Coverage.take(
             page,
-            projectRootByName.get(file.projectName) ?? context.rootPath,
+            file.row.projectRoot,
             file.projectName,
           );
           if (coverage) {
@@ -464,7 +475,7 @@ export const createHeadlessScheduler = async ({
                 await handleTestFileComplete(
                   createFileCleanupTimeoutResult({
                     message,
-                    projectName: file.projectName,
+                    projectName: file.row.instanceName,
                     result: state.result,
                     testPath: payload.testPath,
                   }),
@@ -477,7 +488,7 @@ export const createHeadlessScheduler = async ({
                   await handleTestFileComplete(
                     createFileCleanupTimeoutResult({
                       message: `${message}; file was not run because the previous file cleanup timed out`,
-                      projectName: pendingFile.projectName,
+                      projectName: pendingFile.row.instanceName,
                       testPath: pendingFile.testPath,
                     }),
                   );
@@ -569,12 +580,18 @@ export const createHeadlessScheduler = async ({
 
       const inlineOptions: BrowserHostConfig = {
         ...hostOptions,
+        // The runner page resolves only its own `(project, browser)` row; a
+        // worker page never needs the other rows of this run.
+        projects: [toWireRow(file.row)],
         snapshot: {
           updateSnapshot,
         },
         testFile: file.testPath,
         testFiles: files.map((item) => item.testPath),
         runId: `${run.token}:${session.id}`,
+        // The runner resolves its `(project, browser)` runtime row through this
+        // identity; results and screenshot RPCs attribute through it too.
+        browserName: file.row.browserName,
       };
       const serializedOptions = serializeForInlineScript(inlineOptions);
       await page.addInitScript(
@@ -671,12 +688,14 @@ export const createHeadlessScheduler = async ({
   // Bailed files never run, so they carry no case results — mirror the node
   // pool's skip result (`runInPool.ts`) so the summary reports them as skipped
   // rather than dropping them silently.
-  const makeSkippedFileResult = (file: TestFileInfo): RawTestFileResult => ({
+  const makeSkippedFileResult = (
+    file: ScheduledTestFile,
+  ): RawTestFileResult => ({
     testId: getFileTaskId(file.testPath),
     status: 'skipped',
     name: '',
     testPath: file.testPath,
-    project: file.projectName,
+    project: file.row.instanceName,
     results: [],
   });
 
@@ -700,12 +719,12 @@ export const createHeadlessScheduler = async ({
       coverageCollectors: new Set<() => Promise<void>>(),
     }));
 
-    const queue = [...files];
+    const queue = expandToRows(files, rowsByProject);
     const concurrency = getHeadlessConcurrency(context, queue.length);
     const bail = context.normalizedConfig.bail;
     const nonIsolatedBatchSize = Math.max(
       1,
-      bail ? 1 : Math.ceil(files.length / Math.max(concurrency, 1)),
+      bail ? 1 : Math.ceil(queue.length / Math.max(concurrency, 1)),
     );
 
     const worker = async (): Promise<void> => {
@@ -714,35 +733,51 @@ export const createHeadlessScheduler = async ({
         !run.cancelled &&
         runLifecycle.isTokenActive(run.token)
       ) {
-        // Cross-file bail gate (parity with the node pool's pickup-time skip
-        // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
-        // drain the remaining files as skipped instead of running them. The
-        // count is cycle-scoped because core clears `stateManager` ahead of
-        // every cycle, a watch session's first one included — so a mixed
-        // launch cannot drain this queue on the node initial cycle's
-        // failures.
-        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-          let skipped = queue.shift();
-          while (skipped) {
-            await handleTestFileComplete(makeSkippedFileResult(skipped));
-            skipped = queue.shift();
-          }
-          return;
-        }
-        const next = queue.shift();
-        if (!next) {
-          return;
-        }
-        const batch = [next];
-        if (projectIsolation.get(next.projectName) === false) {
-          while (
-            batch.length < nonIsolatedBatchSize &&
-            queue[0]?.projectName === next.projectName
+        // Mixed runs share one file budget with the headed lane. Acquire ahead
+        // of the bail gate and the queue pop so a worker parked on the limiter
+        // never picks a file against stale state; every exit below releases.
+        const releaseSlot = await fileLimiter?.acquire();
+        try {
+          if (
+            queue.length === 0 ||
+            run.cancelled ||
+            !runLifecycle.isTokenActive(run.token)
           ) {
-            batch.push(queue.shift()!);
+            return;
           }
+          // Cross-file bail gate (parity with the node pool's pickup-time skip
+          // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
+          // drain the remaining files as skipped instead of running them. The
+          // count is cycle-scoped because core clears `stateManager` ahead of
+          // every cycle, a watch session's first one included — so a mixed
+          // launch cannot drain this queue on the node initial cycle's
+          // failures.
+          if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+            let skipped = queue.shift();
+            while (skipped) {
+              await handleTestFileComplete(makeSkippedFileResult(skipped));
+              skipped = queue.shift();
+            }
+            return;
+          }
+          const next = queue.shift();
+          if (!next) {
+            return;
+          }
+          const batch = [next];
+          // Batches never mix rows: a page belongs to one context/viewport pair.
+          if (shareWorkerFixtures(next.row)) {
+            while (
+              batch.length < nonIsolatedBatchSize &&
+              queue[0]?.row === next.row
+            ) {
+              batch.push(queue.shift()!);
+            }
+          }
+          await runWorkerFiles(run, batch, rawCoverage, updateSnapshot);
+        } finally {
+          releaseSlot?.();
         }
-        await runWorkerFiles(run, batch, rawCoverage, updateSnapshot);
       }
     };
 

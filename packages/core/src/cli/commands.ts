@@ -172,8 +172,12 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--browser', 'Run tests in browser mode'],
   ['--browser.enabled', 'Run tests in browser mode'],
   [
+    '--browser.instances <name>',
+    'Run only the configured browser instances with these browserName values: chromium, firefox, webkit — comma-separated and/or repeat the flag (default: all configured instances)',
+  ],
+  [
     '--browser.name <name>',
-    'Browser to use: chromium, firefox, webkit (default: chromium)',
+    'Single browser to use (deprecated: use --browser.instances)',
   ],
   ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
   [
@@ -501,6 +505,7 @@ const allowedWildcardOptions = {
   browser: new Set([
     'enabled',
     'name',
+    'instances',
     'headless',
     'screenshotFailures',
     'port',
@@ -834,14 +839,17 @@ export function createCli(): CAC {
         });
         await renderListTests(result, {
           rootPath,
-          // Public context keeps all configured projects; selection precedes planning.
+          // Public context keeps all configured projects; selection precedes
+          // planning. A multi-browser project lists each browser instance as
+          // its own project, so listed projects count as well.
           showProject:
             filterProjects(
               rstest.context.projects.map((project) => ({
                 config: { name: project.name },
               })),
               commonOptions,
-            ).length > 1,
+            ).length > 1 ||
+            new Set(result.map((test) => test.project)).size > 1,
           filesOnly,
           json,
           includeSuites,

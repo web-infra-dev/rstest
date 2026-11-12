@@ -57,4 +57,22 @@ describe('browser mode - mixed node + browser run', () => {
     expect(cli.stderr).toContain('BROWSER_ONLY_ERR');
     expect(cli.stderr).not.toContain('node-tests/node.test.ts');
   });
+
+  it('rejects an unknown browser name before any node or browser test starts', async () => {
+    const { cli } = await runBrowserCli('mixed', {
+      args: ['-c', 'rstest.invalid-browser.config.mts'],
+    });
+
+    await cli.exec;
+
+    expect(cli.exec.exitCode).not.toBe(0);
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toMatch(
+      /Browser instance must be an object with a `browserName` field/,
+    );
+    // The node project has real tests too; none of them may have started, and
+    // no file result of either side was reported.
+    expect(output).not.toMatch(/node\.test\.ts|browser\.test\.ts/);
+    expect(output).not.toMatch(/Test Files/);
+  });
 });

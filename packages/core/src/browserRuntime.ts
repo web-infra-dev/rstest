@@ -27,6 +27,7 @@ export type { TaskContext } from './runtime/worker/taskContext';
 export type { FileCleanupHooks } from './runtime/runner';
 // Types for browser runtime
 export type {
+  BrowserExpectConfig,
   BrowserRuntimeConfig,
   CoverageMapData,
   CurrentTaskInfo,

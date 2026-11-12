@@ -15,6 +15,7 @@ import {
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
 } from './browserRsbuild';
+import type { ConcurrencyLimiter } from './concurrencyLimiter';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedRunRegistry } from './headedRunRegistry';
@@ -23,20 +24,23 @@ import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
+  BrowserProjectRuntime,
   FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
 import {
   DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
+  toWireRow,
 } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
-import type {
-  BrowserV8CoverageRuntime,
-  BrowserWatchSession,
-  DispatchPageResolver,
-  SchedulerRunResult,
+import {
+  browserForRow,
+  type BrowserV8CoverageRuntime,
+  type BrowserWatchSession,
+  type DispatchLanes,
+  type SchedulerRunResult,
 } from './schedulerSeam';
 import type { RequestedTestPaths, WatchSignals } from './watchSignals';
 
@@ -50,6 +54,16 @@ type HeadedSchedulerContext = Pick<
 type HeadedSchedulerDeps = {
   context: HeadedSchedulerContext;
   runtime: BrowserRuntime;
+  /**
+   * Single headed pair per run (validated): the row whose launch is headed.
+   * In a pure-headed run this is also the runtime's default launch; in a
+   * hybrid run the default launch may belong to a headless row, so the row
+   * picks the container's browser explicitly. The scheduler owns the
+   * container's `projects` slice, so the full row is required.
+   */
+  headedRow: BrowserProjectRuntime;
+  /** Mixed runs only: the budget shared with the headless lane. */
+  fileLimiter?: ConcurrencyLimiter;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
   v8Coverage?: BrowserV8CoverageRuntime;
@@ -70,7 +84,7 @@ type HeadedSchedulerDeps = {
     | 'setAbort'
     | 'queueInvalidationAfter'
   >;
-  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
+  setDispatchPageResolver: (lanes: Pick<DispatchLanes, 'headed'>) => void;
   createWatchSession: (
     execute: (
       testPaths: string[],
@@ -128,6 +142,8 @@ export const claimHeadedCycleScope = (
 export const createHeadedScheduler = async ({
   context,
   runtime,
+  headedRow,
+  fileLimiter,
   allTestFiles,
   hostOptions,
   v8Coverage,
@@ -143,12 +159,37 @@ export const createHeadedScheduler = async ({
   logWatchReady,
   destroyRuntime,
 }: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
-  const { browser, browserLaunchOptions, watchState, wss } = runtime;
+  const { watchState, wss } = runtime;
+  // The container window belongs to the headed pair's launch: headless rows
+  // reuse a different browser process entirely (hybrid runs). The scheduler
+  // constructor's caller only builds one with a headed row, so the row and
+  // its provider options are required.
+  const headedLaunch = browserForRow(runtime.browsers, headedRow);
+  // The container window runs only this headed pair's row — its scheduler
+  // owns the `projects` slice, so the base host config needs no headed
+  // variant.
+  const headedHostOptions: BrowserHostConfig = {
+    ...hostOptions,
+    projects: [toWireRow(headedRow)],
+  };
   const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
-  let currentTestFiles = allTestFiles;
-  if (isWatchMode) {
-    watchState.lastTestFiles = allTestFiles;
-  }
+  // The headed lane runs its row's project only: it stamps each file with the
+  // row it runs on, keeping the one-head lane's reload queue out of other
+  // rows' files and threading the row's browserName to the frames (browser-ui
+  // forwards it in the window options, so a frame resolves its row strictly).
+  // Watch file-set updates commit path-keyed sets, so every commit re-stamps
+  // through this helper.
+  const stampLaneFiles = (
+    files: readonly { testPath: string; projectName: string }[],
+  ): TestFileInfo[] =>
+    files
+      .filter((file) => file.projectName === headedRow.name)
+      .map((file) => ({
+        testPath: file.testPath,
+        projectName: file.projectName,
+        browserName: headedRow.browserName,
+      }));
+  let currentTestFiles = stampLaneFiles(allTestFiles);
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
   // semantically distinct and in a different runtime, so deliberately NOT shared
@@ -261,8 +302,8 @@ export const createHeadedScheduler = async ({
     context: BrowserProviderContext;
     page: BrowserProviderPage;
   }> => {
-    const nextContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
+    const nextContext = await headedLaunch.newContext({
+      providerOptions: headedRow.providerOptions,
       viewport: null,
     });
     const nextPage = await nextContext.newPage();
@@ -286,10 +327,12 @@ export const createHeadedScheduler = async ({
     }
   }
 
-  setDispatchPageResolver((_target, runId) => ({
-    containerPage,
-    isRunCurrent: runId ? () => runs.isCurrent(runId) : undefined,
-  }));
+  setDispatchPageResolver({
+    headed: (_target, runId) => ({
+      containerPage,
+      isRunCurrent: runId ? () => runs.isCurrent(runId) : undefined,
+    }),
+  });
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createSerialTaskQueue();
@@ -396,7 +439,8 @@ export const createHeadedScheduler = async ({
             await handleTestFileComplete(
               createFileCleanupTimeoutResult({
                 message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-                projectName: payload.projectName,
+                // The headed lane runs one row: the payload names it.
+                projectName: headedRow.instanceName,
                 result: payload.result,
                 testPath: payload.testPath,
               }),
@@ -616,7 +660,17 @@ export const createHeadedScheduler = async ({
         );
         return;
       }
-      await reloadTestFileAndWait(file, testNamePattern);
+      // A mixed run's headless workers hold slots of the same budget, so the
+      // headed file runs only once one is free.
+      const release = await fileLimiter?.acquire();
+      try {
+        if (aborted || fatalErrorRef.current) {
+          return;
+        }
+        await reloadTestFileAndWait(file, testNamePattern);
+      } finally {
+        release?.();
+      }
     });
   };
 
@@ -708,7 +762,7 @@ export const createHeadedScheduler = async ({
       updateSnapshot: SnapshotUpdateState,
     ): Promise<void> => {
       const refreshedHostOptions: BrowserHostConfig = {
-        ...hostOptions,
+        ...headedHostOptions,
         snapshot: {
           updateSnapshot,
         },
@@ -744,7 +798,9 @@ export const createHeadedScheduler = async ({
           watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
 
         if (rerunPlan.fileSetUpdate) {
-          currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
+          currentTestFiles = stampLaneFiles(
+            rerunPlan.fileSetUpdate.currentTestFiles,
+          );
           const version = (watchState.headedFileSetVersion += 1);
           // Must run before the container is told: `notifyTestFileUpdate` is
           // what unmounts the dropped iframes, and their runs must already be
