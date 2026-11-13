@@ -16,8 +16,8 @@ class Cli {
   public stdout = '';
   public stderr = '';
   public log = '';
-  private stdoutListeners: Array<() => void> = [];
-  private stderrListeners: Array<() => void> = [];
+  private stdoutListeners = new Set<() => void>();
+  private stderrListeners = new Set<() => void>();
   private stdoutEnded: Promise<void>;
   private stderrEnded: Promise<void>;
   /** tinyexec's own `kill`, captured before the tree-killing override below. */
@@ -69,16 +69,21 @@ class Cli {
     });
 
     const originalThen = exec.then.bind(exec);
+    let outputPromise: PromiseLike<Output> | undefined;
     exec.then = <TResult1 = Output, TResult2 = never>(
       onfulfilled?:
         ((value: Output) => TResult1 | PromiseLike<TResult1>) | null,
       onrejected?:
         ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-    ) =>
-      originalThen(async (output) => {
+    ) => {
+      // tinyexec starts stream readers on each `then` call. Share one read
+      // between output waits and callers awaiting the process result.
+      outputPromise ??= originalThen(async (output) => {
         await this.waitForStreamsEnd();
-        return onfulfilled ? onfulfilled(output) : (output as TResult1);
-      }, onrejected);
+        return output;
+      });
+      return outputPromise.then(onfulfilled, onrejected);
+    };
 
     this.execKill = this.exec.kill.bind(this.exec);
 
@@ -155,12 +160,36 @@ class Cli {
       return Promise.resolve();
     }
 
-    return new Promise((resolve) => {
-      this[`${io}Listeners`].push(() => {
+    return new Promise((resolve, reject) => {
+      const listeners = this[`${io}Listeners`];
+      const onOutput = () => {
         if (matched()) {
+          listeners.delete(onOutput);
           resolve(undefined);
         }
-      });
+      };
+      listeners.add(onOutput);
+
+      // exec drains both streams before settling, including the final output
+      // chunk. An exited CLI cannot produce a missing readiness event.
+      void this.exec.then(
+        () => {
+          listeners.delete(onOutput);
+          if (matched()) {
+            resolve(undefined);
+          } else {
+            reject(
+              new Error(
+                `CLI exited with code ${this.exec.process?.exitCode} before matching ${io}: ${expect}\n${this.log}`,
+              ),
+            );
+          }
+        },
+        (error) => {
+          listeners.delete(onOutput);
+          reject(error);
+        },
+      );
     });
   };
 
