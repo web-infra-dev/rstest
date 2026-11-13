@@ -19,6 +19,7 @@ import {
 } from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
 import type { ConcurrencyLimiter } from './concurrencyLimiter';
+import type { LaunchPool } from './launchPool';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
@@ -40,11 +41,7 @@ import {
   getFileTaskId,
   toWireRow,
 } from './protocol';
-import type {
-  BrowserProviderBrowser,
-  BrowserProviderContext,
-  BrowserProviderPage,
-} from './providers';
+import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import {
   createRunSession,
   type RunSession,
@@ -53,7 +50,6 @@ import {
 import { RunnerSessionRegistry } from './sessionRegistry';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import {
-  browserForRow,
   expandToRows,
   groupRowsByProject,
   type BrowserV8CoverageRuntime,
@@ -73,8 +69,8 @@ type HeadlessSchedulerContext = Pick<
 
 type HeadlessSchedulerDeps = {
   context: HeadlessSchedulerContext;
-  /** One launched browser per launch key (see `BrowserRuntime.browsers`). */
-  browsers: Map<string, BrowserProviderBrowser>;
+  /** Leases each row's browser by launch key (see `BrowserRuntime.launchPool`). */
+  launchPool: LaunchPool;
   projectServers: BrowserRuntime['projectServers'];
   v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
@@ -123,7 +119,7 @@ const shareWorkerFixtures = (row: BrowserProjectRuntime): boolean =>
 
 export const createHeadlessScheduler = async ({
   context,
-  browsers,
+  launchPool,
   projectServers,
   v8Coverage,
   allTestFiles,
@@ -293,12 +289,19 @@ export const createHeadlessScheduler = async ({
     const file = files[0]!;
     let activeFile = file;
     const row = file.row;
-    const browser = browserForRow(browsers, row);
+    // The browser launches on first lease.
+    const lease = await launchPool.acquire(row.launchKey);
     const viewport = resolveViewport(row.viewport);
-    const browserContext = await browser.newContext({
-      providerOptions: row.providerOptions,
-      viewport: viewport ?? null,
-    });
+    let browserContext: BrowserProviderContext;
+    try {
+      browserContext = await lease.browser.newContext({
+        providerOptions: row.providerOptions,
+        viewport: viewport ?? null,
+      });
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
     run.contexts.add(browserContext);
 
     let page: BrowserProviderPage | null = null;
@@ -677,10 +680,18 @@ export const createHeadlessScheduler = async ({
         sessionRegistry.deleteById(sessionId);
       }
       run.contexts.delete(browserContext);
+      // The lease outlives the context: an evicted browser is only closed once
+      // no file runs in it. An abandoned teardown is detached, so its lease is
+      // given back at once; closing the browser then closes that context too.
       if (abandoned) {
         void teardown();
+        lease.release();
       } else {
-        await teardown();
+        try {
+          await teardown();
+        } finally {
+          lease.release();
+        }
       }
     }
   };
@@ -719,7 +730,14 @@ export const createHeadlessScheduler = async ({
       coverageCollectors: new Set<() => Promise<void>>(),
     }));
 
-    const queue = expandToRows(files, rowsByProject);
+    // Launch groups whose browser is already open go first, so a capped watch
+    // pool reuses them before evicting them. `expandToRows` keeps each group
+    // contiguous and the partition is stable.
+    const expanded = expandToRows(files, rowsByProject);
+    const queue = [
+      ...expanded.filter((file) => launchPool.isOpen(file.row.launchKey)),
+      ...expanded.filter((file) => !launchPool.isOpen(file.row.launchKey)),
+    ];
     const concurrency = getHeadlessConcurrency(context, queue.length);
     const bail = context.normalizedConfig.bail;
     const nonIsolatedBatchSize = Math.max(
@@ -781,15 +799,25 @@ export const createHeadlessScheduler = async ({
       }
     };
 
-    run.done = Promise.all(
+    // Any worker failure (a launch failure included) rejects the cycle: stop
+    // the other workers from taking files, wait for them, then rethrow.
+    let failure: { error: unknown } | undefined;
+    run.done = Promise.allSettled(
       Array.from(
         { length: Math.min(queue.length, Math.max(concurrency, 1)) },
-        () => worker(),
+        () =>
+          worker().catch(async (error) => {
+            failure ??= { error };
+            await cancelRun(run, false);
+          }),
       ),
     ).then(() => {});
 
     await run.done;
     runLifecycle.clearIfActive(run);
+    if (failure) {
+      throw failure.error;
+    }
     return rawCoverage;
   };
 
