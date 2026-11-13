@@ -170,6 +170,82 @@ describe('initSpy fn()', () => {
     expect(spy.mock.results[0]!.type).toBe('throw');
   });
 
+  it('keeps results in call order when a mock calls itself', () => {
+    const { fn } = initSpy();
+    const typesDuringCalls: string[][] = [];
+    const depth = fn((n: number): number => {
+      typesDuringCalls.push(depth.mock.results.map(({ type }) => type));
+      return n > 0 ? depth(n - 1) + 1 : 0;
+    });
+    const thrower = fn((n: number) => {
+      if (n === 0) throw new Error('inner');
+      expect(() => thrower(n - 1)).toThrow('inner');
+      return 'outer';
+    });
+
+    expect(depth(2)).toBe(2);
+    expect(thrower(1)).toBe('outer');
+
+    expect(depth.mock.calls).toEqual([[2], [1], [0]]);
+    expect(depth.mock.results).toEqual([
+      { type: 'return', value: 2 },
+      { type: 'return', value: 1 },
+      { type: 'return', value: 0 },
+    ]);
+    expect(typesDuringCalls).toEqual([
+      ['incomplete'],
+      ['incomplete', 'incomplete'],
+      ['incomplete', 'incomplete', 'incomplete'],
+    ]);
+    expect(thrower.mock.results).toEqual([
+      { type: 'return', value: 'outer' },
+      { type: 'throw', value: new Error('inner') },
+    ]);
+  });
+
+  it('keeps settled results in call order when an async mock calls itself', async () => {
+    const { fn } = initSpy();
+    const depth = fn(async (n: number): Promise<number> =>
+      n > 0 ? (await depth(n - 1)) + 1 : 0,
+    );
+
+    await expect(depth(2)).resolves.toBe(2);
+
+    expect(depth.mock.settledResults).toEqual([
+      { type: 'fulfilled', value: 2 },
+      { type: 'fulfilled', value: 1 },
+      { type: 'fulfilled', value: 0 },
+    ]);
+  });
+
+  it('records settled results of a promise with a custom string tag', async () => {
+    class TaggedPromise<T> extends Promise<T> {
+      override get [Symbol.toStringTag]() {
+        return 'TaggedPromise';
+      }
+    }
+    const { fn } = initSpy();
+    const spy = fn(() => TaggedPromise.resolve('ok'));
+
+    await spy();
+
+    expect(spy.mock.settledResults).toEqual([
+      { type: 'fulfilled', value: 'ok' },
+    ]);
+  });
+
+  it('records the instance as the result of a `new` call', () => {
+    const { fn } = initSpy();
+    const Mock = fn(function (this: { value?: number }) {
+      this.value = 1;
+    });
+
+    const instance = new Mock();
+
+    expect(Mock.mock.results).toEqual([{ type: 'return', value: instance }]);
+    expect(Mock.mock.results[0]!.value).toBe(instance);
+  });
+
   it('supports permanent and one-time throwing implementations', () => {
     const { fn } = initSpy();
     const spy = fn(() => 'default')

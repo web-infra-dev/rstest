@@ -85,7 +85,7 @@ export const initSpy = (
     toRealmArray(call) as unknown as T;
 
   const toRealmResult = <T>(
-    type: 'return' | 'throw' | 'fulfilled' | 'rejected',
+    type: 'return' | 'throw' | 'incomplete' | 'fulfilled' | 'rejected',
     value: T,
   ): { type: typeof type; value: T } => {
     const object = getRealmObject();
@@ -218,6 +218,10 @@ export const initSpy = (
       instances: [] as ReturnType<T>[],
       contexts: [] as ThisParameterType<T>[],
       invocationCallOrder: [] as number[],
+      // Indexed by call, like `calls`. tinyspy appends a result when its call
+      // finishes, so a mock that calls itself would list results out of order.
+      results: [] as MockContext<T>['results'],
+      settledResults: [] as MockContext<T>['settledResults'],
     });
 
     let mockState = initMockState();
@@ -351,6 +355,11 @@ export const initSpy = (
     };
 
     function willCall(this: unknown, ...args: any) {
+      // tinyspy records the call before it runs this implementation.
+      const callIndex = spyState.callCount - 1;
+      // A call that settles after `mockClear` must not write into the new state.
+      const { results, settledResults } = mockState;
+      results[callIndex] = { type: 'incomplete', value: undefined };
       let impl = implementation || (spyState.getOriginal() as T);
       mockState.instances.push(this as ReturnType<T>);
       mockState.contexts.push(this as ThisParameterType<T>);
@@ -358,22 +367,36 @@ export const initSpy = (
       if (mockImplementationOnce.length) {
         impl = mockImplementationOnce.shift()!;
       }
-      const result = impl?.apply(this, args);
+      let result: ReturnType<T>;
+      try {
+        result = impl?.apply(this, args);
+      } catch (error) {
+        results[callIndex] = { type: 'throw', value: error };
+        throw error;
+      }
+      const isObject =
+        (typeof result === 'object' && result !== null) ||
+        typeof result === 'function';
+      results[callIndex] = {
+        type: 'return',
+        // `new` returns the instance unless the implementation returns an object.
+        value: new.target && !isObject ? (this as ReturnType<T>) : result,
+      };
       if (
-        result !== null &&
-        typeof result === 'object' &&
-        Object.prototype.toString.call(result) === '[object Promise]' &&
+        isObject &&
+        // The tag finds a promise from another realm (a test's `Promise` in a
+        // VM context); `instanceof` finds a subclass with its own tag.
+        ((result as object) instanceof Promise ||
+          Object.prototype.toString.call(result) === '[object Promise]') &&
         'then' in result &&
-        typeof result.then === 'function' &&
-        !(result instanceof Promise)
+        typeof result.then === 'function'
       ) {
-        const resultIndex = spyState.results.length;
         void result.then(
-          (value: unknown) => {
-            spyState.resolves[resultIndex] = ['ok', value];
+          (value: Awaited<ReturnType<T>>) => {
+            settledResults[callIndex] = { type: 'fulfilled', value };
           },
           (error: unknown) => {
-            spyState.resolves[resultIndex] = ['error', error];
+            settledResults[callIndex] = { type: 'rejected', value: error };
           },
         );
       }
@@ -409,24 +432,16 @@ export const initSpy = (
         },
         get results() {
           return toRealmArray(
-            spyState.results.map(([resultType, value]) => {
-              const type =
-                resultType === 'error'
-                  ? ('throw' as const)
-                  : ('return' as const);
-              return toRealmResult(type, value);
-            }),
+            mockState.results.map(({ type, value }) =>
+              toRealmResult(type, value),
+            ),
           ) as MockContext<T>['results'];
         },
         get settledResults() {
           return toRealmArray(
-            spyState.resolves.map(([resultType, value]) => {
-              const type =
-                resultType === 'error'
-                  ? ('rejected' as const)
-                  : ('fulfilled' as const);
-              return toRealmResult(type, value);
-            }),
+            mockState.settledResults.map(({ type, value }) =>
+              toRealmResult(type, value),
+            ),
           ) as MockContext<T>['settledResults'];
         },
       }),

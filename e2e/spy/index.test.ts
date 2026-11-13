@@ -241,6 +241,23 @@ describe('test spy', () => {
     await expect(sayHi()).rejects.toThrowError('hi');
   });
 
+  it('rstest.fn -> results stay in call order when a mock calls itself', async () => {
+    const depth = rstest.fn((n: number): number =>
+      n > 0 ? depth(n - 1) + 1 : 0,
+    );
+    const asyncDepth = rstest.fn(async (n: number): Promise<number> =>
+      n > 0 ? (await asyncDepth(n - 1)) + 1 : 0,
+    );
+
+    expect(depth(2)).toBe(2);
+    await expect(asyncDepth(2)).resolves.toBe(2);
+
+    expect(depth).toHaveNthReturnedWith(1, 2);
+    expect(depth).toHaveNthReturnedWith(3, 0);
+    expect(asyncDepth).toHaveResolvedTimes(3);
+    expect(asyncDepth).toHaveNthResolvedWith(1, 2);
+  });
+
   it('rstest.fn -> mock return this', () => {
     const sayHi = rstest.fn(function mockFn(this: any) {
       return `hi ${this?.name}`;
