@@ -1,3 +1,4 @@
+import { format as nodeFormat } from 'node:util';
 import {
   formatName,
   formatTestError,
@@ -62,6 +63,51 @@ it('test formatName', () => {
   expect(formatName('test $a', { a: null }, 0)).toBe('test null');
 
   expect(formatName('%j', { a: { b: 1 } }, 0)).toBe('{"a":{"b":1}}');
+});
+
+it('formats %s, %o, %O and %c in each names like util.format', () => {
+  class Named {
+    toString() {
+      return 'named';
+    }
+  }
+  const values: unknown[] = [
+    { a: 1 },
+    'text',
+    42,
+    10n,
+    -0,
+    null,
+    undefined,
+    true,
+    Symbol('s'),
+  ];
+
+  for (const value of values) {
+    for (const specifier of ['%s', '%o', '%O']) {
+      const template = `value ${specifier} end`;
+      expect(formatName(template, [value], 0)).toBe(
+        nodeFormat(template, value),
+      );
+    }
+  }
+
+  expect(formatName('value %s', [{ a: 1 }], 0)).toBe('value { a: 1 }');
+  expect(formatName('value %o', [{ a: 1 }], 0)).toBe('value { a: 1 }');
+  expect(formatName('value %O', [['a', 1]], 0)).toBe("value [ 'a', 1 ]");
+  expect(formatName('value %O', [{ a: { b: 1 }, list: ['x'] }], 0)).toBe(
+    "value { a: { b: 1 }, list: [ 'x' ] }",
+  );
+  expect(formatName('value %o', ['a'], 0)).toBe("value 'a'");
+  // A custom `toString` is used for `%s`.
+  expect(formatName('value %s', [new Named()], 0)).toBe('value named');
+  // A row that is not an array is the only value.
+  expect(formatName('value %o', { a: 1 }, 0)).toBe('value { a: 1 }');
+
+  // `%c` takes its value and prints nothing.
+  expect(formatName('%cstyled %s', ['color: red', 'name'], 0)).toBe(
+    'styled name',
+  );
 });
 
 describe('formatTestError', () => {
