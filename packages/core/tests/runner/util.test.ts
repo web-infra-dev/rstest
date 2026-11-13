@@ -105,8 +105,8 @@ it('formats %s, %o, %O and %c in each names like util.format', () => {
   expect(formatName('value %o', { a: 1 }, 0)).toBe('value { a: 1 }');
 
   // `%c` takes its value and prints nothing.
-  expect(formatName('%cstyled %s', ['color: red', 'name'], 0)).toBe(
-    'styled name',
+  expect(formatName('%c%s styled', ['color: red', 'name'], 0)).toBe(
+    'name styled',
   );
 });
 
