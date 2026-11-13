@@ -107,9 +107,16 @@ const realNow = Date.now.bind(Date);
 
 export const getRealNow = (): number => realNow();
 
+const isErrorLike = (value: unknown): value is { message: string } =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  typeof (value as { message?: unknown }).message === 'string';
+
 export const formatTestError = async (
   err: any,
   test?: Test,
+  ancestors: ReadonlySet<object> = new Set(),
 ): Promise<SerializedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
@@ -154,6 +161,18 @@ export const formatTestError = async (
           typeof actual === 'string'
             ? actual
             : format(actual, { plugins: formatPlugins });
+      }
+
+      // An error often wraps the one that really went wrong, for example
+      // `new Error('Failed to load the user', { cause })`. Keep the chain, so
+      // reporters can show the root cause. `ancestors` holds only the errors
+      // above this one, which stops a circular chain while two errors of one
+      // list can still share a cause.
+      const cause: unknown = error?.cause;
+      if (isErrorLike(cause) && cause !== error && !ancestors.has(cause)) {
+        errObj.cause = (
+          await formatTestError(cause, undefined, new Set(ancestors).add(error))
+        )[0];
       }
 
       return errObj;

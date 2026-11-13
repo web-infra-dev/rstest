@@ -10,12 +10,15 @@ import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
 
-export const toSerializedError = (error: unknown): SerializedError => {
+const serializeError = (
+  error: unknown,
+  ancestors: ReadonlySet<object>,
+): SerializedError => {
   if (!error || typeof error !== 'object') {
     return { message: String(error) };
   }
   const value = error as Partial<SerializedError>;
-  return {
+  const serialized: SerializedError = {
     name: value.name,
     message: value.message ?? String(error),
     stack: value.stack,
@@ -25,7 +28,24 @@ export const toSerializedError = (error: unknown): SerializedError => {
     retryCount: value.retryCount,
     fullStack: value.fullStack,
   };
+  // Keep the cause chain. `ancestors` stops a circular chain.
+  const cause: unknown = value.cause;
+  if (
+    typeof cause === 'object' &&
+    cause !== null &&
+    !Array.isArray(cause) &&
+    typeof (cause as { message?: unknown }).message === 'string' &&
+    cause !== error &&
+    !ancestors.has(cause)
+  ) {
+    serialized.cause = serializeError(cause, new Set(ancestors).add(error));
+  }
+  return serialized;
 };
+
+// Takes one argument only, so it is safe to pass straight to `Array#map`.
+export const toSerializedError = (error: unknown): SerializedError =>
+  serializeError(error, new Set());
 
 const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 
@@ -60,6 +80,7 @@ export async function printError(
   error: SerializedError,
   getSourcemap: GetSourcemap,
   rootPath: string,
+  label = '',
 ): Promise<void> {
   const errorName = error.name || 'Unknown Error';
 
@@ -80,7 +101,7 @@ export async function printError(
   }
 
   logger.stderr(
-    `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
+    `${color.red(label)}${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
 
   if (error.diff) {
@@ -125,6 +146,10 @@ export async function printError(
     }
 
     printStack(stackFrames, rootPath);
+  }
+
+  if (error.cause) {
+    await printError(error.cause, getSourcemap, rootPath, 'Caused by: ');
   }
 }
 

@@ -58,6 +58,30 @@ describe('Test Edge Cases', () => {
     expectStderrLog('at hiddenFrame (node:internal/rstest_hidden:20:6)');
   });
 
+  it('should print the cause of an error', async () => {
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorCause.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog('Error: Failed to load the user');
+    expectStderrLog('Caused by: Error: Request failed');
+    expectStderrLog('Caused by: TypeError: fetch failed');
+    // Each cause points at the line that created it.
+    expectStderrLog(/at request \(.*errorCause\.test\.ts:5:\d+\)/);
+    expectStderrLog(/at loadUser \(.*errorCause\.test\.ts:13:\d+\)/);
+
+    // An error without a cause is printed as before.
+    expectStderrLog('Error: no cause');
+    expect(cli.stderr.match(/Caused by: /g)).toHaveLength(2);
+  });
+
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({
