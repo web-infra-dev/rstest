@@ -193,6 +193,37 @@ describe('formatTestError', () => {
     }
   });
 
+  it('reports a thrown value that is not an error', async () => {
+    const messageOf = async (thrown: unknown) =>
+      (await formatTestError(thrown))[0]!.message;
+
+    // `await Promise.reject()` rejects with `undefined`.
+    expect(await messageOf(undefined)).toBe('undefined');
+    expect(await messageOf(null)).toBe('null');
+    expect(await messageOf(404)).toBe('404');
+    expect(await messageOf(false)).toBe('false');
+    expect(await messageOf(Symbol('reason'))).toBe('Symbol(reason)');
+    expect(await messageOf('plain text')).toBe('plain text');
+    expect(await messageOf({ code: 1 })).toBe('{"code": 1}');
+    expect(await messageOf({ message: 500 })).toBe('{"message": 500}');
+  });
+
+  it('keeps the fields of a thrown object that has a message', async () => {
+    const error = (
+      await formatTestError({
+        message: 'not an Error instance',
+        name: 'CustomError',
+        stack: 'CustomError: not an Error instance\n    at file.ts:1:1',
+      })
+    )[0]!;
+
+    expect(error).toMatchObject({
+      message: 'not an Error instance',
+      name: 'CustomError',
+      stack: 'CustomError: not an Error instance\n    at file.ts:1:1',
+    });
+  });
+
   it('does not add the Istanbul hint for normal reference errors', async () => {
     const error = (
       await formatTestError(new ReferenceError('foo is not defined'))

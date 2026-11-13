@@ -115,12 +115,24 @@ export const formatTestError = async (
 
   return Promise.all(
     errors.map(async (rawError) => {
+      // A test can throw any value, not only an `Error`: `Promise.reject()`
+      // rejects with `undefined`, and `throw 404` or `throw { code: 1 }` are
+      // valid too. Those values have no `message`, so report the value itself.
       const error =
-        typeof rawError === 'string' ? { message: rawError } : rawError;
+        (typeof rawError === 'object' && rawError !== null) ||
+        typeof rawError === 'function'
+          ? rawError
+          : {};
+      const message =
+        typeof error.message === 'string'
+          ? error.message
+          : typeof rawError === 'string'
+            ? rawError
+            : stringify(rawError, 10, { min: true });
       const errObj: SerializedError = {
         fullStack: error.fullStack,
         // Some error attributes cannot be enumerated
-        message: error.message,
+        message,
         name: error.name,
         stack: error.stack,
       };
