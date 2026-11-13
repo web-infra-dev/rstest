@@ -1,3 +1,4 @@
+import { format as formatSpecifier } from '@vitest/utils/display';
 import type { SerializedError, Test, TestOptions } from '../types';
 
 /**
@@ -180,7 +181,9 @@ const formatTemplate = (template: string, values: any[]): string => {
       case '%O':
       case '%o':
       case '%c':
-        return String(value);
+        // As `util.format` does: an object is inspected instead of printed as
+        // `[object Object]`, and `%c` takes its value and prints nothing.
+        return formatSpecifier(specifier, value);
       case '%d':
         if (typeof value === 'bigint') {
           return `${value}n`;

@@ -1,4 +1,4 @@
-import { afterAll, expect, it } from '@rstest/core';
+import { afterAll, describe, expect, it } from '@rstest/core';
 
 const logs: string[] = [];
 
@@ -7,7 +7,7 @@ const mixedTable = [null, 42, ['a']];
 const mixedReceived: unknown[] = [];
 
 afterAll(() => {
-  expect(logs.length).toBe(14);
+  expect(logs.length).toBe(17);
   expect(mixedReceived).toEqual(mixedTable);
 });
 
@@ -65,6 +65,28 @@ it.each`
 it.each([{ value: null }])('nullable $value', () => {
   expect(expect.getState().currentTestName).toBe('nullable null');
   logs.push('executed');
+});
+
+// `%s`, `%o` and `%O` print an object like `util.format`, not `[object Object]`.
+it.each([[{ a: 1 }, ['x', 2]]])('object %o and array %O', () => {
+  expect(expect.getState().currentTestName).toBe(
+    "object { a: 1 } and array [ 'x', 2 ]",
+  );
+  logs.push('executed');
+});
+
+it.each([{ a: { b: 1 } }])('row %s', () => {
+  expect(expect.getState().currentTestName).toBe('row { a: { b: 1 } }');
+  logs.push('executed');
+});
+
+describe.each([[{ id: 1 }]])('suite %o', () => {
+  it('uses the formatted suite name', () => {
+    expect(expect.getState().currentTestName).toBe(
+      'suite { id: 1 } > uses the formatted suite name',
+    );
+    logs.push('executed');
+  });
 });
 
 it.each(mixedTable)('mixed table case %#', (value) => {
