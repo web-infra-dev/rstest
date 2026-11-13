@@ -4,39 +4,56 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from '@rstest/core';
 import { runRstestCli } from '../scripts';
-import { defaultEnvOverrides, runBrowserCli } from './utils';
+import {
+  defaultEnvOverrides,
+  runBrowserCli,
+  shouldRunFirefoxBrowserTests,
+} from './utils';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(__dirname, 'fixtures/multi-browser');
 const blobDir = join(fixtureDir, '.rstest-reports');
 
 describe('browser mode - multi-browser launch rules', () => {
-  it('runs one file copy per browser with per-entry viewport overrides', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {});
-    await expectExecSuccess();
-    // One row per (project, browser), each reported as its own
-    // `<project> (<browser>)` project, and the per-entry viewport assertion
-    // passed inside each real page.
-    expect(cli.stdout).toMatch(
-      /\[rstest \(chromium\)\].*attribution\.test\.ts/,
-    );
-    expect(cli.stdout).toMatch(/\[rstest \(firefox\)\].*attribution\.test\.ts/);
-    expect(cli.stdout).toMatch(/Test Files 2 passed/);
-    expect(cli.stdout).toMatch(/Tests 6 passed/);
-  }, 60_000);
+  it.runIf(shouldRunFirefoxBrowserTests)(
+    'runs one file copy per browser with per-entry viewport overrides',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli(
+        'multi-browser',
+        {},
+      );
+      await expectExecSuccess();
+      // One row per (project, browser), each reported as its own
+      // `<project> (<browser>)` project, and the per-entry viewport assertion
+      // passed inside each real page.
+      expect(cli.stdout).toMatch(
+        /\[rstest \(chromium\)\].*attribution\.test\.ts/,
+      );
+      expect(cli.stdout).toMatch(
+        /\[rstest \(firefox\)\].*attribution\.test\.ts/,
+      );
+      expect(cli.stdout).toMatch(/Test Files 2 passed/);
+      expect(cli.stdout).toMatch(/Tests 6 passed/);
+    },
+    60_000,
+  );
 
-  it('filters to one browser like the CLI flag and drops the other copy', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
-      args: ['--browser.instances=firefox'],
-    });
+  it.runIf(shouldRunFirefoxBrowserTests)(
+    'filters to one browser like the CLI flag and drops the other copy',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+        args: ['--browser.instances=firefox'],
+      });
 
-    await expectExecSuccess();
-    // One browser row selected → one file result under the plain project
-    // name: a project that runs one browser keeps its own name, so neither
-    // browser's instance name appears.
-    expect(cli.stdout).not.toMatch(/\(chromium\)/);
-    expect(cli.stdout).toMatch(/Test Files 1 passed/);
-  }, 60_000);
+      await expectExecSuccess();
+      // One browser row selected → one file result under the plain project
+      // name: a project that runs one browser keeps its own name, so neither
+      // browser's instance name appears.
+      expect(cli.stdout).not.toMatch(/\(chromium\)/);
+      expect(cli.stdout).toMatch(/Test Files 1 passed/);
+    },
+    60_000,
+  );
 
   it('rejects a --browser.instances name that no browser project configures', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
@@ -58,18 +75,22 @@ describe('browser mode - multi-browser launch rules', () => {
     );
   });
 
-  it('warns once per run that browser.browser is deprecated', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
-      args: ['-c', 'rstest.deprecated-browser.config.mts'],
-    });
-    await expectExecSuccess();
-    const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toContain('`browser.browser` is deprecated');
-    // Warned once per run, not per layer or per file.
-    expect(output.match(/browser\.browser` is deprecated/g) ?? []).toHaveLength(
-      1,
-    );
-  }, 60_000);
+  it.runIf(shouldRunFirefoxBrowserTests)(
+    'warns once per run that browser.browser is deprecated',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+        args: ['-c', 'rstest.deprecated-browser.config.mts'],
+      });
+      await expectExecSuccess();
+      const output = `${cli.stdout}\n${cli.stderr}`;
+      expect(output).toContain('`browser.browser` is deprecated');
+      // Warned once per run, not per layer or per file.
+      expect(
+        output.match(/browser\.browser` is deprecated/g) ?? [],
+      ).toHaveLength(1);
+    },
+    60_000,
+  );
 
   it('rejects v8 coverage when a non-chromium browser stays selected', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
@@ -124,29 +145,33 @@ describe('browser mode - multi-browser launch rules', () => {
     );
   });
 
-  it('records one blob per run and merges two browsers back per browser row', async () => {
-    onTestFinished(() => rmSync(blobDir, { recursive: true, force: true }));
-    rmSync(blobDir, { recursive: true, force: true });
+  it.runIf(shouldRunFirefoxBrowserTests)(
+    'records one blob per run and merges two browsers back per browser row',
+    async () => {
+      onTestFinished(() => rmSync(blobDir, { recursive: true, force: true }));
+      rmSync(blobDir, { recursive: true, force: true });
 
-    const blobRun = await runBrowserCli('multi-browser', {
-      args: ['--reporters=blob'],
-    });
-    await blobRun.expectExecSuccess();
-    expect(existsSync(join(blobDir, 'blob.json'))).toBe(true);
+      const blobRun = await runBrowserCli('multi-browser', {
+        args: ['--reporters=blob'],
+      });
+      await blobRun.expectExecSuccess();
+      expect(existsSync(join(blobDir, 'blob.json'))).toBe(true);
 
-    const merge = await runRstestCli({
-      command: 'rstest',
-      args: ['merge-reports', '--cleanup'],
-      options: { nodeOptions: { cwd: fixtureDir } },
-    });
-    await merge.expectExecSuccess();
-    // Merged output attributes both browser instances again.
-    expect(merge.cli.stdout).toMatch(
-      /\[rstest \(chromium\)\].*attribution\.test\.ts/,
-    );
-    expect(merge.cli.stdout).toMatch(
-      /\[rstest \(firefox\)\].*attribution\.test\.ts/,
-    );
-    expect(merge.cli.stdout).toMatch(/Test Files 2 passed/);
-  }, 120_000);
+      const merge = await runRstestCli({
+        command: 'rstest',
+        args: ['merge-reports', '--cleanup'],
+        options: { nodeOptions: { cwd: fixtureDir } },
+      });
+      await merge.expectExecSuccess();
+      // Merged output attributes both browser instances again.
+      expect(merge.cli.stdout).toMatch(
+        /\[rstest \(chromium\)\].*attribution\.test\.ts/,
+      );
+      expect(merge.cli.stdout).toMatch(
+        /\[rstest \(firefox\)\].*attribution\.test\.ts/,
+      );
+      expect(merge.cli.stdout).toMatch(/Test Files 2 passed/);
+    },
+    120_000,
+  );
 });

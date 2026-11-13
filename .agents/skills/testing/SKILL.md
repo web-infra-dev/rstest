@@ -83,6 +83,7 @@ Important:
 - Fixtures default to `headless: true` — no browser windows locally
 - Headed smoke tests are skipped locally by default (CI only)
 - To opt in locally: `cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts`
+- Tests that launch Firefox are skipped unless `RSTEST_E2E_RUN_FIREFOX=true`; Rstest CI enables them after installing Firefox. Locally, install it with `pnpm exec playwright install firefox`, then opt in with `cd e2e && RSTEST_E2E_RUN_FIREFOX=true pnpm test browser-mode/multiBrowserRules.test.ts programmatic/index.test.ts`.
 
 ### Browser E2E debugging
 

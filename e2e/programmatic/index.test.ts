@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { join as joinPosix } from 'pathe';
 import { BROWSER_PORTS } from '../browser-mode/fixtures/ports';
+import { shouldRunFirefoxBrowserTests } from '../browser-mode/utils';
 import { parseMarkerPayload, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -643,7 +644,10 @@ describe('programmatic createRstest', () => {
 
   it.for(['firefox', 'chromium'] as const)(
     'filters configured instances via RunOptions.browser.instances to %s like the CLI flag',
-    async (filter, { onTestFinished }) => {
+    async (filter, { onTestFinished, skip }) => {
+      if (filter === 'firefox' && !shouldRunFirefoxBrowserTests) {
+        skip();
+      }
       const { cli } = await runRstestCli({
         command: 'node',
         args: ['run-browsers-filter.mjs', String(BROWSERS_FILTER_PORT), filter],
@@ -683,47 +687,48 @@ describe('programmatic createRstest', () => {
     },
   );
 
-  it('runs every configured browser when RunOptions carries no browser filter', async ({
-    onTestFinished,
-  }) => {
-    const { cli } = await runRstestCli({
-      command: 'node',
-      args: ['run-browsers-filter.mjs', String(BROWSERS_FILTER_PORT), 'none'],
-      onTestFinished,
-      options: { nodeOptions: { cwd: fixturesDir } },
-    });
+  it.runIf(shouldRunFirefoxBrowserTests)(
+    'runs every configured browser when RunOptions carries no browser filter',
+    async ({ onTestFinished }) => {
+      const { cli } = await runRstestCli({
+        command: 'node',
+        args: ['run-browsers-filter.mjs', String(BROWSERS_FILTER_PORT), 'none'],
+        onTestFinished,
+        options: { nodeOptions: { cwd: fixturesDir } },
+      });
 
-    const execution = await cli.exec;
-    const result = parsePayload(cli.stdout);
+      const execution = await cli.exec;
+      const result = parsePayload(cli.stdout);
 
-    expect(execution.exitCode).toBe(0);
-    // Unfiltered runs every configured browser: one file per browser, results
-    // attributed per browser (chromium's 800-wide entry cannot pass the
-    // 900-wide assertion, firefox's 900-wide entry does).
-    expect(result.status).toBe('failed');
-    expect(result.tests).toEqual({
-      total: 2,
-      passed: 1,
-      failed: 1,
-      skipped: 0,
-      todo: 0,
-      flaky: 0,
-    });
-    expect(result.files).toEqual({ total: 2, failed: 1 });
-    expect(result.fileResults).toEqual(
-      expect.arrayContaining([
-        {
-          project: 'rstest (chromium)',
-          status: 'failed',
-          message: expect.stringContaining('800'),
-        },
-        {
-          project: 'rstest (firefox)',
-          status: 'passed',
-          message: '',
-        },
-      ]),
-    );
-    expect(result.fileResults).toHaveLength(2);
-  });
+      expect(execution.exitCode).toBe(0);
+      // Unfiltered runs every configured browser: one file per browser, results
+      // attributed per browser (chromium's 800-wide entry cannot pass the
+      // 900-wide assertion, firefox's 900-wide entry does).
+      expect(result.status).toBe('failed');
+      expect(result.tests).toEqual({
+        total: 2,
+        passed: 1,
+        failed: 1,
+        skipped: 0,
+        todo: 0,
+        flaky: 0,
+      });
+      expect(result.files).toEqual({ total: 2, failed: 1 });
+      expect(result.fileResults).toEqual(
+        expect.arrayContaining([
+          {
+            project: 'rstest (chromium)',
+            status: 'failed',
+            message: expect.stringContaining('800'),
+          },
+          {
+            project: 'rstest (firefox)',
+            status: 'passed',
+            message: '',
+          },
+        ]),
+      );
+      expect(result.fileResults).toHaveLength(2);
+    },
+  );
 });
