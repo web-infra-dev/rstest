@@ -6,12 +6,14 @@ on:
     paths-ignore:
       - '**/*.md'
       - '**/*.mdx'
+      - 'website/**'
 
   push:
     branches: [main]
     paths-ignore:
       - '**/*.md'
       - '**/*.mdx'
+      - 'website/**'
 
   workflow_dispatch:
 
