@@ -1065,11 +1065,7 @@ const run = async () => {
           result.status = 'failed';
           result.errors = [
             ...(result.errors ?? []),
-            ...unhandledErrors.map((error) => ({
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-            })),
+            ...(await formatTestError(unhandledErrors)),
           ];
         }
 

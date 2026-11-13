@@ -20,6 +20,10 @@ export const createListTestsError = async (
     error: SerializedError,
   ): Promise<SerializedError> => {
     const serialized = { ...error };
+    if (error.cause) {
+      // Source-map the whole chain while the source maps are still open.
+      serialized.cause = await serialize(error.cause);
+    }
     if (error.stack) {
       const frames = await parseErrorStacktrace({
         stack: error.stack,

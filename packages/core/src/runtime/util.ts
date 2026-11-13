@@ -116,7 +116,7 @@ const isErrorLike = (value: unknown): value is { message: string } =>
 export const formatTestError = async (
   err: any,
   test?: Test,
-  seen: WeakSet<object> = new WeakSet(),
+  ancestors: ReadonlySet<object> = new Set(),
 ): Promise<SerializedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
@@ -165,13 +165,14 @@ export const formatTestError = async (
 
       // An error often wraps the one that really went wrong, for example
       // `new Error('Failed to load the user', { cause })`. Keep the chain, so
-      // reporters can show the root cause. `seen` stops a circular chain.
-      if (typeof error === 'object' && error !== null) {
-        seen.add(error);
-      }
+      // reporters can show the root cause. `ancestors` holds only the errors
+      // above this one, which stops a circular chain while two errors of one
+      // list can still share a cause.
       const cause: unknown = error?.cause;
-      if (isErrorLike(cause) && !seen.has(cause)) {
-        errObj.cause = (await formatTestError(cause, undefined, seen))[0];
+      if (isErrorLike(cause) && cause !== error && !ancestors.has(cause)) {
+        errObj.cause = (
+          await formatTestError(cause, undefined, new Set(ancestors).add(error))
+        )[0];
       }
 
       return errObj;

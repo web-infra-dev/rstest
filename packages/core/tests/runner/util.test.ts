@@ -241,4 +241,17 @@ describe('formatTestError', () => {
     expect(error.cause).not.toHaveProperty('cause');
     expect((await formatTestError(self))[0]).not.toHaveProperty('cause');
   });
+
+  it('keeps a cause that several errors of one list share', async () => {
+    const root = new Error('connection lost');
+    const errors = await formatTestError([
+      new Error('first query failed', { cause: root }),
+      new Error('second query failed', { cause: root }),
+    ]);
+
+    expect(errors.map((error) => error.cause?.message)).toEqual([
+      'connection lost',
+      'connection lost',
+    ]);
+  });
 });
