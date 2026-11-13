@@ -19,7 +19,7 @@ export class JSDOM extends __RstestBaseJSDOM {
 // Inject failures or instrumentation only into generated environment entries, never the native package.
 fs.writeFile = function (path, data, ...args) {
   if (
-    String(path).includes('rstest-test-environments-') &&
+    String(path).includes('rstest-test-environments') &&
     String(path).endsWith('entry.mjs')
   ) {
     // The generated entry is only written inside the prebundle child.
