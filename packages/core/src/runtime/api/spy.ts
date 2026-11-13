@@ -386,7 +386,7 @@ export const initSpy = (
         isObject &&
         // The tag finds a promise from another realm (a test's `Promise` in a
         // VM context); `instanceof` finds a subclass with its own tag.
-        (result instanceof Promise ||
+        ((result as object) instanceof Promise ||
           Object.prototype.toString.call(result) === '[object Promise]') &&
         'then' in result &&
         typeof result.then === 'function'

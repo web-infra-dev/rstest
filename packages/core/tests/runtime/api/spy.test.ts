@@ -220,7 +220,7 @@ describe('initSpy fn()', () => {
 
   it('records settled results of a promise with a custom string tag', async () => {
     class TaggedPromise<T> extends Promise<T> {
-      get [Symbol.toStringTag]() {
+      override get [Symbol.toStringTag]() {
         return 'TaggedPromise';
       }
     }
