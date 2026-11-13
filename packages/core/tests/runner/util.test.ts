@@ -110,6 +110,42 @@ it('formats %s, %o, %O and %c in each names like util.format', () => {
   );
 });
 
+it('only substitutes placeholders from the original each name template', () => {
+  const row = { price: '$10', label: '%s $price' };
+
+  for (const specifier of ['%s', '%o', '%O']) {
+    expect(formatName(`$price ${specifier} $label`, row, 0)).toBe(
+      "$10 { price: '$10', label: '%s $price' } %s $price",
+    );
+  }
+  expect(formatName('$price %j', row, 0)).toBe(
+    '$10 {"price":"$10","label":"%s $price"}',
+  );
+  expect(formatName('$price %s', ['$10'], 0)).toBe('$price $10');
+  expect(formatName('%%s %# %$ $price %o', row, 2)).toBe(
+    "%s 2 3 $10 { price: '$10', label: '%s $price' }",
+  );
+});
+
+it('formats circular collections without overflowing during each registration', () => {
+  const map = new Map<string, unknown>();
+  map.set('self', map);
+  const set = new Set<unknown>();
+  set.add(set);
+  const array: unknown[] = [];
+  array.push(array);
+
+  for (const value of [map, set, array]) {
+    for (const specifier of ['%o', '%O']) {
+      expect(formatName(`value ${specifier}`, [value], 0)).toContain(
+        '[Circular]',
+      );
+    }
+  }
+  expect(formatName('value %s', [map], 0)).toContain('[Circular]');
+  expect(formatName('value %s', [set], 0)).toContain('[Circular]');
+});
+
 describe('formatTestError', () => {
   it('adds a hint for missing Istanbul coverage helpers', async () => {
     const error = (

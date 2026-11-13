@@ -1,4 +1,4 @@
-import { format as formatSpecifier } from '@vitest/utils/display';
+import { format as formatSpecifier, stringify } from '@vitest/utils/display';
 import type { SerializedError, Test, TestOptions } from '../types';
 
 /**
@@ -160,16 +160,21 @@ export const formatTestError = async (
     }),
   );
 };
-// cspell:ignore sdjifo
-const formatRegExp = /%[sdjifoOc%]/;
-
-const formatTemplate = (template: string, values: any[]): string => {
-  if (!formatRegExp.test(template)) {
-    return template;
-  }
-
+const formatTemplate = (template: string, param: unknown): string => {
+  const isArrayRow = Array.isArray(param);
+  const values = isArrayRow ? param : [param];
   let valueIndex = 0;
-  return template.replace(/%[sdjifoOc%]/g, (specifier) => {
+  // Match both forms in one pass so inserted values are never interpolated.
+  // cspell:ignore sdjifo
+  return template.replace(/%[sdjifoOc%]|\$([$\w.]+)/g, (specifier, key) => {
+    if (key !== undefined) {
+      if (isArrayRow) {
+        return specifier;
+      }
+      const value = getValue(param, key);
+      return value === null ? 'null' : String(value?.toString());
+    }
+
     if (specifier === '%%') {
       return '%';
     }
@@ -181,9 +186,16 @@ const formatTemplate = (template: string, values: any[]): string => {
       case '%O':
       case '%o':
       case '%c':
-        // As `util.format` does: an object is inspected instead of printed as
-        // `[object Object]`, and `%c` takes its value and prints nothing.
-        return formatSpecifier(specifier, value);
+        try {
+          return formatSpecifier(specifier, value);
+        } catch (error) {
+          if (!(error instanceof RangeError)) {
+            throw error;
+          }
+          // The inspector does not track cycles in collections. Pretty-format
+          // preserves their contents and marks cycles instead of aborting collection.
+          return stringify(value, 10, { min: true });
+        }
       case '%d':
         if (typeof value === 'bigint') {
           return `${value}n`;
@@ -249,23 +261,7 @@ export const formatName = (
       .replace(/__rstest_escaped_%__/g, '%%');
   }
 
-  if (Array.isArray(param)) {
-    // format printf-like string
-    // https://nodejs.org/api/util.html#util_util_format_format_args
-    if (formatRegExp.test(templateStr)) {
-      return formatTemplate(templateStr, param);
-    }
-    return templateStr;
-  }
-
-  if (formatRegExp.test(templateStr)) {
-    templateStr = formatTemplate(templateStr, [param]);
-  }
-
-  return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
-    const value = getValue(param, key);
-    return value === null ? 'null' : value?.toString();
-  });
+  return formatTemplate(templateStr, param);
 };
 
 function getValue(source: any, path: string, defaultValue = undefined): any {

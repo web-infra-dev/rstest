@@ -15,6 +15,6 @@ export default defineConfig({
     headless: true,
     port: BROWSER_PORTS.basic,
   },
-  include: ['tests/**/*.test.ts'],
+  include: ['tests/**/*.test.ts', '../../../test-api/each.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
 });
