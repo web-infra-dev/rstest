@@ -17,11 +17,15 @@ test.sequential('stalled cleanup', async ({ browser, context }) => {
     console.log('RSTEST_PLAYWRIGHT_TIMEOUT_BROWSER_CLOSED');
   });
   const stage = process.env.RSTEST_E2E_CLEANUP_STAGE;
+  const hookTimeout = rstest.getConfig().hookTimeout;
   const stall = () => {
     console.log(
       `RSTEST_PLAYWRIGHT_STALLED_${stage}`,
       rstest.getConfig().hookTimeout,
     );
+    // The injected operation has already captured its short deadline. Let
+    // real context/browser cleanup and the recovery test use the normal budget.
+    rstest.setConfig({ hookTimeout });
     return new Promise<void>(() => {});
   };
   if (stage === 'trace') {
