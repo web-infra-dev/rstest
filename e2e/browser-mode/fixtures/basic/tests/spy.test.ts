@@ -1,6 +1,30 @@
 import { describe, expect, it, rstest } from '@rstest/core';
 
 describe('Spy', () => {
+  it('observes a returned Promise only once', async () => {
+    const promise = Promise.resolve('ok');
+    const then = rstest.spyOn(promise, 'then');
+    const mock = rstest.fn(() => promise);
+
+    expect(mock()).toBe(promise);
+    expect(then).toHaveBeenCalledTimes(1);
+    await promise;
+    expect(mock).toHaveResolvedWith('ok');
+  });
+
+  it('records errors thrown while inspecting a returned value', () => {
+    const error = new Error('tag getter');
+    const mock = rstest.fn(() => ({
+      get [Symbol.toStringTag]() {
+        throw error;
+      },
+    }));
+
+    expect(mock).toThrow(error);
+    expect(mock.mock.results).toEqual([{ type: 'throw', value: error }]);
+    expect(mock).not.toHaveReturned();
+  });
+
   it('checks the value passed to the returned alias', () => {
     const spy = rstest.fn(() => 'actual');
     spy();
