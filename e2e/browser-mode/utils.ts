@@ -83,6 +83,10 @@ export const shouldRunHeadedBrowserTests =
   canRunHeadedBrowser &&
   Boolean(process.env.CI || process.env.RSTEST_E2E_RUN_HEADED);
 
+// Ecosystem CI may only provide Chrome and WebKit; Rstest CI installs Firefox.
+export const shouldRunFirefoxBrowserTests =
+  process.env.RSTEST_E2E_RUN_FIREFOX === 'true';
+
 /**
  * Framework-level warnings that the build pipeline must not emit. Browser-mode
  * tests launch rstest as a subprocess, so any Rsbuild/Rspack build warning or

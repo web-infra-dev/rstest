@@ -1,13 +1,18 @@
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
+import {
+  runBrowserCli,
+  shouldRunHeadedBrowserTests,
+  shouldRunFirefoxBrowserTests,
+} from './utils';
 
 // One headed (project, browser) pair beside headless rows is a legal RUN
 // shape: the host composes one headed lane with headless lanes in the same
 // cycle (watch would reject this set; validation owns that). Headed runs need
 // a display, so CI arms them on headed-capable runners (macos/windows per
-// .github/workflows/test.yml); locally opt in with RSTEST_E2E_RUN_HEADED=true.
+// .github/workflows/test.yml); locally opt in with RSTEST_E2E_RUN_HEADED=true
+// and RSTEST_E2E_RUN_FIREFOX=true for the mixed-browser case.
 describe('browser mode - one headed + headless hybrid run', () => {
-  it.runIf(shouldRunHeadedBrowserTests)(
+  it.runIf(shouldRunHeadedBrowserTests && shouldRunFirefoxBrowserTests)(
     'runs one headed and one headless browser in the same cycle',
     async () => {
       // DEBUG=rstest exposes the per-launch host log for the headed proof.
