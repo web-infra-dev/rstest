@@ -1008,68 +1008,84 @@ const playwrightFixtures = {
       }
 
       cleanupPromise = (async () => {
+        const errors: unknown[] = [];
         try {
-          try {
-            if (artifacts && traceStarted) {
-              const shouldSaveTrace =
-                artifacts.options.mode === 'on' ||
-                artifacts.options.mode === 'on-first-retry' ||
-                artifacts.options.mode === 'on-all-retries' ||
-                task.result?.status === 'failed';
-              const shouldStageTrace =
-                artifacts.options.mode === 'retain-on-failure' &&
-                task.result?.status !== 'failed';
+          if (artifacts && traceStarted) {
+            const shouldSaveTrace =
+              artifacts.options.mode === 'on' ||
+              artifacts.options.mode === 'on-first-retry' ||
+              artifacts.options.mode === 'on-all-retries' ||
+              task.result?.status === 'failed';
+            const shouldStageTrace =
+              artifacts.options.mode === 'retain-on-failure' &&
+              task.result?.status !== 'failed';
 
-              if (shouldSaveTrace) {
-                activeArtifacts = await reserveTraceArtifacts(artifacts);
-                const tracePath = activeArtifacts.tracePath;
-                try {
-                  await withCleanupTimeout('tracing.stop', () =>
-                    context.tracing.stop({ path: tracePath }),
-                  );
-                } catch (error) {
-                  await rm(activeArtifacts.dir, {
-                    recursive: true,
-                    force: true,
-                  });
-                  activeArtifacts = undefined;
-                  throw error;
-                }
-              } else if (shouldStageTrace) {
-                stagedTraceDir = await mkdtemp(
-                  join(tmpdir(), 'rstest-playwright-trace-'),
-                );
-                stagedTracePath = join(stagedTraceDir, 'trace.zip');
-                try {
-                  await withCleanupTimeout('tracing.stop', () =>
-                    context.tracing.stop({ path: stagedTracePath }),
-                  );
-                } catch (error) {
-                  await rm(stagedTraceDir, {
-                    recursive: true,
-                    force: true,
-                  });
-                  stagedTraceDir = undefined;
-                  stagedTracePath = undefined;
-                  throw error;
-                }
-              } else {
+            if (shouldSaveTrace) {
+              activeArtifacts = await reserveTraceArtifacts(artifacts);
+              const tracePath = activeArtifacts.tracePath;
+              try {
                 await withCleanupTimeout('tracing.stop', () =>
-                  context.tracing.stop(),
+                  context.tracing.stop({ path: tracePath }),
                 );
+              } catch (error) {
+                await rm(activeArtifacts.dir, {
+                  recursive: true,
+                  force: true,
+                });
+                activeArtifacts = undefined;
+                throw error;
               }
+            } else if (shouldStageTrace) {
+              stagedTraceDir = await mkdtemp(
+                join(tmpdir(), 'rstest-playwright-trace-'),
+              );
+              stagedTracePath = join(stagedTraceDir, 'trace.zip');
+              try {
+                await withCleanupTimeout('tracing.stop', () =>
+                  context.tracing.stop({ path: stagedTracePath }),
+                );
+              } catch (error) {
+                await rm(stagedTraceDir, {
+                  recursive: true,
+                  force: true,
+                });
+                stagedTraceDir = undefined;
+                stagedTracePath = undefined;
+                throw error;
+              }
+            } else {
+              await withCleanupTimeout('tracing.stop', () =>
+                context.tracing.stop(),
+              );
             }
-          } finally {
-            await withCleanupTimeout('context.close', () => context.close());
           }
         } catch (error) {
-          if (task.result?.status === 'failed') {
-            await finishContextCleanup(false);
-          }
-          throw error;
+          errors.push(error);
         }
 
-        await finishContextCleanup(task.result?.status !== 'failed');
+        try {
+          await withCleanupTimeout('context.close', () => context.close());
+        } catch (error) {
+          errors.push(error);
+        }
+
+        // Successful bodies defer trace retention until the runner records any
+        // cleanup failure and invokes the onTestFailed compensation path.
+        if (errors.length === 0 || task.result?.status === 'failed') {
+          try {
+            await finishContextCleanup(task.result?.status !== 'failed');
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+
+        if (errors.length === 1) {
+          throw errors[0];
+        }
+        if (errors.length > 1) {
+          // Rstest reports an error array with each original message and stack.
+          throw errors;
+        }
       })();
 
       return cleanupPromise;
