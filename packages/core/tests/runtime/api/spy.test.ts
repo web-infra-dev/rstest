@@ -234,6 +234,91 @@ describe('initSpy fn()', () => {
     ]);
   });
 
+  it('observes a returned Promise only once', async () => {
+    const { fn, spyOn } = initSpy();
+    const promise = Promise.resolve('ok');
+    const then = spyOn(promise, 'then');
+    const mock = fn(() => promise);
+
+    expect(mock()).toBe(promise);
+    expect(then).toHaveBeenCalledTimes(1);
+    await promise;
+    expect(mock.mock.settledResults).toEqual([
+      { type: 'fulfilled', value: 'ok' },
+    ]);
+  });
+
+  it.each(['tag', 'then getter', 'then call'])(
+    'records a throw when the Promise %s throws',
+    (stage) => {
+      const { fn } = initSpy();
+      const error = new Error(stage);
+      const result = {
+        get [Symbol.toStringTag]() {
+          if (stage === 'tag') throw error;
+          return 'Promise';
+        },
+        get then() {
+          if (stage === 'then getter') throw error;
+          return () => {
+            throw error;
+          };
+        },
+      };
+      const mock = fn(() => result);
+
+      expect(mock).toThrow(error);
+      expect(mock.mock.results).toEqual([{ type: 'throw', value: error }]);
+      expect(mock).not.toHaveReturned();
+    },
+  );
+
+  it('keeps pending results out of a cleared mock', async () => {
+    const { fn } = initSpy();
+    let resolve!: (value: string) => void;
+    const promise = new Promise<string>((done) => {
+      resolve = done;
+    });
+    const mock = fn(() => promise);
+
+    mock();
+    mock.mockClear();
+    mock.mockResolvedValueOnce('new');
+    await mock();
+    resolve('old');
+    await promise;
+
+    expect(mock.mock.calls).toEqual([[]]);
+    expect(mock.mock.settledResults).toEqual([
+      { type: 'fulfilled', value: 'new' },
+    ]);
+  });
+
+  it('preserves constructor prototypes behind a getter', () => {
+    const { spyOn } = initSpy();
+    function Original(this: { value: number }, value: number) {
+      this.value = value;
+    }
+    Original.prototype.getValue = function () {
+      return this.value;
+    };
+    const object = {
+      get Original() {
+        return Original;
+      },
+    };
+    const mock = spyOn(object, 'Original');
+
+    expect(object.Original).toBe(mock);
+    const instance = Reflect.construct(object.Original, [42]);
+
+    expect(instance).toBeInstanceOf(Original);
+    expect(instance.getValue()).toBe(42);
+    expect(mock.mock.results[0]?.value).toBe(instance);
+    mock.mockRestore();
+    expect(object.Original).toBe(Original);
+  });
+
   it('records the instance as the result of a `new` call', () => {
     const { fn } = initSpy();
     const Mock = fn(function (this: { value?: number }) {

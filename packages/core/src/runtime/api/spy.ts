@@ -208,18 +208,23 @@ export const initSpy = (
       ReturnType<T>
     >;
 
-    const spyFn = spyImpl as unknown as Mock<T>;
+    // Keep tinyspy's descriptors and function metadata, but own execution so
+    // its call wrapper cannot subscribe to the returned Promise a second time.
+    const spyFn = new Proxy(spyImpl, {
+      apply: (_target, thisArg, args) => Reflect.apply(willCall, thisArg, args),
+      construct: (_target, args, newTarget) =>
+        Reflect.construct(willCall, args, newTarget),
+    }) as unknown as Mock<T>;
 
     let mockImplementationOnce: NormalizedProcedure<T>[] = [];
     let implementation = mockFn;
     let mockName = mockFn?.name;
 
     const initMockState = () => ({
+      calls: [] as MockContext<T>['calls'],
       instances: [] as ReturnType<T>[],
       contexts: [] as ThisParameterType<T>[],
       invocationCallOrder: [] as number[],
-      // Indexed by call, like `calls`. tinyspy appends a result when its call
-      // finishes, so a mock that calls itself would list results out of order.
       results: [] as MockContext<T>['results'],
       settledResults: [] as MockContext<T>['settledResults'],
     });
@@ -260,7 +265,6 @@ export const initSpy = (
 
       implementation = fn;
       mockImplementationOnce = [];
-      spyState.willCall(willCall);
 
       const reset = () => {
         implementation = originalImplementation;
@@ -354,69 +358,67 @@ export const initSpy = (
       } as T);
     };
 
-    function willCall(this: unknown, ...args: any) {
-      // tinyspy records the call before it runs this implementation.
-      const callIndex = spyState.callCount - 1;
+    function willCall(this: unknown, ...args: Parameters<T>) {
       // A call that settles after `mockClear` must not write into the new state.
-      const { results, settledResults } = mockState;
+      const { calls, results, settledResults } = mockState;
+      const callIndex = calls.push(args) - 1;
       results[callIndex] = { type: 'incomplete', value: undefined };
-      let impl = implementation || (spyState.getOriginal() as T);
       mockState.instances.push(this as ReturnType<T>);
       mockState.contexts.push(this as ThisParameterType<T>);
       mockState.invocationCallOrder.push(++callOrder);
-      if (mockImplementationOnce.length) {
-        impl = mockImplementationOnce.shift()!;
-      }
-      let result: ReturnType<T>;
       try {
-        result = impl?.apply(this, args);
+        let impl = implementation || (spyState.getOriginal() as T);
+        if (mockImplementationOnce.length) {
+          impl = mockImplementationOnce.shift()!;
+        }
+        const result: ReturnType<T> = impl?.apply(this, args);
+        const isObject =
+          (typeof result === 'object' && result !== null) ||
+          typeof result === 'function';
+        if (
+          isObject &&
+          // The tag finds a promise from another realm (a test's `Promise` in a
+          // VM context); `instanceof` finds a subclass with its own tag.
+          ((result as object) instanceof Promise ||
+            Object.prototype.toString.call(result) === '[object Promise]')
+        ) {
+          const then: unknown = Reflect.get(result, 'then');
+          if (typeof then === 'function') {
+            void then.call(
+              result,
+              (value: Awaited<ReturnType<T>>) => {
+                settledResults[callIndex] = { type: 'fulfilled', value };
+              },
+              (error: unknown) => {
+                settledResults[callIndex] = { type: 'rejected', value: error };
+              },
+            );
+          }
+        }
+        results[callIndex] = {
+          type: 'return',
+          // `new` returns the instance unless the implementation returns an object.
+          value: new.target && !isObject ? (this as ReturnType<T>) : result,
+        };
+        return result;
       } catch (error) {
         results[callIndex] = { type: 'throw', value: error };
         throw error;
       }
-      const isObject =
-        (typeof result === 'object' && result !== null) ||
-        typeof result === 'function';
-      results[callIndex] = {
-        type: 'return',
-        // `new` returns the instance unless the implementation returns an object.
-        value: new.target && !isObject ? (this as ReturnType<T>) : result,
-      };
-      if (
-        isObject &&
-        // The tag finds a promise from another realm (a test's `Promise` in a
-        // VM context); `instanceof` finds a subclass with its own tag.
-        ((result as object) instanceof Promise ||
-          Object.prototype.toString.call(result) === '[object Promise]') &&
-        'then' in result &&
-        typeof result.then === 'function'
-      ) {
-        void result.then(
-          (value: Awaited<ReturnType<T>>) => {
-            settledResults[callIndex] = { type: 'fulfilled', value };
-          },
-          (error: unknown) => {
-            settledResults[callIndex] = { type: 'rejected', value: error };
-          },
-        );
-      }
-      return result;
     }
-
-    spyState.willCall(willCall);
 
     Object.defineProperty(spyFn, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
           if (getRealmArray() === Array) {
-            return spyState.calls.slice();
+            return mockState.calls.slice();
           }
           return toRealmArray(
-            spyState.calls.map((call) => toRealmCall(call)),
+            mockState.calls.map((call) => toRealmCall(call)),
           ) as MockContext<T>['calls'];
         },
         get lastCall() {
-          const lastCall = spyState.calls[spyState.callCount - 1];
+          const lastCall = mockState.calls.at(-1);
           return lastCall
             ? (toRealmCall(lastCall) as MockContext<T>['lastCall'])
             : undefined;
@@ -449,7 +451,6 @@ export const initSpy = (
 
     spyFn.mockClear = () => {
       mockState = initMockState();
-      spyState.reset();
 
       return spyFn;
     };
@@ -494,24 +495,27 @@ export const initSpy = (
       restoreSpies.set(spyFn, restore);
       restoreSpies.set(realmSpy, restore);
     }
-    if (realmSpy !== spyFn) {
-      descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
-      if (descriptor) {
-        if (typeof methodName === 'string') {
-          if ('value' in descriptor) {
-            descriptor.value = realmSpy;
-          } else {
-            descriptor.get = () => realmSpy;
-          }
-        } else if ('getter' in methodName) {
-          descriptor.get = realmSpy;
+    descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+    if (descriptor) {
+      if (typeof methodName === 'string') {
+        if ('value' in descriptor) {
+          descriptor.value = realmSpy;
         } else {
-          descriptor.set = realmSpy as unknown as NonNullable<
-            PropertyDescriptor['set']
-          >;
+          // tinyspy's accessor initializes the original constructor prototype.
+          const getSpy = descriptor.get!;
+          descriptor.get = () => {
+            getSpy.call(obj);
+            return realmSpy;
+          };
         }
-        Object.defineProperty(obj, propertyName, descriptor);
+      } else if ('getter' in methodName) {
+        descriptor.get = realmSpy;
+      } else {
+        descriptor.set = realmSpy as unknown as NonNullable<
+          PropertyDescriptor['set']
+        >;
       }
+      Object.defineProperty(obj, propertyName, descriptor);
     }
 
     return realmSpy;
