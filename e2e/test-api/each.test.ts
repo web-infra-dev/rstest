@@ -92,3 +92,44 @@ describe.each([[{ id: 1 }]])('suite %o', () => {
 it.each(mixedTable)('mixed table case %#', (value) => {
   mixedReceived.push(value);
 });
+
+for (const specifier of ['%s', '%o', '%O']) {
+  it.each([{ price: '$10' }, { price: '$20' }])(
+    `price $price: ${specifier}`,
+    ({ price }) => {
+      expect(expect.getState().currentTestName).toBe(
+        `price ${price}: { price: '${price}' }`,
+      );
+    },
+  );
+}
+
+describe.each([{ label: '%s $missing' }])('suite %o', () => {
+  it('preserves placeholder text in values', () => {
+    expect(expect.getState().currentTestName).toBe(
+      "suite { label: '%s $missing' } > preserves placeholder text in values",
+    );
+  });
+});
+
+const circularMap = new Map<string, unknown>();
+circularMap.set('self', circularMap);
+const circularSet = new Set<unknown>();
+circularSet.add(circularSet);
+const circularArray: unknown[] = [];
+circularArray.push(circularArray);
+
+for (const specifier of ['%o', '%O']) {
+  it.each([[circularMap], [circularSet], [circularArray]])(
+    `circular collection %# ${specifier}`,
+    () => {
+      expect(expect.getState().currentTestName).toContain('[Circular]');
+    },
+  );
+}
+
+describe.each([circularMap, circularSet])('circular suite %# %s', () => {
+  it('collects circular values', () => {
+    expect(expect.getState().currentTestName).toContain('[Circular]');
+  });
+});
