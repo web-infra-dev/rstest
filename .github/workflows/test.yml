@@ -49,6 +49,7 @@ jobs:
               - "!**/*.mdx"
               - "!**/_meta.json"
               - "!**/dictionary.txt"
+              - "!website/**"
 
   # ======== lint ========
   lint:
