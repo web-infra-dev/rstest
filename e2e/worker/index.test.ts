@@ -129,14 +129,17 @@ describe('test worker behavior', () => {
 
     await expectExecFailed();
     expect(cli.log).toContain('Worker exited unexpectedly');
-    expect(cli.log).toContain('Maybe related stderr');
-    expect(cli.log).toContain(marker);
+    expect(cli.log).toContain(`Worker stderr before exit:\n  ${marker}`);
+    expect(cli.log).not.toContain('Maybe relevant test case');
+    expect(cli.log).not.toContain('The below test cases may be relevant');
     // The case that was running at crash time is attributed as a failed test
     // case rather than silently dropped from the counts (#1535).
     expect(
       cli.log,
       'case running at crash time is reported by name (#1535)',
-    ).toContain('should crash the worker process');
+    ).toMatch(
+      /FAIL\s+.*worker\.panic\.test\.ts > worker panic > should crash the worker process/,
+    );
     expect(
       cli.stdout,
       'crashed case counted as a failed test, not dropped (#1535)',

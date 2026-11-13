@@ -12,13 +12,11 @@ import type {
   RawTestFileResult,
   RawTestInfo,
   RawTestResult,
-  TestCaseInfo,
   TestFileResult,
   TestResult,
   TestEnvironmentModuleReference,
 } from '../types';
 import {
-  color,
   getFileTaskId,
   isDeno,
   logger,
@@ -300,8 +298,6 @@ const buildTask = async ({
 
 /**
  * Convert a worker crash or pool error into a fail-status `TestFileResult`.
- * Enriches the error with context about which test cases were running at the
- * time of the crash (if any).
  *
  * Returns the file result plus the synthetic `crashedResults` (the cases that
  * were running at crash time). The caller replays those through the live
@@ -341,16 +337,6 @@ const workerErrorToResult = (
   // were running so they surface as failed test cases in the `Tests` totals,
   // instead of the case silently vanishing from the counts (#1535).
   if (runningTests?.length) {
-    const getCaseName = (test: TestCaseInfo) =>
-      `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
-
-    const hint =
-      runningTests.length === 1
-        ? `Maybe relevant test case: ${getCaseName(runningTests[0]!)} which is running when the error occurs.`
-        : `The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningTests.map((t) => getCaseName(t)).join('\n  - ')}`;
-
-    error.message += `\n\n${color.white(hint)}`;
-
     crashedResults = runningTests.map((test) => ({
       testId: test.testId,
       status: 'failed',
