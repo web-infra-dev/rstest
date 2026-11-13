@@ -60,38 +60,34 @@ test('uses configurable assertion timeouts and matcher overrides', async ({
   page,
 }) => {
   await page.setContent('<div class="message">Pending</div>');
+  if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
+    // Keep the targets unchanged until both timeout assertions finish. A
+    // delayed IPC response must not race a browser-side update into passing.
+    await Promise.all([
+      expect(
+        expect(page.locator('.message')).toContainText('Saved'),
+      ).rejects.toThrow(
+        /to contain text|Playwright assertion timed out after 100ms/,
+      ),
+      expect(expect(page).toHaveTitle('Saved')).rejects.toThrow(
+        /to have title|Playwright assertion timed out after 100ms/,
+      ),
+    ]);
+  }
+
   await page.evaluate(() => {
     setTimeout(() => {
       document.querySelector('.message')!.textContent = 'Saved';
-    }, 500);
-  });
-
-  const assertion = expect(page.locator('.message')).toContainText('Saved');
-  if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
-    await expect(assertion).rejects.toThrow(
-      /to contain text|Playwright assertion timed out after 100ms/,
-    );
-  } else {
-    await assertion;
-  }
-
-  await expect(page.locator('.message')).toContainText('Saved', {
-    timeout: 2000,
-  });
-
-  await page.evaluate(() => {
-    setTimeout(() => {
       document.title = 'Saved';
     }, 500);
   });
-  const titleAssertion = expect(page).toHaveTitle('Saved');
-  if (process.env.RSTEST_E2E_POLL_TIMEOUT) {
-    await expect(titleAssertion).rejects.toThrow(
-      /to have title|Playwright assertion timed out after 100ms/,
-    );
-  } else {
-    await titleAssertion;
-  }
-  await expect(page).toHaveTitle('Saved', { timeout: 2000 });
+
+  const options = process.env.RSTEST_E2E_POLL_TIMEOUT
+    ? { timeout: 2000 }
+    : undefined;
+  await Promise.all([
+    expect(page.locator('.message')).toContainText('Saved', options),
+    expect(page).toHaveTitle('Saved', options),
+  ]);
   console.log('RSTEST_PLAYWRIGHT_EXPECT_TIMEOUT_OK');
 });

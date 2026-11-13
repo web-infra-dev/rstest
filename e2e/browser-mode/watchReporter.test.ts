@@ -16,10 +16,6 @@ const getHookCountFromLog = (content: string, hookName: string): number => {
   return content.split('\n').filter((line) => line.trim() === hookName).length;
 };
 
-// Real Chrome (channel=chrome) cold-launch on loaded CI runners can push the
-// first run past a tight budget, so keep this generous across platforms.
-const WATCH_REPORTER_HOOK_TIMEOUT_MS = 15_000;
-
 describe('browser mode - watch reporter lifecycle', () => {
   it('reports the selected browser watch subset', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-reporter`;
@@ -42,44 +38,8 @@ describe('browser mode - watch reporter lifecycle', () => {
         .map((line) => JSON.parse(line));
 
     try {
-      const waitForHookCounts = async (
-        expectedStartCount: number,
-        expectedEndCount: number,
-      ): Promise<void> => {
-        const pollIntervalMs = 25;
-        const startTime = Date.now();
-
-        while (Date.now() - startTime < WATCH_REPORTER_HOOK_TIMEOUT_MS) {
-          let reportLog: string;
-          try {
-            reportLog = fs.read(reportLogPath);
-          } catch {
-            reportLog = '';
-          }
-
-          const startCount = getHookCountFromLog(reportLog, 'onTestRunStart');
-          const endCount = getHookCountFromLog(reportLog, 'onTestRunEnd');
-
-          if (
-            startCount >= expectedStartCount &&
-            endCount >= expectedEndCount
-          ) {
-            return;
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-        }
-
-        throw new Error(
-          `Timed out waiting for hooks start=${expectedStartCount}, end=${expectedEndCount}. Current log:\n${fs.read(reportLogPath)}`,
-        );
-      };
-
-      await waitForHookCounts(1, 1);
-
-      if (!cli.stdout.includes('Waiting for file changes...')) {
-        await cli.waitForStdout('Waiting for file changes...');
-      }
+      await cli.waitForStdout('WATCH_REPORTER_RUN_END:1');
+      await cli.waitForStdout('Waiting for file changes...');
 
       const initialReportLog = fs.read(reportLogPath);
       expect(getHookCountFromLog(initialReportLog, 'onTestRunStart')).toBe(1);
@@ -93,14 +53,14 @@ describe('browser mode - watch reporter lifecycle', () => {
       const testFilePath = path.join(fixturesTargetPath, 'tests/index.test.ts');
 
       cli.resetStd();
-      fs.update(testFilePath, (content) => `${content}\n// watch-rerun-marker`);
+      // A comment-only edit can leave the emitted module unchanged.
+      fs.update(testFilePath, (content) =>
+        content.replace("'should pass'", "'should pass after edit'"),
+      );
 
-      await cli.waitForStdout('Re-running 1 affected test file(s)');
-      await waitForHookCounts(2, 2);
-
-      if (!cli.stdout.includes('Waiting for file changes...')) {
-        await cli.waitForStdout('Waiting for file changes...');
-      }
+      await cli.waitForStdout('WATCH_REPORTER_RUN_END:2');
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.stdout).toContain('Re-running 1 affected test file(s)');
 
       const rerunReportLog = fs.read(reportLogPath);
       expect(getHookCountFromLog(rerunReportLog, 'onTestRunStart')).toBe(2);

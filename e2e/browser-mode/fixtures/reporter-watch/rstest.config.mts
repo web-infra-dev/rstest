@@ -11,6 +11,8 @@ const writeReportLog = (event: string) => {
 };
 
 class WatchLifecycleReporter implements Reporter {
+  private completedRuns = 0;
+
   onTestRunStart(payload: TestRunStartPayload) {
     writeReportLog('onTestRunStart');
     writeReportLog(JSON.stringify(payload));
@@ -18,6 +20,7 @@ class WatchLifecycleReporter implements Reporter {
 
   onTestRunEnd() {
     writeReportLog('onTestRunEnd');
+    console.log(`WATCH_REPORTER_RUN_END:${++this.completedRuns}`);
   }
 }
 
