@@ -60,6 +60,7 @@ export async function printError(
   error: SerializedError,
   getSourcemap: GetSourcemap,
   rootPath: string,
+  label = '',
 ): Promise<void> {
   const errorName = error.name || 'Unknown Error';
 
@@ -80,7 +81,7 @@ export async function printError(
   }
 
   logger.stderr(
-    `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
+    `${color.red(label)}${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
 
   if (error.diff) {
@@ -125,6 +126,10 @@ export async function printError(
     }
 
     printStack(stackFrames, rootPath);
+  }
+
+  if (error.cause) {
+    await printError(error.cause, getSourcemap, rootPath, 'Caused by: ');
   }
 }
 

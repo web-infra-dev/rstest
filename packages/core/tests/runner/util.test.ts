@@ -200,4 +200,45 @@ describe('formatTestError', () => {
 
     expect(error.message).toBe('foo is not defined');
   });
+
+  it('keeps the cause chain of an error', async () => {
+    const root = new TypeError('fetch failed');
+    const middle = new Error('Request failed', { cause: root });
+    const error = (
+      await formatTestError(
+        new Error('Failed to load the user', { cause: middle }),
+      )
+    )[0]!;
+
+    expect(error.message).toBe('Failed to load the user');
+    expect(error.cause).toMatchObject({
+      name: 'Error',
+      message: 'Request failed',
+      stack: middle.stack,
+      cause: { name: 'TypeError', message: 'fetch failed', stack: root.stack },
+    });
+    expect(error.cause!.cause!.cause).toBeUndefined();
+  });
+
+  it('leaves out a cause that is not an error', async () => {
+    for (const cause of [undefined, null, 'timeout', 404, ['a'], { code: 1 }]) {
+      const error = (await formatTestError(new Error('failed', { cause })))[0]!;
+
+      expect(error).not.toHaveProperty('cause');
+    }
+  });
+
+  it('stops at a circular cause chain', async () => {
+    const first = new Error('first');
+    const second = new Error('second', { cause: first });
+    first.cause = second;
+    const self = new Error('self');
+    self.cause = self;
+
+    const error = (await formatTestError(first))[0]!;
+
+    expect(error.cause).toMatchObject({ message: 'second' });
+    expect(error.cause).not.toHaveProperty('cause');
+    expect((await formatTestError(self))[0]).not.toHaveProperty('cause');
+  });
 });

@@ -217,6 +217,8 @@ export interface SerializedError {
   expected?: string;
   actual?: string;
   retryCount?: number;
+  /** The error that this error was created from (`error.cause`), if any. */
+  cause?: SerializedError;
 }
 
 export type RawTestResult = {
