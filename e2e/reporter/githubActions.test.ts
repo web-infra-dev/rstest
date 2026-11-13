@@ -258,6 +258,57 @@ it.skipIf(!process.env.CI)(
 );
 
 it.skipIf(!process.env.CI)(
+  'github-actions summary keeps Markdown and HTML in test names as text',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-markdown-names.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    try {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          'markdownNames',
+          '--retry',
+          '1',
+          '--reporters',
+          'github-actions',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: {
+              GITHUB_WORKSPACE: githubWorkspace,
+              GITHUB_STEP_SUMMARY: stepSummaryPath,
+            },
+          },
+        },
+      });
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.exec.process?.exitCode).toBe(1);
+
+      const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
+
+      expect(stepSummary).toContain(
+        '### ❌ FAIL fixtures/markdownNames.test.ts > \\<Button /> > renders \\`children\\` in \\*bold\\* (retry x1)',
+      );
+      expect(stepSummary).toContain(
+        '- `` fixtures/markdownNames.test.ts > <Button /> > returns `undefined` `` (passed after retry x1)',
+      );
+    } finally {
+      fs.rmSync(stepSummaryPath, { force: true });
+      fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+    }
+  },
+);
+
+it.skipIf(!process.env.CI)(
   'github-actions summary includes explicit project name in title',
   async () => {
     const stepSummaryPath = join(

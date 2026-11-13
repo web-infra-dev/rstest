@@ -181,6 +181,28 @@ function escapeProperty(s: string): string {
   return escapeData(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
 }
 
+// Test names are plain text, but GitHub renders the step summary as Markdown:
+// it drops `<Button />` as an unknown HTML tag and turns `*`, `_`, `~`,
+// backticks or `[x](y)` into formatting. It also drops a `#` that ends a
+// heading, as the heading's closing sequence.
+function escapeMarkdown(s: string): string {
+  return s.replace(/[\\`*_[\]<&~#]/g, '\\$&');
+}
+
+// A code span ends at the first backtick run as long as its fence, so the
+// fence has to be longer than any run in the text.
+function inlineCode(s: string): string {
+  const longestRun = Math.max(
+    0,
+    ...Array.from(s.matchAll(/`+/g), ([run]) => run.length),
+  );
+  if (longestRun === 0) {
+    return `\`${s}\``;
+  }
+  const fence = '`'.repeat(longestRun + 1);
+  return `${fence} ${s} ${fence}`;
+}
+
 const STEP_SUMMARY_MAX_FAILURES = 20;
 const STEP_SUMMARY_MAX_FLAKY_TESTS = 20;
 const STEP_SUMMARY_DEFAULT_MAX_CHARS_PER_FIELD = 400;
@@ -354,7 +376,7 @@ async function renderStepSummary({
       const fullName = flakyTest.fullName;
       const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
       lines.push(
-        `- \`${title}\` (passed after retry x${flakyTest.retryCount})`,
+        `- ${inlineCode(title)} (passed after retry x${flakyTest.retryCount})`,
       );
 
       const previousFailureSummary = getPreviousFailureSummary(flakyTest);
@@ -400,7 +422,7 @@ async function renderStepSummary({
       const fullName = test.fullName;
       const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
       const retrySuffix = test.retryCount ? ` (retry x${test.retryCount})` : '';
-      pushHeading(lines, 3, `❌ FAIL ${title}${retrySuffix}`);
+      pushHeading(lines, 3, `❌ FAIL ${escapeMarkdown(title)}${retrySuffix}`);
 
       const reportedErrors: SerializedError[] = errors.length
         ? errors
