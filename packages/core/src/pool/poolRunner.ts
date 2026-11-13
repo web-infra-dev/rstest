@@ -1,7 +1,7 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RawTestFileResult, RuntimeRPC, ServerRPC } from '../types';
 import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
-import { createDeferred, type Deferred, toError } from '../utils';
+import { color, createDeferred, type Deferred, toError } from '../utils';
 import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   WORKER_CLEANUP_TIMEOUT_MS,
@@ -611,9 +611,13 @@ export class PoolRunner {
   private attachStderrToError(err: Error): void {
     const raw = this.worker.getCapturedStderr().trim();
     if (raw.length === 0) return;
-    const stderr = formatCapturedStderr(raw);
+    const stderr = formatCapturedStderr(raw).replace(/^/gm, '  ');
     if (err.message.includes(stderr)) return;
-    err.message = `${err.message}\n\nMaybe related stderr:\n${stderr}`;
+    const heading =
+      this.state === 'STOPPED'
+        ? 'Worker stderr before exit:'
+        : 'Worker stderr:';
+    err.message = `${err.message}\n\n${color.yellow(color.bold(heading))}\n${stderr}`;
   }
 
   private clearStartTimer(): void {
