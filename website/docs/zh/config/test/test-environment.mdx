@@ -120,6 +120,12 @@ export default defineConfig({
 });
 ```
 
+##### 预打包缓存 \{#prebundle-cache}
+
+Rstest 会把预打包产物存放在项目根目录下的 `node_modules/.cache/rstest-test-environments`，并在之后的运行中复用，同一台机器上的并行运行也会共享。当 Rstest、Rsbuild、环境包或产物依赖的任一文件发生变化时，会自动重新构建。如果该目录不可写，Rstest 会在本次运行中改用临时目录构建预打包产物。
+
+该缓存可以安全删除。清理在发布新的预打包产物时触发：超过 7 天未使用的条目会被删除，每个缓存构建（例如每个 jsdom 版本）最多保留 3 个条目。
+
 ##### 预打包问题排查 \{#troubleshooting-the-prebundle}
 
 预打包是可选的优化。如果 DOM 环境在预打包后的行为发生变化，请设置 `prebundle: false`，改用原生加载。

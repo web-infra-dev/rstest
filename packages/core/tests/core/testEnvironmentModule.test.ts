@@ -1,5 +1,6 @@
 import { withTempDir } from '../helpers/tempDir';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -165,7 +166,8 @@ exports.canvasToken = canvas.token;
       } finally {
         const bundlePath = result.modules.get('jsdom')?.bundlePath;
         await result.cleanup();
-        expect(bundlePath && fs.existsSync(bundlePath)).toBe(false);
+        // The cache entry outlives the run.
+        expect(bundlePath && fs.existsSync(bundlePath)).toBe(true);
       }
     });
   });
@@ -798,6 +800,409 @@ export class JSDOM {}`,
       } finally {
         await result.cleanup();
       }
+    });
+  });
+});
+
+describe('prebundle cache', () => {
+  const cacheDirectory = (root: string): string =>
+    path.join(root, 'node_modules', '.cache', 'rstest-test-environments');
+
+  const listEntries = (root: string): string[] => {
+    const base = cacheDirectory(root);
+    if (!fs.existsSync(base)) return [];
+    return fs
+      .readdirSync(base)
+      .filter((name) => !name.startsWith('.'))
+      .flatMap((key) =>
+        fs
+          .readdirSync(path.join(base, key))
+          .map((generation) => path.join(base, key, generation)),
+      );
+  };
+
+  const createCountingBuilder = () => {
+    const calls: string[] = [];
+    const buildModule: NonNullable<
+      Parameters<typeof prepareTestEnvironmentModules>[0]['buildModule']
+    > = (options) => {
+      calls.push(options.environmentRoot);
+      return buildTestEnvironmentModule(options);
+    };
+    return { calls, buildModule };
+  };
+
+  const createDependencyPackage = (root: string, token: string) => {
+    const entry = createPackage(
+      root,
+      `import { token } from './dep.js';
+export class JSDOM {}
+export const dependencyToken = token;
+`,
+    );
+    const dependencyPath = path.join(path.dirname(entry), 'dep.js');
+    fs.writeFileSync(
+      dependencyPath,
+      `export const token = ${JSON.stringify(token)};`,
+    );
+    return dependencyPath;
+  };
+
+  const prepareOnce = async (
+    root: string,
+    buildModule: Parameters<
+      typeof prepareTestEnvironmentModules
+    >[0]['buildModule'],
+  ) => {
+    const result = await prepareTestEnvironmentModules({
+      buildModule,
+      projects: [createProject(root, { prebundle: true })],
+      rootPath: root,
+    });
+    const bundlePath = result.modules.get('jsdom')?.bundlePath;
+    if (!bundlePath) {
+      await result.cleanup();
+      throw new Error('Expected jsdom to be bundled.');
+    }
+    return { bundlePath, cleanup: result.cleanup };
+  };
+
+  it('reuses the cached bundle on a second prepare and keeps it across cleanup', async () => {
+    await withTempDir('rstest-env-cache-reuse-', async (root) => {
+      createDependencyPackage(root, 'one');
+      const { calls, buildModule } = createCountingBuilder();
+
+      const first = await prepareOnce(root, buildModule);
+      expect(
+        first.bundlePath.startsWith(cacheDirectory(fs.realpathSync(root))),
+      ).toBe(true);
+      expect(first.bundlePath.split(path.sep)).toContain('node_modules');
+      await first.cleanup();
+      expect(fs.existsSync(first.bundlePath)).toBe(true);
+
+      const second = await prepareOnce(root, buildModule);
+      try {
+        expect(calls).toHaveLength(1);
+        expect(second.bundlePath).toBe(first.bundlePath);
+        const bundled = await import(pathToFileURL(second.bundlePath).href);
+        expect(bundled.dependencyToken).toBe('one');
+      } finally {
+        await second.cleanup();
+      }
+
+      expect(fs.existsSync(second.bundlePath)).toBe(true);
+      expect(listEntries(root)).toHaveLength(1);
+      expect(
+        fs
+          .readdirSync(cacheDirectory(root))
+          .filter((name) => name.startsWith('.')),
+      ).toEqual([]);
+    });
+  });
+
+  it('publishes a new entry when a bundled dependency file changes', async () => {
+    await withTempDir('rstest-env-cache-dependency-', async (root) => {
+      const dependencyPath = createDependencyPackage(root, 'one');
+      const past = (secondsAgo: number) =>
+        new Date(Date.now() - secondsAgo * 1000);
+      fs.utimesSync(dependencyPath, past(120), past(120));
+      const { calls, buildModule } = createCountingBuilder();
+
+      const first = await prepareOnce(root, buildModule);
+      await first.cleanup();
+      expect(listEntries(root)).toHaveLength(1);
+
+      // Same size, different mtime.
+      fs.writeFileSync(dependencyPath, 'export const token = "two";');
+      fs.utimesSync(dependencyPath, past(60), past(60));
+      const second = await prepareOnce(root, buildModule);
+      try {
+        expect(calls).toHaveLength(2);
+        expect(second.bundlePath).not.toBe(first.bundlePath);
+        const bundled = await import(pathToFileURL(second.bundlePath).href);
+        expect(bundled.dependencyToken).toBe('two');
+      } finally {
+        await second.cleanup();
+      }
+      expect(listEntries(root)).toHaveLength(2);
+
+      // Different size, same mtime.
+      fs.writeFileSync(dependencyPath, 'export const token = "three-3";');
+      fs.utimesSync(dependencyPath, past(60), past(60));
+      const third = await prepareOnce(root, buildModule);
+      try {
+        expect(calls).toHaveLength(3);
+        expect(fs.readFileSync(third.bundlePath, 'utf8')).toContain('three-3');
+      } finally {
+        await third.cleanup();
+      }
+      expect(listEntries(root)).toHaveLength(3);
+    });
+  });
+
+  it('does not cache a build whose input has a future mtime', async () => {
+    await withTempDir('rstest-env-cache-future-', async (root) => {
+      const dependencyPath = createDependencyPackage(root, 'one');
+      const future = new Date(Date.now() + 60_000);
+      fs.utimesSync(dependencyPath, future, future);
+      const debug = rs.spyOn(logger, 'debug').mockImplementation(() => {});
+      const { calls, buildModule } = createCountingBuilder();
+
+      try {
+        const result = await prepareOnce(root, buildModule);
+        try {
+          expect(listEntries(root)).toEqual([]);
+          expect(debug).toHaveBeenCalledWith(
+            expect.stringContaining('will not be cached'),
+          );
+          const bundled = await import(pathToFileURL(result.bundlePath).href);
+          expect(bundled.dependencyToken).toBe('one');
+        } finally {
+          await result.cleanup();
+        }
+        expect(fs.existsSync(result.bundlePath)).toBe(false);
+
+        await (await prepareOnce(root, buildModule)).cleanup();
+        expect(calls).toHaveLength(2);
+      } finally {
+        debug.mockRestore();
+      }
+    });
+  });
+
+  it('rebuilds when the package version changes', async () => {
+    await withTempDir('rstest-env-cache-version-', async (root) => {
+      createPackage(root, 'export class JSDOM {}', { version: '30.0.1' });
+      const { calls, buildModule } = createCountingBuilder();
+      await (await prepareOnce(root, buildModule)).cleanup();
+
+      // Identical files and sizes: only the declared version differs.
+      const manifestPath = path.join(
+        root,
+        'node_modules',
+        'jsdom',
+        'package.json',
+      );
+      const manifest = fs
+        .readFileSync(manifestPath, 'utf8')
+        .replace('30.0.1', '30.0.2');
+      fs.writeFileSync(manifestPath, manifest);
+      await (await prepareOnce(root, buildModule)).cleanup();
+
+      expect(calls).toHaveLength(2);
+    });
+  });
+
+  it('rebuilds when an optional native dependency becomes resolvable', async () => {
+    await withTempDir('rstest-env-cache-optional-', async (root) => {
+      createPackage(
+        root,
+        `let installed = false;
+try {
+  require.resolve('canvas');
+  installed = true;
+} catch {}
+if (installed) {
+  require('canvas');
+}
+exports.JSDOM = class JSDOM {};
+exports.canvasInstalled = installed;
+`,
+        { type: 'commonjs', version: '15.2.0' },
+      );
+      const { calls, buildModule } = createCountingBuilder();
+      await (await prepareOnce(root, buildModule)).cleanup();
+      await (await prepareOnce(root, buildModule)).cleanup();
+      expect(calls).toHaveLength(1);
+
+      createPackage(root, 'exports.token = "canvas";', {
+        name: 'canvas',
+        type: 'commonjs',
+      });
+      await (await prepareOnce(root, buildModule)).cleanup();
+      expect(calls).toHaveLength(2);
+    });
+  });
+
+  it.each([
+    [
+      'a truncated bundle',
+      (entry: string) =>
+        fs.truncateSync(path.join(entry, 'dist', 'environment.mjs'), 10),
+    ],
+    [
+      'a missing bundle',
+      (entry: string) => fs.rmSync(path.join(entry, 'dist', 'environment.mjs')),
+    ],
+    [
+      'an unparsable manifest',
+      (entry: string) =>
+        fs.writeFileSync(path.join(entry, 'manifest.json'), '{'),
+    ],
+    [
+      'a missing manifest',
+      (entry: string) => fs.rmSync(path.join(entry, 'manifest.json')),
+    ],
+  ])('ignores %s and rebuilds', async (_name, damage) => {
+    await withTempDir('rstest-env-cache-corrupt-', async (root) => {
+      createDependencyPackage(root, 'one');
+      const { calls, buildModule } = createCountingBuilder();
+      await (await prepareOnce(root, buildModule)).cleanup();
+      const [entry] = listEntries(root);
+      damage(entry!);
+
+      const result = await prepareOnce(root, buildModule);
+      try {
+        expect(calls).toHaveLength(2);
+        const bundled = await import(pathToFileURL(result.bundlePath).href);
+        expect(bundled.dependencyToken).toBe('one');
+      } finally {
+        await result.cleanup();
+      }
+    });
+  });
+
+  it('keeps every published entry valid when two prepares of one key race', async () => {
+    await withTempDir('rstest-env-cache-concurrent-', async (root) => {
+      createDependencyPackage(root, 'one');
+      const { calls, buildModule } = createCountingBuilder();
+
+      const [a, b] = await Promise.all([
+        prepareOnce(root, buildModule),
+        prepareOnce(root, buildModule),
+      ]);
+      try {
+        expect(calls).toHaveLength(2);
+        for (const { bundlePath } of [a, b]) {
+          const bundled = await import(pathToFileURL(bundlePath).href);
+          expect(bundled.dependencyToken).toBe('one');
+        }
+      } finally {
+        await a.cleanup();
+        await b.cleanup();
+      }
+
+      // Each publisher has its own entry; a later run uses one of them.
+      const entries = listEntries(root);
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      expect(entries.length).toBeLessThanOrEqual(2);
+      expect(
+        fs
+          .readdirSync(cacheDirectory(root))
+          .filter((name) => name.startsWith('.')),
+      ).toEqual([]);
+      const third = await prepareOnce(root, buildModule);
+      await third.cleanup();
+      expect(calls).toHaveLength(2);
+    });
+  });
+
+  it('refreshes the last-used time of its entries when watch mode updates', async () => {
+    await withTempDir('rstest-env-cache-touch-', async (root) => {
+      createDependencyPackage(root, 'one');
+      const result = await prepareTestEnvironmentModules({
+        buildModule: buildTestEnvironmentModule,
+        projects: [createProject(root, { prebundle: true })],
+        rootPath: root,
+      });
+      try {
+        const [entry] = listEntries(root);
+        const old = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+        fs.utimesSync(entry!, old, old);
+        await result.update([createProject(root, { prebundle: true })]);
+        expect(fs.statSync(entry!).mtimeMs).toBeGreaterThan(
+          old.getTime() + 1000,
+        );
+      } finally {
+        await result.cleanup();
+      }
+    });
+  });
+
+  it('falls back to a temporary directory when the cache directory cannot be created', async () => {
+    await withTempDir('rstest-env-cache-blocked-', async (root) => {
+      createDependencyPackage(root, 'one');
+      // A file where the cache's parent directory belongs makes `mkdir` fail
+      // for any user, including root.
+      fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'node_modules', '.cache'), '');
+      const { calls, buildModule } = createCountingBuilder();
+
+      const result = await prepareOnce(root, buildModule);
+      const { bundlePath } = result;
+      try {
+        expect(bundlePath.startsWith(fs.realpathSync(os.tmpdir()))).toBe(true);
+        expect(bundlePath.split(path.sep)).toContain('node_modules');
+        const bundled = await import(pathToFileURL(bundlePath).href);
+        expect(bundled.dependencyToken).toBe('one');
+      } finally {
+        await result.cleanup();
+      }
+      expect(calls).toHaveLength(1);
+      expect(fs.existsSync(bundlePath)).toBe(false);
+    });
+  });
+
+  it('falls back to a temporary directory when the cache directory is read-only', async () => {
+    await withTempDir('rstest-env-cache-readonly-', async (root) => {
+      createDependencyPackage(root, 'one');
+      const modules = path.join(root, 'node_modules');
+      fs.chmodSync(modules, 0o555);
+      try {
+        // Root and Windows ignore the mode; there is nothing to test there.
+        const canStillWrite = (() => {
+          try {
+            fs.mkdirSync(path.join(modules, '.probe'));
+            return true;
+          } catch {
+            return false;
+          }
+        })();
+        if (canStillWrite) {
+          return;
+        }
+
+        const { calls, buildModule } = createCountingBuilder();
+        const result = await prepareOnce(root, buildModule);
+        try {
+          expect(
+            result.bundlePath.startsWith(fs.realpathSync(os.tmpdir())),
+          ).toBe(true);
+          const bundled = await import(pathToFileURL(result.bundlePath).href);
+          expect(bundled.dependencyToken).toBe('one');
+        } finally {
+          await result.cleanup();
+        }
+        expect(calls).toHaveLength(1);
+        expect(fs.existsSync(result.bundlePath)).toBe(false);
+      } finally {
+        fs.chmodSync(modules, 0o755);
+      }
+    });
+  });
+
+  it('does not cache a bundle whose build recorded no manifest', async () => {
+    await withTempDir('rstest-env-cache-no-manifest-', async (root) => {
+      createPackage(root, 'export class JSDOM {}');
+      const result = await prepareOnce(root, async ({ environmentRoot }) => {
+        const bundlePath = path.join(
+          environmentRoot,
+          'dist',
+          'environment.mjs',
+        );
+        fs.mkdirSync(path.dirname(bundlePath), { recursive: true });
+        fs.writeFileSync(bundlePath, 'export class JSDOM {}');
+        return fs.realpathSync(bundlePath);
+      });
+      expect(fs.existsSync(result.bundlePath)).toBe(true);
+      expect(listEntries(root)).toEqual([]);
+      await result.cleanup();
+      expect(fs.existsSync(result.bundlePath)).toBe(false);
+      expect(
+        fs
+          .readdirSync(cacheDirectory(root))
+          .filter((name) => name.startsWith('.tmp-')),
+      ).toEqual([]);
     });
   });
 });

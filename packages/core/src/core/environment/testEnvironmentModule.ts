@@ -10,9 +10,15 @@ import {
 } from 'node:fs/promises';
 import { isBuiltin, createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
+import {
+  createRsbuild,
+  rspack as rspackExports,
+  version as rsbuildVersion,
+  type Rspack,
+  type RsbuildConfig,
+} from '@rsbuild/core';
 import type {
   InternalProjectContext,
   TestEnvironmentModuleReference,
@@ -32,6 +38,18 @@ import {
   type EnvironmentDependencyName,
 } from './envDependencies';
 import { getMockRstestPluginOptions } from '../plugins/mockBuild';
+import {
+  findReusableEntry,
+  getBundlePath,
+  hashParts,
+  isEntryValid,
+  pruneCache,
+  publishEntry,
+  TEST_ENVIRONMENT_CACHE_DIRECTORY,
+  touchEntry,
+  writeManifest,
+  type ExternalResolution,
+} from './testEnvironmentCache';
 
 export type PreparedTestEnvironmentModules = {
   modules: ReadonlyMap<string, TestEnvironmentModuleReference>;
@@ -118,13 +136,13 @@ const autoPrebundleMajorRanges: Record<
   'happy-dom': [{ from: 20, to: 21 }],
 };
 
-const getPackageMajorVersion = async ({
+const getPackageVersion = async ({
   packageName,
   resolvedPath,
 }: {
   packageName: string;
   resolvedPath: string;
-}): Promise<number | undefined> => {
+}): Promise<string | undefined> => {
   let currentDirectory = dirname(resolvedPath);
 
   while (true) {
@@ -149,8 +167,7 @@ const getPackageMajorVersion = async ({
         version?: string;
       };
       if (packageJson.name === packageName) {
-        const major = packageJson.version?.match(/^(\d+)(?:\.|$)/)?.[1];
-        return major === undefined ? undefined : Number(major);
+        return packageJson.version;
       }
       // An unnamed nested package.json may only define module semantics, so
       // keep looking for the owning package. A differently named manifest
@@ -170,6 +187,16 @@ const getPackageMajorVersion = async ({
   }
 };
 
+const getPackageMajorVersion = async (options: {
+  packageName: string;
+  resolvedPath: string;
+}): Promise<number | undefined> => {
+  const major = (await getPackageVersion(options))?.match(
+    /^(\d+)(?:\.|$)/,
+  )?.[1];
+  return major === undefined ? undefined : Number(major);
+};
+
 const canAutoPrebundle = (
   name: EnvironmentDependencyName,
   major: number,
@@ -185,6 +212,7 @@ const testEnvironmentExternal = (
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
+  recordResolution?: (resolution: ExternalResolution) => void,
 ): void => {
   if (!request) {
     callback();
@@ -211,6 +239,9 @@ const testEnvironmentExternal = (
   }
 
   const resolvedPath = resolveFromRoot(request, context);
+  // The emitted external depends on whether the optional package resolves, so
+  // a cached bundle must be rebuilt when that answer changes.
+  recordResolution?.({ context, request, resolved: resolvedPath ?? null });
   // jsdom 13-21 guard a static `require('canvas')` with a separate
   // `require.resolve()` check. Keep the unresolved request external so the
   // optional dependency remains a runtime decision instead of a build error.
@@ -228,13 +259,22 @@ const testEnvironmentExternal = (
   );
 };
 
+/** What a build read, recorded to decide later whether its output is stale. */
+type BuildInputs = {
+  files: Set<string>;
+  missing: Set<string>;
+  externals: Map<string, ExternalResolution>;
+};
+
 const createTestEnvironmentBuildConfig = ({
   entryPath,
+  inputs,
   outputPath,
   projectRoot,
   reference,
 }: {
   entryPath: string;
+  inputs?: BuildInputs;
   outputPath: string;
   projectRoot: string;
   reference: TestEnvironmentModuleReference;
@@ -273,7 +313,15 @@ const createTestEnvironmentBuildConfig = ({
           jsdom: dirname(dirname(reference.resolvedPath)),
         };
       }
-      config.externals = [testEnvironmentExternal];
+      config.externals = [
+        (data, callback) =>
+          testEnvironmentExternal(data, callback, (resolution) => {
+            inputs?.externals.set(
+              `${resolution.context}\0${resolution.request}`,
+              resolution,
+            );
+          }),
+      ];
       config.externalsPresets ??= {};
       config.externalsPresets.node = false;
       config.node = {
@@ -306,6 +354,24 @@ const createTestEnvironmentBuildConfig = ({
         url: false,
       };
       config.plugins ??= [];
+      if (inputs) {
+        config.plugins.push({
+          name: 'rstest:record-environment-inputs',
+          apply(compiler: Rspack.Compiler) {
+            compiler.hooks.done.tap(
+              'rstest:record-environment-inputs',
+              (stats) => {
+                for (const file of stats.compilation.fileDependencies) {
+                  inputs.files.add(file);
+                }
+                for (const file of stats.compilation.missingDependencies) {
+                  inputs.missing.add(file);
+                }
+              },
+            );
+          },
+        });
+      }
       config.plugins.push(
         new rspack.experiments.RstestPlugin({
           ...getMockRstestPluginOptions({ rootPath: projectRoot }),
@@ -358,38 +424,37 @@ const createBundleEntrySource = async (
   return `export * from 'jsdom';\nexport { convert as __rstestBlobConvert } from ${blobConverterModuleUrl};\n`;
 };
 
-type BuildTestEnvironmentModuleOptions = {
-  bundleId: number;
+export type BuildTestEnvironmentModuleOptions = {
+  /** Directory that receives `entry.mjs`, `dist/` and `manifest.json`. */
+  environmentRoot: string;
+  /** Generated entry source, also an input of the cache key. */
+  entrySource: string;
   projectRoot: string;
   reference: TestEnvironmentModuleReference;
-  tempRoot: string;
 };
 
 export const buildTestEnvironmentModule = async ({
-  bundleId,
+  entrySource,
+  environmentRoot,
   projectRoot,
   reference,
-  tempRoot,
 }: BuildTestEnvironmentModuleOptions): Promise<string> => {
-  // Keep bundled third-party code under a node_modules segment. Besides
-  // preserving its dependency provenance for Node diagnostics, this prevents
-  // old jsdom internals such as bare `require('punycode')` from being reported
-  // as application-owned deprecations merely because Rstest relocated them to
-  // a top-level temporary directory.
-  const environmentRoot = join(
-    tempRoot,
-    'node_modules',
-    `test-environment-${bundleId}`,
-  );
   const inputPath = join(environmentRoot, 'entry.mjs');
   const outputPath = join(environmentRoot, 'dist');
   await mkdir(environmentRoot, { recursive: true });
-  await writeFile(inputPath, await createBundleEntrySource(reference));
+  await writeFile(inputPath, entrySource);
 
+  const inputs: BuildInputs = {
+    files: new Set(),
+    missing: new Set(),
+    externals: new Map(),
+  };
+  const startedAt = Date.now();
   const rsbuild = await createRsbuild({
     callerName: 'rstest',
     config: createTestEnvironmentBuildConfig({
       entryPath: inputPath,
+      inputs,
       outputPath,
       projectRoot,
       reference,
@@ -400,6 +465,27 @@ export const buildTestEnvironmentModule = async ({
   const result = await rsbuild.build();
   await result.close();
   const bundlePath = join(outputPath, 'environment.mjs');
+  // The build directory is private to this build and its name changes per
+  // build; the generated entry inside it is covered by the cache key instead.
+  const buildRoots = [environmentRoot, await realpath(environmentRoot)].map(
+    (root) => `${root}${sep}`,
+  );
+  const isOutsideBuild = (path: string) =>
+    !buildRoots.some((root) => path.startsWith(root));
+  const changedFile = await writeManifest({
+    bundleSize: (await stat(bundlePath)).size,
+    directory: environmentRoot,
+    externals: [...inputs.externals.values()],
+    files: [...inputs.files].filter(isOutsideBuild),
+    missing: [...inputs.missing].filter(isOutsideBuild),
+    startedAt,
+  });
+  // Without a manifest the output cannot be revalidated, so it is not cached.
+  if (changedFile) {
+    logger.debug(
+      `the test environment prebundle will not be cached: ${changedFile} was modified during the build or has a future mtime`,
+    );
+  }
   // The OS temp path can contain an alias (macOS exposes /var as /private/var),
   // while Node's ESM stack uses the canonical path. Resolve it once here so
   // workers and source-map-support identify the generated file consistently.
@@ -451,6 +537,20 @@ const buildTestEnvironmentModuleInChild = (
     });
   });
 
+// Everything but the entry source and the package identity that decides the
+// bundle's bytes. The function sources cover local edits of an unreleased
+// build; released builds differ through RSTEST_VERSION.
+const getBuildPipelineFingerprint = (projectRoot: string): string =>
+  hashParts({
+    banner: nativeImportBanner,
+    buildConfig: String(createTestEnvironmentBuildConfig),
+    external: String(testEnvironmentExternal),
+    mock: getMockRstestPluginOptions({ rootPath: projectRoot }),
+    rsbuild: rsbuildVersion,
+    rspack: rspackExports.rspackVersion,
+    rstest: RSTEST_VERSION,
+  });
+
 const shouldPrebundle = async ({
   name,
   packageName,
@@ -500,19 +600,138 @@ export const prepareTestEnvironmentModules = async ({
   const bundlePaths = new Map<string, Promise<string | undefined>>();
   const abortController = new AbortController();
   let tempRoot: string | undefined;
+  // Build directories inside a cache that were never published.
+  const unpublishedDirectories = new Set<string>();
+  // Cache entries this run uses, kept fresh in watch mode.
+  const usedEntries = new Set<string>();
+  const pruning: Promise<void>[] = [];
   const cleanup = async (): Promise<void> => {
     abortController.abort();
     // A killed child must be gone before its output directory is removed.
     await Promise.all(bundlePaths.values());
-    if (tempRoot) {
-      await rm(tempRoot, { recursive: true, force: true });
+    await Promise.all(pruning);
+    // Published cache entries outlive the run; only this run's own temporary
+    // directories are removed.
+    await Promise.all([
+      ...[...unpublishedDirectories].map((directory) =>
+        rm(directory, { recursive: true, force: true }),
+      ),
+      tempRoot && rm(tempRoot, { recursive: true, force: true }),
+    ]);
+  };
+
+  const obtainBundle = async ({
+    bundleId,
+    projectRoot,
+    reference,
+  }: {
+    bundleId: number;
+    projectRoot: string;
+    reference: TestEnvironmentModuleReference;
+  }): Promise<string> => {
+    const entrySource = await createBundleEntrySource(reference);
+    const cacheBase = join(
+      projectRoot,
+      'node_modules',
+      '.cache',
+      TEST_ENVIRONMENT_CACHE_DIRECTORY,
+    );
+    const keyDirectory = join(
+      cacheBase,
+      `${reference.name}-${hashParts({
+        entrySource,
+        packageName: reference.packageName,
+        packageVersion: await getPackageVersion(reference),
+        pipeline: getBuildPipelineFingerprint(projectRoot),
+        projectRoot,
+        resolvedPath: reference.resolvedPath,
+      })}`,
+    );
+
+    const lookupStart = performance.now();
+    const reusable = await findReusableEntry(keyDirectory, resolveFromRoot);
+    if (reusable) {
+      usedEntries.add(reusable);
+      logger.debug(
+        `reusing cached test environment prebundle for ${reference.packageName} from ${reusable} (looked up in ${(performance.now() - lookupStart).toFixed(1)} ms)`,
+      );
+      return realpath(getBundlePath(reusable));
     }
+
+    let buildRoot: string | undefined;
+    try {
+      await mkdir(cacheBase, { recursive: true });
+      buildRoot = await mkdtemp(join(cacheBase, '.tmp-'));
+      unpublishedDirectories.add(buildRoot);
+    } catch (error) {
+      logger.debug(
+        `test environment prebundle cache is unavailable at ${cacheBase}; using a temporary directory: ${String(error)}`,
+      );
+    }
+
+    if (!buildRoot) {
+      tempRoot ??= await mkdtemp(join(tmpdir(), 'rstest-test-environments-'));
+      return buildModule(
+        {
+          // Keep bundled third-party code under a node_modules segment.
+          // Besides preserving its dependency provenance for Node
+          // diagnostics, this prevents old jsdom internals such as bare
+          // `require('punycode')` from being reported as application-owned
+          // deprecations merely because Rstest relocated them to a top-level
+          // temporary directory. The cache path above has one as well.
+          environmentRoot: join(
+            tempRoot,
+            'node_modules',
+            `test-environment-${bundleId}`,
+          ),
+          entrySource,
+          projectRoot,
+          reference,
+        },
+        abortController.signal,
+      );
+    }
+
+    const builtBundlePath = await buildModule(
+      { environmentRoot: buildRoot, entrySource, projectRoot, reference },
+      abortController.signal,
+    );
+
+    // Publish only when the build recorded inputs that are still unchanged.
+    // Otherwise the bundle stays in its private directory, which is removed
+    // on cleanup.
+    if (!(await isEntryValid(buildRoot, resolveFromRoot))) {
+      logger.debug(
+        `test environment prebundle for ${reference.packageName} was not cached`,
+      );
+      return builtBundlePath;
+    }
+    // A rename keeps the directory's mtime, so mark the build as just used
+    // first: a concurrent prune must see the new entry as in use.
+    await touchEntry(buildRoot);
+    let directory: string;
+    try {
+      directory = await publishEntry(buildRoot, keyDirectory);
+    } catch (error) {
+      logger.debug(
+        `test environment prebundle for ${reference.packageName} could not be published: ${String(error)}`,
+      );
+      return builtBundlePath;
+    }
+    unpublishedDirectories.delete(buildRoot);
+    usedEntries.add(directory);
+    pruning.push(pruneCache(cacheBase));
+    logger.debug(
+      `published test environment prebundle for ${reference.packageName} at ${directory}`,
+    );
+    return realpath(getBundlePath(directory));
   };
 
   const update = async (
     nextProjects: InternalProjectContext[],
   ): Promise<void> => {
     const nextModules = new Map<string, TestEnvironmentModuleReference>();
+    await Promise.all([...usedEntries].map(touchEntry));
 
     for (const project of nextProjects) {
       const name = project.normalizedConfig.testEnvironment.name;
@@ -559,16 +778,11 @@ export const prepareTestEnvironmentModules = async ({
       const bundleKey = resolvedPath;
       let bundlePathPromise = bundlePaths.get(bundleKey);
       if (!bundlePathPromise) {
-        tempRoot ??= await mkdtemp(join(tmpdir(), 'rstest-test-environments-'));
-        bundlePathPromise = buildModule(
-          {
-            bundleId: bundlePaths.size,
-            projectRoot: project.rootPath,
-            reference,
-            tempRoot,
-          },
-          abortController.signal,
-        ).catch((error: unknown) => {
+        bundlePathPromise = obtainBundle({
+          bundleId: bundlePaths.size,
+          projectRoot: project.rootPath,
+          reference,
+        }).catch((error: unknown) => {
           if (!abortController.signal.aborted) {
             logger.warn(
               formatTestEnvironmentPrebundleFallbackWarning(packageName, error),

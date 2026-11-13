@@ -120,6 +120,12 @@ export default defineConfig({
 });
 ```
 
+##### Prebundle cache
+
+Rstest stores the prebundle in `node_modules/.cache/rstest-test-environments` under the project root and reuses it in later runs, including parallel runs on the same machine. It is rebuilt automatically when Rstest, Rsbuild, the environment package, or any file the bundle was built from changes. If that directory cannot be written, Rstest builds the prebundle in a temporary directory for the current run instead.
+
+The cache is safe to delete. Cleanup runs when a new prebundle is published: it removes entries that have not been used for 7 days and keeps at most 3 entries for each cached build (for example, for each jsdom version).
+
 ##### Troubleshooting the prebundle
 
 The prebundle is optional. If your DOM environment behaves differently after enabling it, set `prebundle: false` to load it natively.

@@ -1,4 +1,11 @@
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -7,7 +14,57 @@ import { prepareFixtures, runRstestCli } from '../scripts';
 
 const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
 
+const prebundleCache = (root: string) =>
+  path.join(root, 'node_modules/.cache/rstest-test-environments');
+
 describe.for(['jsdom', 'happy-dom'])('%s prebundle bridge', (environment) => {
+  it('reuses the cached prebundle across runs and keeps it after the run', async () => {
+    const target = path.join(
+      cwd,
+      `../fixtures-test-prebundle-reuse-${environment}`,
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: cwd,
+      fixturesTargetPath: target,
+    });
+    const cacheRoot = prebundleCache(target);
+    const listBundles = () =>
+      existsSync(cacheRoot)
+        ? readdirSync(cacheRoot, { recursive: true }).filter((name) =>
+            String(name).endsWith('environment.mjs'),
+          )
+        : [];
+    try {
+      const logs: string[] = [];
+      for (const run of [1, 2]) {
+        const { cli, expectExecSuccess } = await runRstestCli({
+          command: 'rstest',
+          args: ['run', '--config', 'rstest.shared.config.mts'],
+          options: {
+            nodeOptions: {
+              cwd: target,
+              env: { DEBUG: 'rstest', PREBUNDLE_ENVIRONMENT: environment },
+            },
+          },
+        });
+        await expectExecSuccess();
+        logs.push(cli.log);
+        expect(listBundles(), `bundles after run ${run}`).toHaveLength(1);
+      }
+      const [first, second] = logs as [string, string];
+      expect(first).toContain('published test environment prebundle');
+      expect(first).not.toContain('reusing cached test environment prebundle');
+      expect(second).toContain('reusing cached test environment prebundle');
+      expect(second).not.toContain('published test environment prebundle');
+      // Neither run leaves a build directory behind.
+      expect(
+        readdirSync(cacheRoot).filter((name) => name.startsWith('.')),
+      ).toEqual([]);
+    } finally {
+      fs.delete(target);
+    }
+  });
+
   it('restores bridge requirements from the persistent build cache', async () => {
     const target = path.join(
       cwd,
@@ -49,6 +106,69 @@ describe.for(['jsdom', 'happy-dom'])('%s prebundle bridge', (environment) => {
         if (warm) expect(cli.stdout).toContain('built modules: 0');
         else expect(cli.stdout).not.toContain('built modules: 0');
       }
+    } finally {
+      fs.delete(target);
+    }
+  });
+
+  it('shares one cache between processes that prepare the same key at once', async () => {
+    const target = path.join(
+      cwd,
+      `../fixtures-test-prebundle-concurrent-${environment}`,
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: cwd,
+      fixturesTargetPath: target,
+    });
+    const cacheRoot = prebundleCache(target);
+    try {
+      // Both processes share the project root (and so the cache key) but not
+      // Rstest's own build output.
+      for (const id of [1, 2]) {
+        writeFileSync(
+          path.join(target, `rstest.concurrent-${id}.config.mts`),
+          `import shared from './rstest.shared.config.mts';
+export default { ...shared, output: { distPath: { root: 'dist-${id}' } } };
+`,
+        );
+      }
+      const runs = await Promise.all(
+        [1, 2].map((id) =>
+          runRstestCli({
+            command: 'rstest',
+            args: ['run', '--config', `rstest.concurrent-${id}.config.mts`],
+            options: {
+              nodeOptions: {
+                cwd: target,
+                env: { DEBUG: 'rstest', PREBUNDLE_ENVIRONMENT: environment },
+              },
+            },
+          }),
+        ),
+      );
+      for (const { cli, expectExecSuccess } of runs) {
+        await expectExecSuccess();
+        // A partial or unreadable entry would force the native fallback.
+        expect(cli.log).not.toContain('falling back to its native entry');
+        expect(cli.log).toContain('test environment prebundle for');
+      }
+      const [key] = readdirSync(cacheRoot).filter(
+        (name) => !name.startsWith('.'),
+      );
+      const entries = readdirSync(path.join(cacheRoot, key!));
+      // One entry per publishing process, each complete.
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      expect(entries.length).toBeLessThanOrEqual(2);
+      for (const entry of entries) {
+        const directory = path.join(cacheRoot, key!, entry);
+        expect(existsSync(path.join(directory, 'manifest.json'))).toBe(true);
+        expect(existsSync(path.join(directory, 'dist/environment.mjs'))).toBe(
+          true,
+        );
+      }
+      expect(
+        readdirSync(cacheRoot).filter((name) => name.startsWith('.')),
+      ).toEqual([]);
     } finally {
       fs.delete(target);
     }
@@ -165,6 +285,12 @@ it('uses the environment dependency after a rebuild', () => {
   it.for(['build', 'load', 'crash'])(
     'keeps require and import usable after prebundle %s failure',
     async (failure, { onTestFinished }) => {
+      // A cached bundle would skip the build the injection targets, and the
+      // injected failure itself must not be cached for later tests.
+      rmSync(prebundleCache(cwd), { recursive: true, force: true });
+      onTestFinished(() =>
+        rmSync(prebundleCache(cwd), { recursive: true, force: true }),
+      );
       const preload = fileURLToPath(
         new URL('./fixtures/prebundle/fail-prebundle.cjs', import.meta.url),
       );
