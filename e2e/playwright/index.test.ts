@@ -22,6 +22,9 @@ describe('@rstest/playwright', () => {
     { stage: 'trace', result: 'pass' },
     { stage: 'trace', result: 'fail' },
     { stage: 'trace', result: 'timeout' },
+    { stage: 'trace-and-close', result: 'pass' },
+    { stage: 'trace-and-close', result: 'fail' },
+    { stage: 'trace-and-close', result: 'timeout' },
     { stage: 'close', result: 'pass' },
     { stage: 'close', result: 'fail' },
     { stage: 'close', result: 'timeout' },
@@ -56,12 +59,11 @@ describe('@rstest/playwright', () => {
         expect(cli.exec.process?.signalCode).toBeNull();
         expect(cli.exec.process?.exitCode).toBe(1);
         expect(cli.log).toContain(`RSTEST_PLAYWRIGHT_STALLED_${stage}`);
-        const operation =
-          stage === 'trace'
-            ? 'tracing.stop'
-            : stage === 'close'
-              ? 'context.close'
-              : 'browser.close';
+        const operation = stage.startsWith('trace')
+          ? 'tracing.stop'
+          : stage === 'close'
+            ? 'context.close'
+            : 'browser.close';
         expect(cli.log).toContain(`Playwright ${operation} timed out in 200ms`);
         if (stage !== 'browser') {
           expect(cli.stdout).toContain(
@@ -69,10 +71,13 @@ describe('@rstest/playwright', () => {
           );
           expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TIMEOUT_RECOVERED');
         }
-        if (stage === 'trace') {
+        if (stage.startsWith('trace')) {
           expect(cli.stdout).toContain(
             'RSTEST_PLAYWRIGHT_TIMEOUT_CONTEXT_CLOSED',
           );
+        }
+        if (stage === 'trace-and-close') {
+          expect(cli.log).toContain('injected context close failure');
         }
         if (result === 'fail') {
           expect(cli.log).toContain('original body failure');
