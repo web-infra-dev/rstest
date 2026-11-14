@@ -1,0 +1,6 @@
+{
+  "name": "@rstest/e2e-bare-imports",
+  "private": true,
+  "sideEffects": false,
+  "type": "module"
+}
