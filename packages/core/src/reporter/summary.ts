@@ -33,7 +33,7 @@ import {
   TEST_DELIMITER,
 } from '../utils';
 import { getFileSummary } from '../utils/testSummary';
-import { getRetryErrorLabel } from './utils';
+import { formatBuildTime, getRetryErrorLabel } from './utils';
 
 const identity = (text: string): string => text;
 
@@ -149,12 +149,14 @@ export const printSummaryLog = ({
   results,
   snapshotSummary,
   duration,
+  showPrebundleTime = false,
   summary,
   rootPath,
 }: {
   results: TestFileResult[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
+  showPrebundleTime?: boolean;
   summary: { tests: TestFileSummary };
   rootPath: string;
 }): void => {
@@ -167,8 +169,11 @@ export const printSummaryLog = ({
     `${TestSummaryLabel} ${formatStatusCounts(summary.tests, 'ansi')}`,
   );
 
+  const buildTime = showPrebundleTime
+    ? formatBuildTime(duration)
+    : prettyTime(duration.buildTime);
   logger.log(
-    `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
+    `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${buildTime}, tests ${prettyTime(duration.testTime)})`)}`,
   );
   logger.log('');
 };

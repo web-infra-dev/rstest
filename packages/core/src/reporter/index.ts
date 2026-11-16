@@ -20,6 +20,7 @@ import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 export class DefaultReporter implements Reporter {
   readonly flushOutputStreams: boolean;
 
+  protected readonly showPrebundleTime: boolean = false;
   protected rootPath: string;
   protected config: NormalizedConfig;
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
@@ -177,6 +178,7 @@ export class DefaultReporter implements Reporter {
     }
 
     printSummaryLog({
+      showPrebundleTime: this.showPrebundleTime,
       results,
       duration,
       summary,

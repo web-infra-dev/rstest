@@ -7,6 +7,31 @@ import { prepareFixtures, runRstestCli } from '../scripts';
 
 const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
 
+it('includes environment prebundles in the first build duration', async () => {
+  const start = performance.now();
+  const { cli, expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      '--config',
+      'rstest.prebundle.config.mts',
+      '--reporters',
+      'json',
+    ],
+    options: { nodeOptions: { cwd } },
+  });
+  await expectExecSuccess();
+  const { durationMs } = JSON.parse(cli.stdout.slice(cli.stdout.indexOf('{')));
+  expect(durationMs.prebundle.jsdom).toBeGreaterThan(0);
+  expect(durationMs.prebundle['happy-dom']).toBeGreaterThan(0);
+  expect(durationMs.build).toBeGreaterThanOrEqual(durationMs.prebundle.jsdom);
+  expect(durationMs.build).toBeGreaterThanOrEqual(
+    durationMs.prebundle['happy-dom'],
+  );
+  expect(durationMs.total).toBe(durationMs.build + durationMs.tests);
+  expect(durationMs.total).toBeLessThanOrEqual(performance.now() - start);
+});
+
 describe.for(['jsdom', 'happy-dom'])('%s prebundle bridge', (environment) => {
   it('restores bridge requirements from the persistent build cache', async () => {
     const target = path.join(
@@ -69,6 +94,8 @@ describe.for(['jsdom', 'happy-dom'])('%s prebundle bridge', (environment) => {
       command: 'rstest',
       args: [
         'watch',
+        '--reporters',
+        'verbose',
         '--config',
         'rstest.demand.config.mts',
         'index.test.ts',
@@ -85,6 +112,7 @@ describe.for(['jsdom', 'happy-dom'])('%s prebundle bridge', (environment) => {
     try {
       await cli.waitForStdout('Waiting for file changes...');
       expect(cli.stdout).toContain('Tests 1 passed');
+      expect(cli.stdout).toContain(`${environment} prebundle `);
       cli.resetStd();
       fs.update(
         testPath,
@@ -99,6 +127,7 @@ it('uses the environment dependency after a rebuild', () => {
       );
       await cli.waitForStdout('Waiting for file changes...');
       expect(cli.stdout).toContain('Tests 1 passed');
+      expect(cli.stdout).not.toContain(`${environment} prebundle `);
       cli.resetStd();
       fs.update(testPath, original);
       await cli.waitForStdout('Waiting for file changes...');
@@ -144,6 +173,9 @@ it('uses the environment dependency after a rebuild', () => {
       );
       if (mode === 'native') expect(loadIndex).toBe(-1);
       else expect(loadIndex).toBeGreaterThan(setupIndex);
+      if (mode !== 'list') {
+        expect(cli.stdout).toMatch(/Duration .*\(build [^, ]+, tests [^)]+\)/);
+      }
     },
   );
 
@@ -170,7 +202,13 @@ it('uses the environment dependency after a rebuild', () => {
       );
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: ['run', '--config', 'rstest.shared.config.mts'],
+        args: [
+          'run',
+          '--config',
+          'rstest.shared.config.mts',
+          '--reporters',
+          'verbose',
+        ],
         options: {
           nodeOptions: {
             cwd,
@@ -185,6 +223,7 @@ it('uses the environment dependency after a rebuild', () => {
       });
       await expectExecSuccess();
       expect(cli.log).toContain('falling back to its native entry');
+      expect(cli.stdout).toContain(`${environment} prebundle `);
       if (failure === 'build') expect(cli.log).toContain('Build error');
       if (failure === 'crash') {
         // Windows has no signals: SIGKILL ends the process with exit code 1.

@@ -128,14 +128,14 @@ export const notifyReportersOnTestRunStart = async (
 };
 
 export const createRunStartBarrier = (
-  context: InternalContext,
   executorCount: number,
+  onSelected: (files: SelectedTestFile[]) => Promise<Error | undefined>,
 ): Array<(files: SelectedTestFile[]) => Promise<Error | undefined>> => {
   const selections = Array.from({ length: executorCount }, () =>
     createDeferred<SelectedTestFile[]>(),
   );
   const started = Promise.all(selections.map(({ promise }) => promise)).then(
-    (files) => notifyReportersOnTestRunStart(context, files.flat()),
+    (files) => onSelected(files.flat()),
   );
   return selections.map(({ resolve }) => (files) => {
     resolve(files);
@@ -261,6 +261,7 @@ export async function finalizeRunCycle(
   context: InternalContext,
   {
     outcomes,
+    duration,
     mode,
     isWatchMode,
     isInterrupted = () => false,
@@ -270,6 +271,7 @@ export async function finalizeRunCycle(
     traceRun,
   }: {
     outcomes: ExecutorCycleOutcome[];
+    duration: Duration;
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
     isInterrupted?: () => boolean;
@@ -351,20 +353,6 @@ export async function finalizeRunCycle(
     },
     runCoverageStep: runLifecycleStep,
   });
-
-  const summed = outcomes.reduce(
-    (acc, o) => {
-      acc.buildTime += o.duration.buildTime;
-      acc.testTime += o.duration.testTime;
-      return acc;
-    },
-    { buildTime: 0, testTime: 0 },
-  );
-  const duration: Duration = {
-    totalTime: summed.buildTime + summed.testTime,
-    buildTime: summed.buildTime,
-    testTime: summed.testTime,
-  };
 
   const isFailure =
     results.some((r) => r.status === 'failed') || errors.length > 0;

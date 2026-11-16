@@ -181,6 +181,7 @@ export type NodeExecutor = TestExecutor &
  * — the planner's `TestPlanner` doc records what a snapshot of either breaks.
  */
 type CreateNodeExecutorOptions = {
+  onPrebundle: (name: string, elapsed: number) => void;
   /** Already prepared and config-hooked by the planner. */
   rsbuildInstance: RsbuildInstance;
   setupFileState: SetupFileState;
@@ -203,6 +204,7 @@ export function createNodeExecutor(
     coverageProvider,
     isWatchMode,
     getTraceRun,
+    onPrebundle,
   }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
@@ -277,7 +279,11 @@ export function createNodeExecutor(
       server: { getRsbuildStats, closeServer },
       testEnvironmentModules,
     } = await settleServerAndTestEnvironmentModules({
-      modules: prepareTestEnvironmentModules({ projects, rootPath }),
+      modules: prepareTestEnvironmentModules({
+        projects,
+        rootPath,
+        onPrebundle,
+      }),
       server: createRsbuildServer({
         inspectedConfig: {
           ...context.normalizedConfig,

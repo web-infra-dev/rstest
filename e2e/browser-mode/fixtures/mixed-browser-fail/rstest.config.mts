@@ -3,16 +3,24 @@ import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 
 // A mixed run where ONLY the browser side fails: the node project passes fully.
-// Pins the unified finalize — one `onTestRunEnd`, a merged (summed) duration,
+// Pins the unified finalize — one `onTestRunEnd`, one elapsed duration,
 // exit code 1 owned by core, and the browser failure detail in the summary
 // block even though no node test failed to seed the filter (Appendix A bug 2).
 class FinalizeProbeReporter implements Reporter {
   #count = 0;
+  #testStart = 0;
+
+  onTestRunStart() {
+    this.#testStart = performance.now();
+  }
 
   onTestRunEnd(summary: {
     duration: { totalTime: number; buildTime: number; testTime: number };
   }) {
     this.#count += 1;
+    process.stdout.write(
+      `PROBE_TEST_WINDOW=${Math.ceil(performance.now() - this.#testStart)}\n`,
+    );
     // Bypass console interception so the markers always reach stdout.
     process.stdout.write(`\nPROBE_ONEND_COUNT=${this.#count}\n`);
     process.stdout.write(

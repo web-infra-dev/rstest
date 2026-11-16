@@ -89,7 +89,8 @@ interface Reporter {
     };
     duration: {
       totalTime: number; // Total duration in milliseconds.
-      buildTime: number; // Build duration in milliseconds.
+      buildTime: number; // Includes compilation and environment preparation.
+      prebundleTime?: Record<string, number>; // Prebundle time per environment package in milliseconds, included in buildTime.
       testTime: number; // Test execution duration in milliseconds.
     };
     snapshotSummary: SnapshotSummary;

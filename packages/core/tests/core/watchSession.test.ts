@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, rs } from '@rstest/core';
 import { createResultReporter } from '../../src/api/result';
 import { isCliShortcutsEnabled } from '../../src/core/watch/cliShortcuts';
 import { createRunnerEventSink } from '../../src/core/execution/runnerEventSink';
+import { RunTimer } from '../../src/core/execution/runTimer';
 import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
@@ -135,6 +136,7 @@ const createDriver = (
   } as unknown as TraceController;
 
   return createWatchCycleDriver({
+    timer: new RunTimer(),
     context,
     coverageProvider: null,
     traceController,

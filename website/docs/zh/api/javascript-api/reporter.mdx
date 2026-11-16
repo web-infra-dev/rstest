@@ -89,7 +89,8 @@ interface Reporter {
     };
     duration: {
       totalTime: number; // 总时长（毫秒）。
-      buildTime: number; // 构建时长（毫秒）。
+      buildTime: number; // 构建时长（毫秒），包含编译和测试环境准备。
+      prebundleTime?: Record<string, number>; // 各环境包的预打包耗时（毫秒），已计入 buildTime。
       testTime: number; // 测试执行时长（毫秒）。
     };
     snapshotSummary: SnapshotSummary;

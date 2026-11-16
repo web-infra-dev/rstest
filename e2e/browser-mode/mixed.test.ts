@@ -27,6 +27,7 @@ describe('browser mode - mixed node + browser run', () => {
   });
 
   it('unifies finalize when only the browser side fails', async () => {
+    const start = performance.now();
     const { cli } = await runBrowserCli('mixed-browser-fail', { args: [] });
 
     await cli.exec;
@@ -40,7 +41,7 @@ describe('browser mode - mixed node + browser run', () => {
     const endCounts = cli.stdout.match(/PROBE_ONEND_COUNT=(\d+)/g) ?? [];
     expect(endCounts).toEqual(['PROBE_ONEND_COUNT=1']);
 
-    // The single finalize sums both executors' durations into one verdict.
+    // Both executors share the same wall-clock interval.
     const durationJson = cli.stdout.match(/PROBE_ONEND_DURATION=(\{.*\})/)?.[1];
     expect(durationJson).toBeDefined();
     const duration = JSON.parse(durationJson!) as {
@@ -50,6 +51,9 @@ describe('browser mode - mixed node + browser run', () => {
     };
     expect(duration.totalTime).toBe(duration.buildTime + duration.testTime);
     expect(duration.testTime).toBeGreaterThan(0);
+    const testWindow = cli.stdout.match(/PROBE_TEST_WINDOW=(\d+)/)?.[1];
+    expect(duration.testTime).toBeLessThanOrEqual(Number(testWindow));
+    expect(duration.totalTime).toBeLessThanOrEqual(performance.now() - start);
 
     // The browser failure detail is present in the summary block, and the node
     // side reports no failure of its own.

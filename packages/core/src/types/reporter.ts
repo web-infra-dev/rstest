@@ -22,6 +22,8 @@ import type { MaybePromise } from './utils';
 export type Duration = {
   totalTime: number;
   buildTime: number;
+  /** Prebundle duration in milliseconds by environment package, included in buildTime. */
+  prebundleTime?: Record<string, number>;
   testTime: number;
 };
 

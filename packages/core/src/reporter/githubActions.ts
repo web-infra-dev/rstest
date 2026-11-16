@@ -22,6 +22,7 @@ import {
   detectPackageManagerAgent,
   escapeMarkdownTableCell,
   type FailureItem,
+  formatBuildTime,
   getErrorType,
   getRetryErrorLabel,
   pushFencedBlock,
@@ -352,7 +353,7 @@ async function renderStepSummary({
     `| **Tests** | ${escapeMarkdownTableCell(formatStatusCounts(summary.tests, 'plain'))} |`,
   );
   lines.push(
-    `| **Duration** | ${prettyTime(duration.totalTime)} (build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}) |`,
+    `| **Duration** | ${prettyTime(duration.totalTime)} (build ${formatBuildTime(duration)}, tests ${prettyTime(duration.testTime)}) |`,
   );
   if (hasFlakyTests) {
     lines.push(
