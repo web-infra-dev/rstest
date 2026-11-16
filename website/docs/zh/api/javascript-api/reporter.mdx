@@ -102,6 +102,7 @@ interface Reporter {
       actual?: string; // 序列化后的断言实际值。
       retryCount?: number; // 产生此错误的重试次数。
       fullStack?: boolean; // 是否打印完整调用栈。
+      cause?: SerializedError; // 序列化后的 `error.cause`，仅当 cause 是错误时提供。
     }[];
     coverage?: CoverageMapData; // 启用覆盖率时提供。
     rerunTestPaths?: string[]; // 仅 watch 模式：当前轮次执行的文件。

@@ -129,7 +129,8 @@ export const formatTestError = async (
         // Some error attributes cannot be enumerated
         message: error.message,
         name: error.name,
-        stack: error.stack,
+        // Reporters parse the stack as text
+        stack: typeof error.stack === 'string' ? error.stack : undefined,
       };
 
       if (error instanceof TestRegisterError && test?.type === 'case') {

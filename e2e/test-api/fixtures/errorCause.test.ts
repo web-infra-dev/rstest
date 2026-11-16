@@ -20,6 +20,12 @@ it('prints the cause chain', () => {
   loadUser();
 });
 
+it('prints a cause whose stack is not a string', () => {
+  throw new Error('wrapper', {
+    cause: { message: 'API failed', stack: ['remote frame'] },
+  });
+});
+
 it('prints an error without a cause', () => {
   throw new Error('no cause');
 });

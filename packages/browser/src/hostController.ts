@@ -33,6 +33,7 @@ import {
   resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
+  type SerializedError,
   toSelectedTestFile,
   type TestFileResult,
   type TestResult,
@@ -1998,9 +1999,12 @@ export const listBrowserTests = async (
   const collectFromProject = async (
     server: BrowserProjectServer,
     projectRow: BrowserProjectRuntime,
-  ): Promise<{ results: ListCommandResult[]; error: Error | null }> => {
+  ): Promise<{
+    results: ListCommandResult[];
+    error: SerializedError | null;
+  }> => {
     const results: ListCommandResult[] = [];
-    let error: Error | null = null;
+    let error: SerializedError | null = null;
     let collectCompleted = false;
     let resolveCollect: (() => void) | undefined;
     const collectPromise = new Promise<void>((resolve) => {
@@ -2037,9 +2041,7 @@ export const listBrowserTests = async (
             resolveCollect?.();
             break;
           case 'fatal': {
-            const payload = message.payload;
-            error = new Error(payload.message);
-            error.stack = payload.stack;
+            error = message.payload;
             resolveCollect?.();
             break;
           }
@@ -2132,6 +2134,7 @@ export const listBrowserTests = async (
           name: 'BrowserCollectError',
           message: fatalError.message,
           stack: fatalError.stack,
+          cause: fatalError.cause,
         },
       ],
     };

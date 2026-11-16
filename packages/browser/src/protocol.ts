@@ -1,6 +1,7 @@
 import type {
   BrowserViewport,
   BrowserName,
+  SerializedError,
 } from '@rstest/core/internal/browser';
 export type {
   BrowserName,
@@ -262,7 +263,7 @@ export type BrowserClientMessage =
   | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
-      payload: { message: string; stack?: string };
+      payload: { message: string; stack?: string; cause?: SerializedError };
     }
   | { type: 'complete' }
   // Collect mode messages

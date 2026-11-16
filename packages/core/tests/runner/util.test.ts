@@ -220,6 +220,19 @@ describe('formatTestError', () => {
     expect(error.cause!.cause!.cause).toBeUndefined();
   });
 
+  it('only keeps a cause stack that is a string', async () => {
+    const error = (
+      await formatTestError(
+        new Error('wrapper', {
+          cause: { message: 'API failed', stack: ['remote frame'] },
+        }),
+      )
+    )[0]!;
+
+    expect(error.cause!.message).toBe('API failed');
+    expect(error.cause!.stack).toBeUndefined();
+  });
+
   it('leaves out a cause that is not an error', async () => {
     for (const cause of [undefined, null, 'timeout', 404, ['a'], { code: 1 }]) {
       const error = (await formatTestError(new Error('failed', { cause })))[0]!;

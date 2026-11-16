@@ -77,9 +77,14 @@ describe('Test Edge Cases', () => {
     expectStderrLog(/at request \(.*errorCause\.test\.ts:5:\d+\)/);
     expectStderrLog(/at loadUser \(.*errorCause\.test\.ts:13:\d+\)/);
 
+    // A cause whose stack is not text is printed without a stack, and the
+    // failures after it are still printed.
+    expectStderrLog('Caused by: Unknown Error: API failed');
+    expect(cli.stderr).not.toContain('Unhandled Reporter Error');
+
     // An error without a cause is printed as before.
     expectStderrLog('Error: no cause');
-    expect(cli.stderr.match(/Caused by: /g)).toHaveLength(2);
+    expect(cli.stderr.match(/Caused by: /g)).toHaveLength(3);
   });
 
   it('test module not found', async () => {

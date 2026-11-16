@@ -102,6 +102,7 @@ interface Reporter {
       actual?: string; // Serialized actual assertion value.
       retryCount?: number; // Retry attempt that produced this error.
       fullStack?: boolean; // Whether to print the full stack trace.
+      cause?: SerializedError; // Serialized `error.cause`, when the cause is an error.
     }[];
     coverage?: CoverageMapData; // Present when coverage is enabled.
     rerunTestPaths?: string[]; // Watch only: files executed in the current cycle.

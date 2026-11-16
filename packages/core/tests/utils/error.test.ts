@@ -1,11 +1,14 @@
-import { describe, expect, it } from '@rstest/core';
+import { stripVTControlCharacters } from 'node:util';
+import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { createListTestsError } from '../../src/api/listTestsError';
 import {
   formatStack,
   parseErrorStacktrace,
+  printError,
   stackIgnores,
   toSerializedError,
 } from '../../src/utils/error';
+import { logger } from '../../src/utils/logger';
 
 describe('error helpers', () => {
   it('uses the mapped method name', async () => {
@@ -75,6 +78,47 @@ describe('error helpers', () => {
     expect(
       toSerializedError(new Error('failed', { cause: 'timeout' })),
     ).not.toHaveProperty('cause');
+  });
+
+  it('only keeps a string stack in toSerializedError', () => {
+    const error = toSerializedError(
+      new Error('wrapper', {
+        cause: { message: 'API failed', stack: ['remote frame'] },
+      }),
+    );
+
+    expect(error.cause!.message).toBe('API failed');
+    expect(error.cause!.stack).toBeUndefined();
+  });
+
+  it('keeps printing the cause chain after the vitest import hint', async () => {
+    const stderr = rs
+      .spyOn(logger, 'stderr')
+      .mockImplementation(() => undefined);
+    onTestFinished(() => {
+      stderr.mockRestore();
+    });
+
+    await printError(
+      {
+        message: 'Failed to run the test',
+        cause: {
+          message: 'Vitest failed to access its internal state',
+          cause: { name: 'TypeError', message: 'innermost failure' },
+        },
+      },
+      async () => null,
+      '/project',
+    );
+
+    const output = stripVTControlCharacters(
+      stderr.mock.calls.map(([message]) => message).join('\n'),
+    );
+    expect(output).toContain('Unknown Error: Failed to run the test');
+    expect(output).toContain(
+      'Caused by: Error: not support import `vitest` in Rstest test environment.',
+    );
+    expect(output).toContain('Caused by: TypeError: innermost failure');
   });
 
   it('stops toSerializedError at a circular cause chain', () => {

@@ -21,7 +21,7 @@ const serializeError = (
   const serialized: SerializedError = {
     name: value.name,
     message: value.message ?? String(error),
-    stack: value.stack,
+    stack: typeof value.stack === 'string' ? value.stack : undefined,
     diff: value.diff,
     actual: value.actual,
     expected: value.expected,
@@ -80,13 +80,27 @@ export async function printError(
   error: SerializedError,
   getSourcemap: GetSourcemap,
   rootPath: string,
-  label = '',
+): Promise<void> {
+  let current: SerializedError | undefined = error;
+  let label = '';
+  while (current) {
+    await printErrorWithoutCause(current, getSourcemap, rootPath, label);
+    current = current.cause;
+    label = 'Caused by: ';
+  }
+}
+
+async function printErrorWithoutCause(
+  error: SerializedError,
+  getSourcemap: GetSourcemap,
+  rootPath: string,
+  label: string,
 ): Promise<void> {
   const errorName = error.name || 'Unknown Error';
 
   if (error.message.includes('Vitest failed to access its internal state')) {
     const tips = [
-      'Error: not support import `vitest` in Rstest test environment.\n',
+      `${label}Error: not support import \`vitest\` in Rstest test environment.\n`,
       'Solution:',
       `  - Update your code to use imports from "${color.yellow('@rstest/core')}" instead of "${color.yellow('vitest')}".`,
       '  - Enable `globals` configuration and use global API.',
@@ -146,10 +160,6 @@ export async function printError(
     }
 
     printStack(stackFrames, rootPath);
-  }
-
-  if (error.cause) {
-    await printError(error.cause, getSourcemap, rootPath, 'Caused by: ');
   }
 }
 
