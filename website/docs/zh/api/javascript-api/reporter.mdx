@@ -151,6 +151,8 @@ interface TestRunStartPayload {
 
 watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累计结果：每个文件只保留最新一次的结果，删除的文件会移出。`rerunTestPaths` 是这一轮实际执行的文件，一次性运行没有这个字段。`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON。
 
+`duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> 按环境包列出预打包耗时，单位为毫秒。这部分时间已计入 `duration.buildTime`。
+
 ### TestResult
 
 `TestResult` 和 `TestFileResult` 由 `@rstest/core` 导出。套件和用例级钩子收到的是 `TestResult`，文件级钩子和 `onTestRunEnd` 收到的是 `TestFileResult`，它在 `TestResult` 的基础上多了这个文件里各个测试的结果。
