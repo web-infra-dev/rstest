@@ -1,5 +1,3 @@
-import { createRequire } from 'node:module';
-import { RSTEST_ENVIRONMENT_GLOBAL_PREFIX } from '../../src/utils/constants';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import type {
   OnAfterCreateCompilerFn,
@@ -2286,52 +2284,6 @@ describe('prepareRsbuild', () => {
       } = await rsbuildInstance.inspectConfig();
 
       if (environment === 'jsdom') expect(bundlerConfigs[0]).toMatchSnapshot();
-      const external = castArray(bundlerConfigs[0]!.externals).at(-1);
-      if (typeof external !== 'function')
-        throw new Error('Missing environment external');
-      const resolvedPath = createRequire(import.meta.url).resolve(environment);
-      for (const [request, resolved, shared] of [
-        [environment, resolvedPath, true],
-        [
-          environment,
-          createRequire(import.meta.url).resolve(
-            environment === 'jsdom' ? 'happy-dom' : 'jsdom',
-          ),
-          false,
-        ],
-        [`${environment}/lib/index.js`, resolvedPath, false],
-      ] as const) {
-        const callback = rs.fn();
-        external(
-          {
-            request,
-            context: rootPath,
-            // Only the callback resolver overload is used by the external hook.
-            getResolve: (() =>
-              (
-                _context: string,
-                _request: string,
-                done: (error: null, path: string) => void,
-              ) =>
-                done(
-                  null,
-                  resolved,
-                )) as Rspack.ExternalItemFunctionData['getResolve'],
-          },
-          callback,
-        );
-        expect(callback.mock.calls).toEqual(
-          shared
-            ? [
-                [
-                  undefined,
-                  [RSTEST_ENVIRONMENT_GLOBAL_PREFIX + resolvedPath],
-                  'global',
-                ],
-              ]
-            : [[]],
-        );
-      }
     },
   );
 

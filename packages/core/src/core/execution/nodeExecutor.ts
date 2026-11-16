@@ -220,9 +220,6 @@ export function createNodeExecutor(
         closeServer: () => Promise<void>;
         pool: Awaited<ReturnType<typeof createPool>>;
         cleanupTestEnvironmentModules: () => Promise<void>;
-        testEnvironmentModules: Awaited<
-          ReturnType<typeof prepareTestEnvironmentModules>
-        >['modules'];
       }
     | undefined;
   // In-flight guard: in watch mode the dev server's first compile fires
@@ -315,7 +312,6 @@ export function createNodeExecutor(
         closeServer,
         pool,
         cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
-        testEnvironmentModules: testEnvironmentModules.modules,
       };
       return runResources;
     } catch (error) {
@@ -343,8 +339,7 @@ export function createNodeExecutor(
       pendingBuildTime = undefined;
     }
     const cycleStart = Date.now();
-    const { getRsbuildStats, pool, testEnvironmentModules } =
-      await ensureRunResources();
+    const { getRsbuildStats, pool } = await ensureRunResources();
     const { nodeProjectsToRun: projects } = getPlan();
 
     let testStart: number | undefined;
@@ -476,9 +471,6 @@ export function createNodeExecutor(
               'host',
               () =>
                 runGlobalSetup(context, p, {
-                  testEnvironmentModule: testEnvironmentModules.get(
-                    p.environmentName,
-                  ),
                   globalSetupEntries,
                   assetFiles,
                   sourceMaps,

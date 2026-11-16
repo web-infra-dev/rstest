@@ -17,8 +17,6 @@ import type {
 import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
-  /** Includes transitive imports; setup entries carry their own bridge requirement. */
-  usesEnvironmentBridge?: boolean;
   distPath: DistPath;
   runtimeDistPath?: DistPath;
   chunks: (string | number)[];
