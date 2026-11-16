@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { expect, it } from '@rstest/core';
 import { parseMarkerPayload, runRstestCli } from '../scripts';
+import { replayLaunchLog, runBrowserCli, runBrowserWatchCli } from './utils';
 
 const cwd = fileURLToPath(
   new URL('./fixtures/launch-failure/', import.meta.url),
@@ -40,4 +41,28 @@ it.for(['run', 'watch'])(
       expect(output).not.toContain('Waiting for file changes...');
     }
   },
+);
+
+it.for(['run', 'watch'])(
+  'fails fast on a launch that fails after another browser ran, in %s',
+  async (command) => {
+    const { cli } = await (command === 'run'
+      ? runBrowserCli('launch-cap-failure', { env: { DEBUG: 'rstest' } })
+      : runBrowserWatchCli('launch-cap-failure'));
+    await cli.exec;
+
+    expect(cli.exec.exitCode).toBe(1);
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toMatch(/Failed to launch/i);
+    expect(output).toContain('nonexistent-browser-binary');
+    if (command === 'watch') {
+      expect(output).toContain('Failed to run Rstest.');
+      expect(output).not.toContain('Waiting for file changes...');
+    }
+    // The browser that did launch is closed again, not leaked.
+    const { launched, closed } = replayLaunchLog(cli.log);
+    expect(launched).toBe(2);
+    expect(closed).toBeGreaterThanOrEqual(1);
+  },
+  120_000,
 );

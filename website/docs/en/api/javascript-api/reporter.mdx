@@ -89,7 +89,8 @@ interface Reporter {
     };
     duration: {
       totalTime: number; // Total duration in milliseconds.
-      buildTime: number; // Build duration in milliseconds.
+      buildTime: number; // Includes compilation and environment preparation.
+      prebundleTime?: Record<string, number>; // Prebundle time per environment package in milliseconds, included in buildTime.
       testTime: number; // Test execution duration in milliseconds.
     };
     snapshotSummary: SnapshotSummary;
@@ -102,6 +103,7 @@ interface Reporter {
       actual?: string; // Serialized actual assertion value.
       retryCount?: number; // Retry attempt that produced this error.
       fullStack?: boolean; // Whether to print the full stack trace.
+      cause?: SerializedError; // Serialized `error.cause`, when the cause is an error.
     }[];
     coverage?: CoverageMapData; // Present when coverage is enabled.
     rerunTestPaths?: string[]; // Watch only: files executed in the current cycle.
@@ -149,6 +151,8 @@ interface TestRunStartPayload {
 Starting in v0.13.0, the payload also includes the run's `status`. See [`rstest.run`](/api/javascript-api/instance#rstestrun) for what each status value means.
 
 In watch mode, `results`, `testResults`, and `summary` accumulate over the whole session: each file keeps its latest result, and deleted files are removed. `rerunTestPaths` lists the files executed in the current cycle and is absent for one-shot runs. Every entry in `unhandledErrors` is a plain object that can be serialized to JSON.
+
+`duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> reports the time spent building each environment package prebundle in milliseconds. These timings are included in `duration.buildTime`.
 
 ### TestResult
 

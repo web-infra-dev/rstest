@@ -33,6 +33,7 @@ import {
   resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
+  type SerializedError,
   toSelectedTestFile,
   type TestFileResult,
   type TestResult,
@@ -92,6 +93,7 @@ import {
 } from './protocol';
 import {
   type BrowserProvider,
+  type BrowserProviderBrowser,
   type BrowserProviderImplementation,
   type BrowserProviderPage,
   type BrowserV8CoverageCollector,
@@ -639,8 +641,7 @@ export const runBrowserController = async (
         isWatchMode,
         containerDistPath,
         containerDevServer,
-        skipProviderLaunch:
-          filesOnly || Boolean(browserCoverageCapabilityError),
+        configOnly: filesOnly || Boolean(browserCoverageCapabilityError),
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
       });
@@ -927,7 +928,7 @@ export const runBrowserController = async (
   const { wsPort } = runtime;
   // The v8 provider resolves per collector; under a v8 run validation
   // guarantees every launch is chromium, so the default launch names both.
-  const defaultLaunch = runtime.launches[0]!;
+  const defaultLaunch = runtime.launchSpecs[0]!;
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
@@ -1761,7 +1762,7 @@ export const runBrowserController = async (
     headlessRows.length > 0
       ? createHeadlessScheduler({
           ...schedulerDeps,
-          browsers: runtime.browsers,
+          launchPool: runtime.launchPool,
           projectServers: runtime.projectServers,
           v8Coverage,
           allTestFiles: headlessAllTestFiles,
@@ -1782,7 +1783,13 @@ export const runBrowserController = async (
           handlers: { handleTestFileComplete },
         })
       : undefined,
-  ]);
+  ]).catch(async (error) => {
+    // A browser launch failure surfaces from a lane, after the runtime exists.
+    // A rejected non-watch cycle has no deferred close, so the runtime closes
+    // here; in watch the cycle ends the session and this is its teardown.
+    await closeRuntime();
+    throw error;
+  });
   const testTime = Math.max(headless?.testTime ?? 0, headed?.testTime ?? 0);
   const rawCoverage = [
     ...(headless?.rawCoverage ?? []),
@@ -1906,23 +1913,14 @@ export const listBrowserTests = async (
       context,
       projectEntries,
       browserProjects,
-      // TODO: list collection boots only the first instance's launch, opens one
-      // page per project in a shared context with `viewport: null`, and copies
-      // the collected tree to every instance of the project. Declarations that
-      // depend on the browser engine, viewport, or context options (for example
-      // `test.skipIf(!CSS.supports(...))` or `test.runIf(window.innerWidth < 500)`)
-      // are therefore listed with that one page's result for every instance.
-      // Collect each instance in its own browser, context, and viewport instead
-      // (like vitest's `--no-static-parse`); the `filesOnly` path should then
-      // list instance names rather than project names too.
-      launchSpecs: [launchSpecs[0]!],
+      launchSpecs,
       shardedEntries: options?.shardedEntries,
       freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
       containerDevServer: undefined,
-      skipProviderLaunch: options?.filesOnly,
+      configOnly: options?.filesOnly,
       appliedModifyRstestConfigEnvironments:
         options?.appliedModifyRstestConfigEnvironments,
     });
@@ -1968,8 +1966,30 @@ export const listBrowserTests = async (
   // for every collect page: one context shared per project, with per-browser
   // attribution stamped onto the results post-capture (test structure
   // collection is browser-independent).
-  const defaultLaunch = runtime.launches[0]!;
-  const browser = defaultLaunch.browser;
+  // TODO: list collection leases only the first instance's launch, opens one
+  // page per project in a shared context with `viewport: null`, and copies
+  // the collected tree to every instance of the project. Declarations that
+  // depend on the browser engine, viewport, or context options (for example
+  // `test.skipIf(!CSS.supports(...))` or `test.runIf(window.innerWidth < 500)`)
+  // are therefore listed with that one page's result for every instance.
+  // Collect each instance in its own browser, context, and viewport instead
+  // (like vitest's `--no-static-parse`); the `filesOnly` path should then
+  // list instance names rather than project names too.
+  const defaultLaunch = runtime.launchSpecs[0]!;
+  let browser: BrowserProviderBrowser;
+  try {
+    // The lease is never released: `destroyBrowserRuntime` closes the pool.
+    ({ browser } = await runtime.launchPool.acquire(defaultLaunch.key));
+  } catch (error) {
+    logger.error(
+      color.red(
+        `Failed to initialize browser provider runtime (${defaultLaunch.provider}).`,
+      ),
+      error,
+    );
+    await destroyBrowserRuntime(runtime);
+    throw error;
+  }
 
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
@@ -1998,9 +2018,12 @@ export const listBrowserTests = async (
   const collectFromProject = async (
     server: BrowserProjectServer,
     projectRow: BrowserProjectRuntime,
-  ): Promise<{ results: ListCommandResult[]; error: Error | null }> => {
+  ): Promise<{
+    results: ListCommandResult[];
+    error: SerializedError | null;
+  }> => {
     const results: ListCommandResult[] = [];
-    let error: Error | null = null;
+    let error: SerializedError | null = null;
     let collectCompleted = false;
     let resolveCollect: (() => void) | undefined;
     const collectPromise = new Promise<void>((resolve) => {
@@ -2037,9 +2060,7 @@ export const listBrowserTests = async (
             resolveCollect?.();
             break;
           case 'fatal': {
-            const payload = message.payload;
-            error = new Error(payload.message);
-            error.stack = payload.stack;
+            error = message.payload;
             resolveCollect?.();
             break;
           }
@@ -2132,6 +2153,7 @@ export const listBrowserTests = async (
           name: 'BrowserCollectError',
           message: fatalError.message,
           stack: fatalError.stack,
+          cause: fatalError.cause,
         },
       ],
     };

@@ -574,6 +574,8 @@ export default defineConfig({
 
 每次 `rstest` run 会按 `(provider, browserName, headless, providerOptions.launch)` 组合为所有 Browser Mode 项目启动浏览器：两个项目若配置了相同且 launch key 一致的浏览器，会共用同一个浏览器实例；`providerOptions.launch` 或 `headless` 不同则各自启动。一个项目的所有浏览器共享同一次构建和同一个 dev server。
 
+浏览器按需启动：某个 launch 在第一个测试文件需要它时才启动，因此无法启动的 launch（例如可执行文件不存在）会在运行到对应文件时让本次 run 失败，而不是在 run 开始前。同时打开的 headless 浏览器最多为 [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) 个；有新的 launch 需要名额时，会关闭空闲的浏览器，优先关闭最久未使用的。watch 模式下，空闲浏览器会在两次运行之间保持打开，直到需要腾出名额。headed 浏览器不计入该数量，并在整个 run 期间保持打开。
+
 以下规则在任何浏览器启动之前完成校验：
 
 - **每次 run 只能有一个 headed 浏览器。** Browser Mode 只打开一个调试窗口，因此最多允许一对 `(project, browser)` 设置 `headless: false`，其余浏览器必须设置 `headless: true`。报错信息会给出具体修复方式：

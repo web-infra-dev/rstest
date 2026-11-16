@@ -33,10 +33,13 @@ import {
   DISPATCH_NAMESPACE_RUNNER,
   toWireRow,
 } from './protocol';
-import type { BrowserProviderContext, BrowserProviderPage } from './providers';
+import type {
+  BrowserProviderBrowser,
+  BrowserProviderContext,
+  BrowserProviderPage,
+} from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import {
-  browserForRow,
   type BrowserV8CoverageRuntime,
   type BrowserWatchSession,
   type DispatchLanes,
@@ -163,8 +166,10 @@ export const createHeadedScheduler = async ({
   // The container window belongs to the headed pair's launch: headless rows
   // reuse a different browser process entirely (hybrid runs). The scheduler
   // constructor's caller only builds one with a headed row, so the row and
-  // its provider options are required.
-  const headedLaunch = browserForRow(runtime.browsers, headedRow);
+  // its provider options are required. A headed launch is pinned in the pool
+  // (never evicted, outside the headless cap), so this lease is held until the
+  // runtime closes the pool and never released.
+  let headedBrowser: BrowserProviderBrowser | undefined;
   // The container window runs only this headed pair's row — its scheduler
   // owns the `projects` slice, so the base host config needs no headed
   // variant.
@@ -302,7 +307,9 @@ export const createHeadedScheduler = async ({
     context: BrowserProviderContext;
     page: BrowserProviderPage;
   }> => {
-    const nextContext = await headedLaunch.newContext({
+    headedBrowser ??= (await runtime.launchPool.acquire(headedRow.launchKey))
+      .browser;
+    const nextContext = await headedBrowser.newContext({
       providerOptions: headedRow.providerOptions,
       viewport: null,
     });

@@ -130,8 +130,9 @@ describe('createHeadedScheduler', () => {
     const fatalErrorRef: { current: Error | null } = { current: null };
     const snapshotManager = new SnapshotManager({ updateSnapshot: 'none' });
     const runtime = {
-      launches: [{ key: 'headed-launch', browser: {}, providerOptions: {} }],
-      browsers: new Map([['headed-launch', {}]]),
+      launchPool: {
+        acquire: async () => ({ browser: {}, release: () => {} }),
+      },
       containerContext: context,
       containerPage: page,
       containerServer: { port: 3000 },

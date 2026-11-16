@@ -40,6 +40,7 @@ import {
   isBrowserProject,
   isNodeProject,
 } from './environment/isBrowserProject';
+import { RunTimer } from './execution/runTimer';
 import { createTestPlanner } from './execution/planner';
 import type { Rstest } from './rstest';
 import {
@@ -128,6 +129,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // step, and every run shape — node-only, browser-only, mixed — comes through
   // here.
   // ===================================================================
+  const timer = new RunTimer();
   const planner = await createTestPlanner(context, {
     browserProjects,
     nodeProjects,
@@ -175,6 +177,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const nodeExecutor = nodeBuild
     ? createNodeExecutor(context, {
         ...nodeBuild,
+        onPrebundle: timer.recordPrebundle,
         getPlan: planner.getPlan,
         coverageProvider,
         isWatchMode,
@@ -352,7 +355,14 @@ export async function runTests(context: Rstest): Promise<void> {
       const reportersStarted = !isInterrupted;
       const selections =
         reportersStarted && executorsToRun.length > 0
-          ? createRunStartBarrier(context, executorsToRun.length)
+          ? createRunStartBarrier(executorsToRun.length, async (files) => {
+              const failure = await notifyReportersOnTestRunStart(
+                context,
+                files,
+              );
+              if (files.length && !failure) timer.startTests();
+              return failure;
+            })
           : [];
       if (reportersStarted && executorsToRun.length === 0) {
         await notifyReportersOnTestRunStart(context, []);
@@ -392,6 +402,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
       await finalizeRunCycle(context, {
         outcomes,
+        duration: timer.finish(),
         mode: 'all',
         isWatchMode: false,
         isInterrupted: () => isInterrupted,
@@ -438,6 +449,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // Assigned once the teardown below exists; until then nothing can be closing.
   let isSessionClosing = () => false;
   const watchDriver = createWatchCycleDriver({
+    timer,
     context,
     coverageProvider,
     traceController,
