@@ -29,16 +29,21 @@ const serializeError = (
     fullStack: value.fullStack,
   };
   // Keep the cause chain. `ancestors` stops a circular chain.
-  const cause: unknown = value.cause;
-  if (
-    typeof cause === 'object' &&
-    cause !== null &&
-    !Array.isArray(cause) &&
-    typeof (cause as { message?: unknown }).message === 'string' &&
-    cause !== error &&
-    !ancestors.has(cause)
-  ) {
-    serialized.cause = serializeError(cause, new Set(ancestors).add(error));
+  try {
+    const cause: unknown = value.cause;
+    if (
+      typeof cause === 'object' &&
+      cause !== null &&
+      !Array.isArray(cause) &&
+      typeof (cause as { message?: unknown }).message === 'string' &&
+      cause !== error &&
+      !ancestors.has(cause)
+    ) {
+      serialized.cause = serializeError(cause, new Set(ancestors).add(error));
+    }
+  } catch {
+    // A getter on the cause can throw while it is read. The error is still
+    // reported, without its cause.
   }
   return serialized;
 };

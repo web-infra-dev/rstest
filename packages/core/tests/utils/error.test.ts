@@ -91,6 +91,19 @@ describe('error helpers', () => {
     expect(error.cause!.stack).toBeUndefined();
   });
 
+  it('keeps the error in toSerializedError when reading its cause throws', () => {
+    const cause = {
+      get message(): string {
+        throw new Error('metadata unavailable');
+      },
+    };
+
+    const error = toSerializedError(new Error('operation failed', { cause }));
+
+    expect(error.message).toBe('operation failed');
+    expect(error).not.toHaveProperty('cause');
+  });
+
   it('keeps printing the cause chain after the vitest import hint', async () => {
     const stderr = rs
       .spyOn(logger, 'stderr')

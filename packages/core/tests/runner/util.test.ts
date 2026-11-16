@@ -233,6 +233,36 @@ describe('formatTestError', () => {
     expect(error.cause!.stack).toBeUndefined();
   });
 
+  it('keeps the error when reading its cause throws', async () => {
+    const unreadable = {
+      get message(): string {
+        throw new Error('metadata unavailable');
+      },
+    };
+    const middle = new Error('Request failed');
+    Object.defineProperty(middle, 'cause', {
+      get() {
+        throw new Error('connection closed');
+      },
+    });
+
+    const error = (
+      await formatTestError(
+        new Error('operation failed', { cause: unreadable }),
+      )
+    )[0]!;
+    const chain = (
+      await formatTestError(
+        new Error('Failed to load the user', { cause: middle }),
+      )
+    )[0]!;
+
+    expect(error.message).toBe('operation failed');
+    expect(error).not.toHaveProperty('cause');
+    expect(chain.cause!.message).toBe('Request failed');
+    expect(chain.cause).not.toHaveProperty('cause');
+  });
+
   it('leaves out a cause that is not an error', async () => {
     for (const cause of [undefined, null, 'timeout', 404, ['a'], { code: 1 }]) {
       const error = (await formatTestError(new Error('failed', { cause })))[0]!;

@@ -40,6 +40,33 @@ describe('browser mode - error handling', () => {
     expect(output).toContain('Caused by: TypeError: socket already closed');
   });
 
+  it('prints the cause of a listed error whose stack is not text', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      command: 'list',
+      args: ['tests/collectErrorStack.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Failed to read the test data');
+    expect(output).toContain('Caused by: TypeError: remote store is offline');
+    expect(output).not.toContain('is not a function');
+  });
+
+  it('prints the cause of a worker fixture cleanup error whose stack is not text', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/workerFixtureCleanupStack.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain(
+      'Worker fixture cleanup failed: Failed to end the session',
+    );
+    expect(output).toContain('Caused by: TypeError: session already ended');
+    expect(output).not.toContain('Unhandled Reporter Error');
+  });
+
   it('should handle runtime, assertion, and timeout errors', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('error', {
       args: [

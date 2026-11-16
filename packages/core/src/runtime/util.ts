@@ -169,11 +169,20 @@ export const formatTestError = async (
       // reporters can show the root cause. `ancestors` holds only the errors
       // above this one, which stops a circular chain while two errors of one
       // list can still share a cause.
-      const cause: unknown = error?.cause;
-      if (isErrorLike(cause) && cause !== error && !ancestors.has(cause)) {
-        errObj.cause = (
-          await formatTestError(cause, undefined, new Set(ancestors).add(error))
-        )[0];
+      try {
+        const cause: unknown = error?.cause;
+        if (isErrorLike(cause) && cause !== error && !ancestors.has(cause)) {
+          errObj.cause = (
+            await formatTestError(
+              cause,
+              undefined,
+              new Set(ancestors).add(error),
+            )
+          )[0];
+        }
+      } catch {
+        // A getter on the cause can throw while it is read. The error is
+        // still reported, without its cause.
       }
 
       return errObj;

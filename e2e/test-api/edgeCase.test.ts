@@ -87,6 +87,27 @@ describe('Test Edge Cases', () => {
     expect(cli.stderr.match(/Caused by: /g)).toHaveLength(3);
   });
 
+  it('should keep an error whose cause cannot be read', async () => {
+    const { cli, expectExecFailed, expectLog, expectStderrLog } =
+      await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'fixtures/errorCauseGetter.test.ts'],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
+        },
+      });
+    await expectExecFailed();
+
+    expectStderrLog('Error: operation failed');
+    expect(cli.stderr).not.toContain('metadata unavailable');
+
+    // The other tests in the file keep their own results.
+    const logs = cli.stdout.split('\n').filter(Boolean);
+    expectLog(/Tests 1 failed \| 2 passed/, logs);
+  });
+
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({

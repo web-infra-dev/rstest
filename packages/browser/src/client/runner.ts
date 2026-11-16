@@ -677,7 +677,7 @@ const run = async () => {
           type: 'fatal',
           payload: {
             message: error.message,
-            stack: error.stack,
+            stack: serialized?.stack,
             cause: serialized?.cause,
           },
         });
@@ -1042,7 +1042,7 @@ const run = async () => {
                 fullStack: true,
                 message: `Worker fixture cleanup failed: ${formattedCleanupError.message}`,
                 name: formattedCleanupError.name,
-                stack: formattedCleanupError.stack,
+                stack: serialized?.stack,
                 cause: serialized?.cause,
               },
             ];
