@@ -124,14 +124,14 @@ export default defineConfig({
 
 The prebundle is optional. If your DOM environment behaves differently after enabling it, set `prebundle: false` to load it natively.
 
+The prebundle is used only by the test environment. Imports of `jsdom` or `happy-dom` in your test code and dependencies follow the normal bundling and externalization rules; they do not share the environment's prebundle. DOM constructors from those imports can therefore differ from the test environment's constructors.
+
 Rstest automatically falls back to native loading if it cannot build, load, or validate a prebundle. Validation covers known problem cases, not every API:
 
 - Bundling can change how an environment resolves runtime assets, executable helpers, and optional or native dependencies, even if the bundle imports successfully.
 - For example, jsdom 27 and 28 can resolve an optional CSS implementation differently after bundling, causing `getComputedStyle()` to fail. `auto` uses native loading for these versions. With `prebundle: true`, Rstest probes this known case and falls back if validation fails.
 
 The environment package is resolved from the project's dependencies first, then the Rstest workspace root, and finally through `@rstest/core`'s native dependency resolution for backward compatibility.
-
-With a jsdom or happy-dom test environment and `prebundle` enabled, bundled `import`, literal `import()`, and `require` requests for the same installation of that environment package reuse the environment module. If the prebundle fails, these requests share the native fallback. Explicit externals, other installations of the environment package, and requests inside external dependencies keep their existing loading behavior. Setting `prebundle: false` disables this reuse.
 
 ### Environment comments
 

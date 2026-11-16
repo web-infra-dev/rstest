@@ -1,11 +1,5 @@
-import { installTestEnvironmentModule } from './env/testEnvironmentModule';
 import { install } from 'source-map-support';
-import type {
-  AssetFiles,
-  EntryInfo,
-  SerializedError,
-  TestEnvironmentModuleReference,
-} from '../../types';
+import type { AssetFiles, EntryInfo, SerializedError } from '../../types';
 import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
@@ -77,7 +71,6 @@ function captureEnvChanges(): Record<string, string | undefined> {
 }
 
 const runGlobalSetup = async (data: {
-  testEnvironmentModule?: TestEnvironmentModuleReference;
   color: boolean;
   entries: EntryInfo[];
   assetFiles: AssetFiles;
@@ -120,15 +113,7 @@ const runGlobalSetup = async (data: {
     (globalThis as Record<string, unknown>).__rstest_federation__ =
       data.federation === true;
 
-    let bridgeInstalled = false;
     for (const entry of data.entries) {
-      if (entry.usesEnvironmentBridge && !bridgeInstalled) {
-        await installTestEnvironmentModule(
-          data.testEnvironmentModule,
-          globalThis,
-        );
-        bridgeInstalled = true;
-      }
       const { distPath, runtimeDistPath, testPath } = entry;
       setFederationDynamicImportOrigin(data.federation, testPath);
       const { loadModule } = data.outputModule

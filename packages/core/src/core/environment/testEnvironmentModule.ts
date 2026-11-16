@@ -50,7 +50,7 @@ const resolveFromRoot = (
   }
 };
 
-export const resolveTestEnvironmentModule = (
+const resolveTestEnvironmentModule = (
   specifier: string,
   projectRoot: string,
   root: string,
