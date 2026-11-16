@@ -33,7 +33,7 @@ import {
   toNativePath,
 } from '../../utils/helper';
 import { createExpect, getGlobalExpect, resetExpectState } from '../api/expect';
-import { formatTestError, TestSkipError } from '../util';
+import { formatTestError, formatTestErrors, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import {
   createFixtureResolver,
@@ -55,6 +55,14 @@ import {
 
 const RealDate = Date;
 const RealAbortController = AbortController;
+
+/**
+ * The `expect.soft` failures of one test attempt. They are thrown together
+ * and reported one by one, unlike a value the test throws itself.
+ */
+class SoftAssertionErrors {
+  constructor(readonly errors: unknown[]) {}
+}
 
 // Cancellation can start cleanup before setup unwinds. Linked frames let the
 // later phase skip an expired predecessor instead of restoring its deadline.
@@ -439,7 +447,10 @@ export class TestRunner {
                 status: 'failed' as const,
                 parentNames: test.parentNames,
                 name: test.name,
-                errors: await formatTestError(error, test),
+                errors:
+                  error instanceof SoftAssertionErrors
+                    ? await formatTestErrors(error.errors, test)
+                    : await formatTestError(error, test),
                 testPath,
                 meta: test.meta,
               };
@@ -1203,7 +1214,7 @@ export class TestRunner {
     } = this.getAssertionState(test);
 
     if (test.result?.state === 'fail') {
-      throw test.result.errors;
+      throw new SoftAssertionErrors(test.result.errors ?? []);
     }
 
     const localExpect = this.localExpects.get(test.context);
