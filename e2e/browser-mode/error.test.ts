@@ -228,9 +228,10 @@ describe('browser mode - error handling', () => {
     // The single test passes, but the escaped rejection must fail the file
     // (parity with node's uncaughtException/unhandledRejection capture).
     expect(cli.exec.exitCode).not.toBe(0);
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
-      'UNHANDLED_BROWSER_REJECTION',
-    );
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Error: UNHANDLED_BROWSER_REJECTION');
+    // Each escaped error is reported on its own, not as one list.
+    expect(output).not.toContain('Unknown Error');
   });
 
   it('logs browser error events without an error object without failing the file', async () => {

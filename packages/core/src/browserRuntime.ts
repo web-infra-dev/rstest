@@ -19,7 +19,12 @@ export {
 } from './runtime/api/expect';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
-export { formatTestError, getRealTimers, setRealTimers } from './runtime/util';
+export {
+  formatTestError,
+  formatTestErrors,
+  getRealTimers,
+  setRealTimers,
+} from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
 export { runSetupFiles } from './runtime/runner/setup';

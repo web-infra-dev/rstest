@@ -22,6 +22,7 @@ import {
   FIXTURE_CLEANUP_TIMEOUT_MS,
   formatConsoleArgs,
   formatTestError,
+  formatTestErrors,
   globalApis,
   getRealTimers,
   RSTEST_API_GLOBAL_KEY,
@@ -1069,7 +1070,7 @@ const run = async () => {
           result.status = 'failed';
           result.errors = [
             ...(result.errors ?? []),
-            ...(await formatTestError(unhandledErrors)),
+            ...(await formatTestErrors(unhandledErrors)),
           ];
         }
 
