@@ -9,6 +9,7 @@ import { DefaultReporter } from './index';
 import { logCase, logFileTitle } from './utils';
 
 export class VerboseReporter extends DefaultReporter {
+  protected override readonly showPrebundleTime = true;
   private readonly verboseOptions: VerboseReporterOptions = {};
 
   constructor({

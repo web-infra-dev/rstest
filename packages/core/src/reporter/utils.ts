@@ -62,15 +62,29 @@ export const toReportCounts = (summary: TestRunSummary): ReportCounts => ({
   todoTests: summary.tests.todo,
 });
 
+export const formatBuildTime = ({
+  buildTime,
+  prebundleTime,
+}: Duration): string => {
+  const detail = Object.entries(prebundleTime ?? {}).map(
+    ([name, elapsed]) => `${name} prebundle ${prettyTime(elapsed)}`,
+  );
+  return detail.length
+    ? `${prettyTime(buildTime)} including ${detail.join(', ')}`
+    : prettyTime(buildTime);
+};
+
 type ReportDuration = {
   total: number;
   build: number;
+  prebundle?: Record<string, number>;
   tests: number;
 };
 
 export const toReportDuration = (duration: Duration): ReportDuration => ({
   total: duration.totalTime,
   build: duration.buildTime,
+  ...(duration.prebundleTime && { prebundle: duration.prebundleTime }),
   tests: duration.testTime,
 });
 

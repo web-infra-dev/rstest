@@ -151,17 +151,19 @@ function mergeSnapshots(summaries: SnapshotSummary[]): SnapshotSummary {
 }
 
 function mergeDurations(durations: Duration[]): Duration {
-  let totalTime = 0;
-  let buildTime = 0;
-  let testTime = 0;
+  const merged: Duration = { totalTime: 0, buildTime: 0, testTime: 0 };
 
   for (const d of durations) {
-    totalTime += d.totalTime;
-    buildTime += d.buildTime;
-    testTime += d.testTime;
+    merged.totalTime += d.totalTime;
+    merged.buildTime += d.buildTime;
+    merged.testTime += d.testTime;
+    for (const [name, elapsed] of Object.entries(d.prebundleTime ?? {})) {
+      merged.prebundleTime ??= {};
+      merged.prebundleTime[name] = (merged.prebundleTime[name] ?? 0) + elapsed;
+    }
   }
 
-  return { totalTime, buildTime, testTime };
+  return merged;
 }
 
 /**

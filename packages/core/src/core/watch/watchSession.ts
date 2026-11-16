@@ -26,6 +26,7 @@ import {
   cycleFailureOutcome,
   runGlobalTeardown,
 } from '../execution/globalSetup';
+import { RunTimer } from '../execution/runTimer';
 import type { Rstest } from '../rstest';
 import {
   collectFailedTestPaths,
@@ -170,6 +171,7 @@ const canFold = (
   !!queued.fileFilters === !!incoming.fileFilters;
 
 export function createWatchCycleDriver({
+  timer,
   context,
   coverageProvider,
   traceController,
@@ -178,6 +180,7 @@ export function createWatchCycleDriver({
   enableCliShortcuts,
   isSessionClosing,
 }: {
+  timer: RunTimer;
   context: Rstest;
   coverageProvider: CoverageProvider | null;
   traceController: TraceController;
@@ -262,6 +265,12 @@ export function createWatchCycleDriver({
     // What a first cycle skips is the snapshot half only; see
     // `prepareWatchCycleState` for why the two halves part ways there.
     const isFirstCycle = !settled.has(executor);
+    // In mixed watch the browser starts after the node cycle has finished.
+    const initialTimer = isFirstCycle
+      ? buildId === 1
+        ? timer
+        : new RunTimer()
+      : undefined;
     prepareWatchCycleState(context, { isFirstCycle });
     // The run opens lazily — see `InternalContext.openReporterRun`. A rebuild
     // that reaches no test then opens nothing and leaves the screen as it was.
@@ -284,7 +293,10 @@ export function createWatchCycleDriver({
     try {
       const onSelected = async (files: SelectedTestFile[]) => {
         selectedFiles = files;
-        return files.length || mode === 'all' ? await openRun() : undefined;
+        const failure =
+          files.length || mode === 'all' ? await openRun() : undefined;
+        if (files.length && !failure) initialTimer?.startTests();
+        return failure;
       };
       let outcome: ExecutorCycleOutcome;
       try {
@@ -331,6 +343,10 @@ export function createWatchCycleDriver({
       }
       await finalizeRunCycle(context, {
         outcomes: [outcome],
+        duration: initialTimer?.finish() ?? {
+          ...outcome.duration,
+          totalTime: outcome.duration.buildTime + outcome.duration.testTime,
+        },
         mode,
         isWatchMode: true,
         reportersStarted: runOpened !== undefined,

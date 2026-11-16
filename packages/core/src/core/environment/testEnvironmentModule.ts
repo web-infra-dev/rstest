@@ -488,9 +488,11 @@ export const prepareTestEnvironmentModules = async ({
   projects,
   rootPath,
   buildModule = buildTestEnvironmentModuleInChild,
+  onPrebundle,
 }: {
   projects: InternalProjectContext[];
   rootPath: string;
+  onPrebundle?: (name: string, elapsed: number) => void;
   buildModule?: (
     options: BuildTestEnvironmentModuleOptions,
     signal: AbortSignal,
@@ -560,6 +562,7 @@ export const prepareTestEnvironmentModules = async ({
       let bundlePathPromise = bundlePaths.get(bundleKey);
       if (!bundlePathPromise) {
         tempRoot ??= await mkdtemp(join(tmpdir(), 'rstest-test-environments-'));
+        const start = performance.now();
         bundlePathPromise = buildModule(
           {
             bundleId: bundlePaths.size,
@@ -568,14 +571,21 @@ export const prepareTestEnvironmentModules = async ({
             tempRoot,
           },
           abortController.signal,
-        ).catch((error: unknown) => {
-          if (!abortController.signal.aborted) {
-            logger.warn(
-              formatTestEnvironmentPrebundleFallbackWarning(packageName, error),
-            );
-          }
-          return undefined;
-        });
+        )
+          .catch((error: unknown) => {
+            if (!abortController.signal.aborted) {
+              logger.warn(
+                formatTestEnvironmentPrebundleFallbackWarning(
+                  packageName,
+                  error,
+                ),
+              );
+            }
+            return undefined;
+          })
+          .finally(() =>
+            onPrebundle?.(packageName, Math.round(performance.now() - start)),
+          );
         bundlePaths.set(bundleKey, bundlePathPromise);
       }
 

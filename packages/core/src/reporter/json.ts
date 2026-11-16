@@ -29,11 +29,7 @@ type JsonReport = {
     skippedTests: number;
     todoTests: number;
   };
-  durationMs: {
-    total: number;
-    build: number;
-    tests: number;
-  };
+  durationMs: ReturnType<typeof toReportDuration>;
   snapshot: SnapshotSummary;
   files: Array<
     Omit<TestFileResult, 'results' | 'relativeTestPath' | 'summary'> & {

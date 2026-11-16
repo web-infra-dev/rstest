@@ -108,6 +108,7 @@ describe('finalizeRunCycle', () => {
 
       if (interrupted) context.exitCode.raise(130);
       await finalizeRunCycle(context, {
+        duration: { totalTime: 0, testTime: 0, buildTime: 0 },
         outcomes: [
           {
             results: [],
@@ -257,6 +258,7 @@ describe('run-level reporter hook failures', () => {
     };
 
     await finalizeRunCycle(context, {
+      duration: { totalTime: 0, testTime: 0, buildTime: 0 },
       outcomes: [outcome, { ...outcome }],
       mode: 'all',
       isWatchMode: false,
@@ -299,6 +301,7 @@ describe('run-level reporter hook failures', () => {
 
     await expect(
       finalizeRunCycle(context, {
+        duration: { totalTime: 0, testTime: 0, buildTime: 0 },
         outcomes: [outcome],
         mode: 'all',
         isWatchMode: false,

@@ -89,7 +89,8 @@ interface Reporter {
     };
     duration: {
       totalTime: number; // 总时长（毫秒）。
-      buildTime: number; // 构建时长（毫秒）。
+      buildTime: number; // 构建时长（毫秒），包含编译和测试环境准备。
+      prebundleTime?: Record<string, number>; // 各环境包的预打包耗时（毫秒），已计入 buildTime。
       testTime: number; // 测试执行时长（毫秒）。
     };
     snapshotSummary: SnapshotSummary;
@@ -149,6 +150,8 @@ interface TestRunStartPayload {
 从 v0.13.0 开始，payload 还会带上本次运行的 `status`；每个取值的含义见 [`rstest.run`](/api/javascript-api/instance#rstestrun)。
 
 watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累计结果：每个文件只保留最新一次的结果，删除的文件会移出。`rerunTestPaths` 是这一轮实际执行的文件，一次性运行没有这个字段。`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON。
+
+`duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> 按环境包列出预打包耗时，单位为毫秒。这部分时间已计入 `duration.buildTime`。
 
 ### TestResult
 
