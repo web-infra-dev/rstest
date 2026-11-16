@@ -268,6 +268,11 @@ export class TestRunner {
 
       this.beforeEach(test, state, api);
 
+      // A retry or a repeat runs the same test again. Drop the snapshot state
+      // of the previous attempt, so the snapshot counter restarts and
+      // `toMatchSnapshot()` resolves to the same keys on every attempt.
+      snapshotClient.clearTest(testPath, test.testId);
+
       const cleanups: AfterEachListener[] = [];
       const fixtureCleanups: (() => Promise<void>)[] = [];
 
