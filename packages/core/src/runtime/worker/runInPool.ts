@@ -125,6 +125,16 @@ const runGlobalCleanups = (): void => {
   }
 };
 
+/**
+ * Node reports a promise rejected without a handler only after the microtask
+ * queue drains. When the file's last test or hook leaves one, the report would
+ * arrive after the runtime stops collecting errors and reach the worker's fatal
+ * handler, which crashes the worker. Waiting one macrotask collects it into
+ * `unhandledErrors` first.
+ */
+const waitForPendingRejections = (): Promise<unknown> =>
+  new Promise((resolve) => getRealTimers().setTimeout!(resolve));
+
 let isTeardown = false;
 /**
  * Test environment kept alive across files on a reused worker
@@ -929,6 +939,7 @@ export const runInPool = async (
         runtimeGlobal: rstestContext.global,
       });
       const tests = await runner.collectTests();
+      await waitForPendingRejections();
       lifecycleHooks.onTaskErrorHandlingChange?.(false);
       collectResult = {
         project,
@@ -1229,6 +1240,7 @@ export const runInPool = async (
       }
     }
 
+    await waitForPendingRejections();
     lifecycleHooks.onTaskErrorHandlingChange?.(false);
     if (unhandledErrors.length > 0) {
       results.status = 'failed';
