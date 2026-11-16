@@ -200,4 +200,101 @@ describe('formatTestError', () => {
 
     expect(error.message).toBe('foo is not defined');
   });
+
+  it('keeps the cause chain of an error', async () => {
+    const root = new TypeError('fetch failed');
+    const middle = new Error('Request failed', { cause: root });
+    const error = (
+      await formatTestError(
+        new Error('Failed to load the user', { cause: middle }),
+      )
+    )[0]!;
+
+    expect(error.message).toBe('Failed to load the user');
+    expect(error.cause).toMatchObject({
+      name: 'Error',
+      message: 'Request failed',
+      stack: middle.stack,
+      cause: { name: 'TypeError', message: 'fetch failed', stack: root.stack },
+    });
+    expect(error.cause!.cause!.cause).toBeUndefined();
+  });
+
+  it('only keeps a cause stack that is a string', async () => {
+    const error = (
+      await formatTestError(
+        new Error('wrapper', {
+          cause: { message: 'API failed', stack: ['remote frame'] },
+        }),
+      )
+    )[0]!;
+
+    expect(error.cause!.message).toBe('API failed');
+    expect(error.cause!.stack).toBeUndefined();
+  });
+
+  it('keeps the error when reading its cause throws', async () => {
+    const unreadable = {
+      get message(): string {
+        throw new Error('metadata unavailable');
+      },
+    };
+    const middle = new Error('Request failed');
+    Object.defineProperty(middle, 'cause', {
+      get() {
+        throw new Error('connection closed');
+      },
+    });
+
+    const error = (
+      await formatTestError(
+        new Error('operation failed', { cause: unreadable }),
+      )
+    )[0]!;
+    const chain = (
+      await formatTestError(
+        new Error('Failed to load the user', { cause: middle }),
+      )
+    )[0]!;
+
+    expect(error.message).toBe('operation failed');
+    expect(error).not.toHaveProperty('cause');
+    expect(chain.cause!.message).toBe('Request failed');
+    expect(chain.cause).not.toHaveProperty('cause');
+  });
+
+  it('leaves out a cause that is not an error', async () => {
+    for (const cause of [undefined, null, 'timeout', 404, ['a'], { code: 1 }]) {
+      const error = (await formatTestError(new Error('failed', { cause })))[0]!;
+
+      expect(error).not.toHaveProperty('cause');
+    }
+  });
+
+  it('stops at a circular cause chain', async () => {
+    const first = new Error('first');
+    const second = new Error('second', { cause: first });
+    first.cause = second;
+    const self = new Error('self');
+    self.cause = self;
+
+    const error = (await formatTestError(first))[0]!;
+
+    expect(error.cause).toMatchObject({ message: 'second' });
+    expect(error.cause).not.toHaveProperty('cause');
+    expect((await formatTestError(self))[0]).not.toHaveProperty('cause');
+  });
+
+  it('keeps a cause that several errors of one list share', async () => {
+    const root = new Error('connection lost');
+    const errors = await formatTestError([
+      new Error('first query failed', { cause: root }),
+      new Error('second query failed', { cause: root }),
+    ]);
+
+    expect(errors.map((error) => error.cause?.message)).toEqual([
+      'connection lost',
+      'connection lost',
+    ]);
+  });
 });

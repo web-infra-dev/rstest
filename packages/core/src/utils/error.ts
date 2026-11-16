@@ -10,22 +10,47 @@ import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
 
-export const toSerializedError = (error: unknown): SerializedError => {
+const serializeError = (
+  error: unknown,
+  ancestors: ReadonlySet<object>,
+): SerializedError => {
   if (!error || typeof error !== 'object') {
     return { message: String(error) };
   }
   const value = error as Partial<SerializedError>;
-  return {
+  const serialized: SerializedError = {
     name: value.name,
     message: value.message ?? String(error),
-    stack: value.stack,
+    stack: typeof value.stack === 'string' ? value.stack : undefined,
     diff: value.diff,
     actual: value.actual,
     expected: value.expected,
     retryCount: value.retryCount,
     fullStack: value.fullStack,
   };
+  // Keep the cause chain. `ancestors` stops a circular chain.
+  try {
+    const cause: unknown = value.cause;
+    if (
+      typeof cause === 'object' &&
+      cause !== null &&
+      !Array.isArray(cause) &&
+      typeof (cause as { message?: unknown }).message === 'string' &&
+      cause !== error &&
+      !ancestors.has(cause)
+    ) {
+      serialized.cause = serializeError(cause, new Set(ancestors).add(error));
+    }
+  } catch {
+    // A getter on the cause can throw while it is read. The error is still
+    // reported, without its cause.
+  }
+  return serialized;
 };
+
+// Takes one argument only, so it is safe to pass straight to `Array#map`.
+export const toSerializedError = (error: unknown): SerializedError =>
+  serializeError(error, new Set());
 
 const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 
@@ -61,11 +86,26 @@ export async function printError(
   getSourcemap: GetSourcemap,
   rootPath: string,
 ): Promise<void> {
+  let current: SerializedError | undefined = error;
+  let label = '';
+  while (current) {
+    await printErrorWithoutCause(current, getSourcemap, rootPath, label);
+    current = current.cause;
+    label = 'Caused by: ';
+  }
+}
+
+async function printErrorWithoutCause(
+  error: SerializedError,
+  getSourcemap: GetSourcemap,
+  rootPath: string,
+  label: string,
+): Promise<void> {
   const errorName = error.name || 'Unknown Error';
 
   if (error.message.includes('Vitest failed to access its internal state')) {
     const tips = [
-      'Error: not support import `vitest` in Rstest test environment.\n',
+      `${label}Error: not support import \`vitest\` in Rstest test environment.\n`,
       'Solution:',
       `  - Update your code to use imports from "${color.yellow('@rstest/core')}" instead of "${color.yellow('vitest')}".`,
       '  - Enable `globals` configuration and use global API.',
@@ -80,7 +120,7 @@ export async function printError(
   }
 
   logger.stderr(
-    `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
+    `${color.red(label)}${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
 
   if (error.diff) {

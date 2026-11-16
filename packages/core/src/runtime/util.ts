@@ -107,9 +107,16 @@ const realNow = Date.now.bind(Date);
 
 export const getRealNow = (): number => realNow();
 
+const isErrorLike = (value: unknown): value is { message: string } =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  typeof (value as { message?: unknown }).message === 'string';
+
 export const formatTestError = async (
   err: any,
   test?: Test,
+  ancestors: ReadonlySet<object> = new Set(),
 ): Promise<SerializedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
@@ -122,7 +129,8 @@ export const formatTestError = async (
         // Some error attributes cannot be enumerated
         message: error.message,
         name: error.name,
-        stack: error.stack,
+        // Reporters parse the stack as text
+        stack: typeof error.stack === 'string' ? error.stack : undefined,
       };
 
       if (error instanceof TestRegisterError && test?.type === 'case') {
@@ -154,6 +162,27 @@ export const formatTestError = async (
           typeof actual === 'string'
             ? actual
             : format(actual, { plugins: formatPlugins });
+      }
+
+      // An error often wraps the one that really went wrong, for example
+      // `new Error('Failed to load the user', { cause })`. Keep the chain, so
+      // reporters can show the root cause. `ancestors` holds only the errors
+      // above this one, which stops a circular chain while two errors of one
+      // list can still share a cause.
+      try {
+        const cause: unknown = error?.cause;
+        if (isErrorLike(cause) && cause !== error && !ancestors.has(cause)) {
+          errObj.cause = (
+            await formatTestError(
+              cause,
+              undefined,
+              new Set(ancestors).add(error),
+            )
+          )[0];
+        }
+      } catch {
+        // A getter on the cause can throw while it is read. The error is
+        // still reported, without its cause.
       }
 
       return errObj;

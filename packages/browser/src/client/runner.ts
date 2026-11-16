@@ -672,11 +672,13 @@ const run = async () => {
       } catch (_error) {
         const error =
           _error instanceof Error ? _error : new Error(String(_error));
+        const [serialized] = await formatTestError(error);
         send({
           type: 'fatal',
           payload: {
             message: error.message,
-            stack: error.stack,
+            stack: serialized?.stack,
+            cause: serialized?.cause,
           },
         });
         window.__RSTEST_DONE__ = true;
@@ -1032,6 +1034,7 @@ const run = async () => {
               cleanupError instanceof Error
                 ? cleanupError
                 : new Error(String(cleanupError));
+            const [serialized] = await formatTestError(formattedCleanupError);
             result.status = 'failed';
             result.errors = [
               ...(result.errors ?? []),
@@ -1039,7 +1042,8 @@ const run = async () => {
                 fullStack: true,
                 message: `Worker fixture cleanup failed: ${formattedCleanupError.message}`,
                 name: formattedCleanupError.name,
-                stack: formattedCleanupError.stack,
+                stack: serialized?.stack,
+                cause: serialized?.cause,
               },
             ];
           }
@@ -1065,11 +1069,7 @@ const run = async () => {
           result.status = 'failed';
           result.errors = [
             ...(result.errors ?? []),
-            ...unhandledErrors.map((error) => ({
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-            })),
+            ...(await formatTestError(unhandledErrors)),
           ];
         }
 

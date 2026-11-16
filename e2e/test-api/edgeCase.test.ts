@@ -58,6 +58,56 @@ describe('Test Edge Cases', () => {
     expectStderrLog('at hiddenFrame (node:internal/rstest_hidden:20:6)');
   });
 
+  it('should print the cause of an error', async () => {
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorCause.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog('Error: Failed to load the user');
+    expectStderrLog('Caused by: Error: Request failed');
+    expectStderrLog('Caused by: TypeError: fetch failed');
+    // Each cause points at the line that created it.
+    expectStderrLog(/at request \(.*errorCause\.test\.ts:5:\d+\)/);
+    expectStderrLog(/at loadUser \(.*errorCause\.test\.ts:13:\d+\)/);
+
+    // A cause whose stack is not text is printed without a stack, and the
+    // failures after it are still printed.
+    expectStderrLog('Caused by: Unknown Error: API failed');
+    expect(cli.stderr).not.toContain('Unhandled Reporter Error');
+
+    // An error without a cause is printed as before.
+    expectStderrLog('Error: no cause');
+    expect(cli.stderr.match(/Caused by: /g)).toHaveLength(3);
+  });
+
+  it('should keep an error whose cause cannot be read', async () => {
+    const { cli, expectExecFailed, expectLog, expectStderrLog } =
+      await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'fixtures/errorCauseGetter.test.ts'],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
+        },
+      });
+    await expectExecFailed();
+
+    expectStderrLog('Error: operation failed');
+    expect(cli.stderr).not.toContain('metadata unavailable');
+
+    // The other tests in the file keep their own results.
+    const logs = cli.stdout.split('\n').filter(Boolean);
+    expectLog(/Tests 1 failed \| 2 passed/, logs);
+  });
+
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({
