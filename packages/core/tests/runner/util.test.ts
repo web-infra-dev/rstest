@@ -2,6 +2,7 @@ import { format as nodeFormat } from 'node:util';
 import {
   formatName,
   formatTestError,
+  formatTestErrors,
   resolveEachArgs,
 } from '../../src/runtime/util';
 
@@ -222,6 +223,41 @@ describe('formatTestError', () => {
       name: 'CustomError',
       stack: 'CustomError: not an Error instance\n    at file.ts:1:1',
     });
+  });
+
+  it('reports a thrown array as one error', async () => {
+    const errors = await formatTestError([]);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.message).toBe('[]');
+  });
+
+  it('reports each error of a collected batch', async () => {
+    const errors = await formatTestErrors([new Error('first'), []]);
+
+    expect(errors.map((error) => error.message)).toEqual(['first', '[]']);
+  });
+
+  it('reports a fixed message when the thrown value cannot be printed', async () => {
+    const errors = await formatTestError({
+      code: 'E_FAIL',
+      get detail() {
+        throw new Error('closed');
+      },
+    });
+
+    expect(errors).toEqual([
+      { message: 'The thrown value could not be printed' },
+    ]);
+  });
+
+  it('only keeps a stack that is a string', async () => {
+    const error = (
+      await formatTestError({ code: 'E_FAIL', stack: ['remote frame'] })
+    )[0]!;
+
+    expect(error.message).toBe('{"code": "E_FAIL", "stack": ["remote frame"]}');
+    expect(error.stack).toBeUndefined();
   });
 
   it('does not add the Istanbul hint for normal reference errors', async () => {

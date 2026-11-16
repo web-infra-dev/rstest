@@ -25,6 +25,7 @@ import { color } from '../../utils/logger';
 import { isVmPoolType } from '../../utils/workers';
 import {
   formatTestError,
+  formatTestErrors,
   getRealNow,
   getRealTimers,
   setRealTimers,
@@ -950,7 +951,7 @@ export const runInPool = async (
         project,
         testPath,
         tests,
-        errors: await formatTestError(unhandledErrors),
+        errors: await formatTestErrors(unhandledErrors),
       };
     } catch (err) {
       collectResult = {
@@ -1249,7 +1250,7 @@ export const runInPool = async (
     if (unhandledErrors.length > 0) {
       results.status = 'failed';
       results.errors = (results.errors || []).concat(
-        ...(await formatTestError(unhandledErrors)),
+        ...(await formatTestErrors(unhandledErrors)),
       );
     }
 
@@ -1312,7 +1313,7 @@ export const runInPool = async (
       runResult.status = 'failed';
       runResult.errors = [
         ...(runResult.errors ?? []),
-        ...(await formatTestError(teardownErrors)),
+        ...(await formatTestErrors(teardownErrors)),
       ];
     }
     const traceEvents = tracker.getTraceEvents();

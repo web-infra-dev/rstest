@@ -107,14 +107,26 @@ const realNow = Date.now.bind(Date);
 
 export const getRealNow = (): number => realNow();
 
-export const formatTestError = async (
-  err: any,
+const printThrownValue = (value: unknown): string => {
+  try {
+    return stringify(value, 10, { min: true });
+  } catch {
+    // A getter on the value can throw while it is printed. A fixed message
+    // keeps that from failing the whole file.
+    return 'The thrown value could not be printed';
+  }
+};
+
+/**
+ * Serializes errors collected from several sources, such as unhandled
+ * rejections or teardown steps.
+ */
+export const formatTestErrors = async (
+  errors: unknown[],
   test?: Test,
 ): Promise<SerializedError[]> => {
-  const errors = Array.isArray(err) ? err : [err];
-
   return Promise.all(
-    errors.map(async (rawError) => {
+    errors.map(async (rawError: any) => {
       // A test can throw any value, not only an `Error`: `Promise.reject()`
       // rejects with `undefined`, and `throw 404` or `throw { code: 1 }` are
       // valid too. Those values have no `message`, so report the value itself.
@@ -128,13 +140,14 @@ export const formatTestError = async (
           ? error.message
           : typeof rawError === 'string'
             ? rawError
-            : stringify(rawError, 10, { min: true });
+            : printThrownValue(rawError);
       const errObj: SerializedError = {
         fullStack: error.fullStack,
         // Some error attributes cannot be enumerated
         message,
         name: error.name,
-        stack: error.stack,
+        // Reporters parse the stack as text
+        stack: typeof error.stack === 'string' ? error.stack : undefined,
       };
 
       if (error instanceof TestRegisterError && test?.type === 'case') {
@@ -172,6 +185,16 @@ export const formatTestError = async (
     }),
   );
 };
+
+/**
+ * Serializes one value caught from a test, hook or fixture. Any value can be
+ * thrown, an array included, so it is always reported as one error.
+ */
+export const formatTestError = (
+  err: unknown,
+  test?: Test,
+): Promise<SerializedError[]> => formatTestErrors([err], test);
+
 const formatTemplate = (template: string, param: unknown): string => {
   const isArrayRow = Array.isArray(param);
   const values = isArrayRow ? param : [param];

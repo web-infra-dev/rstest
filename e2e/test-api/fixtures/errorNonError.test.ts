@@ -18,6 +18,19 @@ it('throws a plain object', () => {
   throw { code: 'E_FAIL' };
 });
 
+it('throws an object that cannot be printed', () => {
+  throw {
+    code: 'E_FAIL',
+    get detail() {
+      throw new Error('closed');
+    },
+  };
+});
+
+it('throws an object whose stack is not a string', () => {
+  throw { code: 'E_FAIL', stack: ['remote frame'] };
+});
+
 describe('hook', () => {
   afterEach(() => {
     throw undefined;
