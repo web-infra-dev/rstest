@@ -47,9 +47,9 @@ The `submitButton` above is a `Locator`. You can continue chaining calls on it (
 
 - **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard; viewport: (width: number, height: number) => Promise<void> }`
 
-`BrowserPage` is the type definition for `page`. It exposes query entry points, DOM-to-Locator conversion, and [`keyboard`](/api/runtime-api/browser-mode/keyboard) with the `BrowserKeyboard` type. Element actions such as `click` and `fill` are available on `Locator`.
+`BrowserPage` is the type of `page`. It provides element queries, DOM-to-Locator conversion, [`keyboard`](/api/runtime-api/browser-mode/keyboard) input, and `viewport` resizing. Element actions such as `click` and `fill` are available on `Locator`.
 
-This means you need to first obtain a `Locator` through `page`, then call interactions and assertions on the `Locator`.
+To interact with or assert against an element, first obtain a `Locator` through `page`.
 
 ## page.viewport
 
@@ -57,7 +57,7 @@ This means you need to first obtain a `Locator` through `page`, then call intera
 
 - **Type:** `(width: number, height: number) => Promise<void>`
 
-Resize the current test's layout viewport. Both dimensions must be positive integers in CSS pixels. The returned Promise resolves after the new dimensions apply, so subsequent media queries and layout reads observe the new viewport.
+Resize the current test's layout viewport to check responsive layouts at different sizes. Both dimensions must be positive integers in CSS pixels. Once `await page.viewport(width, height)` completes, media queries and layout reads use the new dimensions.
 
 ```ts
 import { page } from '@rstest/browser';
@@ -69,11 +69,15 @@ test('uses the tablet layout', async () => {
 });
 ```
 
-Rstest restores the initial viewport after every test attempt, including retries and repeats. Restoration runs after failure screenshots, `afterEach`, fixture cleanup, `onTestFinished`, and `onTestFailed` callbacks. The initial viewport includes browser instance overrides and the active headed UI viewport mode. Changes made in suite teardown hooks are restored before the next suite starts. Tests that keep the initial viewport skip the restore request.
+Rstest restores the initial viewport every time a test finishes, including retries (`retry`) and repeats (`repeats`). Restoration waits for failure screenshots, `afterEach`, fixture cleanup, and the `onTestFinished` and `onTestFailed` callbacks to complete. An unchanged viewport needs no restoration.
 
-To apply a size to a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test attempt. Concurrent tests share a viewport, so calling `page.viewport()` in a concurrent test or a suite hook with runnable concurrent descendants throws an error.
+Headless runs restore the browser instance's initial viewport size. Headed runs restore the UI's previous viewport mode and dimensions. Changes made in `afterAll` or a cleanup function returned by `beforeAll` are restored when that group of tests finishes.
 
-In headless mode, resizing uses Playwright's native viewport emulation, which also updates `window.screen`. Restoration resets the layout viewport, but does not restore a custom `browser.providerOptions.context.screen` value.
+To use the same size for a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test execution. Later retries, repeats, and other tests do not automatically keep that size.
+
+Concurrent tests share a viewport, so they cannot call `page.viewport()`. If a group contains concurrent tests that will run, its `beforeAll`, `afterAll`, and cleanup functions cannot call this API either. These calls throw an error.
+
+In headless mode, Playwright also updates `window.screen` when resizing the viewport. Restoring the viewport does not restore a screen size configured through `browser.providerOptions.context.screen`.
 
 ## Query API
 
