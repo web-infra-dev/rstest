@@ -153,6 +153,40 @@ describe('Test Edge Cases', () => {
     expectLog(/Tests 1 failed \| 2 passed/, logs);
   });
 
+  it('should hide rstest runtime frames when a module throws while it loads', async () => {
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorOnImport.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog('Error: Missing config file');
+    expectStderrLog(/at readConfig \(.*throwOnImport\.ts:2:\d+\)/);
+    // Source maps name the runtime module `rstest%20runtime`.
+    expect(cli.stderr).not.toMatch(/rstest(%20| )runtime/);
+  });
+
+  it('should not list rstest runtime frames as md candidate files', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorOnImport.test.ts', '--reporters', 'md'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expect(cli.stdout).toContain('"path": "fixtures/throwOnImport.ts"');
+    expect(cli.stdout).not.toMatch(/rstest(%20| )runtime/);
+  });
+
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({

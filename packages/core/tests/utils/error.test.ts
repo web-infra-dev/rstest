@@ -56,6 +56,22 @@ describe('error helpers', () => {
     ]);
   });
 
+  it('drops rstest runtime frames whose path is URL-encoded', async () => {
+    const frames = await parseErrorStacktrace({
+      stack: [
+        'Error: Missing config file',
+        '    at readConfig (/project/src/config.ts:2:9)',
+        '    at Object.apply (/project/dist/.rstest-temp/rstest%20runtime:26:1)',
+        '    at /project/src/index.test.ts:4:5',
+      ].join('\n'),
+    });
+
+    expect(frames.map((frame) => frame.file)).toEqual([
+      '/project/src/config.ts',
+      '/project/src/index.test.ts',
+    ]);
+  });
+
   it('keeps the cause chain in toSerializedError', () => {
     const root = new TypeError('fetch failed');
     const errors = [
