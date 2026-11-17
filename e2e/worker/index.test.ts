@@ -233,4 +233,42 @@ describe('test worker behavior', () => {
     await expectExecFailed();
     expectStderrLog(/AssertionError: expected 'hello' to be 'hii'/);
   });
+
+  it.for(['forks', 'threads', 'vmForks', 'vmThreads'])(
+    'reports a rejection left by the last test without crashing the worker (%s)',
+    async (pool) => {
+      const { expectExecFailed, cli } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'rejectionInLastTest.test.ts', '--pool', pool],
+        options: {
+          nodeOptions: {
+            cwd: fixtureDir,
+          },
+        },
+      });
+
+      await expectExecFailed();
+      expect(cli.log).toContain('unhandledRejection: LAST_TEST_REJECTION');
+      expect(cli.log).not.toContain('Worker stderr before exit');
+    },
+  );
+
+  it.for(['forks', 'threads', 'vmForks', 'vmThreads'])(
+    'reports a rejection left while collecting without crashing the worker (%s)',
+    async (pool) => {
+      const { expectExecFailed, cli } = await runRstestCli({
+        command: 'rstest',
+        args: ['list', 'rejectionWhileCollecting.test.ts', '--pool', pool],
+        options: {
+          nodeOptions: {
+            cwd: fixtureDir,
+          },
+        },
+      });
+
+      await expectExecFailed();
+      expect(cli.log).toContain('unhandledRejection: COLLECT_REJECTION');
+      expect(cli.log).not.toContain('Worker stderr before exit');
+    },
+  );
 });
