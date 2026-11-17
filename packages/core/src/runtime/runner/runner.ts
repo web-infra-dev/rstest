@@ -6,6 +6,7 @@ import type {
 } from '@vitest/snapshot';
 import type {
   AfterEachListener,
+  BeforeAllListener,
   CoverageProvider,
   SerializedError,
   OnTestFailedHandler,
@@ -35,6 +36,7 @@ import {
 import { createExpect, getGlobalExpect, resetExpectState } from '../api/expect';
 import { formatTestError, formatTestErrors, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
+import type { FileCleanupHooks } from './index';
 import {
   createFixtureResolver,
   FileFixtureManager,
@@ -109,7 +111,13 @@ export class TestRunner {
     AbortController
   >();
 
+  private concurrentTasks = 0;
+
   constructor(private readonly taskContext: TaskContext) {}
+
+  isRunningConcurrentTests(): boolean {
+    return this.concurrentTasks > 0;
+  }
 
   private async runWithActiveTimeout<T>(
     test: TestCase | TestSuite,
@@ -205,7 +213,7 @@ export class TestRunner {
     tests: Test[];
     testPath: string;
     state: WorkerState;
-    hooks: RunnerHooks;
+    hooks: RunnerHooks & FileCleanupHooks;
     snapshotClient: SnapshotClient;
     api: Rstest;
     coverageProvider?: CoverageProvider;
@@ -231,6 +239,30 @@ export class TestRunner {
       (test, fn, callback) => this.runWithActiveTimeout(test, fn, callback),
       (context, error) => this.abortContextSignal(context, error),
     );
+
+    const hasConcurrentTests = (tests: Test[]): boolean =>
+      tests.some(
+        (test) =>
+          ['run', 'only'].includes(test.runMode) &&
+          (test.type !== 'suite' || test.hasRunnableTests === true) &&
+          (test.concurrent ||
+            test.inConcurrentScope ||
+            (test.type === 'suite' && hasConcurrentTests(test.tests))),
+      );
+
+    const runSuiteHook = async <T>(
+      test: TestSuite,
+      fn: BeforeAllListener,
+      callback: () => T | Promise<T>,
+    ): Promise<T> => {
+      const concurrent = hasConcurrentTests(test.tests);
+      if (concurrent) this.concurrentTasks++;
+      try {
+        return await hookRunner.runWithTimeoutContext(test, fn, callback);
+      } finally {
+        if (concurrent) this.concurrentTasks--;
+      }
+    };
 
     const runTestsCase = async (
       test: TestCase,
@@ -572,7 +604,12 @@ export class TestRunner {
       test.onFinished.length = onFinishedSnapshot;
       test.onFailed.length = onFailedSnapshot;
 
-      this.resetCurrentTest();
+      try {
+        const cleanup = hooks.onTaskCleanup?.();
+        if (cleanup) await cleanup;
+      } finally {
+        this.resetCurrentTest();
+      }
 
       return result;
     };
@@ -615,7 +652,20 @@ export class TestRunner {
       return results;
     };
 
-    const runTest = async (
+    const runTest = (
+      test: Test,
+      parentHooks: ParentHooks,
+    ): Promise<RawTestResult> => {
+      if (!test.concurrent && !test.inConcurrentScope) {
+        return runTask(test, parentHooks);
+      }
+      this.concurrentTasks++;
+      return runTask(test, parentHooks).finally(() => {
+        this.concurrentTasks--;
+      });
+    };
+
+    const runTask = async (
       test: Test,
       parentHooks: ParentHooks,
     ): Promise<RawTestResult> => {
@@ -698,10 +748,8 @@ export class TestRunner {
             if (shouldRunSuiteHooks && test.beforeAllListeners) {
               await hookRunner.runGroup(test.beforeAllListeners, async (fn) => {
                 try {
-                  const cleanupFn = await hookRunner.runWithTimeoutContext(
-                    test,
-                    fn,
-                    () => fn(suiteContext),
+                  const cleanupFn = await runSuiteHook(test, fn, () =>
+                    fn(suiteContext),
                   );
                   if (cleanupFn) {
                     cleanups.push(inheritTimeout(fn, cleanupFn));
@@ -747,9 +795,7 @@ export class TestRunner {
                   listeners,
                   async (fn) => {
                     try {
-                      await hookRunner.runWithTimeoutContext(test, fn, () =>
-                        fn(suiteContext),
-                      );
+                      await runSuiteHook(test, fn, () => fn(suiteContext));
                     } catch (error) {
                       result.errors?.push(...(await formatTestError(error)));
                       return false;
@@ -771,7 +817,14 @@ export class TestRunner {
 
             return result;
           });
-        result = await runSuite();
+        try {
+          result = await runSuite();
+        } finally {
+          if (test.hasRunnableTests) {
+            const cleanup = hooks.onTaskCleanup?.();
+            if (cleanup) await cleanup;
+          }
+        }
 
         errors.push(...(result.errors || []));
       } else {

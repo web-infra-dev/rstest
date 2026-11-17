@@ -6,6 +6,7 @@ import type {
 import { callBrowserRpc } from './browserRpc';
 import { registerElementLocator } from './elementLocator';
 import { keyboard, type BrowserKeyboard } from './keyboard';
+import { viewport } from './viewport';
 
 export const serializeText = (value: string | RegExp): BrowserLocatorText => {
   if (typeof value === 'string') {
@@ -449,6 +450,8 @@ type BrowserPageQueryMethod = (typeof browserPageQueryMethods)[number];
 export type BrowserPage = Pick<Locator, BrowserPageQueryMethod> & {
   elementLocator: (element: Element) => Locator;
   keyboard: BrowserKeyboard;
+  /** Resize the layout viewport for the current test attempt. */
+  viewport: (width: number, height: number) => Promise<void>;
 };
 
 const rootLocator = new Locator({ steps: [] });
@@ -462,6 +465,7 @@ const createBrowserPage = (): BrowserPage => {
   return {
     ...queries,
     keyboard,
+    viewport,
     elementLocator: (element) =>
       new Locator({
         steps: [{ type: 'element', id: registerElementLocator(element) }],

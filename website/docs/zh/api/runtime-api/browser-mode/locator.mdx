@@ -45,11 +45,35 @@ const submitButton = page.getByRole('button', { name: 'Submit' });
 
 ## BrowserPage
 
-- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard }`
+- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard; viewport: (width: number, height: number) => Promise<void> }`
 
 `BrowserPage` 是 `page` 的类型定义，提供查询入口、DOM 到 Locator 的转换，以及类型为 `BrowserKeyboard` 的 [`keyboard`](/api/runtime-api/browser-mode/keyboard)。`click`、`fill` 等元素交互方法由 `Locator` 提供。
 
 也就是说，你需要先通过 `page` 拿到 `Locator`，再在 `Locator` 上调用交互和断言。
+
+## page.viewport
+
+<ApiMeta addedVersion="0.13.0" />
+
+- **类型：** `(width: number, height: number) => Promise<void>`
+
+调整当前测试的布局视口。宽高必须是以 CSS 像素为单位的正整数。返回的 Promise 会在新尺寸生效后完成，随后执行的媒体查询和布局读取会使用新的视口。
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('uses the tablet layout', async () => {
+  await page.viewport(768, 1024);
+  expect(window.matchMedia('(min-width: 768px)').matches).toBe(true);
+});
+```
+
+Rstest 会在每次测试执行尝试结束后恢复初始视口，包括 retry 和 repeats。恢复会在失败截图、`afterEach`、fixture 清理、`onTestFinished` 和 `onTestFailed` 回调完成后执行。初始视口包含浏览器 instance 的覆盖配置和 headed UI 当前的视口模式。suite 结束钩子中修改的视口会在下一组测试开始前恢复。保持初始视口的测试会跳过恢复请求。
+
+整组测试需要固定尺寸时，可以配置 [`browser.viewport`](/config/test/browser#viewport)，或在 `beforeEach` 中调用 `page.viewport()`。在 `beforeAll` 中设置的尺寸会在第一次测试执行尝试结束后恢复。并发测试共享视口，在并发测试或包含可运行并发测试的 suite 钩子中调用 `page.viewport()` 会抛出错误。
+
+headless 模式通过 Playwright 原生视口模拟调整尺寸，也会更新 `window.screen`。恢复时会重置布局视口，但不会还原自定义的 `browser.providerOptions.context.screen` 值。
 
 ## 查询 API
 

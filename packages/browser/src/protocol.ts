@@ -32,6 +32,13 @@ export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
 export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+export const RSTEST_VIEWPORT_EVENT = 'rstest:viewport';
+
+export type BrowserViewportChange = {
+  testPath: string;
+  projectName: string;
+  viewport?: { width: number; height: number };
+};
 export const NO_RPC_TIMEOUT = -1;
 
 export const DISPATCH_NAMESPACE_RUNNER = 'runner';

@@ -45,11 +45,35 @@ The `submitButton` above is a `Locator`. You can continue chaining calls on it (
 
 ## BrowserPage
 
-- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard }`
+- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard; viewport: (width: number, height: number) => Promise<void> }`
 
 `BrowserPage` is the type definition for `page`. It exposes query entry points, DOM-to-Locator conversion, and [`keyboard`](/api/runtime-api/browser-mode/keyboard) with the `BrowserKeyboard` type. Element actions such as `click` and `fill` are available on `Locator`.
 
 This means you need to first obtain a `Locator` through `page`, then call interactions and assertions on the `Locator`.
+
+## page.viewport
+
+<ApiMeta addedVersion="0.13.0" />
+
+- **Type:** `(width: number, height: number) => Promise<void>`
+
+Resize the current test's layout viewport. Both dimensions must be positive integers in CSS pixels. The returned Promise resolves after the new dimensions apply, so subsequent media queries and layout reads observe the new viewport.
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('uses the tablet layout', async () => {
+  await page.viewport(768, 1024);
+  expect(window.matchMedia('(min-width: 768px)').matches).toBe(true);
+});
+```
+
+Rstest restores the initial viewport after every test attempt, including retries and repeats. Restoration runs after failure screenshots, `afterEach`, fixture cleanup, `onTestFinished`, and `onTestFailed` callbacks. The initial viewport includes browser instance overrides and the active headed UI viewport mode. Changes made in suite teardown hooks are restored before the next suite starts. Tests that keep the initial viewport skip the restore request.
+
+To apply a size to a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test attempt. Concurrent tests share a viewport, so calling `page.viewport()` in a concurrent test or a suite hook with runnable concurrent descendants throws an error.
+
+In headless mode, resizing uses Playwright's native viewport emulation, which also updates `window.screen`. Restoration resets the layout viewport, but does not restore a custom `browser.providerOptions.context.screen` value.
 
 ## Query API
 

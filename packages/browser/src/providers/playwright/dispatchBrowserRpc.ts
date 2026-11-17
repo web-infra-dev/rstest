@@ -6,6 +6,8 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import type { FrameLocator, Locator, Page } from 'playwright';
 import { PNG } from 'pngjs';
+import { RSTEST_VIEWPORT_EVENT } from '../../protocol';
+import { parseViewportSize } from '../../viewport';
 import {
   supportedScreenshotMatchers,
   supportedExpectElementMatchers,
@@ -24,6 +26,14 @@ const MIN_SCREENSHOT_STABILITY_TIMEOUT = 100;
 const keyboardQueues = new WeakMap<
   Page,
   ReturnType<typeof createSerialTaskQueue>
+>();
+const viewportQueues = new WeakMap<
+  Page,
+  ReturnType<typeof createSerialTaskQueue>
+>();
+const initialViewportByPage = new WeakMap<
+  Page,
+  { width: number; height: number }
 >();
 
 // ---------------------------------------------------------------------------
@@ -602,6 +612,81 @@ export async function dispatchPlaywrightBrowserRpc({
   const keyboardPage = runnerPage ?? containerPage;
   if (!keyboardPage) {
     throw new Error('Browser container page is not initialized');
+  }
+
+  if (request.kind === 'viewport') {
+    if (request.method !== 'set' && request.method !== 'reset') {
+      throw new Error(`Viewport method not supported: ${request.method}`);
+    }
+    const size =
+      request.method === 'set'
+        ? parseViewportSize(request.args[0], request.args[1])
+        : undefined;
+    let queue = viewportQueues.get(keyboardPage);
+    if (!queue) {
+      queue = createSerialTaskQueue();
+      viewportQueues.set(keyboardPage, queue);
+    }
+    return queue.enqueue(async () => {
+      if (isRequestCurrent && !isRequestCurrent()) {
+        throw new Error('Viewport request belongs to an inactive browser run.');
+      }
+      if (runnerPage) {
+        if (request.method === 'reset') {
+          const original = initialViewportByPage.get(runnerPage);
+          if (original) {
+            await runnerPage.setViewportSize(original);
+            initialViewportByPage.delete(runnerPage);
+          }
+        } else if (size) {
+          if (!initialViewportByPage.has(runnerPage)) {
+            const original =
+              runnerPage.viewportSize() ??
+              (await runnerPage.evaluate(() => ({
+                width: window.innerWidth,
+                height: window.innerHeight,
+              })));
+            initialViewportByPage.set(runnerPage, original);
+          }
+          await runnerPage.setViewportSize(size);
+        }
+        return;
+      }
+      const { iframe } = await getRunnerFrame(
+        keyboardPage,
+        testPath,
+        request.projectName,
+        timeout,
+      );
+      if (isRequestCurrent && !isRequestCurrent()) {
+        throw new Error('Viewport request belongs to an inactive browser run.');
+      }
+      const applied = await iframe.evaluate(
+        (element, { eventName, change }) => {
+          window.dispatchEvent(new CustomEvent(eventName, { detail: change }));
+          // Reading layout after the synchronous UI commit applies media queries before acknowledging.
+          const runner = element as HTMLIFrameElement;
+          const view = runner.contentWindow;
+          return { width: view?.innerWidth, height: view?.innerHeight };
+        },
+        {
+          eventName: RSTEST_VIEWPORT_EVENT,
+          change: {
+            testPath,
+            projectName: request.projectName,
+            viewport: size,
+          },
+        },
+      );
+      if (
+        size &&
+        (applied.width !== size.width || applied.height !== size.height)
+      ) {
+        throw new Error(
+          `Failed to apply viewport ${size.width}x${size.height} to the runner iframe.`,
+        );
+      }
+    });
   }
 
   if (request.kind === 'keyboard') {

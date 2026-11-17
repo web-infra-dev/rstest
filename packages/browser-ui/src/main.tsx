@@ -2,6 +2,8 @@ import {
   DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_RPC_REQUEST_TYPE,
   RSTEST_CONFIG_MESSAGE_TYPE,
+  RSTEST_VIEWPORT_EVENT,
+  type BrowserViewportChange,
 } from '@rstest/browser/protocol';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import React, {
@@ -13,6 +15,7 @@ import React, {
   useState,
 } from 'react';
 import ReactDOM from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
 import { ResizablePanel, ResizablePanelGroup } from './components/Resizable';
@@ -175,6 +178,29 @@ const BrowserRunner: React.FC<{
     return initial;
   });
 
+  const [testViewports, setTestViewports] = useState<
+    Record<string, ViewportSelection>
+  >({});
+  useEffect(() => {
+    const onViewport = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const { testPath, viewport } = event.detail as BrowserViewportChange;
+      flushSync(() => {
+        setTestViewports((previous) => {
+          const next = { ...previous };
+          if (viewport) {
+            next[testPath] = { mode: 'responsive', ...viewport };
+          } else {
+            delete next[testPath];
+          }
+          return next;
+        });
+      });
+    };
+    window.addEventListener(RSTEST_VIEWPORT_EVENT, onViewport);
+    return () => window.removeEventListener(RSTEST_VIEWPORT_EVENT, onViewport);
+  }, []);
+
   useEffect(() => {
     setViewportByProject((prev) => {
       const next: Record<string, ViewportSelection> = { ...prev };
@@ -199,6 +225,12 @@ const BrowserRunner: React.FC<{
         testNamePattern ?? '',
       );
       setActive(testFile);
+      setTestViewports((previous) => {
+        if (!previous[testFile]) return previous;
+        const next = { ...previous };
+        delete next[testFile];
+        return next;
+      });
 
       // The grant is SYNCHRONOUS and precedes the render that navigates: a
       // `load` firing at any later instant (the granted navigation, an HMR
@@ -608,6 +640,7 @@ const BrowserRunner: React.FC<{
   }, [active, testFiles, options.projects]);
 
   const activeViewport = useMemo<ViewportSelection>(() => {
+    if (active && testViewports[active]) return testViewports[active];
     if (!activeProjectName) {
       return { mode: 'full' };
     }
@@ -615,7 +648,13 @@ const BrowserRunner: React.FC<{
       viewportByProject[activeProjectName] ??
       selectionFromConfig(projectDefaults.get(activeProjectName) as any)
     );
-  }, [activeProjectName, viewportByProject, projectDefaults]);
+  }, [
+    active,
+    testViewports,
+    activeProjectName,
+    viewportByProject,
+    projectDefaults,
+  ]);
 
   const handleViewportChange = useCallback(
     (next: ViewportSelection) => {
@@ -756,6 +795,7 @@ const BrowserRunner: React.FC<{
                   const lease = leasesRef.current.get(fileInfo.testPath);
                   const renderedBoot = lease?.boot ?? 0;
                   const selection =
+                    testViewports[fileInfo.testPath] ??
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
                       projectDefaults.get(fileInfo.projectName) as any,
@@ -813,7 +853,8 @@ const BrowserRunner: React.FC<{
                         selection={selection}
                         active={isActive}
                         onResponsiveResize={
-                          selection.mode === 'responsive'
+                          selection.mode === 'responsive' &&
+                          !testViewports[fileInfo.testPath]
                             ? (nextSize) =>
                                 handleResponsiveResize(
                                   fileInfo.projectName,
