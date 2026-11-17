@@ -36,6 +36,7 @@ type CoverageReporterConstructor = new (
 ) => ReportBase;
 
 const COVERAGE_PROCESSING_CONCURRENCY = 4;
+const CSS_SOURCE_PATTERN = /\.css(?:$|[?#])/;
 // Older cores do not pass wrapperLength. Their CJS loader uses this fixed prefix.
 const LEGACY_CJS_WRAPPER_PREFIX = "'use strict';return function(){\n";
 const isWindowsAbsolutePath = (filePath: string): boolean =>
@@ -367,6 +368,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   private shouldIgnoreTransformedFile(filepath: string): boolean {
     const normalizedFilepath = this.normalizeForMatching(filepath);
     return (
+      CSS_SOURCE_PATTERN.test(normalizedFilepath) ||
       this.isNodeModulesPath(normalizedFilepath) ||
       this.isRstestInternalModulePath(normalizedFilepath)
     );
@@ -411,6 +413,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       normalizedSource.includes('/data:text/data:text') ||
       normalizedSource.includes('/blob:http/blob:http');
     return (
+      CSS_SOURCE_PATTERN.test(normalizedSource) ||
       normalizedSource === 'rstest runtime' ||
       normalizedSource.startsWith('data:') ||
       normalizedSource.startsWith('blob:') ||
