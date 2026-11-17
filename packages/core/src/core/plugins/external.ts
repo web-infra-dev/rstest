@@ -295,8 +295,8 @@ export const pluginExternal: (context: InternalContext) => RsbuildPlugin = (
         },
         tools: {
           rspack: (config) => {
-            // Make sure that externals configuration is not modified by users
-            config.externals = castArray(config.externals) || [];
+            // Environment configurations can share the same user-owned array.
+            config.externals = [...castArray(config.externals)];
 
             // A CommonJS bundle loads plain string externals with synchronous
             // require() by default. VM contexts cannot synchronously link an
