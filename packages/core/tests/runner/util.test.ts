@@ -2,6 +2,7 @@ import { format as nodeFormat } from 'node:util';
 import {
   formatName,
   formatTestError,
+  formatTestErrors,
   resolveEachArgs,
 } from '../../src/runtime/util';
 
@@ -193,6 +194,72 @@ describe('formatTestError', () => {
     }
   });
 
+  it('reports a thrown value that is not an error', async () => {
+    const messageOf = async (thrown: unknown) =>
+      (await formatTestError(thrown))[0]!.message;
+
+    // `await Promise.reject()` rejects with `undefined`.
+    expect(await messageOf(undefined)).toBe('undefined');
+    expect(await messageOf(null)).toBe('null');
+    expect(await messageOf(404)).toBe('404');
+    expect(await messageOf(false)).toBe('false');
+    expect(await messageOf(Symbol('reason'))).toBe('Symbol(reason)');
+    expect(await messageOf('plain text')).toBe('plain text');
+    expect(await messageOf({ code: 1 })).toBe('{"code": 1}');
+    expect(await messageOf({ message: 500 })).toBe('{"message": 500}');
+  });
+
+  it('keeps the fields of a thrown object that has a message', async () => {
+    const error = (
+      await formatTestError({
+        message: 'not an Error instance',
+        name: 'CustomError',
+        stack: 'CustomError: not an Error instance\n    at file.ts:1:1',
+      })
+    )[0]!;
+
+    expect(error).toMatchObject({
+      message: 'not an Error instance',
+      name: 'CustomError',
+      stack: 'CustomError: not an Error instance\n    at file.ts:1:1',
+    });
+  });
+
+  it('reports a thrown array as one error', async () => {
+    const errors = await formatTestError([]);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.message).toBe('[]');
+  });
+
+  it('reports each error of a collected batch', async () => {
+    const errors = await formatTestErrors([new Error('first'), []]);
+
+    expect(errors.map((error) => error.message)).toEqual(['first', '[]']);
+  });
+
+  it('reports a fixed message when the thrown value cannot be printed', async () => {
+    const errors = await formatTestError({
+      code: 'E_FAIL',
+      get detail() {
+        throw new Error('closed');
+      },
+    });
+
+    expect(errors).toEqual([
+      { message: 'The thrown value could not be printed' },
+    ]);
+  });
+
+  it('only keeps a stack that is a string', async () => {
+    const error = (
+      await formatTestError({ code: 'E_FAIL', stack: ['remote frame'] })
+    )[0]!;
+
+    expect(error.message).toBe('{"code": "E_FAIL", "stack": ["remote frame"]}');
+    expect(error.stack).toBeUndefined();
+  });
+
   it('does not add the Istanbul hint for normal reference errors', async () => {
     const error = (
       await formatTestError(new ReferenceError('foo is not defined'))
@@ -287,7 +354,7 @@ describe('formatTestError', () => {
 
   it('keeps a cause that several errors of one list share', async () => {
     const root = new Error('connection lost');
-    const errors = await formatTestError([
+    const errors = await formatTestErrors([
       new Error('first query failed', { cause: root }),
       new Error('second query failed', { cause: root }),
     ]);

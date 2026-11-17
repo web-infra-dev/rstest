@@ -40,6 +40,51 @@ describe('Test Edge Cases', () => {
     expectStderrLog('Unknown Error: aaaa');
   });
 
+  it('should report thrown values that are not errors', async () => {
+    const { cli, expectExecFailed, expectLog, expectStderrLog } =
+      await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'fixtures/errorNonError.test.ts'],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
+        },
+      });
+    await expectExecFailed();
+
+    expect(cli.stderr).not.toContain('Cannot read properties of');
+    expect(cli.stderr).not.toContain('Unhandled Reporter Error');
+
+    expectStderrLog('Unknown Error: undefined');
+    expectStderrLog('Unknown Error: null');
+    expectStderrLog('Unknown Error: 404');
+    expectStderrLog('Unknown Error: {"code": "E_FAIL"}');
+    expectStderrLog('Unknown Error: The thrown value could not be printed');
+    expectStderrLog(
+      'Unknown Error: {"code": "E_FAIL", "stack": ["remote frame"]}',
+    );
+
+    // The other tests in the file keep their own results.
+    const logs = cli.stdout.split('\n').filter(Boolean);
+    expectLog(/Tests 7 failed \| 2 passed/, logs);
+  });
+
+  it('should fail when a hook throws an empty array', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorEmptyArray.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog('Unknown Error: []');
+  });
+
   it('should show fullStack when filtered stack is empty', async () => {
     const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',

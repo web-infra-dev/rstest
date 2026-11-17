@@ -107,27 +107,51 @@ const realNow = Date.now.bind(Date);
 
 export const getRealNow = (): number => realNow();
 
+const printThrownValue = (value: unknown): string => {
+  try {
+    return stringify(value, 10, { min: true });
+  } catch {
+    // A getter on the value can throw while it is printed. A fixed message
+    // keeps that from failing the whole file.
+    return 'The thrown value could not be printed';
+  }
+};
+
 const isErrorLike = (value: unknown): value is { message: string } =>
   typeof value === 'object' &&
   value !== null &&
   !Array.isArray(value) &&
   typeof (value as { message?: unknown }).message === 'string';
 
-export const formatTestError = async (
-  err: any,
+/**
+ * Serializes errors collected from several sources, such as unhandled
+ * rejections or teardown steps.
+ */
+export const formatTestErrors = async (
+  errors: unknown[],
   test?: Test,
   ancestors: ReadonlySet<object> = new Set(),
 ): Promise<SerializedError[]> => {
-  const errors = Array.isArray(err) ? err : [err];
-
   return Promise.all(
-    errors.map(async (rawError) => {
+    errors.map(async (rawError: any) => {
+      // A test can throw any value, not only an `Error`: `Promise.reject()`
+      // rejects with `undefined`, and `throw 404` or `throw { code: 1 }` are
+      // valid too. Those values have no `message`, so report the value itself.
       const error =
-        typeof rawError === 'string' ? { message: rawError } : rawError;
+        (typeof rawError === 'object' && rawError !== null) ||
+        typeof rawError === 'function'
+          ? rawError
+          : {};
+      const message =
+        typeof error.message === 'string'
+          ? error.message
+          : typeof rawError === 'string'
+            ? rawError
+            : printThrownValue(rawError);
       const errObj: SerializedError = {
         fullStack: error.fullStack,
         // Some error attributes cannot be enumerated
-        message: error.message,
+        message,
         name: error.name,
         // Reporters parse the stack as text
         stack: typeof error.stack === 'string' ? error.stack : undefined,
@@ -189,6 +213,17 @@ export const formatTestError = async (
     }),
   );
 };
+
+/**
+ * Serializes one value caught from a test, hook or fixture. Any value can be
+ * thrown, an array included, so it is always reported as one error.
+ */
+export const formatTestError = (
+  err: unknown,
+  test?: Test,
+  ancestors?: ReadonlySet<object>,
+): Promise<SerializedError[]> => formatTestErrors([err], test, ancestors);
+
 const formatTemplate = (template: string, param: unknown): string => {
   const isArrayRow = Array.isArray(param);
   const values = isArrayRow ? param : [param];
