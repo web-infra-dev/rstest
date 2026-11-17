@@ -128,17 +128,29 @@ describe('browser mode - viewport', () => {
           /VIEWPORT_DEVICE_SCALE ([\d.]+)/.exec(cli.stdout)?.[1],
         );
         expect(scale).toBeGreaterThan(0);
-        const dimensions = screenshots.map((path) => {
-          const png = readFileSync(path);
-          return [png.readUInt32BE(16) / scale, png.readUInt32BE(20) / scale];
-        });
-        expect(dimensions).toEqual(
-          expect.arrayContaining([
-            [600, 400],
-            [610, 410],
-            [620, 420],
-          ]),
-        );
+        const dimensions = screenshots
+          .map((path) => {
+            const png = readFileSync(path);
+            return {
+              width: png.readUInt32BE(16) / scale,
+              height: png.readUInt32BE(20) / scale,
+            };
+          })
+          .sort((a, b) => a.width - b.width);
+        // Fractional iframe bounds can add one CSS pixel to a headed screenshot.
+        const rounding = headless ? 0 : 1;
+        const expectedDimensions = [
+          [600, 400],
+          [610, 410],
+          [620, 420],
+        ] as const;
+        for (const [index, [width, height]] of expectedDimensions.entries()) {
+          const actual = dimensions[index]!;
+          expect(actual.width).toBeGreaterThanOrEqual(width);
+          expect(actual.width).toBeLessThanOrEqual(width + rounding);
+          expect(actual.height).toBeGreaterThanOrEqual(height);
+          expect(actual.height).toBeLessThanOrEqual(height + rounding);
+        }
       } finally {
         rmSync(join(fixtureRoot, '.rstest', 'screenshots'), {
           recursive: true,

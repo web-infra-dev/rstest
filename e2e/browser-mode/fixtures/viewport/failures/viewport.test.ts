@@ -1,5 +1,24 @@
 import { page } from '@rstest/browser';
-import { afterEach, beforeEach, describe, expect, test } from '@rstest/core';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from '@rstest/core';
+
+beforeAll(() => {
+  const iframe = window.frameElement;
+  if (iframe) {
+    // Exercise screenshot rounding when the headed UI positions an iframe between pixels.
+    const { x, y } = iframe.getBoundingClientRect();
+    iframe.setAttribute(
+      'style',
+      `${iframe.getAttribute('style') ?? ''}; transform: translate(${Math.floor(x) + 0.25 - x}px, ${Math.floor(y) + 0.25 - y}px)`,
+    );
+  }
+});
 
 beforeEach(() => {
   expect(window.innerWidth).toBe(390);
