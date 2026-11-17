@@ -40,5 +40,24 @@ describe('Expect Soft API', () => {
         log.includes('AssertionError: expected 2 to be 100'),
       ),
     ).toHaveLength(1);
+
+    // A soft failure is reported with the error that ended the test,
+    // before it.
+    const softBeforeThrow = logs.findIndex((log) =>
+      log.includes('AssertionError: expected 5 to be 50'),
+    );
+    expect(softBeforeThrow).toBeGreaterThan(-1);
+    expect(
+      logs.findIndex((log) => log.includes('Error: THROWN_AFTER_SOFT')),
+    ).toBeGreaterThan(softBeforeThrow);
+    const softBeforeExpect = logs.findIndex((log) =>
+      log.includes('AssertionError: expected 6 to be 60'),
+    );
+    expect(softBeforeExpect).toBeGreaterThan(-1);
+    expect(
+      logs.findIndex((log) =>
+        log.includes('AssertionError: expected 7 to be 70'),
+      ),
+    ).toBeGreaterThan(softBeforeExpect);
   });
 });

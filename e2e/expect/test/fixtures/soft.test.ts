@@ -17,3 +17,13 @@ test('expect.soft preserves failed retry errors', { retry: 1 }, () => {
   failedAttempts += 1;
   expect.soft(failedAttempts).toBe(100);
 });
+
+test('expect.soft failures are kept when the test throws', () => {
+  expect.soft(5).toBe(50);
+  throw new Error('THROWN_AFTER_SOFT');
+});
+
+test('expect.soft failures are kept when a later expect fails', () => {
+  expect.soft(6).toBe(60);
+  expect(7).toBe(70);
+});
