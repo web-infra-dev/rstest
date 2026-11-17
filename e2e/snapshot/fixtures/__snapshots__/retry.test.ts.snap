@@ -1,0 +1,11 @@
+// Rstest Snapshot v1
+
+exports[`repeated test 1`] = `"same on every repeat"`;
+
+exports[`retried test 1`] = `
+{
+  "value": "stable",
+}
+`;
+
+exports[`retried test 2`] = `"second"`;
