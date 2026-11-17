@@ -64,9 +64,12 @@ class SoftAssertionErrors {
   constructor(readonly errors: unknown[]) {}
 }
 
-/** The `expect.soft` failures the current attempt of `test` has recorded. */
-const getSoftAssertionErrors = (test: TestCase): unknown[] =>
-  test.result?.state === 'fail' ? (test.result.errors ?? []) : [];
+/**
+ * The `expect.soft` failures recorded in the current attempt of `test`, or
+ * `undefined` when the attempt has not failed.
+ */
+const getSoftAssertionErrors = (test: TestCase): unknown[] | undefined =>
+  test.result?.state === 'fail' ? (test.result.errors ?? []) : undefined;
 
 // Cancellation can start cleanup before setup unwinds. Linked frames let the
 // later phase skip an expired predecessor instead of restoring its deadline.
@@ -461,7 +464,7 @@ export class TestRunner {
                 errors: await formatTestErrors(
                   error instanceof SoftAssertionErrors
                     ? error.errors
-                    : [...getSoftAssertionErrors(test), error],
+                    : [...(getSoftAssertionErrors(test) ?? []), error],
                   test,
                 ),
                 testPath,
@@ -1226,8 +1229,9 @@ export class TestRunner {
       isExpectingAssertionsError,
     } = this.getAssertionState(test);
 
-    if (test.result?.state === 'fail') {
-      throw new SoftAssertionErrors(test.result.errors ?? []);
+    const softAssertionErrors = getSoftAssertionErrors(test);
+    if (softAssertionErrors) {
+      throw new SoftAssertionErrors(softAssertionErrors);
     }
 
     const localExpect = this.localExpects.get(test.context);
