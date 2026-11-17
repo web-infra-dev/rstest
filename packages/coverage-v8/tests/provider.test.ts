@@ -1783,6 +1783,7 @@ export default class CustomCoverageReporter {
               sources,
               sourcesContent: statements,
               names: [],
+              // cspell:disable-next-line
               mappings: 'AAAA;ACAA;ACAA;ACAA;ACAA',
             }),
           },
