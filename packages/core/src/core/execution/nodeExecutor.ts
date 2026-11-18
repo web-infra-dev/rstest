@@ -14,6 +14,7 @@ import type {
   RawCoverageResolveOptions,
 } from '../../types/coverage';
 import { color, logger, toSelectedTestFile, type TraceRun } from '../../utils';
+import { recordProjectAssets } from '../../utils/traceRss';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
@@ -268,6 +269,25 @@ export function createNodeExecutor(
   > => {
     const { nodeProjectsToRun: projects, entriesCache } = getPlan();
     await validateRunDependencies();
+    if (getTraceRun().recordRss) {
+      rsbuildInstance.onBeforeEnvironmentCompile(({ environment }) => {
+        getTraceRun().recordRss?.('compile:start', {
+          project: environment.name,
+        });
+      });
+      rsbuildInstance.onAfterEnvironmentCompile(
+        async ({ environment, stats }) => {
+          const record = getTraceRun().recordRss;
+          record?.('compile:end', { project: environment.name });
+          if (!stats || !record) return;
+          await recordProjectAssets(
+            stats.compilation,
+            environment.name,
+            record,
+          );
+        },
+      );
+    }
     // The prebundle runs in a child process and `createRsbuildServer` does not
     // await the first compile, so build them together. Watch projects stay
     // prepared even before they have entries: adding a matching file must reuse
@@ -305,6 +325,9 @@ export function createNodeExecutor(
       const pool = await createPool({
         context,
         testEnvironmentModules: testEnvironmentModules.modules,
+        recordRss: getTraceRun().recordRss
+          ? (event, args) => getTraceRun().recordRss?.(event, args)
+          : undefined,
       });
 
       runResources = {
@@ -509,7 +532,17 @@ export function createNodeExecutor(
             updateSnapshot,
             onCoverageResult: (coverage) =>
               foldCoverage(() => mergedCoverageMap?.merge(coverage)),
-            onRawCoverageResult,
+            onRawCoverageResult: getTraceRun().recordRss
+              ? (raw) => {
+                  const record = getTraceRun().recordRss;
+                  record?.('coverage:merge:start', { project: p.name });
+                  try {
+                    onRawCoverageResult(raw);
+                  } finally {
+                    record?.('coverage:merge:end', { project: p.name });
+                  }
+                }
+              : onRawCoverageResult,
             getKnownCoverageStructures: () =>
               mergedCoverageMap
                 ? coverageProvider?.getKnownCoverageStructures?.(

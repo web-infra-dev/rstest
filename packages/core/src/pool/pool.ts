@@ -248,6 +248,14 @@ export class Pool {
       const runner = new PoolRunner(worker, {
         workerId,
         environmentKey,
+        recordRss: this.options.recordRss
+          ? (event, args) =>
+              this.options.recordRss?.(event, {
+                workerId,
+                pool: task.worker,
+                ...args,
+              })
+          : undefined,
         memoryLimit: this.options.memoryLimit,
         memoryMetric: task.worker === 'forks' ? 'rss' : 'heapUsed',
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,

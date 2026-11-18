@@ -11,7 +11,7 @@ const WORKER_RESPONSE_TAG = '__rstest_worker_response__' as const;
 const RPC_TAG = '__rstest_rpc__' as const;
 
 export type WorkerRequest =
-  | { type: 'start'; workerId: number }
+  | { type: 'start'; workerId: number; traceRss?: boolean }
   | { type: 'cleanup' }
   | {
       type: 'run';
@@ -56,8 +56,25 @@ type TransportSerializedError = {
   cause?: unknown;
 };
 
+export type WorkerRssSample = NodeJS.MemoryUsage & {
+  event:
+    | 'start'
+    | 'sample'
+    | 'task:start'
+    | 'task:end'
+    | 'cleanup:start'
+    | 'cleanup:end';
+  pid: number;
+  threadId: number;
+  sampledAt: number;
+  taskId?: number;
+  project?: string;
+  testPath?: string;
+};
+
 export type WorkerResponse =
-  | { type: 'started'; pid: number }
+  | { type: 'started'; pid: number; threadId?: number }
+  | { type: 'memory'; sample: WorkerRssSample }
   | { type: 'cleanupFinished'; error?: TransportSerializedError }
   | { type: 'workerCleanupStarted'; taskId: number }
   | {
