@@ -8,6 +8,9 @@ const fixtureRoot = join(
   dirname(fileURLToPath(import.meta.url)),
   'fixtures/rss',
 );
+const rstestBin = fileURLToPath(
+  new URL('../../packages/core/bin/rstest.js', import.meta.url),
+);
 
 type RssRecord = {
   event: string;
@@ -237,9 +240,7 @@ describe('experimental memory diagnostics', () => {
         args: [
           '--require',
           join(fixtureRoot, 'memory-fault.cjs'),
-          fileURLToPath(
-            new URL('../../packages/core/bin/rstest.js', import.meta.url),
-          ),
+          rstestBin,
           'run',
         ],
         options: {
@@ -281,8 +282,9 @@ describe('experimental memory diagnostics', () => {
     'preserves context after a kill during %s',
     async (stage) => {
       const { cli } = await runRstestCli({
-        command: 'rstest',
-        args: ['run'],
+        // On Windows, the rstest.cmd launcher has a different PID from Node.
+        command: process.execPath,
+        args: [rstestBin, 'run'],
         options: {
           nodeOptions: {
             cwd: fixtureRoot,
