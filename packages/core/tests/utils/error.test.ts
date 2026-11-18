@@ -181,4 +181,61 @@ describe('error helpers', () => {
     expect(wrapper!.cause!.stack).toContain('source.ts:1:');
     expect(wrapper!.cause!.stack).not.toContain('generated.js');
   });
+
+  it('does not read the error message as a frame', async () => {
+    const locations = async (stack: string[]) =>
+      (await parseErrorStacktrace({ stack: stack.join('\n') })).map(
+        (frame) => `${frame.file}:${frame.lineNumber}`,
+      );
+
+    expect(
+      await locations([
+        'Error: connect ECONNREFUSED 127.0.0.1:5432',
+        '    at connect (/project/src/db.ts:4:9)',
+        '    at /project/src/db.test.ts:8:3',
+      ]),
+    ).toEqual(['/project/src/db.ts:4', '/project/src/db.test.ts:8']);
+    expect(
+      await locations([
+        'Error: 2 services are down',
+        '  api http://localhost:3000',
+        '  db 127.0.0.1:5432',
+        '    at checkServices (/project/src/health.ts:12:11)',
+      ]),
+    ).toEqual(['/project/src/health.ts:12']);
+  });
+
+  it('keeps the location Node puts in front of a CommonJS SyntaxError', async () => {
+    const frames = await parseErrorStacktrace({
+      stack: [
+        '/project/src/config.cjs:3',
+        '  port: 3000',
+        '  ^^^^',
+        '',
+        "SyntaxError: Unexpected identifier 'port'",
+        '    at wrapSafe (node:internal/modules/cjs/loader:1713:18)',
+        '    at /project/src/config.test.ts:7:3',
+      ].join('\n'),
+    });
+
+    expect(frames.map((frame) => `${frame.file}:${frame.lineNumber}`)).toEqual([
+      '/project/src/config.cjs:3',
+      '/project/src/config.test.ts:7',
+    ]);
+  });
+
+  it('reads every line of a stack without `at` frames', async () => {
+    const frames = await parseErrorStacktrace({
+      stack: [
+        'connect@http://localhost:63315/src/db.ts:4:9',
+        '@http://localhost:63315/src/db.test.ts:8:3',
+      ].join('\n'),
+      fullStack: true,
+    });
+
+    expect(frames.map((frame) => `${frame.file}:${frame.lineNumber}`)).toEqual([
+      'http://localhost:63315/src/db.ts:4',
+      'http://localhost:63315/src/db.test.ts:8',
+    ]);
+  });
 });

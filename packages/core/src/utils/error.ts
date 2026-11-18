@@ -238,6 +238,26 @@ const normalizeFilePath = (file?: string | null): string | undefined => {
   }
 };
 
+/**
+ * A V8 stack starts with the error's name and message, and the stack parser
+ * reads any line that ends like a location as a frame, such as
+ * `Error: connect ECONNREFUSED 127.0.0.1:5432`. So when a stack has `at`
+ * frames, only those lines are frames, plus the `file:line` that Node puts in
+ * front of a CommonJS SyntaxError, above the source line and a `^` marker.
+ * Firefox and WebKit stacks have no `at` lines and no message.
+ */
+const getFrameLines = (stack: string): string => {
+  const lines = stack.split('\n');
+  const frameLines = lines.filter((line) => /^\s*at /.test(line));
+  if (!frameLines.length) return stack;
+
+  const [location, , marker, separator] = lines;
+  if (location && marker && /^\s*\^+\s*$/.test(marker) && separator === '') {
+    frameLines.unshift(location);
+  }
+  return frameLines.join('\n');
+};
+
 export async function parseErrorStacktrace({
   stack,
   getSourcemap,
@@ -254,7 +274,7 @@ export async function parseErrorStacktrace({
   const traceMapCache = new Map<string, TraceMap>();
 
   const stackFrames = await Promise.all(
-    stackTraceParse(stack)
+    stackTraceParse(getFrameLines(stack))
       .filter((frame) => {
         if (fullStack) return true;
         const file = normalizeFilePath(frame.file);
