@@ -1738,6 +1738,69 @@ export default class CustomCoverageReporter {
     expect((await resolve(merged))?.toJSON()).toEqual(expected?.toJSON());
   });
 
+  it('filters stylesheets from mapped coverage while preserving component scripts', async () => {
+    const root = join(tmpdir(), 'rstest-v8-stylesheet-sources');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const scriptSource = join(root, 'src', 'included.ts');
+    const componentSource = join(root, 'src', 'Component.vue');
+    const sources = [
+      scriptSource,
+      join(root, 'src', 'style.css'),
+      join(root, 'src', 'style.module.css'),
+      componentSource,
+      join(root, 'src', 'theme.CSS?direct'),
+    ];
+    const statements = [
+      'const included = 1;',
+      'const style = 2;',
+      'const classes = 3;',
+      'const component = 4;',
+      'const theme = 5;',
+    ];
+    const code = statements.join('\n');
+    const provider = new CoverageProvider(createOptions(), root);
+    const coverageMap = await provider.resolveRawCoverage([
+      {
+        entries: [
+          {
+            url: pathToFileURL(generatedFile).href,
+            filePath: generatedFile,
+            scriptId: '1',
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+        options: {
+          assetFiles: { [generatedFile]: code },
+          sourceMaps: {
+            [generatedFile]: JSON.stringify({
+              version: 3,
+              sources,
+              sourcesContent: statements,
+              names: [],
+              // cspell:disable-next-line
+              mappings: 'AAAA;ACAA;ACAA;ACAA;ACAA',
+            }),
+          },
+        },
+        root,
+      },
+    ]);
+
+    expect(coverageMap?.files()).toEqual([scriptSource, componentSource]);
+    expect(coverageMap?.fileCoverageFor(scriptSource).s).toEqual({
+      0: 1,
+    });
+    expect(coverageMap?.fileCoverageFor(componentSource).s).toEqual({
+      0: 1,
+    });
+  });
+
   it('filters external original sources from browser raw coverage', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-browser-external-source');
     const generatedFile = 'https://cdn.example.com/bundle.js';
