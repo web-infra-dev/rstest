@@ -152,8 +152,8 @@ export const formatTestErrors = async (
         fullStack: error.fullStack,
         // Some error attributes cannot be enumerated
         message,
-        name: error.name,
-        // Reporters parse the stack as text
+        // Reporters read the name and parse the stack as text
+        name: typeof error.name === 'string' ? error.name : undefined,
         stack: typeof error.stack === 'string' ? error.stack : undefined,
       };
 

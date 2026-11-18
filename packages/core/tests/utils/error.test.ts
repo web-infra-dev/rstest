@@ -131,6 +131,19 @@ describe('error helpers', () => {
     expect(error.cause!.stack).toBeUndefined();
   });
 
+  it('only keeps a string name in toSerializedError', () => {
+    const error = toSerializedError({
+      message: 'wrapper',
+      name: 42,
+      cause: { message: 'root', name: { code: 'E_ROOT' } },
+    });
+
+    expect(error.message).toBe('wrapper');
+    expect(error.name).toBeUndefined();
+    expect(error.cause!.message).toBe('root');
+    expect(error.cause!.name).toBeUndefined();
+  });
+
   it('keeps the error in toSerializedError when reading its cause throws', () => {
     const cause = {
       get message(): string {

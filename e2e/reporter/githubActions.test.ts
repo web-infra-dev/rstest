@@ -528,3 +528,59 @@ it.skipIf(!process.env.CI)(
     }
   },
 );
+
+it.skipIf(!process.env.CI)(
+  'github-actions reports errors whose name is not a string',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-error-name.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    try {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--include',
+          'fixtures-error-name/**/*.test.ts',
+          '--reporters',
+          'github-actions',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: {
+              GITHUB_WORKSPACE: githubWorkspace,
+              GITHUB_STEP_SUMMARY: stepSummaryPath,
+            },
+          },
+        },
+      });
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.exec.process?.exitCode).toBe(1);
+      expect(cli.stderr).not.toContain('onTestRunEnd failed');
+
+      const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
+      expect(stepSummary).toContain(
+        [
+          '**Caused by: Error**:',
+          '',
+          '```text',
+          'Database connection refused',
+          '```',
+        ].join('\n'),
+      );
+      expect(stepSummary).toContain(
+        ['**Error**:', '', '```text', 'Request failed', '```'].join('\n'),
+      );
+    } finally {
+      fs.rmSync(stepSummaryPath, { force: true });
+      fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+    }
+  },
+);
