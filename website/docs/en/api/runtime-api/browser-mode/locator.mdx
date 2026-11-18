@@ -45,7 +45,25 @@ The `submitButton` above is a `Locator`. You can continue chaining calls on it (
 
 ## BrowserPage
 
-- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard; viewport: (width: number, height: number) => Promise<void> }`
+- **Type:**
+
+```ts
+type BrowserPage = Pick<
+  Locator,
+  | 'locator'
+  | 'getByRole'
+  | 'getByText'
+  | 'getByLabel'
+  | 'getByPlaceholder'
+  | 'getByAltText'
+  | 'getByTitle'
+  | 'getByTestId'
+> & {
+  elementLocator: (element: Element) => Locator;
+  keyboard: BrowserKeyboard;
+  viewport: (width: number, height: number) => Promise<void>;
+};
+```
 
 `BrowserPage` is the type of `page`. It provides element queries, DOM-to-Locator conversion, [`keyboard`](/api/runtime-api/browser-mode/keyboard) input, and `viewport` resizing. Element actions such as `click` and `fill` are available on `Locator`.
 

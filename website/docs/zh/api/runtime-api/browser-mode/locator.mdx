@@ -45,7 +45,25 @@ const submitButton = page.getByRole('button', { name: 'Submit' });
 
 ## BrowserPage
 
-- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard; viewport: (width: number, height: number) => Promise<void> }`
+- **类型：**
+
+```ts
+type BrowserPage = Pick<
+  Locator,
+  | 'locator'
+  | 'getByRole'
+  | 'getByText'
+  | 'getByLabel'
+  | 'getByPlaceholder'
+  | 'getByAltText'
+  | 'getByTitle'
+  | 'getByTestId'
+> & {
+  elementLocator: (element: Element) => Locator;
+  keyboard: BrowserKeyboard;
+  viewport: (width: number, height: number) => Promise<void>;
+};
+```
 
 `BrowserPage` 是 `page` 的类型，提供元素查询、DOM 到 Locator 的转换、[`keyboard`](/api/runtime-api/browser-mode/keyboard) 键盘输入和 `viewport` 视口调整。`click`、`fill` 等元素交互方法由 `Locator` 提供。
 
