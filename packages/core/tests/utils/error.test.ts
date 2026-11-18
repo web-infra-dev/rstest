@@ -72,6 +72,29 @@ describe('error helpers', () => {
     ]);
   });
 
+  it('source-maps a module frame in a bundle with a Windows path', async () => {
+    const [frame] = await parseErrorStacktrace({
+      stack: [
+        'Error: Missing config file',
+        '    at Object../src/server.ts (D:/project/dist/index.mjs:1:1)',
+      ].join('\n'),
+      getSourcemap: async (file) =>
+        file === 'D:/project/dist/index.mjs'
+          ? {
+              version: 3,
+              names: [],
+              sources: ['/project/src/server.ts'],
+              mappings: 'AAAA',
+            }
+          : null,
+    });
+
+    expect(frame).toMatchObject({
+      methodName: 'Object../src/server.ts',
+      file: '/project/src/server.ts',
+    });
+  });
+
   it('keeps the cause chain in toSerializedError', () => {
     const root = new TypeError('fetch failed');
     const errors = [

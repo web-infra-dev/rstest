@@ -240,6 +240,19 @@ const normalizeFilePath = (file?: string | null): string | undefined => {
   }
 };
 
+/**
+ * The stack parser reads a Windows drive path after a method name only with
+ * backslashes, and test bundles have `pathe` paths with forward slashes. So on
+ * Windows it reads a module frame such as
+ * `at Object../src/a.ts (D:/project/dist/index.mjs:67:45)` as one file named
+ * `Object../src/a.ts (D:/project/dist/index.mjs`, which has no source map.
+ */
+const splitMethodFromFile = (frame: StackFrame): StackFrame => {
+  const [, methodName, file] =
+    /^(.+?) \(([a-z]:\/.*)$/i.exec(frame.file ?? '') || [];
+  return methodName && file ? { ...frame, methodName, file } : frame;
+};
+
 export async function parseErrorStacktrace({
   stack,
   getSourcemap,
@@ -257,6 +270,7 @@ export async function parseErrorStacktrace({
 
   const stackFrames = await Promise.all(
     stackTraceParse(stack)
+      .map(splitMethodFromFile)
       .filter((frame) => {
         if (fullStack) return true;
         const file = normalizeFilePath(frame.file);
