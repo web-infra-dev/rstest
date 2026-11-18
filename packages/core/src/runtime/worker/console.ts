@@ -79,12 +79,16 @@ export function createCustomConsole({
 }): Console {
   const getConsoleTrace = () => {
     const limit = Error.stackTraceLimit;
-    Error.stackTraceLimit = 4;
+    // Node's own `console.table` and `console.trace` reach `log` and `error`
+    // through internal frames, which push their caller further down
+    Error.stackTraceLimit = 8;
     const stack = new Error('STACK_TRACE').stack;
-    const trace = stack?.split('\n').slice(4).join('\n');
     Error.stackTraceLimit = limit;
 
-    return trace;
+    return stack
+      ?.split('\n')
+      .slice(4)
+      .find((frame) => !frame.includes('node:internal/console/'));
   };
 
   /**
