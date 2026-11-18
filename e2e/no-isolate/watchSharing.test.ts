@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, rs } from '@rstest/core';
@@ -15,46 +16,69 @@ rs.setConfig({ retry: 3 });
 describe.skipIf(process.platform === 'win32')(
   'module sharing under isolate: false (watch rebuild)',
   () => {
-    it('serves the rebuilt shared module value, not the previous build cache', async ({
-      onTestFinished,
-    }) => {
-      const fixturesTargetPath = `${__dirname}/fixtures-test-watch-sharing${
-        process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''
-      }`;
+    it.for(['memory', 'disk', 'filtered'] as const)(
+      'serves the rebuilt shared module value with %s output',
+      async (output, { onTestFinished }) => {
+        const fixturesTargetPath = `${__dirname}/fixtures-test-watch-sharing-${output}${
+          process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''
+        }`;
 
-      const { fs } = await prepareFixtures({
-        fixturesPath: `${__dirname}/fixtures/watch-sharing`,
-        fixturesTargetPath,
-      });
+        const { fs } = await prepareFixtures({
+          fixturesPath: `${__dirname}/fixtures/watch-sharing`,
+          fixturesTargetPath,
+        });
 
-      const { cli } = await runRstestCli({
-        command: 'rstest',
-        args: ['watch', '--disableConsoleIntercept'],
-        onTestFinished,
-        options: {
-          nodeOptions: {
-            cwd: fixturesTargetPath,
+        const { cli } = await runRstestCli({
+          command: 'rstest',
+          args: [
+            'watch',
+            '--disableConsoleIntercept',
+            '--trace',
+            ...(output === 'disk' ? ['--dev.writeToDisk'] : []),
+          ],
+          onTestFinished,
+          options: {
+            nodeOptions: {
+              cwd: fixturesTargetPath,
+              env: {
+                RSTEST_TEST_FILTER_DISK_ASSETS:
+                  output === 'filtered' ? '1' : '',
+              },
+            },
           },
-        },
-      });
+        });
 
-      // Initial run evaluates `shared.ts` and caches it in the kept runtime
-      // chunk (the optimization that shares module state across files).
-      await cli.waitForStdout('SHARED_MARKER=ORIGINAL');
-      await cli.waitForStdout('Duration');
+        const expectCycle = async (marker: string) => {
+          await cli.waitForStdout('Waiting for file changes...');
+          expect(cli.stdout).toContain(`SHARED_MARKER=${marker}`);
+          const tracePath = cli.stdout.match(
+            /Perfetto trace file:\s*(.*\.json)/,
+          )?.[1];
+          expect(tracePath).toBeTruthy();
+          const trace = JSON.parse(await readFile(tracePath!, 'utf8')) as {
+            traceEvents: Array<{ name: string }>;
+          };
+          expect(trace.traceEvents.map(({ name }) => name)).toContain(
+            'host:pool-run-test',
+          );
+          expect(
+            trace.traceEvents.some(
+              ({ name }) => name === 'host:get-assets-by-entry',
+            ),
+          ).toBe(output !== 'disk');
+        };
 
-      // Edit the shared module: Rsbuild marks basic.test.ts affected and reruns
-      // it on the same reused worker.
-      cli.resetStd();
-      fs.update(path.join(fixturesTargetPath, 'shared.ts'), (content) =>
-        content.replace("'ORIGINAL'", "'UPDATED'"),
-      );
+        await expectCycle('ORIGINAL');
 
-      // Wait for the rerun to finish (its console.log is flushed before the run
-      // summary). The rerun must observe the rebuilt value, not the stale one.
-      await cli.waitForStdout('Duration');
-      expect(cli.stdout).toMatch('SHARED_MARKER=UPDATED');
-      expect(cli.stdout).not.toMatch('SHARED_MARKER=ORIGINAL');
-    });
+        // Edit the shared module: Rsbuild marks basic.test.ts affected and reruns
+        // it on the same reused worker.
+        cli.resetStd();
+        fs.update(path.join(fixturesTargetPath, 'shared.ts'), (content) =>
+          content.replace("'ORIGINAL'", "'UPDATED'"),
+        );
+
+        await expectCycle('UPDATED');
+      },
+    );
   },
 );

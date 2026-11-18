@@ -1,9 +1,12 @@
+import { readFile } from 'node:fs/promises';
 import type {
   AssetFileContent,
   AssetFiles,
   RunWorkerOptions,
   RuntimeRPC,
+  WorkerContext,
 } from '../../../types/worker';
+import { parseInlineSourceMapStr } from '../../../utils/assetFiles';
 import { isVmPoolType } from '../../../utils/workers';
 import {
   type WorkerCache,
@@ -41,10 +44,50 @@ export const createWorkerAssetCache = (
 export const workerAssetCache: WorkerAssetCache =
   createWorkerAssetCache(workerCache);
 
+type LoadAssets = (
+  names: string[],
+  sourceMapNames?: string[],
+) => ReturnType<RuntimeRPC['getAssetsByEntry']>;
+
+const loadDiskAssets = async (
+  names: string[],
+  sourceMapNames: string[],
+  sourceMapPaths: Record<string, string>,
+): ReturnType<LoadAssets> => {
+  const reads = new Map(names.map((name) => [name, readFile(name)]));
+  const [assetEntries, mapEntries] = await Promise.all([
+    Promise.all(
+      Array.from(
+        reads,
+        async ([name, content]) => [name, await content] as const,
+      ),
+    ),
+    Promise.all(
+      sourceMapNames.map(async (name) => {
+        const mapPath = sourceMapPaths[name];
+        if (!mapPath) return null;
+
+        const content = (
+          await (reads.get(mapPath) ?? readFile(mapPath))
+        ).toString('utf8');
+        const map =
+          mapPath === name ? parseInlineSourceMapStr(content) : content;
+        return map === null ? null : ([name, map] as const);
+      }),
+    ),
+  ]);
+  return {
+    assetFiles: Object.fromEntries(assetEntries),
+    sourceMaps: Object.fromEntries(
+      mapEntries.filter((entry) => entry !== null),
+    ),
+  };
+};
+
 export const loadCachedAssets = async (
   assetNames: string[],
   cache: WorkerAssetCache,
-  getAssetsByEntry: RuntimeRPC['getAssetsByEntry'],
+  loadAssets: LoadAssets,
 ): Promise<{
   assetFiles: AssetFiles;
   sourceMaps: Record<string, string>;
@@ -72,7 +115,7 @@ export const loadCachedAssets = async (
 
   const fetched =
     missingAssetNames.length || missingSourceMapNames.length
-      ? await getAssetsByEntry(missingAssetNames, missingSourceMapNames)
+      ? await loadAssets(missingAssetNames, missingSourceMapNames)
       : { assetFiles: {}, sourceMaps: {} };
 
   Object.assign(assetFiles, fetched.assetFiles);
@@ -101,21 +144,33 @@ export const loadCachedAssets = async (
 };
 
 export const loadTaskAssets = async (
-  options: Pick<RunWorkerOptions['options'], 'assetNames' | 'context'>,
+  options: Pick<
+    RunWorkerOptions['options'],
+    'assetNames' | 'diskSourceMapPaths'
+  > & {
+    context: Pick<WorkerContext, 'pool' | 'workerCacheLimit'>;
+  },
   assets: RunWorkerOptions['options']['assets'],
   rpc: Pick<RuntimeRPC, 'getAssetsByEntry'>,
 ): Promise<NonNullable<RunWorkerOptions['options']['assets']>> => {
-  const { assetNames, context } = options;
-  if (isVmPoolType(context.pool)) {
+  const { assetNames, context, diskSourceMapPaths } = options;
+  const usesVmPool = isVmPoolType(context.pool);
+  if (usesVmPool) {
     workerCache.configure(context.workerCacheLimit ?? 0);
   }
   if (assets) {
     return assets;
   }
 
-  if (!isVmPoolType(context.pool) || context.workerCacheLimit === undefined) {
-    return rpc.getAssetsByEntry(assetNames);
+  // A worker can have narrower filesystem grants than the host.
+  const loadAssets: LoadAssets =
+    diskSourceMapPaths && !process.permission
+      ? (files, mapNames = files) =>
+          loadDiskAssets(files, mapNames, diskSourceMapPaths)
+      : rpc.getAssetsByEntry;
+  if (!usesVmPool || context.workerCacheLimit === undefined) {
+    return loadAssets(assetNames);
   }
 
-  return loadCachedAssets(assetNames, workerAssetCache, rpc.getAssetsByEntry);
+  return loadCachedAssets(assetNames, workerAssetCache, loadAssets);
 };

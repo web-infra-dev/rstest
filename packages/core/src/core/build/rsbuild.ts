@@ -16,6 +16,7 @@ import type {
   NormalizedProjectConfig,
 } from '../../types';
 import { isDebug } from '../../utils';
+import { parseInlineSourceMapStr } from '../../utils/assetFiles';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
@@ -75,25 +76,6 @@ const getRuntimeChunkFiles = ({
 
   return runtimeChunkFiles;
 };
-
-function parseInlineSourceMapStr(code: string) {
-  // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
-  const inlineSourceMapRegex =
-    /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
-  const match = inlineSourceMapRegex.exec(code);
-
-  if (!match?.[1]) {
-    return null;
-  }
-
-  try {
-    const base64Data = match[1];
-    const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
-    return decodedStr;
-  } catch {
-    return null;
-  }
-}
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -400,6 +382,7 @@ export const createRsbuildServer = async ({
     assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+    diskSourceMapPaths?: Record<string, string>;
     /** affected test entries only available in watch mode */
     affectedEntries: EntryInfo[];
     /** deleted test entries only available in watch mode */
@@ -534,13 +517,9 @@ export const createRsbuildServer = async ({
       fileFilters?: string[];
     }) => {
       // Fatal errors never fire done, so Rsbuild's stats waiter cannot settle.
-      const stats = await Promise.race([
-        devServer.environments[environmentName]!.getStats(),
-        round.failure,
-      ]);
-
-      const manifest = devServer.environments[environmentName]!.context
-        .manifest as ManifestData;
+      const environment = devServer.environments[environmentName]!;
+      const stats = await Promise.race([environment.getStats(), round.failure]);
+      const manifest = environment.context.manifest as ManifestData;
 
       const { entrypoints, outputPath, assets, hash, chunks } = stats.toJson({
         all: false,
@@ -623,22 +602,17 @@ export const createRsbuildServer = async ({
       const inlineSourceMap =
         stats.compilation.options.devtool === 'inline-source-map';
 
-      const sourceMapPaths: Record<string, string | null> = Object.fromEntries(
-        assets!.map((asset) => {
-          const assetFilePath = path.join(outputPath!, asset.name);
-
-          if (inlineSourceMap) {
-            return [assetFilePath, assetFilePath];
-          }
-          const sourceMapPath = asset?.info.related?.sourceMap?.[0];
-
-          if (sourceMapPath) {
-            const filePath = path.join(outputPath!, sourceMapPath);
-            return [assetFilePath, filePath];
-          }
-          return [assetFilePath, null];
-        }),
-      );
+      const sourceMapPaths: Record<string, string> = {};
+      const assetNames = assets!.map((asset) => {
+        const assetPath = path.join(outputPath!, asset.name);
+        const sourceMap = asset.info.related?.sourceMap?.[0];
+        if (inlineSourceMap) {
+          sourceMapPaths[assetPath] = assetPath;
+        } else if (sourceMap) {
+          sourceMapPaths[assetPath] = path.join(outputPath!, sourceMap);
+        }
+        return assetPath;
+      });
 
       buildData[environmentName] ??= {};
 
@@ -664,10 +638,6 @@ export const createRsbuildServer = async ({
         return inlineSourceMap ? parseInlineSourceMapStr(file) : file;
       };
 
-      const assetNames = assets!.map((asset) =>
-        path.join(outputPath!, asset.name),
-      );
-
       return {
         affectedEntries,
         deletedEntries,
@@ -676,6 +646,11 @@ export const createRsbuildServer = async ({
         setupEntries,
         globalSetupEntries,
         assetNames,
+        // A filter may leave individual assets in the compiler's output FS.
+        diskSourceMapPaths:
+          environment.context.config.dev.writeToDisk === true
+            ? sourceMapPaths
+            : undefined,
         getAssetFiles: async (names: string[]) => {
           return Object.fromEntries(
             await Promise.all(

@@ -393,6 +393,7 @@ export function createNodeExecutor(
           globalSetupEntries,
           getAssetFiles,
           getSourceMaps,
+          diskSourceMapPaths,
           affectedEntries,
           deletedEntries,
         } = await span(
@@ -504,6 +505,7 @@ export function createNodeExecutor(
             getSourceMaps,
             setupEntries,
             getAssetFiles,
+            diskSourceMapPaths,
             project: p,
             buildId,
             updateSnapshot,

@@ -342,7 +342,10 @@ describe('prepareRsbuild', () => {
                 assets: [{ name: 'a.js', size: 4, info: {} }],
               }),
             }),
-            context: { manifest: { entries: {} } },
+            context: {
+              config: { dev: { writeToDisk: false } },
+              manifest: { entries: {} },
+            },
           },
         },
       });

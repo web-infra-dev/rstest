@@ -155,6 +155,8 @@ export type RunWorkerOptions = {
     setupEntries: EntryInfo[];
     /** All bundle assets needed by this task, including setup dependencies. */
     assetNames: string[];
+    /** Present for full disk output. Inline maps point to the bundle itself. */
+    diskSourceMapPaths?: Record<string, string>;
     context: WorkerContext;
     /** Env deletions use a separate JSON-safe wire field because JSON drops `undefined`. */
     deletedEnvKeys: string[];
@@ -170,9 +172,7 @@ export type RunWorkerOptions = {
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
     /**
-     * Eager assets for forks/threads when host memory permits. VM pools
-     * always pull missing assets through getAssetsByEntry so their worker cache
-     * can survive fresh VM Contexts without retaining module instances.
+     * Bytes supplied eagerly by the host. Otherwise workers load the assets.
      */
     assets?: {
       assetFiles: AssetFiles;

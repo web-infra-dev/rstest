@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -215,6 +216,35 @@ describe('test build config', () => {
     expect(fs.existsSync(join(defaultOutputPath, 'rstest-manifest.json'))).toBe(
       false,
     );
+  });
+  it('runs tests when the worker cannot read the disk output directory', async ({
+    onTestFinished,
+  }) => {
+    const outputDir = await fs.promises.mkdtemp(
+      join(tmpdir(), 'rstest-permission-output-'),
+    );
+    onTestFinished(() =>
+      fs.promises.rm(outputDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+      }),
+    );
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/customOutput'),
+          env: { RSTEST_PERMISSION_OUTPUT_DIR: outputDir },
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(fs.existsSync(join(outputDir, 'rstest-manifest.json'))).toBe(true);
   });
 });
 
