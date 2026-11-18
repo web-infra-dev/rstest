@@ -27,6 +27,7 @@ export const ViewportFrame: React.FC<ViewportFrameProps> = ({
 }) => {
   const ref = useRef<HTMLDivElement | null>(null);
   const size = viewportSizeOf(selection);
+  const resizable = selection.mode === 'responsive' && !!onResponsiveResize;
 
   useLayoutEffect(() => {
     if (!active) return;
@@ -94,11 +95,11 @@ export const ViewportFrame: React.FC<ViewportFrameProps> = ({
                 background: token.colorBgContainer,
                 // CSS resize only works when overflow is not `visible`.
                 overflow: 'hidden',
-                resize: selection.mode === 'responsive' ? 'both' : 'none',
-                minWidth: selection.mode === 'responsive' ? 1 : undefined,
-                minHeight: selection.mode === 'responsive' ? 1 : undefined,
-                maxWidth: selection.mode === 'responsive' ? 10000 : undefined,
-                maxHeight: selection.mode === 'responsive' ? 10000 : undefined,
+                resize: resizable ? 'both' : 'none',
+                minWidth: resizable ? 1 : undefined,
+                minHeight: resizable ? 1 : undefined,
+                maxWidth: resizable ? 10000 : undefined,
+                maxHeight: resizable ? 10000 : undefined,
               }
             : { background: token.colorBgContainer }
         }

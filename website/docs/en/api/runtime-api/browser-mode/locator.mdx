@@ -45,11 +45,57 @@ The `submitButton` above is a `Locator`. You can continue chaining calls on it (
 
 ## BrowserPage
 
-- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'> & { elementLocator: (element: Element) => Locator; keyboard: BrowserKeyboard }`
+- **Type:**
 
-`BrowserPage` is the type definition for `page`. It exposes query entry points, DOM-to-Locator conversion, and [`keyboard`](/api/runtime-api/browser-mode/keyboard) with the `BrowserKeyboard` type. Element actions such as `click` and `fill` are available on `Locator`.
+```ts
+type BrowserPage = Pick<
+  Locator,
+  | 'locator'
+  | 'getByRole'
+  | 'getByText'
+  | 'getByLabel'
+  | 'getByPlaceholder'
+  | 'getByAltText'
+  | 'getByTitle'
+  | 'getByTestId'
+> & {
+  elementLocator: (element: Element) => Locator;
+  keyboard: BrowserKeyboard;
+  viewport: (width: number, height: number) => Promise<void>;
+};
+```
 
-This means you need to first obtain a `Locator` through `page`, then call interactions and assertions on the `Locator`.
+`BrowserPage` is the type of `page`. It provides element queries, DOM-to-Locator conversion, [`keyboard`](/api/runtime-api/browser-mode/keyboard) input, and `viewport` resizing. Element actions such as `click` and `fill` are available on `Locator`.
+
+To interact with or assert against an element, first obtain a `Locator` through `page`.
+
+## page.viewport
+
+<ApiMeta addedVersion="0.13.0" />
+
+- **Type:** `(width: number, height: number) => Promise<void>`
+
+Resize the current test's layout viewport to check responsive layouts at different sizes. Both dimensions must be positive integers in CSS pixels. Once `await page.viewport(width, height)` completes, media queries and layout reads use the new dimensions.
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('uses the tablet layout', async () => {
+  await page.viewport(768, 1024);
+  expect(window.matchMedia('(min-width: 768px)').matches).toBe(true);
+});
+```
+
+Rstest restores the initial viewport every time a test finishes, including retries (`retry`) and repeats (`repeats`). Restoration waits for failure screenshots, `afterEach`, fixture cleanup, and the `onTestFinished` and `onTestFailed` callbacks to complete. Tests that do not resize the viewport skip restoration.
+
+Headless runs restore the browser instance's initial viewport size. Headed runs restore the UI's previous viewport mode. Changes made in `afterAll` or a cleanup function returned by `beforeAll` are restored when that group of tests finishes.
+
+To use the same size for a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test execution. Later retries, repeats, and other tests do not automatically keep that size.
+
+Concurrent tests share a viewport, so they cannot call `page.viewport()`. If a group contains concurrent tests that will run, its `beforeAll`, `afterAll`, and cleanup functions cannot call this API either. These calls throw an error.
+
+In headless mode, Playwright also updates `window.screen` when resizing the viewport. Restoring the viewport does not restore a screen size configured through `browser.providerOptions.context.screen`.
 
 ## Query API
 

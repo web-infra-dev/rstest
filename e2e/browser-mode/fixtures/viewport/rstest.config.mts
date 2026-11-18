@@ -1,5 +1,5 @@
 import { defineConfig } from '@rstest/core';
-import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
 
 export default defineConfig({
   browser: {
@@ -11,6 +11,7 @@ export default defineConfig({
       width: 390,
       height: 844,
     },
+    instances: [{ browserName: 'chromium', ...ciChromeEntry() }],
   },
   include: ['tests/**/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,

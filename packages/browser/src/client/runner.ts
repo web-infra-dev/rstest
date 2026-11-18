@@ -59,6 +59,7 @@ import {
   sendDispatchRequest,
 } from './dispatchTransport';
 import { callBrowserRpc } from './browserRpc';
+import { resetViewport, setViewportConcurrencyReader } from './viewport';
 import { adoptRunIdentity, getRunIdentity } from './runIdentity';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
@@ -885,7 +886,18 @@ const run = async () => {
         previousIstanbulCoverage = cloneCoverage(currentCoverage);
       };
 
+      let viewportRestoreFailed = false;
       const runnerHooks: RunnerHooks & FileCleanupHooks = {
+        onTaskCleanup: () => {
+          if (viewportRestoreFailed) return;
+          return resetViewport()?.catch((error: unknown) => {
+            viewportRestoreFailed = true;
+            throw new Error(
+              `Failed to restore the browser viewport after a test. ${error instanceof Error ? error.message : String(error)}`,
+              { cause: error },
+            );
+          });
+        },
         onFileCleanupStart: async (result) => {
           if (result && globalThis.__coverage__) {
             result.coverage = globalThis.__coverage__ as CoverageMapData;
@@ -1001,6 +1013,7 @@ const run = async () => {
             await preloadTestFileSourceMap(chunkUrl);
           }
 
+          setViewportConcurrencyReader(runtime.runner.isRunningConcurrentTests);
           await runtime.runner.prepareTests(testPath, runnerHooks);
           result = await runtime.runner.runTests(
             testPath,
@@ -1008,6 +1021,7 @@ const run = async () => {
             runtime.api,
           );
         } catch (error) {
+          if (viewportRestoreFailed) throw error;
           result = {
             testId: getFileTaskId(testPath),
             project: projectRuntime.instanceName,
@@ -1017,6 +1031,8 @@ const run = async () => {
             results: [],
             errors: await formatTestError(error),
           };
+        } finally {
+          if (!viewportRestoreFailed) await runnerHooks.onTaskCleanup?.();
         }
 
         // Headed execution and single-file batches are file-like even when the

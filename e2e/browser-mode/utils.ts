@@ -32,6 +32,7 @@ const useGithubActionsChrome = (fixtureName?: string): boolean =>
 
 /** Fixtures that declare the channel per chromium entry (mixed browser sets). */
 const SELF_MANAGED_CHANNEL_FIXTURES = new Set([
+  'viewport',
   'multi-browser',
   'hybrid-headed',
   'launch-cap',
