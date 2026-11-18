@@ -1,4 +1,4 @@
-import { inspect } from 'node:util';
+import { inspect, stripVTControlCharacters } from 'node:util';
 import { describe, expect, it, rs } from '@rstest/core';
 import { createCustomConsole } from '../../src/runtime/worker/console';
 
@@ -14,6 +14,42 @@ const outputMethods = [
   'trace',
   'table',
 ] as const;
+
+describe('console.group', () => {
+  it('indents grouped output as Node does', () => {
+    const onConsoleLog = rs.fn();
+    const console = createCustomConsole({
+      silent: false,
+      onConsoleLog,
+      getCurrentTask: () => undefined,
+      testPath: '/test.ts',
+      project: '',
+      printConsoleTrace: false,
+    });
+
+    console.group('Group A');
+    console.log('inside');
+    console.log('line 1\nline 2');
+    console.groupCollapsed('Group B');
+    console.warn('nested 1\nnested 2');
+    console.groupEnd();
+    console.groupEnd();
+    console.log('outside');
+
+    expect(
+      onConsoleLog.mock.calls.map(([log]) =>
+        stripVTControlCharacters(log.content),
+      ),
+    ).toEqual([
+      'Group A',
+      '  inside',
+      '  line 1\n  line 2',
+      '  Group B',
+      '    nested 1\n    nested 2',
+      'outside',
+    ]);
+  });
+});
 
 describe('silent console', () => {
   it.for(outputMethods)('does not inspect arguments for %s', (method) => {
