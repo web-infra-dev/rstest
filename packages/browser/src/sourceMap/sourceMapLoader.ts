@@ -114,6 +114,7 @@ export const loadSourceMapForSource = async ({
 const fetchSourceMap = async (
   jsUrl: string,
   fetcher: Fetcher,
+  shouldFetchExternalMap?: (code: string) => boolean,
 ): Promise<SourceMapPayload | null> => {
   const jsResponse = await fetcher(jsUrl);
   if (!jsResponse.ok) {
@@ -124,6 +125,12 @@ const fetchSourceMap = async (
   const inlineMap = resolveInlineSourceMap(code, jsUrl);
   if (inlineMap) {
     return inlineMap;
+  }
+
+  // Callers can gate the external `.map` fetch on what the code contains
+  // (the map is only needed for a known consumer of it).
+  if (shouldFetchExternalMap && !shouldFetchExternalMap(code)) {
+    return null;
   }
 
   const mapUrl = new URL(jsUrl);
@@ -145,12 +152,15 @@ export const loadSourceMapWithCache = async ({
   force = false,
   origin,
   fetcher = fetch,
+  shouldFetchExternalMap,
 }: {
   jsUrl: string;
   cache: Map<string, SourceMapPayload | null>;
   force?: boolean;
   origin?: string;
   fetcher?: Fetcher;
+  /** When given, the external `.map` is fetched only if the code passes it. */
+  shouldFetchExternalMap?: (code: string) => boolean;
 }): Promise<SourceMapPayload | null> => {
   const normalizedUrl = normalizeJavaScriptUrl(jsUrl, { origin });
   if (!normalizedUrl) {
@@ -162,7 +172,11 @@ export const loadSourceMapWithCache = async ({
   }
 
   try {
-    const sourceMap = await fetchSourceMap(normalizedUrl, fetcher);
+    const sourceMap = await fetchSourceMap(
+      normalizedUrl,
+      fetcher,
+      shouldFetchExternalMap,
+    );
     cache.set(normalizedUrl, sourceMap);
     return sourceMap;
   } catch {
