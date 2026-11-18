@@ -243,18 +243,18 @@ const normalizeFilePath = (file?: string | null): string | undefined => {
  * reads any line that ends like a location as a frame, such as
  * `Error: connect ECONNREFUSED 127.0.0.1:5432`. So when a stack has `at`
  * frames, only those lines are frames, plus the `file:line` that Node puts in
- * front of a CommonJS SyntaxError, above the source line and a `^` marker.
+ * front of a CommonJS SyntaxError. Below it Node writes the source line, a `^`
+ * marker and a blank line. The marker has no `^` at the end of the input, and
+ * Node leaves it out when the error spans lines.
  * Firefox and WebKit stacks have no `at` lines and no message.
  */
 const getFrameLines = (stack: string): string => {
-  const lines = stack.split('\n');
-  const frameLines = lines.filter((line) => /^\s*at /.test(line));
+  const frameLines = stack.split('\n').filter((line) => /^\s*at /.test(line));
   if (!frameLines.length) return stack;
 
-  const [location, , marker, separator] = lines;
-  if (location && marker && /^\s*\^+\s*$/.test(marker) && separator === '') {
-    frameLines.unshift(location);
-  }
+  const [, location] =
+    /^([^\n]*:\d+)\n[^\n]*\n(?:[\t ]*\^*\n)?\n/.exec(stack) || [];
+  if (location) frameLines.unshift(location);
   return frameLines.join('\n');
 };
 

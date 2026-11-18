@@ -1,4 +1,5 @@
 import { stripVTControlCharacters } from 'node:util';
+import { compileFunction } from 'node:vm';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { createListTestsError } from '../../src/api/listTestsError';
 import {
@@ -205,24 +206,46 @@ describe('error helpers', () => {
     ).toEqual(['/project/src/health.ts:12']);
   });
 
-  it('keeps the location Node puts in front of a CommonJS SyntaxError', async () => {
-    const frames = await parseErrorStacktrace({
-      stack: [
-        '/project/src/config.cjs:3',
-        '  port: 3000',
-        '  ^^^^',
-        '',
-        "SyntaxError: Unexpected identifier 'port'",
-        '    at wrapSafe (node:internal/modules/cjs/loader:1713:18)',
-        '    at /project/src/config.test.ts:7:3',
-      ].join('\n'),
-    });
+  it.each([
+    {
+      position: 'an unexpected token',
+      code: 'module.exports = {\n  port: 3000\n  host: 1\n};\n',
+      line: 3,
+    },
+    {
+      position: 'the end of the input',
+      code: 'module.exports = {\n  port: 3000,\n',
+      line: 3,
+    },
+    {
+      position: 'the end of a file without a final newline',
+      code: 'module.exports = {\n  port: 3000,',
+      line: 2,
+    },
+    {
+      position: 'an unclosed comment',
+      code: 'module.exports = {};\n/* port: 3000\n',
+      line: 2,
+    },
+  ])(
+    'keeps the location Node puts in front of a SyntaxError at $position',
+    async ({ code, line }) => {
+      let error: unknown;
+      try {
+        compileFunction(code, [], { filename: '/project/src/config.cjs' });
+      } catch (err) {
+        error = err;
+      }
 
-    expect(frames.map((frame) => `${frame.file}:${frame.lineNumber}`)).toEqual([
-      '/project/src/config.cjs:3',
-      '/project/src/config.test.ts:7',
-    ]);
-  });
+      const [frame] = await parseErrorStacktrace({
+        stack: toSerializedError(error).stack!,
+      });
+
+      expect(`${frame?.file}:${frame?.lineNumber}`).toBe(
+        `/project/src/config.cjs:${line}`,
+      );
+    },
+  );
 
   it('reads every line of a stack without `at` frames', async () => {
     const frames = await parseErrorStacktrace({
