@@ -64,6 +64,13 @@ class SoftAssertionErrors {
   constructor(readonly errors: unknown[]) {}
 }
 
+/**
+ * The `expect.soft` failures recorded in the current attempt of `test`, or
+ * `undefined` when the attempt has not failed.
+ */
+const getSoftAssertionErrors = (test: TestCase): unknown[] | undefined =>
+  test.result?.state === 'fail' ? (test.result.errors ?? []) : undefined;
+
 // Cancellation can start cleanup before setup unwinds. Linked frames let the
 // later phase skip an expired predecessor instead of restoring its deadline.
 type ActiveTimeoutFrame = {
@@ -452,10 +459,14 @@ export class TestRunner {
                 status: 'failed' as const,
                 parentNames: test.parentNames,
                 name: test.name,
-                errors:
+                // `expect.soft` failures recorded before the test threw are
+                // reported first, then the value it threw, as Vitest does.
+                errors: await formatTestErrors(
                   error instanceof SoftAssertionErrors
-                    ? await formatTestErrors(error.errors, test)
-                    : await formatTestError(error, test),
+                    ? error.errors
+                    : [...(getSoftAssertionErrors(test) ?? []), error],
+                  test,
+                ),
                 testPath,
                 meta: test.meta,
               };
@@ -1218,8 +1229,9 @@ export class TestRunner {
       isExpectingAssertionsError,
     } = this.getAssertionState(test);
 
-    if (test.result?.state === 'fail') {
-      throw new SoftAssertionErrors(test.result.errors ?? []);
+    const softAssertionErrors = getSoftAssertionErrors(test);
+    if (softAssertionErrors) {
+      throw new SoftAssertionErrors(softAssertionErrors);
     }
 
     const localExpect = this.localExpects.get(test.context);
