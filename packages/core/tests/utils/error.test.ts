@@ -1,4 +1,5 @@
 import { stripVTControlCharacters } from 'node:util';
+import { compileFunction } from 'node:vm';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { createListTestsError } from '../../src/api/listTestsError';
 import {
@@ -219,5 +220,84 @@ describe('error helpers', () => {
     expect(wrapper!.cause!.stack).toContain('TypeError: root');
     expect(wrapper!.cause!.stack).toContain('source.ts:1:');
     expect(wrapper!.cause!.stack).not.toContain('generated.js');
+  });
+
+  it('does not read the error message as a frame', async () => {
+    const locations = async (stack: string[]) =>
+      (await parseErrorStacktrace({ stack: stack.join('\n') })).map(
+        (frame) => `${frame.file}:${frame.lineNumber}`,
+      );
+
+    expect(
+      await locations([
+        'Error: connect ECONNREFUSED 127.0.0.1:5432',
+        '    at connect (/project/src/db.ts:4:9)',
+        '    at /project/src/db.test.ts:8:3',
+      ]),
+    ).toEqual(['/project/src/db.ts:4', '/project/src/db.test.ts:8']);
+    expect(
+      await locations([
+        'Error: 2 services are down',
+        '  api http://localhost:3000',
+        '  db 127.0.0.1:5432',
+        '    at checkServices (/project/src/health.ts:12:11)',
+      ]),
+    ).toEqual(['/project/src/health.ts:12']);
+  });
+
+  it.each([
+    {
+      position: 'an unexpected token',
+      code: 'module.exports = {\n  port: 3000\n  host: 1\n};\n',
+      line: 3,
+    },
+    {
+      position: 'the end of the input',
+      code: 'module.exports = {\n  port: 3000,\n',
+      line: 3,
+    },
+    {
+      position: 'the end of a file without a final newline',
+      code: 'module.exports = {\n  port: 3000,',
+      line: 2,
+    },
+    {
+      position: 'an unclosed comment',
+      code: 'module.exports = {};\n/* port: 3000\n',
+      line: 2,
+    },
+  ])(
+    'keeps the location Node puts in front of a SyntaxError at $position',
+    async ({ code, line }) => {
+      let error: unknown;
+      try {
+        compileFunction(code, [], { filename: '/project/src/config.cjs' });
+      } catch (err) {
+        error = err;
+      }
+
+      const [frame] = await parseErrorStacktrace({
+        stack: toSerializedError(error).stack!,
+      });
+
+      expect(`${frame?.file}:${frame?.lineNumber}`).toBe(
+        `/project/src/config.cjs:${line}`,
+      );
+    },
+  );
+
+  it('reads every line of a stack without `at` frames', async () => {
+    const frames = await parseErrorStacktrace({
+      stack: [
+        'connect@http://localhost:63315/src/db.ts:4:9',
+        '@http://localhost:63315/src/db.test.ts:8:3',
+      ].join('\n'),
+      fullStack: true,
+    });
+
+    expect(frames.map((frame) => `${frame.file}:${frame.lineNumber}`)).toEqual([
+      'http://localhost:63315/src/db.ts:4',
+      'http://localhost:63315/src/db.test.ts:8',
+    ]);
   });
 });
