@@ -196,6 +196,8 @@ $ npx rstest list --json
 $ npx rstest list --json=./output.json
 ```
 
+In Browser Mode, `rstest list` evaluates test files in each selected browser instance without running test bodies. With `--filesOnly`, it lists each matching file once per selected instance without launching browsers. When a project selects multiple instances, `--json` identifies each by its instance project name, such as `web (chromium)` or `web (firefox)`.
+
 You can use `--includeSuites` to print test suites along side test cases:
 
 ```bash

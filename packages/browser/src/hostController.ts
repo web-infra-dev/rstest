@@ -25,7 +25,6 @@ import {
   logWatchReadyMessage,
   PhaseTracker,
   type RunnerEventSink,
-  type RawTestFileInfo,
   type RawTestFileResult,
   type RawTestResult,
   type RawUserConsoleLog,
@@ -56,6 +55,7 @@ import {
   buildBrowserRuntimeRows,
   resolveContainerDist,
   resolveProjectEntries,
+  resolveViewport,
   serializeForInlineScript,
   type BrowserRuntime,
 } from './browserRsbuild';
@@ -63,6 +63,7 @@ import {
   takeBrowserV8Coverage,
   type BrowserV8CoverageResourceStore,
 } from './browserV8Coverage';
+import { getHeadlessConcurrency } from './concurrency';
 import { createConcurrencyLimiter } from './concurrencyLimiter';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
@@ -93,7 +94,6 @@ import {
 } from './protocol';
 import {
   type BrowserProvider,
-  type BrowserProviderBrowser,
   type BrowserProviderImplementation,
   type BrowserProviderPage,
   type BrowserV8CoverageCollector,
@@ -147,17 +147,6 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
     ...projects.map(
       (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
     ),
-  );
-
-/** Re-attributes a collected test tree to `project`. */
-const withProject = (
-  tests: RawTestFileInfo['tests'],
-  project: string,
-): RawTestFileInfo['tests'] =>
-  tests.map((test) =>
-    test.type === 'suite'
-      ? { ...test, project, tests: withProject(test.tests, project) }
-      : { ...test, project },
   );
 
 const getFailureScreenshotKey = (
@@ -1904,7 +1893,6 @@ export const listBrowserTests = async (
       forceHeadless: true, // Always use headless for list command
     },
   );
-  const listRowsByProject = groupRowsByProject(projectRuntimeConfigs);
 
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;
@@ -1954,7 +1942,14 @@ export const listBrowserTests = async (
     };
   }
 
-  if (!runtime.projectEntries.some((entry) => entry.testFiles.length > 0)) {
+  // Rows of projects that still have test files, in the plan's project order.
+  const rows = projectRuntimeConfigs.filter((row) =>
+    runtime.projectEntries.some(
+      ({ project, testFiles }) =>
+        project.name === row.name && testFiles.length > 0,
+    ),
+  );
+  if (rows.length === 0) {
     await destroyBrowserRuntime(runtime);
     return {
       list: [],
@@ -1962,62 +1957,24 @@ export const listBrowserTests = async (
     };
   }
 
-  // Collect boots the runtime's default launch only and reuses its browser
-  // for every collect page: one context shared per project, with per-browser
-  // attribution stamped onto the results post-capture (test structure
-  // collection is browser-independent).
-  // TODO: list collection leases only the first instance's launch, opens one
-  // page per project in a shared context with `viewport: null`, and copies
-  // the collected tree to every instance of the project. Declarations that
-  // depend on the browser engine, viewport, or context options (for example
-  // `test.skipIf(!CSS.supports(...))` or `test.runIf(window.innerWidth < 500)`)
-  // are therefore listed with that one page's result for every instance.
-  // Collect each instance in its own browser, context, and viewport instead
-  // (like vitest's `--no-static-parse`); the `filesOnly` path should then
-  // list instance names rather than project names too.
-  const defaultLaunch = runtime.launchSpecs[0]!;
-  let browser: BrowserProviderBrowser;
-  try {
-    // The lease is never released: `destroyBrowserRuntime` closes the pool.
-    ({ browser } = await runtime.launchPool.acquire(defaultLaunch.key));
-  } catch (error) {
-    logger.error(
-      color.red(
-        `Failed to initialize browser provider runtime (${defaultLaunch.provider}).`,
-      ),
-      error,
-    );
-    await destroyBrowserRuntime(runtime);
-    throw error;
-  }
-
-  const hostOptions: BrowserHostConfig = {
+  const hostOptions: Omit<BrowserHostConfig, 'projects'> = {
     rootPath: normalize(context.rootPath),
-    projects: projectRuntimeConfigs.map(toWireRow),
     snapshot: {
       updateSnapshot: context.snapshotManager.options.updateSnapshot,
     },
-    mode: 'collect', // Use collect mode
+    mode: 'collect',
     debug: isDebug(),
     rpcTimeout: NO_RPC_TIMEOUT,
   };
-
-  runtime.setContainerOptions(hostOptions);
-
-  // Each project's dev server serves only its own manifest, so collection
-  // navigates one page per project.
-  const browserContext = await browser.newContext({
-    providerOptions: defaultLaunch.providerOptions,
-    viewport: null,
-  });
 
   // Per-page collect watchdog: a test file whose module evaluation stalls must
   // not hang `rstest list` forever.
   const collectTimeoutMs = 30_000;
 
-  const collectFromProject = async (
+  const collectFromPage = async (
+    page: BrowserProviderPage,
     server: BrowserProjectServer,
-    projectRow: BrowserProjectRuntime,
+    row: BrowserProjectRuntime,
   ): Promise<{
     results: ListCommandResult[];
     error: SerializedError | null;
@@ -2030,8 +1987,6 @@ export const listBrowserTests = async (
       resolveCollect = resolve;
     });
 
-    const page = await browserContext.newPage();
-
     // Expose dispatch function for browser client to send messages. The runner
     // stamps its run identity beside every message; collection ignores it (a
     // collect page is navigated directly, so there is no lease to check) and
@@ -2041,20 +1996,9 @@ export const listBrowserTests = async (
       (envelope: RunnerEnvelope) => {
         const message = envelope.message;
         switch (message.type) {
-          case 'collect-result': {
-            const payload = message.payload;
-            // One page collects the project's structure once; each browser
-            // row gets its own copy under its instance name, so listed
-            // entries match the projects the reporters see.
-            results.push(
-              ...listRowsByProject.get(projectRow.name)!.map((row) => ({
-                testPath: payload.testPath,
-                project: row.instanceName,
-                tests: withProject(payload.tests, row.instanceName),
-              })),
-            );
+          case 'collect-result':
+            results.push(message.payload);
             break;
-          }
           case 'collect-complete':
             collectCompleted = true;
             resolveCollect?.();
@@ -2075,15 +2019,11 @@ export const listBrowserTests = async (
       },
     );
 
-    // Inject host options before navigation so the runner can access them.
-    // The page collects one project, so its options carry only that project's
-    // first row (the collect page resolves its row by name alone) — one
-    // inline-options serialization per project.
     await page.addInitScript(
       `window.__RSTEST_BROWSER_OPTIONS__ = ${serializeForInlineScript({
         ...hostOptions,
-        projects: [toWireRow(projectRow)],
-        browserName: projectRow.browserName,
+        projects: [toWireRow(row)],
+        browserName: row.browserName,
       })};`,
     );
 
@@ -2114,32 +2054,45 @@ export const listBrowserTests = async (
       clearTimeout(timeoutId);
     }
 
-    await page.close().catch(() => {});
     return { results, error };
   };
 
-  // Collect one page per project concurrently — the default launch's browser
-  // hosts every page against the project's own dev server.
-  const collected = await Promise.all(
-    [...runtime.projectServers.values()].map((server) =>
-      collectFromProject(
-        server,
-        listRowsByProject.get(server.projectName)![0]!,
-      ),
-    ),
+  const cleanup = () => destroyBrowserRuntime(runtime);
+  const limiter = createConcurrencyLimiter(
+    getHeadlessConcurrency(context, rows.length),
   );
+  // Each row evaluates the project's manifest in an isolated context, but
+  // rows of the same project still share its build and dev server.
+  const collections = rows.map((row) =>
+    limiter.run(async () => {
+      const server = runtime.projectServers.get(row.name)!;
+      const lease = await runtime.launchPool.acquire(row.launchKey);
+      try {
+        const browserContext = await lease.browser.newContext({
+          providerOptions: row.providerOptions,
+          viewport: resolveViewport(row.viewport),
+        });
+        try {
+          const page = await browserContext.newPage();
+          return await collectFromPage(page, server, row);
+        } finally {
+          await browserContext.close().catch(() => {});
+        }
+      } finally {
+        lease.release();
+      }
+    }),
+  );
+  const collected = await Promise.all(collections).catch(async (error) => {
+    // Destroy the shared runtime first: closing the browsers and dev servers
+    // settles in-flight siblings at once, and every task's finally (context
+    // close, lease release) still completes before the rethrow.
+    await cleanup();
+    await Promise.allSettled(collections);
+    throw error;
+  });
   const collectResults = collected.flatMap((entry) => entry.results);
   const fatalError = collected.find((entry) => entry.error)?.error ?? null;
-
-  // Cleanup
-  const cleanup = async () => {
-    try {
-      await browserContext.close();
-    } catch {
-      // ignore
-    }
-    await destroyBrowserRuntime(runtime);
-  };
 
   if (fatalError) {
     await cleanup();

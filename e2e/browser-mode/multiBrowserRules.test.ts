@@ -39,6 +39,52 @@ describe('browser mode - multi-browser launch rules', () => {
   );
 
   it.runIf(shouldRunFirefoxBrowserTests)(
+    'lists only the tests enabled in each browser context',
+    async () => {
+      const { cli, expectExecSuccess } = await runBrowserCli('multi-browser', {
+        command: 'list',
+        args: ['--json', '-t', 'with locale'],
+      });
+      await expectExecSuccess();
+
+      const jsonStart = cli.stdout.indexOf('[\n');
+      expect(JSON.parse(cli.stdout.slice(jsonStart))).toEqual([
+        expect.objectContaining({
+          name: 'Chromium at 820px with locale en-GB',
+          project: 'rstest (chromium)',
+        }),
+        expect.objectContaining({
+          name: 'Firefox at 900px with locale fr-FR',
+          project: 'rstest (firefox)',
+        }),
+      ]);
+    },
+    60_000,
+  );
+
+  it('lists one file per browser without requiring browser binaries', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli('multi-browser', {
+      command: 'list',
+      args: ['--filesOnly', '--json'],
+      env: { PLAYWRIGHT_BROWSERS_PATH: fixtureDir },
+    });
+    await expectExecSuccess();
+
+    expect(JSON.parse(cli.stdout)).toEqual([
+      expect.objectContaining({
+        file: expect.stringMatching(/attribution\.test\.ts$/),
+        type: 'file',
+        project: 'rstest (chromium)',
+      }),
+      expect.objectContaining({
+        file: expect.stringMatching(/attribution\.test\.ts$/),
+        type: 'file',
+        project: 'rstest (firefox)',
+      }),
+    ]);
+  });
+
+  it.runIf(shouldRunFirefoxBrowserTests)(
     'filters to one browser like the CLI flag and drops the other copy',
     async () => {
       const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {

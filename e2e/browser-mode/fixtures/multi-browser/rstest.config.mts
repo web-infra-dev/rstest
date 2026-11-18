@@ -12,14 +12,18 @@ export default defineConfig({
         browserName: 'chromium',
         // Per-entry overrides: the viewports must differ so the in-page
         // attribution assertion can tell the two entries apart.
-        viewport: { width: 800, height: 600 },
+        viewport: { width: 820, height: 600 },
         // CI chrome runners install the chrome channel on this entry without
         // touching the firefox launch (see ciChromeEntry/ports.ts).
-        ...ciChromeEntry(),
+        providerOptions: {
+          ...ciChromeEntry().providerOptions,
+          context: { locale: 'en-GB' },
+        },
       },
       {
         browserName: 'firefox',
         viewport: { width: 900, height: 600 },
+        providerOptions: { context: { locale: 'fr-FR' } },
       },
     ],
   },

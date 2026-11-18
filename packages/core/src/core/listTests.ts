@@ -11,6 +11,7 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './execution/globalSetup';
+import { getReportedProjects } from './browser/browserInstances';
 import {
   type BrowserGlobalSetupStageResult,
   runBrowserGlobalSetupStage,
@@ -277,14 +278,15 @@ const collectBrowserTests = async (
  */
 const collectTestFiles = (planner: TestPlanner) => {
   const { projects, entriesCache } = planner.getPlan();
-  const list: ListCommandResult[] = projects.flatMap((project) =>
-    Object.values(entriesCache.get(project.environmentName)?.entries ?? {}).map(
-      (testPath) => ({
+  const list: ListCommandResult[] = getReportedProjects(projects).flatMap(
+    ({ name, project }) =>
+      Object.values(
+        entriesCache.get(project.environmentName)?.entries ?? {},
+      ).map((testPath) => ({
         testPath,
-        project: project.name,
+        project: name,
         tests: [],
-      }),
-    ),
+      })),
   );
 
   return {
