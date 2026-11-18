@@ -56,6 +56,45 @@ describe('error helpers', () => {
     ]);
   });
 
+  it('drops rstest runtime frames whose path is URL-encoded', async () => {
+    const frames = await parseErrorStacktrace({
+      stack: [
+        'Error: Missing config file',
+        '    at readConfig (/project/src/config.ts:2:9)',
+        '    at Object.apply (/project/dist/.rstest-temp/rstest%20runtime:26:1)',
+        '    at /project/src/index.test.ts:4:5',
+      ].join('\n'),
+    });
+
+    expect(frames.map((frame) => frame.file)).toEqual([
+      '/project/src/config.ts',
+      '/project/src/index.test.ts',
+    ]);
+  });
+
+  it('source-maps a module frame in a bundle with a Windows path', async () => {
+    const [frame] = await parseErrorStacktrace({
+      stack: [
+        'Error: Missing config file',
+        '    at Object../src/server.ts (D:/project/dist/index.mjs:1:1)',
+      ].join('\n'),
+      getSourcemap: async (file) =>
+        file === 'D:/project/dist/index.mjs'
+          ? {
+              version: 3,
+              names: [],
+              sources: ['/project/src/server.ts'],
+              mappings: 'AAAA',
+            }
+          : null,
+    });
+
+    expect(frame).toMatchObject({
+      methodName: 'Object../src/server.ts',
+      file: '/project/src/server.ts',
+    });
+  });
+
   it('keeps the cause chain in toSerializedError', () => {
     const root = new TypeError('fetch failed');
     const errors = [

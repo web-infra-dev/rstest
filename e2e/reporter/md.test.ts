@@ -890,6 +890,116 @@ describe('md', () => {
     expect(normalized).toContain('unhandled async error');
   });
 
+  it('reports module load errors without rstest runtime frames', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/importError',
+        '-c',
+        './rstest.agentMd.importError.config.mts',
+      ],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            AI_AGENT: 'rstest-e2e',
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const normalized = normalizeStdout(cli.stdout);
+    expect(normalized).toMatchInlineSnapshot(`
+      "---
+      tool: "@rstest/core@<version>"
+      timestamp: "<timestamp>"
+      ---
+
+      # Rstest Test Execution Report
+
+      ## Summary
+
+      \`\`\`json
+      {
+        "status": "failed",
+        "counts": {
+          "testFiles": 1,
+          "failedFiles": 1,
+          "tests": 0,
+          "failedTests": 0,
+          "passedTests": 0,
+          "skippedTests": 0,
+          "todoTests": 0
+        },
+        "durationMs": {
+          "total": 0,
+          "build": 0,
+          "tests": 0
+        },
+        "snapshot": {
+          "added": 0,
+          "updated": 0,
+          "unmatched": 0,
+          "removed": 0,
+          "unchecked": 0
+        }
+      }
+      \`\`\`
+
+      ## Failures
+
+      ### [F01] fixtures/agent-md/importError.test.ts
+
+      details:
+
+      \`\`\`json
+      {
+        "testPath": "fixtures/agent-md/importError.test.ts",
+        "project": "rstest",
+        "fullName": "",
+        "status": "failed",
+        "retryCount": 0,
+        "errors": [
+          {
+            "type": "Error",
+            "message": "Missing config file",
+            "stackFrames": [
+              {
+                "file": "fixtures/agent-md/importError/config.ts",
+                "line": 2,
+                "column": 9,
+                "method": "readConfig"
+              },
+              {
+                "file": "fixtures/agent-md/importError/config.ts",
+                "line": 5,
+                "column": 23,
+                "method": "Object../fixtures/agent-md/importError/config.ts"
+              }
+            ]
+          }
+        ],
+        "candidateFiles": [
+          {
+            "path": "fixtures/agent-md/importError/config.ts",
+            "line": 2
+          }
+        ]
+      }
+      \`\`\`
+
+      "
+    `);
+  });
+
   it('escapes RegExp characters in the repro test name pattern', async ({
     onTestFinished,
   }) => {
