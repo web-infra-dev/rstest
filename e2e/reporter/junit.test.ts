@@ -72,7 +72,7 @@ it('junit reports the cause chain of an error', async () => {
     args: [
       'run',
       '-c',
-      './rstest.junit.errorCause.config.mts',
+      './rstest.errorCause.config.mts',
       '--reporters',
       'junit',
     ],

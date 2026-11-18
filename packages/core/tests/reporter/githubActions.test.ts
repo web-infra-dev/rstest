@@ -668,6 +668,123 @@ describe('GithubActionsReporter step summary', () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('renders the cause chain of failures and unhandled errors', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+    const summaryPath = path.join(tempDir, 'summary.md');
+    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    process.env.GITHUB_WORKSPACE = tempDir;
+
+    try {
+      const reporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+        },
+      });
+
+      await reporter.onTestRunEnd({
+        ...emptyRunEndPayload,
+        status: 'failed',
+        unhandledErrors: [
+          {
+            name: 'Error',
+            message: 'Failed to upload results',
+            cause: { name: 'TypeError', message: 'fetch failed' },
+          },
+        ],
+        testResults: [
+          {
+            testId: 'test-1',
+            status: 'failed',
+            name: 'loads the user',
+            fullName: 'loads the user',
+            testPath: path.join(tempDir, 'tests/user.test.ts'),
+            relativeTestPath: 'tests/user.test.ts',
+            project: 'rstest',
+            retryCount: 1,
+            errors: [
+              {
+                name: 'Error',
+                message: 'Failed to load user',
+                retryCount: 1,
+                cause: {
+                  name: 'AssertionError',
+                  message: 'expected 1 to be 2',
+                  diff: '- Expected\n+ Received\n\n- 2\n+ 1',
+                  cause: { message: 'connect ECONNREFUSED 127.0.0.1:5432' },
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain(
+        [
+          '**Error**:',
+          '',
+          '```text',
+          'Failed to upload results',
+          '```',
+          '',
+          '**Caused by: TypeError**:',
+          '',
+          '```text',
+          'fetch failed',
+          '```',
+        ].join('\n'),
+      );
+      expect(summary).toContain(
+        [
+          '**Retry x1 - Error**:',
+          '',
+          '```text',
+          'Failed to load user',
+          '```',
+          '',
+          '**Caused by: AssertionError**:',
+          '',
+          '```text',
+          'expected 1 to be 2',
+          '```',
+          '',
+          '```diff',
+          '- Expected',
+          '+ Received',
+          '',
+          '- 2',
+          '+ 1',
+          '```',
+          '',
+          '**Caused by: Error**:',
+          '',
+          '```text',
+          'connect ECONNREFUSED 127.0.0.1:5432',
+          '```',
+        ].join('\n'),
+      );
+    } finally {
+      if (previousSummaryPath === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY;
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+      }
+
+      if (previousWorkspacePath === undefined) {
+        delete process.env.GITHUB_WORKSPACE;
+      } else {
+        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+      }
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('GithubActionsReporter annotations', () => {
@@ -701,6 +818,48 @@ describe('GithubActionsReporter annotations', () => {
     log.mockRestore();
     expect(lines).toContain(
       '::error file=a.test.ts,line=1,col=1,title=a.test.ts > a%2C b%3A c::expected [ 1, 2 ]: 1%25\n',
+    );
+  });
+
+  it('includes the cause chain in the message', async () => {
+    const log = rs.spyOn(logger, 'log').mockImplementation(() => {});
+    const reporter = new GithubActionsReporter({
+      rootPath: os.tmpdir(),
+      options: { onWritePath: () => 'a.test.ts', summary: false },
+    });
+
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      testResults: [
+        {
+          testId: 'test-1',
+          status: 'failed',
+          name: 'loads the user',
+          fullName: 'loads the user',
+          testPath: path.join(os.tmpdir(), 'a.test.ts'),
+          relativeTestPath: 'a.test.ts',
+          project: 'rstest',
+          errors: [
+            {
+              name: 'Error',
+              message: 'Failed to load user',
+              cause: {
+                name: 'AssertionError',
+                message: 'expected 1 to be 2',
+                diff: '- Expected\n+ Received',
+                cause: { message: 'connect ECONNREFUSED 127.0.0.1:5432' },
+              },
+            },
+          ],
+        },
+      ],
+      getSourcemap: async () => null,
+    });
+
+    const lines = log.mock.calls.map(([message]) => message);
+    log.mockRestore();
+    expect(lines).toContain(
+      '::error file=a.test.ts,line=1,col=1,title=a.test.ts > loads the user::Failed to load user%0ACaused by: AssertionError: expected 1 to be 2%0A- Expected%0A+ Received%0ACaused by: Error: connect ECONNREFUSED 127.0.0.1:5432\n',
     );
   });
 });
