@@ -111,7 +111,10 @@ describe('console.assert', () => {
       ['Assertion failed: expected 3 items, got 2', 'stderr'],
       ['Assertion failed: missing { id: 1 }', 'stderr'],
       ['Assertion failed { id: 1 }', 'stderr'],
-      [expect.stringMatching(/^Assertion failed Error: boom\n {4}at /), 'stderr'],
+      [
+        expect.stringMatching(/^Assertion failed Error: boom\n {4}at /),
+        'stderr',
+      ],
       ['Assertion failed', 'stderr'],
     ]);
   });
