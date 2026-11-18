@@ -21,6 +21,8 @@ import { isError } from '../../utils/isError';
 const currentRunner = (): TestRunner => fileContext().testRunner;
 
 export type FileCleanupHooks = {
+  /** Local environment cleanup after each test attempt and suite. */
+  onTaskCleanup?: () => MaybePromise<void>;
   onFileCleanupStart?: (result?: RawTestFileResult) => MaybePromise<void>;
   onFileCleanupEnd?: () => MaybePromise<void>;
 };
@@ -64,6 +66,7 @@ export function createRunner({
     prepareTests: (testFilePath: string, hooks?: RunnerHooks) => Promise<void>;
     collectTests: () => Promise<RawTestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
+    isRunningConcurrentTests: () => boolean;
     getRootSuiteListeners: () => RootSuiteListeners;
     setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
@@ -178,6 +181,7 @@ export function createRunner({
         return tests.map(toTestInfo);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
+      isRunningConcurrentTests: () => testRunner.isRunningConcurrentTests(),
       getRootSuiteListeners: () => runtimeInstance.getRootSuiteListeners(),
       setRootSuiteListeners: (listeners) =>
         runtimeInstance.setRootSuiteListeners(listeners),

@@ -87,7 +87,8 @@ export type BrowserRpcRequest = {
    * several browsers run the same file. Set by the runner options.
    */
   browserName?: string;
-  kind: 'locator' | 'expect' | 'screenshot' | 'config' | 'keyboard';
+  kind:
+    'locator' | 'expect' | 'screenshot' | 'config' | 'keyboard' | 'viewport';
   locator: BrowserLocatorIR;
   method: string;
   args: unknown[];
@@ -165,7 +166,8 @@ export const validateBrowserRpcRequest = (
     kind !== 'expect' &&
     kind !== 'screenshot' &&
     kind !== 'config' &&
-    kind !== 'keyboard'
+    kind !== 'keyboard' &&
+    kind !== 'viewport'
   ) {
     throw new Error(
       `Invalid browser RPC request: unsupported kind ${JSON.stringify(kind)}`,

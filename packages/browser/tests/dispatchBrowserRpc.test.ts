@@ -66,6 +66,15 @@ class FakeLocator {
 }
 
 class FakePage {
+  viewport = { width: 390, height: 844 };
+  viewportCalls: { width: number; height: number }[] = [];
+  viewportSize() {
+    return this.viewport;
+  }
+  async setViewportSize(size: { width: number; height: number }) {
+    this.viewportCalls.push(size);
+    this.viewport = size;
+  }
   keyboardCalls: unknown[][] = [];
   keyboard = {
     press: async (...args: unknown[]) => {
@@ -131,6 +140,69 @@ const createRequest = (
 };
 
 describe('dispatchPlaywrightBrowserRpc', () => {
+  it('serializes viewport changes and restores the initial size once', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    const operations = [
+      createRequest({ kind: 'viewport', method: 'set', args: [800, 600] }),
+      createRequest({ kind: 'viewport', method: 'set', args: [900, 700] }),
+      createRequest({ kind: 'viewport', method: 'reset', args: [] }),
+      createRequest({ kind: 'viewport', method: 'reset', args: [] }),
+    ];
+    await Promise.all(
+      operations.map((request) =>
+        dispatchPlaywrightBrowserRpc({
+          // Partial provider fake, exercising the existing Playwright dispatch boundary.
+          runnerPage: fakePage as any,
+          request,
+          timeoutFallbackMs: 500,
+        }),
+      ),
+    );
+    expect(fakePage.viewportCalls).toEqual([
+      { width: 800, height: 600 },
+      { width: 900, height: 700 },
+      { width: 390, height: 844 },
+    ]);
+  });
+
+  it('rejects expired viewport requests before changing the page', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        // Partial provider fake.
+        runnerPage: fakePage as any,
+        request: createRequest({
+          kind: 'viewport',
+          method: 'set',
+          args: [800, 600],
+        }),
+        isRequestCurrent: () => false,
+        timeoutFallbackMs: 500,
+      }),
+    ).rejects.toThrow('inactive browser run');
+    expect(fakePage.viewportCalls).toEqual([]);
+  });
+
+  it('validates viewport arguments at the transport boundary', async () => {
+    const fakePage = new FakePage(new FakeLocator());
+    for (const args of [
+      [0, 400],
+      [400, -1],
+      [320.5, 400],
+      ['800', 600],
+    ]) {
+      await expect(
+        dispatchPlaywrightBrowserRpc({
+          // Partial provider fake.
+          runnerPage: fakePage as any,
+          request: createRequest({ kind: 'viewport', method: 'set', args }),
+          timeoutFallbackMs: 500,
+        }),
+      ).rejects.toThrow('positive integer');
+    }
+    expect(fakePage.viewportCalls).toEqual([]);
+  });
+
   it('dispatches keyboard presses without resolving a locator', async () => {
     const fakePage = new FakePage(new FakeLocator());
     fakePage.locator = () => {

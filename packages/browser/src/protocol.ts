@@ -15,6 +15,7 @@ import type {
   RawTestResult,
 } from '@rstest/core/internal/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { ViewportSize } from './viewport';
 
 export type {
   BrowserLocatorIR,
@@ -32,6 +33,13 @@ export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
 export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+export const RSTEST_VIEWPORT_EVENT = 'rstest:viewport';
+
+// The headed UI renders one project/browser pair, so a test path identifies its frame.
+export type BrowserViewportChange = {
+  testPath: string;
+  viewport?: ViewportSize;
+};
 export const NO_RPC_TIMEOUT = -1;
 
 export const DISPATCH_NAMESPACE_RUNNER = 'runner';

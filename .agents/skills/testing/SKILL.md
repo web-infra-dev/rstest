@@ -9,15 +9,31 @@ metadata:
 
 This skill owns the **mechanics**: how to run and write tests, fixtures, and builds. Whether a change needs test work is routed by the `development` skill; what counts as evidence that a change works is defined by the `verify` skill.
 
-## Validate the CI execution matrix
+## Choose the validation scope and matrix
 
-For pool, isolation, environment setup/teardown, or shared-fixture changes, derive the local validation matrix before running tests:
+Start with changed tests and tests of affected callers. A changed source file can have unchanged tests that cover its behavior, so select by execution path as well as the diff. Run the smallest set that proves the change. A full unit or e2e suite needs a concrete coverage gap or an explicit request; preparing a PR alone does not require a full local suite.
 
-- Read `.github/workflows/test.yml` and `e2e/package.json` for the Node.js versions and execution modes actually used. Include relevant combinations from main-push and release runs even when regular PR CI omits them. Testing each Node.js version in the default mode alone does not cover CommonJS output, no-isolate, or threads execution.
-- For environment compatibility, include the dependency versions declared by affected compatibility fixtures, rather than testing only the root-installed jsdom or happy-dom version. Respect each fixture's Node.js requirements and report unsupported or unavailable combinations explicitly.
-- Trace callers of every changed shared fixture or helper. Map their pool, isolation setting, and file-scoped versus worker-scoped environment lifetime. A regression that requires file-end teardown must not impose that assertion on a shared worker environment; keep an explicit no-isolate check for the shared fixture's other callers.
-- Run focused tests that cover the failure and affected callers for each applicable combination. Record the runtime and environment dependency versions, execution mode, command, test counts, and exit code. Explain exclusions instead of presenting an untested combination as covered.
-- Run combinations serially when fixtures share persistent output such as `dist/.rstest-temp/`, or give them separate checkouts. Changing the Node.js version does not isolate a shared build directory.
+Read `.github/workflows/test.yml`, `e2e/package.json`, and `e2e/rstest.config.mts` to derive applicable axes. CI lists available combinations; do not apply every axis to every test.
+
+| Changed execution path                                      | Local validation matrix                                                                                                                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node runner, pool, isolation, or Node environment lifecycle | Focused Node tests on the workflow's Node majors and applicable default, CommonJS, no-isolate, and threads modes, including relevant main-push/release coverage. Include VM pools when the affected path uses them. |
+| Browser runtime, provider, or browser UI                    | Focused browser tests on the affected browser engines and headed/headless paths. Add browser isolation/reuse or watch reruns when their lifetimes are affected.                                                     |
+| Shared core runtime used by both                            | Select affected Node and browser tests separately, then apply each runtime's matrix. Do not multiply browser tests by Node worker-pool or output-format modes.                                                      |
+
+For browser changes:
+
+- Browser tests execute in Playwright-managed pages/contexts. Outer Node `threads`, `forks`, VM pools, and CommonJS output are not browser execution modes. Repeating a browser test under those outer-runner modes adds no browser coverage unless a changed host-loading path specifically depends on them.
+- `e2e/rstest.config.mts` excludes `browser-mode/**` under outer no-isolate and threads modes. Test browser reuse through the browser fixture's own `isolate` setting or CLI argument; an outer exclusion is not a successful browser reuse check.
+- Choose Chromium, Firefox, and WebKit coverage based on engine-sensitive behavior. Native viewport, DOM, input, and provider changes can require all three; container-only UI changes can use a focused headed browser check. Exercise both headed and headless when their distinct transports or rendering paths are affected.
+- Use the primary CI Node version for browser behavior checks. Repeat across host Node majors when the changed browser host/server/loading path has Node-version compatibility risk. A shared Node runner change still needs its separate focused Node matrix.
+
+For shared lifetimes and compatibility:
+
+- Trace callers of every changed shared fixture or helper. Map their pool, isolation setting, and file-scoped versus worker-scoped lifetime. A file-end teardown assertion must not be imposed on a shared worker environment.
+- Include dependency versions declared by affected environment compatibility fixtures. Respect each fixture's Node requirements and report unsupported or unavailable combinations explicitly.
+- Record runtime, relevant environment/browser versions, mode, command, counts, and exit code. Separate Node and browser results; explain exclusions and duplicate runs.
+- Run combinations serially when fixtures share persistent output such as `dist/.rstest-temp/`, or give them separate checkouts. Changing the Node version does not isolate a shared build directory.
 
 ## Running tests
 
@@ -147,6 +163,6 @@ For performance work, compare like-for-like runs: same command/fixture/env/cache
 
 ## Validation before wrapping up
 
-- Do not stop at targeted tests only. Before finishing a code change, run the narrowest relevant tests first, then decide whether broader validation is needed.
+- Stop when the selected behavioral tests and required checks pass. Broaden testing only for an uncovered affected path, a failure, or a new change; do not repeat unchanged coverage for reassurance.
 - `pnpm run check-unused` is part of the default validation pass for code changes in this repo. Run it before wrapping up, even when focused tests already pass.
 - Treat `check-unused` failures as real regressions unless you have confirmed the reported item is an intentional temporary state.
