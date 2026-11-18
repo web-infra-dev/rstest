@@ -1,7 +1,12 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { JUnitReporter } from '../../src/reporter/junit';
 import { emptyRunEndPayload, emptyRunSummary } from './helpers';
-import type { Duration, TestFileResult, TestResult } from '../../src/types';
+import type {
+  Duration,
+  SerializedError,
+  TestFileResult,
+  TestResult,
+} from '../../src/types';
 
 describe('JUnitReporter', () => {
   it('should create JUnit XML report correctly', async () => {
@@ -307,6 +312,76 @@ describe('JUnitReporter', () => {
     expect(xml).toContain('<system-err>crashed &lt;before&gt; &amp; after');
     expect(xml).toContain('at setup.ts:1:1');
     expect(xml).not.toContain('crashed <before> & after');
+  });
+
+  it('reports the cause chain of an error', async () => {
+    const logs: string[] = [];
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    const error: SerializedError = {
+      name: 'Error',
+      message: 'Failed to load user',
+      stack:
+        'Error: Failed to load user\n    at loadUser (/test/root/user.test.ts:19:11)',
+      cause: {
+        name: 'TypeError',
+        message: 'fetch failed',
+        stack:
+          'TypeError: fetch failed\n    at request (/test/root/user.test.ts:11:11)',
+        cause: {
+          message: 'Database <connection> refused',
+          stack:
+            'Error: Database <connection> refused\n    at connect (/test/root/user.test.ts:4:9)',
+        },
+      },
+    };
+    const failedTest: TestResult = {
+      testId: 'cause-1',
+      status: 'failed',
+      name: 'loads the user',
+      fullName: 'loads the user',
+      testPath: '/test/root/user.test.ts',
+      relativeTestPath: 'user.test.ts',
+      project: 'default',
+      errors: [error],
+    };
+
+    const reporter = new JUnitReporter({ rootPath: '/test/root' });
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      status: 'failed',
+      results: [
+        {
+          testId: 'file:user.test.ts',
+          status: 'failed',
+          name: '',
+          fullName: '',
+          testPath: '/test/root/user.test.ts',
+          relativeTestPath: 'user.test.ts',
+          results: [failedTest],
+          project: 'default',
+          summary: { ...emptyRunSummary.tests, total: 1, failed: 1 },
+        },
+      ],
+      testResults: [failedTest],
+      unhandledErrors: [error],
+    });
+
+    const details = [
+      'Failed to load user',
+      'at loadUser (user.test.ts:19:11)',
+      'Caused by: TypeError: fetch failed',
+      'at request (user.test.ts:11:11)',
+      'Caused by: Error: Database &lt;connection&gt; refused',
+      'at connect (user.test.ts:4:9)',
+    ].join('\n');
+    const xml = logs.join('\n');
+    expect(xml).toContain(
+      `<failure message="Failed to load user" type="Error">${details}</failure>`,
+    );
+    expect(xml).toContain(`<system-err>${details}</system-err>`);
   });
 
   it('should escape XML special characters', async () => {

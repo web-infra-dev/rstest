@@ -95,10 +95,10 @@ export class JUnitReporter implements Reporter {
       .replace(/'/g, '&apos;');
   }
 
-  private async formatError(
+  private async formatErrorDetails(
     error: SerializedError,
     getSourcemap: GetSourcemap,
-  ): Promise<{ message: string; type: string; details: string }> {
+  ): Promise<string> {
     let details = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
     const stackFrames = error.stack
       ? await parseErrorStacktrace({
@@ -109,6 +109,18 @@ export class JUnitReporter implements Reporter {
       : [];
     if (stackFrames[0]) {
       details += `\n${formatStack(stackFrames[0], this.rootPath)}`;
+    }
+    return details;
+  }
+
+  private async formatError(
+    error: SerializedError,
+    getSourcemap: GetSourcemap,
+  ): Promise<{ message: string; type: string; details: string }> {
+    let details = await this.formatErrorDetails(error, getSourcemap);
+    for (let cause = error.cause; cause; cause = cause.cause) {
+      const causeDetails = await this.formatErrorDetails(cause, getSourcemap);
+      details += `\nCaused by: ${cause.name || 'Error'}: ${causeDetails}`;
     }
     return {
       message: this.escapeXml(error.message),
