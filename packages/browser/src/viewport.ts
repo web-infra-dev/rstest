@@ -1,7 +1,11 @@
+import type { BrowserViewport } from '@rstest/core/internal/browser';
+
+export type ViewportSize = Exclude<BrowserViewport, string>;
+
 export const parseViewportSize = (
   width: unknown,
   height: unknown,
-): { width: number; height: number } => {
+): ViewportSize => {
   if (
     typeof width !== 'number' ||
     !Number.isInteger(width) ||

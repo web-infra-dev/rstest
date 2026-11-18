@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { FrameLocator, Locator, Page } from 'playwright';
 import { PNG } from 'pngjs';
 import { RSTEST_VIEWPORT_EVENT } from '../../protocol';
-import { parseViewportSize } from '../../viewport';
+import { parseViewportSize, type ViewportSize } from '../../viewport';
 import {
   supportedScreenshotMatchers,
   supportedExpectElementMatchers,
@@ -31,10 +31,7 @@ const viewportQueues = new WeakMap<
   Page,
   ReturnType<typeof createSerialTaskQueue>
 >();
-const initialViewportByPage = new WeakMap<
-  Page,
-  { width: number; height: number }
->();
+const initialViewportByPage = new WeakMap<Page, ViewportSize>();
 
 // ---------------------------------------------------------------------------
 // Iframe lookup
@@ -609,8 +606,8 @@ export async function dispatchPlaywrightBrowserRpc({
     typeof request.timeout === 'number' ? request.timeout : timeoutFallbackMs;
   const requestDeadline = timeout > 0 ? Date.now() + timeout : undefined;
 
-  const keyboardPage = runnerPage ?? containerPage;
-  if (!keyboardPage) {
+  const targetPage = runnerPage ?? containerPage;
+  if (!targetPage) {
     throw new Error('Browser container page is not initialized');
   }
 
@@ -622,10 +619,10 @@ export async function dispatchPlaywrightBrowserRpc({
       request.method === 'set'
         ? parseViewportSize(request.args[0], request.args[1])
         : undefined;
-    let queue = viewportQueues.get(keyboardPage);
+    let queue = viewportQueues.get(targetPage);
     if (!queue) {
       queue = createSerialTaskQueue();
-      viewportQueues.set(keyboardPage, queue);
+      viewportQueues.set(targetPage, queue);
     }
     return queue.enqueue(async () => {
       if (isRequestCurrent && !isRequestCurrent()) {
@@ -653,7 +650,7 @@ export async function dispatchPlaywrightBrowserRpc({
         return;
       }
       const { iframe } = await getRunnerFrame(
-        keyboardPage,
+        targetPage,
         testPath,
         request.projectName,
         timeout,
@@ -665,6 +662,7 @@ export async function dispatchPlaywrightBrowserRpc({
         (element, { eventName, change }) => {
           window.dispatchEvent(new CustomEvent(eventName, { detail: change }));
           // Reading layout after the synchronous UI commit applies media queries before acknowledging.
+          // getRunnerFrame selects an iframe; Locator.evaluate types it as Element.
           const runner = element as HTMLIFrameElement;
           const view = runner.contentWindow;
           return { width: view?.innerWidth, height: view?.innerHeight };
@@ -673,7 +671,6 @@ export async function dispatchPlaywrightBrowserRpc({
           eventName: RSTEST_VIEWPORT_EVENT,
           change: {
             testPath,
-            projectName: request.projectName,
             viewport: size,
           },
         },
@@ -694,10 +691,10 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Keyboard method not supported: ${request.method}`);
     }
     const key = assertStringArg(request.args[0], 'keyboard.press', 'a key');
-    let queue = keyboardQueues.get(keyboardPage);
+    let queue = keyboardQueues.get(targetPage);
     if (!queue) {
       queue = createSerialTaskQueue();
-      keyboardQueues.set(keyboardPage, queue);
+      keyboardQueues.set(targetPage, queue);
     }
     return queue.enqueue(async () => {
       if (isRequestCurrent && !isRequestCurrent()) {
@@ -705,7 +702,7 @@ export async function dispatchPlaywrightBrowserRpc({
       }
       if (!runnerPage) {
         const { iframe } = await getRunnerFrame(
-          keyboardPage,
+          targetPage,
           testPath,
           request.projectName,
           timeout > 0 ? timeout : 0,
@@ -724,7 +721,7 @@ export async function dispatchPlaywrightBrowserRpc({
           return;
         }
       }
-      await keyboardPage.keyboard.press(
+      await targetPage.keyboard.press(
         key,
         // RPC arguments cross the untyped transport boundary.
         request.args[1] as Parameters<Page['keyboard']['press']>[1],
@@ -738,7 +735,7 @@ export async function dispatchPlaywrightBrowserRpc({
     locatorRoot = runnerPage;
   } else {
     headedRunner = await getRunnerFrame(
-      keyboardPage,
+      targetPage,
       testPath,
       request.projectName,
       timeout > 0 ? timeout : 0,

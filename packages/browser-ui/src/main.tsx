@@ -184,6 +184,7 @@ const BrowserRunner: React.FC<{
   useEffect(() => {
     const onViewport = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
+      // The host owns this payload; the DOM event type does not describe its shape.
       const { testPath, viewport } = event.detail as BrowserViewportChange;
       flushSync(() => {
         setTestViewports((previous) => {

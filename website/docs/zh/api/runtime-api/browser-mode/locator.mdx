@@ -69,9 +69,9 @@ test('uses the tablet layout', async () => {
 });
 ```
 
-Rstest 会在每次测试执行结束后恢复初始视口，包括重试（`retry`）和重复执行（`repeats`）。恢复会等到失败截图、`afterEach`、fixture 清理、`onTestFinished` 和 `onTestFailed` 回调完成后再执行。尺寸没有变化时，无需恢复。
+Rstest 会在每次测试执行结束后恢复初始视口，包括重试（`retry`）和重复执行（`repeats`）。恢复会等到失败截图、`afterEach`、fixture 清理、`onTestFinished` 和 `onTestFailed` 回调完成后再执行。没有修改视口的测试会跳过恢复。
 
-headless 模式会恢复当前浏览器实例的初始视口尺寸。headed 模式会恢复 UI 原先选择的视口模式和尺寸。在 `afterAll` 或 `beforeAll` 返回的清理函数中修改视口，也会在这组测试结束后恢复。
+headless 模式会恢复当前浏览器实例的初始视口尺寸。headed 模式会恢复 UI 原先选择的视口模式。在 `afterAll` 或 `beforeAll` 返回的清理函数中修改视口，也会在这组测试结束后恢复。
 
 要让一组测试使用相同尺寸，可以配置 [`browser.viewport`](/config/test/browser#viewport)，或在 `beforeEach` 中调用 `page.viewport()`。在 `beforeAll` 中设置的尺寸会在第一次测试执行结束后恢复，之后的重试、重复执行和其他测试不会自动沿用这个尺寸。
 

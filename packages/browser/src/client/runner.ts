@@ -888,14 +888,16 @@ const run = async () => {
 
       let viewportRestoreFailed = false;
       const runnerHooks: RunnerHooks & FileCleanupHooks = {
-        onTaskCleanup: () =>
-          resetViewport()?.catch((error: unknown) => {
+        onTaskCleanup: () => {
+          if (viewportRestoreFailed) return;
+          return resetViewport()?.catch((error: unknown) => {
             viewportRestoreFailed = true;
             throw new Error(
               `Failed to restore the browser viewport after a test. ${error instanceof Error ? error.message : String(error)}`,
               { cause: error },
             );
-          }),
+          });
+        },
         onFileCleanupStart: async (result) => {
           if (result && globalThis.__coverage__) {
             result.coverage = globalThis.__coverage__ as CoverageMapData;

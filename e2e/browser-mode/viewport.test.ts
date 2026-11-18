@@ -77,21 +77,24 @@ describe('browser mode - viewport', () => {
 
   it('ends the file if restoring its viewport fails', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('viewport', {
-      args: ['--config', 'rstest.restore-error.config.mts'],
+      args: ['--include', 'restore-error/**/*.test.ts'],
     });
     await expectExecFailed();
     expect(cli.log).toContain(
       'Failed to restore the browser viewport after a test.',
     );
-    expect(cli.log).toContain('VIEWPORT_RESTORE_REJECTED');
+    expect(cli.log).toContain('VIEWPORT_RESTORE_REJECTED_1');
+    expect(cli.stdout.match(/^VIEWPORT_RESTORE_ATTEMPT \d+$/gm)).toEqual([
+      'VIEWPORT_RESTORE_ATTEMPT 1',
+    ]);
     expect(cli.log).not.toContain('VIEWPORT_CONTAMINATED_TEST_RAN');
   });
 
   it('ends the file if a pending viewport request blocks cleanup', async () => {
     const { cli, expectExecFailed } = await runBrowserCli('viewport', {
       args: [
-        '--config',
-        'rstest.restore-error.config.mts',
+        '--include',
+        'restore-error/**/*.test.ts',
         '--testNamePattern',
         'pending viewport request|contaminated viewport',
       ],
@@ -108,8 +111,10 @@ describe('browser mode - viewport', () => {
       : [true]) {
       const { cli, expectExecFailed } = await runBrowserCli('viewport', {
         args: [
-          '--config',
-          'rstest.failure.config.mts',
+          '--include',
+          'failures/**/*.test.ts',
+          '--browser.screenshotFailures',
+          'true',
           '--browser.headless',
           String(headless),
         ],

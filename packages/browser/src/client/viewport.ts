@@ -1,10 +1,10 @@
 import { getRealTimers } from '@rstest/core/internal/browser-runtime';
 import { createSerialTaskQueue } from '../serialTaskQueue';
-import { parseViewportSize } from '../viewport';
+import { parseViewportSize, type ViewportSize } from '../viewport';
 import { callBrowserRpc } from './browserRpc';
 import { getRpcTimeout, setRpcPhase } from './dispatchTransport';
 
-let originalViewport: { width: number; height: number } | undefined;
+let originalViewport: ViewportSize | undefined;
 const viewportQueue = createSerialTaskQueue();
 let pendingViewportChanges = 0;
 let isRunningConcurrentTests: (() => boolean) | undefined;
@@ -66,7 +66,9 @@ export const viewport = async (
         width: window.innerWidth,
         height: window.innerHeight,
       };
+      // A headed reset restores the UI mode, whose dimensions may have changed.
       if (
+        window.parent === window &&
         width === originalViewport.width &&
         height === originalViewport.height
       ) {

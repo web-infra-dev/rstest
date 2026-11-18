@@ -69,9 +69,9 @@ test('uses the tablet layout', async () => {
 });
 ```
 
-Rstest restores the initial viewport every time a test finishes, including retries (`retry`) and repeats (`repeats`). Restoration waits for failure screenshots, `afterEach`, fixture cleanup, and the `onTestFinished` and `onTestFailed` callbacks to complete. An unchanged viewport needs no restoration.
+Rstest restores the initial viewport every time a test finishes, including retries (`retry`) and repeats (`repeats`). Restoration waits for failure screenshots, `afterEach`, fixture cleanup, and the `onTestFinished` and `onTestFailed` callbacks to complete. Tests that do not resize the viewport skip restoration.
 
-Headless runs restore the browser instance's initial viewport size. Headed runs restore the UI's previous viewport mode and dimensions. Changes made in `afterAll` or a cleanup function returned by `beforeAll` are restored when that group of tests finishes.
+Headless runs restore the browser instance's initial viewport size. Headed runs restore the UI's previous viewport mode. Changes made in `afterAll` or a cleanup function returned by `beforeAll` are restored when that group of tests finishes.
 
 To use the same size for a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test execution. Later retries, repeats, and other tests do not automatically keep that size.
 

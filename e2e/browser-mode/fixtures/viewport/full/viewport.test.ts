@@ -9,6 +9,24 @@ test('resizes a viewport without an explicit size', async () => {
   expect(window.innerHeight).toBe(400);
 });
 
+test.skipIf(!window.frameElement)(
+  'applies explicit dimensions after the headed panel changes',
+  async () => {
+    const container = window.frameElement?.parentElement?.parentElement;
+    if (!container) throw new Error('Expected a headed viewport container.');
+    const originalWidth = container.style.width;
+    try {
+      await page.viewport(600, 400);
+      container.style.width = `${initial.width - 40}px`;
+      await page.viewport(initial.width, initial.height);
+      expect(window.innerWidth).toBe(initial.width);
+      expect(window.innerHeight).toBe(initial.height);
+    } finally {
+      container.style.width = originalWidth;
+    }
+  },
+);
+
 test.concurrent('rejects concurrent viewport changes', async () => {
   await expect(page.viewport(600, 400)).rejects.toThrow('concurrent tests');
 });
