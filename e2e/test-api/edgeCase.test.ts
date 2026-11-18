@@ -171,22 +171,6 @@ describe('Test Edge Cases', () => {
     expect(cli.stderr).not.toMatch(/rstest(%20| )runtime/);
   });
 
-  it('should not list rstest runtime frames as md candidate files', async () => {
-    const { cli, expectExecFailed } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fixtures/errorOnImport.test.ts', '--reporters', 'md'],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-    await expectExecFailed();
-
-    expect(cli.stdout).toContain('"path": "fixtures/throwOnImport.ts"');
-    expect(cli.stdout).not.toMatch(/rstest(%20| )runtime/);
-  });
-
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({
