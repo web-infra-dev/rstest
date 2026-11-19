@@ -64,6 +64,41 @@ describe('loadTestEnvironmentModule', () => {
     });
   });
 
+  it('skips the jsdom runtime probe when the marker file already exists', async () => {
+    await withTempDir('rstest-env-probe-marker-', async (root) => {
+      const resolvedPath = writeModule(
+        root,
+        'resolved.mjs',
+        createJSDOMModule('export class JSDOM { static source = "resolved" }'),
+      );
+      const bundlePath = writeModule(
+        root,
+        'bundle.mjs',
+        createJSDOMModule(`export class JSDOM {
+          static source = "bundle";
+          constructor() {
+            throw new Error("should not instantiate JSDOM when probe-ok exists");
+          }
+        }`),
+      );
+      fs.writeFileSync(`${bundlePath}.probe-ok`, '');
+
+      const loaded = await loadTestEnvironmentModule({
+        name: 'jsdom',
+        packageName: 'jsdom',
+        resolvedPath,
+        bundlePath,
+      });
+
+      if (loaded?.name !== 'jsdom') {
+        throw new Error('Expected the jsdom dependency.');
+      }
+      expect(
+        (loaded.module.JSDOM as unknown as { source: string }).source,
+      ).toBe('bundle');
+    });
+  });
+
   it('falls back when the jsdom bundle fails its runtime probe', async () => {
     await withTempDir('rstest-env-probe-fallback-', async (root) => {
       const resolvedPath = writeModule(
