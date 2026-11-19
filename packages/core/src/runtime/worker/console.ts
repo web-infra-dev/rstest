@@ -13,7 +13,6 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  */
-import { AssertionError, strict as assert } from 'node:assert';
 import { Console } from 'node:console';
 import { Writable } from 'node:stream';
 import {
@@ -79,12 +78,16 @@ export function createCustomConsole({
 }): Console {
   const getConsoleTrace = () => {
     const limit = Error.stackTraceLimit;
-    Error.stackTraceLimit = 4;
+    // Node's own `console.table` and `console.trace` reach `log` and `error`
+    // through internal frames, which push their caller further down
+    Error.stackTraceLimit = 8;
     const stack = new Error('STACK_TRACE').stack;
-    const trace = stack?.split('\n').slice(4).join('\n');
     Error.stackTraceLimit = limit;
 
-    return trace;
+    return stack
+      ?.split('\n')
+      .slice(4)
+      .find((frame) => !frame.includes('node:internal/console/'));
   };
 
   /**
@@ -119,20 +122,22 @@ export function createCustomConsole({
       });
     }
 
-    override assert(value: unknown, message?: string | Error): asserts value {
-      try {
-        assert(value, message);
-      } catch (error) {
-        if (!(error instanceof AssertionError)) {
-          throw error;
-        }
-        // https://github.com/jestjs/jest/pull/13422#issuecomment-1273396392
-        this._log(
-          'assert',
-          error.toString().replaceAll(/:\n\n.*\n/gs, ''),
-          'stderr',
-        );
-      }
+    /**
+     * Prints as the console spec says, like Node 22 and later: a string first
+     * argument follows `Assertion failed: ` and keeps its format placeholders,
+     * and any other value follows `Assertion failed`.
+     */
+    override assert(value?: unknown, ...data: unknown[]): void {
+      if (value) return;
+
+      const [first, ...rest] = data;
+      this._log(
+        'assert',
+        typeof first === 'string'
+          ? format(`Assertion failed: ${first}`, ...rest)
+          : format('Assertion failed', ...data),
+        'stderr',
+      );
     }
 
     override count(label = 'default'): void {

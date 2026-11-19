@@ -994,6 +994,40 @@ describe('md', () => {
     expect(normalized).toContain('unhandled async error');
   });
 
+  it('omits bundler runtime frames and candidate files', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/bundlerFrames',
+        '-c',
+        './rstest.agentMd.importError.config.mts',
+      ],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: { AI_AGENT: 'rstest-e2e' },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain('Missing config file');
+    expect(cli.stdout).toContain(
+      '"file": "fixtures/agent-md/importError/config.ts"',
+    );
+    expect(cli.stdout).toContain(
+      '"path": "fixtures/agent-md/importError/config.ts"',
+    );
+    expect(cli.stdout).not.toContain('dist/.rstest-temp');
+    expect(cli.stdout).not.toContain('requireModule');
+  });
+
   it('reports module load errors without rstest runtime frames', async ({
     onTestFinished,
   }) => {

@@ -2,12 +2,10 @@ import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import {
   loadSourceMapWithCache,
   normalizeJavaScriptUrl,
-  type SourceMapPayload,
 } from '../sourceMap/sourceMapLoader';
 
 // Source map cache: JS URL → TraceMap
 const sourceMapCache = new Map<string, TraceMap | null>();
-const sourceMapPayloadCache = new Map<string, SourceMapPayload | null>();
 
 /**
  * Get TraceMap for specified URL (sync cache lookup)
@@ -17,35 +15,20 @@ const getSourceMap = (url: string): TraceMap | null => {
 };
 
 /**
- * Preload source map for specified JS URL.
- * First tries to extract inline source map from JS code,
- * then falls back to fetching external .map file.
- *
- * @param jsUrl - The URL of the JS file
- * @param force - If true, bypass cache and always fetch fresh source map
+ * Markers whose presence in a test chunk means inline snapshot assertions
+ * may run in it: `@vitest/snapshot`'s `_resolveInlineStack` walks the frames
+ * below its `__INLINE_SNAPSHOT__` marker, and those frames live in the test
+ * file's own chunk. Chunks without these markers never need their source
+ * map client-side, so the `.map` fetch and `TraceMap` build are skipped.
  */
-const preloadSourceMap = async (
-  jsUrl: string,
-  force = false,
-): Promise<void> => {
-  const normalizedUrl = normalizeJavaScriptUrl(jsUrl, {
-    origin: window.location.origin,
-  });
-  if (!normalizedUrl) {
-    return;
-  }
+const INLINE_SNAPSHOT_MARKERS = [
+  'toMatchInlineSnapshot',
+  'toThrowErrorMatchingInlineSnapshot',
+  '__INLINE_SNAPSHOT',
+];
 
-  if (!force && sourceMapCache.has(normalizedUrl)) return;
-
-  const sourceMap = await loadSourceMapWithCache({
-    jsUrl: normalizedUrl,
-    cache: sourceMapPayloadCache,
-    force,
-    origin: window.location.origin,
-  });
-
-  sourceMapCache.set(normalizedUrl, sourceMap ? new TraceMap(sourceMap) : null);
-};
+const mayContainInlineSnapshots = (code: string): boolean =>
+  INLINE_SNAPSHOT_MARKERS.some((marker) => code.includes(marker));
 
 /**
  * Get all script URLs currently on the page.
@@ -86,29 +69,37 @@ export const findNewScriptUrl = (
 /**
  * Preload source map for a test file's chunk URL.
  *
- * Always fetches fresh source map to handle file changes during watch mode.
+ * Always fetches fresh source map to handle file changes during watch mode,
+ * but only when the chunk actually contains inline snapshot calls: the chunk
+ * code is fetched either way (it is also where an inline source map would
+ * live), while the `.map` request and `TraceMap` build are conditional.
  *
  * @param chunkUrl - The full URL of the chunk JS file
  */
 export const preloadTestFileSourceMap = async (
   chunkUrl: string,
 ): Promise<void> => {
-  // Always force refresh to ensure we have the latest source map
-  // This handles the case where user saves file during test execution
-  await preloadSourceMap(chunkUrl, true);
-};
+  const normalizedUrl = normalizeJavaScriptUrl(chunkUrl, {
+    origin: window.location.origin,
+  });
+  if (!normalizedUrl) {
+    return;
+  }
 
-/**
- * Preload source map for the runner.js file.
- *
- * This is essential for inline snapshot support because the snapshot code
- * runs in runner.js (which contains @rstest/core/internal/browser-runtime).
- * Without this, stack traces from inline snapshots cannot be mapped back
- * to the original source files.
- */
-export const preloadRunnerSourceMap = async (): Promise<void> => {
-  const runnerUrl = `${window.location.origin}/static/js/runner.js`;
-  await preloadSourceMap(runnerUrl);
+  // Client-side stack mapping only serves inline snapshots (see
+  // `mayContainInlineSnapshots`): skip the external `.map` for chunks without
+  // those markers. `force` makes the cache write-only, so a throwaway Map
+  // keeps the payload — possibly with `sourcesContent` — from outliving the
+  // call.
+  const sourceMap = await loadSourceMapWithCache({
+    jsUrl: normalizedUrl,
+    cache: new Map(),
+    force: true,
+    origin: window.location.origin,
+    shouldFetchExternalMap: mayContainInlineSnapshots,
+  });
+
+  sourceMapCache.set(normalizedUrl, sourceMap ? new TraceMap(sourceMap) : null);
 };
 
 /**

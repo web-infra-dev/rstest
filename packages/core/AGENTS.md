@@ -103,6 +103,7 @@ Contracts between modules or processes — not readable from any single file.
 - Live-binding contract: under `isolate: false` one worker runs many files while user modules persist, so every injected API member is built once with a stable identity and resolves the running file's `FileContext` at call time — never as a per-file closure.
 - A new `Rstest` API member → add to `globalApiList` (compile-enforced exhaustiveness) and export a forwarder in `src/runtime/api/public.ts`.
 - A new `RunnerHooks` callback → forward it in `runInPool`'s hooks object and in the browser client entry (`packages/browser/src/client/runner.ts`), which builds its own hooks.
+- The worker boot path is a separate build lib: `src/runtime/worker/index.ts` bundles its whole static graph into one chunk, and anything conditionally used is reached through `worker-fake-timers.cjs` / `worker-source-map-support.cjs` required from `dist` on first use. The worker-only loader variants (`src/runtime/api/fakeTimersLoader.node.ts`, `src/runtime/api/snapshotLoader.worker.ts`) are selected by `resolve.alias` in `rstack.config.mts`; the browser runtime keeps loading its own default `.ts` variants as lazy chunks. Renaming any of these files, the `__RSTEST_WORKER_BUILD__` define, or the required `.cjs` paths needs the build config and the runtime require sites changed together.
 
 ### Reporters (`src/reporter`)
 
@@ -137,6 +138,6 @@ pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 
 - Don't bypass the worker pool for test execution
 - Don't use `console.log` directly; use the logger utilities (sole sanctioned exception: `NonTTYProgressNotifier`'s progress output)
-- Don't call timer globals (`setTimeout` etc.) directly in `src/runtime/` — user tests may enable fake timers; use `getRealTimers()` from `runtime/util` (lint-enforced via `no-restricted-syntax`)
+- Don't call timer globals (`setTimeout` etc.) directly in `src/runtime/` — user tests may enable fake timers; use `getRealTimers()` from `runtime/realTimers` (lint-enforced via `no-restricted-syntax`)
 - Don't fan runner lifecycle events out to reporters or `stateManager` directly; route them through `RunnerEventSink`
 - Don't add a `RuntimeConfig` field without declaring its node/browser disposition in `executorCapabilities`

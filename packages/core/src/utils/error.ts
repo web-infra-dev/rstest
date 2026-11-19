@@ -221,12 +221,11 @@ export const stackIgnores: RegExp[] = [
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,
   /(^|\/)node:/,
-  /webpack\/runtime/,
+  /(?:webpack|rspack)[\\/]runtime/,
+  /(?:^|[\\/])(?:webpack|rspack)[\\/](?:bootstrap|startup)$/,
   // Source maps list the runtime module as a URL, so a frame mapped to it
   // points at `rstest%20runtime`.
   /rstest(?: |%20)runtime/,
-  // windows path
-  /webpack\\runtime/,
   /<anonymous>/,
 ];
 

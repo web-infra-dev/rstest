@@ -1,9 +1,9 @@
-import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { Context } from 'node:vm';
 import { isMainThread, threadId } from 'node:worker_threads';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { normalize } from 'pathe';
-import { install } from 'source-map-support';
 import type {
   AssetFiles,
   MaybePromise,
@@ -23,25 +23,30 @@ import {
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { isVmPoolType } from '../../utils/workers';
-import {
-  formatTestError,
-  formatTestErrors,
-  getRealNow,
-  getRealTimers,
-  setRealTimers,
-} from '../util';
+import { getRealNow, getRealTimers, setRealTimers } from '../realTimers';
+import { formatTestError, formatTestErrors } from '../util';
 import { clearFileContext } from '../fileContext';
 import { withPackageExports } from '../api/packageExports';
 import { disposeRstestUtilities } from '../api/utilities';
+import { createRstestRuntime } from '../api';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { takeFileCleanups } from '../runner/fileCleanup';
 import { runSetupFiles } from '../runner/setup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { applyRuntimeColors } from './color';
+import { createCustomConsole } from './console';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
+import { createLazyPrepareStackTrace } from './lazyPrepareStackTrace';
+import {
+  clearCompilationCache as clearEsModuleCompilationCache,
+  clearModuleCache as clearEsModuleCache,
+  getLoadedAssetFiles as getLoadedEsModuleAssetFiles,
+  loadModule as loadEsModule,
+  wrapperLength as esModuleWrapperLength,
+} from './loadEsModule';
 import { PhaseTracker } from './phaseTracker';
 import { loadTaskAssets } from './vm/assetCache';
 import { disableVmCompilationCache } from './vm/compilationCache';
@@ -61,6 +66,14 @@ import type { TaskContext } from './taskContext';
 import { loadVmExternalModules } from './vm/externalModulesLoader';
 import { workerCache } from './vm/cache';
 
+// The ESM loader's surface used by the loader-agnostic call sites, assembled
+// from named imports so both `outputModule` branches return the same shape.
+const esmLoader = {
+  clearModuleCache: clearEsModuleCache,
+  getLoadedAssetFiles: getLoadedEsModuleAssetFiles,
+  wrapperLength: esModuleWrapperLength,
+};
+
 let sourceMaps: Record<string, string> = {};
 let currentEnvironmentBundle: { path: string; url: string } | undefined;
 
@@ -72,33 +85,47 @@ let currentEnvironmentBundle: { path: string; url: string } | undefined;
 // child_process and keep the real `process.pid`.
 const tracePid = isMainThread ? undefined : process.pid * 1_000_000 + threadId;
 
-// provides source map support for stack traces
-install({
-  environment: 'node',
-  handleUncaughtExceptions: false,
-  retrieveSourceMap: (source) => {
-    if (sourceMaps[source]) {
-      return {
-        url: source,
-        map: JSON.parse(sourceMaps[source]),
-      };
-    }
-    // Stack frames may identify the same ESM file as either a filesystem path
-    // or a file URL, and source-map-support passes that value through unchanged.
-    if (
-      source === currentEnvironmentBundle?.path ||
-      source === currentEnvironmentBundle?.url
-    ) {
-      // Environment bundles are built without sourcemaps. Returning null would
-      // let source-map-support read and scan the entire bundle on first use.
-      return {
-        url: source,
-        map: { version: 3, sources: [], names: [], mappings: '' },
-      };
-    }
-    return null;
-  },
-});
+// Source map support is installed on the first formatted stack trace, so a
+// run that never formats one does not load `worker-source-map-support.cjs`.
+// Running outside the worker build (e.g. `src/` unit tests) resolves the
+// package itself instead.
+const workerRequire = createRequire(import.meta.url);
+const installSourceMapSupport = () => {
+  const { install } = (
+    typeof __RSTEST_WORKER_BUILD__ !== 'undefined' && __RSTEST_WORKER_BUILD__
+      ? workerRequire('./worker-source-map-support.cjs')
+      : workerRequire('source-map-support')
+  ) as Pick<typeof import('source-map-support'), 'install'>;
+  install({
+    environment: 'node',
+    handleUncaughtExceptions: false,
+    retrieveSourceMap: (source) => {
+      if (sourceMaps[source]) {
+        return {
+          url: source,
+          map: JSON.parse(sourceMaps[source]),
+        };
+      }
+      // Stack frames may identify the same ESM file as either a filesystem path
+      // or a file URL, and source-map-support passes that value through unchanged.
+      if (
+        source === currentEnvironmentBundle?.path ||
+        source === currentEnvironmentBundle?.url
+      ) {
+        // Environment bundles are built without sourcemaps. Returning null would
+        // let source-map-support read and scan the entire bundle on first use.
+        return {
+          url: source,
+          map: { version: 3, sources: [], names: [], mappings: '' },
+        };
+      }
+      return null;
+    },
+  });
+  return Error.prepareStackTrace;
+};
+
+Error.prepareStackTrace = createLazyPrepareStackTrace(installSourceMapSupport);
 
 /**
  * Restores task-scoped global mutations at the next task boundary for regular
@@ -434,8 +461,6 @@ const preparePool = async (
     });
 
     if (shouldInterceptConsole) {
-      const { createCustomConsole } = await import('./console');
-
       // Keep a minimal internal interception path when `silent` is enabled.
       // In `disableConsoleIntercept + silent` mode, logs are buffered in the
       // worker first and later replayed to the original worker streams according
@@ -483,8 +508,6 @@ const preparePool = async (
       testPath,
       environment: 'node',
     };
-
-    const { createRstestRuntime } = await import('../api');
 
     const unhandledErrors: Error[] = [];
 
@@ -653,9 +676,11 @@ const loadFiles = async ({
   runtimeGlobal: Record<string, unknown>;
   tracker?: PhaseTracker;
 }): Promise<void> => {
-  const { loadModule } = outputModule
-    ? await import('./loadEsModule')
-    : await import('./loadModule');
+  // The ESM loader is part of the worker entry graph; only the CJS loader is
+  // still loaded on demand.
+  const loadModule = outputModule
+    ? loadEsModule
+    : (await import('./loadModule')).loadModule;
 
   // A reused worker can hold several projects' runtime chunks at once, so pass
   // the current entry path to every self-scoped cleaner. Only its
@@ -773,7 +798,7 @@ export const runInPool = async (
 
   const importLoader = () =>
     options.context.outputModule
-      ? import('./loadEsModule')
+      ? Promise.resolve(esmLoader)
       : import('./loadModule');
 
   // Keeping the runtime chunk is correct within one compile, but a watch rebuild
@@ -788,11 +813,8 @@ export const runInPool = async (
   const buildChanged = lastBuildId !== undefined && lastBuildId !== buildId;
   if (buildChanged) {
     workerCache.clear();
-    const [esmLoader, cjsLoader] = await Promise.all([
-      import('./loadEsModule'),
-      import('./loadModule'),
-    ]);
-    esmLoader.clearCompilationCache();
+    const cjsLoader = await import('./loadModule');
+    clearEsModuleCompilationCache();
     cjsLoader.clearCompilationCache();
     if (isVmPool) {
       const { clearVmExternalCompilationCache } = await loadVmExternalModules();

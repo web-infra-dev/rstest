@@ -103,6 +103,19 @@ describe('Test Edge Cases', () => {
     expectStderrLog('at hiddenFrame (node:internal/rstest_hidden:20:6)');
   });
 
+  it('should keep a user Error.prepareStackTrace wrapper', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorStackWrapper.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
   it('should print the cause of an error', async () => {
     const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',

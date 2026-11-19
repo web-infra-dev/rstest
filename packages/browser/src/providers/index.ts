@@ -41,6 +41,8 @@ export type BrowserProviderPage = {
   goto: (url: string, options?: { waitUntil?: 'load' }) => Promise<unknown>;
   exposeFunction: (name: string, fn: (...args: any[]) => any) => Promise<void>;
   addInitScript: (script: string) => Promise<void>;
+  /** Evaluates an expression string in the page's main frame. */
+  evaluate: (pageFunction: string) => Promise<unknown>;
   on: {
     (event: 'popup', listener: (page: BrowserProviderPage) => void): void;
     (

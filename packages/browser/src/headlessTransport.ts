@@ -6,7 +6,7 @@ import type {
 import { DISPATCH_MESSAGE_TYPE, DISPATCH_RPC_BRIDGE_NAME } from './protocol';
 import type { BrowserProviderPage } from './providers';
 
-type HeadlessRunnerTransportHandlers = {
+export type HeadlessRunnerTransportHandlers = {
   // The envelope's `runId` is ignored here: headless identity is the
   // host-injected `runToken` bound at this transport attachment.
   onDispatchMessage: (envelope: RunnerEnvelope) => Promise<void>;

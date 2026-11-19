@@ -2,6 +2,34 @@ import { runInNewContext } from 'node:vm';
 import { setRealTimers } from '../../../src/runtime/util';
 import { createUtilities } from './helpers';
 
+describe('fake timers API before useFakeTimers', () => {
+  beforeEach(() => {
+    setRealTimers();
+  });
+
+  it('does not report fake timers as enabled', async () => {
+    const rs = await createUtilities();
+
+    expect(rs.isFakeTimers()).toBe(false);
+  });
+
+  it('throws from getTimerCount', async () => {
+    const rs = await createUtilities();
+
+    expect(() => rs.getTimerCount()).toThrow(
+      'Timers are not mocked. Try calling "rstest.useFakeTimers()" first.',
+    );
+  });
+
+  it('keeps clearAllTimers and useRealTimers safe', async () => {
+    const rs = await createUtilities();
+
+    expect(() => rs.clearAllTimers()).not.toThrow();
+    expect(() => rs.useRealTimers()).not.toThrow();
+    expect(rs.isFakeTimers()).toBe(false);
+  });
+});
+
 describe('fake timers API', () => {
   beforeEach(() => {
     setRealTimers();
