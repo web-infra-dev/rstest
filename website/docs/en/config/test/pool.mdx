@@ -55,7 +55,7 @@ Configure the worker pool Rstest uses to run tests, including isolation, concurr
 
 Start with the default `forks` pool. It introduces the fewest execution restrictions of the four pools and offers broader compatibility with Node.js APIs and native addons. The default [`isolate: true`](/config/test/isolate) also gives each test file a separate process, preventing process-level state from persisting between files and containing native crashes within the child process.
 
-If performance does not meet your expectations, first identify where the time is spent. The `rstest-debugging` skill can help; see [Profiling](/guide/debug/profiling) for installation and analysis guidance. If worker startup or module loading is the bottleneck, consider these options:
+If performance does not meet your expectations, first identify where the time is spent—see [Profiling](/guide/debug/profiling) for analysis guidance. If worker startup or module loading is the bottleneck, consider these options:
 
 | Scenario                                                              | Pool to try | Check before switching                                                               |
 | --------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |

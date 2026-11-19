@@ -4,27 +4,25 @@ description: Migration guide for moving from Jest to Rstest.
 
 # Migrating from Jest
 
-Rstest is designed to be Jest-compatible, making migration from Jest projects straightforward. Here's how to migrate your Jest project to Rstest:
+Rstest provides Jest-compatible test, assertion, and mock APIs. Follow this guide to migrate a Jest project to Rstest:
 
 ## Using Agent Skills
 
-If you are using a Coding Agent that supports Skills, install the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill to help with the upgrade process from Jest to Rstest.
+If you are using a Coding Agent that supports Skills, install the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill to assist with migrating from Jest to Rstest:
 
 ```bash
 npx skills add rstackjs/agent-skills --skill migrate-to-rstest
 ```
 
-After installation, let the Coding Agent guide you through the upgrade.
-
 ## Installation and setup
 
-First, you need to install Rstest as a development dependency.
+Install `@rstest/core` as a development dependency:
 
 import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/core -D" />
 
-Next, update the test script in your `package.json` to use [rstest](/guide/basic/cli) instead of `jest`. For example:
+Update the test script in `package.json` to run [rstest](/guide/basic/cli) instead of `jest`:
 
 ```diff
 "scripts": {
@@ -37,20 +35,20 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 
 Some Jest CLI flags map directly to Rstest, while others move into config. Use this table for the common option differences you are likely to hit during migration:
 
-| Jest CLI option                          | Rstest equivalent                                 | Notes                                                                                                             |
-| ---------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `jest`                                   | `rstest`                                          |                                                                                                                   |
-| `jest --watch`                           | `rstest --watch` or `rstest watch`                |                                                                                                                   |
-| `jest --watchAll`                        | `rstest --watch` or `rstest watch`                | Rstest does not distinguish between `--watch` and `--watchAll`.                                                   |
-| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                      |                                                                                                                   |
-| `jest --maxWorkers=50%` or `jest -w 50%` | `rstest --pool.maxWorkers 50%`                    | Rstest's `-w` means `--watch`, not `--maxWorkers`.                                                                |
-| `jest --selectProjects app`              | `rstest --project app`                            |                                                                                                                   |
-| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                  |                                                                                                                   |
-| `jest --forceExit`                       | `rstest --teardownTimeout 0`                      | Rstest exits immediately after teardown functions and reporters finish.                                           |
-| `jest --openHandlesTimeout=5000`         | `rstest --teardownTimeout 5000`                   | Rstest force exits after the timeout; Jest only prints a warning.                                                 |
-| `jest --coverage`                        | `rstest --coverage`                               | Also install the provider package that matches your config: `@rstest/coverage-istanbul` or `@rstest/coverage-v8`. |
-| `jest --coverageDirectory=coverage`      | `coverage.reportsDirectory` in `rstest.config.ts` |                                                                                                                   |
-| `jest --coverageProvider=v8`             | `coverage.provider: 'v8'`                         | Install `@rstest/coverage-v8` and configure the provider in `rstest.config.ts`.                                   |
+| Jest CLI option                          | Rstest equivalent                             | Notes                                                                                                             |
+| ---------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `jest`                                   | `rstest`                                      |                                                                                                                   |
+| `jest --watch`                           | `rstest --watch` or `rstest watch`            |                                                                                                                   |
+| `jest --watchAll`                        | `rstest --watch` or `rstest watch`            | Rstest does not distinguish between `--watch` and `--watchAll`.                                                   |
+| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                  |                                                                                                                   |
+| `jest --maxWorkers=50%` or `jest -w 50%` | `rstest --pool.maxWorkers 50%`                | Rstest's `-w` means `--watch`, not `--maxWorkers`.                                                                |
+| `jest --selectProjects app`              | `rstest --project app`                        |                                                                                                                   |
+| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`              |                                                                                                                   |
+| `jest --forceExit`                       | `rstest --teardownTimeout 0`                  | Rstest exits immediately after teardown functions and reporters finish.                                           |
+| `jest --openHandlesTimeout=5000`         | `rstest --teardownTimeout 5000`               | Rstest force exits after the timeout; Jest only prints a warning.                                                 |
+| `jest --coverage`                        | `rstest --coverage`                           | Also install the provider package that matches your config: `@rstest/coverage-istanbul` or `@rstest/coverage-v8`. |
+| `jest --coverageDirectory=coverage`      | `rstest --coverage.reportsDirectory coverage` | Or set `coverage.reportsDirectory` in `rstest.config.ts`.                                                         |
+| `jest --coverageProvider=v8`             | `rstest --coverage.provider v8`               | Install `@rstest/coverage-v8`, or set `coverage.provider: 'v8'` in `rstest.config.ts`.                            |
 
 ## Configuration migration
 
@@ -187,7 +185,7 @@ This configuration addresses the `development` export difference; it does not re
 
 ### Code transformation
 
-Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
+Unlike Jest's `babel-jest`, Rstest transforms code with SWC by default. Most projects need no extra transform config; customize SWC options through [tools.swc](/config/build/tools#toolsswc) when needed.
 
 Jest itself gets module resolution and transformation from `moduleNameMapper` and `transform`, rather than from `tsconfig.json`. If you use `ts-jest`, do not assume that its TypeScript transform settings carry over: Rstest automatically applies `compilerOptions.paths` for resolution, while transformation settings, such as decorator syntax or output-target requirements, should be reviewed and configured through Rstest when needed. An adapter can inherit or infer additional settings, so refer to the documentation for the [adapter you use](/guide/advanced/adapters). See [source.tsconfigPath](/config/build/source#sourcetsconfigpath).
 
@@ -204,7 +202,7 @@ export default {
 }
 ```
 
-However, if you have custom Babel configurations or use specific Babel plugins/presets, you can add [Rsbuild's Babel Plugin](https://rsbuild.rs/plugins/list/plugin-babel):
+If you use custom Babel plugins or presets, add [Rsbuild's Babel plugin](https://rsbuild.rs/plugins/list/plugin-babel):
 
 ```ts title='rstest.config.ts'
 import { pluginBabel } from '@rsbuild/plugin-babel';
@@ -237,14 +235,14 @@ See [Environment variables](/api/runtime-api/environment-variables) for the full
 
 ### Test API
 
-Your existing Jest test files should work with minimal changes since Rstest provides Jest-compatible APIs. Simply update your imports from Jest to Rstest:
+Update your test API imports from `@jest/globals` to `@rstest/core`:
 
 ```diff
 - import { describe, expect, it, test } from '@jest/globals';
 + import { describe, expect, it, test, rs } from '@rstest/core';
 ```
 
-Rstest provides an `rs` API that you can use to access Rstest's utilities, such as `rs.fn()` and `rs.mock()`. The longer `rstest` helper remains available as an alias. More utilities can be found in the [Rstest APIs](/api/runtime-api/).
+Replace `jest.<api>` calls with `rs.<api>` (or its longer alias `rstest`). See [Rstest APIs](/api/runtime-api/) for the full list.
 
 ```diff
 - const fn = jest.fn();
@@ -257,12 +255,44 @@ fn.mockResolvedValue('foo');
 
 Jest automatically uses a manual mock such as `__mocks__/zustand.ts` in the project root when a test imports `zustand`. To use the same file in Rstest, call `rs.mock('zustand')` in the test file. To apply the mock to every test file, register it once in a file listed in [`setupFiles`](/config/test/setup-files).
 
-```ts title='rstest.setup.ts'
+```ts title="rstest.setup.ts"
 import { rs } from '@rstest/core';
 
 rs.mock('zustand');
 ```
 
+### Loading actual modules (`requireActual`)
+
+In Jest, `jest.requireActual()` synchronously loads the unmocked implementation both inside `jest.mock()` factories and inside tests. In Rstest, choose the helper based on where and how the module is loaded:
+
+- **Inside a hoisted `rs.mock()` factory (ESM):** `rs.mock()` factories must be synchronous. Load the unmocked module with a static `import` using `with { rstest: 'importActual' }` and spread its exports:
+
+```diff
++ import * as actualUtils from './utils' with { rstest: 'importActual' };
++
+- jest.mock('./utils', () => ({
+-   ...jest.requireActual('./utils'),
+-   formatDate: jest.fn(() => '2024-01-01'),
+- }));
++ rs.mock('./utils', () => ({
++   ...actualUtils,
++   formatDate: rs.fn(() => '2024-01-01'),
++ }));
+```
+
+- **Inside an async test or helper (ESM):** Use [`rs.importActual`](/api/runtime-api/rstest/mock-modules#rsimportactual) (`await rs.importActual('./utils')`).
+- **CommonJS modules loaded with `require()`:** Use [`rs.requireActual`](/api/runtime-api/rstest/mock-modules#rsrequireactual) (`rs.requireActual('./utils.cjs')`). It runs synchronously and throws if the dependency graph uses top-level `await`.
+
+### Fake timers
+
+Replace `jest.useFakeTimers()` and `jest.useRealTimers()` with [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) and [`rs.useRealTimers()`](/api/runtime-api/rstest/fake-timers#rsuserealtimers). Rstest forwards options directly to `@sinonjs/fake-timers` (`toNotFake`, `toFake`, `now`, `shouldAdvanceTime`, `advanceTimeDelta`), so rename Jest's `doNotFake` and `advanceTimers` options:
+
+```diff
+- jest.useFakeTimers({ doNotFake: ['setImmediate'], advanceTimers: true });
++ rs.useFakeTimers({ toNotFake: ['setImmediate'], shouldAdvanceTime: true });
+```
+
+`rs.useFakeTimers()` also returns a `Disposable`, so `using _timers = rs.useFakeTimers()` restores real timers automatically when the scope exits.
 ### Virtual module mocks
 
 When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:
@@ -305,16 +335,16 @@ If you need to handle errors, you can modify it as follows:
 
 Rstest runs `afterEach` and `afterAll` hooks in reverse declaration order by default. Set [`sequence.hooks: 'list'`](/config/test/sequence) to run hooks within each suite in declaration order, matching Jest. This matters when one library's cleanup must run before another, such as unmounting components before resetting stores.
 
-The return functions of the `beforeEach` and `beforeAll` hooks in Rstest are used to perform cleaning work after testing.
+When `beforeEach` or `beforeAll` returns a function, Rstest registers it as a cleanup callback to run after the test or suite. Unlike Jest, which ignores hook return values, an arrow function with an implicit return such as `beforeEach(() => doSomething())` runs the returned value during teardown if `doSomething()` returns a function. Wrap the body in braces so nothing is returned:
 
 ```diff
 - beforeEach(() => doSomething());
-+ beforeEach(() => { doSomething() });
++ beforeEach(() => { doSomething(); });
 ```
 
 ### Timeout
 
-If you used `jest.setTimeout()` to set the timeout for a test, you can use `rs.setConfig()` instead.
+Replace `jest.setTimeout()` with `rs.setConfig()`:
 
 ```diff
 - jest.setTimeout(5_000)
@@ -327,7 +357,7 @@ Rstest snapshots use a different key format than Jest. Existing Jest snapshot fi
 
 ### Key separator change
 
-Jest joins the suite name, test name, and snapshot label with `:`. Rstest uses `>`:
+Jest separates the suite name and test name with a space and appends the snapshot label after `: `. Rstest joins all three with `>`:
 
 ```diff
 - overlay should not show a warning when "client.overlay.warnings" is "false": page html 1
@@ -360,9 +390,9 @@ Most snapshot churn after migration is non-functional:
 
 ## ESM and CJS
 
-Rstest supports ESM by default. If your project is using ESM, you don't need to perform any extra configuration, such as setting `NODE_OPTIONS=--experimental-vm-modules`.
+Rstest supports ESM by default. ESM projects require no extra configuration such as `NODE_OPTIONS=--experimental-vm-modules`.
 
-If your project is using CommonJS, Rstest still works, but it is recommended to migrate to ESM for better performance and future compatibility.
+CommonJS projects also work, though migrating to ESM gives better performance and future compatibility.
 
 ### ESM vs CJS mocking
 

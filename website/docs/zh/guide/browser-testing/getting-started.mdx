@@ -18,14 +18,11 @@ import { PackageManagerTabs } from '@theme';
 
 运行命令后，Rstest 会自动完成以下工作：
 
-1. **生成样板代码**：Rstest 会自动嗅探项目的框架（例如 React 等）、语言（例如 TypeScript 或 JavaScript）、测试目录（例如常见的 `tests/`、`test/`、`__tests__/` 等目录，实际以嗅探结果为准）和包管理器，然后生成示例组件和测试文件，方便你快速上手。生成的文件会根据嗅探结果调整：
-   - 测试目录：文件生成在嗅探到的测试目录下
-   - 框架：React 项目生成 JSX 组件测试，否则生成原生 DOM 操作示例
-   - 语言：TypeScript 项目生成 `.ts`/`.tsx` 文件，否则生成 `.js`/`.jsx` 文件
+1. **生成样板代码**：Rstest 会自动嗅探项目的框架（React 或原生 DOM）、语言（通过 `tsconfig.json` 判断 TypeScript 或 JavaScript）、测试目录（按 `tests/`、`test/`、`__tests__/`、`src/__tests__/` 顺序检测，默认 `tests/`）和包管理器，并在检测到的测试目录下生成示例组件和测试文件。
 
-2. **创建配置文件**：在项目根目录创建 `rstest.browser.config.ts`，包含启用浏览器模式的基本配置。
+2. **创建配置文件**：在项目根目录创建 `rstest.browser.config.mts`，默认启用浏览器模式。
 
-3. **更新 package.json**：添加 `test:browser` 脚本。
+3. **更新 `package.json`**：添加 `test:browser` 脚本（`rstest --config=rstest.browser.config.mts`），并将 `@rstest/browser`、`playwright` 和 `@testing-library/dom`（React 项目还会加入 `@rstest/browser-react`）写入 `devDependencies`。
 
 以下是 React 项目的初始化输出示例：
 
@@ -38,7 +35,7 @@ Set up Rstest browser mode
   ✓ Test directory: tests/
 
   Created files:
-    - rstest.browser.config.ts
+    - rstest.browser.config.mts
     - tests/Counter.jsx
     - tests/Counter.test.jsx
     - Updated package.json
@@ -53,10 +50,10 @@ Set up Rstest browser mode
 
 ### 后续步骤
 
-初始化完成后，按照输出中的 "Next steps" 提示操作即可：安装项目依赖、安装浏览器驱动，然后运行测试。
+按输出中的提示安装依赖、下载 Playwright 浏览器二进制文件，然后运行浏览器测试。
 
 :::tip 非交互式环境
-在 CI 或其他非交互式环境中，可以添加 `--yes` 参数跳过所有提示，直接使用嗅探到的配置：
+在 CI 或其他非交互式环境中，添加 `--yes` 参数跳过所有提示，直接使用嗅探到的默认配置：
 
 ```bash
 npx @rstest/core init browser --yes
@@ -68,17 +65,17 @@ npx @rstest/core init browser --yes
 
 ### 1. 安装依赖
 
-首先，安装 Rstest 核心包和浏览器模式支持包：
+安装 `@rstest/core`（测试运行器）、`@rstest/browser`（浏览器模式运行时）和 `playwright`（浏览器驱动 peer dependency）：
 
-<PackageManagerTabs command="add @rstest/core @rstest/browser -D" />
+<PackageManagerTabs command="add @rstest/core @rstest/browser playwright -D" />
 
-浏览器模式需要 Playwright 作为浏览器驱动，请安装对应的浏览器：
+下载用于运行测试的 Playwright 浏览器二进制文件：
 
 ```bash
 npx playwright install chromium
 ```
 
-你也可以安装其他浏览器：
+也可以安装 Firefox、WebKit 或全部浏览器：
 
 ```bash
 # 安装 Firefox
@@ -135,22 +132,6 @@ test('counter increments on click', async () => {
 
 这个示例使用 `page.getByRole()` 按语义角色定位按钮，通过 `click()` 触发交互，再用 `expect.element().toBeVisible()` 断言结果。断言会自动等待元素状态变化，无需手写轮询。
 
-### 4. 运行测试
-
-```bash
-npx rstest
-```
-
-你应该看到类似以下的输出：
-
-```bash
- ✓ src/dom.test.ts (2)
-
- Test Files 1 passed
-      Tests 2 passed
-   Duration 1.2s
-```
-
 ## headless vs headed 模式
 
 默认情况下，浏览器模式会根据环境自动选择运行方式：
@@ -182,6 +163,6 @@ export default defineConfig({
 
 ## 下一步
 
-- [浏览器交互](/guide/browser-testing/user-interactions#locator-api) - 使用 `page` + `expect.element` 编写语义化定位与断言
-- [框架集成](/guide/browser-testing/framework-guides) - 各框架的完整配置和组件测试示例
-- [用户交互](/guide/browser-testing/user-interactions) - 模拟用户操作
+- [浏览器交互](/guide/browser-testing/user-interactions) - 使用 Locator API、Testing Library 或原生 DOM API 模拟用户交互
+- [框架集成](/guide/browser-testing/framework-guides) - React 与 Vanilla JS/TS 的配置和组件测试示例
+- [浏览器模式 API](/api/runtime-api/browser-mode/) - `page`、`Locator`、`expect.element` 和 `@rstest/browser-react` 的 API 参考

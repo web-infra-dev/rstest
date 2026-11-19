@@ -1,5 +1,5 @@
 ---
-description: Custom handler for console log in tests, which is helpful for filtering out logs from third-party libraries.
+description: Filter or intercept console output emitted during tests before it is printed.
 ---
 
 # onConsoleLog
@@ -7,9 +7,9 @@ description: Custom handler for console log in tests, which is helpful for filte
 - **Type:** `(content: string, type: 'stdout' | 'stderr') => boolean | void`
 - **Default:** `undefined`
 
-Custom handler for console log in tests, which is helpful for filtering out logs from third-party libraries.
+Intercept `console` output emitted during tests before Rstest prints it. Return `false` to suppress the log; return `true` or `undefined` to print it as usual.
 
-The handler receives the log `content` along with its `type` (`'stdout'` or `'stderr'`), so you can filter by stream as well as by text. If you return `false`, Rstest will not print the log to the console.
+This is a global option set in the root config and cannot be overridden per project in [`projects`](/config/test/projects).
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -23,17 +23,8 @@ export default defineConfig({
 });
 ```
 
+To hide all test console output or only show logs from failed tests without writing a custom filter, use [`silent`](/config/test/silent).
+
 :::note
-When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `onConsoleLog` will not take effect.
+When [`disableConsoleIntercept`](/config/test/disable-console-intercept) is `true`, `onConsoleLog` has no effect. Logs discarded by `silent` are also not passed to `onConsoleLog`.
 :::
-
-## Silencing console logs
-
-You can silence console logs by returning `false` in the `onConsoleLog` handler.
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-export default defineConfig({
-  onConsoleLog: () => false,
-});
-```

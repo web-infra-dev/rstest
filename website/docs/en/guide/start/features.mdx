@@ -16,7 +16,7 @@ Optimizations such as [lazyBarrel](https://rspack.rs/guide/advanced/lazy-barrel)
 
 ## Reuse existing build setup
 
-Reuse existing Rsbuild, Rslib, or Rspack configuration through [adapters](/guide/advanced/adapters), including aliases, transforms, and plugins. This reduces duplicate configuration and helps keep tests aligned with your application or library's build setup.
+Reuse existing Rsbuild, Rslib, or Rspack configurations through [adapters](/guide/advanced/adapters), including aliases, transforms, and plugins. This avoids duplicating configuration and keeps test builds aligned with your application or library build.
 
 See [Configuring Rstest](/guide/basic/configure-rstest) and [Configuring SWC](/guide/basic/configure-rstest#configure-swc).
 
@@ -26,27 +26,27 @@ Run tests in the default Node.js environment, simulate the DOM for component tes
 
 ### DOM testing
 
-Rstest can simulate the DOM and browser APIs with jsdom or happy-dom. It supports common framework testing workflows for React and Vue, and works with Testing Library and CSS Modules.
+Rstest can simulate the DOM and browser APIs with jsdom or happy-dom. It supports React and Vue testing workflows, Testing Library, and CSS Modules.
 
 Learn more about [DOM testing](/config/test/test-environment#dom-testing).
 
 ### Browser mode
 
-Rstest provides Browser Mode for tests that need a real browser instead of a simulated environment such as jsdom or happy-dom. This helps validate browser APIs, rendering behavior, and interactions that are difficult to cover in DOM simulators.
+Rstest provides Browser Mode for tests that need a real browser instead of jsdom or happy-dom, letting you verify browser APIs, rendering behavior, and interactions that DOM simulators do not cover.
 
-Browser Mode is powered by [Playwright](https://playwright.dev/) and can run tests in Chromium, Firefox, and WebKit, making it suitable for cross-browser verification.
+Browser Mode runs on [Playwright](https://playwright.dev/) and supports Chromium, Firefox, and WebKit for cross-browser verification.
 
 Learn more about [Browser mode](/guide/browser-testing).
 
 ### Playwright-driven E2E tests
 
-Rstest can run E2E tests against a complete page or app with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright). Tests run in Node.js workers and use Playwright to drive a local dev server, preview server, or deployed URL while sharing the same Rstest runner, configuration, and reporting workflow as other tests.
+Rstest runs E2E tests against a complete page or app with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright). Tests execute in Node.js workers and use Playwright to drive a local dev server, preview server, or deployed URL while sharing the same runner, configuration, and reporters as other tests.
 
 Learn more about [E2E testing](/guide/basic/e2e-testing).
 
 ### Test Module Federation applications
 
-Rstest can load real [Module Federation](https://module-federation.io/) remotes in Node, JSDOM, and Browser Mode tests. With [@module-federation/rstest](https://github.com/module-federation/core), tests exercise remote loading and shared dependencies instead of replacing the federation boundary with mocks.
+Rstest loads real [Module Federation](https://module-federation.io/) remotes in Node, JSDOM, and Browser Mode tests. With [@module-federation/rstest](https://github.com/module-federation/core), tests exercise remote loading and shared dependencies instead of mocking the federation boundary.
 
 Learn more about [Module Federation testing](/guide/advanced/module-federation).
 
@@ -54,7 +54,7 @@ Learn more about [Module Federation testing](/guide/advanced/module-federation).
 
 ### Watch mode
 
-When you modify a test file or one of its dependencies, Rstest analyzes the module graph and only reruns the affected test files. This keeps local feedback fast as the test suite grows.
+When a test file or one of its dependencies changes, Rstest analyzes the module graph and reruns only the affected test files, keeping local feedback fast as the test suite grows.
 
 ### VM mode
 
@@ -62,13 +62,13 @@ When you modify a test file or one of its dependencies, Rstest analyzes the modu
 
 For suites where worker startup and dependency compilation take a large share of the runtime, VM mode offers `vmForks` and `vmThreads` pools. They reuse child processes or worker threads while creating a fresh `vm.Context`, module graph, and test environment for each test file.
 
-VM pools can reduce repeated startup and compilation work. Setup files and module evaluation still run for every file, and process-level state is not isolated by the VM context. Start with the default `forks` pool and check VM compatibility before switching.
+VM pools reduce repeated startup and compilation work. Setup files and module evaluation still run for every file, and process-level state is not isolated by the VM context. Start with the default `forks` pool and check VM compatibility before switching.
 
 See [Choosing a pool](/config/test/pool) for configuration, memory recycling, and compatibility details.
 
 ### In-source tests
 
-Rstest supports a Rust-like module testing style that lets you write test blocks directly inside source files. It works well for small utilities and helpers where keeping fast checks next to the implementation makes development easier.
+Rstest supports a Rust-like module testing style that lets you write test blocks directly inside source files, keeping quick checks next to small utilities and helpers.
 
 Learn more about [In-source tests](/config/test/include-source).
 
@@ -76,13 +76,13 @@ Learn more about [In-source tests](/config/test/include-source).
 
 ### Multi-project testing
 
-Rstest can run multiple test projects in one process, with each project keeping its own configuration and environment. This is useful for monorepos, multi-app workspaces, and projects that need separate Node, DOM, or Browser Mode test targets.
+Rstest runs multiple test projects in one process, each with its own configuration and environment. This fits monorepos, multi-app workspaces, and suites that separate Node, DOM, and Browser Mode targets.
 
 Learn more about [Test projects](/guide/basic/projects).
 
 ### Test sharding
 
-Rstest can split test files into shards for parallel execution. In CI, you can distribute the same test suite across multiple machines to reduce total runtime, then use the `blob` reporter and `rstest merge-reports` to merge test results and coverage data after all shards complete.
+Rstest splits test files into shards for parallel execution across CI machines, then merges test results and coverage data with the `blob` reporter and `rstest merge-reports` once all shards finish.
 
 Learn more about [Test sharding](/guide/basic/cli#sharding-tests).
 

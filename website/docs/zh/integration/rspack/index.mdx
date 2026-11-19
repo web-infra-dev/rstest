@@ -1,5 +1,5 @@
 ---
-description: 本指南介绍如何在 Rspack 项目中集成 Rstest，并复用已有的 Rspack 构建配置。
+description: 在 Rspack 项目中集成 Rstest，并复用兼容的 Rspack 编译选项。
 ---
 
 import { PackageManagerTabs } from '@theme';
@@ -16,7 +16,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## 复用 Rspack 配置
 
-[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) 会读取 Rspack 配置，并将兼容的选项转换到 Rstest test compiler。
+[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) 会读取 Rspack 配置，并将兼容的选项转换为 Rstest 测试编译器配置。
 
 ### 安装适配器
 
@@ -33,13 +33,13 @@ export default defineConfig({
 });
 ```
 
-适配器会读取 `rspack.config.ts`，将兼容的 compiler 选项与生成的测试构建合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此当该配置发生变化时，`--changed` 会运行完整测试套件。
+适配器会按顺序查找 `rspack.config.{js,ts,mjs,mts,cjs,cts}`（优先 `.js`），将兼容的编译器选项与生成的测试构建合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)——当该配置发生变化时，`--changed` 会运行完整测试套件；如果未找到配置文件，则返回 `{}`。同时，适配器会移除 Rsbuild 内置的 CSS 插件（`rsbuild:css`、`rsbuild:less`、`rsbuild:sass`），让你的 Rspack CSS 规则和 loader 直接生效。
 
 :::warning
-使用此适配器时，部分 Rsbuild 专属 CSS 选项（例如 `output.cssModules`）不可用。
+由于移除了 Rsbuild 内置的 CSS 插件，使用此适配器时，部分 Rsbuild 专属 CSS 选项（例如 `output.cssModules`）不可用，请在 Rspack 配置中处理 CSS。
 :::
 
-如果默认的 Rspack 配置不适合当前项目，可以使用 `cwd`、`configPath`、`configName` 或 environment 相关选项。选项详情、映射规则和调试方法请查看[配置参考](./reference)。
+如果默认的 Rspack 配置与当前项目不匹配，可以通过 `cwd`、`configPath`、`configName`、`env` 或 `nodeEnv` 指定加载方式。如果内存中已有 Rspack 配置对象，可以使用 `toRstestConfig` 直接转换。两种入口、选项详情、映射规则和调试方法请查看[配置参考](./reference)。
 
 ## 示例项目
 

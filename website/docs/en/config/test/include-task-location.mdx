@@ -1,5 +1,5 @@
 ---
-description: Whether to include the location information of tests when collecting test information.
+description: Include line and column location for tests and suites in reporter payloads and list output.
 ---
 
 # includeTaskLocation
@@ -8,11 +8,9 @@ description: Whether to include the location information of tests when collectin
 - **Default:** `false`
 - **CLI:** `--includeTaskLocation`
 
-Whether to include the location information of tests when collecting test information.
+Include `location` (`{ line, column }`) on collected test cases and suites in reporter payloads (`TestCaseInfo`, `TestSuiteInfo`) and `list` output.
 
-When enabled, this configuration adds line and column number information to test cases and suites. This is useful for debugging and when reporters need to collect test information.
-
-Note that enabling this configuration may slightly decrease test execution performance.
+Enabling this option adds stack-capture overhead during test collection and may slightly slow down runs.
 
 import { Tab, Tabs } from '@theme';
 
@@ -35,17 +33,15 @@ export default defineConfig({
 
 ## Using with the list command
 
-The `includeTaskLocation` option is particularly useful when used with the `list` command, especially when you want to see the exact location of tests:
+Pass `--printLocation` to `rstest list` to enable `includeTaskLocation` automatically and print `file:line:column` beside each test:
 
 ```bash
 npx rstest list --printLocation
 ```
 
-This will automatically enable `includeTaskLocation` and display the location information for each test case.
-
 ## Example output
 
-With `includeTaskLocation` enabled, reporters and the `list` command will include location information:
+With `includeTaskLocation: true`, reporter `TestCaseInfo` and `TestSuiteInfo` objects include a `location` field:
 
 ```json
 {

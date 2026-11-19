@@ -10,12 +10,12 @@ import { ApiMeta } from '@components/ApiMeta';
 ## output.module <RsbuildDocBadge path="/config/output/module" text="output.module" />
 
 - **Type:** `boolean`
-- **Default:** `true`
+- **Default:** `true` (`false` when [`federation`](/config/test/federation) is `true`; overridden by `RSTEST_OUTPUT_MODULE=false` when unset)
 - **CLI:** `--output.module`
 
-Whether to output JavaScript files in ES module format.
+Controls whether Rstest outputs JavaScript test bundles in ES module format.
 
-Rstest outputs and executes test code in ES module format by default. If you want to output test code in CommonJS format, you can enable it through the following configuration:
+By default, Rstest emits and executes test bundles as ES modules. Setting `federation: true` forces this option to `false`. To output CommonJS bundles directly, set `output.module` to `false`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -27,14 +27,14 @@ export default defineConfig({
 });
 ```
 
-### Commonjs interop
+### CommonJS interop \{#commonjs-interop}
 
-When you output JavaScript files in ES module format (`output.module: true`), Rstest will determine the type of external based on how the dependency is imported:
+When `output.module` is `true`, Rstest infers the external type from the import syntax:
 
-- Dependencies imported via `import` syntax will be treated as ES module type externals.
-- Dependencies imported via `require` syntax will be treated as CommonJS externals.
+- Dependencies imported with `import` are treated as ESM externals.
+- Dependencies imported with `require` are treated as CommonJS externals.
 
-When you import CommonJS modules using the `import` syntax, Rstest will attempt interop handling, allowing you to import CommonJS module exports normally using `import` syntax. The following code works correctly in Rstest:
+When importing a CommonJS module with `import` syntax, Rstest applies interop so named and default exports work for modules like this:
 
 ```ts title="cjs-module"
 Object.defineProperty(exports, '__esModule', { value: true });
@@ -52,7 +52,7 @@ exports.default = () => {
 import defaultExport, { a } from 'cjs-module';
 ```
 
-However, this interop handling does not always work perfectly, depending on the way the CommonJS module exports its content. Currently, Rstest does not support interop CommonJS module default exports as named exports.
+However, Rstest cannot interop properties attached to a `module.exports` function as named ESM imports:
 
 ```ts
 function lodash(_value) {}
@@ -66,7 +66,7 @@ module.exports = lodash;
 import { VERSION } from 'lodash'; // ❌
 ```
 
-If you encounter issues during usage, you can specify the external type of a dependency as CommonJS through [specifying external type](#specify-external-type).
+In that case, explicitly mark the dependency as CommonJS via [specifying external type](#specify-external-type):
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -82,14 +82,15 @@ export default defineConfig({
 
 ## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
 
-Prevent some `import` dependencies from being packed into bundles in your code, and instead Rstest will `import` them at runtime.
+- **Type:** `Rspack.Externals`
+- **Default:** `undefined`
 
-- In the Node.js test environment, Rstest will bundle and transpile the following files by default:
-  - Any TypeScript and JSX files in any directory, with file extensions `.ts`, `.tsx`, `.jsx`, `.mts`, `.cts`.
-  - JavaScript files outside the `node_modules` directory, with file extensions `.js`, `.mjs`, `.cjs`.
-- In the browser-like (jsdom, etc) test environment, all packages are bundled by default.
+Prevents specified dependencies from being bundled so Rstest resolves them at runtime instead.
 
-If you want a dependency to be externalized, you can configure it in `output.externals`.
+- In the `node` test environment, Rstest bundles TypeScript/JSX files (`.ts`, `.tsx`, `.jsx`, `.mts`, `.cts`) and non-`node_modules` JavaScript files (`.js`, `.mjs`, `.cjs`), and externalizes `node_modules` dependencies by default.
+- In browser-like environments (`jsdom`, `happy-dom`), all packages are bundled by default.
+
+To externalize a specific dependency, add it to `output.externals`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -101,16 +102,14 @@ export default defineConfig({
 });
 ```
 
-If you want all dependencies to be bundled, you can configure it through the following configuration:
+To bundle all third-party dependencies instead of externalizing them, set [`output.bundleDependencies`](#outputbundledependencies) to `true`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  tools: {
-    rspack: (config) => {
-      config.externals = [];
-    },
+  output: {
+    bundleDependencies: true,
   },
 });
 ```
@@ -259,7 +258,10 @@ export default defineConfig({
 
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
-For custom CSS Modules configuration.
+- **Type:** `CSSModules`
+- **Default:** `{}`
+
+Customizes CSS Modules behavior (such as `auto`, `localIdentName`, `namedExport`, and `exportLocalsConvention`) using Rsbuild's CSS Modules options.
 
 ## output.emitAssets <RsbuildDocBadge path="/config/output/emit-assets" text="output.emitAssets" />
 
@@ -271,13 +273,9 @@ For custom CSS Modules configuration.
 
 Controls whether imported static assets such as images, fonts, audio, and video are emitted as build assets during test builds.
 
-Rstest forwards this option to the underlying Rsbuild pipeline and follows the same behavior as Rsbuild. When `output.emitAssets` is `true`, imported asset modules are emitted into the build output file system. When it is `false`, those asset files are not emitted.
+When `true`, imported asset modules are emitted into the build output file system; when `false`, they are not emitted. Emitted assets are written to disk only when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled or when running with `DEBUG` output enabled; otherwise they remain in the temporary in-memory output.
 
-In Rstest, emitted assets are written to disk only when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled or when you run with DEBUG output enabled. Otherwise, they stay in the temporary in-memory output used by the test build.
-
-This option is mainly useful when you want Rstest to match an existing Rsbuild setup, or when your tests do not need to validate emitted static assets.
-
-If you are already reusing your Rsbuild config through [@rstest/adapter-rsbuild](/integration/rsbuild), `output.emitAssets` is inherited automatically.
+If you reuse an Rsbuild config through [@rstest/adapter-rsbuild](/integration/rsbuild), `output.emitAssets` is inherited automatically.
 
 ## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
 
@@ -286,13 +284,13 @@ If you are already reusing your Rsbuild config through [@rstest/adapter-rsbuild]
 - **Type:** `string | { root?: string }`
 - **Default:** `{ root: 'dist/.rstest-temp' }`
 
-Control the global root directory where Rstest places its temporary build outputs.
+Sets the global root directory for Rstest's temporary build outputs.
 
-By default, Rstest does not write test temporary files to disk. When you enable the [dev.writeToDisk](/config/build/dev#devwritetodisk) option or run in DEBUG mode, Rstest will write temporary artifacts to disk, outputting them to the `dist/.rstest-temp` directory. This includes compiled artifacts used by the Node.js test runtime, as well as temporary resources generated in browser mode such as runner files and virtual manifests.
+By default, Rstest keeps temporary build files in memory. When [dev.writeToDisk](/config/build/dev#devwritetodisk) or `DEBUG` mode is enabled, Rstest writes temporary artifacts under `dist/.rstest-temp` (including compiled Node.js test bundles and Browser Mode runner files and virtual manifests).
 
-In multi-project runs, Rstest still uses one global output root. It may create subdirectories under that root for different projects, but the base directory itself is shared and does not switch to each project's `root`.
+In multi-project runs, Rstest uses a single global output root and creates per-project subdirectories under it rather than switching to each project's `root`.
 
-If you want these files to go to another directory, set `output.distPath.root`:
+To change the temporary output directory, set `output.distPath.root`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -309,12 +307,14 @@ export default defineConfig({
 });
 ```
 
-After this change, rstest will use `<root>/custom/.rstest-temp` as the temporary output root instead of `<root>/dist/.rstest-temp`.
+With this config, Rstest uses `<root>/custom/.rstest-temp` instead of `<root>/dist/.rstest-temp`.
 
 ## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
 
+- **Type:** `boolean | 'auto' | { enable?: boolean | 'auto'; keep?: RegExp[] }`
+- **Default:** `'auto'`
 - **CLI:** `--output.cleanDistPath`
 
-Whether to clean up all test temporary files under the output directory before the test starts.
+Controls whether to clean temporary files in the output directory before tests start.
 
-By default, rstest does not write test temporary files to disk, and this configuration item may be required when you debug rstest outputs.
+By default, Rstest does not write temporary test files to disk, so this mainly applies when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled.

@@ -16,7 +16,7 @@ Rstest 使用 Rspack 根据依赖图打包测试，通过其内置的 SWC loader
 
 ## 复用现有构建配置 \{#reuse-existing-build-setup}
 
-通过 [adapters](/guide/advanced/adapters) 复用已有的 Rsbuild、Rslib 或 Rspack 配置，包括别名、代码转换和插件，减少重复配置，让测试与应用或库的构建配置保持一致。
+通过 [adapters](/guide/advanced/adapters) 复用已有的 Rsbuild、Rslib 或 Rspack 配置，包括别名、代码转换和插件，减少重复配置，让测试构建与应用或库的构建配置保持一致。
 
 参阅 [配置 Rstest](/guide/basic/configure-rstest) 和 [配置 SWC](/guide/basic/configure-rstest#配置-swc)。
 
@@ -26,13 +26,13 @@ Rstest 使用 Rspack 根据依赖图打包测试，通过其内置的 SWC loader
 
 ### DOM 测试 \{#dom-testing}
 
-Rstest 可以通过 jsdom 或 happy-dom 模拟 DOM 与浏览器 API。它支持 React、Vue 等常见框架测试流程，并兼容 Testing Library 和 CSS Modules。
+Rstest 可以通过 jsdom 或 happy-dom 模拟 DOM 与浏览器 API，支持 React、Vue 测试流程，并兼容 Testing Library 和 CSS Modules。
 
 了解更多关于 [DOM 测试](/config/test/test-environment#dom-测试)。
 
 ### 浏览器模式（Browser mode） \{#browser-mode}
 
-Rstest 提供 Browser Mode，适用于需要真实浏览器、而不是 jsdom 或 happy-dom 这类模拟环境的测试。它可以帮助你验证浏览器 API、渲染行为，以及 DOM 模拟器难以覆盖的交互。
+Rstest 提供 Browser Mode，适用于需要真实浏览器、而不是 jsdom 或 happy-dom 这类模拟环境的测试，用来验证浏览器 API、渲染行为以及 DOM 模拟器难以覆盖的交互。
 
 Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromium、Firefox 和 WebKit 中执行测试，适合跨浏览器验证。
 
@@ -40,13 +40,13 @@ Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromi
 
 ### Playwright 驱动的 E2E 测试 \{#playwright-driven-e2e-tests}
 
-Rstest 可以通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 对完整页面或应用运行 E2E 测试。测试会在 Node.js worker 中运行，并使用 Playwright 驱动本地 dev server、preview server 或线上 URL，同时与其他测试共享 Rstest runner、配置和报告工作流。
+Rstest 可以通过 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 对完整页面或应用运行 E2E 测试。测试会在 Node.js worker 中运行，并使用 Playwright 驱动本地 dev server、preview server 或已部署的 URL，同时与其他测试共享 Rstest runner、配置和报告工作流。
 
 了解更多关于 [E2E 测试](/guide/basic/e2e-testing)。
 
 ### 测试模块联邦应用 \{#test-module-federation-applications}
 
-Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的[模块联邦](https://module-federation.io/)生产者。配合 [@module-federation/rstest](https://github.com/module-federation/core)，测试会实际覆盖远程模块加载和共享依赖，而不是使用 mock 替换联邦边界。
+Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的 [Module Federation](https://module-federation.io/) 远程模块（remote）。配合 [@module-federation/rstest](https://github.com/module-federation/core)，测试会实际覆盖远程模块加载和共享依赖，而不是使用 mock 替换联邦边界。
 
 了解更多关于 [模块联邦测试](/guide/advanced/module-federation)。
 
@@ -54,7 +54,7 @@ Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的[模块�
 
 ### Watch 模式 \{#watch-mode}
 
-当你修改测试文件或其依赖模块时，Rstest 会基于模块图分析，仅重新运行受影响的测试文件。随着测试规模增长，这可以让本地反馈保持快速。
+修改测试文件或其依赖模块时，Rstest 会分析模块图，仅重新运行受影响的测试文件，在测试规模增长后仍能保持较快的本地反馈。
 
 ### VM 模式 \{#vm-mode}
 
@@ -68,7 +68,7 @@ VM pool 可以减少重复启动和编译的开销，但 setup 文件和模块�
 
 ### 源码内联测试 \{#in-source-tests}
 
-Rstest 支持类 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)风格，可以在源码文件中直接编写测试块。对于小型工具函数和 helper，将快速检查放在实现旁边会让开发更顺手。
+Rstest 支持类 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)风格，可以在源码文件中直接编写测试块，适合将小型工具函数和 helper 的快速检查放在实现旁边。
 
 了解更多关于 [源码内联测试](/config/test/include-source)。
 
@@ -76,13 +76,13 @@ Rstest 支持类 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-t
 
 ### 多项目测试 \{#multi-project-testing}
 
-Rstest 可以在同一个进程中运行多个测试项目，每个项目都可以保留自己的配置和环境。这适合 monorepo、多应用工作区，以及需要分别覆盖 Node、DOM 或 Browser Mode 的项目。
+Rstest 可以在同一个进程中运行多个测试项目，每个项目保留自己的配置和环境。这适合 monorepo、多应用工作区，以及需要分别覆盖 Node、DOM 或 Browser Mode 的项目。
 
 了解更多关于 [多项目测试](/guide/basic/projects)。
 
 ### 测试分片（Sharding） \{#test-sharding}
 
-Rstest 可以将测试文件拆分为多个分片并行执行。你可以在 CI 中把同一套测试分发到多台机器以缩短总耗时，并在所有分片完成后通过 `blob` 报告器与 `rstest merge-reports` 合并测试结果和代码覆盖率。
+Rstest 可以将测试文件拆分为多个分片在 CI 多机并行执行，并在所有分片完成后通过 `blob` 报告器与 `rstest merge-reports` 合并结果和覆盖率。
 
 了解更多关于 [测试分片](/guide/basic/cli#sharding-tests)。
 

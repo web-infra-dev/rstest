@@ -10,12 +10,21 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 ## tools.bundlerChain <RsbuildDocBadge path="/config/tools/bundler-chain" text="tools.bundlerChain" />
 
-[rspack-chain](https://github.com/rstackjs/rspack-chain) 是一个用于配置 Rspack 的工具库，通过 `tools.bundlerChain` 可以调用 `rspack-chain` 以修改默认的 Rspack 配置。
+- **类型：** `ModifyBundlerChainFn | ModifyBundlerChainFn[]`
+- **默认值：** `undefined`
+
+通过 [rspack-chain](https://github.com/rstackjs/rspack-chain) 提供的链式 API 修改 Rspack 的 loader、plugin 和优化等配置。
 
 ## tools.rspack <RsbuildDocBadge path="/config/tools/rspack" text="tools.rspack" />
 
-`tools.rspack` 选项用于修改 [Rspack](https://rspack.rs/zh/config/index) 的配置项。
+- **类型：** `(Rspack.Configuration | ModifyRspackConfigFn) | (Rspack.Configuration | ModifyRspackConfigFn)[]`
+- **默认值：** `undefined`
+
+直接修改 [Rspack](https://rspack.rs/zh/config/index) 配置，支持传入配置对象（通过 `rspack-merge` 合并）或函数（原地修改或返回新配置）。
 
 ## tools.swc <RsbuildDocBadge path="/config/tools/swc" text="tools.swc" />
 
-通过 `tools.swc` 可以设置 [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 的选项。
+- **类型：** `ConfigChain<Rspack.SwcLoaderOptions>`
+- **默认值：** `undefined`
+
+配置传给 Rspack [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 的选项。

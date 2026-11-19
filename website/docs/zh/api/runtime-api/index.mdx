@@ -1,10 +1,12 @@
 ---
 overview: true
-title: API 总览
-description: 当前页面列出了 Rstest 所有的测试 API。
+title: 运行时 API 总览
+description: Rstest 运行时测试 API、Browser Mode API、rs 工具集与环境变量总览。
 ---
 
-当前页面列出了 Rstest 所有的测试 API。
+Rstest 提供用于编写测试、Mock、浏览器自动化以及读取测试运行状态的环境 API：
 
-- 通用测试 API 见 [Test API](/api/runtime-api/test-api/expect)
-- Browser Mode 专用 API 见 [Browser Mode](/api/runtime-api/browser-mode/)
+- [Test API](/api/runtime-api/test-api/expect)：`expect`、`assert`、`test`、`describe` 与生命周期 hooks。
+- [Browser Mode](/api/runtime-api/browser-mode/)：`page`、`Locator`、键盘操作、`expect.element` 与 React 测试工具。
+- [Rstest utility](/api/runtime-api/rstest/)：用于 mock、fake timers、环境存根、运行时配置与轮询的 `rs` / `rstest` 工具集。
+- [环境变量](/api/runtime-api/environment-variables)：Rstest 注入或读取的环境变量。

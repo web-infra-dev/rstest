@@ -39,7 +39,7 @@ import { Tab, Tabs } from '@theme';
 
 ## 示例
 
-当 `silent` 设置为 `'passed-only'` 时，通过 console 打印的日志会先被缓存；通过任务的日志会被丢弃，失败任务的日志会在失败输出附近回放。
+当 `silent` 设为 `'passed-only'` 时，通过任务的被拦截日志会被缓冲并丢弃，失败任务的日志会随失败输出一起回放。
 
 ```ts title="example.test.ts"
 import { describe, expect, it } from '@rstest/core';
@@ -57,7 +57,7 @@ describe('math', () => {
 });
 ```
 
-最终只会打印 `fail log`。
+只会输出 `fail log`。
 
 :::note
 Rstest 会尽力将日志归属到具体测试上，但在 browser mode 的并发异步测试场景中，日志归属可能不会完全准确。

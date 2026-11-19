@@ -6,13 +6,15 @@ description: 控制测试文件之间的模块状态和测试环境隔离。
 
 - **类型：** `boolean`
 - **默认值：** `true`
-- **CLI：** `--isolate`, `--isolate=false`, `--no-isolate`
+- **CLI：** `--isolate`、`--isolate=false`、`--no-isolate`
 
 控制**测试文件之间**的隔离。默认情况下，每个文件有独立的模块状态和测试环境，避免一个文件的状态影响另一个文件。
 
 同一文件中的测试仍然共享该文件的环境。需要在单个测试之间重置状态时，请使用 [`beforeEach` 和 `afterEach`](/api/runtime-api/test-api/hooks)。
 
 对于 `forks` 和 `threads`，设置 `isolate: false` 后，同一 worker 中的文件可以复用模块缓存和测试环境。如果文件不会留下影响后续测试的状态，这样可以提升性能。
+
+在 [Browser Mode](/config/test/browser) 下，如果未配置 [`setupFiles`](/config/test/setup-files)，headless 模式下设置 `isolate: false` 会在文件间复用同一个页面；headed 模式（`browser.headless: false`）和包含 `setupFiles` 的项目始终按文件隔离。
 
 隔离不控制并行数量。限制 Node.js 测试 worker 数量请使用 [`pool.maxWorkers`](/config/test/pool#poolmaxworkers)，限制文件内并发测试用例数量请使用 [`maxConcurrency`](/config/test/max-concurrency)。
 

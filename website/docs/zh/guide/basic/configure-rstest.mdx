@@ -1,21 +1,21 @@
 ---
-description: 本章节介绍如何配置 Rstest 以及其底层使用的 Rsbuild 和 Rspack。
+description: 介绍如何配置 Rstest 及其底层的 Rsbuild 和 Rspack 构建配置。
 ---
 
 # 配置 Rstest
 
 ## 配置文件
 
-当你使用 Rstest 的 CLI 命令时，Rstest 会自动读取当前项目根目录下的配置文件，按照以下顺序进行解析：
+运行 Rstest CLI 时，Rstest 会按以下顺序自动查找项目根目录下的配置文件：
 
+- `rstest.config.mts`
 - `rstest.config.mjs`
 - `rstest.config.ts`
 - `rstest.config.js`
 - `rstest.config.cjs`
-- `rstest.config.mts`
 - `rstest.config.cts`
 
-我们推荐使用 `.mjs` 或 `.ts` 格式的配置文件，并从 `@rstest/core` 中导入 `defineConfig` 工具函数，它提供了友好的 TypeScript 类型推导和自动补全，可以帮助你避免配置中的错误。
+TypeScript 项目建议使用 `.ts` 或 `.mts` 配置文件，并从 `@rstest/core` 导入 [`defineConfig`](/api/javascript-api/rstest-core#defineconfig) 以获得类型检查和自动补全；非 TypeScript 项目可使用 `.mjs`：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -25,11 +25,21 @@ export default defineConfig({
 });
 ```
 
-如果你在开发一个非 TypeScript 项目，可以使用 `.mjs` 格式的配置文件。
+如果需要动态计算配置，`defineConfig` 也支持传入同步或异步工厂函数：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig(async () => ({
+  testTimeout: process.env.CI ? 10_000 : 5_000,
+}));
+```
+
+针对多 project 工作区和编程式组合配置，`@rstest/core` 还导出了 [`defineProject`](/api/javascript-api/rstest-core#defineproject)、[`mergeRstestConfig`](/api/javascript-api/rstest-core#mergerstestconfig) 和 [`mergeProjectConfig`](/api/javascript-api/rstest-core#mergeprojectconfig)。其中 `defineProject` 同样支持同步和异步函数写法。
 
 ### 指定配置文件
 
-Rstest CLI 通过 `--config` 选项来指定配置文件，可以设置为相对路径或绝对路径。
+通过 `--config`（或缩写 `-c`）指定配置文件的相对路径或绝对路径：
 
 ```json title="package.json"
 {
@@ -39,53 +49,46 @@ Rstest CLI 通过 `--config` 选项来指定配置文件，可以设置为相对
 }
 ```
 
-你也可以将 `--config` 选项缩写为 `-c`：
-
 ```bash
 rstest -c scripts/rstest.config.mjs
 ```
 
+- 使用 `-r, --root <root>` 覆盖项目根目录（决定配置文件查找起点和 `<rootDir>` 的解析基准）。
+- 使用 `--config-loader <loader>` 指定配置文件加载器：`auto`（默认值）、`jiti` 或 `native`。详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/zh/guide/configuration/rsbuild#specify-config-loader)。
+
 ## 配置 Rsbuild
 
-Rstest 的构建配置继承自 Rsbuild。因此，在 Rstest 中，你可以使用绝大部分的 Rsbuild 配置。如：
+Rstest 基于 Rsbuild 构建测试文件，支持直接配置大部分 Rsbuild 构建选项：
 
-- 通过 [plugins](/config/build/plugins) 使用 Rsbuild 插件；
-- 通过 [resolve](/config/build/resolve) 对模块解析行为进行配置；
-- 通过 [tools.rspack](/config/build/tools#toolsrspack) 配置 Rspack；
-- 通过 [tools.swc](/config/build/tools#toolsswc) 对 builtin:swc-loader 进行配置。
+- 通过 [plugins](/config/build/plugins) 注册 Rsbuild 插件
+- 通过 [resolve](/config/build/resolve) 配置模块解析行为
+- 通过 [tools.rspack](/config/build/tools#toolsrspack) 自定义 Rspack 配置
+- 通过 [tools.swc](/config/build/tools#toolsswc) 配置 `builtin:swc-loader`
 
-更多配置可参考 [构建配置](/config/#build-configurations)。
+全部可用构建选项详见[构建配置](/config/#build-configurations)。
 
 ### 在 Rsbuild 插件中读取 Rstest 配置 \{#get-rstest-config}
 
-你可以通过 Rstest 暴露的 API 读取当前 Rsbuild environment 最终的 Rstest 配置。
-
-用法和类型说明请参考 [在 Rsbuild 插件中读取 Rstest 配置](/config/build/plugins#get-rstest-config)。
+可以通过 Rstest 暴露的 API 读取当前 Rsbuild environment 解析后的 Rstest 配置。用法和类型见[在 Rsbuild 插件中读取 Rstest 配置](/config/build/plugins#get-rstest-config)。
 
 ### 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
 
-你可以在 Rsbuild 插件中通过 Rstest 暴露的 API 修改当前 Rstest project 配置。
-
-用法、类型说明和限制请参考 [在 Rsbuild 插件中修改 Rstest 配置](/config/build/plugins#modify-rstest-config)。
+可以在 Rsbuild 插件中修改当前 Rstest project 的配置。用法、类型和限制见[在 Rsbuild 插件中修改 Rstest 配置](/config/build/plugins#modify-rstest-config)。
 
 ## 配置 Rspack
 
-Rstest 底层使用 Rspack 进行构建，因此你可以直接使用 Rspack 的配置项来配置 Rstest 的构建行为。
-
-详情可参考 [配置 Rspack](https://rsbuild.rs/zh/guide/configuration/rspack)。
+Rstest 底层使用 Rspack 打包，可通过 `tools.rspack` 直接传入 Rspack 配置项。详情参考[配置 Rspack](https://rsbuild.rs/zh/guide/configuration/rspack)。
 
 ## 配置 SWC
 
-Rstest 默认通过 Rspack 的 [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 来转换 JavaScript 和 TypeScript 代码，它是 [swc-loader](https://github.com/swc-project/pkgs/tree/main/packages/swc-loader) 的 Rust 版本。
+Rstest 默认使用 Rspack 的 [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 编译 JavaScript 和 TypeScript，可通过以下选项配置：
 
-Rstest 暴露了一些选项来配置 `builtin:swc-loader`：
+- [tools.swc](/config/build/tools#toolsswc)：传给 `builtin:swc-loader` 的选项
+- [source.include](/config/build/source#sourceinclude)：指定需要经由 SWC 编译的文件
+- [source.exclude](/config/build/source#sourceexclude)：排除不需要 SWC 编译的文件
 
-- [tools.swc](/config/build/tools#toolsswc)：用于配置 `builtin:swc-loader` 的选项。
-- [source.include](/config/build/source#sourceinclude)：用于指定需要被 SWC 编译的文件。
-- [source.exclude](/config/build/source#sourceexclude)：用于排除不需要被 SWC 编译的文件。
-
-```ts
-import { defineConfig } from '@rsbuild/core';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   tools: {
@@ -107,15 +110,13 @@ export default defineConfig({
 
 ### SWC 插件版本
 
-请注意，SWC 的插件仍然是一个实验性功能，目前 SWC 的 Wasm 插件是不向后兼容的，SWC 插件的版本与 Rspack 依赖的 `swc_core` 版本存在强耦合关系。
-
-这意味着，你需要选择和当前 `swc_core` 版本匹配的 SWC 插件，才能使它正常执行。如果你使用的 SWC 插件版本与 Rspack 依赖的 `swc_core` 版本不匹配，Rspack 在执行构建时会抛出错误，请参考 [Rspack 常见问题 - SWC 插件版本不匹配](https://rspack.rs/zh/errors/swc-plugin-version) 进行处理。
+SWC Wasm 插件目前仍属实验性功能，在不同 `swc_core` 版本之间不向后兼容。请使用与 Rspack 内置 `swc_core` 版本匹配的 SWC 插件，否则构建会报错。排查方法参考 [Rspack 常见问题 - SWC 插件版本不匹配](https://rspack.rs/zh/errors/swc-plugin-version)。
 
 ## 检测 Rstest 环境
 
-你可以使用 `import.meta.env.RSTEST` 或 `process.env.RSTEST` 判断代码是否运行在 Rstest 中。在所有测试环境（包括 browser mode）下，这两个值都是 `'true'`。
+可以使用 `import.meta.env.RSTEST` 或 `process.env.RSTEST` 判断代码是否运行在 Rstest 中。在所有测试环境（包括 Browser Mode）下，两者的值均为 `'true'`。
 
-在兼容浏览器的 ESM 源码中，推荐使用 `import.meta.env.RSTEST`。browser mode 会在构建时替换这些表达式，但不会添加全局 `process` 对象，因此不要先通过 `typeof process !== 'undefined'` 判断是否可用。
+兼容浏览器的 ESM 源码建议优先使用 `import.meta.env.RSTEST`。Browser Mode 会在构建时替换这些表达式，但不会注入全局 `process` 对象，因此不要用 `typeof process !== 'undefined'` 做前置判断。
 
 ```ts
 if (import.meta.env.RSTEST === 'true') {
@@ -123,9 +124,9 @@ if (import.meta.env.RSTEST === 'true') {
 }
 ```
 
-生产构建源码时，需要在构建配置（如 `rsbuild.config.ts`）中把用到的表达式定义为 `false`。这样打包工具就能把仅用于测试的分支作为死代码消除。
+生产构建源码时，需要在构建配置（如 `rsbuild.config.ts`）中将用到的表达式定义为 `false`，以便打包工具将测试分支作为死代码消除：
 
-```diff title=rsbuild.config.ts
+```diff title="rsbuild.config.ts"
 import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
@@ -140,11 +141,11 @@ export default defineConfig({
 
 ### 在 Rsbuild 插件中判断 Rstest 环境
 
-如果你正在开发 Rsbuild 插件，请参考[判断插件是否运行在 Rstest 中](/config/build/plugins#detect-rstest-environment)，通过 `api.context.callerName` 执行特定环境下的逻辑。
+在 Rsbuild 插件中可通过检查 `api.context.callerName` 是否为 `'rstest'` 来区分环境。详见[判断插件是否运行在 Rstest 中](/config/build/plugins#detect-rstest-environment)。
 
 ## 配置集成
 
-在大型项目中，你往往已经有构建/工具链的既有配置（别名、全局变量、插件等）。Rstest 通过 [适配器（Adapter）](/guide/advanced/adapters) 与 [extends](/config/test/extends) 选项，支持将这些外部配置转换并整合到测试配置中，从而避免重复维护、保持一致性。
+为了复用已有的构建配置（别名、全局变量、插件或框架预设）而避免重复维护，可以通过 [extends](/config/test/extends) 选项结合[适配器（Adapter）](/guide/advanced/adapters)引入外部配置：
 
-- 使用 `extends` 可加载一个函数（适配器）或对象，返回的配置会与当前 Rstest 配置深度合并。
-- 适用于复用 Rsbuild/Rspack 等工具的配置，或为框架模板预设测试行为（如默认测试环境、setup 脚本）。
+- `extends` 支持传入对象、函数（适配器）或数组，解析后的配置会与当前 Rstest 配置深度合并。
+- 适用于复用 Rsbuild、Rslib、Rspack 等工具的配置，或为项目预设默认测试环境和 setup 脚本。

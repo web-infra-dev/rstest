@@ -59,7 +59,7 @@ const plugin = require('./plugin.ts');
 
 Rstest 会转换进入 bundle graph 的文件。但后续交给 Node.js 加载的代码会保留 Node.js 原生 loader 语义。
 
-现代 Node.js 可以从 `.ts` 文件中 strip 掉支持的 TypeScript 语法，但它仍然使用和 JavaScript 文件相同的模块系统规则。在 `type: module` 包中，`.ts` 会像 `.js` 一样默认被视为 ESM。如果这个 `.ts` 文件包含 `module.exports`、`exports` 或 `require` 这类 CommonJS globals，Node.js 不会自动把它改写成 CommonJS。
+现代 Node.js 可以剥离 `.ts` 文件中受支持的 TypeScript 语法，但它仍然使用和 JavaScript 文件相同的模块系统规则。在 `type: module` 包中，`.ts` 会像 `.js` 一样默认被视为 ESM。如果这个 `.ts` 文件包含 `module.exports`、`exports` 或 `require` 这类 CommonJS globals，Node.js 不会自动把它改写成 CommonJS。
 
 这和使用 `ts-jest` 的 Jest 项目可能不同，因为 `ts-jest` 可以注册 runtime loader hook，在 Node.js 应用相同原生边界之前先编译文件。它也可能和 Vitest 不同，因为 Vitest 的 transform/runtime 模型可能隐藏了一部分 Node.js loader 边界。
 

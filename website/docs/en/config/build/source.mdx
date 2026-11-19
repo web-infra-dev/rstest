@@ -11,19 +11,23 @@ Options for input source code.
 
 ## source.decorators <RsbuildDocBadge path="/config/source/decorators" text="source.decorators" />
 
-Used to configure the decorators syntax.
+- **Type:** `{ version?: 'legacy' | '2022-03' | '2023-11' }`
+- **Default:** `{ version: '2023-11' }`
 
-If you are using TypeScript's [experimentalDecorators](https://www.typescriptlang.org/tsconfig/#experimentalDecorators), you should set `source.decorators.version` to `legacy` in this case.
+Configures the decorator syntax version.
+
+If you use TypeScript's [experimentalDecorators](https://www.typescriptlang.org/tsconfig/#experimentalDecorators), set `source.decorators.version` to `'legacy'`.
 
 ## source.assetsInclude <RsbuildDocBadge path="/config/source/assets-include" text="source.assetsInclude" />
 
 <ApiMeta addedVersion="0.9.6" />
 
-Specify additional files that should be treated as static assets.
+- **Type:** `Rspack.RuleSetCondition`
+- **Default:** `undefined`
 
-This is useful when your tests import file types that are not included in Rsbuild's default asset handling, such as `.txt` or `.md`.
+Specifies additional file types to treat as static assets, beyond Rsbuild's built-in asset rules (such as `.txt` or `.md`).
 
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -33,33 +37,66 @@ export default defineConfig({
 });
 ```
 
-If you already reuse Rsbuild or Rslib config through `@rstest/adapter-rsbuild` or `@rstest/adapter-rslib`, `source.assetsInclude` will be inherited automatically.
+If you reuse an Rsbuild or Rslib config via `@rstest/adapter-rsbuild` or `@rstest/adapter-rslib`, `source.assetsInclude` is inherited automatically.
 
 ## source.define <RsbuildDocBadge path="/config/source/define" text="source.define" />
 
-Replaces variables in your code with other values or expressions at compile time. This can be useful for injecting env variables and other information to the code during build time.
+- **Type:** `Rspack.DefinePluginOptions`
+- **Default:** `{}` (`import.meta.env` is mapped to `process.env` automatically)
+
+Replaces global identifiers or expressions in your code at compile time, such as injecting build-time environment variables or feature flags.
 
 ## source.exclude <RsbuildDocBadge path="/config/source/exclude" text="source.exclude" />
 
-Exclude JavaScript or TypeScript files that do not need to be transformed by [SWC](https://rsbuild.rs/guide/configuration/swc).
+- **Type:** `Rspack.RuleSetCondition[]`
+- **Default:** `undefined`
 
-::: note
+Excludes JavaScript or TypeScript files from [SWC](https://rsbuild.rs/guide/configuration/swc) transformation.
 
-Files configured in `source.exclude` will not be transformed by SWC, but the referenced files will still be bundled into the outputs.
+:::note
+Files matched by `source.exclude` skip SWC transformation, but referenced files are still bundled into the output.
 
-If you want certain files not to be bundled into the outputs, you can use [output.externals](/config/build/output#outputexternals) or Rspack's [IgnorePlugin](https://rspack.rs/plugins/webpack/ignore-plugin).
-
+To keep files out of the bundle completely, use [output.externals](/config/build/output#outputexternals) or Rspack's [IgnorePlugin](https://rspack.rs/plugins/webpack/ignore-plugin).
 :::
 
 ## source.include <RsbuildDocBadge path="/config/source/include" text="source.include" />
 
-Specify additional JavaScript files that need to be compiled.
+- **Type:** `Rspack.RuleSetCondition[]`
+- **Default:** `undefined`
+
+Specifies additional JavaScript or TypeScript files (such as specific `node_modules` packages) to compile with SWC.
 
 ## source.transformImport <RsbuildDocBadge path="/config/source/transform-import" text="source.transformImport" />
 
 <ApiMeta addedVersion="0.9.6" />
 
-Configure on-demand import transforms.
+- **Type:**
+
+```ts
+type TransformImport = {
+  libraryName: string;
+  libraryDirectory?: string;
+  customName?: string;
+  customStyleName?: string;
+  style?: string | boolean;
+  styleLibraryDirectory?: string;
+  camelToDashComponentName?: boolean;
+  transformToDefaultImport?: boolean;
+  ignoreEsComponent?: string[];
+  ignoreStyleComponent?: string[];
+};
+
+type TransformImportFn = (
+  imports: TransformImport[],
+) => TransformImport[] | void;
+
+type TransformImportConfig =
+  TransformImportFn | (TransformImport | TransformImportFn)[];
+```
+
+- **Default:** `undefined`
+
+Configures on-demand import transforms (for example, rewriting barrel imports from a component library into direct subpath imports).
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -78,22 +115,22 @@ export default defineConfig({
 ```
 
 :::caution
-
 `source.transformImport` rewrites the final module request at compile time.
 
-In the current implementation, module-level mocking APIs that still use the original specifier, such as `rs.mock('pkg')`, `rs.doMock('pkg')`, `rs.importActual('pkg')`, and `rs.requireActual('pkg')`, may no longer target the transformed module request.
-
+Module-level mocking APIs that reference the original specifier (`rs.mock('pkg')`, `rs.doMock('pkg')`, `rs.importActual('pkg')`, and `rs.requireActual('pkg')`) may no longer match the transformed module request.
 :::
 
 ## source.tsconfigPath <RsbuildDocBadge path="/config/source/tsconfig-path" text="source.tsconfigPath" />
 
+- **Type:** `string`
+- **Default:** `'tsconfig.json'` (auto-detected in each project's root when present)
 - **CLI:** `--source.tsconfigPath <path>`
 
-Configure a custom `tsconfig.json` file path to use, can be a relative or absolute path.
+Configures a custom `tsconfig.json` path (relative to the project root or absolute).
 
-When this option is not set, Rstest detects `tsconfig.json` in each project's root. Its `compilerOptions.paths` mappings are used for module resolution.
+When unset, Rstest detects `tsconfig.json` in each project's root and uses its `compilerOptions.paths` mappings for module resolution.
 
-Rstest does not automatically turn other `compilerOptions` into code transformation settings. Configure the relevant Rstest build options when they are needed, including [`source.decorators`](#sourcedecorators) for decorator syntax and [`tools.swc`](/config/build/tools#toolsswc) for SWC options such as output-target requirements. An adapter may map or infer additional build options; refer to the documentation for the [adapter you use](/guide/advanced/adapters). For example, a directly configured project that uses legacy decorators can use:
+Rstest does not convert other `compilerOptions` into transform settings. Configure build options explicitly when needed—such as [`source.decorators`](#sourcedecorators) for decorator syntax or [`tools.swc`](/config/build/tools#toolsswc) for SWC target settings—or use an [adapter](/guide/advanced/adapters) that maps them for you. For example, to enable legacy decorators:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

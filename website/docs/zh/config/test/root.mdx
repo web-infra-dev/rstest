@@ -1,5 +1,5 @@
 ---
-description: 指定项目根目录。可以是绝对路径，也可以是相对于 process.cwd() 的路径。root 将决定配置文件加载的起点，测试文件被搜索的起点等。
+description: 指定项目根目录。它决定了测试文件搜索的起点以及 <rootDir> 的解析基准。
 ---
 
 # root
@@ -8,9 +8,9 @@ description: 指定项目根目录。可以是绝对路径，也可以是相对�
 - **默认值：** [process.cwd()](https://nodejs.org/api/process.html#processcwd)
 - **CLI：** `-r=<path>`, `--root=<path>`
 
-指定项目根目录。可以是绝对路径，也可以是相对于 `process.cwd()` 的路径。 `root` 将决定配置文件加载的起点，测试文件被搜索的起点等。
+项目根目录，支持绝对路径或相对于 `process.cwd()` 的路径。它决定了测试文件搜索的起点，以及 `<rootDir>` 的解析基准。
 
-在任何基于路径的配置设置中使用 `<rootDir>` 将会引用此值。
+通过 CLI 传入 `-r` 或 `--root` 时，也会将其作为查找配置文件的起点。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

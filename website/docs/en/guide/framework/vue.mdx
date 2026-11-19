@@ -1,17 +1,14 @@
 ---
-description: This guide covers how to test Vue applications and components with Rstest.
+description: Test Vue applications and components with Rstest using happy-dom or jsdom.
 ---
 
 # Vue
 
-This guide covers how to test Vue applications and components with Rstest. Rstest supports testing Vue in multiple scenarios:
-
-- **Node (with happy-dom or jsdom)**: Fast, lightweight tests running in Node.js with a simulated DOM
-- **Browser Mode**: Real browser testing with Playwright for accurate DOM behavior
+Test Vue applications and components in Rstest using a simulated DOM in Node.js (`happy-dom` or `jsdom`) with `@rsbuild/plugin-vue` and `@vue/test-utils`.
 
 ## Node testing
 
-Node-based testing uses DOM simulators like [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to provide a DOM environment in Node.js. This approach is faster and suitable for most component testing scenarios.
+Node-based testing uses [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to simulate the DOM in Node.js for fast component tests.
 
 ### Quick start
 
@@ -25,7 +22,7 @@ If you want to use Vue JSX, also install:
 
 <PackageManagerTabs command="add @rsbuild/plugin-babel @rsbuild/plugin-vue-jsx -D" />
 
-#### 2. Configure rstest
+#### 2. Configure Rstest
 
 Create `rstest.config.ts`:
 
@@ -149,18 +146,11 @@ test('renders user name', async () => {
 
 ## Browser mode testing
 
-For scenarios requiring real browser behavior (e.g., CSS rendering, Web APIs, visual testing), use Rstest's Browser Mode with Playwright.
-
-See the [Browser Testing - Getting Started](/guide/browser-testing/getting-started) for detailed setup instructions.
-
 :::info
 Browser Mode currently provides out-of-the-box support for React. Vue support in Browser Mode will be added in the future.
 :::
 
-**Recommendations:**
-
-- Use **Node testing** for unit tests, logic-heavy components, and fast feedback
-- Use **Browser Mode** for integration tests, visual behavior, and when you need real browser APIs
+See [Browser Testing - Getting Started](/guide/browser-testing/getting-started) for general Browser Mode setup.
 
 ## Example projects
 

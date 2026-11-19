@@ -1,5 +1,5 @@
 ---
-description: 定义多个测试项目，可以是一个目录、配置文件或 glob 模式，也可以是一个对象。Rstest 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
+description: 在单个 Rstest 进程中定义多个测试项目，支持目录、配置文件、glob 模式或内联项目配置。
 ---
 
 # projects
@@ -14,28 +14,28 @@ type InlineProjectConfig = ProjectConfig & { name: string };
 type Projects = (string | InlineProjectConfig)[];
 ```
 
-- **默认值：** `[<rootDir>]`
+- **默认值：** `undefined`（将根目录作为单个项目运行）
 
-定义多个测试项目，可以是一个目录、配置文件或 glob 模式，也可以是一个对象。 Rstest 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
+在单个 Rstest 进程中运行多个测试项目，并将所有项目的测试结果合并展示。数组中的每一项可以是目录路径、配置文件路径、glob 模式或内联项目配置对象。
 
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    // A monorepo: each package directory is a project
+    // Monorepo：每个包目录作为一个 project
     'packages/*',
 
-    // All projects under the apps directory that provide an rstest config file
+    // apps 目录下所有包含 rstest 配置文件的项目
     'apps/**/rstest.config.ts',
 
-    // A specific project directory
+    // 指定的项目目录
     '<rootDir>/services/auth',
 
-    // A specific project's config file
+    // 指定项目的配置文件
     './projects/web/rstest.config.ts',
 
-    // inline project configs
+    // 内联项目配置
     defineInlineProject({
       name: 'node',
       include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
@@ -49,8 +49,8 @@ export default defineConfig({
 });
 ```
 
-任何 `projects` 数组里的对象项，包括嵌套 `projects`，都建议搭配 `defineInlineProject()`。`defineProject()` 只用于项目配置文件的顶层导出。
+任何 `projects` 数组里的对象项，包括嵌套 `projects`，都请使用 `defineInlineProject()`。`defineProject()` 只用于项目配置文件的顶层导出。
 
 `defineProject()` 允许顶层导出的 project 省略 `name`，再由 Rstest 按 [name](/config/test/name) 配置项的规则自动推导。`defineInlineProject()` 则要求每个 inline project 都显式提供 `name`。
 
-更多关于项目配置的信息，请参考[多项目测试](/guide/basic/projects)。
+如需在命令行只运行特定项目，可传入 `--project <name>`（支持通配符）。关于共享配置、全局配置项和嵌套项目，请参考[多项目测试](/guide/basic/projects)。

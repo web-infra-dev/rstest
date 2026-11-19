@@ -1,74 +1,127 @@
 ---
-description: 快照测试（Snapshot Testing）是一种强大的测试方法，用于捕获和比较组件输出的序列化表示。当你的 UI 或数据结构发生变化时，快照测试能够帮助你及时发现这些变更。
+description: 通过 Rstest 快照测试捕获并比对序列化的输出，及时发现数据结构或 UI 的意外变化。
 ---
+
+import { Tab, Tabs } from '@theme';
 
 # 快照测试
 
-快照测试（Snapshot Testing）是一种强大的测试方法，用于捕获和比较组件输出的序列化表示。当你的 UI 或数据结构发生变化时，快照测试能够帮助你及时发现这些变更。
+快照测试会将值序列化并与已保存的参考快照进行比对。预期内的改动可以更新快照，意外的差异则会让测试失败。
 
 ## 基本用法
 
-Rstest 提供了简单的快照测试 API，让你可以轻松创建和使用快照。
-
 ### 创建快照
 
-```ts
-import { test, expect } from '@rstest/core';
+使用 `toMatchSnapshot()` 将值的序列化结果写入外部 `.snap` 文件并比对：
 
-test('组件快照', () => {
+```ts
+import { expect, test } from '@rstest/core';
+
+test('component snapshot', () => {
   const user = { name: 'Alice', age: 25 };
   expect(user).toMatchSnapshot();
 });
 ```
 
+默认情况下，Rstest 会生成以 `// Rstest Snapshot v1` 开头的 `.snap` 文件：
+
+```js
+// Rstest Snapshot v1
+
+exports[`component snapshot 1`] = `
+{
+  "age": 25,
+  "name": "Alice",
+}
+`;
+```
+
 ### 内联快照
 
-对于简单的值，可以使用内联快照：
+对于简短的输出，可以使用 `toMatchInlineSnapshot()` 将快照直接写在测试文件内：
 
 ```ts
-test('内联快照', () => {
+import { expect, test } from '@rstest/core';
+
+test('inline snapshot', () => {
   const message = 'Hello World';
-  expect(message).toMatchInlineSnapshot('"Hello World"');
+  expect(message).toMatchInlineSnapshot(`"Hello World"`);
+});
+```
+
+### 错误快照
+
+使用 `toThrowErrorMatchingSnapshot()` 或 `toThrowErrorMatchingInlineSnapshot()` 为函数抛出的错误（或配合 `rejects` 为 rejected Promise）生成快照：
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('error snapshot', () => {
+  const fail = () => {
+    throw new Error('Invalid input');
+  };
+  expect(fail).toThrowErrorMatchingInlineSnapshot(`[Error: Invalid input]`);
+});
+```
+
+### 属性匹配器
+
+如果对象包含 ID、时间戳等动态字段，可以向 `toMatchSnapshot()` 或 `toMatchInlineSnapshot()` 的第一个参数传入属性匹配器对象：
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('dynamic fields', () => {
+  const user = { id: Math.random(), name: 'Alice', createdAt: new Date() };
+  expect(user).toMatchSnapshot({
+    id: expect.any(Number),
+    createdAt: expect.any(Date),
+  });
 });
 ```
 
 ### 文件快照
 
-默认情况下，Rstest 会将当前测试的所有快照以 `exports['测试名称 索引'] = ${快照内容}` 的格式存储在 `.snap` 文件中。
-
-你也可以使用 `toMatchFileSnapshot` 方法将快照存储在单独的文件中，这将使它们更具可读性。
+使用 `toMatchFileSnapshot(filepath)` 将较大的输出或特定格式文件（如 HTML、CSS、JSON）保存为独立快照文件。与 `toMatchSnapshot()` 不同，`toMatchFileSnapshot()` 是异步方法，必须使用 `await`：
 
 ```ts
-test('文件快照', async () => {
+import { expect, test } from '@rstest/core';
+
+test('file snapshot', async () => {
   const result = renderHTML(h('div', { class: 'foo' }));
   await expect(result).toMatchFileSnapshot('./basic.output.html');
 });
 ```
 
+:::note
+快照匹配器不支持 `.not`。调用 `expect(value).not.toMatchSnapshot()`（或任何带 `.not` 的快照匹配器）会抛出错误。
+:::
+
 ### 配置选项
 
-Rstest 提供了多种快照相关的配置选项，让你可以自定义快照的行为。
-
-- [update](/config/test/update): 是否更新快照
-- [snapshotFormat](/config/test/snapshot-format): 快照格式化选项
-- [resolveSnapshotPath](/config/test/resolve-snapshot-path): 自定义快照文件路径解析函数
+- [update](/config/test/update)：控制是否更新已有快照并清理过期快照（默认值：`false`）。
+- [snapshotFormat](/config/test/snapshot-format)：传递给 `pretty-format` 的序列化格式选项（默认值：`{ printShadowRoot: false }`）。
+- [resolveSnapshotPath](/config/test/resolve-snapshot-path)：自定义 `.snap` 文件的存储路径。
 
 ## 更新快照
 
-当测试运行出现快照不匹配时，Rstest 会将测试标记为失败并输出差异信息。
+在默认配置（`update: false`）下：
 
-如果这些变更是预期内的，你可以通过命令行参数 `-u` 或配置选项 `update` 来更新快照。
+- **本地开发**：新增的快照会自动写入文件，已有快照不匹配时测试失败。
+- **CI 环境**（存在 `process.env.CI`）：既不自动创建新快照，也不更新已有快照——缺失或不匹配都会报错。
 
-import { Tab, Tabs } from '@theme';
+当输出变更是预期行为时，可以通过 `-u` / `--update` 参数、`update: true` 配置，或在交互式 watch 模式下按 `u` 快捷键来更新快照：
 
 <Tabs>
   <Tab label="CLI">
-  ```bash
-  npx rstest -u
-  ```
+```bash
+npx rstest -u
+# 或
+npx rstest --update
+```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -78,42 +131,49 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
+启用 `-u` / `--update` 或 `update: true` 时，Rstest 会更新所有发生变化的快照并删除过期快照。
+
 ## 序列化输出
 
-Rstest 支持通过 [addSnapshotSerializer](/api/runtime-api/test-api/expect#expectaddsnapshotserializer) 方法为快照测试添加自定义序列化工具，以处理特定类型的数据结构。
-
-这尤其有用当你的快照中包含本地路径、敏感数据或其他非可序列化的对象。
+通过 [expect.addSnapshotSerializer](/api/runtime-api/test-api/expect#expectaddsnapshotserializer) 注册自定义序列化器，用于脱敏敏感信息、规范化路径或格式化自定义对象：
 
 ```ts
+import { expect, test } from '@rstest/core';
+
 expect.addSnapshotSerializer({
   test: (val) => typeof val === 'string' && val.startsWith('secret:'),
-  print: (val) => '***MASKED***',
+  print: () => '***MASKED***',
 });
-expect('secret:123').toMatchSnapshot(); // 快照输出的 secret 信息会被掩码
+
+test('masked secret', () => {
+  expect('secret:123').toMatchSnapshot();
+});
 ```
 
-使用 [path-serializer](https://www.npmjs.com/package/path-serializer) 可以将本地路径转换为相对于项目根目录的路径，这在跨平台测试中非常有用。
+如果快照中包含本地文件系统路径，可以使用 [path-serializer](https://www.npmjs.com/package/path-serializer) 将绝对路径转换为相对项目根目录的路径，保证跨环境结果一致：
 
 ```ts
+import path from 'node:path';
+import { expect, test } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
 
 expect.addSnapshotSerializer(
   createSnapshotSerializer({
-    root: path.join(__dirname, '..'),
+    root: path.join(import.meta.dirname, '..'),
   }),
 );
 
-test('序列化快照', () => {
-  const filePath = path.join(__dirname, '../data/file.txt');
+test('serialized snapshot', () => {
+  const filePath = path.join(import.meta.dirname, '../data/file.txt');
   expect({ filePath }).toMatchSnapshot();
-  // before: "/Users/aaa/Desktop/projects/rstest/examples/node/data/file.txt"
+  // before: "/path/to/repo/examples/node/data/file.txt"
   // after: "<ROOT>/examples/node/data/file.txt"
 });
 ```
 
 ## 快照输出路径
 
-快照文件默认以 `.snap` 为扩展名，保存在与测试文件相同的目录下的 `__snapshots__` 文件夹中。
+默认情况下，`.snap` 文件保存在与测试文件同级的 `__snapshots__` 目录中：
 
 ```
 src/
@@ -123,14 +183,14 @@ src/
 │       └── button.test.ts.snap
 ```
 
-你可以通过 [resolveSnapshotPath](/config/test/resolve-snapshot-path) 配置选项自定义快照文件路径。
+可以通过 [resolveSnapshotPath](/config/test/resolve-snapshot-path) 自定义快照路径：
 
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   resolveSnapshotPath: (testPath, snapExtension) => {
-    // 将快照存储在测试文件同级
+    // 将快照保存在测试文件同级目录
     return `${testPath}${snapExtension}`;
   },
 });
@@ -140,11 +200,11 @@ export default defineConfig({
 
 ### 保持快照简洁
 
-快照应该是可读且易于理解的，避免包含过多无关信息：
+只序列化与当前断言相关的字段，避免包含时间戳、随机 session ID 或 User-Agent 等易变字段（或通过属性匹配器处理）：
 
 ```ts
-// ✅ 好的做法 - 只包含必要信息
-test('用户信息快照', () => {
+// ✅ 推荐 - 仅包含关键字段
+test('user info snapshot', () => {
   const userInfo = {
     name: 'Alice',
     role: 'admin',
@@ -153,8 +213,8 @@ test('用户信息快照', () => {
   expect(userInfo).toMatchSnapshot();
 });
 
-// ❌ 避免 - 包含过多无关信息
-test('完整用户对象快照', () => {
+// ❌ 避免 - 包含过多易变字段
+test('complete user object snapshot', () => {
   const fullUser = {
     ...user,
     lastLogin: new Date(),
@@ -165,25 +225,25 @@ test('完整用户对象快照', () => {
 });
 ```
 
-### 使用描述性的快照名称
+### 使用有区分度的快照名称
 
-当使用多个快照时，为每个快照提供描述性的名称：
+同一测试内有多个快照时，为每个快照传入描述性名称：
 
 ```ts
-test('组件状态变化', () => {
+test('component state changes', () => {
   const component = new MyComponent();
 
-  expect(component.initialState).toMatchSnapshot('初始状态');
+  expect(component.initialState).toMatchSnapshot('initial state');
 
   component.update();
-  expect(component.updatedState).toMatchSnapshot('更新后状态');
+  expect(component.updatedState).toMatchSnapshot('updated state');
 });
 ```
 
 ### 定期审查快照
 
-随着代码的演进，快照可能会过时。定期审查和更新快照是必要的：
+像审查业务代码一样对待快照文件：
 
-- 在重构 UI 时更新相关快照
-- 删除不再需要的快照
-- 合理使用内联快照进行小范围测试
+- 更新前先确认 diff 是否符合预期，不要盲目执行 `-u`。
+- 删除或重构测试时，及时清理不再使用的快照。
+- 简短的输出优先使用内联快照，便于在测试文件中直接阅读。

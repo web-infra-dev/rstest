@@ -1,13 +1,13 @@
 ---
-description: The name of the test project.
+description: Set the display and filter name of the test project.
 ---
 
 # name
 
 - **Type:** `string`
-- **Default:** `rstest`
+- **Default:** `'rstest'` (single project), or inferred from `package.json` / directory name in [projects](/config/test/projects)
 
-The name of the test project.
+Set the name of the test project. Used in reporter output and to select projects with [--project](/guide/basic/test-filter#filter-by-project-name).
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -17,6 +17,6 @@ export default defineConfig({
 });
 ```
 
-Project names must be unique across all projects declared through [projects](/config/test/projects); Rstest reports an error at startup when two projects share a name. Use the [--project](/guide/basic/test-filter#filter-by-project-name) option to filter projects by name.
+Project names must be unique across all entries declared in [projects](/config/test/projects); Rstest errors at startup if two projects share a name.
 
-If a project's name is not provided, Rstest will use the `name` field from the current project's `package.json`. If it does not exist, the folder name will be used instead.
+When `name` is omitted on a project inside `projects`, Rstest uses the `name` field from that project's `package.json`, falling back to its directory name. For a standalone run without `projects`, `name` defaults to `'rstest'`.

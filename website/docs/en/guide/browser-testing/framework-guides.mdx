@@ -15,7 +15,7 @@ Before continuing, make sure you've completed the basic Browser Mode setup. You 
 Then follow this guide for framework-specific configuration.
 :::
 
-:::info Framework Support
+:::info Framework support
 Currently, Browser Mode only provides out-of-the-box support for React. Other frameworks (Vue, Svelte, etc.) will be supported in the future.
 :::
 
@@ -55,30 +55,25 @@ export default defineConfig({
 
 ### Component testing
 
-After the `render` function renders a component to the DOM, it returns `container` (the component's container element). You can use native DOM APIs or Testing Library to query elements and make assertions:
+`render` mounts a React component into the real browser DOM and returns `{ container, baseElement, rerender, unmount, asFragment }`. Use the [Locator API](/guide/browser-testing/user-interactions#locator-api) (`page` + `expect.element`) to query elements, trigger interactions, and assert rendered output:
 
 ```tsx title="src/Counter.test.tsx"
-import { act, render } from '@rstest/browser-react';
+import { page } from '@rstest/browser';
+import { render } from '@rstest/browser-react';
 import { expect, test } from '@rstest/core';
 import { Counter } from './Counter';
 
 test('renders and increments', async () => {
-  const { container } = await render(<Counter />);
+  await render(<Counter />);
 
-  expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
-    '0',
-  );
+  await expect.element(page.getByText('Count: 0')).toBeVisible();
 
-  await act(() => {
-    container.querySelector('button')!.click();
-  });
-  expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
-    '1',
-  );
+  await page.getByRole('button', { name: 'Increment' }).click();
+  await expect.element(page.getByText('Count: 1')).toBeVisible();
 });
 ```
 
-If a component depends on Context (like Theme, Auth, or Store), use the `wrapper` option to wrap it with Providers:
+If a component depends on Context (such as Theme, Auth, or Store), pass a `wrapper` component:
 
 ```tsx
 const Wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -162,68 +157,34 @@ See the [React API reference](/api/runtime-api/browser-mode/react) for `render`,
 
 ## Vanilla JS/TS
 
-For projects without a framework, you can test directly using native DOM APIs.
-
-### Install dependencies (Optional)
-
-If you want to use Testing Library's query methods, install these dependencies:
-
-<PackageManagerTabs command="add @testing-library/dom @testing-library/user-event -D" />
+For projects without a framework, append DOM elements to `document.body` and test them with [`page` and `expect.element`](/guide/browser-testing/user-interactions#locator-api) (or see [User interactions](/guide/browser-testing/user-interactions) for Testing Library and native DOM event examples):
 
 ### Example tests
 
-Testing with native DOM APIs:
-
 ```ts title="src/counter.test.ts"
+import { page } from '@rstest/browser';
 import { expect, test } from '@rstest/core';
 
-test('counter increments on click', () => {
-  // Create DOM structure
+test('counter increments on click', async () => {
   const container = document.createElement('div');
   container.innerHTML = `
-    <span id="count">0</span>
-    <button id="increment">+</button>
+    <p>Count: 0</p>
+    <button type="button">Increment</button>
   `;
   document.body.appendChild(container);
 
-  // Setup event handler
   let count = 0;
-  const countEl = container.querySelector('#count')!;
-  const button = container.querySelector('#increment')!;
+  const display = container.querySelector('p')!;
+  const button = container.querySelector('button')!;
 
   button.addEventListener('click', () => {
     count++;
-    countEl.textContent = String(count);
+    display.textContent = `Count: ${count}`;
   });
 
-  // Test interaction
-  button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-  expect(countEl.textContent).toBe('1');
-});
-```
-
-Testing with Testing Library:
-
-```ts title="src/dropdown.test.ts"
-import { expect, test } from '@rstest/core';
-import { getByRole, queryByRole } from '@testing-library/dom';
-import userEvent from '@testing-library/user-event';
-import { createDropdown } from './dropdown';
-
-test('toggles dropdown on click', async () => {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  createDropdown(container);
-
-  const trigger = getByRole(container, 'button');
-
-  // Initial state: menu hidden
-  expect(queryByRole(container, 'menu')).toBeNull();
-
-  // Click to open menu
-  await userEvent.click(trigger);
-  expect(getByRole(container, 'menu')).toBeTruthy();
+  await expect.element(page.getByText('Count: 0')).toBeVisible();
+  await page.getByRole('button', { name: 'Increment' }).click();
+  await expect.element(page.getByText('Count: 1')).toBeVisible();
 });
 ```
 
@@ -243,9 +204,9 @@ test('renders content in shadow DOM', () => {
 });
 ```
 
-## Multi-Framework Projects
+## Multi-framework projects
 
-If your project includes multiple frameworks, you can use [projects](/config/test/projects) configuration to set up independent test environments for each:
+Use [projects](/config/test/projects) when different parts of a repository target browser and Node environments:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

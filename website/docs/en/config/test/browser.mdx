@@ -1,14 +1,17 @@
 ---
-description: Browser Mode configuration. When enabled, tests run in a real browser instead of the Node.js environment.
+description: Browser Mode configuration. When enabled, tests run in a real browser instead of Node.js.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
+import { Tab, Tabs } from '@theme';
 
 # browser
 
 - **Type:**
 
 ```ts
+type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
 type BrowserViewport =
   | {
       width: number;
@@ -39,7 +42,7 @@ type BrowserModeConfig = {
   enabled?: boolean;
   provider: 'playwright';
   /** @deprecated Use `instances` instead. Will be removed in 1.0. */
-  browser?: 'chromium' | 'firefox' | 'webkit';
+  browser?: BrowserName;
   headless?: boolean;
   screenshotFailures?: boolean;
   port?: number;
@@ -68,7 +71,7 @@ type BrowserScreenshotPathOptions = {
   testFilePath: string;
   projectName: string;
   testName: string;
-  browserName: 'chromium' | 'firefox' | 'webkit';
+  browserName: BrowserName;
   platform: string;
   screenshotAssertionOrdinal?: number;
 };
@@ -82,7 +85,7 @@ const defaultBrowser = {
   provider: 'playwright',
   instances: [{ browserName: 'chromium' }],
   headless: true, // CI environment; false for local development
-  screenshotFailures: true, // Defaults to the headless setting
+  screenshotFailures: true, // Defaults to browser.headless (true in CI, false locally)
   port: undefined, // Random available port
   viewport: undefined, // Browser UI fills the preview panel
   strictPort: false,
@@ -90,19 +93,9 @@ const defaultBrowser = {
 };
 ```
 
-Browser Mode configuration. When enabled, tests run in a real browser instead of the Node.js environment.
+Configures Browser Mode so tests run in a real browser instead of Node.js.
 
 ## Options
-
-### screenshotFailures
-
-<ApiMeta addedVersion="0.12.4" />
-
-Capture a PNG screenshot for each failed browser test. Defaults to the `headless` setting. Screenshots are saved under `.rstest/screenshots/` in the project root, with the test file and test name in the filename. Set this to `false` to disable capture.
-
-- **Type:** `boolean`
-- **Default:** `browser.headless`
-- **CLI:** `--browser.screenshotFailures`
 
 ### enabled
 
@@ -124,7 +117,7 @@ export default defineConfig({
 ```
 
 :::tip
-Enabling Browser Mode requires installing the `@rstest/browser` package and Playwright browsers.
+Browser Mode requires [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) and Playwright browsers:
 
 ```bash
 npm add @rstest/browser -D
@@ -151,54 +144,6 @@ export default defineConfig({
 });
 ```
 
-### browser (deprecated) \{#browser-deprecated}
-
-<ApiMeta addedVersion="0.13.0" />
-
-:::warning Deprecated
-`browser.browser` is deprecated and will be removed in 1.0. Use [`instances`](#instances) instead, e.g. `instances: [{ browserName: 'firefox' }]`. Rstest prints a deprecation warning once per run when this field is set. `--browser.name` is the deprecated CLI form.
-:::
-
-- **Type:** `'chromium' | 'firefox' | 'webkit'`
-- **Default:** `'chromium'`
-- **CLI:** `--browser.name <name>` (deprecated)
-
-The single browser type to use for testing. Setting this field is normalized to `instances: [{ browserName: browser }]`.
-
-Setting both `browser` and `instances` on a browser project is a config error.
-
-- `chromium` - Google Chrome, Microsoft Edge
-- `firefox` - Mozilla Firefox
-- `webkit` - Safari
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-    browser: 'firefox', // deprecated; prefer instances: [{ browserName: 'firefox' }]
-  },
-});
-```
-
-You need to install the corresponding browser before use:
-
-```bash
-# Install chromium
-npx playwright install chromium
-
-# Install Firefox
-npx playwright install firefox
-
-# Install WebKit
-npx playwright install webkit
-
-# Install all browsers
-npx playwright install
-```
-
 ### instances
 
 <ApiMeta addedVersion="0.13.0" />
@@ -207,7 +152,7 @@ npx playwright install
 - **Default:** `[{ browserName: 'chromium' }]`
 - **CLI:** `--browser.instances <names>` (comma-separated and/or repeatable; filters the configured instances)
 
-Browser instances this project runs on, one per browser. Every instance of a project shares one build and one dev server — multi-browser runs do not multiply build time.
+Browser instances this project runs on, one per browser. Every instance in a project shares one build and one dev server, so multi-browser runs do not multiply build time.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -221,7 +166,7 @@ export default defineConfig({
 });
 ```
 
-Each item is a `BrowserInstanceConfig` object: `browserName` is required, and every other field overrides the project-level value for that browser. A bare browser name such as `instances: ['chromium']` is a config error; write `{ browserName: 'chromium' }`:
+Each entry is a `BrowserInstanceConfig` object: `browserName` is required, and all other fields override the project-level value for that browser. A bare string such as `instances: ['chromium']` is a config error; write `{ browserName: 'chromium' }`:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -248,7 +193,7 @@ export default defineConfig({
 });
 ```
 
-`BrowserInstanceConfig` accepts only runtime-effective overrides; build-scoped options (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level `browser` config:
+`BrowserInstanceConfig` accepts only runtime overrides; build-scoped options (`enabled`, `provider`, `port`, `strictPort`) stay on the project-level `browser` config:
 
 | Field                | Default                              |
 | -------------------- | ------------------------------------ |
@@ -259,16 +204,38 @@ export default defineConfig({
 | `expect`             | project `browser.expect`             |
 | `providerOptions`    | project `browser.providerOptions`    |
 
-Merge rules per instance: an instance field wins, then the project-level `browser.*` field, then the built-in default. `providerOptions` merges per top-level key (`launch`, `context`) instead of whole-field: an instance `launch` replaces the project `launch` key entirely (Playwright options may contain functions and class instances, so sibling keys under it are not merged), while keys the instance does not set keep the project value — in the example above the chromium instance launches with `channel: 'chrome'` alone, and its context keeps the project-level `locale: 'en-US'`.
+Merge precedence per instance: instance field > project-level `browser.*` > built-in default. `providerOptions` merges per top-level key (`launch`, `context`) rather than deep-merging inside them: setting `launch` on an instance replaces the project `launch` object (Playwright options can contain functions and class instances), while unset keys keep the project value. In the example above, `chromium` launches with `channel: 'chrome'` alone and keeps `locale: 'en-US'` from the project `context`.
 
-A project runs exactly one browser per instance; two result rows come back for the same file, each reported under its own project name — see [Multi-browser reporting](#multi-browser-reporting).
+Each instance runs the project's test files independently and reports results under its own project label — see [Multi-browser reporting](#multi-browser-reporting).
 
 Validation rules:
 
-- The same `browserName` may be configured at most once per project (duplicate names are a config error).
-- `instances` must not be empty — remove the option to run the default Chromium instead.
+- Each `browserName` may appear at most once per project.
+- `instances` cannot be empty — omit the option to run the default Chromium instance.
 - At most one `(project, browser)` pair may run headed (`headless: false`) per run; see [Launch rules](#launch-rules).
 - [`coverage.provider: 'v8'`](/config/test/coverage) requires every selected browser to be Chromium; see [Launch rules](#launch-rules).
+
+### browser (deprecated) \{#browser-deprecated}
+
+<ApiMeta addedVersion="0.13.0" />
+
+:::warning Deprecated
+`browser.browser` is deprecated and will be removed in 1.0. Use [`instances`](#instances) instead, e.g. `instances: [{ browserName: 'firefox' }]`. Rstest prints a deprecation warning once per run when this field is set. `--browser.name` is the deprecated CLI form.
+:::
+
+- **Type:** `'chromium' | 'firefox' | 'webkit'`
+- **Default:** `'chromium'`
+- **CLI:** `--browser.name <name>` (deprecated)
+
+Single browser type to use for testing. Normalized to `instances: [{ browserName: browser }]`.
+
+Setting both `browser` and `instances` on a project is a config error.
+
+- `chromium`: Google Chrome, Microsoft Edge
+- `firefox`: Mozilla Firefox
+- `webkit`: Safari
+
+Install the matching Playwright browser (for example, `npx playwright install firefox`) before running tests.
 
 ### headless
 
@@ -276,9 +243,7 @@ Validation rules:
 - **Default:** `true` in CI environments, `false` for local development
 - **CLI:** `--browser.headless`
 
-Whether to run the browser in headless mode (without UI). Items in [`instances`](#instances) can override it per browser, subject to the [one headed browser per run](#launch-rules) rule.
-
-import { Tab, Tabs } from '@theme';
+Run browsers in headless mode (without a UI window). Items in [`instances`](#instances) can override this per browser, subject to the [one headed browser per run](#launch-rules) rule.
 
 <Tabs defaultValue="rstest.config.ts">
   <Tab label="rstest.config.ts">
@@ -309,24 +274,17 @@ jobs:
   </Tab>
 </Tabs>
 
-During local development, setting `headless: false` shows the browser window for easier debugging.
+Set `headless: process.env.CI === 'true'` if you want headed mode locally and headless mode in CI.
 
-:::tip Dynamic Configuration Based on Environment
-If you want headed mode for local debugging and headless in CI, control it with environment variables:
+### screenshotFailures
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+<ApiMeta addedVersion="0.12.4" />
 
-export default defineConfig({
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-    headless: process.env.CI === 'true',
-  },
-});
-```
+- **Type:** `boolean`
+- **Default:** `browser.headless`
+- **CLI:** `--browser.screenshotFailures`
 
-:::
+Capture a PNG screenshot for each failed browser test. Screenshots are saved under `.rstest/screenshots/` in the project root with the test file and test name in the filename. Set to `false` to disable capture.
 
 ### viewport
 
@@ -335,18 +293,9 @@ export default defineConfig({
 - **Type:** `BrowserViewport`
 - **Default:** `undefined`
 
-Set the default runner iframe viewport for Browser Mode tests. When not specified, the Browser UI fills the preview panel. Items in [`instances`](#instances) can override the viewport per browser.
+Default runner iframe viewport for Browser Mode tests. When unset, the Browser UI fills the preview panel. Items in [`instances`](#instances) can override this per browser.
 
-```ts
-type BrowserViewport =
-  | {
-      width: number;
-      height: number;
-    }
-  | DevicePreset;
-```
-
-Use an explicit size when you want all files in a browser project to run with the same viewport:
+Pass explicit dimensions or a built-in device preset:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -356,20 +305,8 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     viewport: { width: 390, height: 844 },
-  },
-});
-```
-
-You can also use a built-in device preset:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-    viewport: 'iPhone12Pro',
+    // Or a device preset:
+    // viewport: 'iPhone12Pro',
   },
 });
 ```
@@ -397,16 +334,16 @@ Supported presets:
 | `NestHubMax`            | 1280 x 800  |
 
 :::tip
-`browser.viewport` controls the test runner iframe viewport. If you need Playwright context options such as locale, color scheme, or permissions, configure them through [`providerOptions.context`](#provider-options).
+`browser.viewport` controls the test runner iframe viewport. Configure Playwright context options such as locale, color scheme, or permissions via [`providerOptions.context`](#provider-options).
 :::
 
 ### port
 
 - **Type:** `number`
-- **Default:** `undefined` (automatically selects an available port)
+- **Default:** `undefined` (selects an available port automatically)
 - **CLI:** `--browser.port <port>`
 
-The port number for the Browser Mode Dev Server.
+Port number for the Browser Mode dev server.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -420,7 +357,7 @@ export default defineConfig({
 });
 ```
 
-If you set `port` and the port is already in use, the behavior is controlled by `strictPort`: when `strictPort: true`, Rstest throws an error and exits; when `strictPort: false`, it falls back to another available port. If `port` is not specified, an available port is always selected automatically.
+When `port` is already in use, [`strictPort`](#strictport) determines whether Rstest fails or falls back to another available port.
 
 ### strictPort
 
@@ -428,10 +365,7 @@ If you set `port` and the port is already in use, the behavior is controlled by 
 - **Default:** `false`
 - **CLI:** `--browser.strictPort`
 
-When `port` is specified, whether the port must be available:
-
-- `true`: throw an error and exit if the port is in use
-- `false`: fall back to another available port if the port is in use
+When `port` is specified, fail if the port is already in use (`true`), or fall back to another available port (`false`).
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -454,11 +388,11 @@ export default defineConfig({
 - **Default:** `{}`
 - **CLI:** `--browser.providerOptions.*`
 
-Playwright options passed through to browser launch and context creation. Rstest does not validate or interpret the contents of this object — it forwards the values as-is to Playwright.
+Options forwarded as-is to the browser provider for browser launch and context creation. Rstest does not validate or interpret these fields.
 
-Each `BrowserInstanceConfig` in [`instances`](#instances) can carry its own `providerOptions`: top-level keys (`launch`, `context`) set on the instance replace the project-level keys, and keys the instance does not set keep the project-level value.
+Each `BrowserInstanceConfig` in [`instances`](#instances) can define its own `providerOptions`: top-level keys (`launch`, `context`) replace the project-level keys on that instance, while unset keys inherit the project-level values.
 
-See [Playwright provider options](#provider-options) below for the supported fields.
+See [Playwright provider options](#provider-options) for the supported fields.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -476,7 +410,7 @@ export default defineConfig({
 });
 ```
 
-You can also pass nested Playwright options from the CLI:
+You can also pass nested Playwright options via CLI:
 
 ```bash
 npx rstest --browser.providerOptions.launch.channel=chrome
@@ -502,11 +436,11 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 }
 ```
 
-With neither pixel limit set, no pixels may differ after applying `threshold`. `style` is not injected by default. `mask` is assertion-only and defaults to no masks.
+With neither pixel limit set, no pixels may differ after applying `threshold`. `style` is unset by default, and `mask` is assertion-only because it takes browser `Locator` objects.
 
-Configure defaults for [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#screenshot-matching) across a Browser Mode project. Put pixel-comparison tolerances under `comparatorOptions`; capture and path options are siblings of it. Assertion-level values override the corresponding global values. `mask` remains assertion-specific because it uses browser `Locator` objects.
+Configures project-wide defaults for [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#screenshot-matching). Pixel-comparison tolerances belong under `comparatorOptions`; capture and path options are siblings of it. Assertion-level options override these defaults.
 
-The defaults below apply when an option is omitted. Playwright supplies the capture defaults for `maskColor`, `caret`, `scale`, and `omitBackground`.
+The table below lists the defaults applied when each option is omitted (`maskColor`, `caret`, `scale`, and `omitBackground` use Playwright's capture defaults):
 
 | Option                                | Default           | Description                                                          |
 | ------------------------------------- | ----------------- | -------------------------------------------------------------------- |
@@ -522,21 +456,21 @@ The defaults below apply when an option is omitted. Playwright supplies the capt
 | `screenshotDirectory`                 | `__screenshots__` | Directory for references beside each test file.                      |
 | `resolveScreenshotPath`               | Built-in          | Uses the path layout described below.                                |
 
-When both pixel limits are set, the stricter one applies. An assertion that specifies either limit replaces the project-level pixel limits for that assertion. An assertion that specifies neither inherits both.
+When both pixel limits are set, the stricter one applies. An assertion that specifies either limit replaces the project-level pixel limits for that assertion; an assertion that specifies neither inherits both.
 
-A relative `screenshotDirectory` is resolved from each test file's directory. If omitted, it defaults to `__screenshots__`. A shared directory keeps references separate by project name and test file, so paths stay stable across checkouts. When the chosen directory is the test file's own directory, Rstest places references in its `__screenshots__` subdirectory.
+A relative `screenshotDirectory` resolves from each test file's directory (defaulting to `__screenshots__`). When a shared directory is used, Rstest separates references by project name and test file; when the chosen directory is the test file's own directory, references are placed in its `__screenshots__` subdirectory.
 
-By default, references are stored in this layout:
+Default reference path layout:
 
 ```text
 <test-directory>/__screenshots__/<test-file>/<reference-name>-<browser>-<platform>.png
 ```
 
-The reference name comes from the explicit name or the test name, sanitized for use as a path. Names that could collide after sanitization receive a stable suffix. Every unnamed assertion gets a sequence number starting at `1`, including a test's only screenshot (for example, `<test-name>-1`). Explicitly named assertions do not get this number.
+The reference name comes from the explicit name or the sanitized test name (with a stable suffix if sanitization could collide). Every unnamed assertion receives a sequence number starting at `1` (for example, `<test-name>-1`), even when a test has only one screenshot; explicitly named assertions have no sequence number.
 
-Project names are not part of the default path, so projects using the same test file, screenshot name, browser, and platform share a reference. Use `resolveScreenshotPath` to isolate project-specific references. Existing references from Rstest's previous hashed layout are not moved automatically; move them to the new paths or regenerate them with `--update`.
+Because project names are not included in the default layout, projects sharing a test file, screenshot name, browser, and platform share one reference. Use `resolveScreenshotPath` to isolate per-project references. Existing references from Rstest's previous hashed layout are not migrated automatically—move them or regenerate them with `--update`.
 
-Use `resolveScreenshotPath` when you need a different layout. It receives the absolute test file path, project and test names, browser, platform, and an optional ordinal for unnamed assertions. The first unnamed assertion receives no ordinal; later ones start at `2`. Return an absolute path or a path relative to the project root. When configured, the resolver takes precedence over `screenshotDirectory`.
+`resolveScreenshotPath` receives the absolute test file path, project and test names, browser, platform, and an optional ordinal for unnamed assertions (`undefined` for the first unnamed assertion, starting at `2` afterward). Return an absolute path or a path relative to the project root. When set, it takes precedence over `screenshotDirectory`.
 
 ```ts title="rstest.config.ts"
 import path from 'node:path';
@@ -573,21 +507,21 @@ export default defineConfig({
 
 ## Launch rules
 
-Every `rstest` run launches one browser per `(provider, browserName, headless, providerOptions.launch)` combination across all Browser Mode projects. Two projects that configure the same browser with the same launch key share one browser instance; different `providerOptions.launch` values or a different `headless` setting produce separate launches. Within a project, every browser of the project shares one build and one dev server.
+Each `rstest` run launches one browser process per unique `(provider, browserName, headless, providerOptions.launch)` combination across all Browser Mode projects. Projects with matching launch keys share one browser instance; differing `providerOptions.launch` or `headless` values produce separate launches. Within a project, all browsers share one build and one dev server.
 
-Browsers start on demand: a launch starts the first time a test file needs it, so a launch that cannot start (for example a missing executable) fails the run when that file is reached, not before the run begins. At most [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) headless browsers are open at once; when another launch needs a slot, an idle browser is closed, least recently used first. In watch mode idle browsers stay open between runs until a slot is needed. A headed browser is not counted and stays open for the whole run.
+Browsers launch on demand when the first test file needs them, so a broken launch (such as a missing executable) fails when that file runs. At most [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) headless browsers stay open concurrently; when another launch needs a slot, the least recently used idle browser closes. In watch mode, idle browsers remain open between runs until a slot is needed. Headed browsers are not counted against this limit and stay open for the entire run.
 
-The following rules are validated before any browser launches:
+Before any browser launches, Rstest validates:
 
-- **One headed browser per run.** Browser mode opens a single debug window, so at most one `(project, browser)` pair may set `headless: false`; every other browser must set `headless: true`. The error names the concrete fix:
+- **One headed browser per run.** Browser Mode opens a single debug window, so at most one `(project, browser)` pair may set `headless: false`; all others must use `headless: true`:
 
   > Only one (project, browser) pair can run headed per run: "web" ("chromium"). Browser mode opens one debug window, so every other browser must set headless: true. Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.
 
-- **Watch mode does not support mixing headed and headless browsers.** A watch session where one browser runs headed and another headless is rejected at validation; every configured browser must set `headless: true`, or run without watch.
+- **Watch mode cannot mix headed and headless browsers.** If one browser is headed and another is headless, watch mode rejects the run during validation; set `headless: true` on all browsers or run without watch mode.
 
-- **Coverage provider `v8` requires Chromium.** With `coverage.enabled` and `coverage.provider: 'v8'`, a browser project selecting a non-Chromium browser fails validation. Switch to `coverage.provider: 'istanbul'`, or select Chromium only (`--browser.instances chromium`).
+- **Coverage provider `v8` requires Chromium.** With `coverage.enabled` and `coverage.provider: 'v8'`, selecting any non-Chromium browser fails validation. Switch to `coverage.provider: 'istanbul'`, or filter to Chromium (`--browser.instances chromium`).
 
-For strict browser-per-environment coverage you can still run separate executions (for example, in a CI matrix) with the `--browser.instances` filter:
+To collect coverage or run tests per browser separately (for example, in a CI matrix), filter with `--browser.instances`:
 
 ```bash
 npx rstest --browser.instances chromium
@@ -597,27 +531,27 @@ npx rstest --browser.instances webkit
 
 ## CLI browser filters
 
-`--browser.instances <names>` (repeatable and/or comma-separated) only filters, like `--project`: it selects the configured instances whose `browserName` is listed and never creates an instance from a name. The default Chromium instance (when nothing is configured) and the instance of the deprecated `browser.browser` count as configured instances.
+`--browser.instances <names>` (repeatable and/or comma-separated) filters configured instances by `browserName`, like `--project`; it never creates new instances. The default Chromium instance (when `instances` is omitted) and an instance from the deprecated `browser.browser` field count as configured instances.
 
-- A browser project where none of its instances match is skipped for the run; node projects are unaffected.
-- A listed name that no selected browser project configures is an error naming the name and the configured browsers per project.
-- Duplicated names and names other than `chromium`, `firefox` and `webkit` are errors.
+- A browser project with no matching instances is skipped for the run; Node projects are unaffected.
+- Listing a browser name that no selected browser project configures throws an error naming the invalid name and each project's configured browsers.
+- Duplicate names and names other than `chromium`, `firefox`, and `webkit` are errors.
 
-`--browser.name <name>` stays as a deprecated option and emits a deprecation warning once per run. The project runs that single browser: with the configured instance's overrides when one has that `browserName`, otherwise as a plain instance with project-level defaults. It cannot be combined with `--browser.instances`.
+`--browser.name <name>` remains as a deprecated alias and prints a deprecation warning once per run. It selects that single browser (reusing the matching configured `instances` entry's overrides if present, or project-level defaults otherwise) and cannot be combined with `--browser.instances`.
 
 ## Multi-browser reporting
 
-Reporters do not see browsers. When a project selects more than one browser, each `(project, browser)` pair is reported as its own project named `<project> (<browserName>)`, for example `web (chromium)` and `web (firefox)`. A project that selects a single browser keeps its original name.
+Reporters are browser-agnostic. When a project runs more than one browser, each `(project, browser)` pair reports as its own project named `<project> (<browserName>)`, such as `web (chromium)` and `web (firefox)`. A project running a single browser keeps its configured name.
 
-- Reporter payloads, `rstest list` results, and blob reports use this name as `project`, so the same file run by two browsers yields two distinct results. Built-in reporters show it like any other project name, e.g. `✓ [web (chromium)] tests/basic.test.ts`.
-- The pairs are a reporting view only: every browser of a project still shares one build and one dev server, and `--project` filters by the configured project name.
-- Two configured project names must not collide with a generated `<project> (<browserName>)` name; a collision is a config error.
+- Reporter payloads, `rstest list` output, and blob reports use this name as `project`, so running one file across two browsers produces two distinct results (for example, `✓ [web (chromium)] tests/basic.test.ts`).
+- This naming is reporting-only: all browsers in a project still share one build and one dev server, and `--project` filters by the configured project name.
+- Configured project names must not collide with a generated `<project> (<browserName>)` name; collisions are a config error.
 
 ## Multi-project config isolation
 
-When using `projects` in Browser Mode, each project still compiles and executes with its own build config (for example `plugins`, `include`, and framework-specific setup).
+With `projects` in Browser Mode, each project compiles and runs with its own build config (`plugins`, `include`, framework setup, etc.).
 
-Browser build-scoped options stay per project (`provider`, `port`, `strictPort`), while the browser instances, defaults, and per-browser overrides (`instances`, `headless`, `viewport`, `providerOptions`) are project-owned: two browser projects may run different browsers in one run. When two projects configure the same browser, [launch sharing](#launch-rules) applies.
+Build-scoped options (`provider`, `port`, `strictPort`) remain per-project, while instances, defaults, and per-browser overrides (`instances`, `headless`, `viewport`, `providerOptions`) are owned by each project. Different browser projects can run different browsers in the same run; when two projects configure the same browser, [Launch rules](#launch-rules) apply.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -644,7 +578,7 @@ export default defineConfig({
 
 ## Mixing with node tests
 
-You can configure both browser tests and Node.js tests together:
+Browser tests and Node.js tests can run together in one config:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -678,12 +612,12 @@ export default defineConfig({
 
 ### Playwright
 
-When using `provider: 'playwright'`, the Playwright provider recognizes the following fields in `providerOptions`:
+With `provider: 'playwright'`, `providerOptions` recognizes:
 
-1. **`launch`** — Passed to Playwright's [`browserType.launch()`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch). Controls how the browser process is started.
-2. **`context`** — Passed to Playwright's [`browser.newContext()`](https://playwright.dev/docs/api/class-browser#browser-new-context). Controls the browser context created for each test file.
+1. **`launch`** — Passed to Playwright's [`browserType.launch()`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch) to control browser process startup.
+2. **`context`** — Passed to Playwright's [`browser.newContext()`](https://playwright.dev/docs/api/class-browser#browser-new-context) to control the browser context created for each test file.
 
-Since `providerOptions` is typed as `Record<string, unknown>`, you won't get IntelliSense out of the box. To get type checking and autocompletion, import types directly from the `playwright` package and use TypeScript's `satisfies` operator:
+Because `providerOptions` is typed as `Record<string, unknown>`, import Playwright's types and use `satisfies` for IntelliSense and type checking:
 
 ```ts title="rstest.config.ts"
 import type { LaunchOptions, BrowserContextOptions } from 'playwright';
@@ -713,6 +647,6 @@ export default defineConfig({
 
 ## Related links
 
-- [Browser Mode Guide](/guide/browser-testing/) - Introduction and usage guide for Browser Mode
-- [Getting Started](/guide/browser-testing/getting-started) - Configure Browser Mode tests
-- [User interactions](/guide/browser-testing/user-interactions#locator-api) - Write semantic tests with `page` + `expect.element`
+- [Browser Mode guide](/guide/browser-testing/) — Overview and usage guide for Browser Mode
+- [Getting started](/guide/browser-testing/getting-started) — Set up Browser Mode tests
+- [User interactions](/guide/browser-testing/user-interactions#locator-api) — Write tests with `page` and `expect.element`

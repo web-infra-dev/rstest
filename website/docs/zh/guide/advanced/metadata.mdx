@@ -9,7 +9,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.11.1" />
 
-Metadata 允许你为测试、套件和文件结果附加可 JSON 序列化的数据。内置 Reporter 默认不会打印这些数据；它主要面向自定义 Reporter、programmatic API、CI 集成、仪表盘、归属关系映射，以及 mutation testing runner 等外部工具。
+Metadata 可以为测试、套件和文件结果附加可 JSON 序列化的数据。内置 Reporter 默认不会打印这些数据；它主要面向自定义 Reporter、programmatic API、CI 集成、仪表盘、归属关系映射，以及 mutation testing runner 等外部工具。
 
 ## 为测试添加 metadata
 
@@ -69,7 +69,7 @@ describe(
 
 ## 从 Hook 添加文件和套件 metadata
 
-生命周期 Hook 可以通过 `ctx.meta` 获取 metadata 对象。
+文件级和套件级 Hook（`beforeAll` 和 `afterAll`）可以通过 `ctx.meta` 获取 metadata 对象（而测试级 Hook `beforeEach` 和 `afterEach` 通过 `ctx.task.meta` 访问测试 metadata）。
 
 ```ts
 import { afterAll, describe, test } from '@rstest/core';
@@ -173,8 +173,8 @@ Rstest 在收集和上报 metadata 时遵循以下规则：
 - 子级顶层字段会覆盖父级顶层字段。
 - 继承的 metadata 会为每个子级复制，因此运行时修改不会泄漏到兄弟测试或兄弟套件。
 - 嵌套对象和数组会在继承时复制。
-- 在测试中修改 `task.meta` 会影响该测试最终的 `TestResult.meta`。
-- 在文件级 Hook 中修改 `ctx.meta` 会影响 `TestFileResult.meta`；在套件 Hook 中修改它会影响该套件结果的 `meta`。
+- 在测试中修改 `task.meta`（或在 `beforeEach` / `afterEach` 中修改 `ctx.task.meta`）会影响该测试最终的 `TestResult.meta`。
+- 在文件级 `beforeAll` 或 `afterAll` 中修改 `ctx.meta` 会影响 `TestFileResult.meta`；在套件级 `beforeAll` 或 `afterAll` 中修改它会影响该套件结果的 `meta`。
 
 ## Skipped 和 todo 测试
 
@@ -196,25 +196,7 @@ test.todo('add refund coverage', {
 });
 ```
 
-因为这些测试不会执行，所以无法进行运行时修改，但 Reporter 仍然可以从 `onTestCaseStart` 和 `onTestCaseResult` 读取它们声明的 metadata。
-
-## 什么时候使用 metadata
-
-常见使用场景包括：
-
-- 归属字段，例如 `owner`、`team` 或 `feature`。
-- 测试管理系统链接，例如 `caseId` 或 `tracking`。
-- CI 仪表盘字段，例如 shard、environment 或 risk level。
-- 自定义 Reporter 输出，例如 JSON、Markdown 或内部仪表盘。
-- 需要把测试结果映射到源码分析的外部工具，例如 mutation testing runner。
-
-## 最佳实践
-
-- 保持值小且可 JSON 序列化。
-- 优先使用稳定的字段名，例如 `owner`、`feature`、`caseId` 和 `tracking`。
-- 将共享字段放在 `describe` 上，只在单个测试上覆盖例外。
-- 只有当 metadata 依赖运行时发现的信息时，才在运行时写入。
-- 使用自定义 Reporter 或 programmatic API 消费 metadata；内置 Reporter 更适合人类可读的测试输出。
+因为这些测试不会执行，所以无法在运行时修改，但 Reporter 仍然可以从 `onTestCaseStart` 和 `onTestCaseResult` 读取它们声明的 metadata。
 
 ## 相关 API
 
