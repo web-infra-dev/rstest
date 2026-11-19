@@ -19,7 +19,7 @@ const serializeError = (
   }
   const value = error as Partial<SerializedError>;
   const serialized: SerializedError = {
-    name: value.name,
+    name: typeof value.name === 'string' ? value.name : undefined,
     message: value.message ?? String(error),
     stack: typeof value.stack === 'string' ? value.stack : undefined,
     diff: value.diff,

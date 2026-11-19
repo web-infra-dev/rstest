@@ -300,6 +300,21 @@ describe('formatTestError', () => {
     expect(error.cause!.stack).toBeUndefined();
   });
 
+  it('only keeps a name that is a string', async () => {
+    const error = (
+      await formatTestError({
+        message: 'wrapper',
+        name: 42,
+        cause: { message: 'root', name: { code: 'E_ROOT' } },
+      })
+    )[0]!;
+
+    expect(error.message).toBe('wrapper');
+    expect(error.name).toBeUndefined();
+    expect(error.cause!.message).toBe('root');
+    expect(error.cause!.name).toBeUndefined();
+  });
+
   it('keeps the error when reading its cause throws', async () => {
     const unreadable = {
       get message(): string {
