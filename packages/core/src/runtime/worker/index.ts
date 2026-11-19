@@ -12,7 +12,7 @@ import { ENV } from '../../utils/env';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
-import { getRealNow, getRealTimers, setRealTimers } from '../util';
+import { getRealNow, getRealTimers, setRealTimers } from '../realTimers';
 import {
   installForkTerminationPolicy,
   installGracefulExit,
