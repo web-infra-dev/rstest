@@ -268,16 +268,6 @@ export function createNodeExecutor(
   > => {
     const { nodeProjectsToRun: projects, entriesCache } = getPlan();
     await validateRunDependencies();
-
-    // The dev server compiles once in run mode, so it never reuses checkpoints.
-    if (!isWatchMode) {
-      rsbuildInstance.onBeforeCreateCompiler(({ bundlerConfigs }) => {
-        for (const config of bundlerConfigs) {
-          config.incremental ??= false;
-        }
-      });
-    }
-
     // The prebundle runs in a child process and `createRsbuildServer` does not
     // await the first compile, so build them together. Watch projects stay
     // prepared even before they have entries: adding a matching file must reuse

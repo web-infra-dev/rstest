@@ -22,7 +22,14 @@ export default defineConfig({
     },
     {
       extends: baseConfig,
-      name: 'explicit',
+      name: 'explicit-object',
+      tools: {
+        rspack: { incremental: 'safe', plugins: [reportIncremental] },
+      },
+    },
+    {
+      extends: baseConfig,
+      name: 'explicit-callback',
       tools: {
         rspack: (config) => {
           config.plugins.push(reportIncremental);
