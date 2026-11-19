@@ -4,6 +4,11 @@ import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
 define.lib({
+  exports: {
+    custom: {
+      './package.json': './package.json',
+    },
+  },
   plugins: publishCheckPlugins(),
   lib: [
     {

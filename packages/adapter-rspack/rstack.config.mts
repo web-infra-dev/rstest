@@ -4,6 +4,7 @@ import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
 define.lib({
+  exports: true,
   plugins: publishCheckPlugins(),
   output: {
     // Bundle the shared config helpers into the adapter's dist so it carries no

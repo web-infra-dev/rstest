@@ -19,12 +19,12 @@ catalog:
   '@rsbuild/plugin-svgr': ^2.0.5
   '@rsbuild/plugin-vue': ^2.0.1
   '@rsbuild/plugin-vue-jsx': ^2.0.1
-  '@rslib/core': ~1.0.5
+  '@rslib/core': ~1.1.0-beta.1
   '@rspack/cli': ~2.3.0
   '@rspack/core': ~2.3.0
   '@rspack/dev-server': ~2.2.2
   '@rspack/plugin-react-refresh': ~2.0.2
-  rstack: ^0.9.0
+  rstack: ^0.9.3
 
 allowBuilds:
   '@parcel/watcher': false
@@ -45,6 +45,7 @@ hoist: false
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - 'rstack@0.9.3'
   - '@module-federation/*'
   - '@swc-next/*'
   - '@rspack/*'
@@ -54,7 +55,7 @@ minimumReleaseAgeExclude:
   - '@rstest/*'
   - '@rsdoctor/*'
   - '@rslint/*'
-  - '@rstackjs/doc-ui'
+  - '@rstackjs/*'
   - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
