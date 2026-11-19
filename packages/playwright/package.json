@@ -25,9 +25,7 @@
     "./config": {
       "import": "./dist/config.js"
     },
-    "./package.json": {
-      "default": "./package.json"
-    }
+    "./package.json": "./package.json"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

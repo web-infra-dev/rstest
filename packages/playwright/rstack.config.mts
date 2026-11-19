@@ -9,9 +9,7 @@ define.lib({
       ...exports,
       '.': { import: exports['.'] },
       './config': { import: exports['./config'] },
-      './package.json': {
-        default: './package.json',
-      },
+      './package.json': './package.json',
     }),
   },
   plugins: publishCheckPlugins(),
