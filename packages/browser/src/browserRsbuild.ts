@@ -1743,7 +1743,7 @@ export const createBrowserRuntime = async ({
                   },
                   output: {
                     target: 'web',
-                    // Inline snapshots need line and column mappings even without embedded sources.
+                    // Inline snapshots need line and column mappings.
                     sourceMap: {
                       js: omitSourceContent
                         ? 'nosources-source-map'
