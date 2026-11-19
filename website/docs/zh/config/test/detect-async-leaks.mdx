@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 检测测试文件结束后仍然存活的异步资源，例如未清理的定时器。
 
-该选项基于 Node.js `async_hooks` 实现，可能会降低测试速度。建议只在排查泄漏问题时启用，不建议在常规测试中长期打开。
+该选项基于 Node.js `async_hooks` 实现，可能会降低测试速度，建议仅在排查泄漏时启用。该选项仅适用于 Node Mode，在 Browser Mode 下会被忽略并输出警告。
 
 import { Tab, Tabs } from '@theme';
 
@@ -37,7 +37,7 @@ export default defineConfig({
 
 ## 示例
 
-下面的测试泄漏了一个 interval：
+下面的测试泄漏了一个定时器：
 
 ```ts
 import { expect, it } from '@rstest/core';

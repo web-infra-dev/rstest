@@ -1,5 +1,5 @@
 ---
-description: Hide logs for skipped test files to reduce noise in the test output, especially when running tests with filters.
+description: Hide log output for skipped test files.
 ---
 
 # hideSkippedTestFiles
@@ -8,7 +8,9 @@ description: Hide logs for skipped test files to reduce noise in the test output
 - **Default:** `false`
 - **CLI:** `--hideSkippedTestFiles`
 
-Hide logs for skipped test files to reduce noise in the test output, especially when running tests with filters.
+Hide log output for skipped test files. Useful when filters or file-level skips leave many skipped files in the output.
+
+The summary counts at the bottom still include skipped files.
 
 import { Tab, Tabs } from '@theme';
 
@@ -31,25 +33,21 @@ export default defineConfig({
 
 ## Example
 
-By default, Rstest displays logs for all test files.
+By default, Rstest logs every test file, including skipped ones:
 
 ```bash
- ✓ test/index.test.ts (1) 1ms
-  ✓ Index > should add two numbers correctly (0ms)
- - test/all-skipped.test.ts (2) 1ms
+ ✓ test/index.test.ts (1)
+ - test/all-skipped.test.ts (2)
 
  Test Files 1 passed | 1 skipped
       Tests 1 passed | 2 skipped (3)
    Duration 93ms (build 50ms, tests 43ms)
 ```
 
-When you set `hideSkippedTestFiles` to `true`, Rstest will hide logs for all skipped test files after the test run is complete.
-
-The output will look like this:
+With `hideSkippedTestFiles: true`, skipped files are omitted from the file list:
 
 ```bash
- ✓ test/index.test.ts (1) 1ms
-  ✓ Index > should add two numbers correctly (0ms)
+ ✓ test/index.test.ts (1)
 
  Test Files 1 passed | 1 skipped
       Tests 1 passed | 2 skipped (3)

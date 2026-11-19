@@ -1,70 +1,60 @@
 ---
-description: "This section explains how to upgrade the project's Rstest dependencies to the latest version."
+description: Upgrade @rstest/* and related Rsbuild dependencies in your project with Taze.
 ---
 
 # Upgrade Rstest
 
-This section explains how to upgrade the project's Rstest dependencies to the latest version.
+Use [Taze](https://github.com/antfu-collective/taze) to update Rstest packages in `package.json` to the latest release.
 
 :::info
-
-Rstest is still in 0.x version stage, and the API may change frequently. We recommend upgrading to the latest version to access new features and bug fixes.
-
+Rstest is in `0.x`, so minor versions can introduce breaking changes. Check the release notes before upgrading across minor versions.
 :::
 
 ## Using taze
 
-We recommend using [Taze](https://github.com/antfu-collective/taze) to upgrade the Rstest version. Taze is a CLI tool for updating npm dependencies.
-
 ### Usage
 
-Run the following command to upgrade all dependencies that include `rstest` and `rsbuild` in their names:
+Update all dependencies whose names contain `rstest` or `rsbuild`:
 
 ```bash
 npx taze major --include "/(rstest|rsbuild)/" -w
 ```
 
-:::tip
-Rstest has not yet reached version 1.0.0, so you need to add the `major` parameter when updating.
+:::tip Why `major` is required
+Because Rstest is still on `0.x`, SemVer treats minor releases such as `0.11` → `0.12` as breaking changes. Without `major`, `taze` only updates patch releases within the same minor range.
 :::
 
-The result will look similar to:
+Example output:
 
 ```bash
-rstest-example - 1 patch
+rstest-example - 1 minor
 
   devDependencies
-    @rstest/core    ~29d  ^0.6.0  →  ^0.6.6  ~5d
+    @rstest/core    ~14d  ^0.11.0  →  ^0.12.6  ~1d
 
 ℹ changes written to package.json, run pnpm i to install updates.
 ```
 
-You can also adjust the `include` pattern to match specific packages, for example, to upgrade only packages under the `@rstest` scope:
+Then run your package manager's install command (`pnpm install`, `npm install`, etc.) to install the updated packages.
+
+To update only packages under the `@rstest` scope:
 
 ```bash
-npx taze --include /@rstest/ -w
+npx taze major --include "/@rstest/" -w
 ```
 
 ### Options
 
-Here are some examples of using taze options.
-
-- In a monorepo, you can add the `-r` option to upgrade recursively:
+- Upgrade recursively across all packages in a monorepo (`-r`):
 
 ```bash
-npx taze --include /(rstest|rsbuild)/ -w -r
+npx taze major --include "/(rstest|rsbuild)/" -w -r
 ```
 
-- Add `-l` to upgrade locked versions:
+- Upgrade locked dependency versions (`-l`):
 
 ```bash
-npx taze --include /(rstest|rsbuild)/ -w -l
+npx taze major --include "/(rstest|rsbuild)/" -w -l
 ```
 
-- To upgrade to a major version:
-
-```bash
-npx taze major --include /(rstest|rsbuild)/ -w
-```
-
-> For more options, please refer to the [taze documentation](https://github.com/antfu-collective/taze).
+For additional options, see the [Taze documentation](https://github.com/antfu-collective/taze).

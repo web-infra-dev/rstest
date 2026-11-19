@@ -1,10 +1,12 @@
 ---
 overview: true
-title: Runtime API Overview
-description: This page lists all the testing APIs for Rstest.
+title: Runtime API overview
+description: Overview of Rstest runtime testing APIs, browser mode APIs, rs utilities, and environment variables.
 ---
 
-This page lists all the testing APIs for Rstest.
+Rstest provides runtime APIs for writing tests, mocking, browser automation, and reading test-runner environment state:
 
-- For general testing APIs, see [Test API](/api/runtime-api/test-api/expect)
-- For Browser Mode specific APIs, see [Browser Mode](/api/runtime-api/browser-mode/)
+- [Test API](/api/runtime-api/test-api/expect): `expect`, `assert`, `test`, `describe`, and lifecycle hooks.
+- [Browser Mode](/api/runtime-api/browser-mode/): `page`, `Locator`, keyboard actions, `expect.element`, and React testing utilities.
+- [Rstest utility](/api/runtime-api/rstest/): `rs` / `rstest` helpers for mocking, fake timers, stubbing, runtime config, and polling.
+- [Environment variables](/api/runtime-api/environment-variables): environment variables set or read by Rstest.

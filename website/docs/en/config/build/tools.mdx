@@ -3,19 +3,28 @@ description: Options for low-level tools, such as customizing Rspack configurati
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
- 
+
 # tools
 
 Options for low-level tools.
 
 ## tools.bundlerChain <RsbuildDocBadge path="/config/tools/bundler-chain" text="tools.bundlerChain" />
 
-[rspack-chain](https://github.com/rstackjs/rspack-chain) is a utility library for configuring Rspack. By using `rspack-chain`, you can more easily modify and extend Rspack configurations.
+- **Type:** `ModifyBundlerChainFn | ModifyBundlerChainFn[]`
+- **Default:** `undefined`
+
+Modifies the Rspack configuration via [rspack-chain](https://github.com/rstackjs/rspack-chain), which provides a chainable API for rules, plugins, and optimization settings.
 
 ## tools.rspack <RsbuildDocBadge path="/config/tools/rspack" text="tools.rspack" />
 
-`tools.rspack` is used to configure [Rspack](https://rspack.rs/config/index).
+- **Type:** `(Rspack.Configuration | ModifyRspackConfigFn) | (Rspack.Configuration | ModifyRspackConfigFn)[]`
+- **Default:** `undefined`
+
+Modifies the [Rspack](https://rspack.rs/config/index) configuration directly, either as a configuration object (merged via `rspack-merge`) or a function that mutates or returns a config.
 
 ## tools.swc <RsbuildDocBadge path="/config/tools/swc" text="tools.swc" />
 
-You can set the options of [builtin:swc-loader](https://rspack.rs/guide/features/builtin-swc-loader) through `tools.swc`.
+- **Type:** `ConfigChain<Rspack.SwcLoaderOptions>`
+- **Default:** `undefined`
+
+Configures options passed to Rspack's [builtin:swc-loader](https://rspack.rs/guide/features/builtin-swc-loader).

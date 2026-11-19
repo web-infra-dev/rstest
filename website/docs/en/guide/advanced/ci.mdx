@@ -253,12 +253,3 @@ Use `junit` for CI test-result integrations, `json` for custom tooling, `md` for
 Start with the package-manager cache because it is safe and usually gives the biggest CI improvement. In GitHub Actions, `actions/setup-node` with `cache: pnpm` restores the pnpm store based on the lockfile.
 
 Do not cache Playwright browser binaries by default. Restoring the cache can take about as long as downloading the browser, and Linux system dependencies are not included in that cache. Prefer the preinstalled GitHub Chrome when its version policy fits your workflow; otherwise install only the required browser and use `--only-shell` for headless-only Chromium runs.
-
-## Recommended checklist
-
-- Use Node.js `^20.19.0` or `>=22.12.0` to match Rstest's supported runtime range.
-- Run `rstest` in CI, either directly or through a package script.
-- Install coverage and browser packages only when the workflow needs those features.
-- Upload coverage, JUnit, JSON, or blob artifacts with `if: always()` if they help debug failures.
-- Add sharding only after the single-machine workflow is stable.
-- Choose explicitly between a version-matched Playwright browser and a preinstalled system Chrome, and keep the selected browser, channel, and installation step aligned.

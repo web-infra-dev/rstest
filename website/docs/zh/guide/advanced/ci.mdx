@@ -216,7 +216,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-每个分片会将测试结果和实际采集的覆盖率写入 `.rstest-reports/blob-{index}-{count}.json`。支持延迟最终处理的 coverage provider 会让这些使用 blob 报告器的分片不生成覆盖率报告，也不检查阈值；未使用 blob 报告器的分片仍会正常完成覆盖率最终处理。旧版 provider 保持原有的单次运行最终处理行为。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果补齐未测试文件、运行已配置的 reporter 并检查覆盖率阈值。请把覆盖率最终处理参数放在共享配置中，或将相同的 `--coverage.*` 参数传给合并命令，因为只传给分片的 CLI 参数不会写入 blob。更多细节请查看[测试分片](/guide/basic/cli#sharding-tests)和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
+每个分片会将测试结果和实际采集的覆盖率写入 `.rstest-reports/blob-{index}-{count}.json`。支持延迟最终处理的 coverage provider 会让使用 `blob` reporter 的分片不生成覆盖率报告，也不检查阈值；未使用 `blob` reporter 的分片仍会正常完成覆盖率处理。旧版 provider 保持原有的单次运行最终处理行为。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果补齐未测试文件、运行已配置的 reporter 并检查覆盖率阈值。请把覆盖率最终处理参数放在共享配置中，或将相同的 `--coverage.*` 参数传给合并命令，因为只传给分片的 CLI 参数不会写入 blob。更多细节请查看[测试分片](/guide/basic/cli#sharding-tests)和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
 
 ## 发布机器可读报告
 
@@ -253,12 +253,3 @@ export default defineConfig({
 建议先从包管理器缓存开始，因为它安全，通常也能带来最明显的 CI 优化。在 GitHub Actions 中，`actions/setup-node` 配合 `cache: pnpm` 会基于 lockfile 恢复 pnpm store。
 
 默认不要缓存 Playwright 浏览器二进制文件。恢复缓存所需的时间可能与重新下载相近，而且缓存不包含 Linux 系统依赖。如果 workflow 可以接受 runner 的浏览器版本，优先使用 GitHub 预装的 Chrome；否则只安装需要的浏览器，并在仅运行 headless Chromium 时使用 `--only-shell`。
-
-## 推荐检查清单
-
-- 使用 Node.js `^20.19.0` 或 `>=22.12.0`，以匹配 Rstest 支持的运行时范围。
-- 在 CI 中运行 `rstest`，可以直接运行，也可以通过 package script 运行。
-- 仅在 workflow 需要对应功能时安装 coverage 和 browser 包。
-- 如果 coverage、JUnit、JSON 或 blob artifact 有助于排查失败，使用 `if: always()` 上传。
-- 在单机 workflow 稳定后，再添加 sharding。
-- 明确选择与 Playwright 版本匹配的浏览器或系统预装的 Chrome，并让 browser、channel 和安装步骤保持一致。

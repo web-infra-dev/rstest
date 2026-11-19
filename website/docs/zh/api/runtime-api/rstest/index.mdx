@@ -1,13 +1,13 @@
 ---
 title: Rstest Utility
-description: Rstest 提供了一些实用函数，通过 rs 工具方法可以帮助你更方便地进行测试。
+description: Rstest 通过 rs 工具对象提供用于 mock、fake timers 和环境模拟的工具函数。
 ---
 
 # Rstest utility
 
-Rstest 提供了一些实用函数，通过 `rs` 工具方法可以帮助你更方便地进行测试。
+Rstest 通过 `rs` 工具对象提供用于 mock、fake timers 和环境模拟的工具函数。
 
-你可以直接从 `@rstest/core` 导入 `rs`。
+从 `@rstest/core` 直接导入 `rs`：
 
 ```ts
 import { rs } from '@rstest/core';
@@ -16,7 +16,7 @@ const fn = rs.fn();
 fn.mockResolvedValue('foo');
 ```
 
-更长的 `rstest` 工具方法仍然可以作为别名使用。
+也可以使用别名 `rstest`：
 
 ```ts
 import { rstest } from '@rstest/core';
@@ -25,4 +25,4 @@ const fn = rstest.fn();
 fn.mockResolvedValue('foo');
 ```
 
-或者，你也可以像使用 `jest` 一样全局访问它（当启用了 [globals](/config/test/globals) 配置时）。
+启用 [globals](/config/test/globals) 配置后，无需导入即可全局访问 `rs` 和 `rstest`。

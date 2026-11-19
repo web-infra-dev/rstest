@@ -14,6 +14,8 @@ Tests within the same file still share that file's environment. Use [`beforeEach
 
 For `forks` and `threads`, setting `isolate: false` lets files in the same worker reuse module caches and the test environment. This can improve performance if the files do not leave state behind.
 
+In [Browser Mode](/config/test/browser), `isolate: false` reuses a single page across files in headless mode when no [`setupFiles`](/config/test/setup-files) are configured. Headed mode (`browser.headless: false`) and projects with `setupFiles` always isolate test files.
+
 Isolation does not control parallelism. Use [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) to limit Node.js test workers and [`maxConcurrency`](/config/test/max-concurrency) to limit concurrent test cases within a file.
 
 :::info `vmForks` and `vmThreads` always isolate test files

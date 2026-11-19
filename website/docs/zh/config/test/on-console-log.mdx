@@ -1,5 +1,5 @@
 ---
-description: 自定义 console 日志的处理函数，这有助于过滤来自第三方库的日志。
+description: 在测试输出的 console 日志打印前拦截并过滤。
 ---
 
 # onConsoleLog
@@ -7,9 +7,9 @@ description: 自定义 console 日志的处理函数，这有助于过滤来自�
 - **类型：** `(content: string, type: 'stdout' | 'stderr') => boolean | void`
 - **默认值：** `undefined`
 
-自定义 console 日志的处理函数，这有助于过滤来自第三方库的日志。
+在 Rstest 打印测试中的 `console` 输出前拦截日志。返回 `false` 会屏蔽该条日志；返回 `true` 或 `undefined` 则正常输出。
 
-处理函数会接收到日志内容 `content` 以及它的来源流 `type`（`'stdout'` 或 `'stderr'`），因此你既能按文本过滤，也能按输出流过滤。如果你返回 `false`，Rstest 不会将此日志打印到控制台。
+这是一个全局配置项，只能在根配置中设置，无法在 [`projects`](/config/test/projects) 中按项目覆盖。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -23,17 +23,8 @@ export default defineConfig({
 });
 ```
 
+如果只是想屏蔽全部测试日志或仅保留失败用例的日志，无需自定义过滤函数，直接使用 [`silent`](/config/test/silent) 即可。
+
 :::note
-当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`onConsoleLog` 将不会生效。
+当 [`disableConsoleIntercept`](/config/test/disable-console-intercept) 为 `true` 时，`onConsoleLog` 不会生效。被 `silent` 丢弃的日志也不会传入 `onConsoleLog`。
 :::
-
-## 静默控制台日志
-
-你可以通过在 `onConsoleLog` 处理函数中返回 `false` 来静默控制台日志。
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-export default defineConfig({
-  onConsoleLog: () => false,
-});
-```

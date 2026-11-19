@@ -10,27 +10,43 @@ Options for module resolution.
 
 ## resolve.aliasStrategy <RsbuildDocBadge path="/config/resolve/alias-strategy" text="resolve.aliasStrategy" />
 
-Control the priority between the `resolve.alias` option and the `paths` option in `tsconfig.json`.
+- **Type:** `'prefer-tsconfig' | 'prefer-alias'`
+- **Default:** `'prefer-tsconfig'`
+
+Controls precedence between `resolve.alias` and `compilerOptions.paths` in `tsconfig.json`:
+
+- `'prefer-tsconfig'`: `tsconfig.json` `paths` take precedence over `resolve.alias`.
+- `'prefer-alias'`: `resolve.alias` takes precedence over `tsconfig.json` `paths`.
 
 ## resolve.alias <RsbuildDocBadge path="/config/resolve/alias" text="resolve.alias" />
 
-Set the alias for the module path, which is used to simplify the import path or redirect the module reference, similar to the [resolve.alias](https://rspack.rs/config/resolve#resolvealias) config of Rspack.
+- **Type:** `ConfigChain<Record<string, string | false | (string | false)[]>>`
+- **Default:** `{}`
 
-For TypeScript projects, you only need to configure [compilerOptions.paths](https://www.typescriptlang.org/tsconfig/#paths) in the `tsconfig.json` file. Rstest will automatically recognize it, so there is no need to configure the `resolve.alias` option separately.
+Redirects or simplifies module import paths, matching Rspack's [resolve.alias](https://rspack.rs/config/resolve#resolvealias).
+
+For TypeScript projects, Rstest automatically reads `compilerOptions.paths` from `tsconfig.json`, so you do not need to duplicate those mappings in `resolve.alias`.
 
 ## resolve.dedupe <RsbuildDocBadge path="/config/resolve/dedupe" text="resolve.dedupe" />
 
-Force Rstest to resolve the specified packages from project root, which is useful for deduplicating packages and reducing the bundle size.
+- **Type:** `string[]`
+- **Default:** `undefined`
+
+Forces Rstest to resolve the specified packages from the project root, preventing duplicate package copies in the bundle.
 
 ## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
 
-Automatically resolve file extensions when importing modules. This means you can import files without explicitly writing their extensions.
+- **Type:** `string[]`
+- **Default:** `['.ts', '.tsx', '.mjs', '.js', '.jsx', '.json', '.cjs']`
+
+File extensions resolved automatically when importing modules without an explicit extension. Rstest inherits Rsbuild's defaults and appends `.cjs`.
 
 ## resolve.conditionNames <RsbuildDocBadge path="/config/resolve/condition-names" text="resolve.conditionNames" />
 
-Control the condition names used when resolving the `exports` field of a package.
+- **Type:** `string[]`
+- **Default:** Depends on the test environment and dependency type.
 
-**Default:** Depends on the test environment and dependency type.
+Controls the condition names used when resolving a package's `exports` field.
 
 For `node`, `jsdom`, and `happy-dom` tests, Rstest inherits Rspack's default conditions. With the default `NODE_ENV=test`, bundled JavaScript dependencies use:
 
@@ -41,12 +57,18 @@ For `node`, `jsdom`, and `happy-dom` tests, Rstest inherits Rspack's default con
 
 Rstest treats `NODE_ENV=test` as development mode for bundling, so `development` is active even though `NODE_ENV` is `'test'`. The package's `exports` key order determines which matching entry wins, rather than the order of `conditionNames`.
 
-When customizing this option, use `'...'` to preserve Rspack's default conditions. For example, use `conditionNames: ['custom', '...']` in `node` tests, or `conditionNames: ['browser', 'custom', '...']` in `jsdom` / `happy-dom` tests. When this option is set explicitly, Rstest no longer adds `browser` automatically.
+When customizing this option, include `'...'` to keep Rspack's default conditions—for example, `conditionNames: ['custom', '...']` in `node` tests, or `conditionNames: ['browser', 'custom', '...']` in `jsdom` / `happy-dom` tests. Once this option is set explicitly, Rstest no longer adds `browser` automatically.
 
-Providing a list without `'...'` replaces the defaults across dependency types, including the distinction between `import` and `require`.
+Providing a list without `'...'` replaces the defaults across all dependency types, including the distinction between `import` and `require`.
 
 To remove a default condition while keeping separate ESM and CommonJS resolution, configure `tools.rspack.resolve.byDependency`. See the [Jest migration example](/guide/migration/jest#dependency-export-conditions), which excludes `development` and explains when to include `browser`.
 
 ## resolve.mainFields <RsbuildDocBadge path="/config/resolve/main-fields" text="resolve.mainFields" />
 
-Control the priority order of package entry fields such as `main`, `module`, and `browser`.
+- **Type:** `string[]`
+- **Default:** `['main']` (`node`); `['module', 'main']` (`jsdom` / `happy-dom`); `['browser', 'module', 'main']` (Browser Mode)
+
+Controls the priority order of `package.json` entry fields such as `main`, `module`, and `browser`.
+
+- In the `node` test environment, Rstest strips `'module'` from `mainFields` (defaulting to `['main']`) because a package's `module` entry is not always native Node ESM.
+- For CommonJS `require` calls across `node`, `jsdom`, and `happy-dom`, Rstest also prepends `'main'` to `resolve.byDependency.commonjs.mainFields`.

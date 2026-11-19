@@ -1,5 +1,5 @@
 ---
-description: Default timeout of hook in milliseconds. 0 will disable the timeout.
+description: Default timeout of lifecycle hooks in milliseconds. 0 disables the timeout.
 ---
 
 # hookTimeout
@@ -8,7 +8,7 @@ description: Default timeout of hook in milliseconds. 0 will disable the timeout
 - **Default:** `10_000`
 - **CLI:** `--hookTimeout=10000`
 
-Default timeout of [hook](/api/runtime-api/test-api/hooks) in milliseconds. `0` will disable the timeout.
+Default timeout of lifecycle [hooks](/api/runtime-api/test-api/hooks) (`beforeAll`, `afterAll`, `beforeEach`, `afterEach`, `onTestFinished`, and `onTestFailed`) in milliseconds. Set to `0` to disable the timeout.
 
 import { Tab, Tabs } from '@theme';
 
@@ -29,10 +29,10 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-Rstest determines the hook timeout based on the following priority order:
+Rstest resolves the hook timeout in the following priority order:
 
-1. [timeout](/api/runtime-api/test-api/hooks) configuration in each test case
-2. Timeout configured in the test file via [`rs.setConfig({ hookTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig)
-3. `--hookTimeout` option in CLI
-4. `hookTimeout` option in the configuration file
+1. The `timeout` argument passed to an individual [hook](/api/runtime-api/test-api/hooks)
+2. File-level timeout set via [`rs.setConfig({ hookTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig)
+3. `--hookTimeout` CLI option
+4. `hookTimeout` in the configuration file
 5. Default value of `10_000` milliseconds

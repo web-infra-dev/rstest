@@ -1,6 +1,6 @@
 ---
 title: Reporters
-description: Rstest 中的报告器控制测试结果的显示和处理方式。
+description: 控制 Rstest 中测试结果的格式化、展示与导出方式。
 ---
 
 import { Tab, Tabs } from '@theme';
@@ -9,37 +9,31 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Reporters
 
-Rstest 中的报告器控制测试结果的显示和处理方式。
-
-你可以使用内置报告器获得不同的输出格式，或创建自定义报告器来集成到你的工作流程中。
+Reporter 控制 Rstest 如何格式化与输出测试结果。你可以使用内置报告器输出终端日志、CI 注解或机器可读产物，也可以接入自定义报告器。
 
 ## 配置方式
 
-你可以通过以下方式配置报告器：
+可通过以下方式配置报告器：
 
-1. **CLI**: `--reporters=<name>` (可多次使用；同时兼容 `--reporter` 作为别名)
-2. **配置文件**: 在 `rstest.config.ts` 中添加 [reporters](/config/test/reporters)
+1. **CLI**：`--reporters=<name>`（可多次使用；同时支持别名 `--reporter`）
+2. **配置文件**：在 `rstest.config.ts` 中设置 [reporters](/config/test/reporters)
 
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 import { customReporter } from './path/to/custom-reporter';
 
 export default defineConfig({
   reporters: [
-    'default', // 简单字符串报告器
-    ['junit', { outputPath: './test-results.xml' }], // 带选项的报告器
-    customReporter, // 自定义报告器实例
+    'default',
+    ['junit', { outputPath: './test-results.xml' }],
+    customReporter,
   ],
 });
 ```
 
-更多配置方式请参考 [报告器配置](/config/test/reporters)。
-
-内置报告器的 options 类型定义在 TypeScript types 中：[`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+完整配置方式见[报告器配置](/config/test/reporters)，内置报告器选项类型定义见 [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)（其中 `junit` 在公开联合类型中声明为 `Record<string, unknown>`，实际选项见下方 [JUnit 报告器](#junit-报告器)）。
 
 ## 内置报告器
-
-Rstest 提供了多种内置报告器：
 
 | 报告器           | 用途                | 使用场景              |
 | ---------------- | ------------------- | --------------------- |
@@ -48,13 +42,13 @@ Rstest 提供了多种内置报告器：
 | `verbose`        | 详细的测试用例输出  | 调试测试失败          |
 | `github-actions` | CI 错误注释         | GitHub Actions 工作流 |
 | `junit`          | JUnit XML 格式      | CI/CD 集成            |
-| `json`           | 结构化 JSON 报告    | CI 工具和脚本处理     |
+| `json`           | 结构化 JSON 报告    | CI 工具与脚本处理     |
 | `md`             | Markdown agent 报告 | Agent / LLM 集成      |
 | `blob`           | 序列化 JSON 输出    | 合并分片报告          |
 
 ### 默认报告器
 
-默认报告器在终端中显示测试运行状态、结果和汇总信息，带有彩色输出。
+在终端以彩色格式输出测试运行状态、失败详情和汇总信息。
 
 **输出示例：**
 
@@ -66,18 +60,21 @@ Rstest 提供了多种内置报告器：
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-**配置选项：**
+**选项：**
 
-- `summary`：是否显示汇总信息（默认：`true`）
-- `logger`：用于输出的自定义日志函数（默认：`process.stdout/process.stderr`）
+| 选项              | 类型                                                                          | 默认值                                        | 说明                                   |
+| ----------------- | ----------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------- |
+| `summary`         | `boolean`                                                                     | `true`                                        | 是否输出失败详情和运行汇总。           |
+| `logger`          | `{ outputStream: Writable; errorStream: Writable; getColumns: () => number }` | `process.stdout` / `process.stderr`           | 自定义输出流与列宽获取函数。           |
+| `showProjectName` | `boolean`                                                                     | 多项目或多浏览器运行时为 `true`，否则 `false` | 是否在测试文件路径前显示 `[project]`。 |
 
 #### 进度报告
 
-默认报告器在测试执行期间提供进度反馈，并根据你的环境自动调整。
+默认报告器会根据终端环境自动切换进度输出方式：
 
 **TTY 环境（交互式终端）**
 
-在交互式终端中，默认报告器会在终端底部显示实时测试进度，包括当前正在运行的测试文件，以及运行超过 2 秒的测试用例。
+在终端底部每秒刷新一次实时状态，展示正在运行的测试文件及耗时超过 2 秒的测试用例，运行结束后自动清除：
 
 ```bash
  RUNS  src/database.test.ts
@@ -88,11 +85,9 @@ Rstest 提供了多种内置报告器：
    Duration 30s
 ```
 
-此实时状态每秒更新一次，测试完成后会自动清除。
-
 **非 TTY 环境（CI、管道输出、AI agents）**
 
-在非 TTY 环境中，默认报告器会在控制台 30 秒无输出时自动输出一次进度日志。这可以防止 CI "无输出" 超时（例如，GitHub Actions 在 10 分钟无输出后会终止进程），同时不会干扰正常的测试结果输出。
+当控制台连续 30 秒无输出时自动打印一条进度日志，并列出耗时超过 10 秒的测试用例。输出满 20 次（约 10 分钟空闲）后停止打印，避免测试真正卡死时阻塞 CI 的超时机制：
 
 ```bash
 [PROGRESS] test files: 20 done, 4 running | tests: 380 passed, 3 failed | 2m 30s
@@ -100,11 +95,9 @@ Rstest 提供了多种内置报告器：
             Running: src/other.test.ts
 ```
 
-当某个测试用例运行超过 10 秒时，会显示其名称和耗时。这有助于识别卡住或慢速的测试。进度报告在输出 20 次后（约 10 分钟空闲时间）会自动停止，以避免在测试真正卡死时阻止 CI 超时机制生效。
-
 ### 详细报告器
 
-详细报告器继承自默认报告器，为所有测试用例输出详细信息，包括成功的测试用例。进度报告等默认报告器的功能同样适用。如果 Rstest 预打包了测试环境，详细报告会在构建耗时中列出每个环境包的预打包耗时。
+继承自默认报告器，输出包括通过用例在内的全部测试用例，并在预打包测试环境时于构建耗时中列出各环境包的预打包耗时。
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -113,11 +106,11 @@ npx rstest --reporters=verbose
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: 'verbose'
+  reporters: 'verbose',
 });
 ```
   </Tab>
@@ -135,16 +128,18 @@ export default defineConfig({
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
+**选项：** 支持 `logger` 和 `showProjectName`（与[默认报告器](#默认报告器)一致；汇总信息始终输出）。
+
 ### Dot 报告器
 
 <ApiMeta addedVersion="0.9.7" />
 
-Dot 报告器会为每个测试用例输出一个紧凑字符：
+每个测试用例完成后输出一个紧凑字符：
 
-- `·` 表示通过
-- `x` 表示失败
-- `-` 表示跳过
-- `*` 表示 todo
+- `·`：通过
+- `x`：失败
+- `-`：跳过
+- `*`：todo
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -153,21 +148,25 @@ npx rstest --reporters=dot
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: 'dot'
+  reporters: 'dot',
 });
 ```
   </Tab>
 </Tabs>
 
-在标记行之后，它仍然会输出常规的失败摘要和耗时汇总。
+标记行输出结束后会继续打印失败详情和耗时汇总（除非设置 `summary: false`）。
+
+**选项：** 支持 `summary`（默认：`true`）和 `logger`（与[默认报告器](#默认报告器)一致）。
 
 ### GitHub Actions 报告器
 
-GitHub Actions 报告器将在测试失败时以 [GitHub Actions 工作流命令](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 的形式输出错误信息。
+在测试失败时通过 [GitHub Actions 工作流命令](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 输出错误注解，用于在 PR diff 中直接定位失败位置。
+
+**自动启用：** 当 `process.env.GITHUB_ACTIONS === 'true'` 且未手动配置报告器时，自动与 `default` 一并启用。
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -176,44 +175,38 @@ npx rstest --reporters=github-actions
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: ['github-actions']
+  reporters: ['github-actions'],
 });
 ```
   </Tab>
 </Tabs>
 
-当测试失败时，GitHub Actions 报告器会输出类似以下格式的信息：
+失败断言会输出如下工作流命令：
 
 ```bash
 ::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
 ```
 
-这些输出会被 GitHub Actions 解析并在对应位置生成注释。
-
-当错误带有 `cause` 时，cause 链中的每个错误会以 `Caused by: <name>: <message>` 的形式追加到消息中。
+当错误带有 `cause` 时，cause 链中的每个错误都会以 `Caused by: <name>: <message>` 形式追加到消息中。
 
 ![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
 
-当存在 `GITHUB_STEP_SUMMARY`（GitHub Actions 会自动注入）时，Rstest 还会追加一份 Markdown 摘要，包含：
+当环境中存在 `GITHUB_STEP_SUMMARY` 时，Rstest 还会追加一个可折叠的 Markdown 摘要（状态图标为 `✅`、存在重试后通过的 flaky 测试时为 `⚠️`，失败时为 `❌`），包含：
 
-- 测试汇总表（files/tests/duration）
-- flaky tests 区块：展示重试后通过的用例，并在可用时附带之前失败信息的简短摘要
-- 失败用例详情（错误信息、diff、错误堆栈），以及 `cause` 链中每个错误的同样信息
-- 每个失败用例的复现命令
-- 带状态标记的标题（`✅` / `❌`）
-- 每次 test run 独立的可折叠区块；成功时默认折叠
+- 汇总表（`Test Files`、`Tests`、`Duration`，存在 flaky 测试时包含 `Flaky Tests`）
+- 最多 20 条重试后通过的 flaky 测试及之前失败的简要原因
+- 最多 20 条失败用例详情（错误信息、diff、堆栈，包含 `cause` 链中每个错误的详情，以及单条复现命令）
+- 若项目根目录位于 `GITHUB_WORKSPACE` 内，路径会缩写为 `<ROOT>/...`
 
 #### 自动启用
 
-当没有手动设置报告器时，Rstest 在检测到 GitHub Actions 环境（`process.env.GITHUB_ACTIONS` 为 `'true'`）时会自动启用此报告器。
+当配置文件和 CLI 都未显式指定报告器，且 `process.env.GITHUB_ACTIONS === 'true'` 时，Rstest 会自动启用 `['default', 'github-actions']`。
 
 #### 手动启用
-
-你也可以手动启用此报告器：
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -222,11 +215,11 @@ npx rstest --reporters=github-actions
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: ['github-actions']
+  reporters: ['github-actions'],
 });
 ```
   </Tab>
@@ -241,9 +234,9 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.11.6" />
 
-使用 `summary` 的对象形式，可以自定义每个失败消息和 diff，以及每个未处理错误消息和 stack 包含的最大字符数。`maxCharsPerField` 默认为 `400`。GitHub 将一个 step 生成的完整 Summary 限制为 [1 MiB](https://docs.github.com/zh/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#步骤隔离和限制)，因此应为该配置设置合理的上限。将 `summary` 设置为 `false` 可以禁用 Markdown 摘要。
+`summary.maxCharsPerField` 默认为 `400`，用于限制每条失败消息、diff 以及每个未处理错误消息和堆栈的最大字符数。GitHub 限制单个 step 的 Summary 总大小为 [1 MiB](https://docs.github.com/zh/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#步骤隔离和限制)，请合理控制上限；设为 `summary: false` 可关闭 Markdown 摘要。
 
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -263,7 +256,7 @@ export default defineConfig({
 
 ### JUnit 报告器
 
-生成 JUnit XML 格式的测试报告，非常适合 CI/CD 集成和测试结果聚合。
+生成 JUnit XML 格式的测试报告，用于 CI/CD 集成和结果聚合。
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -272,26 +265,26 @@ npx rstest --reporters=junit
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: [['junit', { outputPath: './junit.xml' }]]
+  reporters: [['junit', { outputPath: './junit.xml' }]],
 });
 ```
   </Tab>
 </Tabs>
 
-**配置选项：**
+**选项：**
 
-- `outputPath`：输出文件路径 (默认为控制台输出)
+- `outputPath`：`string` — 输出文件路径（默认输出到控制台）。
 
-JUnit 报告器生成如下 XML 格式：
+生成的 XML 格式如下：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="rstest tests" tests="3" failures="1" errors="1" skipped="1" time="0.3" timestamp="2024-01-01T00:00:00.000Z">
-  <testsuite name="test1.test.ts" tests="3" failures="1" errors="1" skipped="1" time="0.3" timestamp="2024-01-01T00:00:00.000Z">
+<testsuites name="rstest tests" tests="3" failures="1" errors="0" skipped="1" time="0.3" timestamp="2024-01-01T00:00:00.000Z">
+  <testsuite name="test1.test.ts" tests="3" failures="1" errors="0" skipped="1" time="0.3" timestamp="2024-01-01T00:00:00.000Z">
     <testcase name="should pass" classname="test1.test.ts" time="0.1">
     </testcase>
     <testcase name="should fail" classname="test1.test.ts" time="0.2">
@@ -304,18 +297,19 @@ JUnit 报告器生成如下 XML 格式：
 </testsuites>
 ```
 
-JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
+状态映射规则：
 
-- `passed`：测试通过
-- `failed`：测试失败，生成 `<failure>` 标签
-- `skipped`：测试跳过，生成 `<skipped>` 标签
-- `todo`：测试待办，生成 `<skipped>` 标签
+- `passed`：空的 `<testcase>` 节点
+- `failed`：在 `<testcase>` 内生成 `<failure>` 节点
+- `skipped` / `todo`：在 `<testcase>` 内生成 `<skipped/>` 节点
+- 文件级错误（文件加载失败或 `beforeAll` / `afterAll` 报错）：追加一个包含 `<error>` 的 `<testcase>` 节点，并累加 `errors` 计数
+- 顶层 `unhandledErrors`：追加 `<testsuite name="rstest unhandled errors">` 与 `<system-err>` 节点，并累加 `errors` 计数
 
 ### JSON 报告器
 
 <ApiMeta addedVersion="0.9.6" />
 
-生成稳定的 JSON 文档，适合 CI 工具、自定义 dashboard 或后处理脚本直接消费。
+生成结构化的 JSON 文档，供 CI 工具、dashboard 或后处理脚本读取。
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -324,7 +318,7 @@ npx rstest --reporters=json
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -334,45 +328,45 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-**配置选项：**
+**选项：**
 
-- `outputPath`：输出文件路径（默认输出到 stdout）
+- `outputPath`：`string` — 输出文件路径（默认输出到 stdout）。
 
 **输出结构：**
 
-- `status`：本次运行的整体状态（`passed`、`failed` 或 `error`）
-- `summary`：文件和测试的聚合计数
-- `durationMs`：总耗时、构建耗时和测试耗时（毫秒）。如果运行时预打包了测试环境，`prebundle` 会按包名列出这部分构建耗时。多项目运行中，构建和测试耗时可能重叠，整轮耗时以 `durationMs.total` 为准。详见 [reporter API](/api/javascript-api/reporter#ontestrunend) 的计时说明。
+- `tool`：固定为 `'rstest'`
+- `version`：Rstest 版本号
+- `status`：本次运行状态（`'passed' | 'failed' | 'error'`）
+- `summary`：文件和测试计数（`testFiles`、`failedFiles`、`tests`、`failedTests`、`passedTests`、`skippedTests`、`todoTests`）
+- `durationMs`：`{ total, build, prebundle?, tests }`（单位毫秒；存在环境预打包时包含 `prebundle`；多项目运行中构建与测试可能重叠，总耗时以 `total` 为准；详见 [onTestRunEnd](/api/javascript-api/reporter#ontestrunend)）
 - `snapshot`：本次运行的 snapshot 汇总
-- `files`：按测试文件聚合的结果，包含嵌套测试项
-- `tests`：扁平化测试结果，每项都带 `fullName`
-- `consoleLogs`：捕获到的用户 console 输出（如果有）
-- `unhandledErrors`：顶层 unhandled errors（如果有）
+- `files`：按测试文件聚合的结果及嵌套测试用例
+- `tests`：扁平化测试用例结果，每项包含 `fullName`
+- `consoleLogs`：捕获到的用户 console 输出（无日志时省略该字段）
+- `unhandledErrors`：顶层 unhandled errors 数组（无错误时为空数组 `[]`）
 
-JSON 报告器会将 `testPath` 写成相对路径，这样在不同机器和 CI workspace 中输出更稳定。
+`testPath` 均写作相对根目录的路径，确保在不同机器和 CI workspace 下保持一致。
 
 ### Markdown 报告器
 
-Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout，主要用于 agent / LLM 场景。
+向 stdout 输出结构化的单份 Markdown 文档，便于 AI agent 和 LLM 消费。
 
-在 agent 环境中，只有当你没有显式配置 reporters 时，Rstest 才会默认使用 `md`。
+当配置文件和 CLI 均未显式指定报告器时，Rstest 在 AI agent 环境中会自动启用 `['md']`。设置环境变量 `RSTEST_NO_AGENT=1` 可关闭 agent 检测，恢复默认的控制台报告器。
 
-默认 preset 为 `normal`，主要针对 agent 工作流做了取舍：
+默认 preset 为 `normal`：
 
-- 每个失败用例都会输出 repro 命令（`file+name`），方便 agent 精准复跑某一个失败 case。
-- stack 默认使用 `top`（稳定的定位锚点），而不是输出完整的 stack frames。
-- console 默认开启，但带有严格的输出上限，避免报告体积失控。
-- 当失败数量超过 `failures.max` 时，会先输出包含最小字段的完整失败列表（repro / type / message / expected / actual），并且只展开前 `failures.max` 个失败的完整详情。
+- 每个失败用例附带 `repro` 命令（`file+name`），方便单条复现。
+- 堆栈默认使用 `'top'`（仅保留顶层栈帧），控制输出体积。
+- 默认开启 console 采集，并按文件和条目限制长度。
+- 失败数超过 `failures.max` 时，先输出包含最小字段的完整 `Failure List`（`type`、`message`、`expected`、`actual`、`repro`），再只展开前 `failures.max` 条的完整 `Failure Details`。
 
-几个 preset 的主要区别，在于失败信息默认会保留多少上下文：
+各 preset 决定了失败上下文的展开程度：
 
-| Preset    | 适用场景                                         | 失败详情                             | Console logs                                         | Code frames           |
-| --------- | ------------------------------------------------ | ------------------------------------ | ---------------------------------------------------- | --------------------- |
-| `normal`  | 默认的 agent 工作流                              | `stack: 'top'`、`failures.max: 50`   | 开启，每个 test path 最多 10 条、每条最多 500 字符   | 开启，默认上下各 2 行 |
-| `compact` | CI 日志、多轮 agent 调用、对 token 更敏感的场景  | `stack: 'top'`、`failures.max: 20`   | 关闭                                                 | 关闭                  |
-| `full`    | 希望一份报告里保留尽可能多调试信息的深度排查场景 | `stack: 'full'`、`failures.max: 200` | 开启，每个 test path 最多 200 条、每条最多 5000 字符 | 开启，默认上下各 3 行 |
-
-这些 preset 不会改变 markdown 的整体结构，主要影响的是失败部分默认展开的上下文多少。
+| Preset    | 适用场景                             | 失败详情                             | Console logs                                  | Code frames       |
+| --------- | ------------------------------------ | ------------------------------------ | --------------------------------------------- | ----------------- |
+| `normal`  | 默认 agent 工作流                    | `stack: 'top'`、`failures.max: 50`   | 开启，每个路径最多 10 条、每条最多 500 字符   | 开启，上下各 2 行 |
+| `compact` | CI 日志、多轮 agent 调用、控制 token | `stack: 'top'`、`failures.max: 20`   | 关闭                                          | 关闭              |
+| `full`    | 深度排查问题、保留完整上下文         | `stack: 'full'`、`failures.max: 200` | 开启，每个路径最多 200 条、每条最多 5000 字符 | 开启，上下各 3 行 |
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -381,7 +375,7 @@ npx rstest --reporters=md
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -391,9 +385,26 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-默认输出总是先给出报告标题，然后是摘要；在需要时列出测试项，最后给出失败信息。
+#### 选项
 
-当所有测试都通过时，输出摘录大致如下：
+| 选项             | 类型                                                                    | 默认值                                              | 说明                                                                     |
+| ---------------- | ----------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `preset`         | `'normal' \| 'compact' \| 'full'`                                       | `'normal'`                                          | 输出详略预设。                                                           |
+| `header`         | `boolean \| { env?: boolean }`                                          | `{ env: true }`                                     | 控制 YAML frontmatter 中的 `runtime` 信息（`node`、`platform`、`cwd`）。 |
+| `reproduction`   | `boolean \| 'file' \| 'file+name'`                                      | `'file+name'`                                       | 控制失败用例的复现命令（`true` 等同于 `'file+name'`）。                  |
+| `testLists`      | `'auto' \| 'always'`                                                    | `'auto'`                                            | 控制 Passed/Skipped/Todo 列表（`'auto'` 仅在聚焦且全部通过时输出）。     |
+| `failures`       | `{ max?: number }`                                                      | `{ max: 50 }`                                       | 最多展开完整详情的失败用例数。                                           |
+| `codeFrame`      | `boolean \| { linesAbove?: number; linesBelow?: number }`               | `{ linesAbove: 2, linesBelow: 2 }`                  | 顶层错误栈帧的代码片段上下文行数。                                       |
+| `stack`          | `number \| false \| 'full' \| 'top'`                                    | `'top'`                                             | 输出的堆栈帧数量（`'full'` 最多保留 50 帧）。                            |
+| `candidateFiles` | `boolean \| { max?: number }`                                           | `{ max: 5 }`                                        | 从堆栈中提取的疑似相关文件列表。                                         |
+| `console`        | `boolean \| { maxLogsPerTestPath?: number; maxCharsPerEntry?: number }` | `{ maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }` | 每个失败用例附带的 console 日志上限。                                    |
+| `errors`         | `boolean \| { unhandled?: boolean }`                                    | `{ unhandled: true }`                               | 是否输出 `## Unhandled Errors` 章节。                                    |
+
+#### 输出结构
+
+报告以 YAML frontmatter 和 `# Rstest Test Execution Report` 开头，随后依次输出 `## Summary`、可选的 `## Tests`（聚焦运行全部通过或 `testLists: 'always'` 时）、`## Failures`，以及存在未捕获异常时的 `## Unhandled Errors`。
+
+全量运行且全部通过时的摘录：
 
 ````md
 ## Summary
@@ -409,6 +420,18 @@ export default defineConfig({
     "passedTests": 13,
     "skippedTests": 1,
     "todoTests": 0
+  },
+  "durationMs": {
+    "total": 120,
+    "build": 25,
+    "tests": 95
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 0,
+    "removed": 0,
+    "unchecked": 0
   }
 }
 ```
@@ -420,7 +443,7 @@ No test failures reported.
 Note: all tests passed. Lists omitted for brevity.
 ````
 
-当存在失败时，输出摘录大致如下：
+存在失败时的摘录：
 
 ````md
 ## Summary
@@ -436,6 +459,18 @@ Note: all tests passed. Lists omitted for brevity.
     "passedTests": 0,
     "skippedTests": 0,
     "todoTests": 0
+  },
+  "durationMs": {
+    "total": 84,
+    "build": 18,
+    "tests": 66
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 0,
+    "removed": 0,
+    "unchecked": 0
   }
 }
 ```
@@ -455,8 +490,24 @@ details:
 ```json
 {
   "testPath": "fixtures/agent-md/index.test.ts",
+  "project": "rstest",
   "fullName": "agent-md > fails with diff",
-  "status": "failed"
+  "status": "failed",
+  "duration": 12,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "AssertionError",
+      "message": "expected 2 to be 3",
+      "topFrame": {
+        "file": "fixtures/agent-md/index.test.ts",
+        "line": 4,
+        "column": 15,
+        "method": null
+      },
+      "stackFrames": []
+    }
+  ]
 }
 ```
 
@@ -471,9 +522,9 @@ diff:
 ```
 ````
 
-如果你希望在 CI 日志或多轮 agent 工作流里进一步压缩输出，可以切到 `compact` preset，并收紧失败详情数量：
+可通过覆盖 preset 字段进一步控制输出大小：
 
-```ts title=rstest.config.ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -494,7 +545,7 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.3" />
 
-Blob 报告器将测试结果序列化为 JSON 文件，以便后续合并。它专门用于 CI 环境中的[测试分片](/guide/basic/cli#sharding-tests)场景，在多台机器上拆分运行测试后需要合并结果。与分片一样，它不支持 watch 模式。
+将测试结果序列化为 JSON 文件，供 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 后续合并。专用于 CI 环境中的[测试分片](/guide/basic/cli#sharding-tests)，不支持 watch 模式。
 
 <Tabs defaultValue='CLI'>
   <Tab label="CLI">
@@ -503,7 +554,7 @@ npx rstest run --shard 1/3 --reporters=blob
 ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -513,11 +564,11 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-**配置选项：**
+**选项：**
 
-- `outputDir`：blob 报告文件的存储目录（默认：`.rstest-reports`）
+- `outputDir`：`string` — blob 报告文件的输出目录（默认：`.rstest-reports`）。
 
-```ts title=rstest.config.ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -525,12 +576,20 @@ export default defineConfig({
 });
 ```
 
-Blob 文件默认保存到 `.rstest-reports/` 目录。启用覆盖率时，每个 blob 只保存该次运行实际采集的覆盖率。支持延迟最终处理的 coverage provider 会让使用 blob 报告器的运行不生成覆盖率报告、不根据 `coverage.include` 补齐未测试文件，也不检查覆盖率阈值。未使用 blob 报告器的运行会正常完成覆盖率最终处理，包括分片运行。旧版 provider 保持原有的单次运行最终处理行为。所有生成 blob 的运行完成后，使用启用了覆盖率的 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 基于统一结果集中执行这些步骤。只传给生成 blob 的运行的覆盖率参数不会写入 blob；请把最终处理参数放在配置文件中，或在执行 `merge-reports` 时再次传入。
+启用覆盖率时，每个 blob 只保存当次运行采集到的覆盖率数据。对于支持延迟最终处理的 coverage provider，使用 blob 报告器的运行不会生成覆盖率报告、不会按 `coverage.include` 补齐未测试文件，也不会检查覆盖率阈值（不使用 blob 报告器的运行仍会正常完成最终处理，包括分片运行；旧版 provider 维持单次最终处理）。所有分片完成后，执行带覆盖率的 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 对汇总结果统一执行这些步骤。仅通过命令行传给生成 blob 运行的覆盖率参数不会写入 blob；请将最终处理参数写入配置文件，或在执行 `merge-reports` 时再次传入。
 
-完整的 CI 工作流示例请参考[使用分片拆分测试](/guide/advanced/ci#split-tests-with-shards)。
+完整 CI 工作流见[使用分片拆分测试](/guide/advanced/ci#split-tests-with-shards)。
 
 ## 自定义报告器
 
-对于高级集成需求，你可以通过实现 `Reporter` 接口来创建自定义报告器。
+可通过模块路径（`'./custom-reporter.js'` 或 `['./custom-reporter.js', options]`，需默认导出 `Reporter` 类），或直接传入实现 `Reporter` 接口的实例对象来使用自定义报告器；不支持直接传入类构造函数。在启用类型擦除的 Node 22.18+ / 24 运行时下，可直接加载 `.ts` 和 `.mts` 模块。
 
-更多详细信息可以在 [Reporter API 参考](/api/javascript-api/reporter) 中找到。
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
+});
+```
+
+生命周期钩子和载荷类型定义见 [Reporter API 参考](/api/javascript-api/reporter)。

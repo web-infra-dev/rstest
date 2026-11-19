@@ -1,13 +1,13 @@
 ---
 title: Describe
-description: describe defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
+description: Define test suites with describe, chainable modifiers, suite options, and parameterized tables.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Describe
 
-`describe` defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
+`describe` groups tests and nested suites into a test suite.
 
 ## describe
 
@@ -18,34 +18,14 @@ import { ApiMeta } from '@components/ApiMeta';
 (name: string | Function, options: TestOptions, fn?: () => void | Promise<void>): void;
 ```
 
-Defines a test suite that can contain multiple test cases or nested describe blocks.
-The callback can be asynchronous; Rstest waits for it during collection before running the tests declared inside it.
-
-<ApiMeta addedVersion="0.12.3" />
-
-You can pass a function as the suite name. Rstest uses its `name` property and does not call it; an anonymous function is displayed as `<anonymous>`. This also applies to `describe.each` and `describe.for`.
-
-```ts
-function add(a: number, b: number) {
-  return a + b;
-}
-
-describe(add, () => {
-  test('adds numbers', () => {
-    expect(add(1, 2)).toBe(3);
-  });
-});
-```
+Defines a test suite containing test cases or nested `describe` blocks. If `fn` is async, Rstest awaits it during test collection before running the tests declared inside.
 
 ```ts
 import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {
-    // ...
-  });
-  test('sub', () => {
-    // ...
+    expect(1 + 2).toBe(3);
   });
 });
 ```
@@ -60,36 +40,32 @@ describe('async setup', async () => {
 });
 ```
 
-### TestOptions
+<ApiMeta addedVersion="0.12.3" />
 
-<ApiMeta addedVersion="0.11.0" />
-
-Pass a `TestOptions` object as the **second argument** (before the suite function) to set defaults for every test inside the suite:
+You can pass a function as `name`. Rstest reads its `name` property without calling it (anonymous functions display as `<anonymous>`). This also applies to `describe.each` and `describe.for`.
 
 ```ts
-describe('flaky integration', { retry: 3, timeout: 10000 }, () => {
-  test('reaches the server', async () => {
-    /* inherits retry: 3 and timeout: 10000 */
+function add(a: number, b: number) {
+  return a + b;
+}
+
+describe(add, () => {
+  test('adds numbers', () => {
+    expect(add(1, 2)).toBe(3);
   });
 });
 ```
 
-As a shorthand, you can still pass a number as the **last argument** to set only the timeout (equivalent to `{ timeout: n }`):
+### TestOptions
 
-```ts
-describe('slow suite', () => {
-  test('within budget', async () => {
-    /* ... */
-  });
-}, 10000);
-```
+<ApiMeta addedVersion="0.11.0" />
 
-`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, `repeats`, and `meta` (`meta` is added in 0.11.1). These propagate to descendant suites and tests as **inheritable defaults**:
+Pass a [`TestOptions`](/api/runtime-api/test-api/test#testoptions) object as the **second argument** (before the suite callback) to set inheritable defaults (`timeout`, `retry`, `repeats`, and `meta`) for descendant suites and tests. Passing a number as the **last argument** sets `{ timeout: n }`.
 
-- A test-level option always wins over the suite-level value.
-- A nested `describe` inherits its parent's options, and the nearest enclosing value applies.
-- A test without its own `timeout` falls back to the nearest suite's `timeout`, then to [`test.testTimeout`](/config/test/test-timeout).
-- Metadata is merged from parent suite to child suite or test; child top-level keys override keys from the parent, and inherited values are copied per descendant.
+- A test-level option always overrides the suite-level value.
+- Nested `describe` blocks inherit parent options; the nearest enclosing value wins.
+- If no `timeout` is set on a test or enclosing suite, Rstest falls back to [`test.testTimeout`](/config/test/test-timeout).
+- `meta` <ApiMeta sup addedVersion="0.11.1" /> merges from parent suite to child suite or test: child top-level keys override parent keys, and inherited values are copied per descendant.
 
 ```ts
 describe('parent', { retry: 2, timeout: 100 }, () => {
@@ -131,7 +107,7 @@ describe(
 
 ## describe.only
 
-Only run the describe block(s) marked with `only`.
+Runs only the `describe` block(s) marked with `only` in the file.
 
 ```ts
 describe.only('only this suite', () => {
@@ -141,19 +117,19 @@ describe.only('only this suite', () => {
 
 ## describe.skip
 
-Skip the describe block(s) marked with `skip`.
+Marks all tests in the `describe` block as skipped.
 
 ```ts
-describe.skip('Skip the test cases in this suite', () => {
+describe.skip('skipped suite', () => {
   // ...
 });
 ```
 
-It should be noted that the skip tag is only used to skip test cases, and the code inside the describe block will still be executed. This is because Rstest needs to collect information about test cases to ensure that all features work properly, even if they are marked as skipped. For example, in snapshot tests, it determines whether a snapshot is outdated or marked as skipped.
+The suite callback itself still executes during collection so Rstest can discover the skipped tests and track their snapshots. Test bodies inside it do not run:
 
 ```ts
 describe.skip('a', () => {
-  console.log('will run');
+  console.log('runs during collection');
   test('b', () => {
     console.log('will not run');
     expect(0).toBe(0);
@@ -163,7 +139,7 @@ describe.skip('a', () => {
 
 ## describe.todo
 
-Mark a describe block as todo.
+Marks a `describe` block as todo.
 
 ```ts
 describe.todo('should implement this suite');
@@ -174,15 +150,34 @@ describe.todo('should implement this suite');
 - **Type:**
 
 ```ts
-// Every row is an array: the row is spread into the arguments
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
-// Otherwise: the row is passed as a single argument
-describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+type DescribeCall<Fn> = {
+  (name: string | Function, fn?: Fn, timeout?: number): void;
+  (name: string | Function, options: TestOptions, fn?: Fn): void;
+};
+
+// Object rows: each row is passed as a single argument
+describe.each<T extends Record<string, unknown>>(
+  cases: readonly T[],
+): DescribeCall<(param: T) => void | Promise<void>>;
+// Tuple / array rows: every row is an array, spread into the arguments
+describe.each<T extends readonly [unknown, ...unknown[]]>(
+  cases: readonly T[],
+): DescribeCall<(...args: [...T]) => void | Promise<void>>;
+describe.each<T extends readonly unknown[]>(
+  cases: readonly T[],
+): DescribeCall<(...args: [...T]) => void | Promise<void>>;
+// Mixed or scalar rows: each row is passed as a single argument
+describe.each<T>(
+  cases: readonly T[],
+): DescribeCall<(param: T) => void | Promise<void>>;
+// Tagged template literal table
+describe.each<T extends Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): DescribeCall<(param: T) => void | Promise<void>>;
 ```
 
-Creates a describe block for each item in the provided array. Like `describe`, it accepts an optional [`TestOptions`](#testoptions) object as its second argument and applies it to every generated suite.
+Creates a `describe` block for each entry in `cases` or in a tagged template table. Accepts the same optional [`TestOptions`](#testoptions) second argument and applies it to every generated suite.
 
 ```ts
 describe.each([
@@ -195,23 +190,9 @@ describe.each([
 });
 ```
 
-Rows are spread into the suite function arguments only when every row of the table is an array. Once any row is not an array, every row is passed whole, so an array row of a mixed table arrives as the array itself.
+Rows are spread into `fn` arguments only when every row is an array. If any row is not an array, every row is passed as a single argument.
 
-You can also use a tagged template literal table syntax:
-
-```ts
-describe.each`
-  a    | b    | expected
-  ${1} | ${2} | ${3}
-  ${2} | ${3} | ${5}
-`('$a + $b = $expected', ({ a, b, expected }) => {
-  test('add', () => {
-    expect(a + b).toBe(expected);
-  });
-});
-```
-
-You can provide an explicit generic type parameter for type safety:
+With tagged template literals, pass an explicit generic type parameter when you want typed row properties:
 
 ```ts
 describe.each<{ a: number; b: number; expected: number }>`
@@ -230,11 +211,21 @@ describe.each<{ a: number; b: number; expected: number }>`
 - **Type:**
 
 ```ts
-describe.for(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.for(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+type DescribeCall<Fn> = {
+  (name: string | Function, fn?: Fn, timeout?: number): void;
+  (name: string | Function, options: TestOptions, fn?: Fn): void;
+};
+
+describe.for<T>(
+  cases: readonly T[],
+): DescribeCall<(param: T) => void | Promise<void>>;
+describe.for<T extends Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): DescribeCall<(param: T) => void | Promise<void>>;
 ```
 
-Alternative to `describe.each` for more flexible parameter types. It accepts the same optional [`TestOptions`](#testoptions) second argument.
+Alternative to `describe.each` that always passes each case as a single `param` argument without spreading array rows. Accepts the same optional [`TestOptions`](#testoptions) second argument.
 
 ```ts
 describe.for([
@@ -247,21 +238,7 @@ describe.for([
 });
 ```
 
-`describe.for` also supports the tagged template literal table syntax:
-
-```ts
-describe.for`
-  a    | b    | expected
-  ${1} | ${2} | ${3}
-  ${2} | ${3} | ${5}
-`('$a + $b = $expected', ({ a, b, expected }) => {
-  test('add', () => {
-    expect(a + b).toBe(expected);
-  });
-});
-```
-
-You can provide an explicit generic type parameter for type safety:
+Also supports tagged template literals with an optional explicit generic parameter:
 
 ```ts
 describe.for<{ a: number; b: number; expected: number }>`
@@ -277,7 +254,7 @@ describe.for<{ a: number; b: number; expected: number }>`
 
 ## describe.runIf
 
-Run the describe block only if the condition is true.
+Runs the `describe` block only when `condition` is truthy.
 
 ```ts
 describe.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
@@ -287,7 +264,7 @@ describe.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
 
 ## describe.skipIf
 
-Skip the describe block if the condition is true.
+Skips the `describe` block when `condition` is truthy.
 
 ```ts
 describe.skipIf(process.platform === 'win32')('skip on Windows', () => {
@@ -297,7 +274,7 @@ describe.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## describe.concurrent
 
-Run the tests in the describe block concurrently.
+Runs the tests inside the `describe` block concurrently.
 
 ```ts
 describe.concurrent('concurrent suite', () => {
@@ -312,7 +289,7 @@ describe.concurrent('concurrent suite', () => {
 
 ## describe.sequential
 
-Run the tests in the describe block sequentially (default behavior).
+Runs the tests inside the `describe` block sequentially (the default behavior).
 
 ```ts
 describe.sequential('sequential suite', () => {
@@ -327,10 +304,10 @@ describe.sequential('sequential suite', () => {
 
 ## Chainable modifiers
 
-`describe` supports chainable modifiers, so you can use them together. For example:
+`describe` modifiers can be chained in any order before calling the suite function:
 
-- `describe.only.runIf(condition)` (or `describe.runIf(condition).only`) will only run the describe block if the condition is true.
-- `describe.skipIf(condition).concurrent` (or `describe.concurrent.skipIf(condition)`) will skip the describe block if the condition is true, otherwise run the tests concurrently.
-- `describe.runIf(condition).concurrent` (or `describe.concurrent.runIf(condition)`) will only run the describe block concurrently if the condition is true.
-- `describe.only.concurrent` (or `describe.concurrent.only`) will only run the describe block concurrently.
-- ......
+- `describe.only.runIf(condition)` / `describe.runIf(condition).only`
+- `describe.skipIf(condition).concurrent` / `describe.concurrent.skipIf(condition)`
+- `describe.runIf(condition).concurrent` / `describe.concurrent.runIf(condition)`
+- `describe.only.concurrent` / `describe.concurrent.only`
+- `describe.concurrent.each(cases)` / `describe.each(cases)` chained with `.only`, `.skip`, `.runIf`, or `.skipIf`

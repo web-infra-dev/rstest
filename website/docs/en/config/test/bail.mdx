@@ -1,5 +1,5 @@
 ---
-description: Abort the test run after the specified number of test failures. This is useful for stopping test runs early when failures occur.
+description: Abort the test run after the specified number of test failures.
 ---
 
 # bail
@@ -8,9 +8,9 @@ description: Abort the test run after the specified number of test failures. Thi
 - **Default:** `0`
 - **CLI:** `--bail [number]` (default: `1`)
 
-Abort the test run after the specified number of test failures. This is useful for stopping test runs early when failures occur.
+Stop the test run after the specified number of test failures.
 
-Setting this to `0` (the default) means to run all tests regardless of failures. Setting this to `1` will stop the test run after the first test failure.
+Set this to `0` (the default) to run all tests regardless of failures, or `1` to stop after the first test failure.
 
 import { Tab, Tabs } from '@theme';
 

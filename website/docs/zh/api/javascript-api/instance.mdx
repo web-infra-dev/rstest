@@ -1,5 +1,5 @@
 ---
-description: 'Rstest 实例 API 参考：createRstest、rstest.context、rstest.run、rstest.watch、rstest.listTests、rstest.mergeReports 和 runCLI。'
+description: 'Rstest 实例 API 参考：createRstest、rstest.context、rstest.run、rstest.watch、rstest.listTests、rstest.mergeReports、ListTestsError、PROJECT_LOADER 和 runCLI。'
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -8,23 +8,23 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.12.0" />
 
-本页介绍的所有 API 都由 [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 的 `@rstest/core/api` 入口导出。你可以通过这些 API 创建 Rstest 实例、运行或列出测试、启动监听会话，以及合并 blob 报告。
+本页介绍的 API 均由 [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 的 `@rstest/core/api` 入口导出，用于创建 Rstest 实例、运行或列出测试、启动 watch 会话、合并 blob 报告、自定义加载 project 配置以及以编程方式调用 CLI。
 
 ```ts
 import { createRstest } from '@rstest/core/api';
 ```
 
 :::warning
-目前所有导出都是实验性的，在 Rstest 1.0.0 之前可能发生变化。请暂时锁定 `@rstest/core` 的精确版本来保证 API 稳定性。
+`@rstest/core/api` 的所有导出目前均为实验性 API，在 Rstest 1.0.0 之前可能调整。依赖该入口时建议锁定 `@rstest/core` 的精确版本。
 :::
 
 ## createRstest
 
-`createRstest` 函数用于创建并返回一个 Rstest 实例。`config` 会在创建实例时解析一次，并作为实例的基础配置持续复用。传给实例方法的选项只应用于当前操作，不会修改这份基础配置。
+创建并返回一个 `RstestInstance`。`config` 会在创建实例时解析一次，并作为实例的基础配置持续复用；传给实例方法的选项只作用于当前操作，不会修改基础配置。
 
-`cwd` 默认为 `process.cwd()`，并作为相对 `config.root` 的解析基准；省略 `config` 时使用空的内联配置，不会从 `cwd` 中发现配置文件。
+`cwd` 默认为 `process.cwd()`，用于解析相对路径的 `config.root`；省略 `config` 时使用空的内联配置，不会在 `cwd` 中自动查找配置文件。
 
-`createRstest` 会设置 `RSTEST=true`，仅当 `NODE_ENV` 尚未设置时才设置 `NODE_ENV=test`，并且不会恢复这两个环境变量。
+`createRstest` 会设置 `RSTEST=true`，仅在 `NODE_ENV` 未设置时设置 `NODE_ENV=test`，且之后不会还原这两个环境变量。
 
 ### 示例
 
@@ -45,7 +45,7 @@ console.log(result.status);
 
 ### 加载配置文件
 
-使用主入口的 [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) 加载配置文件，再将返回值（`{ content, filePath, dependencies }`）直接作为 `config` 传入。
+使用 `@rstest/core` 的 [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) 加载配置文件，再将返回值（`{ content, filePath, dependencies }`）直接传给 `config`。
 
 ```ts
 import { loadConfig } from '@rstest/core';
@@ -62,14 +62,14 @@ const rstest = await createRstest({ config: loaded });
 ```ts
 interface LoadedRstestConfig {
   content: RstestConfig; // 已加载的配置内容。
-  filePath: string | null; // `loadConfig` 返回的配置文件来源路径，没有时为 `null`。
+  filePath: string | null; // `loadConfig` 返回的配置文件路径，无文件时为 `null`。
   dependencies?: string[];
 }
 
 interface CreateRstestOptions {
   cwd?: string;
   config?: RstestConfig | LoadedRstestConfig;
-  configLoader?: 'auto' | 'jiti' | 'native'; // 通过 `projects` 发现的配置文件所使用的 loader；默认为 `auto`。
+  configLoader?: 'auto' | 'jiti' | 'native'; // 解析通过 `projects` 发现的配置文件时使用的 loader；默认为 `auto`。
 }
 
 function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
@@ -77,7 +77,7 @@ function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
 
 ## rstest.context
 
-`rstest.context` 是一个在创建实例时解析一次的只读对象。你可以在不运行测试的情况下检查解析后的状态，例如用 `rootPath` 确定结果中的 `testPath` 在 workspace 中的位置，用 `projects` 展示或筛选多项目配置，用 `config` 查看生效的配置，也可以用 `version` 做兼容性检查。
+`rstest.context` 是在创建实例时解析一次的只读对象，可在不运行测试的前提下查看解析结果：通过 `rootPath` 将结果中的 `testPath` 映射回工作区，通过 `projects` 获取多项目列表，通过 `config` 查看生效配置，通过 `version` 检查版本兼容性。
 
 ### 示例
 
@@ -112,7 +112,7 @@ interface ProjectContext {
   name: string; // 项目名称。
   rootPath: string; // 项目的绝对根路径。
   configFilePath?: string; // 与项目关联的配置文件路径（如果有）。
-  configFileDependencies?: string[]; // 项目配置依赖，包括父级项目的配置文件。
+  configFileDependencies?: string[]; // 项目配置依赖，包含父级项目的配置文件。
 }
 
 interface RstestContext {
@@ -131,7 +131,7 @@ interface RstestContext {
 
 ### context.rootPath
 
-Rstest 实例的绝对根路径。它由 `config.root` 解析得出；当 `config.root` 为相对路径时，以 `cwd` 为基准。
+Rstest 实例的绝对根路径，基于 `cwd` 解析 `config.root` 得到。
 
 - **类型：** `string`
 
@@ -143,13 +143,13 @@ Rstest 实例规范化后的配置。
 
 ### context.projects
 
-解析后的项目 Context。未显式配置 `projects` 时，该数组包含由 `config.name` 命名的默认项目（默认名称为 `'rstest'`）。
+解析后的项目 Context 列表。未显式配置 `projects` 时，数组中包含以 `config.name` 命名的默认项目（默认为 `'rstest'`）。
 
 - **类型：** `readonly ProjectContext[]`
 
 ## rstest.run
 
-`rstest.run()` 会运行一个测试轮次，并返回 `TestRunResult`。只有在运行完全无法开始时（无效的选项或配置，或 node 项目的 dev server 无法启动）Promise 才会被拒绝。此后的一切失败——浏览器项目的 dev server 或浏览器无法启动、`globalSetup` 抛错、编译错误、测试失败——都通过 `status` 报告，不会导致 Promise 被拒绝，具体规则见 [TestRunResult](#testrunresult)。
+`rstest.run()` 运行一轮测试并返回 `TestRunResult`。仅当运行无法启动时（无效的选项或配置，或 Node 项目的 dev server 无法启动），返回的 Promise 才会拒绝；启动后的失败（Browser Mode dev server 或浏览器无法启动、`globalSetup` 抛错、编译错误、测试失败）都通过 `status` 报告，不会拒绝 Promise，见 [TestRunResult](#testrunresult)。
 
 ### 示例
 
@@ -172,35 +172,48 @@ console.log(result.summary.tests);
 
 ### RunOptions
 
-`RunOptions` 支持 `testTimeout`、`coverage`、`reporters` 等运行周期选项，不接受创建阶段的选项（`config`、`configLoader`、`root`）以及仅用于 CLI 的 `teardownTimeout`。完整 flag 列表见 [CLI 选项](/guide/basic/cli#cli-选项)，精确类型见 [`packages/core/src/api/types.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/api/types.ts)。
+`RunOptions` 支持运行周期选项及配置覆盖，不接受创建阶段的选项（`config`、`configLoader`、`root`）和仅用于 CLI 的 `teardownTimeout`。对应的 CLI 参数见 [CLI 选项](/guide/basic/cli#cli-选项)。
 
-对于用于覆盖配置的字段，优先级为：**本次 `run()` 显式传入的值 > 实例配置中的值 > 该配置项的默认值**。未传入或值为 `undefined` 的字段沿用配置中的值。嵌套对象和数组遵循对应配置项的合并规则。
+对于覆盖配置项的字段，优先级为：**本次 `run()` 显式传入的值 > 实例配置值 > 配置项默认值**。未传入或值为 `undefined` 的字段保留实例配置；嵌套对象和数组遵循对应配置项的合并规则。
 
-覆盖只影响本次 `run()` 调用，不会修改实例的初始配置：
+覆盖仅作用于当前 `run()` 调用，不会修改实例的基础配置：
 
 ```ts
 const rstest = await createRstest({ config: { repeats: 2 } });
 
-await rstest.run({ repeats: 5 }); // 本次调用的全局默认值为 5。
-await rstest.run(); // 仍使用配置中的 2。
+await rstest.run({ repeats: 5 }); // 本次调用使用 5。
+await rstest.run(); // 恢复使用实例配置中的 2。
 ```
 
-`filters` 仅用于 API；CLI 通过位置参数传入 filter。它默认使用不区分大小写的子字符串匹配。用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径，例如 `filters: ['"src/foo.test.ts"', 'utils']`；带引号和不带引号的 filter 可以混用。省略 `filters` 时选择所有文件；显式传入空数组时不会选择任何文件。
+`filters` 仅用于 API（CLI 通过位置参数传入 filter）。默认按不区分大小写的子串匹配；用成对的单引号或双引号包裹路径可精确匹配绝对路径或相对于 root 的路径，例如 `filters: ['"src/foo.test.ts"', 'utils']`，两者可混用。省略 `filters` 会选择全部文件；显式传入空数组则不选择任何文件。
 
-`trace` <ApiMeta sup addedVersion="0.12.4" /> 会为本次运行采集[性能 trace](/guide/debug/profiling#using-trace)。传 `true` 时文件写入 `<rootPath>/.rstest/`。与 CLI flag 不同，它不会打印任何内容，也不会启动 Perfetto helper server，文件路径从 `TestRunResult.trace` 读取。在 `rstest.watch()` 中，它对整个会话生效。
+`trace` <ApiMeta sup addedVersion="0.12.4" /> 为本次运行采集[性能 trace](/guide/debug/profiling#using-trace)。传入 `true` 会将 trace 文件写入 `<rootPath>/.rstest/`。与 CLI 参数不同，它不会打印输出，也不会启动 Perfetto helper server，文件路径需从 `TestRunResult.trace` 读取。在 `rstest.watch()` 中对整个会话生效。
 
 `repeats` <ApiMeta sup addedVersion="0.13.0" /> 设置单个测试的额外执行次数，测试和套件自身的选项优先。详见 [repeats](/config/test/repeats)。
 
-`browser` <ApiMeta sup addedVersion="0.13.0" /> 覆盖本次 run 中 browser 项目的浏览器选项：`RunOptions.browser.instances` 按 [CLI 过滤](/config/test/browser#cli-浏览器过滤) 的规则过滤已配置的浏览器 instance —— 只运行 `browserName` 在列表中的 instance，没有匹配 instance 的 browser 项目会被跳过，名字没有被任何选中的 browser 项目配置则报错；传 `undefined` 保留全部已配置的 instance。已废弃的 `browser.name` 选择单个浏览器。选项语义见 [instances](/config/test/browser#instances)。
+`browser` 覆盖本次运行中 browser 项目的浏览器选项：`RunOptions.browser.instances` <ApiMeta sup addedVersion="0.13.0" /> 按与 [CLI 过滤](/config/test/browser#cli-浏览器过滤)相同的规则筛选已配置的浏览器实例——仅运行 `browserName` 在列表中的实例，无匹配实例的 browser 项目会被跳过，若指定的名称未在任何选中项目中配置则报错；传 `undefined` 保留所有已配置实例。已废弃的 `browser.name` 用于选择单个浏览器。选项语义详见 [instances](/config/test/browser#instances)。
 
 - **类型：**
 
 ```ts
 interface RunOptions {
   filters?: string[];
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string;
+  project?: string[];
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
   trace?: boolean;
-  repeats?: number;
-  // `true` 是 `browser.enabled: true` 的简写。
+
+  // 配置覆盖项
+  include?: string[];
+  exclude?: string[];
+  globals?: boolean;
+  testEnvironment?: string;
+  // `true` 为 `{ enabled: true }` 的简写。
   browser?:
     | boolean
     | {
@@ -215,8 +228,59 @@ interface RunOptions {
         strictPort?: boolean;
         providerOptions?: Record<string, unknown>;
       };
-  // ……以及其他支持的运行选项，用于覆盖同名配置项，
-  // 例如 `testTimeout`、`coverage`、`reporters`。
+  federation?: boolean;
+  testTimeout?: number;
+  hookTimeout?: number;
+  retry?: number;
+  repeats?: number;
+  maxConcurrency?: number;
+  slowTestThreshold?: number;
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
+  unstubGlobals?: boolean;
+  unstubEnvs?: boolean;
+  silent?: boolean | 'passed-only';
+  printConsoleTrace?: boolean;
+  disableConsoleIntercept?: boolean;
+  logHeapUsage?: boolean;
+  detectAsyncLeaks?: boolean;
+  hideSkippedTests?: boolean;
+  hideSkippedTestFiles?: boolean;
+  includeTaskLocation?: boolean;
+  reporters?: string | string[];
+  onlyFailures?: boolean;
+  source?: { tsconfigPath?: string };
+  dev?: { writeToDisk?: boolean };
+  output?: {
+    emitAssets?: boolean;
+    cleanDistPath?: boolean;
+    module?: boolean;
+  };
+  // 仅限根配置覆盖（由引擎转发到每个项目）
+  pool?:
+    | string
+    | {
+        type?: string;
+        maxWorkers?: string | number;
+        memoryLimit?: string | number;
+        execArgv?: string[] | string;
+      };
+  isolate?: boolean;
+  coverage?:
+    | boolean
+    | {
+        enabled?: boolean | string;
+        allowExternal?: boolean;
+        provider?: 'istanbul' | 'v8';
+        include?: string | string[];
+        changed?: boolean | string;
+        exclude?: string | string[];
+        reporters?: string | string[];
+        reportsDirectory?: string;
+        reportOnFailure?: boolean | string;
+        clean?: boolean | string;
+      };
 }
 
 interface RstestInstance {
@@ -233,22 +297,22 @@ type TestRunStatus = 'passed' | 'failed' | 'error';
 
 interface TestRunResult {
   status: TestRunStatus; // 本次运行的整体状态。
-  trace?: { tracePath: string; summaryPath: string }; // 仅在运行时传入 `trace` 时存在。
+  trace?: { tracePath: string; summaryPath: string }; // 仅在传入 `trace` 时存在。
   // 其余字段与 `onTestRunEnd` 的 payload 相同，去掉 `getSourcemap`。
 }
 ```
 
-其余字段（`results`、`testResults`、`summary`、`duration`、`snapshotSummary`、`unhandledErrors`、`coverage`、`rerunTestPaths`）的说明见 Reporter API 的 [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend)。
+其余字段（`results`、`testResults`、`summary`、`duration`、`snapshotSummary`、`unhandledErrors`、`coverage`、`rerunTestPaths`）对应 Reporter API 中 [`onTestRunEnd`](/api/javascript-api/reporter#ontestrunend) 的 payload。
 
-当 `unhandledErrors` 不为空时，`status` 为 `'error'`。测试或测试文件失败、coverage 未达 threshold，或未设置 `passWithNoTests` 时没有找到测试，`status` 为 `'failed'`。watch 模式下，只要会话里还有失败的测试文件，即使当前轮次全部通过，`status` 仍是 `'failed'`。其他情况下，`status` 为 `'passed'`。之后再发生 global teardown 错误不会影响 `onTestRunEnd` 收到的 payload，但 `run()` 仍会返回 `'failed'`。
+当 `unhandledErrors` 非空时，`status` 为 `'error'`。存在失败的测试或测试文件、覆盖率未达标，或未开启 `passWithNoTests` 且未找到测试时，`status` 为 `'failed'`。在 watch 模式下，只要会话中仍保留失败的测试文件，即使当前轮次全部通过，`status` 仍为 `'failed'`。其余情况为 `'passed'`。后续 global teardown 阶段发生的错误不会改变 `onTestRunEnd` 收到的 payload，但 `run()` 仍会返回 `'failed'`。
 
-`unhandledErrors` 里的每一项都是普通对象，可以直接序列化为 JSON，不是 Error 实例。
+`unhandledErrors` 中的每一项都是可 JSON 序列化的普通对象，而非 `Error` 实例。
 
-`trace` <ApiMeta sup addedVersion="0.12.4" /> 包含 Perfetto trace JSON 及其 markdown 摘要的绝对路径。运行未开启 `trace` 时该字段不存在。watch 模式下，它指向最近一轮的文件。
+`trace` <ApiMeta sup addedVersion="0.12.4" /> 在启用 `trace` 时包含 Perfetto trace JSON 与 markdown 摘要的绝对路径。在 watch 模式下指向最近一轮生成的文件。
 
 ## rstest.watch
 
-`rstest.watch()` 会启动监听会话，并返回用于关闭它的监听器。
+`rstest.watch()` 启动监听会话，并返回用于关闭会话的控制器。
 
 ### 示例
 
@@ -274,17 +338,17 @@ const watcher = await rstest.watch({
 await watcher.close();
 ```
 
-每一轮结束后都会调用 `onResult`，第一轮也不例外。`results`、`summary` 和 `status` 反映整个 watch 会话的状态，`rerunTestPaths` 是这一轮实际执行的文件。
+每轮结束后都会调用 `onResult`（包括第一轮）。`results`、`summary` 和 `status` 反映整个 watch 会话的累计状态，`rerunTestPaths` 列出当前轮次执行的文件。
 
 失败分为三类：
 
-- **启动失败**——配置阶段抛错，或 node 项目的 dev server 无法启动。`run()` 和 `watch()` 都会被拒绝。
-- **启动之后的致命失败**——浏览器项目的 dev server 或浏览器无法启动、首轮 `globalSetup` 抛错或编译失败，或 bundler 以不会重新挂载文件监听器的方式结束了一次编译。`run()` 返回 `status: 'error'`；在 watch 中，失败的那一轮仍会送达 `onResult`，随后会话关闭；若 `watch()` 尚未 resolve，则以该错误被拒绝——多个错误时合并为 `AggregateError`。
-- **可恢复的周期失败**——测试失败、测试文件编译失败，或后续轮次的 `globalSetup` 失败。该轮会上报失败，watch 会话保持打开，等待下一次触发。
+- **启动失败**：配置阶段抛错，或 Node 项目的 dev server 无法启动。`run()` 和 `watch()` 均会拒绝 Promise。
+- **启动后的致命失败**：Browser Mode 的 dev server 或浏览器无法启动、首轮 `globalSetup` 抛错或编译失败，或打包器结束编译后未能重新挂载文件监听器。`run()` 返回 `status: 'error'`；在 watch 模式下，失败轮次仍会送达 `onResult`，随后会话关闭；若 `watch()` 尚未 resolve，则以该错误拒绝（多个错误时合并为 `AggregateError`）。
+- **可恢复的周期失败**：测试失败、测试文件编译失败，或后续轮次的 `globalSetup` 失败。该轮会上报失败，watch 会话保持开启。
 
-`onResult` 抛出的错误会被隔离，不会停止监听会话。调用 `watcher.close()` 会释放编译器、worker、文件监听器，并运行待处理的 `globalSetup` 清理函数。该方法是幂等的，重复调用会得到相同结果；清理失败时，它返回的 Promise 会被拒绝。
+`onResult` 抛出的错误会被隔离，不会中断监听会话。调用 `watcher.close()` 会释放编译器、worker、文件监听器及待执行的 `globalSetup` 清理回调。该方法幂等，若清理阶段失败则返回的 Promise 会被拒绝。
 
-`rstest.watch()` 会拒绝 `related` 和 `changed`，因为它们会选择固定的文件集合，而监听会话必须能够发现新的关联测试。使用这些选项时请调用 `rstest.run()`。`related: false` 和 `changed: false` 会被忽略。
+`rstest.watch()` 不接受 `related` 和 `changed`，因为它们会固定文件集合，而监听会话需要动态发现新的关联测试；需要这两个选项时请改用 `rstest.run()`（传入 `related: false` 和 `changed: false` 会被忽略）。
 
 ### WatchOptions
 
@@ -306,7 +370,7 @@ interface RstestInstance {
 
 ## rstest.listTests
 
-`rstest.listTests()` 会收集测试文件和测试声明，但不运行测试主体。
+`rstest.listTests()` 收集测试文件和测试声明，不执行测试主体代码。
 
 ### 示例
 
@@ -327,17 +391,17 @@ const tests = await rstest.listTests({
 console.log(tests);
 ```
 
-设置 `filesOnly` 可跳过声明收集。`includeSuites` 会将具名测试套件作为独立条目返回。`RunOptions` 中的 `includeTaskLocation` 会加入源码位置。
+设置 `filesOnly` 可跳过声明收集；`includeSuites` 会将具名测试套件作为独立条目返回；`RunOptions` 中的 `includeTaskLocation` 用于附加源码位置。
 
-每个条目都包含 `testPath` 和 `project`。隐式默认项目的基础名称是 `config.name`（默认为 `'rstest'`）。测试声明条目包含自身的 `name`、带测试套件前缀的 `fullName`，以及表示层级的 `parentNames`；文件条目不包含 `name` 和 `fullName`。标记为 `skip` 或 `todo` 的声明也会返回，`runMode` 分别为 `skip` 或 `todo`；可运行声明不提供 `runMode`。
+每个条目都包含 `testPath` 和 `project`。隐式默认项目的基础名称为 `config.name`（默认为 `'rstest'`）。声明条目包含自身的 `name`、带套件前缀的 `fullName` 以及表示层级的 `parentNames`；文件条目省略 `name` 和 `fullName`。标记为 `skip` 或 `todo` 的声明也会包含在内，其 `runMode` 为 `'skip'` 或 `'todo'`；可运行声明省略 `runMode`。
 
-在 Browser Mode 下，测试声明会在每个选中的 browser instance 中收集。`filesOnly` 会为每个文件与 instance 的组合返回一个条目，且不会启动浏览器。两种模式的 `project` 都与 `run()` 一致，例如同时选中两个 instance 时，会使用 `web (chromium)` 和 `web (firefox)`。
+在 Browser Mode 下，声明会在每个选中的浏览器实例中收集；开启 `filesOnly` 时按文件与实例组合返回条目，且不启动浏览器。两种模式返回的 `project` 名称均与 `run()` 一致，例如同时选中两个实例时为 `web (chromium)` 和 `web (firefox)`。
 
-条目按深度优先的声明顺序返回。测试套件紧邻其后代之前，来自同一文件和项目的条目保持连续。
+条目按深度优先的声明顺序返回：套件紧邻其后代之前，同一文件和项目的条目保持连续。
 
-收集失败时，`rstest.listTests()` 返回的 Promise 会以 `ListTestsError` 拒绝，而不是返回部分列表或空列表。
+收集失败时，`rstest.listTests()` 会抛出 [`ListTestsError`](#listtestserror)，而不是返回部分列表或空列表。
 
-只有显式传给 `rstest.listTests()` 的 `shard` 才会生效，并将结果限制在选定分片。省略 `shard` 时会列出所有文件；实例配置中的 `shard` 仍会像以前一样被丢弃。
+仅当向 `rstest.listTests()` 显式传入 `shard` 时才按分片过滤；省略时列出全部文件，不受实例配置影响。
 
 ### ListOptions
 
@@ -351,11 +415,11 @@ interface ListOptions {
 
 interface ListedTest {
   testPath: string; // 测试文件路径。
-  name?: string; // 声明自身的名称；文件条目不包含此字段。
-  fullName?: string; // 带测试套件前缀的显示名称；文件条目不包含此字段。
-  parentNames?: string[]; // 外层测试套件的名称。
+  name?: string; // 声明自身名称；文件条目省略此字段。
+  fullName?: string; // 带套件前缀的显示名称；文件条目省略此字段。
+  parentNames?: string[]; // 外层测试套件名称。
   project: string; // 项目名称。
-  location?: TestLocation; // 请求后提供的源码位置。
+  location?: TestLocation; // 请求后附带的源码位置。
   runMode?: 'skip' | 'todo'; // 不可运行声明的 skip 或 todo 模式。
   type: 'file' | 'suite' | 'case'; // 条目类型。
 }
@@ -365,11 +429,31 @@ interface RstestInstance {
 }
 ```
 
+### ListTestsError
+
+<ApiMeta addedVersion="0.12.0" />
+
+当测试收集阶段出现文件级错误或未捕获异常时，`rstest.listTests()` 抛出的错误类。
+
+- **类型：**
+
+```ts
+class ListTestsError extends Error {
+  readonly name: 'ListTestsError';
+  files: { testPath: string; errors: SerializedError[] }[];
+  unhandledErrors: SerializedError[];
+  constructor(
+    files: { testPath: string; errors: SerializedError[] }[],
+    unhandledErrors: SerializedError[],
+  );
+}
+```
+
 ## rstest.mergeReports
 
-`rstest.mergeReports()` 用于合并 blob 报告，并返回与 `rstest.run()` 相同的结果模型。
+`rstest.mergeReports()` 合并 blob 报告，并返回与 `rstest.run()` 相同的结果模型。
 
-当本次操作无法产生运行结果时，Promise 会被拒绝；合并的测试结果中若有测试失败，仍通过 `status` 报告，不会导致 Promise 被拒绝。
+仅当无法生成运行结果时拒绝 Promise；合并报告中存在失败测试时，通过 `status` 反映，不会拒绝 Promise。
 
 ### 示例
 
@@ -386,7 +470,7 @@ const result = await rstest.mergeReports({
 console.log(result.status);
 ```
 
-`path` 用于选择 blob 报告目录。`cleanup` 会在合并成功后删除已消费的报告。
+`path` 指定 blob 报告目录，`cleanup` 在合并成功后删除已消费的报告。
 
 ### MergeReportsOptions
 
@@ -403,9 +487,57 @@ interface RstestInstance {
 }
 ```
 
+## PROJECT_LOADER
+
+<ApiMeta addedVersion="0.12.5" />
+
+挂载在根 `RstestConfig` 上的 Symbol 键，供宿主工具（例如上层框架 CLI）从自身配置文件中解析 `projects` 条目，替代默认的 `rstest.config.*` 查找逻辑。
+
+仅读取根配置上的该 Symbol，嵌套 `projects` 也会复用根配置的加载器。返回 `null` 时会基于空配置创建项目，不再回退到 `rstest.config.*`。加载器可能被并发调用。
+
+### 示例
+
+```ts
+import {
+  createRstest,
+  type LoadProjectConfig,
+  PROJECT_LOADER,
+} from '@rstest/core/api';
+
+const loadProject: LoadProjectConfig = async ({ dirPath, filePath }) => {
+  const configFile = filePath ?? findHostConfig(dirPath);
+  if (!configFile) return null;
+  const { test, dependencies } = await loadHostConfig(configFile);
+  return { content: test, filePath: configFile, dependencies };
+};
+
+const rstest = await createRstest({
+  config: {
+    projects: ['packages/*'],
+    [PROJECT_LOADER]: loadProject,
+  },
+});
+```
+
+### LoadProjectConfig
+
+- **类型：**
+
+```ts
+const PROJECT_LOADER: unique symbol;
+
+type LoadProjectConfig = (ctx: {
+  dirPath: string; // 正在加载的项目目录（规范化的绝对路径）。
+  filePath?: string; // 配置文件路径（规范化的绝对路径），仅文件条目会提供。
+}) =>
+  | LoadConfigResult<RstestConfig>
+  | null
+  | Promise<LoadConfigResult<RstestConfig> | null>;
+```
+
 ## runCLI
 
-`runCLI` 会在当前进程中运行 Rstest 命令行。它会解析 `argv`、设置 `process.exitCode`，并安装 CLI 的 signal handlers。需要 CLI 的进程行为时，请使用 `runCLI`；实例方法不会设置 `process.exitCode` 或安装 signal handlers。
+`runCLI` 在当前进程中运行 Rstest CLI，负责解析 `argv`、设置 `process.exitCode` 并注册 CLI 的信号处理。需要完整 CLI 进程行为时使用此函数；实例方法不会设置 `process.exitCode` 或注册信号处理。
 
 ### 示例
 
@@ -417,10 +549,9 @@ runCLI({
 });
 ```
 
-`argv` 的结构与 Node.js 的 `process.argv` 一致，默认值为 `process.argv`：前两项是 executable 和 script 的路径，会被忽略，命令、filters 和 flags 从索引 2 开始。
-这与 Rsbuild 和 Rspress 的 `runCLI` 使用的结构相同。
+`argv` 格式与 Node.js `process.argv` 一致（默认即为 `process.argv`）：前两项为可执行文件与脚本路径并会被忽略，子命令、filter 和选项从索引 2 开始。
 
-所有可用的命令和选项，请参阅 [CLI 文档](/guide/basic/cli)。
+所有可用的命令和选项见 [CLI 文档](/guide/basic/cli)。
 
 ### RunCLIOptions
 

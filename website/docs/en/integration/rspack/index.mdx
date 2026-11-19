@@ -1,5 +1,5 @@
 ---
-description: This guide covers how to integrate Rstest with Rspack for seamless testing in your Rspack projects.
+description: Integrate Rstest with Rspack to reuse compatible compiler options from your Rspack configuration.
 ---
 
 import { PackageManagerTabs } from '@theme';
@@ -33,13 +33,13 @@ export default defineConfig({
 });
 ```
 
-The adapter loads `rspack.config.ts`, merges compatible compiler options with the generated test build, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes.
+The adapter checks `rspack.config.{js,ts,mjs,mts,cjs,cts}` (starting with `.js`), merges compatible compiler options with the generated test build, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers) so `--changed` runs the full test suite when that config changes. If no config file is found, it returns `{}`. It also removes Rsbuild's built-in CSS plugins (`rsbuild:css`, `rsbuild:less`, `rsbuild:sass`) so your Rspack CSS rules and loaders take effect directly.
 
 :::warning
-When using this adapter, some Rsbuild-specific CSS options, such as `output.cssModules`, are unavailable.
+Because Rsbuild's built-in CSS plugins are removed, Rsbuild-specific CSS options such as `output.cssModules` are unavailable when using this adapter. Configure CSS processing in your Rspack config instead.
 :::
 
-Use `cwd`, `configPath`, `configName`, or the environment options when the default Rspack config does not match your project. See the [configuration reference](./reference) for option details, mapping behavior, and debug instructions.
+Use `cwd`, `configPath`, `configName`, `env`, or `nodeEnv` when the default Rspack config does not match your project. If you already have an Rspack config object in memory, use `toRstestConfig` instead of loading a file. See the [configuration reference](./reference) for both entry points, options, mapping behavior, and debug instructions.
 
 ## Example project
 

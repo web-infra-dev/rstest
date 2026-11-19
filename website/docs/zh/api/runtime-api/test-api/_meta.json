@@ -1,1 +1,1 @@
-["expect", "test", "describe", "hooks"]
+["expect", "assert", "test", "describe", "hooks"]

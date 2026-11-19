@@ -1,16 +1,16 @@
 ---
-description: Rstest 注入到测试进程和 worker 进程中的环境变量。
+description: Rstest 在测试与 worker 进程中注入的环境变量，以及用于控制运行行为的环境变量。
 ---
 
 # 环境变量
 
-Rstest 在测试进程和 worker 进程中会设置一些环境变量，你可以在测试、setup 文件以及源码中读取它们。
+Rstest 会在测试与 worker 进程中注入运行时环境变量，同时读取部分可选环境变量来控制构建输出、agent 检测与调试日志。
 
 ## `NODE_ENV`
 
-如果 `NODE_ENV` 还没被设置，Rstest 在执行测试时会把它设为 `'test'`。Rstest 不会覆盖已有的值，因此你可以通过 shell 或 `package.json` 脚本指定。
+如果启动前尚未定义 `NODE_ENV`，Rstest 会将其设为 `'test'`。已有的值会被保留，可通过 shell 或 `package.json` 脚本覆盖。
 
-`process.env.NODE_ENV` 和 `import.meta.env.NODE_ENV` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下都可用。在 ESM 源码中（尤其是浏览器构建等没有 `process` 的场景），更推荐使用 `import.meta.env.NODE_ENV`。
+`process.env.NODE_ENV` 和 `import.meta.env.NODE_ENV` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下均可用。在没有 `process` 对象的 ESM 源码中，建议优先使用 `import.meta.env.NODE_ENV`。
 
 ```ts
 if (import.meta.env.NODE_ENV === 'test') {
@@ -20,9 +20,9 @@ if (import.meta.env.NODE_ENV === 'test') {
 
 ## `RSTEST`
 
-`process.env.RSTEST` 和 `import.meta.env.RSTEST` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下都可用。Rstest 在执行测试时会把它们设为 `'true'`，可以用来在源码中标记仅在测试中执行的代码分支。
+`process.env.RSTEST` 和 `import.meta.env.RSTEST` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下均可用，在测试运行期间值为 `'true'`。
 
-在 browser mode 下，Rstest 会在构建时替换这些表达式，但不会添加全局 `process` 对象。在兼容浏览器的 ESM 源码中，推荐使用 `import.meta.env.RSTEST`。不要先通过 `typeof process !== 'undefined'` 判断是否可用，因为该条件在浏览器中仍为 `false`。
+在 browser mode 下，Rstest 会在构建阶段替换这些表达式，不会注入全局 `process` 对象。在兼容浏览器的 ESM 源码中建议优先使用 `import.meta.env.RSTEST`，并且不要用 `typeof process !== 'undefined'` 做前置判断，因为该条件在浏览器中始终为 `false`。
 
 ```ts
 if (import.meta.env.RSTEST === 'true') {
@@ -30,15 +30,15 @@ if (import.meta.env.RSTEST === 'true') {
 }
 ```
 
-在生产构建中，把源码使用的表达式替换为 `false`，这样打包工具就能消除对应的死代码 — 详见 [检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
+在生产构建中将源码使用的表达式定义为 `false`，以便打包工具消除死代码，详见[检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
 
-如果想把测试代码直接写在源文件里，更推荐使用 [`import.meta.rstest`](/config/test/include-source) — 它直接暴露 Rstest 的测试 API，并且在生产构建中为 `undefined`。
+对于[源码内联测试](/config/test/include-source)，建议使用 `import.meta.rstest` —— 它直接暴露 Rstest 测试 API，且在生产构建中为 `undefined`。
 
 ## `RSTEST_WORKER_ID`
 
-标识当前测试文件所在 worker 进程的整数（以字符串形式表示）。第一个 worker 为 `'1'`。等价于 Jest 的 [`JEST_WORKER_ID`](https://jestjs.io/zh-Hans/docs/environment-variables#jest_worker_id)。
+标识当前测试文件所在 Node worker 的整数字符串，从 `'1'` 开始。等价于 Jest 的 [`JEST_WORKER_ID`](https://jestjs.io/zh-Hans/docs/environment-variables#jest_worker_id)。
 
-可以在并行 worker 之间隔离共享的外部资源 — 比如数据库 schema、端口、临时目录，以及其他可能因多 worker 同名而冲突的资源。
+可用于在并发 worker 之间隔离外部资源，例如数据库 schema、端口或临时目录。
 
 ```ts title="db.test.ts"
 import { afterAll, beforeAll, test } from '@rstest/core';
@@ -58,4 +58,34 @@ test('inserts a row', async () => {
 });
 ```
 
-同时运行的 worker 之间 ID 一定不同，所以在 worker 生命周期内可以放心地把它用作资源名的一部分。并发 worker 的数量上限由 [`pool.maxWorkers`](/config/test/pool) 控制；ID 会按 worker 启动顺序递增，单次 Rstest 运行内不会回收复用。
+Worker ID 的取值范围限定在 `[1, pool.maxWorkers]`。启动新 worker 时，Rstest 会分配该范围内最小的空闲 ID，并只在前一个 worker 完全退出后才回收复用该 ID。在 `isolate: false` 模式下，复用的空闲 worker 会保留原有 ID。并发运行的 worker 不会共享同一个 ID。
+
+## `RSTEST_NO_AGENT`
+
+设置 `RSTEST_NO_AGENT=1` 可关闭 AI coding agent 自动检测。
+
+当配置文件和 CLI 参数均未显式指定 reporter 时，Rstest 在检测到 AI coding agent 环境后会自动将默认 reporter 切换为 `md`，并关闭默认的终端彩色输出。设置 `RSTEST_NO_AGENT=1` 会保留 `default` 控制台 reporter 及常规 TTY 彩色输出检测。
+
+```bash
+RSTEST_NO_AGENT=1 npx rstest run
+```
+
+## `RSTEST_OUTPUT_MODULE`
+
+当未显式配置 [`output.module`](/config/build/output#outputmodule) 时，设置 `RSTEST_OUTPUT_MODULE=false` 可禁用 ESM 输出（开启 `federation` 时始终为 `false`）。配置文件中显式设置的 `output.module` 优先级高于该环境变量。
+
+```bash
+RSTEST_OUTPUT_MODULE=false npx rstest run
+```
+
+## `DEBUG`
+
+以逗号分隔的调试作用域列表（不区分大小写），用于开启详细调试日志、将临时构建产物与最终配置写入磁盘，并打印完整错误堆栈。支持的作用域包括 `rstest`、`rsbuild`、`builder` 和 `*`。
+
+配合 V8 覆盖率设置 `DEBUG=rstest:bundle-coverage`，可将 Node.js 测试构建产物的原始覆盖率写入 `.rstest/bundle-coverage-<timestamp>.json`（详见[查看构建产物的覆盖率](/guide/debug/debugging#inspect-bundle-coverage)）。
+
+```bash
+DEBUG=rstest npx rstest run
+```
+
+详见[调试](/guide/debug/debugging)和[性能分析](/guide/debug/profiling)。

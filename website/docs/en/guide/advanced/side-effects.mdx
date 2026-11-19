@@ -45,9 +45,7 @@ See Rspack's [tree shaking documentation](https://rspack.rs/guide/optimization/t
 
 ## Faster test builds with barrel optimization
 
-Rstest sends test files and their dependencies through Rspack's build pipeline, so it benefits from Rspack's default lazyBarrel optimization without switching to production mode. Rstest does not automatically mark application code as side-effect-free: the optimization relies on declarations provided by the project or dependency package.
-
-A barrel file is an entry point that re-exports other modules. Tests often use only a small subset of its exports:
+Rstest builds tests with Rspack, which enables `lazyBarrel` optimization by default without switching to production mode. When a barrel file (`index.ts`) re-exports multiple modules and is marked side-effect-free, Rspack only builds the re-exported branches that the test actually uses and skips unused branches.
 
 ```ts title="src/utils/index.ts"
 export { sum } from './sum';
@@ -63,24 +61,9 @@ test('sum', () => {
 });
 ```
 
-When `src/utils/index.ts` is declared side-effect-free and no other module in the build graph uses `formatDate`, Rspack can follow the `sum` re-export to build `sum.ts` and skip the `format-date.ts` branch.
+If `src/utils/index.ts` is marked side-effect-free and nothing else imports `formatDate`, Rspack skips transforming and parsing `format-date.ts` and its exclusive dependencies. Note that `export *` re-exports can limit this optimization when Rspack must inspect modules to locate exports.
 
-| Build work                                                                          | When all re-export branches must be processed | With lazyBarrel |
-| ----------------------------------------------------------------------------------- | --------------------------------------------- | --------------- |
-| Loader transforms, parsing, and dependency builds for `sum.ts`                      | Required                                      | Required        |
-| Transforms, parsing, and builds for `format-date.ts` and its exclusive dependencies | Required                                      | Can be skipped  |
-
-The benefit goes beyond removing code from the final bundle: unrelated branches can avoid subsequent build processing altogether. For entry points that export many components or utilities, using only a few exports in tests can reduce cold-start build work. Watch rebuilds also process modules according to dependency needs; this is a separate optimization from caching previously built results.
-
-If another test or module uses `formatDate`, that branch still needs to be built. With `export *`, Rspack may need to build more modules to determine where an export comes from, limiting the benefit.
-
-**`sideEffects` declares module behavior; lazyBarrel uses that declaration to optimize builds.** It relies on explicit package or module-rule declarations to skip branches before building their dependencies.
-
-An incorrect `sideEffects: false` declaration can therefore drop required initialization. Declare side effects for those modules and any necessary intermediate importers.
-
-Rspack can also skip building side-effect-free bare imports such as `import './register-mocks'`. This is a separate related optimization, so initialization can be skipped even without a barrel file.
-
-See Rspack's [barrel file optimization](https://rspack.rs/guide/advanced/lazy-barrel) guide.
+Because `lazyBarrel` and tree shaking trust `sideEffects` declarations instead of analyzing every module upfront, an inaccurate `sideEffects: false` can drop required initialization—both through barrel re-exports and bare imports such as `import './register-mocks'`. See Rspack's [barrel file optimization](https://rspack.rs/guide/advanced/lazy-barrel) guide for details.
 
 ## Declare modules with side effects
 

@@ -1,5 +1,5 @@
 ---
-description: "The extends option allows you to extend your Rstest configuration from external sources, such as adapters that convert other build tools' configurations to Rstest-compatible format"
+description: Extend Rstest configuration from shared presets, async factories, or build-tool adapters.
 ---
 
 # extends
@@ -7,25 +7,19 @@ description: "The extends option allows you to extend your Rstest configuration 
 - **Type:** `ExtendConfig | ExtendConfigFn | (ExtendConfig | ExtendConfigFn)[]`
 - **Default:** `undefined`
 
-The `extends` option allows you to extend your Rstest configuration from external sources, such as adapters that convert other build tools' configurations to Rstest-compatible format.
-
-This enables:
-
-- **Adapter Integration**: Extend from adapters like `@rstest/adapter-rslib`
-- **Async Configuration**: Load configuration from external sources asynchronously
-- **Config Merging**: Automatically merge extended configuration with your local Rstest config
-- **Composable Presets**: Combine multiple shared configs in a single `extends` array
+Extend your Rstest configuration from shared presets, async factory functions, or adapters (such as `@rstest/adapter-rslib`) that translate other build tools' configs into Rstest options.
 
 ## Basic usage (object)
 
 ```ts
-type ExtendConfig = Omit<RstestConfig, 'projects'>;
+type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
+  reporters?: any;
+};
+
+type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
 ```
 
-`ExtendConfig` is a plain subset of `RstestConfig` without `projects`.
-
-You can use it to extend your Rstest configuration from external sources.
-Rstest will merge the extended config with your local config following the [configuration merging rules](#configuration-merging).
+`ExtendConfig` is a subset of `RstestConfig` without `projects`, with `reporters` widened to `any` so adapters built against different `@rstest/core` versions remain compatible. Rstest merges the extended config with your local config following the [configuration merging rules](#configuration-merging).
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -43,13 +37,11 @@ export default defineConfig({
 
 ```ts
 type ExtendConfigFn = (
-  userConfig: Readonly<RstestConfig>,
+  userConfig: Readonly<LooseRstestConfig>,
 ) => ExtendConfig | Promise<ExtendConfig>;
 ```
 
-`ExtendConfigFn` is a function that takes the user's Rstest config as input and returns an extended config.
-
-You can use this to load external configuration files, fetch remote configs, or conditionally modify the config based on user settings.
+`ExtendConfigFn` receives the user's Rstest config and returns (synchronously or asynchronously) an `ExtendConfig`. Use it to load external config files, fetch remote configs, or derive options from user settings:
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -72,11 +64,9 @@ export default defineConfig({
 
 ## Multiple extends
 
-You can pass an array to `extends` when you want to compose multiple presets.
+Pass an array to `extends` to compose multiple presets. Rstest merges entries from left to right so later entries override earlier ones, while the local config keeps highest priority.
 
-Rstest resolves the array from left to right. Later entries override earlier ones, and your local config still has the highest priority.
-
-When an entry is a function, each `ExtendConfigFn` is resolved independently against the original user config. Array order only affects merge precedence, not the input passed to each function.
+When an array contains functions, each `ExtendConfigFn` receives the original user config independently; array order only controls merge precedence.
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -97,21 +87,19 @@ export default defineConfig({
 
 ## Configuration merging
 
-Rstest deep-merges object fields and overrides primitives. Local config always takes precedence over the extended config.
-
-When `extends` is an array, precedence is:
+Rstest deep-merges object fields and overrides primitives, with the local config taking precedence. When `extends` is an array, precedence is:
 
 ```ts
 extends[0] < extends[1] < ... < extends[n] < local config
 ```
 
-Important merge rules:
+Merge rules:
 
-- Primitive fields like `testTimeout`, `retry`, and `globals` are overridden by the later value.
-- `setupFiles`, `globalSetup`, and `plugins` are concatenated so multiple presets can contribute entries.
+- Primitive fields such as `testTimeout`, `retry`, and `globals` are overridden by the later value.
+- `setupFiles`, `globalSetup`, and `plugins` are concatenated across presets.
 - `include`, `reporters`, and `coverage.reporters` are replaced by the later value.
-- Object fields like `source`, `resolve`, `output`, `tools`, `env`, and `coverage` are deep-merged.
-- `browser` deep-merges plain objects, including nested `providerOptions`. Arrays, functions, and class instances are replaced by the later value. For example, overriding `providerOptions.launch.args` replaces the argument array while preserving an earlier `launch.timeout` and `context.locale`.
+- Object fields such as `source`, `resolve`, `output`, `tools`, `env`, and `coverage` are deep-merged.
+- `browser` deep-merges plain objects, including nested `providerOptions`; arrays, functions, and class instances are replaced by the later value (for example, overriding `providerOptions.launch.args` replaces the array while preserving `launch.timeout` and `context.locale`).
 - `projects` is ignored in every extended config.
 
 Example:
@@ -164,9 +152,7 @@ export default defineConfig({
 
 ## Using adapters
 
-### Example: extend from Rslib config
-
-Use the `@rstest/adapter-rslib` adapter to extend Rstest configuration from an existing Rslib config file. The adapter automatically maps compatible options like `source.define`, `source.include`, `source.exclude`, `source.transformImport`, and more.
+Adapters such as `@rstest/adapter-rslib` map compatible options (like `source.define`, `source.include`, `source.exclude`, and `source.transformImport`) from an existing build config into Rstest:
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -184,7 +170,7 @@ export default defineConfig({
 
 ## Limitations
 
-The `extends` configuration cannot include the `projects` field. To define multiple projects, extend each project individually:
+An extended config cannot define `projects`. To configure multiple projects, pass `extends` on each project individually:
 
 ```ts
 export default defineConfig({

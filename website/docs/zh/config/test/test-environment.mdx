@@ -4,13 +4,13 @@ description: Rstest 默认使用 Node.js 作为测试环境。如果你在开发
 
 # testEnvironment
 
-- **类型：** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions, prebundle?: 'auto' | boolean }`
+- **类型：** `'node' | 'jsdom' | 'happy-dom' | { name: 'node' | 'jsdom' | 'happy-dom'; options?: Record<string, any>; prebundle?: 'auto' | boolean }`
 - **默认值：** `'node'`
 - **CLI：** `--testEnvironment=node`
 
-测试时所使用的环境。
+Node 模式下测试运行所使用的环境。
 
-Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 `jsdom` 或 `happy-dom`。
+Rstest 默认在 Node.js 环境中运行测试。如果是 Web 应用，可以将 `testEnvironment` 设为 `'jsdom'` 或 `'happy-dom'`。
 
 import { Tab, Tabs } from '@theme';
 import { ApiMeta } from '@components/ApiMeta';
@@ -34,19 +34,7 @@ export default defineConfig({
 
 ### DOM 测试
 
-Rstest 支持使用 [jsdom](https://github.com/jsdom/jsdom) 和 [happy-dom](https://github.com/capricorn86/happy-dom) 来模拟 DOM 和浏览器 API。
-
-如果你想启用 DOM 测试，可以使用如下配置：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  testEnvironment: 'jsdom', // 或 'happy-dom'
-});
-```
-
-你还需要安装对应的包：
+Rstest 支持通过 [jsdom](https://github.com/jsdom/jsdom) 和 [happy-dom](https://github.com/capricorn86/happy-dom) 模拟 DOM 和浏览器 API。将 `testEnvironment` 设为 `'jsdom'` 或 `'happy-dom'` 并安装对应的包：
 
 import { PackageManagerTabs } from '@theme';
 
@@ -70,7 +58,7 @@ test('DOM test', () => {
 
 #### 环境选项
 
-你也可以为测试环境传递选项。这对于配置 `jsdom` 或 `happy-dom` 非常有用。例如，你可以为 `jsdom` 设置 `url`：
+通过 `options` 可向环境构造函数传入配置，例如为 `jsdom` 设置 `url`：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
