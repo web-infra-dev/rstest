@@ -20,14 +20,8 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./pure": {
-      "types": "./dist/pure.d.ts",
-      "default": "./dist/pure.js"
-    },
+    ".": "./dist/index.js",
+    "./pure": "./dist/pure.js",
     "./package.json": {
       "default": "./package.json"
     }

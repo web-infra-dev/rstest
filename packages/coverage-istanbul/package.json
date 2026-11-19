@@ -19,10 +19,7 @@
   "author": "Travis Zhang<https://github.com/travzhang>",
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+    ".": "./dist/index.js"
   },
   "types": "./dist/index.d.ts",
   "files": [
