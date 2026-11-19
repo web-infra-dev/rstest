@@ -25,7 +25,11 @@ it('includes environment prebundles in the first build duration', async () => {
   expect(durationMs.build).toBeGreaterThanOrEqual(
     durationMs.prebundle['happy-dom'],
   );
-  expect(durationMs.total).toBe(durationMs.build + durationMs.tests);
+  expect(durationMs.total).toBeGreaterThanOrEqual(durationMs.build);
+  expect(durationMs.total).toBeGreaterThanOrEqual(durationMs.tests);
+  expect(durationMs.build + durationMs.tests).toBeGreaterThanOrEqual(
+    durationMs.total,
+  );
   expect(durationMs.total).toBeLessThanOrEqual(performance.now() - start);
 });
 

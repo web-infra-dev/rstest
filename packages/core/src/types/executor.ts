@@ -1,4 +1,5 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { RunTimer } from '../core/execution/runTimer';
 import type { TraceEvent } from '../utils/trace';
 import type { InternalProjectContext, ListCommandResult } from './core';
 import type { CoverageMapData, RawCoverageResolveOptions } from './coverage';
@@ -56,6 +57,8 @@ export interface ExecutorRunCycleOptions {
    * cycle and must not report the failure again.
    */
   onSelected?: (files: SelectedTestFile[]) => Promise<Error | undefined>;
+  /** The one-shot Node run owns timing when it can skip the selection barrier. */
+  runTimer?: RunTimer;
 }
 
 /**

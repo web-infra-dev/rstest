@@ -13,7 +13,13 @@ import type {
   CoverageProvider,
   RawCoverageResolveOptions,
 } from '../../types/coverage';
-import { color, logger, toSelectedTestFile, type TraceRun } from '../../utils';
+import {
+  color,
+  logger,
+  toError,
+  toSelectedTestFile,
+  type TraceRun,
+} from '../../utils';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
@@ -327,8 +333,14 @@ export function createNodeExecutor(
   const runCycle = async (
     opts: ExecutorRunCycleOptions,
   ): Promise<ExecutorCycleOutcome> => {
-    const { buildId, mode, fileFilters, fromInvalidation, updateSnapshot } =
-      opts;
+    const {
+      buildId,
+      mode,
+      fileFilters,
+      fromInvalidation,
+      updateSnapshot,
+      runTimer,
+    } = opts;
     // Consume-once, and only by a cycle a rebuild triggered: a shortcut-driven
     // rerun compiles nothing, so it reports its own span and leaves a published
     // one for the cycle whose compile produced it, wherever in the queue that
@@ -384,8 +396,30 @@ export function createNodeExecutor(
     const traceRun = getTraceRun();
     const { span } = traceRun;
 
-    const projectPlans = await Promise.all(
-      projects.map(async (p) => {
+    const { bail, onlyFailures, testNamePattern, shard } =
+      context.normalizedConfig;
+    const isExplicitlyScoped =
+      fileFilters !== undefined || context.fileFilters !== undefined;
+    const dispatchAsReady =
+      projects.length > 1 &&
+      !isWatchMode &&
+      mode === 'all' &&
+      !opts.onSelected &&
+      !bail &&
+      !onlyFailures &&
+      !coverageProvider &&
+      !isExplicitlyScoped &&
+      !context.relatedMode &&
+      !testNamePattern &&
+      !shard &&
+      // Node global setup can change the shared environment for other workers.
+      projects.every(
+        (project) => project.normalizedConfig.globalSetup.length === 0,
+      );
+
+    const projectFailures = new Set<unknown>();
+    const runProjects = async () => {
+      const pendingPlans = projects.map(async (p) => {
         const {
           assetNames,
           entries,
@@ -523,6 +557,7 @@ export function createNodeExecutor(
           return {
             results,
             testResults,
+            errors: [],
             bundleCoverage,
             assetNames,
             getAssetFiles,
@@ -531,17 +566,83 @@ export function createNodeExecutor(
         };
 
         return { p, finalEntries, execute };
-      }),
-    ).catch((error: unknown) => {
+      });
+
+      if (dispatchAsReady) {
+        // A later build can fail with workers already running. Keep their
+        // results and wait for them before closing the pool and running teardown.
+        let buildsRemaining = pendingPlans.length;
+        const settled = await Promise.allSettled(
+          pendingPlans.map(async (pending) => {
+            const plan = await pending.finally(() => {
+              if (--buildsRemaining === 0) runTimer?.finishBuild();
+            });
+            if (didClose) return undefined;
+            const finishGroup = plan.finalEntries.length
+              ? runTimer?.startTestGroup()
+              : undefined;
+            try {
+              return await plan.execute(plan.finalEntries);
+            } finally {
+              finishGroup?.();
+            }
+          }),
+        );
+        return settled.flatMap((result) => {
+          if (result.status === 'rejected') {
+            projectFailures.add(result.reason);
+            return [];
+          }
+          return result.value ? [result.value] : [];
+        });
+      }
+
+      const projectPlans = await Promise.all(pendingPlans);
+      if (
+        onlyFailures &&
+        !isWatchMode &&
+        !context.relatedMode &&
+        !testNamePattern &&
+        mode !== 'on-demand' &&
+        !isExplicitlyScoped
+      ) {
+        applyOnlyFailuresSelection(projectPlans, {
+          resultsCache,
+          sequenceHints,
+          rootPath,
+        });
+      }
+
+      const runStartFailure = await opts.onSelected?.(
+        projectPlans.flatMap(({ p, finalEntries }) =>
+          finalEntries.map(({ testPath }) =>
+            toSelectedTestFile(testPath, p.name),
+          ),
+        ),
+      );
+
+      // A run-start hook can yield to cancellation before setup or workers begin.
+      if (runStartFailure || didClose) return;
+      if (projectPlans.some(({ finalEntries }) => finalEntries.length)) {
+        runTimer?.startTests();
+      }
+
+      return Promise.all(
+        projectPlans.map((plan) => plan.execute(plan.finalEntries)),
+      );
+    };
+
+    const returns = await runProjects().catch((error: unknown) => {
       if (error instanceof CompileFailedError) return error;
       throw error;
     });
-    if (projectPlans instanceof CompileFailedError) {
+    if (!returns || returns instanceof CompileFailedError) {
+      const compileFailed = returns instanceof CompileFailedError;
       return {
         results: [],
         testResults: [],
-        errors: [projectPlans.error],
-        failure: 'fatal',
+        errors: compileFailed ? [returns.error] : [],
+        failure: compileFailed ? 'fatal' : undefined,
         testPaths: [],
         duration: {
           buildTime: rebuildTime ?? Date.now() - cycleStart,
@@ -549,51 +650,6 @@ export function createNodeExecutor(
         },
       };
     }
-
-    const isExplicitlyScoped =
-      fileFilters !== undefined || context.fileFilters !== undefined;
-    if (
-      context.normalizedConfig.onlyFailures &&
-      !isWatchMode &&
-      !context.relatedMode &&
-      !context.normalizedConfig.testNamePattern &&
-      mode !== 'on-demand' &&
-      !isExplicitlyScoped
-    ) {
-      applyOnlyFailuresSelection(projectPlans, {
-        resultsCache,
-        sequenceHints,
-        rootPath,
-      });
-    }
-
-    const runStartFailure = await opts.onSelected?.(
-      projectPlans.flatMap(({ p, finalEntries }) =>
-        finalEntries.map(({ testPath }) =>
-          toSelectedTestFile(testPath, p.name),
-        ),
-      ),
-    );
-
-    // A run-start hook can yield to cancellation before setup or workers begin;
-    // a reporter failure aborts the run and is already recorded, so this cycle
-    // contributes no error of its own.
-    if (runStartFailure || didClose) {
-      return {
-        results: [],
-        testResults: [],
-        errors: [],
-        testPaths: [],
-        duration: {
-          buildTime: rebuildTime ?? Date.now() - cycleStart,
-          testTime: 0,
-        },
-      };
-    }
-
-    const returns = await Promise.all(
-      projectPlans.map((plan) => plan.execute(plan.finalEntries)),
-    );
 
     const workerCleanupErrors = !isWatchMode
       ? await pool.cleanupWorkerFixtures()
@@ -618,14 +674,13 @@ export function createNodeExecutor(
     // (cancellation closes the executor; filters and bail omit tests)
     // so the perf-first cache is never poisoned. This is node-internal and does
     // not depend on the shared finalize, so it stays here.
-    const bailLimit = context.normalizedConfig.bail;
     const bailAborted =
-      bailLimit > 0 &&
-      context.stateManager.getCountOfFailedTests() >= bailLimit;
+      bail > 0 && context.stateManager.getCountOfFailedTests() >= bail;
     if (
       !didClose &&
       !context.normalizedConfig.testNamePattern &&
-      !bailAborted
+      !bailAborted &&
+      projectFailures.size === 0
     ) {
       await writeResultsCache(
         rootPath,
@@ -634,16 +689,26 @@ export function createNodeExecutor(
       );
     }
 
+    const failures = [...projectFailures];
+    const hasCompileFailure = failures.some(
+      (error) => error instanceof CompileFailedError,
+    );
     return {
       results: returns.flatMap((r) => r.results),
       testResults: returns.flatMap((r) => r.testResults),
       errors: [
-        ...returns.flatMap((r) => ('errors' in r ? r.errors : [])),
+        ...returns.flatMap((r) => r.errors),
         ...workerCleanupErrors,
+        ...failures.map((error) =>
+          error instanceof CompileFailedError ? error.error : toError(error),
+        ),
       ],
-      failure: returns.some((r) => 'failure' in r && r.failure === 'setup')
-        ? 'setup'
-        : undefined,
+      failure: hasCompileFailure
+        ? 'fatal'
+        : failures.length ||
+            returns.some((r) => 'failure' in r && r.failure === 'setup')
+          ? 'setup'
+          : undefined,
       testPaths: currentEntries.map((e) => e.testPath),
       deletedTestPaths: currentDeletedEntries,
       duration: { buildTime, testTime },
