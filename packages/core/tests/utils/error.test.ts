@@ -57,6 +57,60 @@ describe('error helpers', () => {
     ]);
   });
 
+  it.each(
+    ['webpack', 'rspack'].flatMap((bundler) =>
+      ['runtime/require', 'bootstrap', 'startup'].flatMap((source) => [
+        `./${bundler}/${source}`,
+        `${bundler}:///${bundler}/${source}`,
+        `C:\\project\\${bundler}\\${source.replaceAll('/', '\\')}`,
+      ]),
+    ),
+  )('filters source-mapped bundler frames from %s', async (source) => {
+    const options = {
+      stack: [
+        'Error: Missing config file',
+        '    at readConfig (/project/src/config.ts:2:9)',
+        '    at requireModule (/project/dist/bundle.js:1:1)',
+      ].join('\n'),
+      getSourcemap: async (file: string) =>
+        file === '/project/dist/bundle.js'
+          ? {
+              version: 3 as const,
+              names: [],
+              sources: [source],
+              mappings: 'AAAA',
+            }
+          : null,
+    };
+
+    const frames = await parseErrorStacktrace({ ...options, fullStack: false });
+    expect(frames.map((frame) => frame.file)).toEqual([
+      '/project/src/config.ts',
+    ]);
+
+    const fullFrames = await parseErrorStacktrace({
+      ...options,
+      fullStack: true,
+    });
+    expect(fullFrames).toHaveLength(2);
+    expect(fullFrames[0]).toEqual(frames[0]);
+    expect(fullFrames[1]?.methodName).toBe('requireModule');
+  });
+
+  it('keeps user files named after bundler sources', async () => {
+    const files = [
+      '/project/src/webpack/bootstrap.ts',
+      '/project/src/rspack/startup.ts',
+      '/project/src/webpack/bootstrap-helper.ts',
+      '/project/src/rspack/startup-config.ts',
+    ];
+    const frames = await parseErrorStacktrace({
+      stack: files.map((file) => `    at load (${file}:1:1)`).join('\n'),
+      fullStack: false,
+    });
+    expect(frames.map((frame) => frame.file)).toEqual(files);
+  });
+
   it('drops rstest runtime frames whose path is URL-encoded', async () => {
     const frames = await parseErrorStacktrace({
       stack: [
