@@ -4,7 +4,8 @@ import type { Duration } from '../../types';
 export class RunTimer {
   private readonly start = performance.now();
   private buildTime?: number;
-  private buildFinished = false;
+  private readyBuildTime?: number;
+  private testGroupStarted = false;
   private runningGroups = 0;
   private groupWindowStart = 0;
   private overlappingTestTime = 0;
@@ -24,17 +25,17 @@ export class RunTimer {
     if (this.runningGroups > 0) {
       this.overlappingTestTime += now - this.groupWindowStart;
     }
-    this.buildTime = Math.round(now - this.start);
-    this.buildFinished = true;
+    this.readyBuildTime = Math.round(now - this.start);
   }
 
   startTestGroup(): (() => void) | undefined {
-    if (this.buildFinished) return;
+    this.testGroupStarted = true;
+    if (this.readyBuildTime !== undefined) return;
     if (this.runningGroups++ === 0) {
       this.groupWindowStart = performance.now();
     }
     return () => {
-      if (--this.runningGroups === 0 && !this.buildFinished) {
+      if (--this.runningGroups === 0 && this.readyBuildTime === undefined) {
         this.overlappingTestTime += performance.now() - this.groupWindowStart;
       }
     };
@@ -42,7 +43,9 @@ export class RunTimer {
 
   finish(): Duration {
     const totalTime = Math.round(performance.now() - this.start);
-    const buildTime = this.buildTime ?? totalTime;
+    const buildTime =
+      (this.testGroupStarted ? this.readyBuildTime : this.buildTime) ??
+      totalTime;
     return {
       totalTime,
       buildTime,

@@ -29,6 +29,7 @@ import {
 } from './globalSetup';
 import { applyOnlyFailuresSelection } from './onlyFailures';
 import type { ProjectPlan } from './projectPlan';
+import type { RunTimer } from './runTimer';
 import { CompileFailedError, createRsbuildServer } from '../build/rsbuild';
 import {
   readResultsCache,
@@ -187,7 +188,7 @@ export type NodeExecutor = TestExecutor &
  * — the planner's `TestPlanner` doc records what a snapshot of either breaks.
  */
 type CreateNodeExecutorOptions = {
-  onPrebundle: (name: string, elapsed: number) => void;
+  timer: RunTimer;
   /** Already prepared and config-hooked by the planner. */
   rsbuildInstance: RsbuildInstance;
   setupFileState: SetupFileState;
@@ -210,7 +211,7 @@ export function createNodeExecutor(
     coverageProvider,
     isWatchMode,
     getTraceRun,
-    onPrebundle,
+    timer,
   }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
@@ -238,6 +239,8 @@ export function createNodeExecutor(
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let didClose = false;
+  let interrupted = false;
+  let cancelPendingBuilds: (() => void) | undefined;
   // When a dev compile starts. Paired with the compile's end into a completed
   // span below; on its own it is not a build time, because cycles are queued
   // and the wait for the queue is not build work.
@@ -285,7 +288,7 @@ export function createNodeExecutor(
       modules: prepareTestEnvironmentModules({
         projects,
         rootPath,
-        onPrebundle,
+        onPrebundle: timer.recordPrebundle,
       }),
       server: createRsbuildServer({
         inspectedConfig: {
@@ -333,14 +336,9 @@ export function createNodeExecutor(
   const runCycle = async (
     opts: ExecutorRunCycleOptions,
   ): Promise<ExecutorCycleOutcome> => {
-    const {
-      buildId,
-      mode,
-      fileFilters,
-      fromInvalidation,
-      updateSnapshot,
-      runTimer,
-    } = opts;
+    const { buildId, mode, fileFilters, fromInvalidation, updateSnapshot } =
+      opts;
+    const runTimer = !isWatchMode && !opts.onSelected ? timer : undefined;
     // Consume-once, and only by a cycle a rebuild triggered: a shortcut-driven
     // rerun compiles nothing, so it reports its own span and leaves a published
     // one for the cycle whose compile produced it, wherever in the queue that
@@ -572,12 +570,19 @@ export function createNodeExecutor(
         // A later build can fail with workers already running. Keep their
         // results and wait for them before closing the pool and running teardown.
         let buildsRemaining = pendingPlans.length;
+        // Closing the dev server can leave an unfinished build's stats pending.
+        const cancelledBuild = new Promise<undefined>((resolve) => {
+          cancelPendingBuilds = () => resolve(undefined);
+          if (interrupted || didClose) cancelPendingBuilds();
+        });
         const settled = await Promise.allSettled(
           pendingPlans.map(async (pending) => {
-            const plan = await pending.finally(() => {
-              if (--buildsRemaining === 0) runTimer?.finishBuild();
-            });
-            if (didClose) return undefined;
+            const plan = await Promise.race([pending, cancelledBuild]).finally(
+              () => {
+                if (--buildsRemaining === 0) runTimer?.finishBuild();
+              },
+            );
+            if (!plan || interrupted || didClose) return undefined;
             const finishGroup = plan.finalEntries.length
               ? runTimer?.startTestGroup()
               : undefined;
@@ -588,9 +593,10 @@ export function createNodeExecutor(
             }
           }),
         );
+        cancelPendingBuilds = undefined;
         return settled.flatMap((result) => {
           if (result.status === 'rejected') {
-            projectFailures.add(result.reason);
+            if (!interrupted && !didClose) projectFailures.add(result.reason);
             return [];
           }
           return result.value ? [result.value] : [];
@@ -677,6 +683,7 @@ export function createNodeExecutor(
     const bailAborted =
       bail > 0 && context.stateManager.getCountOfFailedTests() >= bail;
     if (
+      !interrupted &&
       !didClose &&
       !context.normalizedConfig.testNamePattern &&
       !bailAborted &&
@@ -787,6 +794,7 @@ export function createNodeExecutor(
       return;
     }
     didClose = true;
+    cancelPendingBuilds?.();
     notifyCompileFailed = undefined;
     if (runDependencyValidationPromise) {
       await runDependencyValidationPromise.catch(() => undefined);
@@ -830,6 +838,8 @@ export function createNodeExecutor(
     runCycle,
     onInvalidate,
     interrupt: async () => {
+      interrupted = true;
+      cancelPendingBuilds?.();
       runResources?.pool.interrupt();
     },
     close,

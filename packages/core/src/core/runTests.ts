@@ -177,7 +177,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const nodeExecutor = nodeBuild
     ? createNodeExecutor(context, {
         ...nodeBuild,
-        onPrebundle: timer.recordPrebundle,
+        timer,
         getPlan: planner.getPlan,
         coverageProvider,
         isWatchMode,
@@ -390,7 +390,6 @@ export async function runTests(context: Rstest): Promise<void> {
                     env: browserStage.env,
                     onTraceEvents: forwardBrowserTraceEvents,
                     onSelected: selections[index],
-                    runTimer: needsRunStartBarrier ? undefined : timer,
                   });
             } finally {
               // Empty or failed executors must release sibling selections.

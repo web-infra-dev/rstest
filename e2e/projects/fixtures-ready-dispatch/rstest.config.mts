@@ -13,6 +13,7 @@ import {
 } from './markers';
 
 const timingReport = process.env.RSTEST_DISPATCH_TIMING_REPORT;
+const scenario = process.env.RSTEST_DISPATCH_SCENARIO;
 const fastReported = fastStarted + '.reported';
 
 export default defineConfig({
@@ -56,6 +57,12 @@ export default defineConfig({
         rspack(config) {
           config.plugins.push({
             apply(compiler: Rspack.Compiler) {
+              if (scenario === 'compile-failure') {
+                compiler.hooks.beforeCompile.tapPromise(
+                  'WaitForSlowBuildFailure',
+                  () => waitForMarker(slowFailed),
+                );
+              }
               compiler.hooks.done.tap('MarkFastBuildReady', () => {
                 writeFileSync(fastBuilt, '');
               });
@@ -74,6 +81,15 @@ export default defineConfig({
               compiler.hooks.beforeCompile.tapPromise(
                 'WaitForFastProject',
                 async () => {
+                  if (scenario === 'compile-failure') {
+                    throw new Error('Compilation failed before any dispatch');
+                  }
+                  if (scenario === 'interrupt') {
+                    await waitForMarker(fastReported);
+                    console.log('[pending-build]');
+                    await waitForMarker(fastStarted + '.interrupted');
+                    throw new Error('Pending build rejected after SIGINT');
+                  }
                   if (checkFallback) {
                     // Keep the builds staggered even if the fast compiler starts late.
                     await waitForMarker(fastBuilt);

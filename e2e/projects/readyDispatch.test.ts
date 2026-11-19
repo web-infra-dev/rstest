@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,4 +126,63 @@ it('reports the last build and excludes build-only gaps from test time', async (
   expect(overlapMs).toBeLessThan(fastRun.dur / 1000 + gapMs / 2);
   expect(durationMs.total).toBeGreaterThanOrEqual(durationMs.build);
   expect(durationMs.total).toBeGreaterThanOrEqual(durationMs.tests);
+});
+
+it.for([
+  {
+    scenario: 'compile-failure',
+    title: 'reports zero test time when all builds fail before dispatch',
+  },
+  {
+    scenario: 'interrupt',
+    title: 'keeps a completed result without reporting rejection after SIGINT',
+  },
+])('$title', async ({ scenario }, { onTestFinished, skip }) => {
+  const interrupt = scenario === 'interrupt';
+  if (interrupt && process.platform === 'win32') skip();
+  const temp = await mkdtemp(join(tmpdir(), 'rstest-ready-dispatch-failure-'));
+  onTestFinished(() => rm(temp, { force: true, recursive: true }));
+  const marker = join(temp, 'fast-started');
+  const reportPath = join(temp, 'report.json');
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: ['run'],
+    options: {
+      nodeOptions: {
+        cwd,
+        env: {
+          RSTEST_FAST_PROJECT_MARKER: marker,
+          RSTEST_DISPATCH_TIMING_REPORT: reportPath,
+          RSTEST_DISPATCH_SCENARIO: scenario,
+        },
+      },
+    },
+    onTestFinished,
+  });
+
+  if (interrupt) {
+    await cli.waitForStdout('[pending-build]');
+    cli.exec.process!.kill('SIGINT');
+    await cli.waitForStdout('Received SIGINT');
+    await writeFile(marker + '.interrupted', '');
+  }
+
+  await expectExecFailed();
+  expect(cli.exec.process!.exitCode).toBe(interrupt ? 130 : 1);
+  const { durationMs, summary, unhandledErrors } = JSON.parse(
+    await readFile(reportPath, 'utf8'),
+  );
+  if (interrupt) {
+    expect(summary.passedTests).toBe(1);
+    expect(unhandledErrors).toEqual([]);
+  } else {
+    expect(summary.tests).toBe(0);
+    expect(unhandledErrors).toEqual([
+      expect.objectContaining({
+        message: 'Compilation failed before any dispatch',
+      }),
+    ]);
+    expect(durationMs.tests).toBe(0);
+    expect(durationMs.build).toBe(durationMs.total);
+  }
 });

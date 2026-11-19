@@ -36,3 +36,28 @@ it('counts overlapping test groups and the time after the last build', () => {
     clock.mockRestore();
   }
 });
+
+it.for([false, true])(
+  'attributes time after build completion when a test group starts: %s',
+  (startsTests) => {
+    let now = 0;
+    const clock = rs.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      const timer = new RunTimer();
+      now = 20;
+      timer.finishBuild();
+      if (startsTests) {
+        now = 25;
+        timer.startTestGroup();
+      }
+      now = 40;
+      expect(timer.finish()).toEqual({
+        totalTime: 40,
+        buildTime: startsTests ? 20 : 40,
+        testTime: startsTests ? 20 : 0,
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  },
+);
