@@ -121,6 +121,7 @@ type PoolDispatchParams = {
   assetNames: string[];
   getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+  diskSourceMapPaths?: Record<string, string>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
   project: InternalProjectContext;
@@ -148,6 +149,7 @@ const buildTask = async ({
   updateSnapshot,
   getAssetFiles,
   getSourceMaps,
+  diskSourceMapPaths: projectDiskSourceMapPaths,
   rpcMethods,
   getKnownCoverageStructures,
   traceSpan,
@@ -171,6 +173,7 @@ const buildTask = async ({
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
+  diskSourceMapPaths?: PoolDispatchParams['diskSourceMapPaths'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
   getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
   traceSpan: TraceSpan;
@@ -190,6 +193,15 @@ const buildTask = async ({
     assetNames,
     project.normalizedConfig.federation,
   );
+  // Bundle coverage records inputs through the host asset loader.
+  let diskSourceMapPaths: Record<string, string> | undefined;
+  if (projectDiskSourceMapPaths && !captureBundleCoverage) {
+    diskSourceMapPaths = {};
+    for (const name of taskAssetNames) {
+      const mapPath = projectDiskSourceMapPaths[name];
+      if (mapPath) diskSourceMapPaths[name] = mapPath;
+    }
+  }
   const getAssets = async (
     requestedAssetNames = taskAssetNames,
     requestedSourceMapNames = requestedAssetNames,
@@ -225,6 +237,7 @@ const buildTask = async ({
       getKnownCoverageStructures,
       // Bundle coverage bypasses the VM cache to capture every task's assets.
       loadAssets:
+        !diskSourceMapPaths &&
         (!isVmPoolType(workerKind) || captureBundleCoverage) &&
         !project.normalizedConfig.federation
           ? () =>
@@ -238,6 +251,7 @@ const buildTask = async ({
       options: {
         entryInfo,
         assetNames: taskAssetNames,
+        diskSourceMapPaths,
         // Known limit: the config portion is `stableJson`, so environment option
         // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
         // function, a `virtualConsole` instance) collapse to identical bytes —
@@ -371,25 +385,18 @@ export const createPool = async ({
   context: InternalContext;
   testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
 }): Promise<{
-  runTests: (params: {
-    entries: EntryInfo[];
-    assetNames: string[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
-    setupEntries: EntryInfo[];
-    updateSnapshot: SnapshotUpdateState;
-    project: InternalProjectContext;
-    /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
-    buildId?: number;
-    /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
-    onCoverageResult?: (coverage: CoverageMapData) => void;
-    onRawCoverageResult?: (coverage: unknown) => void;
-    getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
-    /** Perfetto trace events forwarded for caller-owned dumping. */
-    onTraceEvents?: (events: TraceEvent[]) => void;
-    /** Records host-side pool slices in the caller-owned Perfetto trace. */
-    traceSpan: TraceSpan;
-  }) => Promise<{
+  runTests: (
+    params: PoolDispatchParams & {
+      /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
+      onCoverageResult?: (coverage: CoverageMapData) => void;
+      onRawCoverageResult?: (coverage: unknown) => void;
+      getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
+      /** Perfetto trace events forwarded for caller-owned dumping. */
+      onTraceEvents?: (events: TraceEvent[]) => void;
+      /** Records host-side pool slices in the caller-owned Perfetto trace. */
+      traceSpan: TraceSpan;
+    },
+  ) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
     bundleCoverage: BundleCoverageResult[];
@@ -482,6 +489,7 @@ export const createPool = async ({
       assetNames,
       getAssetFiles,
       getSourceMaps,
+      diskSourceMapPaths,
       setupEntries,
       project,
       updateSnapshot,
@@ -543,6 +551,7 @@ export const createPool = async ({
                   updateSnapshot,
                   getAssetFiles,
                   getSourceMaps,
+                  diskSourceMapPaths,
                   rpcMethods,
                   getKnownCoverageStructures,
                   traceSpan,
@@ -654,6 +663,7 @@ export const createPool = async ({
       assetNames,
       getAssetFiles,
       getSourceMaps,
+      diskSourceMapPaths,
       setupEntries,
       project,
       updateSnapshot,
@@ -688,6 +698,7 @@ export const createPool = async ({
             updateSnapshot,
             getAssetFiles,
             getSourceMaps,
+            diskSourceMapPaths,
             rpcMethods,
             // `collect` does not participate in tracing.
             traceSpan: noopTraceSpan,

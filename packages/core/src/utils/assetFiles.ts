@@ -77,3 +77,22 @@ export const getAssetText = (assetFiles: AssetFiles, name: string): string => {
   textCache.set(content, text);
   return text;
 };
+
+export function parseInlineSourceMapStr(code: string): string | null {
+  // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
+  const inlineSourceMapRegex =
+    /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
+  const match = inlineSourceMapRegex.exec(code);
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  try {
+    const base64Data = match[1];
+    const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
+    return decodedStr;
+  } catch {
+    return null;
+  }
+}
