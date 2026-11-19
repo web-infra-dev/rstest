@@ -65,3 +65,38 @@ it('junit reports a file that fails outside of its tests', async () => {
   );
   expect(xml).not.toContain('<failure');
 });
+
+it('junit reports the cause chain of an error', async () => {
+  const { cli } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      '-c',
+      './rstest.junit.errorCause.config.mts',
+      '--reporters',
+      'junit',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await cli.exec;
+  expect(cli.exec.process?.exitCode).toBe(1);
+
+  const file = String.raw`fixtures-cause[\\/]errorCause\.test\.ts`;
+  expect(cli.stdout).toMatch(
+    new RegExp(
+      [
+        '<failure message="Failed to load user" type="Error">Failed to load user',
+        String.raw`at loadUser \(${file}:19:11\)`,
+        'Caused by: TypeError: fetch failed',
+        String.raw`at request \(${file}:11:11\)`,
+        'Caused by: Error: Database connection refused',
+        String.raw`at connect \(${file}:4:9\)</failure>`,
+      ].join('\n'),
+    ),
+  );
+});

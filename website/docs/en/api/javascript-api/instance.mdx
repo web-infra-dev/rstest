@@ -329,9 +329,11 @@ console.log(tests);
 
 Set `filesOnly` to skip collecting declarations. `includeSuites` includes named suites as separate entries. `includeTaskLocation` from `RunOptions` adds source locations.
 
-Every entry includes `testPath` and `project`. Entries from the implicit default project use `config.name` (`'rstest'` by default). Declaration entries include their own `name`, a suite-prefixed `fullName`, and `parentNames` for the hierarchy; file entries omit `name` and `fullName`. Skipped and todo declarations are included with `runMode` set to `skip` or `todo`; runnable declarations omit `runMode`.
+Every entry includes `testPath` and `project`. The implicit default project's base name is `config.name` (`'rstest'` by default). Declaration entries include their own `name`, a suite-prefixed `fullName`, and `parentNames` for the hierarchy; file entries omit `name` and `fullName`. Skipped and todo declarations are included with `runMode` set to `skip` or `todo`; runnable declarations omit `runMode`.
 
-Entries are returned in depth-first declaration order. A suite immediately precedes its descendants, and all entries from one file stay contiguous.
+In Browser Mode, declarations are collected in each selected browser instance. `filesOnly` returns one entry per file and instance without launching browsers. Both modes use the same `project` names as `run()`, such as `web (chromium)` and `web (firefox)` when both instances are selected.
+
+Entries are returned in depth-first declaration order. A suite immediately precedes its descendants, and entries for the same file and project stay contiguous.
 
 `rstest.listTests()` rejects with `ListTestsError` when collection fails instead of returning a partial or empty list.
 

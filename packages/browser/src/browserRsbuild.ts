@@ -267,7 +267,7 @@ export type BrowserRuntime = {
   containerServer: BrowserProjectServer;
   /**
    * The resolved launch plan, one spec per launch key; `launchSpecs[0]` is the
-   * default launch the list/collect page and any default-browser caller use.
+   * default launch for callers that do not target a specific row.
    */
   launchSpecs: BrowserLaunchSpec[];
   /**

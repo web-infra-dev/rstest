@@ -1,7 +1,7 @@
 import type { RssTrace } from '../utils/traceRss';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { dirname, join, resolve } from 'pathe';
+import { dirname, resolve } from 'pathe';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -106,16 +106,13 @@ const getAssetNames = (
 };
 
 const getNodeExecArgv = () => {
-  const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
-
   return [
     '--experimental-vm-modules',
     '--experimental-import-meta-resolve',
     needFlagExperimentalDetectModule()
       ? '--experimental-detect-module'
       : undefined,
-    '--require',
-    suppressFile,
+    '--disable-warning=ExperimentalWarning',
   ].filter(Boolean) as string[];
 };
 

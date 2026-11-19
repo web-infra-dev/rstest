@@ -38,6 +38,33 @@ describe('test build config', () => {
     },
   );
 
+  it.for(['run', 'list'] as const)(
+    'disables incremental builds by default for Node %s',
+    async (command, { onTestFinished }) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [command, '--config', 'rstest.incremental.config.mts'],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures/tools/rspack'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+
+      expect(cli.stdout).toContain('incremental default: false');
+      expect(cli.stdout).toContain('incremental explicit-object: true');
+      expect(cli.stdout).toContain('incremental explicit-callback: true');
+      if (command === 'list') {
+        expect(cli.stdout).toContain(
+          'tools.rspack config should work correctly',
+        );
+      }
+    },
+  );
+
   it('modifyRstestConfig should apply before listing test files', async ({
     onTestFinished,
   }) => {

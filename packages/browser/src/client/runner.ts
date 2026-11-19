@@ -65,7 +65,6 @@ import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
   getScriptUrls,
-  preloadRunnerSourceMap,
   preloadTestFileSourceMap,
 } from './sourceMapSupport';
 
@@ -346,16 +345,30 @@ const dispatchRunnerLifecycle = (
 const CONFIG_WAIT_TIMEOUT_MS = 30_000;
 
 /**
- * Wait for configuration from container if running in iframe.
+ * Wait for configuration from the host: the container's config handshake in a
+ * headed iframe, or the claiming batch's postMessage on a pre-warmed headless
+ * page.
  * This is a prerequisite for test execution - without config, tests cannot run.
+ *
+ * A top-level (headless) page normally boots with host-injected options, but a
+ * pre-warmed page loads `runner.html` before the host knows which batch it
+ * will serve; the host delivers the config through a postMessage once the
+ * batch claims the page, and this wait is what keeps it parked meanwhile.
  */
 const waitForConfig = (): Promise<void> => {
-  // If not in iframe or already has config, resolve immediately
-  if (window.parent === window || window.__RSTEST_BROWSER_OPTIONS__) {
+  // Already configured (host-injected options): resolve immediately
+  if (window.__RSTEST_BROWSER_OPTIONS__) {
     return Promise.resolve();
   }
 
   return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const stopListening = (): void => {
+      window.removeEventListener('message', handleMessage);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    };
     const handleMessage = (event: MessageEvent) => {
       const payload = event.data?.payload;
       if (
@@ -363,26 +376,31 @@ const waitForConfig = (): Promise<void> => {
         typeof payload?.runId === 'string'
       ) {
         window.__RSTEST_BROWSER_OPTIONS__ = payload;
-        debugLog(
-          '[Runner] Received config from container:',
-          event.data.payload,
-        );
-        window.removeEventListener('message', handleMessage);
+        debugLog('[Runner] Received config from host:', event.data.payload);
+        stopListening();
         resolve();
       }
     };
 
     window.addEventListener('message', handleMessage);
 
-    setTimeout(() => {
-      window.removeEventListener('message', handleMessage);
-      reject(
-        new Error(
-          `[Rstest] Failed to receive browser config within ${CONFIG_WAIT_TIMEOUT_MS / 1000}s. ` +
-            'This may indicate a connection issue between the runner iframe and container.',
-        ),
-      );
-    }, CONFIG_WAIT_TIMEOUT_MS);
+    // Only a headed iframe owns the config handshake with its container and
+    // can be left permanently unserved when that connection breaks, so only
+    // it gets a self-destruct timer. A top-level (headless) pre-warmed page
+    // legitimately parks here for as long as its claiming batch runs — the
+    // current batch can outlast any fixed timeout — and its lifecycle is
+    // host-owned (claim, discard, or run cancel closes the context).
+    if (window.parent !== window) {
+      timeoutId = setTimeout(() => {
+        stopListening();
+        reject(
+          new Error(
+            `[Rstest] Failed to receive browser config within ${CONFIG_WAIT_TIMEOUT_MS / 1000}s. ` +
+              'This may indicate a connection issue between the runner page and the host.',
+          ),
+        );
+      }, CONFIG_WAIT_TIMEOUT_MS);
+    }
   });
 };
 
@@ -510,10 +528,6 @@ const run = async () => {
   send({ type: 'ready' });
 
   setRealTimers();
-
-  // Snapshot code runs in runner.js, so preload its sourcemap to map stack
-  // traces back to original source files.
-  await preloadRunnerSourceMap();
 
   // Find the project for this test file
   const targetTestFile = options.testFile;

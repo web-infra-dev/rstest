@@ -6,7 +6,7 @@ import { publishCheckPlugins } from '../../scripts/publishCheckPlugins.ts';
 import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 import browserPackage from '../browser/package.json' with { type: 'json' };
-import { licensePlugin } from './licensePlugin.ts';
+import { licensePlugin, writeCollectedLicenseFile } from './licensePlugin.ts';
 import packageJson from './package.json' with { type: 'json' };
 
 const { peerDependencies, version: browserVersion } = browserPackage;
@@ -31,6 +31,16 @@ if (version !== browserVersion) {
 
 const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');
+const enableSourceMap = process.env.SOURCEMAP === 'true';
+
+// Deduplicate bare and `node:` builtin imports across all Node libs.
+const nodeExternals = {
+  fs: 'node:fs',
+  os: 'node:os',
+  tty: 'node:tty',
+  util: 'node:util',
+  path: 'node:path',
+};
 
 const readableMinifyConfig = {
   jsOptions: {
@@ -53,10 +63,81 @@ const readableMinifyConfig = {
   },
 } satisfies Rsbuild.Minify;
 
+const createSplitMinify = (fullyMinified: RegExp): Rsbuild.Minify => ({
+  jsOptions: [
+    { include: fullyMinified },
+    { ...readableMinifyConfig.jsOptions, exclude: fullyMinified },
+  ],
+});
+
+// `minify` is scoped per lib, so `~\d+` matches rslib's multi-compiler suffix
+// regardless of lib ordering in `define.lib({ lib })`.
 const fullyMinifiedNodeChunks =
-  /(?:^|\/)(?:@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~0\.js$/;
+  /(?:^|\/)(?:@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~\d+\.js$/;
 const fullyMinifiedBrowserChunks =
-  /(?:^|\/)(?:browser-runtime-vendor|fake-timers|magic-string\.es)~1\.js$/;
+  /(?:^|\/)(?:browser-runtime-vendor|fake-timers|magic-string\.es)~\d+\.js$/;
+const fullyMinifiedWorkerChunks =
+  /(?:^|\/)(?:@vitest\/pretty-format|diff|magic-string\.es)~\d+\.js$/;
+
+// Disable chunk splitting for worker libs so startup loads one chunk instead
+// of walking a chunk graph.
+const singleChunkOptimization = {
+  splitChunks: false,
+  runtimeChunk: false,
+} as const;
+
+const shouldEmitLicense = !isBuildWatch && isLibBuild;
+const licenseRenderOptions = {
+  packageName: '@rstest/core',
+  includeCodeReferences: true,
+};
+// One instance per lib (the plugin keeps per-compilation state); skipped in
+// watch mode to avoid `ResourceData has been dropped by Rust`.
+const createLibLicensePlugin = () =>
+  licensePlugin(
+    licenseRenderOptions.packageName,
+    licenseRenderOptions.includeCodeReferences,
+  );
+const licensePlugins = shouldEmitLicense
+  ? {
+      rstest: await createLibLicensePlugin(),
+      worker: await createLibLicensePlugin(),
+      workerLazyDeps: await createLibLicensePlugin(),
+    }
+  : {};
+
+/**
+ * Writes `LICENSE.md` once for all libs: each lib reports only the packages in
+ * its own compilation, and they compile in parallel.
+ */
+const emitMergedLicense: Rsbuild.RsbuildPlugin = {
+  name: 'rstest:merge-license',
+  setup(api) {
+    api.onAfterBuild(async ({ stats }) => {
+      // A failed compilation reports only part of its graph; writing then
+      // would overwrite the tracked file with a package subset.
+      if (!shouldEmitLicense || stats?.hasErrors()) {
+        return;
+      }
+      await writeCollectedLicenseFile(
+        new URL('./LICENSE.md', import.meta.url),
+        licenseRenderOptions,
+      );
+    });
+  },
+};
+
+/**
+ * Picks worker-only loader variants for modules shared with `browser_runtime`
+ * (where they stay lazy chunks). Keys match the exact relative requests inside
+ * the `worker` lib.
+ */
+const workerRuntimeAliases = {
+  './fakeTimersLoader':
+    require.resolve('./src/runtime/api/fakeTimersLoader.node.ts'),
+  './snapshotLoader':
+    require.resolve('./src/runtime/api/snapshotLoader.worker.ts'),
+};
 
 // An allowlist preserves the existing lazy snapshot, fake-timers, and
 // magic-string chunk boundaries.
@@ -72,7 +153,7 @@ const jestMatchersDtsBanner = `declare global {
 }`;
 
 define.lib({
-  plugins: publishCheckPlugins(),
+  plugins: [...publishCheckPlugins(), emitMergedLicense],
   lib: [
     {
       id: 'rstest',
@@ -101,26 +182,9 @@ define.lib({
         dts: jestMatchersDtsBanner,
       },
       output: {
-        sourceMap: process.env.SOURCEMAP === 'true',
-        externals: {
-          // fix deduplicate import from fs & node:fs
-          fs: 'node:fs',
-          os: 'node:os',
-          tty: 'node:tty',
-          util: 'node:util',
-          path: 'node:path',
-        },
-        minify: {
-          jsOptions: [
-            {
-              include: fullyMinifiedNodeChunks,
-            },
-            {
-              ...readableMinifyConfig.jsOptions,
-              exclude: fullyMinifiedNodeChunks,
-            },
-          ],
-        },
+        sourceMap: enableSourceMap,
+        externals: nodeExternals,
+        minify: createSplitMinify(fullyMinifiedNodeChunks),
       },
       shims: {
         esm: {
@@ -133,24 +197,18 @@ define.lib({
           'api/index': './src/api/index.ts',
           adapter: './src/adapter.ts',
           browser: './src/browser.ts',
-          worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
           prebundleWorker: './src/core/environment/prebundleWorker.ts',
         },
       },
       tools: {
         rspack: {
-          // fix licensePlugin watch error: ResourceData has been dropped by Rust.
           plugins: [
             new rspack.CopyRspackPlugin({
               patterns: [
                 {
                   from: 'src/core/plugins/mockRuntimeCode.js',
                   to: 'mockRuntimeCode.js',
-                },
-                {
-                  from: 'src/pool/rstestSuppressWarnings.cjs',
-                  to: 'rstestSuppressWarnings.cjs',
                 },
                 {
                   from: 'src/core/plugins/importActualLoader.mjs',
@@ -166,8 +224,7 @@ define.lib({
                 },
               ],
             }),
-            // only load & apply licensePlugin in lib build
-            isBuildWatch || !isLibBuild ? null : await licensePlugin(),
+            licensePlugins.rstest,
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/main' }),
           ].filter(Boolean),
         },
@@ -193,18 +250,8 @@ define.lib({
       output: {
         target: 'web',
         distPath: 'dist/browser-runtime',
-        sourceMap: process.env.SOURCEMAP === 'true',
-        minify: {
-          jsOptions: [
-            {
-              include: fullyMinifiedBrowserChunks,
-            },
-            {
-              ...readableMinifyConfig.jsOptions,
-              exclude: fullyMinifiedBrowserChunks,
-            },
-          ],
-        },
+        sourceMap: enableSourceMap,
+        minify: createSplitMinify(fullyMinifiedBrowserChunks),
       },
       plugins: [pluginNodePolyfill()],
       tools: {
@@ -229,6 +276,80 @@ define.lib({
           plugins: [
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/browser' }),
           ].filter(Boolean),
+        },
+      },
+    },
+    {
+      id: 'worker',
+      syntax: 'es2023',
+      dts: false,
+      output: {
+        // Shares `dist` with the other Node libs; only the first lib cleans it.
+        cleanDistPath: false,
+        sourceMap: enableSourceMap,
+        externals: nodeExternals,
+        minify: createSplitMinify(fullyMinifiedWorkerChunks),
+      },
+      shims: {
+        esm: {
+          require: true,
+        },
+      },
+      source: {
+        entry: {
+          worker: './src/runtime/worker/index.ts',
+        },
+        define: {
+          // Worker-only code paths; read behind a `typeof` guard so running
+          // from `src/` (unit tests) does not throw.
+          __RSTEST_WORKER_BUILD__: JSON.stringify(true),
+        },
+      },
+      tools: {
+        rspack: (config, { mergeConfig }) => {
+          return mergeConfig(config, {
+            optimization: singleChunkOptimization,
+            resolve: {
+              alias: workerRuntimeAliases,
+            },
+            plugins: [
+              licensePlugins.worker,
+              rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker' }),
+            ].filter(Boolean),
+          });
+        },
+      },
+    },
+    {
+      id: 'worker_lazy_deps',
+      format: 'cjs',
+      syntax: 'es2023',
+      dts: false,
+      output: {
+        cleanDistPath: false,
+        sourceMap: enableSourceMap,
+        externals: nodeExternals,
+        // Pure third-party code, loaded on demand by the worker.
+        minify: {
+          jsOptions: [{ include: /\.cjs$/ }],
+        },
+      },
+      source: {
+        entry: {
+          'worker-fake-timers': './src/runtime/api/fakeTimers.ts',
+          'worker-source-map-support':
+            './src/runtime/worker/sourceMapSupport.ts',
+        },
+      },
+      tools: {
+        rspack: (config, { mergeConfig }) => {
+          return mergeConfig(config, {
+            optimization: singleChunkOptimization,
+            plugins: [
+              licensePlugins.workerLazyDeps,
+              rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker-lazy-deps' }),
+            ].filter(Boolean),
+          });
         },
       },
     },

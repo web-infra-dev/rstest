@@ -329,9 +329,11 @@ console.log(tests);
 
 设置 `filesOnly` 可跳过声明收集。`includeSuites` 会将具名测试套件作为独立条目返回。`RunOptions` 中的 `includeTaskLocation` 会加入源码位置。
 
-每个条目都包含 `testPath` 和 `project`。隐式默认项目的条目使用 `config.name`（默认为 `'rstest'`）。测试声明条目包含自身的 `name`、带测试套件前缀的 `fullName`，以及表示层级的 `parentNames`；文件条目不包含 `name` 和 `fullName`。标记为 `skip` 或 `todo` 的声明也会返回，`runMode` 分别为 `skip` 或 `todo`；可运行声明不提供 `runMode`。
+每个条目都包含 `testPath` 和 `project`。隐式默认项目的基础名称是 `config.name`（默认为 `'rstest'`）。测试声明条目包含自身的 `name`、带测试套件前缀的 `fullName`，以及表示层级的 `parentNames`；文件条目不包含 `name` 和 `fullName`。标记为 `skip` 或 `todo` 的声明也会返回，`runMode` 分别为 `skip` 或 `todo`；可运行声明不提供 `runMode`。
 
-条目按深度优先的声明顺序返回。测试套件紧邻其后代之前，同一文件的所有条目保持连续。
+在 Browser Mode 下，测试声明会在每个选中的 browser instance 中收集。`filesOnly` 会为每个文件与 instance 的组合返回一个条目，且不会启动浏览器。两种模式的 `project` 都与 `run()` 一致，例如同时选中两个 instance 时，会使用 `web (chromium)` 和 `web (firefox)`。
+
+条目按深度优先的声明顺序返回。测试套件紧邻其后代之前，来自同一文件和项目的条目保持连续。
 
 收集失败时，`rstest.listTests()` 返回的 Promise 会以 `ListTestsError` 拒绝，而不是返回部分列表或空列表。
 

@@ -20,7 +20,7 @@ import type { Assertion } from '@vitest/expect';
 import { Assertion as ChaiAssertion, util } from 'chai';
 import type { RstestExpect, RuntimeConfig, TestCase } from '../../types';
 import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
-import { getRealTimers } from '../util';
+import { getRealTimers } from '../realTimers';
 import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
 
 // these matchers are not supported because they don't make sense with poll

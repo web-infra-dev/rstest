@@ -78,4 +78,27 @@ describe('console trace', () => {
 
     expect(logs.some((log) => log.includes('trace.test.ts:4:11'))).toBeTruthy();
   });
+
+  it('should print the call site of console.table and console.trace', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'callSite.test', '--printConsoleTrace'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const titles = [
+      ...cli.stdout.split('\n'),
+      ...cli.stderr.split('\n'),
+    ].filter((log) => log.includes(' | callSite.test.ts > '));
+
+    expect(titles).toEqual([
+      'log | callSite.test.ts > prints call sites | callSite.test.ts:4:11',
+      'error | callSite.test.ts > prints call sites | callSite.test.ts:5:11',
+    ]);
+  });
 });

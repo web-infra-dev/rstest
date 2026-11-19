@@ -428,6 +428,110 @@ describe('md', () => {
     `);
   });
 
+  it('does not read an error message as a stack frame', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/messageLocation',
+        '-c',
+        './rstest.agentMd.messageLocation.config.mts',
+      ],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            AI_AGENT: 'rstest-e2e',
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const normalized = normalizeStdout(cli.stdout);
+    expect(normalized).toMatchInlineSnapshot(`
+      "---
+      tool: "@rstest/core@<version>"
+      timestamp: "<timestamp>"
+      ---
+
+      # Rstest Test Execution Report
+
+      ## Summary
+
+      \`\`\`json
+      {
+        "status": "failed",
+        "counts": {
+          "testFiles": 1,
+          "failedFiles": 1,
+          "tests": 1,
+          "failedTests": 1,
+          "passedTests": 0,
+          "skippedTests": 0,
+          "todoTests": 0
+        },
+        "durationMs": {
+          "total": 0,
+          "build": 0,
+          "tests": 0
+        },
+        "snapshot": {
+          "added": 0,
+          "updated": 0,
+          "unmatched": 0,
+          "removed": 0,
+          "unchecked": 0
+        }
+      }
+      \`\`\`
+
+      ## Failures
+
+      ### [F01] fixtures/agent-md/messageLocation.test.ts :: agent-md > connects to the database
+
+      details:
+
+      \`\`\`json
+      {
+        "testPath": "fixtures/agent-md/messageLocation.test.ts",
+        "project": "rstest",
+        "fullName": "agent-md > connects to the database",
+        "status": "failed",
+        "duration": 0,
+        "retryCount": 0,
+        "errors": [
+          {
+            "type": "Error",
+            "message": "connect ECONNREFUSED 127.0.0.1:5432",
+            "topFrame": {
+              "file": "fixtures/agent-md/messageLocation.test.ts",
+              "line": 4,
+              "column": 9,
+              "method": "connect"
+            },
+            "stackFrames": []
+          }
+        ],
+        "candidateFiles": [
+          {
+            "path": "fixtures/agent-md/messageLocation.test.ts",
+            "line": 4
+          }
+        ]
+      }
+      \`\`\`
+
+      "
+    `);
+  });
+
   it('labels timeout errors', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
@@ -888,6 +992,40 @@ describe('md', () => {
     expect(normalized).toContain('"failedFiles": 1');
     expect(normalized).toContain('"type": "uncaughtException"');
     expect(normalized).toContain('unhandled async error');
+  });
+
+  it('omits bundler runtime frames and candidate files', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/bundlerFrames',
+        '-c',
+        './rstest.agentMd.importError.config.mts',
+      ],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: { AI_AGENT: 'rstest-e2e' },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain('Missing config file');
+    expect(cli.stdout).toContain(
+      '"file": "fixtures/agent-md/importError/config.ts"',
+    );
+    expect(cli.stdout).toContain(
+      '"path": "fixtures/agent-md/importError/config.ts"',
+    );
+    expect(cli.stdout).not.toContain('dist/.rstest-temp');
+    expect(cli.stdout).not.toContain('requireModule');
   });
 
   it('reports module load errors without rstest runtime frames', async ({

@@ -103,6 +103,19 @@ describe('Test Edge Cases', () => {
     expectStderrLog('at hiddenFrame (node:internal/rstest_hidden:20:6)');
   });
 
+  it('should keep a user Error.prepareStackTrace wrapper', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorStackWrapper.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
   it('should print the cause of an error', async () => {
     const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
@@ -268,5 +281,26 @@ describe('Test Edge Cases', () => {
     await expectExecFailed();
 
     expectStderrLog(/AssertionError: expected .* to deeply equal undefined/);
+  });
+
+  it('should not read an error message that ends like a location as a frame', async () => {
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorMessageLocation.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog('Error: connect ECONNREFUSED 127.0.0.1:5432');
+    // The code frame shows the throw, and the message is not listed as a frame.
+    expectStderrLog(
+      "> 4 |   throw new Error('connect ECONNREFUSED 127.0.0.1:5432');",
+    );
+    expectStderrLog(/at connect \(.*errorMessageLocation\.test\.ts:4:9\)/);
+    expect(cli.stderr).not.toContain('at Error: connect');
   });
 });

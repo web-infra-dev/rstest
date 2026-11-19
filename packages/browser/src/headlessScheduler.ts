@@ -12,6 +12,7 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getTestPathKey } from './pathUtils';
 import { createSerialTaskQueue } from './serialTaskQueue';
 import {
+  type BrowserProjectServer,
   type BrowserRuntime,
   drainPendingAffectedTestFiles,
   resolveViewport,
@@ -19,10 +20,13 @@ import {
 } from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
 import type { ConcurrencyLimiter } from './concurrencyLimiter';
-import type { LaunchPool } from './launchPool';
+import type { LaunchLease, LaunchPool } from './launchPool';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
-import { attachHeadlessRunnerTransport } from './headlessTransport';
+import {
+  attachHeadlessRunnerTransport,
+  type HeadlessRunnerTransportHandlers,
+} from './headlessTransport';
 import {
   createDeferredPromise,
   type FatalPayload,
@@ -30,15 +34,19 @@ import {
 } from './hostPayloads';
 import type {
   BrowserClientMessage,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
   FileCleanupDispatchPayload,
+  RunnerEnvelope,
   TestFileInfo,
 } from './protocol';
 import {
   DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
   getFileTaskId,
+  RSTEST_CONFIG_MESSAGE_TYPE,
   toWireRow,
 } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
@@ -170,6 +178,210 @@ export const createHeadlessScheduler = async ({
     }
   };
 
+  /** Unregister a context from the run and close it. */
+  const discardContext = async (
+    run: ActiveHeadlessRun,
+    context: BrowserProviderContext,
+  ): Promise<void> => {
+    run.contexts.delete(context);
+    await closeContextSafely(context);
+  };
+
+  /** The only way a row's runner context is created: pre-warm and batch share it. */
+  const createRowContext = (
+    browser: LaunchLease['browser'],
+    row: BrowserProjectRuntime,
+  ): Promise<BrowserProviderContext> =>
+    browser.newContext({
+      providerOptions: row.providerOptions,
+      viewport: resolveViewport(row.viewport) ?? null,
+    });
+
+  const requireProjectServer = (
+    projectName: string,
+    testFile?: string,
+  ): BrowserProjectServer => {
+    const server = projectServers.get(projectName);
+    if (!server) {
+      throw new Error(
+        `No browser dev server for project "${projectName}"${testFile ? ` (test file: ${testFile})` : ''}.`,
+      );
+    }
+    return server;
+  };
+
+  const runnerPageUrl = (server: BrowserProjectServer): string =>
+    `http://localhost:${server.port}/runner.html`;
+
+  /**
+   * A runner page prepared while the previous batch of the same row is still
+   * executing: a fresh `BrowserContext` + `Page` on the same leased browser,
+   * with the transport attached and `runner.html` already loaded. The runner
+   * parks in `waitForConfig` (the page boots without injected options) until
+   * the claiming batch delivers its config, so the page must not be claimed
+   * before the batch's session, cleanup handlers, and transport handlers are
+   * in place.
+   */
+  type PrewarmBridge = HeadlessRunnerTransportHandlers;
+
+  type PrewarmPage = {
+    context: BrowserProviderContext;
+    page: BrowserProviderPage;
+    bridge: PrewarmBridge;
+  };
+
+  type Prewarm = {
+    /** The page crashed or closed before a batch claimed it. */
+    invalidated: boolean;
+    /** Never rejects: a failed warm-up cleans itself up and resolves null. */
+    ready: Promise<PrewarmPage | null>;
+  };
+
+  /** Per-worker state that outlives one batch: the lease and its pre-warm. */
+  type WorkerSlot = {
+    row: BrowserProjectRuntime;
+    lease: LaunchLease;
+    /** Set once the lease was given back; the slot no longer owns it. */
+    leaseReleased: boolean;
+    prewarm?: Prewarm;
+    /** Contexts still closing in the background, awaited before release. */
+    pendingCloses: Promise<void>[];
+  };
+
+  // Idempotent: the abandoned teardown and a context-creation failure can
+  // both release before the slot is finished, and `launchPool`'s release is
+  // a bare `refs--` that must not run twice.
+  const releaseSlotLease = (slot: WorkerSlot): void => {
+    if (slot.leaseReleased) {
+      return;
+    }
+    slot.lease.release();
+    slot.leaseReleased = true;
+  };
+
+  /**
+   * Preps in flight per browser (`launchKey` → count). A prep's `newPage` and
+   * `goto` compete for the browser's CDP target budget: on a saturated browser
+   * (high worker counts) stacked preps inflate every page's creation time by
+   * more than they hide, so the pre-warm is skipped once this cap is reached.
+   * Two covers the steady overlap of low-concurrency runs, where preps run
+   * without contention.
+   */
+  const PREWARM_CAP_PER_BROWSER = 2;
+  const prepsInFlight = new Map<string, number>();
+
+  /**
+   * Start a speculative pre-warm for `row` under `slot`'s lease when the
+   * worker's queue still holds another batch of that row, keeping the count of
+   * concurrent preps per browser inside the cap.
+   */
+  const maybeStartPrewarm = (
+    run: ActiveHeadlessRun,
+    slot: WorkerSlot,
+    shouldPrewarm: (row: BrowserProjectRuntime) => boolean,
+  ): void => {
+    const row = slot.row;
+    if (!shouldPrewarm(row)) {
+      return;
+    }
+    const key = row.launchKey;
+    const inFlight = prepsInFlight.get(key) ?? 0;
+    if (inFlight >= PREWARM_CAP_PER_BROWSER) {
+      return;
+    }
+    prepsInFlight.set(key, inFlight + 1);
+    const prewarm = startPrewarm(run, slot.lease, row);
+    void prewarm.ready.finally(() => {
+      const remaining = (prepsInFlight.get(key) ?? 1) - 1;
+      if (remaining > 0) {
+        prepsInFlight.set(key, remaining);
+      } else {
+        prepsInFlight.delete(key);
+      }
+    });
+    slot.prewarm = prewarm;
+  };
+
+  /**
+   * Settle a worker slot: background closes joined, an unclaimed pre-warm
+   * discarded, and the lease released — in that order, so the lease never
+   * outlives a live context under it. The claiming batch closes its claimed
+   * context itself, so only unclaimed pre-warms are discarded here.
+   */
+  const finishSlot = async (
+    run: ActiveHeadlessRun,
+    slot: WorkerSlot,
+  ): Promise<void> => {
+    await Promise.all(slot.pendingCloses.splice(0));
+    const prewarm = slot.prewarm;
+    slot.prewarm = undefined;
+    if (prewarm) {
+      // Any pre-warm still on the slot was never claimed (a claim clears it),
+      // so discard it here.
+      const warmed = await prewarm.ready;
+      if (warmed) {
+        await discardContext(run, warmed.context);
+      }
+    }
+    releaseSlotLease(slot);
+  };
+
+  const startPrewarm = (
+    run: ActiveHeadlessRun,
+    lease: LaunchLease,
+    row: BrowserProjectRuntime,
+  ): Prewarm => {
+    // `ready` mutates this object while it runs, so it is created first and
+    // filled in below.
+    const prewarm: Prewarm = {
+      invalidated: false,
+      ready: Promise.resolve(null),
+    };
+    prewarm.ready = (async (): Promise<PrewarmPage | null> => {
+      let context: BrowserProviderContext | undefined;
+      try {
+        context = await createRowContext(lease.browser, row);
+        // Register with the run right away so a `cancelRun` closes an
+        // unclaimed pre-warm context like any other live context; the
+        // claiming batch keeps the registration until its own teardown.
+        run.contexts.add(context);
+        const projectServer = requireProjectServer(row.name);
+        // Forwarding stubs first: the claiming batch swaps these for its
+        // real handlers before it delivers the config, and the runner
+        // sends nothing until then (it parks in `waitForConfig`). A message
+        // arriving while parked means the runner is past its wait (e.g. it
+        // self-failed) — the page can no longer be claimed.
+        const bridge: PrewarmBridge = {
+          onDispatchMessage: async () => {
+            prewarm.invalidated = true;
+          },
+          onDispatchRpc: async () => ({ requestId: 'pre-warm' }),
+        };
+        const page = await context.newPage();
+        await attachHeadlessRunnerTransport(page, {
+          onDispatchMessage: (envelope) => bridge.onDispatchMessage(envelope),
+          onDispatchRpc: (request) => bridge.onDispatchRpc(request),
+        });
+        const invalidate = (): void => {
+          prewarm.invalidated = true;
+        };
+        page.on('crash', invalidate);
+        page.on('close', invalidate);
+        await page.goto(runnerPageUrl(projectServer), { waitUntil: 'load' });
+        return { context, page, bridge };
+      } catch (error) {
+        if (context) {
+          await discardContext(run, context);
+        }
+        logger.debug(
+          `[Headless] Pre-warm for project "${row.name}" (${row.browserName}) failed: ${toError(error).message}`,
+        );
+        return null;
+      }
+    })();
+    return prewarm;
+  };
+
   const cancelRun = async (
     run: ActiveHeadlessRun,
     waitForDone = true,
@@ -279,8 +491,10 @@ export const createHeadlessScheduler = async ({
   const runWorkerFiles = async (
     run: ActiveHeadlessRun,
     files: ScheduledTestFile[],
+    slot: WorkerSlot,
     rawCoverage: unknown[],
     updateSnapshot: SnapshotUpdateState,
+    shouldPrewarm: (row: BrowserProjectRuntime) => boolean,
   ): Promise<void> => {
     if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
       return;
@@ -289,18 +503,34 @@ export const createHeadlessScheduler = async ({
     const file = files[0]!;
     let activeFile = file;
     const row = file.row;
-    // The browser launches on first lease.
-    const lease = await launchPool.acquire(row.launchKey);
-    const viewport = resolveViewport(row.viewport);
+    const lease = slot.lease;
+    const prewarm = slot.prewarm;
+    slot.prewarm = undefined;
+
+    let claimed: PrewarmPage | undefined;
+    if (prewarm) {
+      const warmed = await prewarm.ready;
+      if (warmed && !prewarm.invalidated) {
+        claimed = warmed;
+      } else if (warmed) {
+        // The warm-up completed but its page died while idle; a failed
+        // warm-up has already closed its own context.
+        await discardContext(run, warmed.context);
+      }
+    }
+
     let browserContext: BrowserProviderContext;
-    try {
-      browserContext = await lease.browser.newContext({
-        providerOptions: row.providerOptions,
-        viewport: viewport ?? null,
-      });
-    } catch (error) {
-      lease.release();
-      throw error;
+    if (claimed) {
+      browserContext = claimed.context;
+    } else {
+      try {
+        browserContext = await createRowContext(lease.browser, row);
+      } catch (error) {
+        // The slot gives the lease back at once so the pool's other acquirers
+        // (and eviction) are not held up by this worker's failure.
+        releaseSlotLease(slot);
+        throw error;
+      }
     }
     run.contexts.add(browserContext);
 
@@ -408,8 +638,15 @@ export const createHeadlessScheduler = async ({
       }
       await coverageCollection;
     };
+
+    const abortRun = async (): Promise<void> => {
+      markDone();
+      await collectRunCoverage(run);
+      await cancelRun(run, false);
+    };
+
     try {
-      page = await browserContext.newPage();
+      page = claimed ? claimed.page : await browserContext.newPage();
       await v8Coverage?.start(page);
       run.coverageCollectors.add(collectCoverage);
       page.on('crash', () =>
@@ -516,70 +753,66 @@ export const createHeadlessScheduler = async ({
         },
       });
 
-      await attachHeadlessRunnerTransport(page, {
-        onDispatchMessage: (envelope) => {
-          const queued = dispatchQueue.then(async () => {
-            try {
-              const message = envelope.message;
-              if (settled) {
-                return;
-              }
-              if (message.type === 'file-start') {
-                const startedPath = getTestPathKey(message.payload.testPath);
-                activeFile =
-                  files.find(
-                    (candidate) =>
-                      getTestPathKey(candidate.testPath) === startedPath,
-                  ) ?? activeFile;
-              }
-              if (message.type === 'fatal') {
-                await collectCoverage();
-              }
-              await dispatchRunnerMessage(run, files, session.id, message);
-              if (message.type === 'file-complete') {
-                const completedPath = message.payload.testPath;
-                completedFiles.add(completedPath);
-              }
-              if (
-                message.type === 'complete' ||
-                (message.type === 'file-complete' &&
-                  files.length === 1 &&
-                  !keepWorkerFixtures)
-              ) {
-                disarmWorkerCleanupDeadline();
-                markDone();
-              } else if (message.type === 'fatal') {
-                markDone();
-                await collectRunCoverage(run);
-                await cancelRun(run, false);
-              }
-            } catch (error) {
-              const formatted = toError(error);
-              await handleFatal({
-                message: formatted.message,
-                stack: formatted.stack,
-              });
-              markDone();
-              await collectRunCoverage(run);
-              await cancelRun(run, false);
+      const onDispatchMessage = (envelope: RunnerEnvelope): Promise<void> => {
+        const queued = dispatchQueue.then(async () => {
+          try {
+            const message = envelope.message;
+            if (settled) {
+              return;
             }
-          });
-          dispatchQueue = queued.catch(() => {});
-          return queued;
-        },
-        onDispatchRpc: async (request) => {
-          return dispatchRouter.dispatch({
-            ...request,
-            runToken: run.token,
-            target: {
-              sessionId: session.id,
-              testFile: file.testPath,
-              projectName: file.projectName,
-              ...request.target,
-            },
-          });
-        },
-      });
+            if (message.type === 'file-start') {
+              const startedPath = getTestPathKey(message.payload.testPath);
+              activeFile =
+                files.find(
+                  (candidate) =>
+                    getTestPathKey(candidate.testPath) === startedPath,
+                ) ?? activeFile;
+            }
+            if (message.type === 'fatal') {
+              await collectCoverage();
+            }
+            await dispatchRunnerMessage(run, files, session.id, message);
+            if (message.type === 'file-complete') {
+              const completedPath = message.payload.testPath;
+              completedFiles.add(completedPath);
+            }
+            if (
+              message.type === 'complete' ||
+              (message.type === 'file-complete' &&
+                files.length === 1 &&
+                !keepWorkerFixtures)
+            ) {
+              disarmWorkerCleanupDeadline();
+              markDone();
+            } else if (message.type === 'fatal') {
+              await abortRun();
+            }
+          } catch (error) {
+            const formatted = toError(error);
+            await handleFatal({
+              message: formatted.message,
+              stack: formatted.stack,
+            });
+            await abortRun();
+          }
+        });
+        dispatchQueue = queued.catch(() => {});
+        return queued;
+      };
+      const onDispatchRpc = async (
+        request: BrowserDispatchRequest,
+      ): Promise<BrowserDispatchResponse> => {
+        return dispatchRouter.dispatch({
+          ...request,
+          runToken: run.token,
+          target: {
+            sessionId: session.id,
+            testFile: file.testPath,
+            projectName: file.projectName,
+            ...request.target,
+          },
+        });
+      };
 
       const inlineOptions: BrowserHostConfig = {
         ...hostOptions,
@@ -596,20 +829,39 @@ export const createHeadlessScheduler = async ({
         // identity; results and screenshot RPCs attribute through it too.
         browserName: file.row.browserName,
       };
-      const serializedOptions = serializeForInlineScript(inlineOptions);
-      await page.addInitScript(
-        `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
-      );
 
-      const projectServer = projectServers.get(file.projectName);
-      if (!projectServer) {
-        throw new Error(
-          `No browser dev server for project "${file.projectName}" (test file: ${file.testPath}).`,
+      if (claimed) {
+        // The warm-up attached forwarding stubs before its goto; swap in this
+        // batch's handlers, then unblock the runner the page already loaded.
+        // Everything a runner message needs — session, cleanup handlers,
+        // coverage collection — is registered by now.
+        claimed.bridge.onDispatchMessage = onDispatchMessage;
+        claimed.bridge.onDispatchRpc = onDispatchRpc;
+        const configMessage = serializeForInlineScript({
+          type: RSTEST_CONFIG_MESSAGE_TYPE,
+          payload: inlineOptions,
+        });
+        await page.evaluate(`window.postMessage(${configMessage}, '*')`);
+      } else {
+        await attachHeadlessRunnerTransport(page, {
+          onDispatchMessage,
+          onDispatchRpc,
+        });
+        await page.addInitScript(
+          `window.__RSTEST_BROWSER_OPTIONS__ = ${serializeForInlineScript(inlineOptions)};`,
         );
+
+        const projectServer = requireProjectServer(
+          file.projectName,
+          file.testPath,
+        );
+        await page.goto(runnerPageUrl(projectServer), { waitUntil: 'load' });
       }
-      await page.goto(`http://localhost:${projectServer.port}/runner.html`, {
-        waitUntil: 'load',
-      });
+
+      // This batch is set up; if the queue still holds another batch of this
+      // row, prepare its page now so the newContext/newPage/goto cost hides
+      // behind the current file's execution.
+      maybeStartPrewarm(run, slot, shouldPrewarm);
 
       const state = await Promise.race([
         donePromise.then(() => ({ type: 'done' as const })),
@@ -658,40 +910,28 @@ export const createHeadlessScheduler = async ({
       run.coverageCollectors.delete(collectCoverage);
       // A superseded run can hold a renderer that will never answer again:
       // its test file may have been deleted mid-flight, leaving the page
-      // waiting on a chunk the bundler will never produce, and closing such a
-      // page blocks for as long as the renderer stays wedged. The cycle waits
-      // on this teardown, so for an abandoned run it is detached — its
-      // results are already discarded, and the replacement cycle must not be
-      // held up by a page nobody is reading. A run that ends normally closes
-      // in band, which is what keeps the open-context count at the
-      // concurrency limit.
+      // waiting on a chunk the bundler will never produce, and closing such
+      // a page blocks for as long as the renderer stays wedged. The cycle
+      // waits on this teardown for a normal end only; for an abandoned run
+      // it is detached — its results are already discarded, and the
+      // replacement cycle must not be held up by a page nobody is reading.
+      // The lease goes back at once in that case: closing the evicted
+      // browser closes this context too.
       const abandoned = run.cancelled || runLifecycle.isTokenStale(run.token);
-      const teardown = async (): Promise<void> => {
-        if (page) {
-          try {
-            await page.close();
-          } catch {
-            // ignore
-          }
-        }
-        await closeContextSafely(browserContext);
-      };
       if (sessionId) {
         sessionRegistry.deleteById(sessionId);
       }
       run.contexts.delete(browserContext);
-      // The lease outlives the context: an evicted browser is only closed once
-      // no file runs in it. An abandoned teardown is detached, so its lease is
-      // given back at once; closing the browser then closes that context too.
       if (abandoned) {
-        void teardown();
-        lease.release();
+        void closeContextSafely(browserContext);
+        releaseSlotLease(slot);
       } else {
-        try {
-          await teardown();
-        } finally {
-          lease.release();
-        }
+        // In-band close, tracked on the slot: the next same-row batch (with
+        // its claimed pre-warm) starts while this context closes, and the
+        // worker releases the lease only once every context it created under
+        // the lease has closed. `context.close()` closes the page too, so no
+        // separate `page.close()` round trip is issued.
+        slot.pendingCloses.push(closeContextSafely(browserContext));
       }
     }
   };
@@ -740,61 +980,120 @@ export const createHeadlessScheduler = async ({
     ];
     const concurrency = getHeadlessConcurrency(context, queue.length);
     const bail = context.normalizedConfig.bail;
+    const bailReached = (): boolean =>
+      Boolean(bail && context.stateManager.getCountOfFailedTests() >= bail);
     const nonIsolatedBatchSize = Math.max(
       1,
       bail ? 1 : Math.ceil(queue.length / Math.max(concurrency, 1)),
     );
 
+    // Speculative pre-warm gate: another batch of this row must still be
+    // queued, and the run must be live — a bail drain or a cancelled run
+    // would only discard the warmed context. A mixed run gives the lease back
+    // at every file slot boundary (see the worker's slot settling), so a
+    // pre-warm could never survive to be claimed there.
+    const shouldPrewarm = (row: BrowserProjectRuntime): boolean =>
+      !fileLimiter &&
+      queue.length > 0 &&
+      !run.cancelled &&
+      runLifecycle.isTokenActive(run.token) &&
+      queue[0]!.row === row &&
+      !bailReached();
+
     const worker = async (): Promise<void> => {
-      while (
-        queue.length > 0 &&
-        !run.cancelled &&
-        runLifecycle.isTokenActive(run.token)
-      ) {
-        // Mixed runs share one file budget with the headed lane. Acquire ahead
-        // of the bail gate and the queue pop so a worker parked on the limiter
-        // never picks a file against stale state; every exit below releases.
-        const releaseSlot = await fileLimiter?.acquire();
-        try {
-          if (
-            queue.length === 0 ||
-            run.cancelled ||
-            !runLifecycle.isTokenActive(run.token)
-          ) {
-            return;
-          }
-          // Cross-file bail gate (parity with the node pool's pickup-time skip
-          // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
-          // drain the remaining files as skipped instead of running them. The
-          // count is cycle-scoped because core clears `stateManager` ahead of
-          // every cycle, a watch session's first one included — so a mixed
-          // launch cannot drain this queue on the node initial cycle's
-          // failures.
-          if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-            let skipped = queue.shift();
-            while (skipped) {
-              await handleTestFileComplete(makeSkippedFileResult(skipped));
-              skipped = queue.shift();
-            }
-            return;
-          }
-          const next = queue.shift();
-          if (!next) {
-            return;
-          }
-          const batch = [next];
-          // Batches never mix rows: a page belongs to one context/viewport pair.
-          if (shareWorkerFixtures(next.row)) {
-            while (
-              batch.length < nonIsolatedBatchSize &&
-              queue[0]?.row === next.row
+      // One worker slot per worker: the lease stays alive across consecutive
+      // same-row batches (one pre-warm runs under it at a time), and it is
+      // released only after every context created under it has closed.
+      let workerSlot: WorkerSlot | undefined;
+      try {
+        while (
+          queue.length > 0 &&
+          !run.cancelled &&
+          runLifecycle.isTokenActive(run.token)
+        ) {
+          // Mixed runs share one file budget with the headed lane. Acquire ahead
+          // of the bail gate and the queue pop so a worker parked on the limiter
+          // never picks a file against stale state; every exit below releases.
+          const releaseFileSlot = await fileLimiter?.acquire();
+          try {
+            if (
+              queue.length === 0 ||
+              run.cancelled ||
+              !runLifecycle.isTokenActive(run.token)
             ) {
-              batch.push(queue.shift()!);
+              return;
             }
+            // Cross-file bail gate (parity with the node pool's pickup-time skip
+            // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
+            // drain the remaining files as skipped instead of running them. The
+            // count is cycle-scoped because core clears `stateManager` ahead of
+            // every cycle, a watch session's first one included — so a mixed
+            // launch cannot drain this queue on the node initial cycle's
+            // failures.
+            if (bailReached()) {
+              let skipped = queue.shift();
+              while (skipped) {
+                await handleTestFileComplete(makeSkippedFileResult(skipped));
+                skipped = queue.shift();
+              }
+              return;
+            }
+            const next = queue.shift();
+            if (!next) {
+              return;
+            }
+            const batch = [next];
+            // Batches never mix rows: a page belongs to one context/viewport pair.
+            if (shareWorkerFixtures(next.row)) {
+              while (
+                batch.length < nonIsolatedBatchSize &&
+                queue[0]?.row === next.row
+              ) {
+                batch.push(queue.shift()!);
+              }
+            }
+            // A row change ends this worker's business with the old browser:
+            // its contexts (and any unclaimed pre-warm) close before the lease
+            // goes back, and the new lease is acquired after that — releasing
+            // before acquiring is what lets a capped pool evict the idle old
+            // browser instead of deadlocking on this worker's own lease.
+            if (workerSlot && workerSlot.row !== next.row) {
+              await finishSlot(run, workerSlot);
+              workerSlot = undefined;
+            }
+            workerSlot ??= {
+              row: next.row,
+              lease: await launchPool.acquire(next.row.launchKey),
+              leaseReleased: false,
+              pendingCloses: [],
+            };
+            await runWorkerFiles(
+              run,
+              batch,
+              workerSlot,
+              rawCoverage,
+              updateSnapshot,
+              shouldPrewarm,
+            );
+          } finally {
+            // The lease must not span a file slot. Settle it before the file
+            // slot is released whenever it cannot be reused next round: in a
+            // mixed run the limiter can park this worker on the next
+            // `acquire()` with the lease still held (file slot first, lease
+            // second), and a row change makes the lease unusable regardless.
+            if (
+              workerSlot &&
+              (fileLimiter || queue[0]?.row !== workerSlot.row)
+            ) {
+              await finishSlot(run, workerSlot);
+              workerSlot = undefined;
+            }
+            releaseFileSlot?.();
           }
-          await runWorkerFiles(run, batch, rawCoverage, updateSnapshot);
-        } finally {
-          releaseSlot?.();
+        }
+      } finally {
+        if (workerSlot) {
+          await finishSlot(run, workerSlot);
         }
       }
     };

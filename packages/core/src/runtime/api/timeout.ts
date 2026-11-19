@@ -1,5 +1,5 @@
 import type { TestCase, TestSuite } from '../../types';
-import { getRealNow } from '../util';
+import { getRealNow } from '../realTimers';
 
 export const TEST_TIMEOUT_BUFFER = 100;
 

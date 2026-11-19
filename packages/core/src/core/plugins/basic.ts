@@ -11,6 +11,7 @@ import { createVmTimersShim } from '../../runtime/worker/vm/timers';
 import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../build/runtimeChunk';
+import { isNodeProject } from '../environment/isBrowserProject';
 import {
   applyMockExportsPresence,
   forceWebpackRuntimeMode,
@@ -138,6 +139,14 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
           },
           tools: {
             rspack: (config, { isProd, rspack }) => {
+              // One-shot builds have no rebuild that can reuse checkpoints.
+              if (
+                (context.command === 'run' || context.command === 'list') &&
+                isNodeProject(project)
+              ) {
+                config.incremental ??= false;
+              }
+
               // keep windows path as native path
               config.context = path.resolve(rootPath);
               // treat `test` as development mode

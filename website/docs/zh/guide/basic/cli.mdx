@@ -196,6 +196,8 @@ $ npx rstest list --json
 $ npx rstest list --json=./output.json
 ```
 
+在 Browser Mode 下，`rstest list` 会在每个选中的 browser instance 中求值测试文件，但不执行测试主体。使用 `--filesOnly` 时，每个匹配的文件会按选中的 instance 各列一次，且不会启动浏览器。一个项目选中多个 instance 时，`--json` 会用各自的 instance 项目名来区分，例如 `web (chromium)` 或 `web (firefox)`。
+
 您可以使用 `--includeSuites` 选项，在打印测试用例的同时输出测试套件信息：
 
 ```bash
