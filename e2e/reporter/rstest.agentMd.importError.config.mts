@@ -1,7 +1,7 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/fixtures/agent-md/importError.test.ts'],
+  include: ['**/fixtures/agent-md/{importError,bundlerFrames}.test.ts'],
   reporters: [
     [
       'md',
