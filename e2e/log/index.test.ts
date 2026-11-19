@@ -139,4 +139,22 @@ describe('console log', () => {
     expect(logs.some((log) => log.includes("I'm log"))).toBeTruthy();
     expect(logs.some((log) => log.includes("I'm info"))).toBeTruthy();
   });
+
+  it('should print a failed console.assert as Node does', async () => {
+    const { cli, expectExecSuccess, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'assert.test'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expectStderrLog('Assertion failed: expected 3 items, got 2');
+    expectStderrLog('Assertion failed: missing { id: 1 }');
+    expectStderrLog('Assertion failed Error: boom');
+    expect(cli.stderr).not.toContain('not printed');
+  });
 });

@@ -85,3 +85,37 @@ describe('silent console', () => {
     );
   });
 });
+
+describe('console.assert', () => {
+  it('prints a failed assertion as Node does', () => {
+    const onConsoleLog = rs.fn();
+    const console = createCustomConsole({
+      silent: false,
+      onConsoleLog,
+      getCurrentTask: () => undefined,
+      testPath: '/test.ts',
+      project: '',
+      printConsoleTrace: false,
+    });
+
+    console.assert(false, 'expected %d items, got %d', 3, 2);
+    console.assert(false, 'missing', { id: 1 });
+    console.assert(false, { id: 1 });
+    console.assert(false, new Error('boom'));
+    console.assert(false);
+    console.assert(true, 'not printed');
+
+    expect(
+      onConsoleLog.mock.calls.map(([log]) => [log.content, log.type]),
+    ).toEqual([
+      ['Assertion failed: expected 3 items, got 2', 'stderr'],
+      ['Assertion failed: missing { id: 1 }', 'stderr'],
+      ['Assertion failed { id: 1 }', 'stderr'],
+      [
+        expect.stringMatching(/^Assertion failed Error: boom\n {4}at /),
+        'stderr',
+      ],
+      ['Assertion failed', 'stderr'],
+    ]);
+  });
+});
