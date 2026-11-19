@@ -1,7 +1,7 @@
 import { createHook } from 'node:async_hooks';
 import type { CurrentTaskInfo, SerializedError } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils/helper';
-import { getRealTimers } from '../util';
+import { getRealTimers } from '../realTimers';
 import type { TaskContext } from './taskContext';
 
 type AsyncLeak = {

@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises';
+
 type WebpackLicensePluginCtor =
   (typeof import('webpack-license-plugin'))['default'];
 
@@ -17,41 +19,52 @@ type AdditionalPackageLicenseMeta = Pick<
   'name' | 'license' | 'licenseText' | 'repository'
 >;
 
-export async function licensePlugin(
-  packageName = '@rstest/core',
-  includeCodeReferences = true,
-  excludedPackages: readonly string[] = [],
-  additionalPackages: readonly AdditionalPackageLicenseMeta[] = [],
-) {
-  const { default: WebpackLicensePlugin } =
-    await import('webpack-license-plugin');
+type LicenseRenderOptions = {
+  packageName: string;
+  includeCodeReferences: boolean;
+};
 
-  const formatLicenseTitle = (packageMeta: PackageLicenseMeta) => {
-    const licenseId = packageMeta.license ?? 'undefined';
-    const repositoryUrl = packageMeta.repository;
+/**
+ * Every lib that bundles third-party code reports into `@rstest/core`'s single
+ * `LICENSE.md`, but each lib's compilation only sees its own graph. Packages
+ * are accumulated here and written once after all libs are built, because the
+ * libs compile in parallel and whichever compilation's file landed last would
+ * otherwise decide the content.
+ */
+const collectedPackages = new Map<string, PackageLicenseMeta>();
 
-    return `Licensed under ${licenseId} license${
-      repositoryUrl ? ` in the repository at ${repositoryUrl}` : ''
-    }.`;
-  };
+const formatLicenseTitle = (packageMeta: PackageLicenseMeta) => {
+  const licenseId = packageMeta.license ?? 'undefined';
+  const repositoryUrl = packageMeta.repository;
 
-  const formatLicenseText = (licenseText?: string) => {
-    if (!licenseText) {
-      return '';
-    }
+  return `Licensed under ${licenseId} license${
+    repositoryUrl ? ` in the repository at ${repositoryUrl}` : ''
+  }.`;
+};
 
-    const relevantLicenseText = includeCodeReferences
-      ? licenseText
-      : licenseText.split('\n## Code references', 1)[0].trimEnd();
+const formatLicenseText = (
+  licenseText: string | undefined,
+  includeCodeReferences: boolean,
+) => {
+  if (!licenseText) {
+    return '';
+  }
 
-    return relevantLicenseText
-      .split('\n')
-      .map((line) => `> ${line}`)
-      .join('\n');
-  };
+  const relevantLicenseText = includeCodeReferences
+    ? licenseText
+    : licenseText.split('\n## Code references', 1)[0].trimEnd();
 
-  const renderLicenses = (packages: PackageLicenseMeta[]) => {
-    return `MIT License
+  return relevantLicenseText
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
+};
+
+const renderLicenses = (
+  packages: PackageLicenseMeta[],
+  { packageName, includeCodeReferences }: LicenseRenderOptions,
+) => {
+  return `MIT License
 
 Copyright (c) 2025-present ByteDance, Inc. and its affiliates.
 
@@ -374,11 +387,24 @@ ${packages
       packageMeta.license ? `\n\n${formatLicenseTitle(packageMeta)}` : ''
     }${
       packageMeta.licenseText
-        ? `\n\n${formatLicenseText(packageMeta.licenseText)}`
+        ? `\n\n${formatLicenseText(packageMeta.licenseText, includeCodeReferences)}`
         : ''
     }\n\n`;
   }, '')
   .trim()}\n`;
+};
+
+export async function licensePlugin(
+  packageName = '@rstest/core',
+  includeCodeReferences = true,
+  excludedPackages: readonly string[] = [],
+  additionalPackages: readonly AdditionalPackageLicenseMeta[] = [],
+) {
+  const { default: WebpackLicensePlugin } =
+    await import('webpack-license-plugin');
+  const renderOptions: LicenseRenderOptions = {
+    packageName,
+    includeCodeReferences,
   };
 
   return new WebpackLicensePlugin({
@@ -393,9 +419,30 @@ ${packages
           if (!uniquePackages.has(pkg.name)) {
             uniquePackages.set(pkg.name, pkg);
           }
+          if (!collectedPackages.has(pkg.name)) {
+            collectedPackages.set(pkg.name, pkg);
+          }
         }
-        return renderLicenses(Array.from(uniquePackages.values()));
+        return renderLicenses(
+          Array.from(uniquePackages.values()),
+          renderOptions,
+        );
       },
     },
   });
 }
+
+/**
+ * Write the union of every lib's third-party packages. Call this once after
+ * the whole build finishes, when every lib's `licensePlugin` has reported.
+ */
+export const writeCollectedLicenseFile = async (
+  outputPath: string | URL,
+  renderOptions: LicenseRenderOptions,
+): Promise<void> => {
+  await writeFile(
+    outputPath,
+    renderLicenses([...collectedPackages.values()], renderOptions),
+  );
+  collectedPackages.clear();
+};

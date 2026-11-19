@@ -62,7 +62,7 @@ define.lint(({ js, ts }) => [
           'clearImmediate',
         ].map((name) => ({
           selector: `CallExpression[callee.name='${name}']`,
-          message: `Fake timers replace the ${name} global in user tests. Use getRealTimers() from runtime/util (extend REAL_TIMERS there if it lacks ${name}).`,
+          message: `Fake timers replace the ${name} global in user tests. Use getRealTimers() from runtime/realTimers (extend REAL_TIMERS there if it lacks ${name}).`,
         })),
       ],
     },
