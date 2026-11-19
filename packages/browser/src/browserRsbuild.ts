@@ -1707,6 +1707,13 @@ export const createBrowserRuntime = async ({
               }
 
               const userRsbuildConfig = project.normalizedConfig;
+              const { coverage } = userRsbuildConfig;
+              const omitSourceContent =
+                context.command === 'run' &&
+                (!coverage.enabled || coverage.provider === 'istanbul') &&
+                resolveBrowserInstances(project).every(
+                  ({ headless }) => headless,
+                );
               const buildCache = resolveProjectBuildCache({
                 context,
                 project,
@@ -1736,9 +1743,11 @@ export const createBrowserRuntime = async ({
                   },
                   output: {
                     target: 'web',
-                    // Enable source map for inline snapshot support
+                    // Inline snapshots need line and column mappings even without embedded sources.
                     sourceMap: {
-                      js: 'source-map',
+                      js: omitSourceContent
+                        ? 'nosources-source-map'
+                        : 'source-map',
                     },
                     // Every project server compiles the same asset names
                     // (`static/js/runner.js`, ...). With `dev.writeToDisk`

@@ -4,6 +4,26 @@ import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
 describe('browser mode - coverage', () => {
+  it.each([
+    { args: ['--no-coverage', '--coverage.provider=v8'], embedsSources: false },
+    { args: ['--coverage.provider=istanbul'], embedsSources: false },
+    { args: ['--coverage.provider=v8'], embedsSources: true },
+  ])(
+    'emits the headless runner source map for $args',
+    async ({ args, embedsSources }) => {
+      const { expectExecSuccess, cli } = await runBrowserCli(
+        'browser-coverage',
+        {
+          args: ['--include=tests/runnerSourceMap.fixture.ts', ...args],
+        },
+      );
+      await expectExecSuccess();
+      expect(cli.stdout).toContain(
+        `Runner map embeds sources: ${embedsSources}`,
+      );
+    },
+  );
+
   it('should collect coverage data from browser tests with build cache enabled', async () => {
     const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
     const cacheDir = join(fixtureDir, '.cache/browser-coverage');
