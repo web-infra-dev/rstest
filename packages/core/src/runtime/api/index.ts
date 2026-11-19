@@ -5,6 +5,7 @@ import { registerWorkerCleanup } from '../runner/workerCleanup';
 import { registerFileCleanup } from '../runner/fileCleanup';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
+import { loadSnapshotModule } from './snapshotLoader';
 import { createRstestUtilities } from './utilities';
 
 export type RuntimeRstest = Rstest & {
@@ -56,7 +57,7 @@ export const createRstestRuntime = async (
       Promise.resolve(
         createRunner({ workerState, taskContext, runtimeGlobal }),
       ),
-      import(/* webpackChunkName: "snapshot" */ './snapshot'),
+      loadSnapshotModule(),
     ]);
 
   setupChaiConfig(workerState.runtimeConfig.chaiConfig);

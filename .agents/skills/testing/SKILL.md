@@ -91,7 +91,7 @@ Important:
 - Do **not** start e2e while any package build is still running.
 - Do **not** overlap `pnpm build` and `pnpm e2e` in separate sessions.
 - Wait for the build command to exit successfully before starting e2e.
-- If e2e fails immediately with a missing built file such as `packages/core/dist/rstestSuppressWarnings.cjs`, treat that as an incomplete build and rebuild before retrying.
+- If e2e fails immediately with a missing built file such as `packages/core/dist/worker.js`, treat that as an incomplete build and rebuild before retrying.
 - When unsure whether the build is fully finished, verify the expected artifact exists before running e2e.
 
 ## Browser E2E

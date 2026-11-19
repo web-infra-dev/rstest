@@ -9,9 +9,14 @@ import type {
 } from '../../types';
 import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
 import { fileContext } from '../fileContext';
-import { getRealTimers } from '../util';
+import { getRealTimers } from '../realTimers';
 import { getRemainingTestTimeout, TEST_TIMEOUT_BUFFER } from './timeout';
-import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
+import type {
+  FakeTimers,
+  FakeTimerInstallOpts,
+  FakeTimersSnapshot,
+} from './fakeTimers';
+import { getFakeTimersClass, prepareFakeTimers } from './fakeTimersLoader';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
@@ -242,9 +247,10 @@ const buildRstestUtilities = async (): Promise<{
     pendingWaits.clear();
   };
 
-  const { FakeTimers } = await import(
-    /* webpackChunkName: "fake-timers" */ './fakeTimers'
-  );
+  // The compat path (browser runtime and `src/`) owns its chunk import here;
+  // the Node worker build resolves the class lazily from a bundled CJS chunk
+  // instead, so this is a no-op there (see `./fakeTimersLoader`).
+  await prepareFakeTimers();
 
   let currentFakeTimersConfig: FakeTimerInstallOpts | undefined;
 
@@ -270,7 +276,8 @@ const buildRstestUtilities = async (): Promise<{
     const runtimeGlobal = getRuntimeGlobal();
     let timer = timersByGlobal.get(runtimeGlobal);
     if (!timer) {
-      timer = new FakeTimers({ global: runtimeGlobal });
+      const FakeTimersClass = getFakeTimersClass();
+      timer = new FakeTimersClass({ global: runtimeGlobal });
       timersByGlobal.set(runtimeGlobal, timer);
     }
     return timer;

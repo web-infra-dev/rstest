@@ -4,7 +4,7 @@ import type {
   RawTestSuiteInfo,
 } from '../../types/testSuite';
 import type { TraceEvent } from '../../utils/trace';
-import { getRealNow } from '../util';
+import { getRealNow } from '../realTimers';
 
 type PhaseName =
   | 'prepare'

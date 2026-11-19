@@ -9,7 +9,7 @@ import type {
 } from '../../types';
 import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
-import { getRealTimers } from '../util';
+import { getRealTimers } from '../realTimers';
 import { setFixtureCallbackSource } from './fixtures';
 
 /**
