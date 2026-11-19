@@ -342,7 +342,7 @@ export default defineConfig({
 
 - `status`: Overall run status (`passed`, `failed`, or `error`)
 - `summary`: Counts for files and tests
-- `durationMs`: Total, build, and test durations in milliseconds. The optional `prebundle` field shows how much build time each environment package took to bundle.
+- `durationMs`: Total, build, and test durations in milliseconds. The optional `prebundle` field shows how much build time each environment package took to bundle. Build and test time can overlap in multi-project runs. Use `durationMs.total` for the overall elapsed time. The [reporter API](/api/javascript-api/reporter#ontestrunend) describes how each phase is measured.
 - `snapshot`: Snapshot summary from the run
 - `files`: Test-file level results with nested test cases
 - `tests`: Flattened test-case results, each with `fullName`

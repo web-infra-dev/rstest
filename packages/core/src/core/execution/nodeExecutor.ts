@@ -13,7 +13,13 @@ import type {
   CoverageProvider,
   RawCoverageResolveOptions,
 } from '../../types/coverage';
-import { color, logger, toSelectedTestFile, type TraceRun } from '../../utils';
+import {
+  color,
+  logger,
+  toError,
+  toSelectedTestFile,
+  type TraceRun,
+} from '../../utils';
 import { writeBundleCoverageResults } from '../build/bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../environment/envDependencies';
 import {
@@ -23,6 +29,7 @@ import {
 } from './globalSetup';
 import { applyOnlyFailuresSelection } from './onlyFailures';
 import type { ProjectPlan } from './projectPlan';
+import type { RunTimer } from './runTimer';
 import { CompileFailedError, createRsbuildServer } from '../build/rsbuild';
 import {
   readResultsCache,
@@ -181,7 +188,7 @@ export type NodeExecutor = TestExecutor &
  * — the planner's `TestPlanner` doc records what a snapshot of either breaks.
  */
 type CreateNodeExecutorOptions = {
-  onPrebundle: (name: string, elapsed: number) => void;
+  timer: RunTimer;
   /** Already prepared and config-hooked by the planner. */
   rsbuildInstance: RsbuildInstance;
   setupFileState: SetupFileState;
@@ -204,7 +211,7 @@ export function createNodeExecutor(
     coverageProvider,
     isWatchMode,
     getTraceRun,
-    onPrebundle,
+    timer,
   }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
@@ -232,6 +239,8 @@ export function createNodeExecutor(
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let didClose = false;
+  let interrupted = false;
+  let cancelPendingBuilds: (() => void) | undefined;
   // When a dev compile starts. Paired with the compile's end into a completed
   // span below; on its own it is not a build time, because cycles are queued
   // and the wait for the queue is not build work.
@@ -279,7 +288,7 @@ export function createNodeExecutor(
       modules: prepareTestEnvironmentModules({
         projects,
         rootPath,
-        onPrebundle,
+        onPrebundle: timer.recordPrebundle,
       }),
       server: createRsbuildServer({
         inspectedConfig: {
@@ -329,6 +338,7 @@ export function createNodeExecutor(
   ): Promise<ExecutorCycleOutcome> => {
     const { buildId, mode, fileFilters, fromInvalidation, updateSnapshot } =
       opts;
+    const runTimer = !isWatchMode && !opts.onSelected ? timer : undefined;
     // Consume-once, and only by a cycle a rebuild triggered: a shortcut-driven
     // rerun compiles nothing, so it reports its own span and leaves a published
     // one for the cycle whose compile produced it, wherever in the queue that
@@ -384,8 +394,30 @@ export function createNodeExecutor(
     const traceRun = getTraceRun();
     const { span } = traceRun;
 
-    const projectPlans = await Promise.all(
-      projects.map(async (p) => {
+    const { bail, onlyFailures, testNamePattern, shard } =
+      context.normalizedConfig;
+    const isExplicitlyScoped =
+      fileFilters !== undefined || context.fileFilters !== undefined;
+    const dispatchAsReady =
+      projects.length > 1 &&
+      !isWatchMode &&
+      mode === 'all' &&
+      !opts.onSelected &&
+      !bail &&
+      !onlyFailures &&
+      !coverageProvider &&
+      !isExplicitlyScoped &&
+      !context.relatedMode &&
+      !testNamePattern &&
+      !shard &&
+      // Node global setup can change the shared environment for other workers.
+      projects.every(
+        (project) => project.normalizedConfig.globalSetup.length === 0,
+      );
+
+    const projectFailures = new Set<unknown>();
+    const runProjects = async () => {
+      const pendingPlans = projects.map(async (p) => {
         const {
           assetNames,
           entries,
@@ -525,6 +557,7 @@ export function createNodeExecutor(
           return {
             results,
             testResults,
+            errors: [],
             bundleCoverage,
             assetNames,
             getAssetFiles,
@@ -533,17 +566,91 @@ export function createNodeExecutor(
         };
 
         return { p, finalEntries, execute };
-      }),
-    ).catch((error: unknown) => {
+      });
+
+      if (dispatchAsReady) {
+        // A later build can fail with workers already running. Keep their
+        // results and wait for them before closing the pool and running teardown.
+        let buildsRemaining = pendingPlans.length;
+        // Closing the dev server can leave an unfinished build's stats pending.
+        const cancelledBuild = new Promise<undefined>((resolve) => {
+          cancelPendingBuilds = () => resolve(undefined);
+          if (interrupted || didClose) cancelPendingBuilds();
+        });
+        const settled = await Promise.allSettled(
+          pendingPlans.map(async (pending) => {
+            const plan = await Promise.race([pending, cancelledBuild]).finally(
+              () => {
+                if (--buildsRemaining === 0) runTimer?.finishBuild();
+              },
+            );
+            if (!plan || interrupted || didClose) return undefined;
+            const finishGroup = plan.finalEntries.length
+              ? runTimer?.startTestGroup()
+              : undefined;
+            try {
+              return await plan.execute(plan.finalEntries);
+            } finally {
+              finishGroup?.();
+            }
+          }),
+        );
+        cancelPendingBuilds = undefined;
+        return settled.flatMap((result) => {
+          if (result.status === 'rejected') {
+            if (!interrupted && !didClose) projectFailures.add(result.reason);
+            return [];
+          }
+          return result.value ? [result.value] : [];
+        });
+      }
+
+      const projectPlans = await Promise.all(pendingPlans);
+      if (
+        onlyFailures &&
+        !isWatchMode &&
+        !context.relatedMode &&
+        !testNamePattern &&
+        mode !== 'on-demand' &&
+        !isExplicitlyScoped
+      ) {
+        applyOnlyFailuresSelection(projectPlans, {
+          resultsCache,
+          sequenceHints,
+          rootPath,
+        });
+      }
+
+      const runStartFailure = await opts.onSelected?.(
+        projectPlans.flatMap(({ p, finalEntries }) =>
+          finalEntries.map(({ testPath }) =>
+            toSelectedTestFile(testPath, p.name),
+          ),
+        ),
+      );
+
+      // A run-start hook can yield to cancellation before setup or workers begin.
+      if (runStartFailure || didClose) return;
+      if (projectPlans.some(({ finalEntries }) => finalEntries.length)) {
+        runTimer?.startTests();
+      }
+
+      return Promise.all(
+        projectPlans.map((plan) => plan.execute(plan.finalEntries)),
+      );
+    };
+
+    const returns = await runProjects().catch((error: unknown) => {
       if (error instanceof CompileFailedError) return error;
       throw error;
     });
-    if (projectPlans instanceof CompileFailedError) {
+    if (!returns || returns instanceof CompileFailedError) {
+      const compileFailed = returns instanceof CompileFailedError;
       return {
         results: [],
         testResults: [],
-        errors: [projectPlans.error],
-        failure: 'fatal',
+        errors: compileFailed ? [returns.error] : [],
+        failure: compileFailed ? 'fatal' : undefined,
         testPaths: [],
         duration: {
           buildTime: rebuildTime ?? Date.now() - cycleStart,
@@ -551,51 +658,6 @@ export function createNodeExecutor(
         },
       };
     }
-
-    const isExplicitlyScoped =
-      fileFilters !== undefined || context.fileFilters !== undefined;
-    if (
-      context.normalizedConfig.onlyFailures &&
-      !isWatchMode &&
-      !context.relatedMode &&
-      !context.normalizedConfig.testNamePattern &&
-      mode !== 'on-demand' &&
-      !isExplicitlyScoped
-    ) {
-      applyOnlyFailuresSelection(projectPlans, {
-        resultsCache,
-        sequenceHints,
-        rootPath,
-      });
-    }
-
-    const runStartFailure = await opts.onSelected?.(
-      projectPlans.flatMap(({ p, finalEntries }) =>
-        finalEntries.map(({ testPath }) =>
-          toSelectedTestFile(testPath, p.name),
-        ),
-      ),
-    );
-
-    // A run-start hook can yield to cancellation before setup or workers begin;
-    // a reporter failure aborts the run and is already recorded, so this cycle
-    // contributes no error of its own.
-    if (runStartFailure || didClose) {
-      return {
-        results: [],
-        testResults: [],
-        errors: [],
-        testPaths: [],
-        duration: {
-          buildTime: rebuildTime ?? Date.now() - cycleStart,
-          testTime: 0,
-        },
-      };
-    }
-
-    const returns = await Promise.all(
-      projectPlans.map((plan) => plan.execute(plan.finalEntries)),
-    );
 
     const workerCleanupErrors = !isWatchMode
       ? await pool.cleanupWorkerFixtures()
@@ -620,14 +682,14 @@ export function createNodeExecutor(
     // (cancellation closes the executor; filters and bail omit tests)
     // so the perf-first cache is never poisoned. This is node-internal and does
     // not depend on the shared finalize, so it stays here.
-    const bailLimit = context.normalizedConfig.bail;
     const bailAborted =
-      bailLimit > 0 &&
-      context.stateManager.getCountOfFailedTests() >= bailLimit;
+      bail > 0 && context.stateManager.getCountOfFailedTests() >= bail;
     if (
+      !interrupted &&
       !didClose &&
       !context.normalizedConfig.testNamePattern &&
-      !bailAborted
+      !bailAborted &&
+      projectFailures.size === 0
     ) {
       await writeResultsCache(
         rootPath,
@@ -636,16 +698,26 @@ export function createNodeExecutor(
       );
     }
 
+    const failures = [...projectFailures];
+    const hasCompileFailure = failures.some(
+      (error) => error instanceof CompileFailedError,
+    );
     return {
       results: returns.flatMap((r) => r.results),
       testResults: returns.flatMap((r) => r.testResults),
       errors: [
-        ...returns.flatMap((r) => ('errors' in r ? r.errors : [])),
+        ...returns.flatMap((r) => r.errors),
         ...workerCleanupErrors,
+        ...failures.map((error) =>
+          error instanceof CompileFailedError ? error.error : toError(error),
+        ),
       ],
-      failure: returns.some((r) => 'failure' in r && r.failure === 'setup')
-        ? 'setup'
-        : undefined,
+      failure: hasCompileFailure
+        ? 'fatal'
+        : failures.length ||
+            returns.some((r) => 'failure' in r && r.failure === 'setup')
+          ? 'setup'
+          : undefined,
       testPaths: currentEntries.map((e) => e.testPath),
       deletedTestPaths: currentDeletedEntries,
       duration: { buildTime, testTime },
@@ -724,6 +796,7 @@ export function createNodeExecutor(
       return;
     }
     didClose = true;
+    cancelPendingBuilds?.();
     notifyCompileFailed = undefined;
     if (runDependencyValidationPromise) {
       await runDependencyValidationPromise.catch(() => undefined);
@@ -767,6 +840,8 @@ export function createNodeExecutor(
     runCycle,
     onInvalidate,
     interrupt: async () => {
+      interrupted = true;
+      cancelPendingBuilds?.();
       runResources?.pool.interrupt();
     },
     close,

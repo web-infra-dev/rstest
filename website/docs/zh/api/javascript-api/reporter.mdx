@@ -154,6 +154,8 @@ watch 模式下，`results`、`testResults` 和 `summary` 是整个会话的累�
 
 `duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> 按环境包列出预打包耗时，单位为毫秒。这部分时间已计入 `duration.buildTime`。
 
+测试组按构建产物就绪顺序派发时，`buildTime` 从整轮开始计到最后一组产物就绪，包含环境准备。`testTime` 包含最后一组就绪到计时结束的时间，其中包含 worker 清理。此前至少有一组在执行的时间也会计入，包括 worker 准备。多组同时执行只算一次，只在构建的空档计入 `buildTime`。构建和测试耗时可能重叠，两者之和大于等于 `totalTime`。整轮耗时以 `totalTime` 为准。
+
 ### TestResult
 
 `TestResult` 和 `TestFileResult` 由 `@rstest/core` 导出。套件和用例级钩子收到的是 `TestResult`，文件级钩子和 `onTestRunEnd` 收到的是 `TestFileResult`，它在 `TestResult` 的基础上多了这个文件里各个测试的结果。

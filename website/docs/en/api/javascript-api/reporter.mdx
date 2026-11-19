@@ -154,6 +154,8 @@ In watch mode, `results`, `testResults`, and `summary` accumulate over the whole
 
 `duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> reports the time spent building each environment package prebundle in milliseconds. These timings are included in `duration.buildTime`.
 
+When test groups start as their build outputs become ready, `buildTime` runs from the start of the run until the last group is ready, including environment preparation. `testTime` includes the rest of the timed run after that point, including worker cleanup, and any earlier time while at least one test group was executing, including worker preparation. Concurrent groups count once. Build-only gaps count toward `buildTime`. The two phases can overlap, so their sum is at least `totalTime`. Use `totalTime` for the run’s elapsed time.
+
 ### TestResult
 
 `TestResult` and `TestFileResult` are exported from `@rstest/core`. Suite and case hooks receive a `TestResult`; file hooks and `onTestRunEnd` receive `TestFileResult` values, which extend `TestResult` with the results of the file's tests.

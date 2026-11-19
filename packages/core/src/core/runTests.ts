@@ -177,7 +177,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const nodeExecutor = nodeBuild
     ? createNodeExecutor(context, {
         ...nodeBuild,
-        onPrebundle: timer.recordPrebundle,
+        timer,
         getPlan: planner.getPlan,
         coverageProvider,
         isWatchMode,
@@ -353,8 +353,14 @@ export async function runTests(context: Rstest): Promise<void> {
       }
 
       const reportersStarted = !isInterrupted;
+      // A run-start hook observes the complete selection and may veto it.
+      // A node-only run without that hook has no consumer for the barrier.
+      const needsRunStartBarrier =
+        executorsToRun.length !== 1 ||
+        executorsToRun[0] !== nodeExecutorToRun ||
+        context.reporters.some((reporter) => reporter.onTestRunStart);
       const selections =
-        reportersStarted && executorsToRun.length > 0
+        reportersStarted && needsRunStartBarrier && executorsToRun.length > 0
           ? createRunStartBarrier(executorsToRun.length, async (files) => {
               const failure = await notifyReportersOnTestRunStart(
                 context,
@@ -387,7 +393,7 @@ export async function runTests(context: Rstest): Promise<void> {
                   });
             } finally {
               // Empty or failed executors must release sibling selections.
-              await selections[index]!([]);
+              await selections[index]?.([]);
             }
           })
         : [];

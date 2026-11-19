@@ -340,7 +340,7 @@ export default defineConfig({
 
 - `status`：本次运行的整体状态（`passed`、`failed` 或 `error`）
 - `summary`：文件和测试的聚合计数
-- `durationMs`：总耗时、构建耗时和测试耗时（毫秒）。如果运行时预打包了测试环境，`prebundle` 会按包名列出这部分构建耗时。
+- `durationMs`：总耗时、构建耗时和测试耗时（毫秒）。如果运行时预打包了测试环境，`prebundle` 会按包名列出这部分构建耗时。多项目运行中，构建和测试耗时可能重叠，整轮耗时以 `durationMs.total` 为准。详见 [reporter API](/api/javascript-api/reporter#ontestrunend) 的计时说明。
 - `snapshot`：本次运行的 snapshot 汇总
 - `files`：按测试文件聚合的结果，包含嵌套测试项
 - `tests`：扁平化测试结果，每项都带 `fullName`
