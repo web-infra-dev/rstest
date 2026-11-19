@@ -5,12 +5,9 @@ import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
 define.lib({
   exports: {
-    custom: (exports) => ({
-      ...exports,
-      '.': { import: exports['.'] },
-      './config': { import: exports['./config'] },
+    custom: {
       './package.json': './package.json',
-    }),
+    },
   },
   plugins: publishCheckPlugins(),
   lib: [
