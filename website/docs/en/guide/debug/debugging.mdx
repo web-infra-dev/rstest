@@ -2,6 +2,8 @@
 description: "Rstest provides a debug mode to troubleshoot problems, you can add the DEBUG=rstest environment variable when testing to enable Rstest's debug mode, and you can also debug by setting breakpoints in VS Code."
 ---
 
+import { Prompt } from '@rspress/core/theme';
+
 # Debugging
 
 ## Debug mode
@@ -59,6 +61,30 @@ For a complete introduction to Rstest config, please see the [Configure Rstest](
 ## View test temporary outputs
 
 In the [debug mode](#debug-mode) or when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled, Rstest will write test temporary outputs to disk. You can view the files in `dist/.rstest-temp` directory to help you troubleshoot problems.
+
+### Inspect bundle coverage
+
+If a Node.js test bundle is larger than expected, enable [V8 coverage](/config/test/coverage#v8-provider) and set `DEBUG=rstest:bundle-coverage` to see which generated files the test runner received and which parts of them executed.
+
+```bash
+DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
+```
+
+Rstest prints the path to `.rstest/bundle-coverage-<timestamp>.json` under the Rstest root directory. For each test file, `assets` lists the size of each generated file in bytes, and `rawV8` contains V8 execution ranges for the generated code before source-map remapping. You can pass a test file filter to `rstest run` to focus on one bundle.
+
+A dependency fully replaced by `rs.mock()` can still be bundled, so use [`output.externals`](/config/build/output#outputexternals) if you want to leave it out of the bundle.
+
+If your coding agent supports skills, install `rstest-debugging`, then copy the prompt below.
+
+```bash
+npx skills add rstackjs/agent-skills --skill rstest-debugging
+```
+
+<Prompt
+  title="Investigate bundle coverage"
+  description="Copy this prompt and send it to your coding agent."
+  prompt="Use the rstest-debugging skill to inspect bundle coverage for this project's Node.js tests, trace why large dependencies are bundled, and verify any proposed change against the same tests."
+/>
 
 ## Debugging in VS Code
 
