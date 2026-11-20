@@ -74,11 +74,16 @@ Rstest 会在根目录的 `.rstest` 下写入 `bundle-coverage-<timestamp>.json`
 
 被 `rs.mock()` 完全替换的依赖仍可能被打包，此时可通过 [`output.externals`](/config/build/output#outputexternals) 将它排除在 bundle 之外。
 
+如果你的 Coding Agent 支持 Skills，可以先安装 `rstest-debugging`，再复制下面的 prompt。
+
+```bash
+npx skills add rstackjs/agent-skills --skill rstest-debugging
+```
+
 <Prompt
   title="排查构建产物覆盖率"
   description="复制这段 prompt 并发给你的 Coding Agent。"
-  prompt={`请按 rstest-debugging skill 及其参考文档分析本项目 Node.js 测试的构建产物覆盖率，查清体积较大的依赖为什么会被打包，并用同一批测试验证建议的改动。
-https://raw.githubusercontent.com/rstackjs/agent-skills/main/skills/rstest-debugging/SKILL.md`}
+  prompt="请用 rstest-debugging skill 分析本项目 Node.js 测试的构建产物覆盖率，查清体积较大的依赖为什么会被打包，并用同一批测试验证建议的改动。"
 />
 
 ## 在 VS Code 中调试

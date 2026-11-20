@@ -74,11 +74,16 @@ Rstest prints the path to `.rstest/bundle-coverage-<timestamp>.json` under the R
 
 A dependency fully replaced by `rs.mock()` can still be bundled, so use [`output.externals`](/config/build/output#outputexternals) if you want to leave it out of the bundle.
 
+If your coding agent supports skills, install `rstest-debugging`, then copy the prompt below.
+
+```bash
+npx skills add rstackjs/agent-skills --skill rstest-debugging
+```
+
 <Prompt
   title="Investigate bundle coverage"
   description="Copy this prompt and send it to your coding agent."
-  prompt={`Use the rstest-debugging skill to inspect bundle coverage for this project's Node.js tests, trace why large dependencies are bundled, and verify any proposed change against the same tests. Follow the skill and its references at
-https://raw.githubusercontent.com/rstackjs/agent-skills/main/skills/rstest-debugging/SKILL.md`}
+  prompt="Use the rstest-debugging skill to inspect bundle coverage for this project's Node.js tests, trace why large dependencies are bundled, and verify any proposed change against the same tests."
 />
 
 ## Debugging in VS Code
