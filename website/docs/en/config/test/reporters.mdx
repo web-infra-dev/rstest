@@ -111,7 +111,7 @@ Full type definitions live in [`packages/core/src/types/reporter.ts`](https://gi
 
 - **`default`**:
   - `summary?: boolean` (default: `true`) — print the test run summary.
-  - `logger?: { outputStream: NodeJS.WriteStream; errorStream: NodeJS.WriteStream; getColumns?: () => number }` (default: `process.stdout` / `process.stderr`) — custom output streams.
+  - `logger?: { outputStream: Writable; errorStream: Writable; getColumns: () => number }` (default: `process.stdout` / `process.stderr`) — custom output streams (`Writable` from `node:stream`).
   - `showProjectName?: boolean` (default: `true` for multi-project or multi-browser runs, `false` otherwise) — print the project name in test file titles.
 - **`dot`**: supports `summary` and `logger` (same defaults as `default`).
 - **`verbose`**: supports `logger` and `showProjectName` (same defaults as `default`).

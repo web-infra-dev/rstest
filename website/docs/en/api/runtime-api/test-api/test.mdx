@@ -339,7 +339,7 @@ Creates a **new** `test` API whose context is extended with custom fixtures. The
 ```ts
 import { test } from '@rstest/core';
 
-const myTest = test.extend({
+const myTest = test.extend<{ user: { name: string } }>({
   user: async ({}, use) => {
     await use({ name: 'Alice' });
   },

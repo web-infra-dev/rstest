@@ -254,7 +254,8 @@ interface RunOptions {
   dev?: { writeToDisk?: boolean };
   output?: {
     emitAssets?: boolean;
-    cleanDistPath?: boolean;
+    cleanDistPath?:
+      boolean | 'auto' | { enable?: boolean | 'auto'; keep?: RegExp[] };
     module?: boolean;
   };
   // 仅限根配置覆盖（由引擎转发到每个项目）
@@ -498,6 +499,7 @@ interface RstestInstance {
 ### 示例
 
 ```ts
+import type { RstestConfig } from '@rstest/core';
 import {
   createRstest,
   type LoadProjectConfig,
@@ -511,12 +513,12 @@ const loadProject: LoadProjectConfig = async ({ dirPath, filePath }) => {
   return { content: test, filePath: configFile, dependencies };
 };
 
-const rstest = await createRstest({
-  config: {
-    projects: ['packages/*'],
-    [PROJECT_LOADER]: loadProject,
-  },
-});
+const config: RstestConfig & { [PROJECT_LOADER]?: LoadProjectConfig } = {
+  projects: ['packages/*'],
+  [PROJECT_LOADER]: loadProject,
+};
+
+const rstest = await createRstest({ config });
 ```
 
 ### LoadProjectConfig

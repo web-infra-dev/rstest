@@ -180,7 +180,7 @@ Each Browser Mode project compiles and runs with its own build configuration, so
 Currently `'playwright'` is the only supported `provider`. Within a run, you can target different browsers across projects (via `browser.instances`) or mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdom'` projects, subject to these constraints:
 
 - **At most one headed browser per run**: Only one `(project, browser)` pair may run with `headless: false`; all other browsers in the run must set `headless: true`. If `--browser.headless=false` fails on a multi-browser run, narrow the run with `--browser.instances <name>` or `--project`.
-- **No mixed headed + headless in watch mode**: `rstest watch` requires every configured browser to run with `headless: true`. Use `rstest run` to mix headed and headless browsers.
+- **No mixed headed + headless in watch mode**: `rstest watch` supports running a single headed browser, but does not allow mixing headed and headless browsers in the same run. When mixing both, set `headless: true` on every browser, narrow the run to the single headed browser, or use `rstest run`.
 - **Unique reported project names**: A project running multiple browsers reports each one as `<project> (<browser>)`. Make sure that name does not collide with another project's `name`.
 
 ```ts title="rstest.config.ts"

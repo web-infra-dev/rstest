@@ -112,7 +112,7 @@ export default defineConfig({
 
 - **`default`**：
   - `summary?: boolean`（默认值：`true`）—— 是否输出测试汇总信息。
-  - `logger?: { outputStream: NodeJS.WriteStream; errorStream: NodeJS.WriteStream; getColumns?: () => number }`（默认值：`process.stdout` / `process.stderr`）—— 自定义输出流。
+  - `logger?: { outputStream: Writable; errorStream: Writable; getColumns: () => number }`（默认值：`process.stdout` / `process.stderr`）—— 自定义输出流（`Writable` 来自 `node:stream`）。
   - `showProjectName?: boolean`（默认值：多 project 或多 browser 运行时为 `true`，否则为 `false`）—— 是否在测试文件标题中显示 project 名称。
 - **`dot`**：支持 `summary` 和 `logger`（默认值与 `default` 相同）。
 - **`verbose`**：支持 `logger` 和 `showProjectName`（默认值与 `default` 相同）。

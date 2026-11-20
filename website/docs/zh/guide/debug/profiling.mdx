@@ -194,11 +194,7 @@ import { PackageManagerTabs } from '@theme';
 samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack ./node_modules/@rstest/core/bin/rstest.js run
 ```
 
-Rstest 会将主进程上的 `--perf-prof`、`--perf-basic-prof` 和 `--interpreted-frames-native-stack` 透传给 `forks` 和 `vmForks` worker，但**不会**透传给 `threads` 或 `vmThreads` worker。如果使用线程 pool，请通过 `--pool.execArgv` 传递：
-
-```bash
-samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack ./node_modules/@rstest/core/bin/rstest.js run --pool.execArgv=--perf-prof --pool.execArgv=--perf-basic-prof --pool.execArgv=--interpreted-frames-native-stack
-```
+Rstest 会将主进程上的 `--perf-prof`、`--perf-basic-prof` 和 `--interpreted-frames-native-stack` 透传给 `forks` 和 `vmForks` worker。对于 `threads` 和 `vmThreads`，worker 与主进程共享同一个 Node.js 进程，主进程上的这些 V8 参数已经覆盖整个进程（**不要**通过 `--pool.execArgv` 传入它们，Node.js `worker_threads` 会抛出 `ERR_WORKER_INVALID_EXEC_ARGV`）。
 
 执行结束后，`samply` 会自动在 [Firefox Profiler](https://profiler.firefox.com/) 中打开采样结果，选择 Node.js 线程即可查看 JavaScript 侧的耗时分布。
 

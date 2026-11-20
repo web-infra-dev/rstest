@@ -339,7 +339,7 @@ test.extend<Name extends string, Value>(
 ```ts
 import { test } from '@rstest/core';
 
-const myTest = test.extend({
+const myTest = test.extend<{ user: { name: string } }>({
   user: async ({}, use) => {
     await use({ name: 'Alice' });
   },
