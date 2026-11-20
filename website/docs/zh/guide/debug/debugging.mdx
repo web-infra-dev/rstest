@@ -2,6 +2,8 @@
 description: 为了便于排查问题，Rstest 提供了调试模式，你可以在执行测试时添加 DEBUG=rstest 环境变量来开启 Rstest 的调试模式，也可以通过在 VS Code 中设置断点的方式进行调试。
 ---
 
+import { Prompt } from '@rspress/core/theme';
+
 # 调试
 
 ## 开启调试模式
@@ -70,32 +72,14 @@ DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
 
 Rstest 会在根目录的 `.rstest` 下写入 `bundle-coverage-<timestamp>.json`，并在终端打印文件路径。按测试文件查看时，`assets` 记录每个构建产物的字节数，`rawV8` 记录经过 source map 重映射前的 V8 执行范围。只想排查一个 bundle 时，可以给 `rstest run` 传入测试文件名。
 
-#### 常见问题 \{#common-questions}
+被 `rs.mock()` 完全替换的依赖仍可能被打包，此时可通过 [`output.externals`](/config/build/output#outputexternals) 将它排除在 bundle 之外。
 
-- **为什么没有生成 JSON 文件？** 这个实验功能从 Rstest 0.11.7 开始提供。确认 `DEBUG` 包含 `rstest:bundle-coverage`，并且命令至少运行了一个 Node.js 测试文件。终端的 `Bundle coverage file:` 会显示输出路径。
-- **为什么 `rawV8` 是 `null`？** Rstest 即使没有采集 V8 覆盖率，也能列出构建产物。加上 `--coverage --coverage.provider v8` 重新运行，确认终端显示 `Coverage enabled with v8`。
-- **bundle 太大，从哪里查起？** 在 `assets` 中挑出体积最大的 JavaScript 文件，按路径匹配 `rawV8.entries[].filePath`。匹配到记录后，可以看函数的执行范围和次数，尤其是多个模块合在同一个 bundle 时。缺少匹配项表示这次测试采集的覆盖率数据里没有该产物的记录。沿导入链查清产物的来源，再决定是否调整打包范围。V8 的偏移量和产物字节数单位不同，执行范围可以作为排查线索。
-
-#### 用 `rstest-debugging` 排查 \{#investigate-with-rstest-debugging}
-
-如果你的 Coding Agent 支持 Skills，安装 `rstest-debugging` 后，把下面的 prompt 交给它，并填入测试文件或命令。具体步骤见[安装说明](/guide/debug/profiling)。
-
-```text
-请用 rstest-debugging skill 帮我排查这个 Node.js 测试的 bundle。
-测试文件或命令：<在这里填写>
-现象：<bundle 偏大、启动慢，或其他实际观察到的问题>
-
-使用项目已安装的 Rstest，分别测一个有代表性的测试文件和全部受影响的测试。
-如果涉及耗时，在版本支持时用 --trace 区分构建、加载、setup 和测试执行。
-
-为代表性的测试文件开启 V8 覆盖率并设置 DEBUG=rstest:bundle-coverage。
-对照产物大小和 V8 执行范围，沿导入链找出大 bundle 来自哪些依赖。
-告诉我数据能说明什么，还有哪些疑点。
-
-如果有证据支持调整，每次只改一项。关闭 bundle 调试后重跑两组测试，
-保持 Node 版本、测试文件、覆盖率设置、worker 和缓存状态一致。
-说明耗时是否改善，并核对测试结果和覆盖率。只清理这次排查生成的调试文件。
-```
+<Prompt
+  title="排查构建产物覆盖率"
+  description="复制这段 prompt 并发给你的 Coding Agent。"
+  prompt={`请按 rstest-debugging skill 及其参考文档分析本项目 Node.js 测试的构建产物覆盖率，查清体积较大的依赖为什么会被打包，并用同一批测试验证建议的改动。
+https://raw.githubusercontent.com/rstackjs/agent-skills/main/skills/rstest-debugging/SKILL.md`}
+/>
 
 ## 在 VS Code 中调试
 

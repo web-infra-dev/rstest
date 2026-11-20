@@ -2,6 +2,8 @@
 description: "Rstest provides a debug mode to troubleshoot problems, you can add the DEBUG=rstest environment variable when testing to enable Rstest's debug mode, and you can also debug by setting breakpoints in VS Code."
 ---
 
+import { Prompt } from '@rspress/core/theme';
+
 # Debugging
 
 ## Debug mode
@@ -70,36 +72,14 @@ DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
 
 Rstest prints the path to `.rstest/bundle-coverage-<timestamp>.json` under the Rstest root directory. For each test file, `assets` lists the size of each generated file in bytes, and `rawV8` contains V8 execution ranges for the generated code before source-map remapping. You can pass a test file filter to `rstest run` to focus on one bundle.
 
-#### Common questions
+A dependency fully replaced by `rs.mock()` can still be bundled, so use [`output.externals`](/config/build/output#outputexternals) if you want to leave it out of the bundle.
 
-- **Why is there no JSON file?** This experimental feature requires Rstest 0.11.7 or later. Check that `DEBUG` includes `rstest:bundle-coverage` and that your command runs at least one test file in Node.js. Look for `Bundle coverage file:` in the terminal for the output path.
-- **Why is `rawV8` `null`?** Rstest can list assets without collecting V8 coverage. Rerun with `--coverage --coverage.provider v8` and check that the terminal shows `Coverage enabled with v8`.
-- **How do I investigate a large bundle?** Start with the largest JavaScript files in `assets` and match their paths to `rawV8.entries[].filePath`. For matching entries, inspect the function ranges and execution counts, especially when many modules share one bundle. A missing entry means the coverage collected for that test has no record for that asset. Trace the imports before deciding whether to change what gets bundled. V8 offsets and asset sizes use different units, so use the ranges as a diagnostic signal.
-
-#### Investigate with `rstest-debugging`
-
-If your coding agent supports skills, install `rstest-debugging` and paste the prompt below with the affected test file or command. See the [installation instructions](/guide/debug/profiling).
-
-```text
-Use the rstest-debugging skill to investigate this Node.js test bundle.
-Test file or command: <insert here>
-Symptom: <large bundle, slow startup, or other observed problem>
-
-Use the project's installed Rstest. Measure a representative file and the
-full affected scope. If timing is part of the problem, use --trace when
-available to distinguish build time from loading, setup, and test execution.
-
-For the representative file, collect V8 coverage with
-DEBUG=rstest:bundle-coverage. Correlate asset sizes with V8 execution ranges
-and trace the imports behind the largest bundles. Report what the data shows
-and where it is inconclusive.
-
-If the evidence supports a change, compare one change at a time against the
-baseline. Rerun both scopes without bundle debugging, with the same Node
-version, test files, coverage settings, workers, and cache state. Report
-whether the change improves timing while preserving test results and coverage.
-Clean up only the debug artifacts you created.
-```
+<Prompt
+  title="Investigate bundle coverage"
+  description="Copy this prompt and send it to your coding agent."
+  prompt={`Use the rstest-debugging skill to inspect bundle coverage for this project's Node.js tests, trace why large dependencies are bundled, and verify any proposed change against the same tests. Follow the skill and its references at
+https://raw.githubusercontent.com/rstackjs/agent-skills/main/skills/rstest-debugging/SKILL.md`}
+/>
 
 ## Debugging in VS Code
 
