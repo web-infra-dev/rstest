@@ -62,7 +62,7 @@ In the [debug mode](#debug-mode) or when [dev.writeToDisk](/config/build/dev#dev
 
 ### Inspect bundle coverage
 
-If a Node.js test bundle is larger than expected, use `DEBUG=rstest:bundle-coverage` with [V8 coverage](/config/test/coverage#v8-provider) to see which generated files the test runner received and which parts of them executed.
+If a Node.js test bundle is larger than expected, enable [V8 coverage](/config/test/coverage#v8-provider) and set `DEBUG=rstest:bundle-coverage` to see which generated files the test runner received and which parts of them executed.
 
 ```bash
 DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8

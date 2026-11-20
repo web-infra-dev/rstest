@@ -62,7 +62,7 @@ export default {
 
 ### 查看构建产物的覆盖率 \{#inspect-bundle-coverage}
 
-如果 Node.js 测试的 bundle 比预期大，可以在开启 [V8 覆盖率](/config/test/coverage#v8-provider) 时设置 `DEBUG=rstest:bundle-coverage`，看看测试运行器收到了哪些构建产物，其中哪些代码实际执行过。
+如果 Node.js 测试的 bundle 比预期大，可以开启 [V8 覆盖率](/config/test/coverage#v8-provider) 并设置 `DEBUG=rstest:bundle-coverage`，看看测试运行器收到了哪些构建产物，其中哪些代码实际执行过。
 
 ```bash
 DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
