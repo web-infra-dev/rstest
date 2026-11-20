@@ -254,7 +254,8 @@ interface RunOptions {
   dev?: { writeToDisk?: boolean };
   output?: {
     emitAssets?: boolean;
-    cleanDistPath?: boolean;
+    cleanDistPath?:
+      boolean | 'auto' | { enable?: boolean | 'auto'; keep?: RegExp[] };
     module?: boolean;
   };
   // Root-only overrides (forwarded to every project by the engine)
@@ -498,6 +499,7 @@ Only the symbol on the root config is read, and nested `projects` also use the r
 ### Example
 
 ```ts
+import type { RstestConfig } from '@rstest/core';
 import {
   createRstest,
   type LoadProjectConfig,
@@ -511,12 +513,12 @@ const loadProject: LoadProjectConfig = async ({ dirPath, filePath }) => {
   return { content: test, filePath: configFile, dependencies };
 };
 
-const rstest = await createRstest({
-  config: {
-    projects: ['packages/*'],
-    [PROJECT_LOADER]: loadProject,
-  },
-});
+const config: RstestConfig & { [PROJECT_LOADER]?: LoadProjectConfig } = {
+  projects: ['packages/*'],
+  [PROJECT_LOADER]: loadProject,
+};
+
+const rstest = await createRstest({ config });
 ```
 
 ### LoadProjectConfig

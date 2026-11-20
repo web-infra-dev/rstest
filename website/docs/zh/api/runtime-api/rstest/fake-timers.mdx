@@ -20,7 +20,7 @@ Fake timers 会替换全局定时器函数与 `Date`，让测试无需等待真�
 rs.useFakeTimers();
 ```
 
-传入 `config` 可将配置透传给 `@sinonjs/fake-timers`：例如用 `toFake` / `toNotFake` 指定要接管的定时器 API，用 `now` 设置初始模拟时间，或用 `shouldAdvanceTime` / `advanceTimeDelta` 开启自动推进。
+传入 `config`（来自 `@sinonjs/fake-timers` 的 `FakeTimerInstallOpts`，`@rstest/core` 未重新导出）可将配置透传给 `@sinonjs/fake-timers`：例如用 `toFake` / `toNotFake` 指定要接管的定时器 API，用 `now` 设置初始模拟时间，或用 `shouldAdvanceTime` / `advanceTimeDelta` 开启自动推进。
 
 - **`using` 语法**
 
@@ -148,16 +148,16 @@ clearTimeout(timeout);
 ## rs.advanceTimersByTime
 
 - **别名：** `rstest.advanceTimersByTime`
-- **类型：** `(ms: number | string | Temporal.Duration) => RstestUtilities`
+- **类型：** `(ms: number | string | TemporalDuration) => RstestUtilities`
 
 将 fake timers 快进指定时长，并执行该时间窗口内调度的所有定时器。
 
-字符串时长遵循 `@sinonjs/fake-timers` 格式（例如 `'00:10'` 表示 10 秒）。
+字符串时长遵循 `@sinonjs/fake-timers` 格式（例如 `'00:10'` 表示 10 秒），`TemporalDuration` 接受 `@sinonjs/fake-timers` 定义的 Temporal duration 结构化对象。
 
 ## rs.advanceTimersByTimeAsync
 
 - **别名：** `rstest.advanceTimersByTimeAsync`
-- **类型：** `(ms: number | string | Temporal.Duration) => Promise<RstestUtilities>`
+- **类型：** `(ms: number | string | TemporalDuration) => Promise<RstestUtilities>`
 
 异步快进 fake timers 指定时长，并在每个定时器回调之间刷新微任务。
 
@@ -187,7 +187,7 @@ clearTimeout(timeout);
 <ApiMeta addedVersion="0.11.0" />
 
 - **别名：** `rstest.jumpTimersByTime`
-- **类型：** `(ms: number | string | Temporal.Duration) => RstestUtilities`
+- **类型：** `(ms: number | string | TemporalDuration) => RstestUtilities`
 
 将模拟时钟直接跳过指定时长，每个受影响的定时器回调最多只触发一次（跳过中间的 interval tick，类似于模拟进程休眠后唤醒）。
 

@@ -34,7 +34,7 @@ import { ApiMeta } from '@components/ApiMeta';
 - `renderHook`: Tests custom Hooks without creating wrapper components
 - Automatic cleanup: Automatically unmounts components from previous tests before each new test, preventing test interference
 
-[@rsbuild/plugin-react](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugins/plugin-react), or an equivalent React JSX transform plugin/configuration, is also required when your browser tests use JSX. It transforms JSX for Browser Mode, so JSX-based tests can run without `React is not defined` runtime errors.
+[@rsbuild/plugin-react](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-react), or an equivalent React JSX transform plugin/configuration, is also required when your browser tests use JSX. It transforms JSX for Browser Mode, so JSX-based tests can run without `React is not defined` runtime errors.
 
 ### Configure React JSX transform
 

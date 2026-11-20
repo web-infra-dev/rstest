@@ -182,7 +182,7 @@ export default defineProject({
 目前唯一支持的 `provider` 是 `'playwright'`。同一次运行中可以通过 `browser.instances` 在不同项目间使用不同浏览器，或将 Browser Mode 项目与 `testEnvironment: 'node'` / `'jsdom'` 项目混跑，但需满足以下约束：
 
 - **每次运行最多只能有一个 headed 浏览器**：最多只能有一对 `(project, browser)` 以 `headless: false` 运行，其余所有浏览器必须设为 `headless: true`。若多浏览器运行搭配 `--browser.headless=false` 报错，可用 `--browser.instances <name>` 或 `--project` 缩小到单个浏览器。
-- **Watch 模式不支持混用 headed 与 headless**：`rstest watch` 下所有配置的浏览器都必须为 `headless: true`。如需混用 headed 与 headless，请使用 `rstest run`。
+- **Watch 模式不支持混用 headed 与 headless**：`rstest watch` 支持单独运行一个 headed 浏览器，但不支持在同一次运行中混用 headed 与 headless 浏览器。如需混用，请将所有浏览器设为 `headless: true`、筛选到单个 headed 浏览器，或改用 `rstest run`。
 - **汇报名称不能冲突**：运行多个浏览器的项目会以 `<project> (<browser>)` 的名称汇报结果，请避免该名称与其他项目的 `name` 重复。
 
 ```ts title="rstest.config.ts"

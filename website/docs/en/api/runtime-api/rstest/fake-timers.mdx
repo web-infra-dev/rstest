@@ -20,7 +20,7 @@ Enables fake timers for `setTimeout`, `setInterval`, `Date`, `performance`, and 
 rs.useFakeTimers();
 ```
 
-Pass `config` to forward options to `@sinonjs/fake-timers`: for example, `toFake` and `toNotFake` to select timer APIs, `now` to set the initial fake time, and `shouldAdvanceTime` / `advanceTimeDelta` for automatic advancement.
+Pass `config` (`FakeTimerInstallOpts` from `@sinonjs/fake-timers`, not re-exported by `@rstest/core`) to forward options to `@sinonjs/fake-timers`: for example, `toFake` and `toNotFake` to select timer APIs, `now` to set the initial fake time, and `shouldAdvanceTime` / `advanceTimeDelta` for automatic advancement.
 
 - **`using` syntax**
 
@@ -148,16 +148,16 @@ Asynchronously executes only the timers currently pending, flushing microtasks b
 ## rs.advanceTimersByTime
 
 - **Alias:** `rstest.advanceTimersByTime`
-- **Type:** `(ms: number | string | Temporal.Duration) => RstestUtilities`
+- **Type:** `(ms: number | string | TemporalDuration) => RstestUtilities`
 
 Advances fake timers by the specified duration, executing any timers scheduled within that window.
 
-String durations follow `@sinonjs/fake-timers` format (for example, `'00:10'` for ten seconds).
+String durations follow `@sinonjs/fake-timers` format (for example, `'00:10'` for ten seconds), and `TemporalDuration` accepts `@sinonjs/fake-timers`'s structural Temporal duration object shape.
 
 ## rs.advanceTimersByTimeAsync
 
 - **Alias:** `rstest.advanceTimersByTimeAsync`
-- **Type:** `(ms: number | string | Temporal.Duration) => Promise<RstestUtilities>`
+- **Type:** `(ms: number | string | TemporalDuration) => Promise<RstestUtilities>`
 
 Asynchronously advances fake timers by the specified duration, flushing microtasks between timer callbacks.
 
@@ -187,7 +187,7 @@ Advances fake timers to the next animation frame.
 <ApiMeta addedVersion="0.11.0" />
 
 - **Alias:** `rstest.jumpTimersByTime`
-- **Type:** `(ms: number | string | Temporal.Duration) => RstestUtilities`
+- **Type:** `(ms: number | string | TemporalDuration) => RstestUtilities`
 
 Jumps the fake clock forward by the specified duration, firing each affected timer callback at most once (skipping intermediate interval ticks, like waking a suspended process).
 

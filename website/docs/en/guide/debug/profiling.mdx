@@ -193,11 +193,7 @@ Profiling Node.js code on macOS requires Node.js 22.16+.
 samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack ./node_modules/@rstest/core/bin/rstest.js run
 ```
 
-Rstest forwards host `--perf-prof`, `--perf-basic-prof`, and `--interpreted-frames-native-stack` flags to `forks` and `vmForks` workers, but **not** to `threads` or `vmThreads` workers. When using a thread pool, pass those flags via `--pool.execArgv`:
-
-```bash
-samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack ./node_modules/@rstest/core/bin/rstest.js run --pool.execArgv=--perf-prof --pool.execArgv=--perf-basic-prof --pool.execArgv=--interpreted-frames-native-stack
-```
+Rstest forwards host `--perf-prof`, `--perf-basic-prof`, and `--interpreted-frames-native-stack` flags to `forks` and `vmForks` workers. For `threads` and `vmThreads`, workers share the host Node.js process, so host-level `--perf-prof*` flags already apply process-wide (do **not** pass them via `--pool.execArgv`, as Node.js `worker_threads` rejects them with `ERR_WORKER_INVALID_EXEC_ARGV`).
 
 After the run finishes, `samply` opens the profile in the [Firefox Profiler](https://profiler.firefox.com/). Select the Node.js thread to inspect JavaScript execution time.
 
