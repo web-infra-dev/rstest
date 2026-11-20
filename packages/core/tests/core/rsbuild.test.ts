@@ -2943,6 +2943,64 @@ describe('prepareRsbuild', () => {
     expect(bundlerConfigs[0]).toMatchSnapshot();
   });
 
+  it.each([
+    { command: 'run', nativeWatcher: false },
+    { command: 'run', nativeWatcher: true },
+    { command: 'watch', nativeWatcher: false },
+    { command: 'watch', nativeWatcher: true },
+  ] as const)(
+    'applies watch ignores after user config ($command, nativeWatcher: $nativeWatcher)',
+    async ({ command, nativeWatcher }) => {
+      const ignored = /test-temp-.*/;
+      const watchOptions = { ignored, aggregateTimeout: 17 };
+      const normalizedConfig = withDefaultConfig({ root: rootPath });
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath,
+          command,
+          normalizedConfig,
+          projects: ['object', 'function'].map((name) => ({
+            name,
+            rootPath,
+            environmentName: name,
+            normalizedConfig: withDefaultConfig({
+              root: rootPath,
+              tools: {
+                rspack:
+                  name === 'object'
+                    ? { watchOptions, experiments: { nativeWatcher } }
+                    : (config) => {
+                        config.watchOptions = { ...watchOptions };
+                        config.experiments ??= {};
+                        config.experiments.nativeWatcher = nativeWatcher;
+                      },
+              },
+            }),
+          })),
+        } as unknown as InternalContext,
+        globTestSourceEntries: async () => ({}),
+      });
+
+      const compiler = await rsbuildInstance.createCompiler();
+      try {
+        const compilers =
+          'compilers' in compiler ? compiler.compilers : [compiler];
+        expect(compilers).toHaveLength(2);
+        for (const child of compilers) {
+          expect(child.options.watchOptions).toMatchObject({
+            ignored: command === 'watch' ? ignored : '**/**',
+            aggregateTimeout: 17,
+          });
+          expect(child.options.experiments.nativeWatcher).toBe(nativeWatcher);
+        }
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          compiler.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+    },
+  );
+
   it('should pass normalized performance.buildCache to rsbuild config', async () => {
     const rsbuildInstance = await prepareRsbuild({
       context: {
