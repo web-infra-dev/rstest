@@ -179,6 +179,8 @@ if (hasNativeFeature()) {
 
 由于底层覆盖率数据来自 Node.js / Chromium V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同引擎版本之间可能存在轻微差异。
 
+要查看 Node.js 测试中构建产物的 V8 执行范围，参见[查看构建产物的覆盖率](/guide/debug/debugging#inspect-bundle-coverage)。
+
 ##### Ignore hints
 
 `v8` provider 在将 V8 coverage 转换为 Istanbul 格式时会识别 ignore hints。hint 前缀可以使用以下任意一种形式：

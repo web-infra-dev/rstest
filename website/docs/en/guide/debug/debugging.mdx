@@ -60,6 +60,16 @@ For a complete introduction to Rstest config, please see the [Configure Rstest](
 
 In the [debug mode](#debug-mode) or when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled, Rstest will write test temporary outputs to disk. You can view the files in `dist/.rstest-temp` directory to help you troubleshoot problems.
 
+### Inspect bundle coverage
+
+If a Node.js test bundle is larger than expected, use `DEBUG=rstest:bundle-coverage` with [V8 coverage](/config/test/coverage#v8-provider) to see which generated files the test runner received and which parts of them executed.
+
+```bash
+DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
+```
+
+Rstest prints the path to `.rstest/bundle-coverage-<timestamp>.json` under the Rstest root directory. For each test file, `assets` lists the size of each generated file in bytes, and `rawV8` contains V8 execution ranges for the generated code before source-map remapping. You can pass a test file filter to `rstest run` to focus on one bundle.
+
 ## Debugging in VS Code
 
 Rstest supports debugging in VS Code using `debugger` statements or breakpoints. Just open the `JavaScript Debug Terminal` and run the test command in the terminal.
