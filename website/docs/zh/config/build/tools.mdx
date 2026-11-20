@@ -16,8 +16,6 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 `tools.rspack` 选项用于修改 [Rspack](https://rspack.rs/zh/config/index) 的配置项。
 
-对于 Node.js 测试项目，Rstest 默认启用 `experiments.nativeWatcher`。可以将 `tools.rspack.experiments.nativeWatcher` 设为 `false`，改用 Watchpack。非 watch 模式下，Rstest 会在应用用户配置后强制将 `watchOptions.ignored` 设为 `'**/**'`，避免文件变化触发重新构建。
-
 ## tools.swc <RsbuildDocBadge path="/config/tools/swc" text="tools.swc" />
 
 通过 `tools.swc` 可以设置 [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 的选项。
