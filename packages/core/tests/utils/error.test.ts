@@ -1,3 +1,4 @@
+import { AssertionError } from 'node:assert';
 import { stripVTControlCharacters } from 'node:util';
 import { compileFunction } from 'node:vm';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
@@ -196,6 +197,26 @@ describe('error helpers', () => {
     expect(error.name).toBeUndefined();
     expect(error.cause!.message).toBe('root');
     expect(error.cause!.name).toBeUndefined();
+  });
+
+  it('only keeps a string actual and expected in toSerializedError', () => {
+    const cause = new AssertionError({
+      actual: 1n,
+      expected: 2n,
+      operator: 'strictEqual',
+    });
+    const error = toSerializedError(
+      new Error('Reporter CountReporter (#2) onTestFileResult failed', {
+        cause,
+      }),
+    );
+
+    expect(error.cause!.message).toBe(cause.message);
+    expect(error.cause!.actual).toBeUndefined();
+    expect(error.cause!.expected).toBeUndefined();
+    expect(
+      toSerializedError({ message: 'failed', actual: '1n', expected: '2n' }),
+    ).toMatchObject({ actual: '1n', expected: '2n' });
   });
 
   it('keeps the error in toSerializedError when reading its cause throws', () => {

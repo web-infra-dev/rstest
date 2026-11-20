@@ -126,4 +126,37 @@ describe('json reporter', () => {
       }),
     ]);
   });
+
+  it('should write the report when a reporter hook throws an assertion error', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', './rstest.reporterCause.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const report = parseJsonReport(cli.stdout);
+
+    expect(report.status).toBe('error');
+    expect(report.unhandledErrors).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'Reporter CountReporter (#2) onTestFileResult failed',
+        ),
+        cause: expect.objectContaining({
+          name: 'AssertionError',
+          message: expect.stringContaining('1n !== 2n'),
+          stack: expect.stringMatching(/assertReporter\.mjs:5:12/),
+        }),
+      }),
+    ]);
+  });
 });
