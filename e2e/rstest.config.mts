@@ -2,6 +2,16 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rstest/core';
 
 /**
+ * Test directories to skip in CommonJS output mode (`RSTEST_OUTPUT_MODULE=false`).
+ *
+ * - browser-mode: browser tests compile through the browser Rsbuild pipeline and
+ *   run in Playwright-managed pages/contexts (`outputModule` is hardcoded to
+ *   `false` on the browser runner), so repeating them under outer Node CJS
+ *   output adds no browser coverage while increasing CI runtime.
+ */
+const COMMONJS_EXCLUDES = ['browser-mode/**'];
+
+/**
  * Test directories to skip in no-isolate mode.
  *
  * - watch: requires module isolation to test HMR/watch behavior
@@ -94,6 +104,7 @@ export default defineConfig({
     '**/fixtures-*/**',
     '**/flaky-fixtures/**',
   ].concat(
+    process.env.RSTEST_OUTPUT_MODULE === 'false' ? COMMONJS_EXCLUDES : [],
     process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : [],
     process.env.RSTEST_POOL_TYPE === 'threads' ? THREADS_EXCLUDES : [],
     process.env.RSTEST_E2E_SKIP_PLAYWRIGHT === 'true' ? ['playwright/**'] : [],

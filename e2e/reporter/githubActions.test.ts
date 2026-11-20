@@ -453,3 +453,134 @@ it.skipIf(!process.env.CI)(
     }
   },
 );
+
+it.skipIf(!process.env.CI)(
+  'github-actions reports the cause chain of an error',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-cause.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    try {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          './rstest.errorCause.config.mts',
+          '--reporters',
+          'github-actions',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: {
+              GITHUB_WORKSPACE: githubWorkspace,
+              GITHUB_STEP_SUMMARY: stepSummaryPath,
+            },
+          },
+        },
+      });
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.exec.process?.exitCode).toBe(1);
+
+      const logs = cli.stdout
+        .split('\n')
+        .filter((log) => log.startsWith('::error'));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatch(
+        /,line=19,col=11,title=fixtures-cause\/errorCause\.test\.ts > loads the user::Failed to load user%0ACaused by: TypeError: fetch failed%0ACaused by: Error: Database connection refused$/,
+      );
+
+      const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
+      expect(stepSummary).toContain(
+        [
+          '**Caused by: TypeError**:',
+          '',
+          '```text',
+          'fetch failed',
+          '```',
+          '',
+          '```',
+          'at request (fixtures-cause/errorCause.test.ts:11:11)',
+        ].join('\n'),
+      );
+      expect(stepSummary).toContain(
+        [
+          '**Caused by: Error**:',
+          '',
+          '```text',
+          'Database connection refused',
+          '```',
+          '',
+          '```',
+          'at connect (fixtures-cause/errorCause.test.ts:4:9)',
+        ].join('\n'),
+      );
+    } finally {
+      fs.rmSync(stepSummaryPath, { force: true });
+      fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+    }
+  },
+);
+
+it.skipIf(!process.env.CI)(
+  'github-actions reports errors whose name is not a string',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-error-name.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    try {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--include',
+          'fixtures-error-name/**/*.test.ts',
+          '--reporters',
+          'github-actions',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: {
+              GITHUB_WORKSPACE: githubWorkspace,
+              GITHUB_STEP_SUMMARY: stepSummaryPath,
+            },
+          },
+        },
+      });
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.exec.process?.exitCode).toBe(1);
+      expect(cli.stderr).not.toContain('onTestRunEnd failed');
+
+      const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
+      expect(stepSummary).toContain(
+        [
+          '**Caused by: Error**:',
+          '',
+          '```text',
+          'Database connection refused',
+          '```',
+        ].join('\n'),
+      );
+      expect(stepSummary).toContain(
+        ['**Error**:', '', '```text', 'Request failed', '```'].join('\n'),
+      );
+    } finally {
+      fs.rmSync(stepSummaryPath, { force: true });
+      fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+    }
+  },
+);

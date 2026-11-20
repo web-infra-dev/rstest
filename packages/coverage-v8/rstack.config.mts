@@ -3,6 +3,7 @@ import { rslibRspackConfig } from '../../scripts/rslibConfig.ts';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
 define.lib({
+  exports: true,
   lib: [
     {
       syntax: 'es2021',

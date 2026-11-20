@@ -1,6 +1,10 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   createWorkerAssetCache,
   loadCachedAssets,
+  loadTaskAssets,
 } from '../../../../src/runtime/worker/vm/assetCache';
 import { WorkerCache } from '../../../../src/runtime/worker/vm/cache';
 
@@ -97,5 +101,52 @@ describe('WorkerCache', () => {
 
     expect(assets.get('asset')).toBeUndefined();
     expect(compilation.get('setup')).toBe('1234');
+  });
+});
+
+it('reads bundled assets and their source maps from disk without requesting bytes from the host', async ({
+  onTestFinished,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), 'rstest-worker-assets-'));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  const external = join(directory, 'external.js');
+  const externalMapPath = join(directory, 'external.js.map');
+  const inline = join(directory, 'inline.js');
+  const noMap = join(directory, 'plain.js');
+  const inlineMap = '{"version":3,"sources":["inline.ts"]}';
+  const externalMap = '{"version":3,"sources":["external.ts"]}';
+  const inlineBundle = `//# sourceMappingURL=data:application/json;base64,${Buffer.from(inlineMap).toString('base64')}`;
+
+  await Promise.all([
+    writeFile(external, 'external bundle'),
+    writeFile(externalMapPath, externalMap),
+    writeFile(inline, inlineBundle),
+    writeFile(noMap, 'plain bundle'),
+  ]);
+
+  const getAssetsByEntry = rs.fn();
+  const assets = await loadTaskAssets(
+    {
+      assetNames: [external, inline, noMap],
+      diskSourceMapPaths: {
+        [external]: externalMapPath,
+        [inline]: inline,
+        [noMap]: noMap,
+      },
+      context: { pool: 'forks' },
+    },
+    undefined,
+    { getAssetsByEntry },
+  );
+
+  expect(getAssetsByEntry).not.toHaveBeenCalled();
+  expect(assets).toEqual({
+    assetFiles: {
+      [external]: Buffer.from('external bundle'),
+      [inline]: Buffer.from(inlineBundle),
+      [noMap]: Buffer.from('plain bundle'),
+    },
+    sourceMaps: { [external]: externalMap, [inline]: inlineMap },
   });
 });

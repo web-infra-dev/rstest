@@ -48,6 +48,16 @@ export const pluginEntryWatch: (params: {
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
+    if (!isWatch) {
+      api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
+        // Dev middleware calls compiler.watch(); apply this after tools.rspack.
+        for (const config of bundlerConfigs) {
+          config.watchOptions ??= {};
+          config.watchOptions.ignored = '**/**';
+        }
+      });
+    }
+
     const getSourceEntries = async (environmentName: string) => {
       const sourceEntries = await globTestSourceEntries(environmentName);
       if (testEntryPathState) {
@@ -72,6 +82,9 @@ export const pluginEntryWatch: (params: {
         );
       }
 
+      config.experiments ??= {};
+      config.experiments.nativeWatcher ??= true;
+
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
@@ -93,14 +106,8 @@ export const pluginEntryWatch: (params: {
           context.normalizedConfig,
           configFilePath ? [configFilePath] : [],
         );
-
-        config.experiments ??= {};
-        config.experiments.nativeWatcher ??= true;
       } else {
-        // watch false seems not effect when rspack.watch()
         config.watch = false;
-        config.watchOptions ??= {};
-        config.watchOptions.ignored = '**/**';
 
         const sourceEntries = await getSourceEntries(environment.name);
         config.entry = {

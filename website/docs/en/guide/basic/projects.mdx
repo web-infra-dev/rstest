@@ -6,6 +6,8 @@ description: Rstest supports running multiple test projects simultaneously withi
 
 Rstest supports running multiple test projects simultaneously within a single Rstest process. These projects can have different test configurations and test environments.
 
+In an unfiltered, one-shot Node.js run without coverage, bail, or failure selection, a project can start testing while another is still building. Runs with global setup or a reporter that needs the complete selection in `onTestRunStart` wait for all projects before dispatching tests.
+
 ## Use cases
 
 - **Monorepo projects**: When your codebase contains multiple sub-packages or modules, each sub-project might have different test configuration requirements.

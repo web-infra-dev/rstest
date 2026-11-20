@@ -14,6 +14,8 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 默认情况下，Rstest 不会将测试临时文件写入磁盘，当你需要调试 Rstest 产物时可能需要此配置项。
 
+设置 `dev.writeToDisk: true` 后，Node.js worker 会直接从磁盘读取构建产物。当测试产物较大时，这可以降低主进程的内存占用。
+
 ```ts title="rstest.config.ts"
 export default {
   dev: {

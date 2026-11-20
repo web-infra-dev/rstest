@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -39,7 +40,7 @@ describe('test build config', () => {
   );
 
   it.for(['run', 'list'] as const)(
-    'disables incremental builds by default for Node %s',
+    'applies Node compiler defaults and explicit overrides for %s',
     async (command, { onTestFinished }) => {
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
@@ -57,6 +58,21 @@ describe('test build config', () => {
       expect(cli.stdout).toContain('incremental default: false');
       expect(cli.stdout).toContain('incremental explicit-object: true');
       expect(cli.stdout).toContain('incremental explicit-callback: true');
+      expect(cli.stdout).toContain(
+        'watch filesystem default: NativeWatchFileSystem',
+      );
+      for (const project of ['explicit-object', 'explicit-callback']) {
+        expect(cli.stdout).toContain(
+          `watch filesystem ${project}: NodeWatchFileSystem`,
+        );
+      }
+      for (const project of [
+        'default',
+        'explicit-object',
+        'explicit-callback',
+      ]) {
+        expect(cli.stdout).toContain(`watch ignores ${project}: **/**`);
+      }
       if (command === 'list') {
         expect(cli.stdout).toContain(
           'tools.rspack config should work correctly',
@@ -242,6 +258,35 @@ describe('test build config', () => {
     expect(fs.existsSync(join(defaultOutputPath, 'rstest-manifest.json'))).toBe(
       false,
     );
+  });
+  it('runs tests when the worker cannot read the disk output directory', async ({
+    onTestFinished,
+  }) => {
+    const outputDir = await fs.promises.mkdtemp(
+      join(tmpdir(), 'rstest-permission-output-'),
+    );
+    onTestFinished(() =>
+      fs.promises.rm(outputDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+      }),
+    );
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/customOutput'),
+          env: { RSTEST_PERMISSION_OUTPUT_DIR: outputDir },
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(fs.existsSync(join(outputDir, 'rstest-manifest.json'))).toBe(true);
   });
 });
 

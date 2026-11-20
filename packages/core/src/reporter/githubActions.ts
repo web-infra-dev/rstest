@@ -122,7 +122,10 @@ export class GithubActionsReporter {
           let line = 1;
           let column = 1;
 
-          const message = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
+          let message = formatMessage(error);
+          for (let cause = error.cause; cause; cause = cause.cause) {
+            message += `\nCaused by: ${cause.name || 'Error'}: ${formatMessage(cause)}`;
+          }
           const type = 'error';
 
           if (error.stack) {
@@ -171,6 +174,10 @@ export class GithubActionsReporter {
       );
     }
   }
+}
+
+function formatMessage(error: SerializedError): string {
+  return `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
 }
 
 function escapeData(s: string): string {
@@ -397,11 +404,18 @@ async function renderStepSummary({
       if (!error) continue;
 
       pushHeading(lines, 3, `❌ FAIL Unhandled Error ${index + 1}`);
-      lines.push(`**${error.name || 'Error'}**:`);
-      pushFencedBlock(lines, 'text', stripAnsi(trim(error.message)));
+      let current: SerializedError | undefined = error;
+      let label = '';
+      while (current) {
+        lines.push(`**${label}${current.name || 'Error'}**:`);
+        pushFencedBlock(lines, 'text', stripAnsi(trim(current.message)));
 
-      if (error.stack) {
-        pushFencedBlock(lines, '', stripAnsi(trim(error.stack)));
+        if (current.stack) {
+          pushFencedBlock(lines, '', stripAnsi(trim(current.stack)));
+        }
+
+        current = current.cause;
+        label = 'Caused by: ';
       }
     }
 
@@ -429,28 +443,33 @@ async function renderStepSummary({
         ? errors
         : [createUnknownFailure()];
       for (const error of reportedErrors) {
-        const errorType = getErrorType(error);
-        const message = trim(error.message);
         const retryLabel = getRetryErrorLabel(error);
-        lines.push(`**${retryLabel ? `${retryLabel} - ` : ''}${errorType}**:`);
-        pushFencedBlock(lines, 'text', stripAnsi(message));
+        let current: SerializedError | undefined = error;
+        let label = retryLabel ? `${retryLabel} - ` : '';
+        while (current) {
+          lines.push(`**${label}${getErrorType(current)}**:`);
+          pushFencedBlock(lines, 'text', stripAnsi(trim(current.message)));
 
-        if (error.diff) {
-          pushFencedBlock(lines, 'diff', stripAnsi(trim(error.diff)));
-        }
-
-        if (error.stack) {
-          const stackFrames = await parseErrorStacktrace({
-            stack: error.stack,
-            fullStack: error.fullStack,
-            getSourcemap,
-          });
-          if (stackFrames.length > 0) {
-            const stackLines = stackFrames.map((frame) =>
-              stripAnsi(formatStack(frame, rootPath)),
-            );
-            pushFencedBlock(lines, '', stackLines.join('\n'));
+          if (current.diff) {
+            pushFencedBlock(lines, 'diff', stripAnsi(trim(current.diff)));
           }
+
+          if (current.stack) {
+            const stackFrames = await parseErrorStacktrace({
+              stack: current.stack,
+              fullStack: current.fullStack,
+              getSourcemap,
+            });
+            if (stackFrames.length > 0) {
+              const stackLines = stackFrames.map((frame) =>
+                stripAnsi(formatStack(frame, rootPath)),
+              );
+              pushFencedBlock(lines, '', stackLines.join('\n'));
+            }
+          }
+
+          current = current.cause;
+          label = 'Caused by: ';
         }
       }
 

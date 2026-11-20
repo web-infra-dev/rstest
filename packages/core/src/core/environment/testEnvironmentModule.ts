@@ -358,7 +358,7 @@ const createBundleEntrySource = async (
   return `export * from 'jsdom';\nexport { convert as __rstestBlobConvert } from ${blobConverterModuleUrl};\n`;
 };
 
-type BuildTestEnvironmentModuleOptions = {
+export type BuildTestEnvironmentModuleOptions = {
   bundleId: number;
   projectRoot: string;
   reference: TestEnvironmentModuleReference;

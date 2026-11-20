@@ -107,9 +107,11 @@ export function createCustomConsole({
       type: 'stderr' | 'stdout' = 'stdout',
     ) {
       const currentTask = getCurrentTask();
+      // Like Node's console, indent every line of a grouped message
+      const indent = '  '.repeat(this._groupDepth);
 
       onConsoleLog({
-        content: '  '.repeat(this._groupDepth) + message,
+        content: indent + message.replaceAll('\n', `\n${indent}`),
         name: getPrettyConsoleName(name),
         taskId: currentTask?.taskId,
         taskName: currentTask?.taskName,
@@ -170,19 +172,19 @@ export function createCustomConsole({
     }
 
     override group(title?: string, ...args: unknown[]): void {
-      this._groupDepth++;
-
       if (title != null || args.length > 0) {
         this._log('group', color.bold(format(title, ...args)));
       }
+
+      this._groupDepth++;
     }
 
     override groupCollapsed(title?: string, ...args: unknown[]): void {
-      this._groupDepth++;
-
       if (title != null || args.length > 0) {
         this._log('groupCollapsed', color.bold(format(title, ...args)));
       }
+
+      this._groupDepth++;
     }
 
     override groupEnd(): void {

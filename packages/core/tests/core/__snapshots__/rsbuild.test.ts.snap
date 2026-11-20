@@ -7,6 +7,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "entry": {},
   "experiments": {
     "asyncWebAssembly": false,
+    "nativeWatcher": true,
     "runtimeMode": "webpack",
     "sourceImport": true,
   },
@@ -739,7 +740,6 @@ require.extensions = __rstest_native_require.extensions;
   "watch": false,
   "watchOptions": {
     "aggregateTimeout": 0,
-    "ignored": "**/**",
   },
 }
 `;
@@ -751,6 +751,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": false,
+    "nativeWatcher": true,
     "runtimeMode": "webpack",
     "sourceImport": true,
   },
@@ -1438,7 +1439,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "watch": false,
   "watchOptions": {
     "aggregateTimeout": 0,
-    "ignored": "**/**",
   },
 }
 `;
@@ -1450,6 +1450,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "entry": {},
   "experiments": {
     "asyncWebAssembly": false,
+    "nativeWatcher": true,
     "runtimeMode": "webpack",
     "sourceImport": true,
   },
@@ -2124,7 +2125,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "watch": false,
   "watchOptions": {
     "aggregateTimeout": 0,
-    "ignored": "**/**",
   },
 }
 `;
@@ -3192,6 +3192,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": false,
+    "nativeWatcher": true,
     "runtimeMode": "webpack",
     "sourceImport": true,
   },
@@ -3879,7 +3880,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "watch": false,
   "watchOptions": {
     "aggregateTimeout": 0,
-    "ignored": "**/**",
   },
 }
 `;
@@ -3891,6 +3891,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": false,
+    "nativeWatcher": true,
     "runtimeMode": "webpack",
     "sourceImport": true,
   },
@@ -4578,7 +4579,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "watch": false,
   "watchOptions": {
     "aggregateTimeout": 0,
-    "ignored": "**/**",
   },
 }
 `;
