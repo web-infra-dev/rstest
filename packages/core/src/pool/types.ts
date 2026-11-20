@@ -5,6 +5,7 @@ import type {
 } from '../types';
 import type { RstestPoolType } from '../types/config';
 import type { TestEnvironmentModuleFallback } from './protocol';
+import type { RssTrace } from '../utils/traceRss';
 
 export type PoolWorkerKind = RstestPoolType;
 
@@ -22,6 +23,7 @@ export type PoolTask = {
 };
 
 export type PoolOptions = {
+  recordRss?: RssTrace['record'];
   workerEntry: string;
   maxWorkers: number;
   minWorkers: number;

@@ -5,6 +5,7 @@ import { displayPath, isTTY } from './helper';
 import { color, logger } from './logger';
 import { onFatalSignal } from './signals';
 import { formatTraceSummary, summarizeTrace } from './traceSummary';
+import { createRssTrace, type RssTrace } from './traceRss';
 
 // ---------------------------------------------------------------------------
 // Public event type
@@ -247,6 +248,7 @@ const startTraceServer = (initialPath: string): Promise<TraceServerHandle> => {
 export type TraceOutput = { tracePath: string; summaryPath: string };
 
 export interface TraceRun {
+  recordRss?: RssTrace['record'];
   /**
    * Pass to `pool.runTests` as `onTraceEvents`. `undefined` when tracing is
    * disabled, so the pool layer skips collecting events entirely.
@@ -262,6 +264,7 @@ export interface TraceRun {
 }
 
 export interface TraceController {
+  recordRss?: RssTrace['record'];
   /** Begin a per-run handle that buffers events until `finalize`. */
   beginRun: () => TraceRun;
   /** Files written by the most recent `finalize` that collected events. */
@@ -292,6 +295,11 @@ export const createTraceController = (options: {
   embedded: boolean;
 }): TraceController => {
   const { enabled, rootPath, embedded } = options;
+  const rss = process.env.DEBUG?.toLowerCase()
+    .split(',')
+    .includes('rstest:memory')
+    ? createRssTrace(rootPath, embedded)
+    : undefined;
   let server: TraceServerHandle | undefined;
   // Files produced by the previous run in this session. In watch mode we
   // replace them on each rerun so .rstest/ does not accumulate
@@ -299,7 +307,7 @@ export const createTraceController = (options: {
   let lastOutput: TraceOutput | undefined;
 
   const beginRun = (): TraceRun => {
-    if (!enabled) {
+    if (!enabled && !rss) {
       return {
         onEvents: undefined,
         span: noopTraceSpan,
@@ -309,34 +317,40 @@ export const createTraceController = (options: {
     const events: TraceEvent[] = [];
     const pushHostSlice: TraceSpan = async (name, cat, fn, args) => {
       const start = Date.now();
+      rss?.record('span:start', { name, cat, ...args });
       try {
         return await fn();
       } finally {
         const end = Date.now();
-        events.push({
-          name,
-          cat,
-          ph: 'X',
-          ts: start * 1000,
-          dur: (end - start) * 1000,
-          pid: process.pid,
-          tid: 0,
-          args: {
-            testPath: '<host>',
-            project: 'host',
-            ...args,
-          },
-        });
+        rss?.record('span:end', { name, cat, ...args });
+        if (enabled)
+          events.push({
+            name,
+            cat,
+            ph: 'X',
+            ts: start * 1000,
+            dur: (end - start) * 1000,
+            pid: process.pid,
+            tid: 0,
+            args: {
+              testPath: '<host>',
+              project: 'host',
+              ...args,
+            },
+          });
       }
     };
     return {
+      recordRss: rss?.record,
       // Iterate instead of spreading: a single file with thousands of cases
       // can hand `chunk` a very large array, and `push(...chunk)` would then
       // exceed V8's argument-list limit and throw `RangeError: Maximum call
       // stack size exceeded` before the trace is ever written.
-      onEvents: (chunk) => {
-        for (const ev of chunk) events.push(ev);
-      },
+      onEvents: enabled
+        ? (chunk) => {
+            for (const ev of chunk) events.push(ev);
+          }
+        : undefined,
       span: pushHostSlice,
       finalize: async () => {
         if (!events.length) return;
@@ -412,11 +426,13 @@ export const createTraceController = (options: {
   };
 
   const controller: TraceController = {
+    recordRss: rss?.record,
     beginRun,
     get lastOutput() {
       return lastOutput;
     },
     close: async () => {
+      rss?.close();
       if (!server) return;
       const s = server;
       server = undefined;

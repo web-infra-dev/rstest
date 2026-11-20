@@ -18,6 +18,7 @@ import {
   wrapRpc,
 } from './protocol';
 import type { PoolTask } from './types';
+import type { RssTrace } from '../utils/traceRss';
 
 const WORKER_START_TIMEOUT_MS = 90_000;
 const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
@@ -50,6 +51,7 @@ type PendingTask = {
 let nextTaskSeq = 0;
 
 type PoolRunnerOptions = {
+  recordRss?: RssTrace['record'];
   workerId: number;
   environmentKey: string;
   memoryLimit?: number;
@@ -76,6 +78,9 @@ export class PoolRunner {
   readonly environmentKey: string;
   readonly worker: PoolWorker;
   private state: RunnerState = 'IDLE';
+  private readonly recordRss?: RssTrace['record'];
+  private workerPid?: number;
+  private workerThreadId?: number;
   private operationChain: Promise<unknown> = Promise.resolve();
   private startPromise: Promise<void> | undefined;
   private currentTask: PendingTask | undefined;
@@ -111,6 +116,7 @@ export class PoolRunner {
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
+    this.recordRss = options.recordRss;
     this.environmentKey = options.environmentKey;
     this.memoryLimit = options.memoryLimit;
     this.memoryMetric = options.memoryMetric ?? 'heapUsed';
@@ -168,7 +174,11 @@ export class PoolRunner {
 
       try {
         await this.worker.start();
-        this.worker.send({ type: 'start', workerId: this.workerId });
+        this.worker.send({
+          type: 'start',
+          workerId: this.workerId,
+          ...(this.recordRss ? { traceRss: true } : {}),
+        });
         await startDeferred.promise;
       } catch (err) {
         this.clearStartTimer();
@@ -420,7 +430,18 @@ export class PoolRunner {
 
   private handleResponse(response: WorkerResponse): void {
     switch (response.type) {
+      case 'memory': {
+        const { event, ...sample } = response.sample;
+        this.recordRss?.(`worker:${event}`, {
+          role: 'worker',
+          rssScope: sample.threadId === 0 ? 'worker-process' : 'shared-process',
+          ...sample,
+        });
+        return;
+      }
       case 'started':
+        this.workerPid = response.pid;
+        this.workerThreadId = response.threadId;
         this.clearStartTimer();
         this.startDeferred?.resolve();
         this.startDeferred = undefined;
@@ -513,6 +534,15 @@ export class PoolRunner {
   }
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
+    if (this.workerPid !== undefined) {
+      this.recordRss?.('worker:exit', {
+        role: 'worker',
+        pid: this.workerPid,
+        threadId: this.workerThreadId,
+        exitCode: code ?? undefined,
+        signal: signal ?? undefined,
+      });
+    }
     this.clearStartTimer();
     this.clearFixtureCleanupTimer();
     this.rejectCleanup(
