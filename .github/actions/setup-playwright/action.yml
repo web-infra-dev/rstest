@@ -14,27 +14,64 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install Playwright WebKit
-      if: inputs.install-webkit == 'true'
+    - name: Resolve Linux Playwright cache metadata
+      id: linux-meta
+      if: runner.os == 'Linux' && (inputs.install-webkit == 'true' || inputs.install-firefox == 'true')
       shell: bash
-      # Only browser-mode e2e includes the explicit WebKit fixture.
-      # Linux runners also need WebKit's system libraries (--with-deps);
-      # the macOS/Windows images already provide them.
       run: |
-        if [ "$RUNNER_OS" = "Linux" ]; then
-          npx playwright install --with-deps webkit
-        else
-          npx playwright install webkit
+        codename=$(. /etc/os-release && echo "${VERSION_CODENAME:-unknown}")
+        pw_version=$(pnpm exec playwright --version | awk '{print $2}')
+        month=$(date -u +%Y-%m)
+        echo "codename=$codename" >> "$GITHUB_OUTPUT"
+        echo "playwright_version=$pw_version" >> "$GITHUB_OUTPUT"
+        echo "month=$month" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Linux Playwright apt packages
+      id: apt-cache
+      if: runner.os == 'Linux' && (inputs.install-webkit == 'true' || inputs.install-firefox == 'true')
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/playwright-apt-debs
+        key: playwright-apt-${{ runner.os }}-${{ steps.linux-meta.outputs.codename }}-${{ steps.linux-meta.outputs.playwright_version }}-${{ steps.linux-meta.outputs.month }}
+        restore-keys: |
+          playwright-apt-${{ runner.os }}-${{ steps.linux-meta.outputs.codename }}-${{ steps.linux-meta.outputs.playwright_version }}-
+          playwright-apt-${{ runner.os }}-${{ steps.linux-meta.outputs.codename }}-
+
+    - name: Install Playwright browsers
+      if: inputs.install-webkit == 'true' || inputs.install-firefox == 'true'
+      shell: bash
+      # Only install browsers not provided by GitHub-hosted runners: WebKit for
+      # the explicit WebKit fixture, and bundled Firefox (Playwright offers no
+      # system channel for it). Combine into a single invocation so Linux runs
+      # `--with-deps` (`apt-get`) only once; macOS/Windows images already
+      # provide the system libraries.
+      env:
+        INSTALL_WEBKIT: ${{ inputs.install-webkit }}
+        INSTALL_FIREFOX: ${{ inputs.install-firefox }}
+        APT_CACHE_HIT: ${{ steps.apt-cache.outputs.cache-hit }}
+      run: |
+        browsers=()
+        if [ "$INSTALL_WEBKIT" = "true" ]; then
+          browsers+=(webkit)
         fi
-    - name: Install Playwright Firefox
-      if: inputs.install-firefox == 'true'
-      shell: bash
-      # The multi-browser fixtures run the bundled Firefox (Playwright offers
-      # no system channel for it); Linux runners also need its system
-      # libraries.
-      run: |
+        if [ "$INSTALL_FIREFOX" = "true" ]; then
+          browsers+=(firefox)
+        fi
         if [ "$RUNNER_OS" = "Linux" ]; then
-          npx playwright install --with-deps firefox
+          # Pre-seed apt's archive cache so `--with-deps` avoids downloading ~140 MB
+          # of WebKit system libraries from throttled Azure Ubuntu mirrors.
+          if [ -d "$HOME/.cache/playwright-apt-debs" ]; then
+            find "$HOME/.cache/playwright-apt-debs" -maxdepth 1 -name '*.deb' \
+              -exec sudo cp -n -t /var/cache/apt/archives/ {} +
+          fi
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99-keep-debs > /dev/null
+          npx playwright install --with-deps "${browsers[@]}"
+          if [ "$APT_CACHE_HIT" != "true" ]; then
+            mkdir -p "$HOME/.cache/playwright-apt-debs"
+            find /var/cache/apt/archives -maxdepth 1 -name '*.deb' \
+              -exec cp -n -t "$HOME/.cache/playwright-apt-debs/" {} +
+          fi
         else
-          npx playwright install firefox
+          npx playwright install "${browsers[@]}"
         fi

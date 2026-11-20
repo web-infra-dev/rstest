@@ -24,7 +24,7 @@ Read `.github/workflows/test.yml`, `e2e/package.json`, and `e2e/rstest.config.mt
 For browser changes:
 
 - Browser tests execute in Playwright-managed pages/contexts. Outer Node `threads`, `forks`, VM pools, and CommonJS output are not browser execution modes. Repeating a browser test under those outer-runner modes adds no browser coverage unless a changed host-loading path specifically depends on them.
-- `e2e/rstest.config.mts` excludes `browser-mode/**` under outer no-isolate and threads modes. Test browser reuse through the browser fixture's own `isolate` setting or CLI argument; an outer exclusion is not a successful browser reuse check.
+- `e2e/rstest.config.mts` excludes `browser-mode/**` under outer CommonJS, no-isolate, and threads modes. Test browser reuse through the browser fixture's own `isolate` setting or CLI argument; an outer exclusion is not a successful browser reuse check.
 - Choose Chromium, Firefox, and WebKit coverage based on engine-sensitive behavior. Native viewport, DOM, input, and provider changes can require all three; container-only UI changes can use a focused headed browser check. Exercise both headed and headless when their distinct transports or rendering paths are affected.
 - Use the primary CI Node version for browser behavior checks. Repeat across host Node majors when the changed browser host/server/loading path has Node-version compatibility risk. A shared Node runner change still needs its separate focused Node matrix.
 
@@ -121,7 +121,7 @@ Protect runtime invariants at the narrowest existing interface that exposes thei
 
 ## Unit tests are OS-agnostic
 
-CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in the e2e job's macOS/Windows rows. Enforced by the `rstest/os-agnostic-tests` rule in `rstack.config.mts` as part of `pnpm lint`; the rule itself is unit-tested by `scripts/lint/os-agnostic-rule.test.ts` (in the `lint` project).
+CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in the e2e job's cross-OS rows (`ubuntu`/`windows` on regular PRs, plus `macos` on `main`, `release:` PRs, and PRs labeled `ci:macos`). Enforced by the `rstest/os-agnostic-tests` rule in `rstack.config.mts` as part of `pnpm lint`; the rule itself is unit-tested by `scripts/lint/os-agnostic-rule.test.ts` (in the `lint` project).
 
 - Do not write unit tests whose behavior or expectations depend on the host OS (reading `process.platform`, `os.platform()`, etc.). CI would only ever exercise the Linux branch.
 - To cover platform-dependent code paths in a unit test, stub the platform for the test's duration so every branch runs deterministically on any host — see `withPlatform` in `packages/core/tests/core/related.test.ts`.

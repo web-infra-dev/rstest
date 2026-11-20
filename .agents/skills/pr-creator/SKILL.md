@@ -42,6 +42,7 @@ metadata:
 8. Create the PR.
    When running in Codex, use the Codex GitHub connector/plugin for GitHub operations.
    Use `gh pr create` only as a fallback when the connector is unavailable.
+   Regular PR CI runs `e2e` on `ubuntu-latest` and `windows-latest` only; if the PR touches macOS-sensitive low-level logic (worker IPC/process teardown, symlinked/canonical paths, signal handling, filesystem watching/case-sensitivity, or WebKit/headed browser behavior), apply the `ci:macos` label so CI adds the `macos-latest` Node 24 e2e leg pre-merge.
 
 ## Constraints
 
