@@ -2944,8 +2944,10 @@ describe('prepareRsbuild', () => {
   });
 
   it.each([
+    { command: 'run', nativeWatcher: undefined },
     { command: 'run', nativeWatcher: false },
     { command: 'run', nativeWatcher: true },
+    { command: 'watch', nativeWatcher: undefined },
     { command: 'watch', nativeWatcher: false },
     { command: 'watch', nativeWatcher: true },
   ] as const)(
@@ -2971,8 +2973,10 @@ describe('prepareRsbuild', () => {
                     ? { watchOptions, experiments: { nativeWatcher } }
                     : (config) => {
                         config.watchOptions = { ...watchOptions };
-                        config.experiments ??= {};
-                        config.experiments.nativeWatcher = nativeWatcher;
+                        if (nativeWatcher !== undefined) {
+                          config.experiments ??= {};
+                          config.experiments.nativeWatcher = nativeWatcher;
+                        }
                       },
               },
             }),
@@ -2991,7 +2995,9 @@ describe('prepareRsbuild', () => {
             ignored: command === 'watch' ? ignored : '**/**',
             aggregateTimeout: 17,
           });
-          expect(child.options.experiments.nativeWatcher).toBe(nativeWatcher);
+          expect(child.options.experiments.nativeWatcher).toBe(
+            nativeWatcher ?? true,
+          );
         }
       } finally {
         await new Promise<void>((resolve, reject) => {

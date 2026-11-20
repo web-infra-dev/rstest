@@ -40,7 +40,7 @@ describe('test build config', () => {
   );
 
   it.for(['run', 'list'] as const)(
-    'disables incremental builds by default for Node %s',
+    'applies Node compiler defaults and explicit overrides for %s',
     async (command, { onTestFinished }) => {
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
@@ -58,6 +58,21 @@ describe('test build config', () => {
       expect(cli.stdout).toContain('incremental default: false');
       expect(cli.stdout).toContain('incremental explicit-object: true');
       expect(cli.stdout).toContain('incremental explicit-callback: true');
+      expect(cli.stdout).toContain(
+        'watch filesystem default: NativeWatchFileSystem',
+      );
+      for (const project of ['explicit-object', 'explicit-callback']) {
+        expect(cli.stdout).toContain(
+          `watch filesystem ${project}: NodeWatchFileSystem`,
+        );
+      }
+      for (const project of [
+        'default',
+        'explicit-object',
+        'explicit-callback',
+      ]) {
+        expect(cli.stdout).toContain(`watch ignores ${project}: **/**`);
+      }
       if (command === 'list') {
         expect(cli.stdout).toContain(
           'tools.rspack config should work correctly',

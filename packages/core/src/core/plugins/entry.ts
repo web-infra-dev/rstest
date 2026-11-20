@@ -82,6 +82,9 @@ export const pluginEntryWatch: (params: {
         );
       }
 
+      config.experiments ??= {};
+      config.experiments.nativeWatcher ??= true;
+
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
@@ -103,9 +106,6 @@ export const pluginEntryWatch: (params: {
           context.normalizedConfig,
           configFilePath ? [configFilePath] : [],
         );
-
-        config.experiments ??= {};
-        config.experiments.nativeWatcher ??= true;
       } else {
         config.watch = false;
 

@@ -9,6 +9,12 @@ const reportIncremental = {
       console.log(
         `incremental ${name}: ${Boolean(incremental && incremental.buildModuleGraph)}`,
       );
+      console.log(
+        `watch filesystem ${name}: ${compiler.watchFileSystem?.constructor.name}`,
+      );
+      console.log(
+        `watch ignores ${name}: ${compiler.options.watchOptions.ignored}`,
+      );
     });
   },
 };
@@ -24,7 +30,12 @@ export default defineConfig({
       extends: baseConfig,
       name: 'explicit-object',
       tools: {
-        rspack: { incremental: 'safe', plugins: [reportIncremental] },
+        rspack: {
+          incremental: 'safe',
+          experiments: { nativeWatcher: false },
+          watchOptions: { ignored: /test-temp-.*/ },
+          plugins: [reportIncremental],
+        },
       },
     },
     {
@@ -34,6 +45,9 @@ export default defineConfig({
         rspack: (config) => {
           config.plugins.push(reportIncremental);
           config.incremental = 'safe';
+          config.experiments ??= {};
+          config.experiments.nativeWatcher = false;
+          config.watchOptions = { ignored: /test-temp-.*/ };
         },
       },
     },
