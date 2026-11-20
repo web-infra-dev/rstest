@@ -273,35 +273,3 @@ jobs:
     uses: ./.github/workflows/codspeed.yml
     with:
       ref: ${{ github.sha }}
-
-  # ======== gate ========
-  # Transitional aggregate gate kept until the main branch ruleset is updated to
-  # require `prepare`, `lint`, `ut`, and the five static `e2e-*` jobs directly.
-  test-gate:
-    needs:
-      - prepare
-      - lint
-      - ut
-      - e2e-ubuntu-24
-      - e2e-windows-24
-      - e2e-macos-24
-      - e2e-ubuntu-20
-      - e2e-ubuntu-26
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check test requirement
-        run: |
-          for result in \
-            "${{ needs.prepare.result }}" \
-            "${{ needs.lint.result }}" \
-            "${{ needs.ut.result }}" \
-            "${{ needs.e2e-ubuntu-24.result }}" \
-            "${{ needs.e2e-windows-24.result }}" \
-            "${{ needs.e2e-macos-24.result }}" \
-            "${{ needs.e2e-ubuntu-20.result }}" \
-            "${{ needs.e2e-ubuntu-26.result }}"; do
-            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
-              exit 1
-            fi
-          done
