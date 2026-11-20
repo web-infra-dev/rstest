@@ -3,6 +3,9 @@ name: Test
 on:
   pull_request:
     branches: [main]
+    # Include `labeled` so applying `ci:macos` to an open PR (or via `gh pr
+    # create --label`) immediately schedules the expanded macOS e2e matrix.
+    types: [opened, synchronize, reopened, labeled]
 
   push:
     branches: [main]
