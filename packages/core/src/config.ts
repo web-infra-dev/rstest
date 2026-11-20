@@ -48,17 +48,27 @@ export interface LoadedRstestConfig {
   dependencies?: string[];
 }
 
-export async function loadConfig({
-  cwd = process.cwd(),
-  path,
-  envMode,
-  configLoader,
-}: {
+type LoadRstestConfigOptions = {
   cwd?: string;
   path?: string;
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
-} = {}): Promise<LoadConfigResult<RstestConfig>> {
+};
+
+export async function loadConfig(
+  options: LoadRstestConfigOptions = {},
+): Promise<LoadConfigResult<RstestConfig>> {
+  const result = await readConfigFile(options);
+  result.content = await resolveExtends(result.content, result);
+  return result;
+}
+
+export async function readConfigFile({
+  cwd = process.cwd(),
+  path,
+  envMode,
+  configLoader,
+}: LoadRstestConfigOptions): Promise<LoadConfigResult<RstestConfig>> {
   const result = await loadRsbuildConfig<RstestConfig>({
     cwd,
     path,
@@ -73,7 +83,6 @@ export async function loadConfig({
     logger.debug('no rstest config file found');
   }
 
-  result.content = await resolveExtends(result.content, result);
   return result;
 }
 
@@ -108,6 +117,7 @@ const resolveExtendEntry = async (
 export const resolveExtends = async (
   config: RstestConfig,
   source?: Pick<LoadConfigResult<RstestConfig>, 'filePath' | 'dependencies'>,
+  globDefaults?: NonNullable<RstestConfig['extends']>,
 ): Promise<RstestConfig> => {
   const hasOwnTriggers = config.forceRerunTriggers !== undefined;
   let merged = config;
@@ -129,6 +139,23 @@ export const resolveExtends = async (
     extendedTriggers = resolvedExtends.flatMap(
       (entry) => entry.forceRerunTriggers || [],
     );
+  }
+
+  if (globDefaults) {
+    const userConfig = Object.freeze({ ...config });
+    const layers = await Promise.all(
+      castArray(globDefaults).map((entry) =>
+        resolveExtendEntry(entry, userConfig),
+      ),
+    );
+    const defaults = layers.reduce<RstestConfig>(plainDeepMerge, {});
+    if (
+      merged.forceRerunTriggers === undefined &&
+      defaults.forceRerunTriggers
+    ) {
+      extendedTriggers = defaults.forceRerunTriggers;
+    }
+    merged = plainDeepMerge(defaults, merged);
   }
 
   const configFiles = source

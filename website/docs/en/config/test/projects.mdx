@@ -11,7 +11,12 @@ import type { ProjectConfig } from '@rstest/core';
 
 type InlineProjectConfig = ProjectConfig & { name: string };
 
-type Projects = (string | InlineProjectConfig)[];
+type GlobProject = {
+  glob: string;
+  extends: NonNullable<ProjectConfig['extends']>;
+};
+
+type Projects = (string | InlineProjectConfig | GlobProject)[];
 ```
 
 - **Default:** `[<rootDir>]`
@@ -51,7 +56,24 @@ export default defineConfig({
 });
 ```
 
-Use `defineInlineProject()` for object items in any `projects` array, including nested `projects`. Use `defineProject()` only for the top-level export of a project config file.
+To give discovered projects shared defaults, use a directory glob with `extends`:
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      glob: 'packages/*',
+      extends: { globals: true, setupFiles: ['./setup.ts'] },
+    },
+  ],
+});
+```
+
+Each matched directory is a project, including directories without a config file. Relative setup paths resolve from that project. Its config and inherited settings override the glob defaults. Plain objects merge recursively and local arrays replace default arrays. When multiple glob entries match the same directory, the first provides its defaults.
+
+Use `defineInlineProject()` for named inline items in any `projects` array, including nested `projects`. Use `defineProject()` only for the top-level export of a project config file.
 
 `defineProject()` can omit `name` on the exported project and let Rstest infer it using the [name](/config/test/name) option rules. `defineInlineProject()` requires `name` for each inline project item.
 

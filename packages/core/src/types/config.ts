@@ -376,7 +376,12 @@ type SnapshotFormat = Omit<
  * Inline project config must include a name.
  */
 export type InlineProjectConfig = ProjectConfig & { name: string };
-type TestProject = string | InlineProjectConfig;
+export type GlobProject = {
+  glob: string;
+  extends: NonNullable<RstestConfig['extends']>;
+};
+
+type TestProject = string | InlineProjectConfig | GlobProject;
 
 type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
   reporters?: any;
