@@ -11,7 +11,12 @@ import type { ProjectConfig } from '@rstest/core';
 
 type InlineProjectConfig = ProjectConfig & { name: string };
 
-type Projects = (string | InlineProjectConfig)[];
+type GlobProject = {
+  glob: string;
+  extends: NonNullable<ProjectConfig['extends']>;
+};
+
+type Projects = (string | InlineProjectConfig | GlobProject)[];
 ```
 
 - **默认值：** `undefined`（将根目录作为单个项目运行）
@@ -36,6 +41,23 @@ export default defineConfig({
 });
 ```
 
-`projects` 数组中的对象项请使用 `defineInlineProject()`（必须提供 [`name`](/config/test/name)），项目配置文件的顶层导出请使用 `defineProject()`（可省略并自动推导 `name`）。
+要为匹配的项目设置共享默认值，可以在目录 glob 上使用 `extends`：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      glob: 'packages/*',
+      extends: { globals: true, setupFiles: ['./setup.ts'] },
+    },
+  ],
+});
+```
+
+每个匹配的目录都是一个项目，包括没有配置文件的目录。相对的 setup 文件路径从项目目录解析。项目配置及其继承的设置优先于 glob 默认值。普通对象递归合并，项目中的数组会替换默认数组。如果多个 glob 项匹配同一目录，则使用第一个匹配项的默认值。
+
+`projects` 数组中的具名内联项请使用 `defineInlineProject()`（必须提供 [`name`](/config/test/name)），项目配置文件的顶层导出请使用 `defineProject()`（可省略并自动推导 `name`）。
 
 如需在命令行只运行特定项目，可传入 `--project <name>`（支持通配符）。关于目录或 glob 条目、共享配置、全局配置项和嵌套项目，请参考[多项目测试](/guide/basic/projects)。
