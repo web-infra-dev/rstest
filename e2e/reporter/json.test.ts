@@ -88,4 +88,42 @@ describe('json reporter', () => {
     expect(report.tests).toHaveLength(3);
     expect(report.tests[2].status).toBe('skipped');
   });
+
+  it('should keep the cause of an unhandled error', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        './rstest.globalSetupCause.config.mts',
+        '--reporters',
+        'json',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const report = parseJsonReport(cli.stdout);
+
+    expect(report.status).toBe('error');
+    expect(report.unhandledErrors).toEqual([
+      expect.objectContaining({
+        name: 'Error',
+        message: 'Failed to start the test database',
+        cause: expect.objectContaining({
+          name: 'Error',
+          message: 'connect ECONNREFUSED 127.0.0.1:5432',
+          stack: expect.stringMatching(/at connect .*globalSetup\.ts:2:9/),
+        }),
+      }),
+    ]);
+  });
 });

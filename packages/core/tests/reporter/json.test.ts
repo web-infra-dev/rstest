@@ -177,6 +177,44 @@ describe('JsonReporter', () => {
     },
   );
 
+  it('keeps the cause chain of unhandled errors', async () => {
+    const reporter = new JsonReporter({
+      config: baseConfig,
+      rootPath: '/test/root',
+      options: {},
+    });
+
+    const logs: string[] = [];
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+    onTestFinished(() => {
+      rs.resetAllMocks();
+    });
+
+    const unhandledError = {
+      name: 'Error',
+      message: 'Failed to start the test database',
+      stack: 'Error: Failed to start the test database\n    at globalSetup',
+      cause: {
+        name: 'Error',
+        message: 'connect ECONNREFUSED 127.0.0.1:5432',
+        stack: 'Error: connect ECONNREFUSED 127.0.0.1:5432\n    at connect',
+        cause: { message: 'socket closed' },
+      },
+    };
+
+    await reporter.onTestRunEnd({
+      ...emptyRunEndPayload,
+      status: 'error',
+      unhandledErrors: [unhandledError],
+    });
+
+    const report = JSON.parse(logs.join('\n'));
+
+    expect(report.unhandledErrors).toEqual([unhandledError]);
+  });
+
   describe('console logs', () => {
     const PATH_A = '/test/root/a.test.ts';
     const PATH_B = '/test/root/b.test.ts';
