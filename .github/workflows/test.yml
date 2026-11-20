@@ -148,125 +148,123 @@ jobs:
         run: pnpm run test:federation
 
   # ======== e2e ========
-  e2e:
+  # Static top-level jobs instead of a dynamic matrix so every leg always emits
+  # a check-run (either executed or `skipped`, consuming zero runner slots).
+  # GitHub rulesets treat `skipped` required checks as passing and enforce
+  # `success` whenever a leg actually runs — allowing rulesets to require each
+  # static job directly without a trailing `test-gate` job queuing for a runner.
+  #
+  #   trigger         | active jobs                                             | scripts run as steps
+  #   ----------------+---------------------------------------------------------+------------------------------
+  #   PR (regular)    | e2e-ubuntu-24, e2e-windows-24                           | test
+  #   PR (`ci:macos`) | + e2e-macos-24                                          | test
+  #   push to main    | e2e-macos-24, e2e-windows-24, e2e-ubuntu-20, -ubuntu-26 | test, commonjs, no-isolate, threads
+  #   release PR      | e2e-macos-24, e2e-windows-24, e2e-ubuntu-20, -ubuntu-26 | test, commonjs, no-isolate, threads
+  #
+  # Full runs execute all four e2e scripts sequentially in one job so they share
+  # checkout/install/build setup and avoid starving the org-wide runner pool.
+  # macOS full runs can exceed 60 minutes, so keep timeout-minutes at 90.
+  #
+  # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
+  # reuse; tolerated on full runs in exchange for coverage.
+  # Node 26 covers the current line, where Web Storage is enabled by default
+  # and `localStorage` exists on globalThis before a DOM environment is set up.
+  e2e-ubuntu-24:
     needs: [prepare, lint, ut]
-    if: needs.prepare.outputs.changed == 'true'
-    runs-on: ${{ matrix.os }}
-    env:
-      RSTEST_E2E_RUN_FIREFOX: 'true'
-    # Full runs execute all four e2e scripts sequentially. macOS can spend
-    # over 60 minutes across successful steps, so allow room for the whole
-    # matrix without changing individual test or teardown deadlines.
+    if: needs.prepare.outputs.changed == 'true' && needs.prepare.outputs.is_full_run != 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        # Sparse matrix (include-only), not an os × node cross-product:
-        #   - Regular PRs run ubuntu/24 and windows/24 to keep PR latency low
-        #     and avoid saturating the org's scarce macOS concurrency pool.
-        #     Add the `ci:macos` label to a PR to opt into macos/24 pre-merge.
-        #   - Full runs (push to main, release PRs, workflow_dispatch fullRun)
-        #     run macos/24, windows/24, and ubuntu on the extra Node majors
-        #     (20, 26).
-        #
-        #   trigger         | combos                           | scripts run as steps
-        #   ----------------+----------------------------------+------------------------------
-        #   PR (regular)    | ubuntu/24, windows/24            | test
-        #   PR (`ci:macos`) | + macos/24                       | test
-        #   push to main    | macos/24, windows/24, ubu/20, 26 | test, commonjs, no-isolate, threads
-        #   release PR      | macos/24, windows/24, ubu/20, 26 | test, commonjs, no-isolate, threads
-        #
-        # The e2e scripts (test, test:commonjs, test:no-isolate, test:threads)
-        # are sequential steps of one job, not a matrix axis: they share the
-        # same ~2 min checkout/install/build setup, and collapsing them keeps
-        # the job count down so a burst of merges does not starve the org-wide
-        # runner pool.
-        #
-        # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
-        # reuse; tolerated on full runs in exchange for coverage.
-        # Node 26 covers the current line, where Web Storage is enabled by default
-        # and `localStorage` exists on globalThis before a DOM environment is set up.
-        include: >-
-          ${{ fromJson(
-            needs.prepare.outputs.is_full_run == 'true'
-              && '[{"os":"macos-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"},{"os":"ubuntu-latest","node_version":"20"},{"os":"ubuntu-latest","node_version":"26"}]'
-            || (needs.prepare.outputs.run_macos == 'true'
-              && '[{"os":"ubuntu-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"},{"os":"macos-latest","node_version":"24"}]'
-              || '[{"os":"ubuntu-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"}]')
-          ) }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 1
 
-      - name: Setup pnpm standalone
-        if: matrix.node_version == '20'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Run E2E
+        uses: ./.github/actions/run-e2e
         with:
-          # pnpm 11 requires Node >=22, but this matrix intentionally tests Node 20 runtime behavior.
-          standalone: true
+          node-version: '24'
+          is-full-run: ${{ needs.prepare.outputs.is_full_run }}
 
-      - name: Setup pnpm
-        if: matrix.node_version != '20'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - name: Setup Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+  e2e-windows-24:
+    needs: [prepare, lint, ut]
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          node-version: ${{ matrix.node_version }}
-          package-manager-cache: false
+          fetch-depth: 1
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Build Packages
-        id: build
-        run: pnpm run build
-
-      - name: Setup Playwright
-        # Every job runs the `test` script, which includes browser-mode e2e
-        # (incl. the WebKit fixture), so browsers are always needed.
-        uses: ./.github/actions/setup-playwright
+      - name: Run E2E
+        uses: ./.github/actions/run-e2e
         with:
-          install-webkit: 'true'
-          install-firefox: 'true'
+          node-version: '24'
+          is-full-run: ${{ needs.prepare.outputs.is_full_run }}
 
-      - name: E2E Test (test)
-        run: cd e2e && pnpm test
+  e2e-macos-24:
+    needs: [prepare, lint, ut]
+    if: needs.prepare.outputs.changed == 'true' && (needs.prepare.outputs.is_full_run == 'true' || needs.prepare.outputs.run_macos == 'true')
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 1
 
-      # Each remaining script is gated on the build having succeeded but NOT on
-      # the previous scripts, so one failing script does not mask the others'
-      # results — they were independent matrix jobs before being collapsed into
-      # steps.
-      - name: E2E Test (test:commonjs)
-        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
-        # Playwright keeps default-mode coverage on every OS/Node combination;
-        # CommonJS only needs one extra pass, on the oldest supported Node.
-        run: cd e2e && pnpm test:commonjs
-        env:
-          RSTEST_E2E_SKIP_PLAYWRIGHT: ${{ matrix.os != 'ubuntu-latest' || matrix.node_version != '20' }}
+      - name: Run E2E
+        uses: ./.github/actions/run-e2e
+        with:
+          node-version: '24'
+          is-full-run: ${{ needs.prepare.outputs.is_full_run }}
 
-      # Playwright fixtures already use isolate:false and explicitly cover pools.
-      # These outer-runner modes do not add fixture coverage.
-      - name: E2E Test (test:no-isolate)
-        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
-        run: cd e2e && pnpm test:no-isolate
-        env:
-          RSTEST_E2E_SKIP_PLAYWRIGHT: 'true'
+  e2e-ubuntu-20:
+    needs: [prepare, lint, ut]
+    if: needs.prepare.outputs.changed == 'true' && needs.prepare.outputs.is_full_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 1
 
-      - name: E2E Test (test:threads)
-        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
-        run: cd e2e && pnpm test:threads
-        env:
-          RSTEST_E2E_SKIP_PLAYWRIGHT: 'true'
+      - name: Run E2E
+        uses: ./.github/actions/run-e2e
+        with:
+          node-version: '20'
+          is-full-run: ${{ needs.prepare.outputs.is_full_run }}
+          run-commonjs-playwright: 'true'
+
+  e2e-ubuntu-26:
+    needs: [prepare, lint, ut]
+    if: needs.prepare.outputs.changed == 'true' && needs.prepare.outputs.is_full_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 1
+
+      - name: Run E2E
+        uses: ./.github/actions/run-e2e
+        with:
+          node-version: '26'
+          is-full-run: ${{ needs.prepare.outputs.is_full_run }}
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
   # Re-enable once quota resets.
   codspeed:
-    needs: e2e
+    needs:
+      - e2e-ubuntu-24
+      - e2e-windows-24
+      - e2e-macos-24
+      - e2e-ubuntu-20
+      - e2e-ubuntu-26
     if: false
     permissions:
       actions: read
@@ -277,8 +275,18 @@ jobs:
       ref: ${{ github.sha }}
 
   # ======== gate ========
+  # Transitional aggregate gate kept until the main branch ruleset is updated to
+  # require `prepare`, `lint`, `ut`, and the five static `e2e-*` jobs directly.
   test-gate:
-    needs: [prepare, lint, ut, e2e]
+    needs:
+      - prepare
+      - lint
+      - ut
+      - e2e-ubuntu-24
+      - e2e-windows-24
+      - e2e-macos-24
+      - e2e-ubuntu-20
+      - e2e-ubuntu-26
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -288,7 +296,11 @@ jobs:
             "${{ needs.prepare.result }}" \
             "${{ needs.lint.result }}" \
             "${{ needs.ut.result }}" \
-            "${{ needs.e2e.result }}"; do
+            "${{ needs.e2e-ubuntu-24.result }}" \
+            "${{ needs.e2e-windows-24.result }}" \
+            "${{ needs.e2e-macos-24.result }}" \
+            "${{ needs.e2e-ubuntu-20.result }}" \
+            "${{ needs.e2e-ubuntu-26.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               exit 1
             fi
