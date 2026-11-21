@@ -3,7 +3,7 @@ import { prettyTime } from '../utils';
 
 const REPORT_INTERVAL_MS = 30_000;
 const SLOW_CASE_THRESHOLD_MS = 10_000;
-/** Stop reporting after this many reports to let CI timeout mechanisms take over. */
+/** Stop reporting after this many reports in a row to let CI timeout mechanisms take over. */
 const MAX_REPORT_COUNT = 20;
 
 /**
@@ -36,12 +36,18 @@ export class NonTTYProgressNotifier {
   /** Reset the idle timer — call when other output is written to the console. */
   notifyOutput(): void {
     if (this.started) {
+      // The limit is for a run that has stopped producing output, so only
+      // reports without other output between them count toward it.
+      this.reportCount = 0;
       this.scheduleReport();
     }
   }
 
   stop(): void {
     this.started = false;
+    // Watch reruns reuse the reporter; each run counts its own time and reports.
+    this.startTime = undefined;
+    this.reportCount = 0;
     if (this.reportTimeout) {
       clearTimeout(this.reportTimeout);
       this.reportTimeout = undefined;
