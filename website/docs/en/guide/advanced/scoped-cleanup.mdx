@@ -1,20 +1,18 @@
 ---
-description: Use `using` and `await using` to automatically clean up temporary test resources when a block exits.
+description: Use `using` to automatically restore spies, environment variables, globals, and fake timers when a block exits.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Scoped cleanup
 
-Rstest supports scoped cleanup for temporary test changes. When your runtime or toolchain supports explicit resource management, you can use `using` to automatically restore resources at the end of a block.
-
-This is useful when a test temporarily changes shared state, such as spies, environment variables, globals, or fake timers.
+Rstest supports scoped cleanup for temporary test changes. When your runtime or toolchain supports explicit resource management, `using` automatically restores resources when a block exits.
 
 ## `using` syntax
 
 <ApiMeta addedVersion="0.10.3" />
 
-[`rs.stubEnv()`](/api/runtime-api/rstest/utilities#rsstubenv), [`rs.stubGlobal()`](/api/runtime-api/rstest/utilities#rsstubglobal), and [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) return disposable resources that work with the `using` syntax.
+[`rs.spyOn()`](/api/runtime-api/rstest/mock-functions#rsspyon), [`rs.stubEnv()`](/api/runtime-api/rstest/utilities#rsstubenv), [`rs.stubGlobal()`](/api/runtime-api/rstest/utilities#rsstubglobal), and [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) return disposable resources that work with the `using` syntax.
 
 ## Spy cleanup
 
@@ -112,16 +110,3 @@ test('runs delayed work', () => {
   expect(rs.isFakeTimers()).toBe(false);
 });
 ```
-
-## Async resources
-
-For asynchronous resources that implement `Symbol.asyncDispose`, use `await using`. Rstest's browser provider resources support async disposal internally so provider pages, contexts, and browsers can be closed by the same explicit resource management protocol.
-
-```ts
-await using resource = createAsyncResource();
-
-await resource.run();
-// resource[Symbol.asyncDispose]() is awaited here
-```
-
-Use `using` for synchronous cleanup and `await using` when cleanup needs to await asynchronous work.

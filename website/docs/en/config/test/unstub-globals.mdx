@@ -1,5 +1,5 @@
 ---
-description: Restores all global variables that were changed with rs.stubGlobal before every test.
+description: Automatically restore global variables stubbed with rs.stubGlobal before each test.
 overviewHeaders: []
 ---
 
@@ -9,7 +9,7 @@ overviewHeaders: []
 - **Default:** `false`
 - **CLI:** `--unstubGlobals`
 
-Restores all global variables that were changed with [rs.stubGlobal](/api/runtime-api/rstest/utilities#rsstubglobal) before every test.
+Automatically calls [`rs.unstubAllGlobals()`](/api/runtime-api/rstest/utilities#rsunstuballglobals) before every test, restoring all `globalThis` properties changed with [`rs.stubGlobal()`](/api/runtime-api/rstest/utilities#rsstubglobal) to their original descriptors (or deleting properties that did not exist).
 
 import { Tab, Tabs } from '@theme';
 

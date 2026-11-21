@@ -1,5 +1,5 @@
 ---
-description: 测试的默认超时时间（以毫秒为单位）。设置为 0 禁用超时。
+description: 测试的默认超时时间（毫秒）。设为 0 表示禁用超时。
 ---
 
 # testTimeout
@@ -8,7 +8,7 @@ description: 测试的默认超时时间（以毫秒为单位）。设置为 0 �
 - **默认值：** `5_000`（Browser Mode 下为 `15_000`）
 - **CLI：** `--testTimeout=5000`
 
-测试的默认超时时间（以毫秒为单位）。设置为 `0` 禁用超时。
+单个测试用例允许运行的最长时间（毫秒），超时会直接报错失败。设为 `0` 表示禁用超时。
 
 import { Tab, Tabs } from '@theme';
 
@@ -29,10 +29,13 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-Rstest 会根据以下优先级顺序确定测试超时时间：
+Rstest 按以下优先级（从高到低）确定测试超时时间：
 
-1. 每个测试用例中的 [timeout](/api/runtime-api/test-api/test#test-1) 配置
-2. 测试文件中通过 [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig) 配置的超时时间
-3. CLI 中的 `--testTimeout` 选项
-4. 配置文件中的 `testTimeout` 选项
-5. 默认值 `5000` 毫秒（Browser Mode 下为 `15000` 毫秒）。Browser Mode 下 `expect.poll.timeout` 的默认值也为 `5000` 毫秒，Node Mode 下为 `1000` 毫秒。
+1. 单个测试通过 [`TestOptions.timeout`](/api/runtime-api/test-api/test#testoptions) 或 `test` 末尾参数传入的 `timeout`
+2. 外层 `describe` 套件通过 [`TestOptions.timeout`](/api/runtime-api/test-api/describe#testoptions) 设置的超时时间（就近优先）
+3. 测试文件中通过 [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig) 设置的超时时间
+4. CLI 的 `--testTimeout` 选项或 `run({ testTimeout })`
+5. 配置文件中的 `testTimeout` 选项
+6. 默认值 `5_000` 毫秒（Browser Mode 下为 `15_000` 毫秒）
+
+Browser Mode 下 `expect.poll.timeout` 的默认值也为 `5_000` 毫秒，Node Mode 下为 `1_000` 毫秒；详见 [`expect.poll`](/config/test/expect)。

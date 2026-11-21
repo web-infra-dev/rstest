@@ -3,23 +3,27 @@ description: 与本地开发调试有关的选项，如将临时构建文件写�
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
- 
+
 # dev
 
-与本地开发调试有关的选项。
+与本地开发调试相关的选项。
 
 ## dev.writeToDisk <RsbuildDocBadge path="/config/dev/write-to-disk" text="dev.writeToDisk" />
 
+- **类型：** `boolean | ((filename: string) => boolean)`
+- **默认值：** `false`
 - **CLI：** `--dev.writeToDisk`
 
-默认情况下，Rstest 不会将测试临时文件写入磁盘，当你需要调试 Rstest 产物时可能需要此配置项。
+控制是否将测试构建生成的临时文件写入磁盘。默认情况下，Rstest 仅将产物保存在内存中；需要调试测试构建产物时可以开启该选项。
 
 设置 `dev.writeToDisk: true` 后，Node.js worker 会直接从磁盘读取构建产物。当测试产物较大时，这可以降低主进程的内存占用。
 
 ```ts title="rstest.config.ts"
-export default {
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
   dev: {
     writeToDisk: true,
   },
-};
+});
 ```

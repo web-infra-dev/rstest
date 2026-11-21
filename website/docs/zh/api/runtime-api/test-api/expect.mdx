@@ -1,31 +1,23 @@
 ---
 title: Expect
-description: expect 用于在测试中创建断言。Rstest 提供了丰富的 API 及匹配器，支持轮询、快照断言等。
+description: 使用 expect 编写测试断言，支持否定断言、软断言、轮询断言、快照断言、不对称匹配器与自定义匹配器。
 overviewHeaders: [2, 3]
 ---
 
 # Expect
 
-`expect` 用于在测试中创建断言。Rstest 提供了丰富的 API 及匹配器，支持轮询、快照断言等。
+`expect` 用于在测试中创建断言，支持内置匹配器、取反、软断言、轮询、快照以及自定义匹配器。
 
-你可以从 `@rstest/core` 包中导入 `expect` API：
+可以从 `@rstest/core` 导入 `expect`，或在并发测试中从 [`TestContext`](/api/runtime-api/test-api/test#testcontext) 解构，以将断言准确绑定到当前测试：
 
 ```ts
 import { expect, test } from '@rstest/core';
 
-test('should add two numbers correctly', () => {
+test('adds two numbers', () => {
   expect(1 + 1).toBe(2);
-  expect(1 + 2).toBe(3);
 });
-```
 
-你也可以从 [测试上下文](/api/runtime-api/test-api/test#testcontext) 中获取 `expect` API，这有助于在并行测试中准确追踪断言的来源。
-
-```ts
-import { test } from '@rstest/core';
-
-test('should add two numbers correctly', ({ expect }) => {
-  expect(1 + 1).toBe(2);
+test('concurrent-safe expect', ({ expect }) => {
   expect(1 + 2).toBe(3);
 });
 ```
@@ -34,10 +26,7 @@ test('should add two numbers correctly', ({ expect }) => {
 
 - **类型：** `<T>(actual: T, message?: string) => Assertion<T>`
 
-为给定的值创建一个断言对象。
-
-- `actual`：要断言的目标值。
-- `message`：可选，自定义失败提示信息，会在断言失败时显示。
+为 `actual` 创建断言对象，可选传入失败时显示的自定义提示信息 `message`。
 
 ```ts
 import { expect } from '@rstest/core';
@@ -49,9 +38,9 @@ expect([1, 2, 3]).toContain(2);
 
 ## expect.element（Browser mode）
 
-- **类型：** `(locator: Locator) => BrowserElementExpect`
+- **类型：** `(locator: Locator | Element) => BrowserElementExpect`
 
-在 Browser Mode 中，`expect.element` 用于对 `@rstest/browser` 提供的 Locator 执行断言（例如 `toBeVisible`、`toHaveText`、`toHaveValue`）。
+在 Browser Mode 中，`expect.element` 用于对 `Locator` 或 DOM `Element` 创建断言（如 `toBeVisible`、`toHaveText`、`toHaveValue`）。
 
 ```ts
 import { page } from '@rstest/browser';
@@ -65,11 +54,11 @@ test('asserts by locator', async () => {
 });
 ```
 
-`expect.element` 仅在 Browser Mode 中可用，并且需要引入 `@rstest/browser` 来安装浏览器侧适配层。完整参考见 [Assertion（Browser Mode）](/api/runtime-api/browser-mode/assertion)。
+`expect.element` 仅在 Browser Mode 中引入 `@rstest/browser` 后可用。完整匹配器与超时规则见 [Assertion（Browser Mode）](/api/runtime-api/browser-mode/assertion)。
 
 ## expect.not
 
-否定该断言。
+通过 `expect(actual).not` 对后续匹配器取反：
 
 ```ts
 expect(1 + 1).not.toBe(3);
@@ -80,7 +69,7 @@ expect('foo').not.toBeUndefined();
 
 - **类型：** `<T>(actual: T, message?: string) => Assertion<T>`
 
-即使断言失败，测试也会继续执行，所有失败会在最后统一报告。
+软断言。断言失败时不会中断测试，所有失败会在测试结束时统一报告。
 
 ```ts
 expect.soft(1 + 1).toBe(3); // 不会中断测试
@@ -89,25 +78,41 @@ expect.soft(1 + 2).toBe(4);
 
 ## expect.poll
 
-- **类型：** `<T>(actual: () => T | Promise<T>, options?: { interval?: number, timeout?: number, message?: string }) => PromiseLike<Assertion<Awaited<T>>>`
+- **类型：**
 
-持续调用 `actual`，并重复执行 matcher，直到断言通过或超时。
+```ts
+<T>(
+  actual: () => T,
+  options?: { interval?: number; timeout?: number; message?: string },
+) =>
+  Omit<
+    PromisifyAssertion<Awaited<T>>,
+    | 'rejects'
+    | 'resolves'
+    | 'toThrow'
+    | 'toThrowError'
+    | 'throw'
+    | 'throws'
+    | 'matchSnapshot'
+    | 'toMatchSnapshot'
+    | 'toMatchInlineSnapshot'
+    | 'toThrowErrorMatchingSnapshot'
+    | 'toThrowErrorMatchingInlineSnapshot'
+  >;
+```
 
-- **默认 `interval`：** `50`（毫秒）
-- **默认 `timeout`：** `1000`（毫秒），Browser Mode 下为 `5000`（毫秒）
+持续调用 `actual` 并重试后续匹配器，直到通过或超时。每个匹配器返回 `Promise<void>`，**必须**使用 `await` 等待（`Awaited<T>` 会自动解包异步 `actual` 的返回值）。
 
-你可以通过 [`expect.poll` 配置](/config/test/expect#expectpoll)修改这些默认值。单次调用传入的选项优先级更高。
+- **默认 `interval`：** `50` 毫秒
+- **默认 `timeout`：** `1000` 毫秒（Browser Mode 下为 `5000` 毫秒）
 
-`options`：
+可通过 [`expect.poll` 配置](/config/test/expect#expectpoll)修改默认值；单次调用传入的 `options` 优先级更高：
 
 - `interval`：每次重试之间的间隔时间（毫秒）。
-- `timeout`：轮询允许的最长总耗时（毫秒）。
-- `message`：轮询断言失败时显示的自定义提示信息。
+- `timeout`：超时失败前的最大轮询时间（毫秒）。
+- `message`：超时失败时显示的自定义提示信息。
 
-注意：
-
-- `expect.poll(...)` 是异步断言，**必须**使用 `await`。
-- `expect.poll(...)` 不支持 `resolves`/`rejects`、`toThrow*` 以及快照类 matcher。遇到这类不稳定条件建议使用 `rs.waitFor()`。
+`expect.poll` 不支持 `.resolves`、`.rejects`、`.toThrow*` 及快照匹配器，遇到这类场景请改用 [`rs.waitFor`](/api/runtime-api/rstest/utilities#rswaitfor)。
 
 ```ts
 await expect.poll(() => getStatus()).toBe('ready');
@@ -132,7 +137,7 @@ await expect
 
 - **类型：** `(message?: string) => never`
 
-标记代码路径为不可达。如果调用会抛出异常。
+执行到该调用时立即抛出异常。
 
 ```ts
 if (shouldNotHappen) {
@@ -144,7 +149,7 @@ if (shouldNotHappen) {
 
 - **类型：** `(expected: number) => void`
 
-验证在测试期间调用了特定数量的断言。常用来检查异步代码是否被调用或是否触发了预期的异常。
+校验当前测试期间精确执行了 `expected` 次断言，常用于确保异步分支或 `catch` 块确实被执行。
 
 ```ts
 expect.assertions(1);
@@ -160,9 +165,7 @@ try {
 
 - **类型：** `() => void`
 
-验证在测试期间至少调用了一个断言。
-
-适用于断言次数不固定，但必须至少发生一次断言的场景。
+校验当前测试期间至少执行了一次断言。
 
 ```ts
 expect.hasAssertions();
@@ -171,17 +174,11 @@ expect(1 + 1).toBe(2);
 
 ## expect.addEqualityTesters
 
-- **类型：** `(testers: Array<Tester>) => void`
+- **类型：** `(testers: Tester[]) => void`
 
-自定义用来验证两个对象是否相等的测试器。
+为深度相等匹配器注册自定义相等性测试器。每个 tester 返回 `true`（相等）、`false`（不等），或 `undefined`（交由下一个 tester 或默认逻辑处理）。
 
-自定义相等性测试器遵循与 snapshot serializer 相同的[文件隔离规则](#expectaddsnapshotserializer)。VM pool 会在每个文件结束后还原原有的测试器列表，文件执行失败时也会还原。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 内的文件会共享测试器，包括来自不同项目的文件。
-
-每个 tester 可以返回：
-
-- `true`：两者视为相等
-- `false`：两者视为不相等
-- `undefined`：跳过当前 tester，交给下一个 tester 或默认比较逻辑
+遵循与 snapshot serializer 相同的[文件隔离规则](#expectaddsnapshotserializer)。
 
 ```ts
 expect.addEqualityTesters([
@@ -191,25 +188,23 @@ expect.addEqualityTesters([
     }
   },
 ]);
-expect(0.1 + 0.2).toEqual(0.3); // 使用自定义测试器后为 true
+expect(0.1 + 0.2).toEqual(0.3);
 ```
 
 ## expect.addSnapshotSerializer
 
-- **类型：** `(serializer: SnapshotSerializer) => void`
+- **类型：** `(plugin: Parameters<ExpectStatic['addSnapshotSerializer']>[0]) => void`
 
-为快照测试添加自定义序列化工具。
+添加自定义的快照序列化插件（`pretty-format` 插件）。对当前测试文件及其 Hook 生效，后添加的优先匹配。如需对项目内所有文件生效，请在 `setupFiles` 中注册。
 
-Serializer 对当前测试文件及其 hooks 生效，后添加的 serializer 优先匹配。若要为某个项目的每个文件注册 serializer，请在该项目的 `setupFiles` 中添加。
-
-`vmThreads` 和 `vmForks` 会在每个文件结束时还原 serializer 列表，文件执行失败时也会还原。由于 VM pool 始终按文件隔离，`isolate: false` 时也遵循这一行为。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 中的文件会共享 serializer，包括来自不同项目的文件。
+在 `vmThreads` 和 `vmForks` pool 中，每个文件结束或失败后都会还原序列化器列表（即使 `isolate` 为 `false`）。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 内的文件（包括不同项目）会共享序列化器。
 
 ```ts
 expect.addSnapshotSerializer({
   test: (val) => typeof val === 'string' && val.startsWith('secret:'),
-  print: (val) => '***MASKED***',
+  print: () => '***MASKED***',
 });
-expect('secret:123').toMatchSnapshot(); // 快照输出的 secret 信息会被掩码
+expect('secret:123').toMatchSnapshot();
 ```
 
 ## expect.getState / expect.setState
@@ -218,69 +213,61 @@ expect('secret:123').toMatchSnapshot(); // 快照输出的 secret 信息会被�
   - `getState: () => MatcherState`
   - `setState: (state: Partial<MatcherState>) => void`
 
-获取或设置内部匹配器状态。
+读取或更新内部匹配器状态。
 
 ```ts
 const state = expect.getState();
 console.log(state.currentTestName);
 expect.setState({ currentTestName: '自定义名称' });
-console.log(expect.getState().currentTestName); // 输出 '自定义名称'
 ```
 
 ## 匹配器（Matchers）
 
 ### 常用匹配器
 
-常用匹配器是最常见的一组断言能力，用来覆盖值比较、结构比较、类型判断和异常验证。
+相等性与同一性：
 
-相等性校验：
-
-- `toBe(value)`：基于 `Object.is` 的严格相等比较。
-- `toEqual(value)`：对象/数组的深度相等比较。
-- `toStrictEqual(value)`：更严格的深度相等（包含 `undefined` 字段、稀疏数组差异）。
-- `toBeOneOf(array)`：值必须命中给定候选集合之一。
+- `toBe(value)`：基于 `Object.is` 的严格相等。
+- `toEqual(value)`：对象与数组的深度相等。
+- `toStrictEqual(value)`：更严格的深度相等（校验 `undefined` 属性与稀疏数组差异）。
+- `toBeOneOf(array)`：值匹配 `array` 中的任意一项。
 
 类型与存在性：
 
-- `toBeTruthy()` / `toBeFalsy()`：真值/假值判断。
-- `toBeNull()` / `toBeUndefined()` / `toBeDefined()`：空值与定义状态判断。
-- `toBeNaN()`：判断是否为 `NaN`。
-- `toBeInstanceOf(class)`：实例类型判断。
-- `toBeTypeOf(type)`：运行时类型判断（如 `'string'`）。
+- `toBeTruthy()` / `toBeFalsy()`：真值 / 假值判断。
+- `toBeNull()` / `toBeUndefined()` / `toBeDefined()`：空值与已定义判断。
+- `toBeNaN()`：是否为 `NaN`。
+- `toBeInstanceOf(class)`：原型链实例判断。
+- `toBeTypeOf(type)`：运行时 `typeof` 类型判断（如 `'string'`）。
 
-数字比较：
+数值比较：
 
-- `toBeGreaterThan(number)` / `toBeGreaterThanOrEqual(number)`。
-- `toBeLessThan(number)` / `toBeLessThanOrEqual(number)`。
-- `toBeCloseTo(number, numDigits?)`：适合浮点数近似比较。
+- `toBeGreaterThan(number)` / `toBeGreaterThanOrEqual(number)`
+- `toBeLessThan(number)` / `toBeLessThanOrEqual(number)`
+- `toBeCloseTo(number, numDigits?)`：按指定精度比较浮点数。
 
 集合与字符串：
 
-- `toContain(item)`：数组/字符串包含判断。
-- `toContainEqual(item)`：数组成员的深度相等判断。
+- `toContain(item)`：数组或字符串包含 `item`。
+- `toContainEqual(item)`：数组包含与 `item` 深度相等的元素。
 - `toMatch(stringOrRegExp)`：字符串匹配子串或正则。
-- `toMatchObject(object)`：对象包含指定属性子集。
-- `toHaveLength(length)`：断言 `.length`。
-- `toHaveProperty(path, value?)`：断言属性路径存在，可选断言该路径值。
+- `toMatchObject(object)`：对象包含 `object` 的属性子集。
+- `toHaveLength(length)`：校验 `.length`。
+- `toHaveProperty(path, value?)`：校验属性路径存在及可选的目标值。
 
-自定义条件与异常：
+自定义谓词与异常：
 
-- `toSatisfy(fn)`：满足自定义谓词函数。
-- `toThrowError(expected?)`：断言函数抛错（支持字符串/正则/错误类型）。
+- `toSatisfy(fn)`：满足自定义谓词函数 `fn`。
+- `toThrowError(expected?)`：断言包裹的函数抛出匹配的错误（支持字符串、正则、错误实例或构造函数）。
 
 ```ts
-// toBe vs toEqual
 expect(1 + 1).toBe(2);
 expect({ id: 1, name: 'a' }).toEqual({ id: 1, name: 'a' });
-
-// 严格深比较
 expect({ a: undefined, b: 1 }).toStrictEqual({ a: undefined, b: 1 });
 
-// 数字断言
 expect(0.1 + 0.2).toBeCloseTo(0.3, 5);
 expect(10).toBeGreaterThan(5);
 
-// 集合断言
 expect([1, 2, 3]).toContain(2);
 expect([{ id: 1 }]).toContainEqual({ id: 1 });
 expect({ user: { role: 'admin' } }).toHaveProperty('user.role', 'admin');
@@ -289,11 +276,9 @@ expect({ id: 1, role: 'admin', active: true }).toMatchObject({
   role: 'admin',
 });
 
-// 文本与自定义条件
 expect('request id: 42').toMatch(/id:\s\d+/);
 expect(21).toSatisfy((n) => n % 3 === 0);
 
-// 异常断言（必须包成函数）
 expect(() => {
   throw new TypeError('invalid input');
 }).toThrowError(TypeError);
@@ -301,39 +286,33 @@ expect(() => {
 
 ### Mock 匹配器
 
-Mock 匹配器用于验证 `rs.fn` / `rs.spyOn` 的交互行为，包括调用次数、参数、调用顺序、返回值和异步结果。
+校验 `rs.fn` / `rs.spyOn` mock 的调用次数、参数、调用顺序、返回值和 Promise 结果（`Nth` 系列从 `1` 开始计数）：
 
-调用相关：
+调用断言：
 
-- `toHaveBeenCalled()`：至少被调用一次。
-- `toHaveBeenCalledTimes(times)`：被调用次数精确匹配。
-- `toHaveBeenCalledWith(...args)`：任意一次调用参数匹配。
-- `toHaveBeenLastCalledWith(...args)`：最后一次调用参数匹配。
-- `toHaveBeenNthCalledWith(n, ...args)`：第 n 次调用参数匹配。
-- `toHaveBeenCalledExactlyOnceWith(...args)`：仅调用一次且参数匹配。
-- `toHaveBeenCalledBefore(mock)` / `toHaveBeenCalledAfter(mock)`：校验调用先后顺序。
+- `toHaveBeenCalled()`
+- `toHaveBeenCalledTimes(times)`
+- `toHaveBeenCalledWith(...args)`
+- `toHaveBeenLastCalledWith(...args)`
+- `toHaveBeenNthCalledWith(n, ...args)`
+- `toHaveBeenCalledExactlyOnceWith(...args)`
+- `toHaveBeenCalledBefore(mock, failIfNoFirstInvocation?)` / `toHaveBeenCalledAfter(mock, failIfNoFirstInvocation?)`
 
-返回值相关：
+返回值断言：
 
-- `toHaveReturned()`：至少有一次正常返回。
-- `toHaveReturnedTimes(times)`：正常返回次数精确匹配。
-- `toHaveReturnedWith(value)`：任意一次返回值匹配。
-- `toHaveLastReturnedWith(value)`：最后一次返回值匹配。
-- `toHaveNthReturnedWith(n, value)`：第 n 次返回值匹配。
+- `toHaveReturned()`
+- `toHaveReturnedTimes(times)`
+- `toHaveReturnedWith(value)`
+- `toHaveLastReturnedWith(value)`
+- `toHaveNthReturnedWith(n, value)`
 
-Promise 结果相关：
+Promise resolve 断言：
 
-- `toHaveResolved()`：至少有一次 resolve。
-- `toHaveResolvedTimes(times)`：resolve 次数精确匹配。
-- `toHaveResolvedWith(value)`：任意一次 resolve 值匹配。
-- `toHaveLastResolvedWith(value)`：最后一次 resolve 值匹配。
-- `toHaveNthResolvedWith(n, value)`：第 n 次 resolve 值匹配。
-
-注意：
-
-- `Nth` 系列从 `1` 开始计数（`1` 表示第一次调用）。
-- `toHaveBeenCalledWith` 只要求“某次”匹配；需要严格位置时用 `Last` 或 `Nth`。
-- 这些 matcher 只能用于 mock/spy，不能用于普通函数。
+- `toHaveResolved()`
+- `toHaveResolvedTimes(times)`
+- `toHaveResolvedWith(value)`
+- `toHaveLastResolvedWith(value)`
+- `toHaveNthResolvedWith(n, value)`
 
 ```ts
 const sum = rs.fn((a: number, b: number) => a + b);
@@ -362,13 +341,11 @@ expect(before).toHaveBeenCalledBefore(after);
 
 ### 快照匹配器
 
-快照匹配器用于将值、错误或文件与之前记录的快照进行比较，便于追踪输出的变化。
-
-- `toMatchSnapshot()`：将值与已保存的快照进行比较。
-- `toMatchInlineSnapshot()`：将值与测试文件中的内联快照进行比较。
-- `toThrowErrorMatchingSnapshot()`：检查抛出的错误与已保存快照匹配。
-- `toThrowErrorMatchingInlineSnapshot()`：检查抛出的错误与内联快照匹配。
-- `toMatchFileSnapshot(filepath)`：将值与指定文件中的快照进行比较。
+- `toMatchSnapshot(propertiesOrMessage?, message?)`：与已保存的 `.snap` 快照对比。
+- `toMatchInlineSnapshot(propertiesOrSnapshot?, snapshotOrMessage?, message?)`：与测试文件中的内联快照对比。
+- `toThrowErrorMatchingSnapshot(message?)`：校验抛出的错误与已保存快照匹配。
+- `toThrowErrorMatchingInlineSnapshot(snapshot?, message?)`：校验抛出的错误与内联快照匹配。
+- `toMatchFileSnapshot(filepath, message?)`：异步匹配器，与指定独立文件对比。
 
 ```ts
 expect('hello world').toMatchSnapshot();
@@ -384,8 +361,8 @@ await expect('hello world').toMatchFileSnapshot(
 
 ### Promise 匹配器
 
-- `resolves`：对 Promise 的 resolve 结果进行断言。
-- `rejects`：对 Promise 的 reject 结果进行断言。
+- `resolves`：解包已兑现的 Promise，并对结果继续链式断言。
+- `rejects`：解包已拒绝的 Promise，并对错误继续链式断言。
 
 ```ts
 await expect(Promise.resolve('ok')).resolves.toBe('ok');
@@ -394,60 +371,48 @@ await expect(Promise.reject(new Error('fail'))).rejects.toThrow('fail');
 
 ### 不对称匹配器
 
-不对称匹配器是一些辅助工具，允许更灵活地匹配值，如部分匹配、类型匹配或模式匹配，适合编写更具表现力且不易碎的测试。
+用于在相等性断言中进行部分匹配、类型匹配或模式匹配：
 
-- `expect.anything()`：匹配除 null 和 undefined 之外的任意值。
-- `expect.any(constructor)`：匹配指定类型的任意值。
-- `expect.closeTo(number, precision?)`：匹配接近期望值的数字。
-- `expect.arrayContaining(array)`：匹配包含期望元素的数组。
-- `expect.objectContaining(object)`：匹配包含期望属性的对象。
-- `expect.stringContaining(string)`：匹配包含期望子串的字符串。
-- `expect.stringMatching(stringOrRegExp)`：匹配符合期望模式的字符串。
+- `expect.anything()`：匹配除 `null` 和 `undefined` 之外的任意值。
+- `expect.any(constructor)`：匹配指定构造函数的任意值。
+- `expect.closeTo(number, precision?)`：匹配在浮点精度范围内的数值。
+- `expect.arrayContaining(array)`：匹配包含 `array` 中所有元素的数组。
+- `expect.objectContaining(object)`：匹配包含 `object` 中所有属性的对象。
+- `expect.stringContaining(string)`：匹配包含子串 `string` 的字符串。
+- `expect.stringMatching(stringOrRegExp)`：匹配符合 `stringOrRegExp` 的字符串。
 
 ```ts
 expect({ a: 1 }).toEqual({ a: expect.anything() });
-
 expect(1).toEqual(expect.any(Number));
-
 expect(0.1 + 0.2).toEqual(expect.closeTo(0.3, 5));
-
 expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 1]));
-
 expect({ a: 1, b: 2 }).toEqual(expect.objectContaining({ a: 1 }));
-
 expect('hello world').toEqual(expect.stringContaining('world'));
-
 expect('hello world').toEqual(expect.stringMatching(/^hello/));
 ```
 
 ### 自定义匹配器
 
-在 VM pool 中，自定义匹配器遵循与 snapshot serializer 相同的[文件隔离规则](#expectaddsnapshotserializer)。文件清理时会还原断言方法和不对称匹配器（`expect.matcher` 与 `expect.not.matcher`），包括被文件覆盖的内置匹配器。通过测试上下文的 `expect` 注册的扩展也遵循这一规则。使用 `forks` 或 `threads` 且设置 `isolate: false` 时，同一 worker 内的文件会共享扩展，包括来自不同项目的文件。
-
-你可以通过扩展 expect 添加自定义匹配器：
+通过 `expect.extend` 注册自定义匹配器。在 VM pool 中，自定义匹配器（包括对内置匹配器的覆盖以及不对称匹配器 `expect.<matcher>` / `expect.not.<matcher>`）遵循与 snapshot serializer 相同的[文件隔离规则](#expectaddsnapshotserializer)。
 
 ```ts
 expect.extend({
   toBeDivisibleBy(received, argument) {
     const pass = received % argument === 0;
-    if (pass) {
-      return {
-        message: () => `期望 ${received} 不能被 ${argument} 整除`,
-        pass: true,
-      };
-    } else {
-      return {
-        message: () => `期望 ${received} 能被 ${argument} 整除`,
-        pass: false,
-      };
-    }
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `期望 ${received} 不能被 ${argument} 整除`
+          : `期望 ${received} 能被 ${argument} 整除`,
+    };
   },
 });
 
 expect(10).toBeDivisibleBy(2);
 ```
 
-如果你想为自定义匹配器添加 TypeScript 类型定义，可以扩展 `@rstest/core` 模块中的 `Assertion` 接口声明：
+如需为自定义匹配器补充 TypeScript 类型，可扩展 `@rstest/core` 中的 `Assertion` 接口：
 
 ```ts
 declare module '@rstest/core' {

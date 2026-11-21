@@ -1,5 +1,5 @@
 ---
-description: Log heap usage for each test, it can help to find memory leaks in tests.
+description: Log V8 heap memory usage after each test to help spot memory leaks.
 ---
 
 # logHeapUsage
@@ -8,7 +8,9 @@ description: Log heap usage for each test, it can help to find memory leaks in t
 - **Default:** `false`
 - **CLI:** `--logHeapUsage`
 
-Log heap usage for each test, it can help to find memory leaks in tests.
+Print V8 `heapUsed` memory usage after each test file and displayed test case to help spot memory leaks.
+
+Applies to Node.js tests only; ignored with a warning in [Browser Mode](/config/test/browser).
 
 import { Tab, Tabs } from '@theme';
 
@@ -31,7 +33,7 @@ export default defineConfig({
 
 ## Example
 
-After setting `logHeapUsage` to `true`, Rstest will log heap usage for each test.
+With `logHeapUsage: true`, each test line prints its heap usage:
 
 ```bash
  ✓ test/index.test.ts (2) 11 MB heap used

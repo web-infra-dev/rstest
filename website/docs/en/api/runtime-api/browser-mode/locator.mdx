@@ -1,6 +1,6 @@
 ---
 title: Locator
-description: Locator is the core API for element querying and interaction in Browser Mode.
+description: Locator is the core API for querying and interacting with DOM elements in Browser Mode.
 overviewHeaders: [2, 3]
 ---
 
@@ -8,13 +8,11 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Locator
 
-`Locator` is the core API for element querying and interaction in Browser Mode. You can build query chains via `page.getBy*` or `page.locator()`, then execute interaction actions. Concrete execution semantics are provided by the configured browser `provider`.
+`Locator` is the core API for querying and interacting with elements in Browser Mode. Build query chains with `page.getBy*` or `page.locator()`, then call interaction methods or pass the `Locator` to [`expect.element`](/api/runtime-api/browser-mode/assertion). Execution semantics are determined by the configured browser `provider`.
 
 :::tip Auto-wait
-With the Playwright provider, Locator interaction methods (such as `click`, `fill`, `check`) automatically wait for the element to become actionable (visible, enabled, stable) before executing. You do not need to manually wait for elements before performing actions. This is distinct from the [auto-retry](/api/runtime-api/browser-mode/assertion#auto-retry-and-timeout) behavior of `expect.element` assertions.
+With the Playwright provider, `Locator` action methods (`click`, `fill`, `check`, etc.) wait for the target element to become actionable (visible, enabled, and stable) before running. This differs from the [auto-retry](/api/runtime-api/browser-mode/assertion#auto-retry-and-timeout) behavior of `expect.element` assertions.
 :::
-
-The following example demonstrates the typical workflow: query elements, perform interactions, and combine with [expect.element](/api/runtime-api/browser-mode/assertion) for assertions.
 
 ```ts title="src/locator.test.ts"
 import { page } from '@rstest/browser';
@@ -33,15 +31,12 @@ test('interacts with a form using locator', async () => {
 
 - **Type:** `BrowserPage`
 
-`page` is the starting point in tests: first use `page` to locate elements, then execute interactions and assertions on the returned `Locator`.
-
-Use query methods to create `Locator` instances. For keyboard input at the current focus, use [`page.keyboard`](/api/runtime-api/browser-mode/keyboard).
+Entry point for locating elements in a test. Call query methods on `page` to create a `Locator`, then chain interactions or pass it to `expect.element(...)`. For focus-based keyboard input, use [`page.keyboard`](/api/runtime-api/browser-mode/keyboard).
 
 ```ts
 const submitButton = page.getByRole('button', { name: 'Submit' });
+await submitButton.click();
 ```
-
-The `submitButton` above is a `Locator`. You can continue chaining calls on it (e.g., `.click()`) or pass it to `expect.element(...)` for assertions.
 
 ## BrowserPage
 
@@ -65,9 +60,7 @@ type BrowserPage = Pick<
 };
 ```
 
-`BrowserPage` is the type of `page`. It provides element queries, DOM-to-Locator conversion, [`keyboard`](/api/runtime-api/browser-mode/keyboard) input, and `viewport` resizing. Element actions such as `click` and `fill` are available on `Locator`.
-
-To interact with or assert against an element, first obtain a `Locator` through `page`.
+Type of `page`. Provides element queries, DOM-to-Locator conversion, [`keyboard`](/api/runtime-api/browser-mode/keyboard) input, and `viewport` resizing. Element actions (`click`, `fill`, etc.) are methods on `Locator`.
 
 ## page.viewport
 
@@ -75,7 +68,7 @@ To interact with or assert against an element, first obtain a `Locator` through 
 
 - **Type:** `(width: number, height: number) => Promise<void>`
 
-Resize the current test's layout viewport to check responsive layouts at different sizes. Both dimensions must be positive integers in CSS pixels. Once `await page.viewport(width, height)` completes, media queries and layout reads use the new dimensions.
+Resize the current test's layout viewport to check responsive layouts. Both dimensions must be positive integers in CSS pixels. Once `await page.viewport(width, height)` resolves, media queries and layout reads reflect the new dimensions.
 
 ```ts
 import { page } from '@rstest/browser';
@@ -87,19 +80,19 @@ test('uses the tablet layout', async () => {
 });
 ```
 
-Rstest restores the initial viewport every time a test finishes, including retries (`retry`) and repeats (`repeats`). Restoration waits for failure screenshots, `afterEach`, fixture cleanup, and the `onTestFinished` and `onTestFailed` callbacks to complete. Tests that do not resize the viewport skip restoration.
+Rstest restores the initial viewport after each test execution, including retries (`retry`) and repeats (`repeats`). Restoration waits for failure screenshots, `afterEach`, fixture cleanup, `onTestFinished`, and `onTestFailed` callbacks to finish. Tests that do not resize the viewport skip restoration.
 
 Headless runs restore the browser instance's initial viewport size. Headed runs restore the UI's previous viewport mode. Changes made in `afterAll` or a cleanup function returned by `beforeAll` are restored when that group of tests finishes.
 
-To use the same size for a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test execution. Later retries, repeats, and other tests do not automatically keep that size.
+To apply the same size across a group of tests, configure [`browser.viewport`](/config/test/browser#viewport) or call `page.viewport()` in `beforeEach`. A size set in `beforeAll` is restored after the first test execution; subsequent retries, repeats, and tests do not keep it.
 
-Concurrent tests share a viewport, so they cannot call `page.viewport()`. If a group contains concurrent tests that will run, its `beforeAll`, `afterAll`, and cleanup functions cannot call this API either. These calls throw an error.
+Concurrent tests share a viewport, so calling `page.viewport()` in a concurrent test throws an error. If a group contains concurrent tests that will run, its `beforeAll`, `afterAll`, and cleanup functions throw as well.
 
-In headless mode, Playwright also updates `window.screen` when resizing the viewport. Restoring the viewport does not restore a screen size configured through `browser.providerOptions.context.screen`.
+In headless mode, Playwright also updates `window.screen` when resizing the viewport. Restoring the viewport does not reset a screen size configured via `browser.providerOptions.context.screen`.
 
 ## Query API
 
-All the following APIs return a new `Locator` and support further chaining.
+All query methods return a `Locator` and support chaining.
 
 ### locator
 
@@ -115,9 +108,7 @@ const item = page.locator('.todo-item');
 
 - **Type:** `(role: string, options?: LocatorGetByRoleOptions) => Locator`
 
-Query elements by semantic role. Recommended as the first choice.
-
-`LocatorGetByRoleOptions` supports: `name`, `exact`, `checked`, `disabled`, `expanded`, `selected`, `pressed`, `includeHidden`, `level`.
+Query elements by ARIA role. Prefer this over CSS selectors or test IDs when semantic roles are available.
 
 ```ts
 const saveBtn = page.getByRole('button', { name: 'Save' });
@@ -125,9 +116,9 @@ const saveBtn = page.getByRole('button', { name: 'Save' });
 
 ### getByText
 
-- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **Type:** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-Query by visible text.
+Query elements by visible text.
 
 ```ts
 const successMessage = page.getByText('Saved successfully');
@@ -135,9 +126,9 @@ const successMessage = page.getByText('Saved successfully');
 
 ### getByLabel
 
-- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **Type:** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-Query by form label.
+Query form controls by their label text.
 
 ```ts
 const emailInput = page.getByLabel('Email');
@@ -145,9 +136,9 @@ const emailInput = page.getByLabel('Email');
 
 ### getByPlaceholder
 
-- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **Type:** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-Query by placeholder.
+Query inputs by placeholder text.
 
 ```ts
 const searchInput = page.getByPlaceholder('Search');
@@ -155,9 +146,9 @@ const searchInput = page.getByPlaceholder('Search');
 
 ### getByAltText
 
-- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **Type:** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-Query by `alt` text.
+Query elements by `alt` text.
 
 ```ts
 const avatarImage = page.getByAltText('User avatar');
@@ -165,9 +156,9 @@ const avatarImage = page.getByAltText('User avatar');
 
 ### getByTitle
 
-- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **Type:** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-Query by `title`.
+Query elements by `title` attribute.
 
 ```ts
 const helpIcon = page.getByTitle('Help');
@@ -177,7 +168,7 @@ const helpIcon = page.getByTitle('Help');
 
 - **Type:** `(text: string | RegExp) => Locator`
 
-Query by test id.
+Query elements by test ID attribute (defaults to `data-testid`; customize with [`setTestIdAttribute`](#settestidattribute)).
 
 ```ts
 const settingsPanel = page.getByTestId('settings-panel');
@@ -189,7 +180,7 @@ const settingsPanel = page.getByTestId('settings-panel');
 
 - **Type:** `(element: Element) => Locator`
 
-Synchronously wrap a DOM `Element` from the current test document in a Locator. This lets you use elements returned by Testing Library or third-party tools with native browser actions and Rstest assertions. HTML and SVG elements, including elements inside shadow DOM, are supported.
+Synchronously wrap a DOM `Element` from the current test document in a `Locator`, allowing elements from Testing Library or DOM queries to use browser actions and assertions. HTML and SVG elements, including elements inside shadow DOM, are supported.
 
 ```ts
 import { getByRole } from '@testing-library/dom';
@@ -199,9 +190,9 @@ await page.elementLocator(button).click();
 await expect.element(button).toBeEnabled();
 ```
 
-The Locator retains the identity of the original element without changing DOM attributes. If a component replaces that node, this Locator still refers to the old node: detached assertions pass and actions wait for the original node to become attached again or time out. Use query Locators such as `page.getByRole()` when the target should be found again after a rerender.
+The `Locator` stays bound to the original DOM node without modifying DOM attributes. If a rerender replaces that node, detached assertions pass and actions wait for the original node to reattach or time out; use query Locators such as `page.getByRole()` when the element should be resolved again after a rerender.
 
-Elements from other documents or iframes are rejected. A detached element from the current document can be wrapped before it is inserted.
+Elements from other documents or iframes throw an error. Detached elements from the current document can be wrapped before insertion.
 
 ## Configuration API
 
@@ -209,21 +200,9 @@ Elements from other documents or iframes are rejected. A detached element from t
 
 - **Type:** `(attribute: string) => Promise<void>`
 
-Set the attribute name used by `getByTestId()`. The default value is `data-testid`.
+Set the attribute name used by `getByTestId()`. Defaults to `'data-testid'`. This forwards to the browser provider (for example, Playwright's `selectors.setTestIdAttribute()`).
 
-This configuration is forwarded through the Browser Mode channel to the host provider (e.g., Playwright's `selectors.setTestIdAttribute()`).
-
-This is a global configuration. It is recommended to set it once during the test setup phase to avoid inconsistent query behavior caused by mid-test modifications.
-
-```ts
-import { page, setTestIdAttribute } from '@rstest/browser';
-
-await setTestIdAttribute('data-test');
-await page.getByTestId('settings-panel').click();
-```
-
-:::tip
-It is recommended to configure `setTestIdAttribute` in a setup file to ensure it applies to all tests consistently:
+Because this is a global setting, call it once in a [setup file](/config/test/setup-files) rather than changing it mid-test:
 
 ```ts title="rstest.setup.ts"
 import { setTestIdAttribute } from '@rstest/browser';
@@ -231,15 +210,13 @@ import { setTestIdAttribute } from '@rstest/browser';
 await setTestIdAttribute('data-qa');
 ```
 
-Then reference it in your config:
-
 ```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
 export default defineConfig({
   setupFiles: ['./rstest.setup.ts'],
 });
 ```
-
-:::
 
 ## Composition API
 
@@ -247,23 +224,14 @@ export default defineConfig({
 
 - **Type:** `(options: LocatorFilterOptions) => Locator`
 
-`LocatorFilterOptions` supports:
-
-- `hasText?: string | RegExp`: Keep elements matching the text
-- `hasNotText?: string | RegExp`: Exclude elements matching the text
-- `has?: Locator`: Keep elements containing the child Locator
-- `hasNot?: Locator`: Exclude elements containing the child Locator
-
-Used for secondary filtering on existing query results.
+Narrow an existing `Locator` by text or descendant `Locator` matches.
 
 ```ts
 const profileSave = page
   .locator('section')
   .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
   .getByRole('button', { name: 'Save' });
-```
 
-```ts
 const visibleItems = page.locator('li').filter({
   hasNotText: /archived/i,
   hasNot: page.getByRole('img', { name: 'Locked' }),
@@ -274,7 +242,7 @@ const visibleItems = page.locator('li').filter({
 
 - **Type:** `(other: Locator) => Locator`
 
-Combine two Locator conditions.
+Combine two `Locator` conditions (`and` matches elements satisfying both; `or` matches elements satisfying either).
 
 ```ts
 const byRole = page.getByRole('button', { name: 'Submit' });
@@ -290,34 +258,21 @@ const exactOne = byRole.and(byId);
   - `first(): Locator`
   - `last(): Locator`
 
-Select a specific element from the matched set.
+Select a single element by 0-based index, first match, or last match from a `Locator` matching multiple elements.
 
 ## Interaction API
 
-The following APIs trigger actual browser actions and return `Promise<void>`.
+Interaction methods execute browser actions and return `Promise<void>`.
 
 :::warning Strictness
-Locators are strict. If a Locator interaction action (like `click` or `fill`) resolves to more than one element, the operation will throw an error. Use [`first()`](#nth--first--last), [`last()`](#nth--first--last), or [`nth()`](#nth--first--last) to explicitly select a single element when the query matches multiple elements.
+Locators are strict. If an action (`click`, `fill`, etc.) matches more than one element, it throws an error. Use [`first()`](#nth--first--last), [`last()`](#nth--first--last), or [`nth()`](#nth--first--last) to select a single element.
 :::
-
-These `*Options` types represent the set of options currently supported in Browser Mode:
-
-- `LocatorClickOptions` / `LocatorDblclickOptions`: `button`, `delay`, `force`, `modifiers`, `position`, `timeout`, `trial` (`click` additionally supports `clickCount`)
-- `LocatorHoverOptions`: `force`, `modifiers`, `position`, `timeout`, `trial`
-- `LocatorDragToOptions`: `force`, `sourcePosition`, `targetPosition`, `timeout`, `trial`
-- `LocatorPressOptions`: `delay`, `timeout`
-- `LocatorFillOptions`: `force`, `timeout`
-- `LocatorCheckOptions`: `force`, `position`, `timeout`, `trial`
-- `LocatorFocusOptions` / `LocatorBlurOptions` / `LocatorScrollIntoViewIfNeededOptions`: `timeout`
-- `LocatorWaitForOptions`: `state` (`attached` / `detached` / `visible` / `hidden`) and `timeout`
-- `LocatorSelectOptionOptions`: `force`, `timeout`
-- `LocatorSetInputFilesOptions`: `timeout`
 
 ### click
 
 - **Type:** `(options?: LocatorClickOptions) => Promise<void>`
 
-Click the element matched by the current Locator.
+Click the matched element.
 
 ```ts
 await page.getByRole('button', { name: 'Submit' }).click();
@@ -327,7 +282,7 @@ await page.getByRole('button', { name: 'Submit' }).click();
 
 - **Type:** `(options?: LocatorDblclickOptions) => Promise<void>`
 
-Double-click the element.
+Double-click the matched element.
 
 ```ts
 await page.getByText('Open details').dblclick();
@@ -339,7 +294,7 @@ await page.getByText('Open details').dblclick();
 
 - **Type:** `(target: Locator, options?: LocatorDragToOptions) => Promise<void>`
 
-Drag this element to a target Locator. `sourcePosition` and `targetPosition` are coordinates relative to the respective elements' top-left padding-box corners.
+Drag this element to a `target` `Locator`. `sourcePosition` and `targetPosition` are coordinates relative to the respective elements' top-left padding-box corners.
 
 ```ts
 await page.getByTestId('card').dragTo(page.getByTestId('column'));
@@ -349,7 +304,7 @@ await page.getByTestId('card').dragTo(page.getByTestId('column'));
 
 - **Type:** `(options?: LocatorHoverOptions) => Promise<void>`
 
-Hover the mouse over the element, commonly used to trigger hover menus or tooltips.
+Hover the pointer over the matched element.
 
 ```ts
 await page.getByRole('button', { name: 'More' }).hover();
@@ -359,7 +314,7 @@ await page.getByRole('button', { name: 'More' }).hover();
 
 - **Type:** `(key: string, options?: LocatorPressOptions) => Promise<void>`
 
-Send a keyboard key press on the element.
+Focus the matched element and press a key or key combination (for example, `'Enter'` or `'ControlOrMeta+A'`).
 
 ```ts
 await page.getByLabel('Search').press('Enter');
@@ -369,7 +324,7 @@ await page.getByLabel('Search').press('Enter');
 
 - **Type:** `(text: string, options?: LocatorPressOptions) => Promise<void>`
 
-Type `text` into the element one character at a time, sending a keyboard key press for each character. Use it when the element reacts to individual key events, such as autocomplete inputs or keyboard shortcuts; otherwise prefer [`fill`](#fill). `delay` sets the wait between key presses in milliseconds.
+Type `text` into the element one character at a time, sending key events per character. Use this when the element handles individual key events (such as autocomplete or shortcuts); otherwise prefer [`fill`](#fill). `delay` sets the wait between key presses in milliseconds.
 
 ```ts
 await page.getByLabel('Search').pressSequentially('rstest');
@@ -379,7 +334,7 @@ await page.getByLabel('Search').pressSequentially('rstest');
 
 - **Type:** `(value: string, options?: LocatorFillOptions) => Promise<void>`
 
-Set the value of an input field. Applicable to `input`, `textarea`, and other editable elements.
+Set the value of an `input`, `textarea`, or `contenteditable` element.
 
 ```ts
 await page.getByPlaceholder('Email').fill('dev@rstest.rs');
@@ -389,7 +344,7 @@ await page.getByPlaceholder('Email').fill('dev@rstest.rs');
 
 - **Type:** `() => Promise<void>`
 
-Clear the value of the current input element.
+Clear the value of an input element.
 
 ```ts
 await page.getByPlaceholder('Email').clear();
@@ -399,7 +354,7 @@ await page.getByPlaceholder('Email').clear();
 
 - **Type:** `(options?: LocatorFocusOptions) => Promise<void>`
 
-Focus the element.
+Focus the matched element.
 
 ```ts
 await page.getByLabel('Username').focus();
@@ -409,7 +364,7 @@ await page.getByLabel('Username').focus();
 
 - **Type:** `(options?: LocatorBlurOptions) => Promise<void>`
 
-Remove focus from the element.
+Remove focus from the matched element.
 
 ```ts
 await page.getByLabel('Username').blur();
@@ -439,7 +394,7 @@ await page.getByLabel('Agree').uncheck();
 
 - **Type:** `(options?: LocatorScrollIntoViewIfNeededOptions) => Promise<void>`
 
-Scroll the page if needed to bring the element into the visible area.
+Scroll the page if needed so the matched element is in the viewport.
 
 ```ts
 await page.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded();
@@ -449,7 +404,7 @@ await page.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded();
 
 - **Type:** `(options?: LocatorWaitForOptions) => Promise<void>`
 
-Wait until the Locator meets the specified condition before continuing execution. Useful for handling async rendering.
+Wait until the matched element reaches the specified `state` (`'attached'`, `'detached'`, `'visible'`, or `'hidden'`).
 
 ```ts
 await page.getByText('Ready').waitFor();
@@ -459,7 +414,7 @@ await page.getByText('Ready').waitFor();
 
 - **Type:** `(type: string, eventInit?: LocatorDispatchEventInit) => Promise<void>`
 
-Dispatch a custom or native event on the element.
+Dispatch a DOM event on the matched element. `type` must be a non-empty string, and `eventInit` must be JSON-serializable (`BrowserSerializable`).
 
 ```ts
 await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
@@ -469,7 +424,7 @@ await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
 
 - **Type:** `(value: string | string[], options?: LocatorSelectOptionOptions) => Promise<void>`
 
-Select an option of a `select` element. Currently only supports `string` or `string[]` as the value.
+Select option(s) on a `<select>` element. Only `string` or `string[]` values are supported.
 
 ```ts
 await page.getByLabel('Choice').selectOption('b');
@@ -479,21 +434,137 @@ await page.getByLabel('Choice').selectOption('b');
 
 - **Type:** `(files: string | string[], options?: LocatorSetInputFilesOptions) => Promise<void>`
 
-Set files for an `input[type="file"]`. Currently only supports file paths as `string` or `string[]`.
+Set file path(s) on an `<input type="file">` element. Only `string` or `string[]` file paths are supported.
 
 ```ts
 await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 ```
 
+## Option and helper types
+
+All option and helper types below are exported from `@rstest/browser`:
+
+```ts
+type LocatorTextOptions = {
+  exact?: boolean;
+};
+
+type LocatorGetByRoleOptions = {
+  name?: string | RegExp;
+  exact?: boolean;
+  checked?: boolean;
+  disabled?: boolean;
+  expanded?: boolean;
+  selected?: boolean;
+  pressed?: boolean;
+  includeHidden?: boolean;
+  level?: number;
+};
+
+type LocatorFilterOptions = {
+  hasText?: string | RegExp;
+  hasNotText?: string | RegExp;
+  has?: Locator;
+  hasNot?: Locator;
+};
+
+type LocatorKeyboardModifier =
+  'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
+
+type LocatorMouseButton = 'left' | 'right' | 'middle';
+
+type LocatorPosition = {
+  x: number;
+  y: number;
+};
+
+type LocatorClickOptions = {
+  button?: LocatorMouseButton;
+  clickCount?: number;
+  delay?: number;
+  force?: boolean;
+  modifiers?: LocatorKeyboardModifier[];
+  position?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+type LocatorDblclickOptions = Omit<LocatorClickOptions, 'clickCount'>;
+
+type LocatorHoverOptions = Pick<
+  LocatorClickOptions,
+  'force' | 'modifiers' | 'position' | 'timeout' | 'trial'
+>;
+
+type LocatorDragToOptions = {
+  force?: boolean;
+  sourcePosition?: LocatorPosition;
+  targetPosition?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+type LocatorPressOptions = {
+  delay?: number;
+  timeout?: number;
+};
+
+type LocatorFillOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
+type LocatorCheckOptions = {
+  force?: boolean;
+  position?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+type LocatorFocusOptions = {
+  timeout?: number;
+};
+
+type LocatorBlurOptions = {
+  timeout?: number;
+};
+
+type LocatorScrollIntoViewIfNeededOptions = {
+  timeout?: number;
+};
+
+type LocatorWaitForOptions = {
+  state?: 'attached' | 'detached' | 'visible' | 'hidden';
+  timeout?: number;
+};
+
+type BrowserSerializable =
+  | null
+  | boolean
+  | number
+  | string
+  | BrowserSerializable[]
+  | { [key: string]: BrowserSerializable };
+
+type LocatorDispatchEventInit = BrowserSerializable;
+
+type LocatorSelectOptionOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
+type LocatorSetInputFilesOptions = {
+  timeout?: number;
+};
+```
+
 ## Usage constraints
 
-- The APIs listed on this page represent the currently supported subset of the Playwright Locator API. APIs not listed here are not yet available
-- The argument to `and` / `or` / `filter({ has | hasNot })` must be a `Locator` returned by `@rstest/browser`
-- The `type` argument to `dispatchEvent(type, eventInit?)` must be a non-empty string
-- `selectOption` currently only supports `string` or `string[]`
-- `setInputFiles` currently only supports file paths as `string` or `string[]`
-- Some parameters are transmitted through the Browser Mode communication channel; it is recommended to keep them JSON-serializable
+- Only the methods documented on this page are currently supported from the Playwright `Locator` API.
+- Arguments to `and()`, `or()`, `dragTo()`, and `filter({ has | hasNot })` must be `Locator` instances returned by `@rstest/browser`.
+- `dispatchEvent(type, eventInit?)` requires a non-empty `type` string and a JSON-serializable `eventInit`.
+- `selectOption()` and `setInputFiles()` only accept `string` or `string[]` values.
 
 ## Using with expect.element
 
-`Locator` is typically used together with `expect.element(locator)`. For the full list of assertions, see [Assertion](/api/runtime-api/browser-mode/assertion).
+Pass any `Locator` to `expect.element(locator)` for auto-retrying assertions. See [Assertion](/api/runtime-api/browser-mode/assertion).

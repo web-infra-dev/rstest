@@ -69,7 +69,7 @@ Suite metadata is inherited by descendant suites and tests. Child top-level keys
 
 ## Add file and suite metadata from hooks
 
-Lifecycle hooks receive a metadata object through `ctx.meta`.
+File-level and suite-level hooks (`beforeAll` and `afterAll`) receive a metadata object through `ctx.meta` (while per-test hooks `beforeEach` and `afterEach` access test metadata through `ctx.task.meta`).
 
 ```ts
 import { afterAll, describe, test } from '@rstest/core';
@@ -173,8 +173,8 @@ Rstest applies these rules when metadata is collected and reported:
 - Child top-level keys override parent top-level keys.
 - Inherited metadata is copied for each descendant, so runtime mutation does not leak to sibling tests or sibling suites.
 - Nested objects and arrays are copied during inheritance.
-- Mutating `task.meta` during a test affects that test's final `TestResult.meta`.
-- Mutating `ctx.meta` in file-level hooks affects `TestFileResult.meta`; mutating it in suite hooks affects that suite result's `meta`.
+- Mutating `task.meta` during a test (or `ctx.task.meta` in `beforeEach` / `afterEach`) affects that test's final `TestResult.meta`.
+- Mutating `ctx.meta` in file-level `beforeAll` or `afterAll` hooks affects `TestFileResult.meta`; mutating it in suite-level `beforeAll` or `afterAll` hooks affects that suite result's `meta`.
 
 ## Skipped and todo tests
 
@@ -197,24 +197,6 @@ test.todo('add refund coverage', {
 ```
 
 Because these tests do not execute, runtime mutations are not possible, but reporters can still read their declared metadata from `onTestCaseStart` and `onTestCaseResult`.
-
-## When to use metadata
-
-Common use cases include:
-
-- Ownership fields such as `owner`, `team`, or `feature`.
-- Links to a test management system, such as `caseId` or `tracking`.
-- CI dashboard fields, such as shard, environment, or risk level.
-- Custom reporter output for JSON, Markdown, or internal dashboards.
-- External tools that need to map test results to source analysis, such as mutation testing runners.
-
-## Best practices
-
-- Keep values small and JSON-serializable.
-- Prefer stable field names such as `owner`, `feature`, `caseId`, and `tracking`.
-- Put shared fields on `describe` and only override exceptions on individual tests.
-- Write runtime metadata only when it depends on information discovered during execution.
-- Use a custom reporter or the programmatic API to consume metadata; built-in reporters are optimized for human-readable test output.
 
 ## Related APIs
 

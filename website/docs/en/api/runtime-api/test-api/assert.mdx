@@ -1,0 +1,40 @@
+---
+description: Chai assert API re-exported by Rstest for Node-style assertions.
+---
+
+# assert
+
+Rstest re-exports [Chai's `assert` API](https://www.chaijs.com/api/assert/) for TDD-style assertions. You can import `assert` directly from `@rstest/core`, or access it globally when [globals](/config/test/globals) is enabled.
+
+- **Type:** `typeof import('chai').assert`
+
+## Example
+
+```ts
+import { assert, test } from '@rstest/core';
+
+test('basic assertions', () => {
+  assert.equal(1 + 1, 2);
+  assert.strictEqual('rstest', 'rstest');
+  assert.deepEqual({ a: 1 }, { a: 1 });
+  assert.isTrue(Array.isArray([1, 2, 3]));
+  assert.throws(() => {
+    throw new Error('boom');
+  }, /boom/);
+});
+```
+
+## Common methods
+
+| Method                                                                   | Description                                           |
+| ------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `assert(expression, message?)`                                           | Fails if `expression` is falsy.                       |
+| `assert.equal(actual, expected, message?)`                               | Asserts non-strict equality (`==`).                   |
+| `assert.strictEqual(actual, expected, message?)`                         | Asserts strict equality (`===`).                      |
+| `assert.deepEqual(actual, expected, message?)`                           | Asserts deep structural equality.                     |
+| `assert.isTrue(value, message?)` / `assert.isFalse(value, message?)`     | Asserts strict boolean `true` / `false`.              |
+| `assert.isNull(value, message?)` / `assert.isUndefined(value, message?)` | Asserts `null` / `undefined`.                         |
+| `assert.include(haystack, needle, message?)`                             | Asserts a string, array, or object contains `needle`. |
+| `assert.throws(fn, errorLike?, errMsgMatcher?, message?)`                | Asserts `fn` throws a matching error.                 |
+
+For the full list of assertion methods and options, see the [Chai Assert API](https://www.chaijs.com/api/assert/).

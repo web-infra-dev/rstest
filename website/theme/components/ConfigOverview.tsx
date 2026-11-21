@@ -66,10 +66,14 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'browser.enabled',
       'browser.provider',
-      'browser.browser',
+      'browser.instances',
       'browser.headless',
+      'browser.screenshotFailures',
+      'browser.viewport',
       'browser.port',
+      'browser.strictPort',
       'browser.providerOptions',
+      'browser.expect.toMatchScreenshot',
     ],
   },
   {
@@ -129,9 +133,12 @@ export default function Overview() {
       text: item.name,
       link: '',
       items: item.items?.map((item) => {
-        const [page, anchor] = item.split('.');
-        const target = page ?? item;
-        const hash = anchor ? `#${anchor.toLowerCase()}` : '';
+        const dotIndex = item.indexOf('.');
+        const target = dotIndex === -1 ? item : item.slice(0, dotIndex);
+        const anchor = dotIndex === -1 ? undefined : item.slice(dotIndex + 1);
+        const hash = anchor
+          ? `#${anchor.toLowerCase().replaceAll('.', '')}`
+          : '';
 
         return {
           link: tUrl(`/config/test/${camelToKebab(target)}${hash}`),

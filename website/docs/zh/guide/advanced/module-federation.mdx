@@ -16,7 +16,7 @@ import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @module-federation/rstest -D" />
 
-该插件只负责配置消费远程模块的测试消费者。生产者仍需使用自己的模块联邦构建插件进行构建，例如 [Rslib 的 `mf` 格式](https://rslib.rs/guide/advanced/module-federation)。
+该插件只负责配置消费远程模块的测试消费者。生产者仍需使用各自的模块联邦构建插件构建，例如 [Rslib 的 `mf` 格式](https://rslib.rs/guide/advanced/module-federation)。
 
 ## 基本用法 \{#basic-usage}
 
@@ -65,14 +65,14 @@ declare module 'remote/formatPrice' {
 
 `federation()` 插件接受和模块联邦构建插件相同的选项：`remotes`、`shared`、`remoteType` 等。测试里要注意两点：
 
-- **远程入口的目标环境。** Node 和 JSDOM 测试运行在 Rstest 的 Node runner 里，所以要指向面向 Node 的远程入口，例如 `remoteEntry.cjs`。Browser Mode 消费的是浏览器构建产物中的 `remoteEntry.js`。
-- **HTTP 生产者。** 通过 HTTP 提供的生产者写成 `remote@http://localhost:3001/remoteEntry.cjs` 这样的地址，并设置 `remoteType: 'script'`。服务要在测试运行前启动，见[用 `globalSetup` 启动生产者](#serve-remotes-with-globalsetup)。
+- **远程入口的目标环境**：Node 和 JSDOM 测试运行在 Rstest 的 Node runner 里，所以要指向面向 Node 的远程入口，例如 `remoteEntry.cjs`。Browser Mode 消费的是浏览器构建产物中的 `remoteEntry.js`。
+- **HTTP 生产者**：通过 HTTP 提供的生产者写成 `remote@http://localhost:3001/remoteEntry.cjs` 这样的地址，并设置 `remoteType: 'script'`。服务要在测试运行前启动，见[用 `globalSetup` 启动生产者](#serve-remotes-with-globalsetup)。
 
 ### 插件和 `federation` 配置项的关系 \{#the-plugin-and-the-federation-option}
 
-[`federation`](/config/test/federation) 配置项只是 Rstest 内部的运行时兼容开关。它负责安装垫片，让模块联邦运行时能在 Rstest 的 Node worker 里加载 chunk，本身不配置任何模块联邦的内容：没有远程模块，没有暴露模块，也没有共享依赖。
+[`federation`](/config/test/federation) 配置项只是 Rstest 内部的运行时兼容开关。它负责安装垫片，让模块联邦运行时能在 Rstest 的 Node worker 里加载 chunk，本身不配置远程模块、暴露模块或共享依赖。
 
-`federation()` 插件才做真正的配置，并且在基于 Node 的测试环境下会自动打开这个开关。因此在 Node 和 JSDOM 测试里使用插件时，不需要再设置 `federation: true`。Browser Mode 的情况不同，见 [Browser mode](#browser-mode)。
+`federation()` 插件负责实际的模块联邦配置，并在基于 Node 的测试环境中自动启用该开关。在 [Browser mode](#browser-mode) 下，插件会改用 Web 端运行时而非 Node 垫片，因此两种环境下都不需要手动设置 `federation: true`。
 
 ## 用 `globalSetup` 启动生产者 \{#serve-remotes-with-globalsetup}
 

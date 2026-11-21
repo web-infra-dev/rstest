@@ -7,15 +7,17 @@ description: Configure which reporters to use for test result output.
 - **Type:**
 
 ```ts
-type ReporterConfig =
+type ReporterItem =
+  | Reporter
   | BuiltInReporterNames
   | (string & {})
-  | [name: string, options: Record<string, unknown>]
-  | Reporter;
-type Reporters = ReporterConfig | ReporterConfig[];
-```
+  | ReporterWithOptions
+  | [string]
+  | [string, Record<string, unknown>];
 
-- **Reporter options reference:** Reporter option types are defined in [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+type Reporters =
+  Reporter | BuiltInReporterNames | (string & {}) | ReporterItem[];
+```
 
 - **Default:**
 
@@ -29,17 +31,15 @@ process.env.GITHUB_ACTIONS === 'true'
 
 Configure which reporters to use for test result output.
 
-Built-in reporter names include `default`, `dot`, `verbose`, `md`, `github-actions`, `junit`, `json`, and `blob`.
+Built-in reporter names: `default`, `dot`, `verbose`, `md`, `github-actions`, `junit`, `json`, and `blob`.
 
 :::info AI agent environments
-If you haven't explicitly configured any reporters (no `reporters` in config and no `--reporters` flags), Rstest defaults to `['md']` and outputs AI agent-friendly markdown to stdout.
+When no `reporters` are configured (neither in config nor via `--reporters`), Rstest defaults to `['md']` in AI agent environments and writes agent-friendly Markdown to stdout.
 :::
 
-### Usage
+## Usage
 
-#### Basic example
-
-You can specify reporters in the `rstest.config.ts` file or via the CLI.
+### Basic example
 
 import { Tab, Tabs } from '@theme';
 
@@ -61,14 +61,24 @@ export default defineConfig({
 });
 ```
 
-</Tab>
+  </Tab>
 </Tabs>
 
-#### Multiple reporters
+### Multiple reporters
 
-You can use multiple reporters to output test results in different formats simultaneously. This is useful when you want both console output and a file report for CI/CD pipelines.
+Pass an array to combine console output with file reports for CI/CD pipelines:
 
-```ts title=rstest.config.ts
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+
+```bash
+npx rstest --reporters=default --reporters=junit
+```
+
+  </Tab>
+  <Tab label="rstest.config.ts">
+
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -76,42 +86,76 @@ export default defineConfig({
 });
 ```
 
-#### Configuring reporters with options
+  </Tab>
+</Tabs>
 
-Many reporters support configuration options. Pass them as a tuple `[reporterName, options]`:
+### Configuring reporters with options
 
-```ts title=rstest.config.ts
+Pass `[reporterName, options]` inside the `reporters` array to configure a reporter:
+
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: [
-    ['default', { verbose: true }],
-    ['github-actions', { verbose: true }],
+    ['default', { summary: false }],
+    ['github-actions', { summary: { maxCharsPerField: 1000 } }],
     ['junit', { outputPath: './test-results.xml' }],
   ],
 });
 ```
 
-#### Using custom reporters
+### Built-in reporter options
 
-You can use a custom reporter module by passing its module specifier, or a tuple with options. The module must default export a reporter class. Rstest constructs it with the options (an empty object for the string form) and a context containing `rootPath` and the resolved `config`. The module can be JavaScript or TypeScript; `.ts` and `.mts` modules load directly on Node runtimes with type stripping enabled (Node 22.18+ or 24):
+Full type definitions live in [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts).
 
-```ts title=rstest.config.ts
+- **`default`**:
+  - `summary?: boolean` (default: `true`) — print the test run summary.
+  - `logger?: { outputStream: Writable; errorStream: Writable; getColumns: () => number }` (default: `process.stdout` / `process.stderr`) — custom output streams (`Writable` from `node:stream`).
+  - `showProjectName?: boolean` (default: `true` for multi-project or multi-browser runs, `false` otherwise) — print the project name in test file titles.
+- **`dot`**: supports `summary` and `logger` (same defaults as `default`).
+- **`verbose`**: supports `logger` and `showProjectName` (same defaults as `default`).
+- **`github-actions`**:
+  - `annotations?: boolean` (default: `true`) — output `::error` workflow annotations for failed tests.
+  - `summary?: boolean | { maxCharsPerField?: number }` (default: `true`; `maxCharsPerField` defaults to `400`) — append a Markdown summary to `GITHUB_STEP_SUMMARY`.
+- **`junit`**:
+  - `outputPath?: string` — write the JUnit XML report to a file instead of stdout.
+- **`json`**:
+  - `outputPath?: string` — write the JSON report to a file instead of stdout.
+- **`blob`**:
+  - `outputDir?: string` (default: `'.rstest-reports'`) — directory for blob report files. Not supported in watch mode.
+- **`md`**:
+  - `preset?: 'normal' | 'compact' | 'full'` (default: `'normal'`) — output detail preset.
+  - `header?: boolean | { env?: boolean }` (default: `{ env: true }`) — control runtime/environment frontmatter.
+  - `reproduction?: boolean | 'file' | 'file+name'` (default: `'file+name'`) — control failure reproduction commands.
+  - `testLists?: 'auto' | 'always'` (default: `'auto'`) — when to include Passed / Skipped / Todo lists.
+  - `failures?: { max?: number }` (default: `{ max: 50 }`) — maximum expanded failure details.
+  - `codeFrame?: boolean | { linesAbove?: number; linesBelow?: number }` (default: `{ linesAbove: 2, linesBelow: 2 }`) — code frame line window.
+  - `stack?: number | false | 'full' | 'top'` (default: `'top'`) — stack frames per error.
+  - `candidateFiles?: boolean | { max?: number }` (default: `{ max: 5 }`) — candidate files extracted from stack traces.
+  - `console?: boolean | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number }` (default: `{ maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }`) — console log limits.
+  - `errors?: boolean | { unhandled?: boolean }` (default: `{ unhandled: true }`) — unhandled error output.
+
+### Custom reporters
+
+Pass a module specifier (or `[specifier, options]`) whose default export is a class implementing [`Reporter`](/api/javascript-api/reporter). Rstest instantiates it with `(options, { rootPath, config })` (passing `{}` when no options are provided). On Node.js 22.18+ or 24 with type stripping enabled, `.ts` and `.mts` reporter modules load directly:
+
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: './custom-reporter.js',
 });
 
-// To pass options:
+// With options:
 export const configWithOptions = defineConfig({
   reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
 });
 ```
 
-You can also pass an already constructed object that implements the `Reporter` interface. Reporter classes cannot be passed directly.
+You can also pass an already constructed object implementing `Reporter`. Reporter classes cannot be passed directly.
 
-### Related documentation
+## Related documentation
 
-- [Reporters guide](/guide/basic/reporters) - Usage examples and built-in reporter details
-- [Reporter API reference](/api/javascript-api/reporter) - Custom reporter implementation
+- [Reporters guide](/guide/basic/reporters) — usage examples and output formats for built-in reporters
+- [Reporter API reference](/api/javascript-api/reporter) — custom reporter implementation

@@ -1,24 +1,22 @@
 ---
 title: Reporter
-description: The Reporter API allows you to create custom test result processors and output formatters.
+description: Create custom test result processors and output formatters with the Reporter API.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Reporter API
 
-The Reporter API allows you to create custom test result processors and output formatters.
+Create custom test result processors and output formatters by implementing the `Reporter` interface. See the [Reporters guide](/guide/basic/reporters) for built-in reporters and configuration options.
 
-> **Note**: For usage examples and configuration guidance, see the [Reporters guide](/guide/basic/reporters).
+## Using a custom reporter
 
-## Using custom reporter
-
-Create a custom reporter by implementing the `Reporter` interface:
+Pass an object implementing `Reporter` to [`reporters`](/config/test/reporters):
 
 ```ts
-import type { Reporter, TestFileResult } from '@rstest/core';
+import type { Reporter } from '@rstest/core';
 
-const customReporter: Reporter = {
+export const customReporter: Reporter = {
   onTestFileStart(test) {
     console.log(`Starting: ${test.testPath}`);
   },
@@ -27,15 +25,13 @@ const customReporter: Reporter = {
     console.log(`Finished: ${result.testPath}`);
   },
 
-  onTestRunEnd({ results, duration }) {
+  onTestRunEnd({ duration }) {
     console.log(`All tests completed in ${duration.totalTime}ms`);
   },
 };
 ```
 
-Use the custom reporter in your configuration:
-
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 import { customReporter } from './path/to/custom-reporter';
 
@@ -44,23 +40,21 @@ export default defineConfig({
 });
 ```
 
+When loading a reporter by module specifier (`reporters: [['./custom-reporter.js', options]]`), export a `Reporter` class as the default export. Rstest instantiates it with `(options, context)` where `context` is [`ReporterContext`](#reportercontext).
+
 ## Interface overview
 
-The `Reporter` interface provides lifecycle hooks for test execution. Each hook is called at specific points during the test run.
+`Reporter` exposes lifecycle hooks called during test execution:
 
-> **Important**: For the most up-to-date interface definition and complete type signatures, please refer to the [source code](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts).
-
-### Hook categories
-
-- **File-level hooks**: `onTestFileStart`, `onTestFileReady`, `onTestFileResult`
-- **Suite-level hooks**: `onTestSuiteStart`, `onTestSuiteResult`
-- **Case-level hooks**: `onTestCaseStart`, `onTestCaseResult`
-- **Run-level hooks**: `onTestRunStart`, `onTestRunEnd`, `onUserConsoleLog`, `onExit`
-
-### Basic interface structure
+- **File hooks**: `onTestFileStart`, `onTestFileReady`, `onTestFileResult`
+- **Suite hooks**: `onTestSuiteStart`, `onTestSuiteResult`
+- **Case hooks**: `onTestCaseStart`, `onTestCaseResult`
+- **Run hooks**: `onTestRunStart`, `onTestRunEnd`, `onUserConsoleLog`, `onExit`
 
 ```ts
 interface Reporter {
+  /** Set to `false` when the reporter does not write to process stdout/stderr. Default: `true`. */
+  flushOutputStreams?: boolean;
   onTestRunStart?(payload: TestRunStartPayload): MaybePromise<void>;
   onTestFileStart?(test: TestFileInfo): MaybePromise<void>;
   onTestFileReady?(test: TestFileInfo): MaybePromise<void>;
@@ -69,64 +63,22 @@ interface Reporter {
   onTestSuiteResult?(result: TestResult): MaybePromise<void>;
   onTestCaseStart?(test: TestCaseInfo): MaybePromise<void>;
   onTestCaseResult?(result: TestResult): MaybePromise<void>;
-  onTestRunEnd?(payload: {
-    status: TestRunStatus;
-    results: TestFileResult[]; // Test file results; in watch mode, accumulated over the whole session.
-    testResults: TestResult[]; // Results of every test, not grouped by file.
-    summary: {
-      tests: {
-        total: number; // Total number of tests.
-        passed: number; // Number of passed tests.
-        failed: number; // Number of failed tests.
-        skipped: number; // Number of skipped tests.
-        todo: number; // Number of todo tests.
-        flaky: number; // Passed tests that required a retry.
-      };
-      files: {
-        total: number; // Total number of test files.
-        failed: number; // Number of failed test files.
-      };
-    };
-    duration: {
-      totalTime: number; // Total duration in milliseconds.
-      buildTime: number; // Includes compilation and environment preparation.
-      prebundleTime?: Record<string, number>; // Prebundle time per environment package in milliseconds, included in buildTime.
-      testTime: number; // Test execution duration in milliseconds.
-    };
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors: {
-      name?: string; // Error class name.
-      message: string; // Error message.
-      stack?: string; // Serialized stack trace.
-      diff?: string; // Formatted assertion diff.
-      expected?: string; // Serialized expected assertion value.
-      actual?: string; // Serialized actual assertion value.
-      retryCount?: number; // Retry attempt that produced this error.
-      fullStack?: boolean; // Whether to print the full stack trace.
-      cause?: SerializedError; // Serialized `error.cause`, when the cause is an error.
-    }[];
-    coverage?: CoverageMapData; // Present when coverage is enabled.
-    rerunTestPaths?: string[]; // Watch only: files executed in the current cycle.
-    getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>; // Resolves the source map of a built file.
-  }): MaybePromise<void>;
+  onTestRunEnd?(payload: TestRunEndPayload): MaybePromise<void>;
   onUserConsoleLog?(log: UserConsoleLog): MaybePromise<void>;
   onExit?(): MaybePromise<void>;
 }
 ```
 
-<ApiMeta addedVersion="0.12.0" />
-
-Starting in v0.12.0, Rstest also calls `onExit` when the reporter's owning context is released after normal run, list, or merge completion, watch close, or startup failure. It continues to run on abnormal CLI exits. List contexts currently do not attach reporters, so they have no reporter hooks to call. Use `onExit` to release resources such as streams or renderers. Errors from the hook do not replace the operation's result or error.
-
-<ApiMeta addedVersion="0.11.1" />
-
-Metadata result fields are available on reporter results. JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+- `flushOutputStreams`: By default, Rstest flushes `process.stdout` and `process.stderr` after each reporter's `onTestRunEnd` hook. Set `flushOutputStreams: false` when a reporter does not write to stdio streams.
+- `onTestSuiteResult`: `result.errors` contains only suite hook errors (`beforeAll` and `afterAll`).
+- **Metadata** <ApiMeta sup addedVersion="0.11.1" />: Runtime metadata written via `context.task.meta` is available on `TestResult.meta` in `onTestCaseResult`. Hook metadata written via `ctx.meta` is available on the corresponding `TestResult.meta` in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+- **`onExit`** <ApiMeta sup addedVersion="0.12.0" />: Called when the reporter's owning context is released after a normal run or merge completion, watch close, startup failure, or abnormal CLI exit. Use it to release resources such as streams or renderers. Errors thrown by `onExit` do not replace the operation's result or error. (List contexts do not attach reporters, so `onExit` does not run for `listTests`.)
 
 ### onTestRunStart
 
 <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunStart` receives a `TestRunStartPayload` with a `files` array. Each selected file has its absolute `testPath`, `project`, and `testId`. In watch mode, this is the current cycle's rerun selection, not the accumulated session results. Import `TestRunStartPayload` from `@rstest/core`.
+Called before test execution begins. In watch mode, `files` contains only the files selected for the current rerun cycle, not accumulated session results. Import `TestRunStartPayload` from `@rstest/core`.
 
 - **Type:**
 
@@ -142,55 +94,181 @@ interface TestRunStartPayload {
 
 ### onTestRunEnd
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.12.0" /> <ApiMeta addedVersion="0.13.0" />
 
-`onTestRunEnd` is called when a run cycle finishes, with the results and aggregates of that cycle. Starting in v0.12.0, the payload carries `summary` and `rerunTestPaths`, and `unhandledErrors` is always an array of serialized errors.
+Called when a run cycle finishes with that cycle's results, summary, duration, and status. See [`rstest.run`](/api/javascript-api/instance#rstestrun) for the meaning of each `status` value.
 
-<ApiMeta addedVersion="0.13.0" />
+- **Type:**
 
-Starting in v0.13.0, the payload also includes the run's `status`. See [`rstest.run`](/api/javascript-api/instance#rstestrun) for what each status value means.
+```ts
+type TestRunStatus = 'passed' | 'failed' | 'error';
 
-In watch mode, `results`, `testResults`, and `summary` accumulate over the whole session: each file keeps its latest result, and deleted files are removed. `rerunTestPaths` lists the files executed in the current cycle and is absent for one-shot runs. Every entry in `unhandledErrors` is a plain object that can be serialized to JSON.
+interface TestRunEndPayload {
+  status: TestRunStatus;
+  results: TestFileResult[]; // File results; in watch mode, accumulated over the session.
+  testResults: TestResult[]; // All test case results, not grouped by file.
+  summary: {
+    tests: {
+      total: number;
+      passed: number;
+      failed: number;
+      skipped: number;
+      todo: number;
+      flaky: number; // Passed tests that required a retry.
+    };
+    files: {
+      total: number;
+      failed: number;
+    };
+  };
+  duration: {
+    totalTime: number; // Total elapsed duration in milliseconds.
+    buildTime: number; // Compilation and environment preparation duration in milliseconds.
+    prebundleTime?: Record<string, number>; // Prebundle time per environment package in milliseconds, included in buildTime.
+    testTime: number; // Test execution duration in milliseconds.
+  };
+  snapshotSummary: SnapshotSummary;
+  unhandledErrors: SerializedError[];
+  coverage?: CoverageMapData; // Present when coverage is enabled.
+  rerunTestPaths?: string[]; // Watch only: files executed in the current cycle.
+  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>; // Resolves the source map of a built file.
+}
+```
 
-`duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> reports the time spent building each environment package prebundle in milliseconds. These timings are included in `duration.buildTime`.
+In watch mode, `results`, `testResults`, and `summary` accumulate over the session: each file keeps its latest result and deleted files are removed. `rerunTestPaths` lists the files executed in the current cycle and is absent for one-shot runs. Every entry in `unhandledErrors` is a plain JSON-serializable object.
 
-When test groups start as their build outputs become ready, `buildTime` runs from the start of the run until the last group is ready, including environment preparation. `testTime` includes the rest of the timed run after that point, including worker cleanup, and any earlier time while at least one test group was executing, including worker preparation. Concurrent groups count once. Build-only gaps count toward `buildTime`. The two phases can overlap, so their sum is at least `totalTime`. Use `totalTime` for the run’s elapsed time.
+`duration.prebundleTime` <ApiMeta sup addedVersion="0.12.7" /> reports the time spent building each environment package prebundle in milliseconds and is included in `duration.buildTime`.
+
+When test groups start as their build outputs become ready, `buildTime` runs from the start of the run until the last group is ready (including environment preparation). `testTime` covers the rest of the timed run after that point (including worker cleanup), plus any earlier time while at least one test group was executing (including worker preparation). Concurrent groups count once, and build-only gaps count toward `buildTime`. Because the two phases can overlap, their sum is at least `totalTime`; use `totalTime` for elapsed wall-clock duration.
+
+### ReporterContext
+
+Passed as the second constructor argument when Rstest loads a custom reporter class by module specifier. Exported from `@rstest/core`.
+
+- **Type:**
+
+```ts
+interface ReporterContext {
+  rootPath: string;
+  config: NormalizedConfig;
+}
+```
+
+### TestFileInfo
+
+Passed to `onTestFileStart` and `onTestFileReady`. Exported from `@rstest/core`.
+
+- **Type:**
+
+```ts
+type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
+
+type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
+
+interface TestFileInfo {
+  testId: string;
+  testPath: string;
+  relativeTestPath: string;
+  project: string;
+  tests: TestInfo[];
+}
+```
+
+### TestSuiteInfo
+
+Passed to `onTestSuiteStart`. Exported from `@rstest/core`.
+
+- **Type:**
+
+```ts
+interface TestSuiteInfo {
+  testId: string;
+  testPath: string;
+  relativeTestPath: string;
+  name: string;
+  fullName: string;
+  parentNames?: string[];
+  project: string;
+  type: 'suite';
+  runMode: TestRunMode;
+  location?: { line: number; column: number }; // Present when includeTaskLocation is enabled.
+  meta?: TaskMeta;
+}
+```
+
+### TestCaseInfo
+
+Passed to `onTestCaseStart`. Exported from `@rstest/core`.
+
+- **Type:**
+
+```ts
+interface TestCaseInfo {
+  testId: string;
+  testPath: string;
+  relativeTestPath: string;
+  name: string;
+  fullName: string;
+  parentNames?: string[];
+  project: string;
+  type: 'case';
+  runMode: TestRunMode;
+  timeout?: number;
+  startTime?: number;
+  location?: { line: number; column: number }; // Present when includeTaskLocation is enabled.
+  meta?: TaskMeta;
+}
+```
 
 ### TestResult
 
-`TestResult` and `TestFileResult` are exported from `@rstest/core`. Suite and case hooks receive a `TestResult`; file hooks and `onTestRunEnd` receive `TestFileResult` values, which extend `TestResult` with the results of the file's tests.
+Passed to `onTestSuiteResult` and `onTestCaseResult`. Exported from `@rstest/core`.
 
 - **Type:**
 
 ```ts
 type TestResultStatus = 'skipped' | 'passed' | 'failed' | 'todo';
 
+interface SerializedError {
+  name?: string;
+  message: string;
+  stack?: string;
+  diff?: string;
+  expected?: string;
+  actual?: string;
+  retryCount?: number;
+  fullStack?: boolean;
+  cause?: SerializedError;
+}
+
 interface TestResult {
-  testId: string; // Task identifier.
-  status: TestResultStatus; // Final result status.
-  name: string; // Display name of the test, suite, or test file.
-  fullName: string; // Parent suite names and name, joined with ` > `.
-  testPath: string; // Path of the owning test file.
+  testId: string;
+  status: TestResultStatus;
+  name: string;
+  fullName: string; // Parent suite names and name joined with ` > `.
+  testPath: string; // Absolute path of the owning test file.
   relativeTestPath: string; // POSIX path relative to rootPath.
-  parentNames?: string[]; // Names of the enclosing suites.
+  parentNames?: string[];
   duration?: number; // Execution duration in milliseconds.
-  errors?: SerializedError[]; // Errors from the final attempt.
+  errors?: SerializedError[]; // Errors from the final attempt (or suite hooks for suites).
   retryErrors?: SerializedError[]; // Errors from earlier retry attempts.
-  retryCount?: number; // Number of retry attempts performed.
-  project: string; // Project name.
-  meta?: TaskMeta; // Serializable metadata attached to the task.
-  heap?: number; // Heap usage in bytes, sampled when `logHeapUsage` is enabled.
+  retryCount?: number;
+  project: string;
+  meta?: TaskMeta;
+  heap?: number; // Heap usage in bytes when logHeapUsage is enabled.
 }
 ```
 
 ### TestFileResult
+
+Passed to `onTestFileResult` and included in `onTestRunEnd`. Extends `TestResult` with file-level results and summary. Exported from `@rstest/core`.
 
 - **Type:**
 
 ```ts
 interface TestFileResult extends TestResult {
   loadDuration?: number;
-  results: TestResult[]; // Results of the tests declared in this file.
+  results: TestResult[];
   summary: {
     total: number;
     passed: number;
@@ -199,8 +277,8 @@ interface TestFileResult extends TestResult {
     todo: number;
     flaky: number;
   };
-  snapshotResult?: SnapshotResult; // Snapshot statistics of this file.
-  coverage?: Record<string, FileCoverageData>; // Per-file coverage data when coverage is enabled.
+  snapshotResult?: SnapshotResult; // From @vitest/snapshot.
+  coverage?: Record<string, FileCoverageData>; // From istanbul-lib-coverage when coverage is enabled.
 }
 ```
 
@@ -208,9 +286,29 @@ interface TestFileResult extends TestResult {
 
 <ApiMeta addedVersion="0.12.6" />
 
-In Node pools, `loadDuration` measures worker-side asset loading, setup file execution, and test module evaluation and collection, in milliseconds. It is recorded even if loading fails, and is absent when loading did not start or in browser mode. The existing `duration` measures test execution, including hooks and snapshot finalization. Their sum is used for Node test file scheduling; it excludes worker startup, environment initialization, queue wait, and worker teardown.
+In Node pools, `loadDuration` measures worker-side asset loading, setup file execution, and test module evaluation and collection in milliseconds. It is recorded even when loading fails, and is absent if loading did not start or in browser mode. `duration` measures test execution, including hooks and snapshot finalization. Their sum is used for Node test file scheduling and excludes worker startup, environment initialization, queue wait, and worker teardown.
 
-`SerializedError` has the same shape as the entries of `unhandledErrors` in the `onTestRunEnd` payload. `SnapshotResult` comes from `@vitest/snapshot` and `FileCoverageData` from `istanbul-lib-coverage`.
+### UserConsoleLog
+
+Passed to `onUserConsoleLog`. Exported from `@rstest/core`.
+
+- **Type:**
+
+```ts
+interface UserConsoleLog {
+  content: string;
+  name: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
+  trace?: string;
+  testPath: string;
+  relativeTestPath: string;
+  project: string;
+  type: 'stdout' | 'stderr';
+}
+```
 
 ## Examples
 
@@ -221,18 +319,18 @@ import type { Reporter } from '@rstest/core';
 
 const simpleReporter: Reporter = {
   onTestFileStart(test) {
-    console.log(`📁 ${test.testPath}`);
+    console.log(`Starting: ${test.testPath}`);
   },
 
   onTestCaseResult(result) {
-    const status = result.status === 'passed' ? '✅' : '❌';
+    const status = result.status === 'passed' ? 'PASS' : 'FAIL';
     console.log(`${status} ${result.name}`);
   },
 
   onTestRunEnd({ results }) {
     const passed = results.filter((r) => r.status === 'passed').length;
     const failed = results.filter((r) => r.status === 'failed').length;
-    console.log(`\n📊 ${passed} passed, ${failed} failed`);
+    console.log(`\n${passed} passed, ${failed} failed`);
   },
 };
 ```
@@ -244,6 +342,7 @@ import { writeFileSync } from 'node:fs';
 import type { Reporter } from '@rstest/core';
 
 const jsonReporter: Reporter = {
+  flushOutputStreams: false,
   onTestRunEnd({ results }) {
     const report = {
       timestamp: new Date().toISOString(),

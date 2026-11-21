@@ -1,5 +1,5 @@
 ---
-description: 为了便于排查问题，Rstest 提供了调试模式，你可以在执行测试时添加 DEBUG=rstest 环境变量来开启 Rstest 的调试模式，也可以通过在 VS Code 中设置断点的方式进行调试。
+description: 使用 DEBUG=rstest、worker 调试参数、浏览器模式有头运行、VS Code 断点及泄漏检测功能调试 Rstest 构建与测试。
 ---
 
 import { Prompt } from '@rspress/core/theme';
@@ -8,7 +8,7 @@ import { Prompt } from '@rspress/core/theme';
 
 ## 开启调试模式
 
-为了便于排查问题，Rstest 提供了调试模式，你可以在执行测试时添加 `DEBUG=rstest` 环境变量来开启 Rstest 的调试模式。
+通过设置 `DEBUG=rstest` 环境变量开启调试模式（支持以逗号分隔的 `rstest`、`rsbuild`、`builder` 或 `*`，不区分大小写）：
 
 ```bash
 DEBUG=rstest pnpm test
@@ -16,27 +16,35 @@ DEBUG=rstest pnpm test
 
 在调试模式下，Rstest 会：
 
-- 将测试中间产物输出到磁盘
-- 将最终生成的 Rstest 配置、Rsbuild 配置和 Rspack 配置写入到产物目录下
-- 打印出完整的错误栈信息
-- 将日志级别设置为 `verbose`
+- 将测试临时构建产物输出到磁盘
+- 将最终生效的 Rstest、Rsbuild 与 Rspack 配置写入磁盘
+- 打印完整的错误堆栈信息
+- 将日志级别设置为 `verbose`，并在 watch 模式下关闭清屏
 
 ### Rstest 配置文件
 
-在调试模式下，Rstest 会自动生成 `dist/.rstest-temp/rsbuild/rstest.config.mjs` 文件，这里面包含了最终生成的 Rstest 配置。在这个文件里，你可以了解到你传入的 Rstest 配置在经过框架层和 Rstest 处理后的最终结果。
+开启调试模式后，Rstest 会将最终配置输出到 `dist/.rstest-temp/.rsbuild/` 目录（如果配置了 `output.distPath.root`，则位于 `<output.distPath.root>/.rsbuild/`）：
 
-该文件的大致内容如下：
+- `rstest.config.mjs`：最终解析后的 Rstest 配置
+- `rsbuild.config.mjs`：生成的 Rsbuild 配置
+- `rspack.config.<project>.mjs`：各项目对应的 Rspack 配置（例如默认项目为 `rspack.config.rstest.mjs`）
 
-```js title="rstest.config.mjs"
+默认配置下，`dist/.rstest-temp/.rsbuild/rstest.config.mjs` 的内容大致如下：
+
+```js title="dist/.rstest-temp/.rsbuild/rstest.config.mjs"
 export default {
+  root: '/path/to/project',
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: [
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/.{idea,git,cache,output,temp}/**',
-    '**/dist/.rstest-temp',
-  ],
+  exclude: {
+    patterns: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/dist/.rstest-temp',
+    ],
+    override: false,
+  },
   includeSource: [],
   pool: {
     type: 'forks',
@@ -44,10 +52,16 @@ export default {
   isolate: true,
   globals: false,
   passWithNoTests: false,
+  onlyFailures: false,
   update: false,
   testTimeout: 5000,
-  testEnvironment: 'node',
+  hookTimeout: 10000,
+  teardownTimeout: 10000,
+  testEnvironment: {
+    name: 'node',
+  },
   retry: 0,
+  repeats: 0,
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
@@ -56,25 +70,25 @@ export default {
 };
 ```
 
-关于 Rstest 配置项的完整介绍，请查看[配置 Rstest](/guide/basic/configure-rstest) 章节。
+完整配置项说明见[配置 Rstest](/guide/basic/configure-rstest)。
 
 ## 查看测试中间产物
 
-在 [调试模式](#开启调试模式) 下或者手动开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 配置项时，Rstest 会将测试中间产物输出到磁盘。你可以通过查看 `dist/.rstest-temp` 目录下的文件来了解测试中间产物。
+在[调试模式](#开启调试模式)下或手动开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 时，Rstest 会将编译后的测试 bundle 和 source map 写入 `dist/.rstest-temp`（或 `output.distPath.root`）目录，可直接检查产物定位构建问题。
 
 ### 查看构建产物的覆盖率 \{#inspect-bundle-coverage}
 
-如果 Node.js 测试的 bundle 比预期大，可以开启 [V8 覆盖率](/config/test/coverage#v8-provider) 并设置 `DEBUG=rstest:bundle-coverage`，看看测试运行器收到了哪些构建产物，其中哪些代码实际执行过。
+如果 Node.js 测试的 bundle 比预期大，可以开启 [V8 覆盖率](/config/test/coverage#v8-provider) 并设置 `DEBUG=rstest:bundle-coverage`，查看测试运行器加载了哪些构建产物以及实际执行的代码范围：
 
 ```bash
 DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
 ```
 
-Rstest 会在根目录的 `.rstest` 下写入 `bundle-coverage-<timestamp>.json`，并在终端打印文件路径。按测试文件查看时，`assets` 记录每个构建产物的字节数，`rawV8` 记录经过 source map 重映射前的 V8 执行范围。只想排查一个 bundle 时，可以给 `rstest run` 传入测试文件名。
+Rstest 会在项目根目录的 `.rstest` 下写入 `bundle-coverage-<timestamp>.json`，并在终端打印文件路径。每个测试文件条目中，`assets` 记录各构建产物的字节数，`rawV8` 记录 source map 重映射前的 V8 执行范围。若只需排查单个 bundle，可直接给 `rstest run` 传入测试文件名。
 
-被 `rs.mock()` 完全替换的依赖仍可能被打包，此时可通过 [`output.externals`](/config/build/output#outputexternals) 将它排除在 bundle 之外。
+被 `rs.mock()` 完全替换的依赖仍可能被打包，可通过 [`output.externals`](/config/build/output#outputexternals) 将其排除在 bundle 之外。
 
-如果你的 Coding Agent 支持 Skills，可以先安装 `rstest-debugging`，再复制下面的 prompt。
+如果你的 Coding Agent 支持 Skills，可以先安装 `rstest-debugging`，再使用下面的 prompt：
 
 ```bash
 npx skills add rstackjs/agent-skills --skill rstest-debugging
@@ -86,11 +100,38 @@ npx skills add rstackjs/agent-skills --skill rstest-debugging
   prompt="请用 rstest-debugging skill 分析本项目 Node.js 测试的构建产物覆盖率，查清体积较大的依赖为什么会被打包，并用同一批测试验证建议的改动。"
 />
 
+## 调试测试 worker
+
+为避免调试端口冲突，Rstest 启动 worker 时会过滤主进程上的 `--inspect*` 和 `--debug-port` 参数。直接执行 `node --inspect ./node_modules/@rstest/core/bin/rstest.js` 只会附加到 Rstest 主进程。
+
+若要调试测试 worker 中的代码，请通过 [`pool.execArgv`](/config/test/pool#向-worker-传递-nodejs-flags) 传入 `--inspect-brk`，同时用 `--pool.maxWorkers=1` 将并发限制为单 worker，并用 `--testTimeout=0` 关闭超时限制：
+
+```bash
+npx rstest run --pool.execArgv=--inspect-brk --pool.maxWorkers=1 --testTimeout=0
+```
+
+当 `pool.execArgv` 包含 `--inspect*`（或主进程处于调试状态）时，Rstest 会自动启用内联 source map（`inline-nosources-source-map`）并将产物分片上限设为 1 MB，确保断点能准确映射回源码。
+
+## 调试浏览器模式
+
+调试 [Browser Mode](/guide/browser-testing) 测试时，使用 `--browser.headless=false` 可以打开可见的浏览器窗口（例如在 CI 或已配置 `browser.headless: true` 的项目中），方便直接查看 DOM 状态和开发者工具：
+
+```bash
+npx rstest run --browser.headless=false
+```
+
+当 `browser.headless` 为 `true`（CI 默认值）时，测试失败会自动将 PNG 截图保存到 `.rstest/screenshots/`，可通过 [`browser.screenshotFailures`](/config/test/browser#screenshotfailures) 关闭。
+
+## 调试异步泄漏与内存
+
+- `--detectAsyncLeaks`：在测试文件结束后检测仍未关闭的异步资源（例如未清理的定时器），报错并打印资源创建堆栈。见 [`detectAsyncLeaks`](/config/test/detect-async-leaks)。
+- `--logHeapUsage`：在每个测试文件与用例后打印 V8 `heapUsed` 内存用量（仅适用于 Node.js pool）。见 [`logHeapUsage`](/config/test/log-heap-usage)。
+
 ## 在 VS Code 中调试
 
-Rstest 支持通过 `debugger` 语句或断点的方式在 VS Code 中进行调试。只需打开 `JavaScript Debug Terminal`，然后在终端中运行测试命令即可。
+打开 VS Code 的 `JavaScript Debug Terminal` 并运行测试命令，即可直接使用 `debugger` 语句或编辑器断点调试。
 
-你也可以添加一个启动配置来调试当前打开的测试文件：
+也可以在 `.vscode/launch.json` 中添加启动配置，通过 `F5` 或 `Run and Debug` 面板调试当前打开的测试文件：
 
 ```json title=".vscode/launch.json"
 {
@@ -109,5 +150,3 @@ Rstest 支持通过 `debugger` 语句或断点的方式在 VS Code 中进行调�
   ]
 }
 ```
-
-之后，你可以直接在 VS Code 中按下 `F5` 键或前往 `Run and Debug` 面板来启动调试。

@@ -1,5 +1,5 @@
 ---
-description: This chapter introduces how to help AI better understand Rstest's features, configuration, and best practices, so it can provide more accurate assistance during day-to-day development and troubleshooting.
+description: Integrate Rstest with AI coding agents using prompts, Agent Skills, llms.txt, Markdown docs, the Markdown reporter, and AGENTS.md.
 ---
 
 import { Prompt } from '@rspress/core/theme';
@@ -7,7 +7,7 @@ import { PackageManagerTabs } from '@theme';
 
 # AI
 
-To help AI better understand Rstest's features, configuration, and best practices so it can provide more accurate assistance during day-to-day development and troubleshooting, Rstest provides the following capabilities:
+Rstest provides ready-to-use prompts, Agent Skills, machine-readable documentation, and a Markdown reporter so coding agents can set up, configure, run, and debug tests accurately:
 
 - [Agent prompt](#agent-prompt)
 - [Agent Skills](#agent-skills)
@@ -44,22 +44,22 @@ https://rstest.rs/guide/start/agent-migrate.md`}
 
 ## Agent Skills
 
-Agent Skills are domain-specific knowledge packs that can be installed into Agents, enabling them to give more accurate and professional suggestions or perform actions in specific scenarios.
+Agent Skills are installable knowledge packs that guide coding agents through Rstest workflows.
 
-In the [rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) repository, there are many skills for the Rstack ecosystem. The skills related to Rstest include:
+The [rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) repository includes the following Rstest skills:
 
 - [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest): Migrate Jest, Vitest, or Playwright Test projects to Rstest, using `@rstest/playwright` for Playwright E2E tests.
-- [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices): Share best practices for using Rstest.
-- [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging): Debug Rstest issues systematically, including performance regressions. Use it when Rstest is slower than expected, slower than Jest or Vitest, or when you need to determine whether the bottleneck is in build startup or test execution before trying config or code changes.
+- [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices): Best practices for configuring and writing Rstest tests.
+- [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging): Debug Rstest issues systematically, including performance regressions. Use it when Rstest is slower than expected, slower than Jest or Vitest, or when you need to determine whether the bottleneck is in build startup or test execution before changing config or code.
 
-In Coding Agents that support skills, you can use the [skills](https://www.npmjs.com/package/skills) package to install a specific skill with the following command:
+In coding agents that support skills, install a skill with [skills](https://www.npmjs.com/package/skills):
 
 <PackageManagerTabs
   command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
   dlx
 />
 
-After installation, simply use natural language prompts to trigger the skill, for example:
+After installation, trigger the skill with a natural-language prompt, for example:
 
 ```
 Help me migrate this Playwright Test project to @rstest/playwright
@@ -67,46 +67,44 @@ Help me migrate this Playwright Test project to @rstest/playwright
 
 ## llms.txt
 
-[llms.txt](https://llmstxt.org/) is a standard that helps LLMs discover and use project documentation. Rstest follows this standard and publishes the following two files:
+[llms.txt](https://llmstxt.org/) helps LLMs discover and read project documentation. Rstest publishes two files:
 
-- [llms.txt](https://rstest.rs/llms.txt): A structured index file containing the titles, links, and brief descriptions of all documentation pages.
+- [llms.txt](https://rstest.rs/llms.txt): A structured index listing titles, links, and short descriptions for all documentation pages.
 
 ```
 https://rstest.rs/llms.txt
 ```
 
-- [llms-full.txt](https://rstest.rs/llms-full.txt): A full-content file that concatenates the complete content of every documentation page into a single file.
+- [llms-full.txt](https://rstest.rs/llms-full.txt): All documentation pages concatenated into a single file.
 
 ```
 https://rstest.rs/llms-full.txt
 ```
 
-You can choose the file that best fits your use case:
+Choose based on your context budget:
 
-- `llms.txt` is smaller and consumes fewer tokens, making it suitable for AI to fetch specific pages on demand.
-- `llms-full.txt` contains the complete documentation content, so AI doesn't need to follow individual links — ideal when you need AI to have a comprehensive understanding of Rstest, though it consumes more tokens and is best used with AI tools that support large context windows.
+- `llms.txt` is small and lets an agent fetch only the pages it needs.
+- `llms-full.txt` contains the full documentation in one file so an agent does not need to follow links, at the cost of higher token usage.
 
 ## Markdown docs
 
-Every Rstest documentation page has a corresponding `.md` plain-text version that can be provided directly to AI. On any doc page, you can click “Copy Markdown” or “Copy Markdown Link” under the title to get the Markdown content or link.
+Every documentation page has a plain-text `.md` version. Click "Copy Markdown" or "Copy Markdown Link" under any page title to share a specific section with an agent:
 
 ```
 https://rstest.rs/guide/start/index.md
 ```
 
-Providing the Markdown link or content allows AI to focus on a specific chapter, which is useful for targeted troubleshooting or looking up a particular topic.
-
 ## Markdown reporter
 
-When you want AI to directly consume test results, use the `md` reporter. It outputs a single markdown document to stdout, which is easier for LLMs to parse than colorful terminal logs. The output is also more concise, which usually reduces token usage.
+Use the `md` reporter when an AI agent consumes test results directly. It prints a single Markdown document to stdout that is more concise and easier for LLMs to parse than ANSI terminal output.
 
-In Agent environments, Rstest defaults to `md` when you didn't explicitly configure reporters.
+When running inside an AI agent environment with no reporter configured in `rstest.config.ts` or CLI flags, Rstest defaults to `['md']`. Set `RSTEST_NO_AGENT=1` to disable agent detection and keep the default console reporter.
 
 ```bash
 npx rstest --reporters=md
 ```
 
-You can also configure it in `rstest.config.ts` and combine it with other reporters in local or CI workflows.
+You can also configure it in `rstest.config.ts` and combine it with other reporters:
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -116,13 +114,11 @@ export default defineConfig({
 });
 ```
 
-More information about the `md` reporter can be found in [Markdown reporter](/guide/basic/reporters#markdown-reporter).
+See [Markdown reporter](/guide/basic/reporters#markdown-reporter) for presets and options.
 
 ## AGENTS.md
 
-You can create an `AGENTS.md` file in the root of any project that uses Rstest. This file follows the [AGENTS.md](https://agents.md/) specification and provides key project information to Agents.
-
-Here is an example of Rstest-related content you can add to `AGENTS.md`:
+Add an `AGENTS.md` file (following the [AGENTS.md](https://agents.md/) specification) at the repository root to give coding agents project-specific test commands and doc links:
 
 ```markdown wrapCode
 # AGENTS.md
@@ -141,4 +137,4 @@ You are an expert in JavaScript, Rspack, Rsbuild, and Rstest. You write maintain
 - Rstest: https://rstest.rs/llms.txt
 ```
 
-You can also customize it for your project, adding more details about the project structure, overall architecture, and other relevant information so Agents can better understand your project.
+Customize it with your project's directory structure, conventions, and scripts.

@@ -1,5 +1,5 @@
 ---
-description: Restores all process.env values that were changed with rs.stubEnv before every test.
+description: Automatically restore environment variables stubbed with rs.stubEnv before each test.
 overviewHeaders: []
 ---
 
@@ -9,7 +9,7 @@ overviewHeaders: []
 - **Default:** `false`
 - **CLI:** `--unstubEnvs`
 
-Restores all `process.env` values that were changed with [rs.stubEnv](/api/runtime-api/rstest/utilities#rsstubenv) before every test.
+Automatically calls [`rs.unstubAllEnvs()`](/api/runtime-api/rstest/utilities#rsunstuballenvs) before every test, restoring all `process.env` and `import.meta.env` values changed with [`rs.stubEnv()`](/api/runtime-api/rstest/utilities#rsstubenv) to their original values.
 
 import { Tab, Tabs } from '@theme';
 

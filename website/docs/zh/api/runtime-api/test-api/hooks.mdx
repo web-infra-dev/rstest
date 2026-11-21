@@ -1,43 +1,58 @@
 ---
 title: Hooks
-description: Hooks 允许你在测试或测试套件执行之前或之后运行初始化和清理逻辑。
+description: 在测试或测试套件执行前后运行初始化与清理逻辑。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Hooks
 
-Hooks 允许你在测试或测试套件执行之前或之后运行初始化和清理逻辑。
+为测试套件或单个测试注册初始化与清理回调。
 
 ## beforeAll
 
-- **类型：** `(fn: (ctx: SuiteContext) => void | ((ctx: SuiteContext) => void | Promise<void>) | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>, timeout?: number) => void`
+- **类型：**
 
-在当前套件的所有测试之前运行。
+```ts
+interface SuiteContext {
+  filepath: string;
+  meta: TaskMeta;
+}
 
-当前套件中没有可执行的测试时，例如所有测试都被跳过、被测试名称筛选排除，或未被 `test.only` 选中，Rstest 不会执行该 hook。
+type BeforeAll = (
+  fn: (
+    ctx: SuiteContext,
+  ) =>
+    | void
+    | ((ctx: SuiteContext) => void | Promise<void>)
+    | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>,
+  timeout?: number,
+) => void;
+```
+
+在当前套件的所有测试执行前运行一次（位于文件顶层时则在文件内所有测试前运行一次）。
+
+当套件中没有可运行的测试时（例如所有测试被跳过、被测试名称筛选排除，或未被 `test.only` 选中），Rstest 会跳过 `beforeAll`。
 
 ```ts
 import { beforeAll } from '@rstest/core';
 
 beforeAll(async (ctx) => {
-  // 在所有测试前的初始化逻辑
-  // ctx.filepath 表示当前测试文件路径
+  // ctx.filepath 为当前测试文件路径
   ctx.meta.startedAt = Date.now();
 });
 ```
 
-`beforeAll` 也支持返回一个清理函数，在所属 suite 的 `afterAll` Hook 之后运行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 配置：
+`beforeAll` 返回的函数会注册为套件级清理回调，在所属套件的 `afterAll` 之后执行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 控制：
 
 ```ts
 import { beforeAll } from '@rstest/core';
 
 beforeAll(async () => {
-  const cleanUp = await doSomething();
+  const resource = await acquireResource();
 
-  // 在所有测试后的清理逻辑
   return async () => {
-    await cleanUp();
+    await resource.close();
   };
 });
 ```
@@ -46,30 +61,25 @@ beforeAll(async () => {
 
 - **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
 
-在当前套件的所有测试之后运行。
-
-当前套件中没有可执行的测试时，例如所有测试都被跳过、被测试名称筛选排除，或未被 `test.only` 选中，Rstest 不会执行该 hook。
+在当前套件的所有测试结束后运行一次。套件中没有可运行的测试时会跳过。
 
 ```ts
 import { afterAll } from '@rstest/core';
 
 afterAll(async (ctx) => {
-  // 在所有测试后的清理逻辑
   ctx.meta.finished = true;
 });
 ```
 
 <ApiMeta addedVersion="0.11.1" />
 
-`ctx.meta` 是当前 suite 的可变元数据对象。如果 suite 通过 `describe(name, { meta }, fn)` 声明，`ctx.meta` 会以应用完套件继承后的元数据作为初始值。文件级 hooks 写入的元数据会出现在 `TestFileResult.meta`；`describe` 内 hooks 写入的元数据会出现在传给自定义 Reporter 的对应 suite result 上。
+`ctx.meta` 是当前套件的可变元数据对象。若套件通过 `describe(name, { meta }, fn)` 声明，`ctx.meta` 会以继承后的元数据作为初始值。文件级 Hook 写入的元数据出现在 `TestFileResult.meta` 中；`describe` 内的 Hook 写入的元数据出现在自定义 Reporter 收到的对应套件 `TestResult.meta` 中。
 
 ## beforeEach
 
 - **类型：** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | ((ctx: TestContext & ExtraContext) => void | Promise<void>) | Promise<void | ((ctx: TestContext & ExtraContext) => void | Promise<void>)>, timeout?: number) => void`
 
-`ctx` 的字段详见 [`TestContext`](/api/runtime-api/test-api/test#testcontext)(以下测试级 hook 同理)。
-
-在当前套件的每个测试之前运行。
+在当前套件的每个测试执行前运行。`ctx` 上的字段见 [`TestContext`](/api/runtime-api/test-api/test#testcontext)（`afterEach`、`onTestFinished` 与 `onTestFailed` 同理）。
 
 ```ts
 import { beforeEach } from '@rstest/core';
@@ -79,32 +89,29 @@ beforeEach(async () => {
 });
 ```
 
-`beforeEach` 也支持返回一个清理函数，在该测试的所有 `afterEach` Hook 之后运行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 配置：
+`beforeEach` 返回的函数会注册为单测清理回调，在该测试的所有 `afterEach` 之后执行，执行顺序由 [`sequence.hooks`](/config/test/sequence#sequencehooks) 控制：
 
 ```ts
 import { beforeEach } from '@rstest/core';
 
 beforeEach(async () => {
-  const cleanUp = await doSomething();
+  const handle = await openHandle();
 
-  // 每个测试后的清理逻辑
   return async () => {
-    await cleanUp();
+    await handle.close();
   };
 });
 ```
 
 <ApiMeta addedVersion="0.11.4" />
 
-`beforeEach`、`afterEach` callback 以及 `beforeEach` 返回的 cleanup 函数都可以使用通过 `test.extend` 创建的 fixture。将 fixture 类型作为 `ExtraContext` 传入；Rstest 会在某个 callback 第一次请求 fixture 前完成初始化。详见[在 hook 中使用 fixture](/api/runtime-api/test-api/test#在-hook-中使用-fixture)。
-
-使用 fixture 的 hook callback 必须在 hook 参数中通过直接对象解构声明 fixture 依赖。Rstest 不会从 hook 函数体推断依赖。使用 fixture 的 callback 不支持对象 rest property 和默认值。
+`beforeEach`、`afterEach` 以及 `beforeEach` 返回的清理函数都可以使用 `test.extend` 创建的 fixture。将 fixture 接口作为 `ExtraContext` 传入，并在回调参数中通过直接对象解构声明所需的 fixture。Rstest 不会从函数体内推断 fixture 依赖，且不支持对象 rest 属性和默认值。详见[在 hook 中使用 fixture](/api/runtime-api/test-api/test#在-hook-中使用-fixture)。
 
 ## afterEach
 
 - **类型：** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | Promise<void>, timeout?: number) => void`
 
-在当前套件的每个测试之后运行。
+在当前套件的每个测试结束后运行。
 
 ```ts
 import { afterEach } from '@rstest/core';
@@ -118,25 +125,25 @@ afterEach(async () => {
 
 - **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
-测试运行完成后调用，无论测试成功或失败。可用于执行清理操作。该 hook 会在 `afterEach` 之后执行。
+注册在当前测试结束后运行的回调，无论测试通过还是失败都会执行。执行时机在 `afterEach` 之后，且必须在测试函数内部调用。
 
 ```ts
 import { onTestFinished, test } from '@rstest/core';
 
-test('test server', () => {
+test('closes server after test', () => {
   const server = startServer();
-  // Register a cleanup function to close the server after the test
+  // 注册测试结束后的清理回调
   onTestFinished(() => server.close());
 
-  server.listen(3000, () => {
-    console.log('Server is running on port 3000');
-  });
+  server.listen(3000);
 });
 ```
 
-需要注意的是，当你在并发测试中使用 `onTestFinished` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFinished hook 所属的具体测试。
+在并发测试中，请从测试上下文参数解构 `onTestFinished`，不要使用顶层导入的函数，以便 Rstest 将回调准确绑定到对应测试：
 
 ```ts
+import { describe, test } from '@rstest/core';
+
 describe.concurrent('并发套件', () => {
   test('test 1', async ({ onTestFinished }) => {
     /* ... */
@@ -151,22 +158,16 @@ describe.concurrent('并发套件', () => {
 
 - **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
-测试运行失败后调用。
+注册仅在当前测试失败时运行的回调。必须在测试函数内部调用。
 
 ```ts
 import { onTestFailed, test } from '@rstest/core';
 
-test('test server', () => {
-  const server = startServer();
-
+test('logs errors on failure', () => {
   onTestFailed(({ task }) => {
     console.log(task.result?.errors);
-  });
-
-  server.listen(3000, () => {
-    console.log('Server is running on port 3000');
   });
 });
 ```
 
-需要注意的是，当你在并发测试中使用 `onTestFailed` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFailed hook 所属的具体测试。
+在并发测试中，同样请从测试上下文参数解构 `onTestFailed`，不要使用顶层导入的函数，以确保回调准确绑定到当前测试。

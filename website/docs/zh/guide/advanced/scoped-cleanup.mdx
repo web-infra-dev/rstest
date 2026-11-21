@@ -1,20 +1,18 @@
 ---
-description: 使用 `using` 和 `await using` 在代码块退出时自动清理测试中的临时资源。
+description: 使用 `using` 在代码块退出时自动恢复 spy、环境变量、全局变量和 fake timers。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # 作用域清理
 
-Rstest 支持对测试中的临时变更进行作用域清理。当运行时或工具链支持 explicit resource management 时，你可以使用 `using` 在代码块退出时自动恢复资源。
-
-这适用于测试中临时修改共享状态的场景，例如 spy、环境变量、全局变量或 fake timers。
+Rstest 支持对测试中的临时变更做作用域清理。当运行时或工具链支持 explicit resource management 时，使用 `using` 可以在代码块退出时自动恢复资源。
 
 ## `using` 语法
 
 <ApiMeta addedVersion="0.10.3" />
 
-[`rs.stubEnv()`](/api/runtime-api/rstest/utilities#rsstubenv)、[`rs.stubGlobal()`](/api/runtime-api/rstest/utilities#rsstubglobal) 和 [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) 会返回可释放资源，可配合 `using` 语法进行作用域清理。
+[`rs.spyOn()`](/api/runtime-api/rstest/mock-functions#rsspyon)、[`rs.stubEnv()`](/api/runtime-api/rstest/utilities#rsstubenv)、[`rs.stubGlobal()`](/api/runtime-api/rstest/utilities#rsstubglobal) 和 [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) 会返回可释放资源，可配合 `using` 语法自动清理。
 
 ## Spy 清理
 
@@ -112,16 +110,3 @@ test('runs delayed work', () => {
   expect(rs.isFakeTimers()).toBe(false);
 });
 ```
-
-## 异步资源
-
-对于实现了 `Symbol.asyncDispose` 的异步资源，可以使用 `await using`。Rstest 的 browser provider 资源已在内部支持异步释放，因此 provider page、context 和 browser 可以通过相同的 explicit resource management 协议关闭。
-
-```ts
-await using resource = createAsyncResource();
-
-await resource.run();
-// 这里会等待 resource[Symbol.asyncDispose]() 执行完成
-```
-
-同步清理使用 `using`，需要等待异步清理完成时使用 `await using`。

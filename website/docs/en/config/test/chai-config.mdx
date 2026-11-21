@@ -11,11 +11,11 @@ type ChaiConfig = {
   /**
    * @default true
    */
-  showDiff: boolean;
+  showDiff?: boolean;
   /**
    * @default 40
    */
-  truncateThreshold: number;
+  truncateThreshold?: number;
 };
 ```
 
@@ -25,11 +25,10 @@ Customize the [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/c
 
 ### truncateThreshold
 
-Sets the number of characters to display when showing large values in assertions. When an assertion fails and displays objects or arrays, Chai will truncate the output if it exceeds this threshold to keep error messages readable.
-
+- **Type:** `number`
 - **Default:** `40`
 
-A higher value shows more details in assertion failures, useful for debugging complex data structures:
+Maximum number of characters to display for objects and arrays in assertion failure messages. Values exceeding this threshold are truncated.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -41,29 +40,26 @@ export default defineConfig({
 });
 ```
 
-With the default value (40), long arrays or objects get truncated:
+With the default `40`, long arrays or objects are truncated:
 
-```ts
+```text
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
-If you set a higher threshold, you see the full structure:
+With a higher threshold, the full structure is printed:
 
-```ts
+```text
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
-This allows you to see the exact values that don't match, making debugging easier.
-
 ### showDiff
 
-Show a diff of expected vs actual values in assertion failures.
-
+- **Type:** `boolean`
 - **Default:** `true`
 
-Disable this if you want to see plain assertion messages without diffs:
+Show a diff of expected vs. actual values in assertion failures.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -75,9 +71,9 @@ export default defineConfig({
 });
 ```
 
-By default, Rstest shows a diff of expected vs actual values in assertion failures:
+By default, Rstest prints a diff on assertion failures:
 
-```ts
+```text
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   + expected
   - actual
@@ -89,8 +85,8 @@ AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   }
 ```
 
-If you set `showDiff: false`, Rstest will show plain assertion messages without diffs:
+With `showDiff: false`, Rstest prints only the plain assertion message:
 
-```ts
+```text
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```

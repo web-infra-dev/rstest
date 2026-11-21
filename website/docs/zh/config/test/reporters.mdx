@@ -8,15 +8,17 @@ overviewHeaders: []
 - **类型：**
 
 ```ts
-type ReporterConfig =
+type ReporterItem =
+  | Reporter
   | BuiltInReporterNames
   | (string & {})
-  | [name: string, options: Record<string, unknown>]
-  | Reporter;
-type Reporters = ReporterConfig | ReporterConfig[];
-```
+  | ReporterWithOptions
+  | [string]
+  | [string, Record<string, unknown>];
 
-- **Reporter options 参考：** 各报告器的 options 类型定义在 [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+type Reporters =
+  Reporter | BuiltInReporterNames | (string & {}) | ReporterItem[];
+```
 
 - **默认值：**
 
@@ -33,14 +35,12 @@ process.env.GITHUB_ACTIONS === 'true'
 内置报告器名称包括 `default`、`dot`、`verbose`、`md`、`github-actions`、`junit`、`json` 和 `blob`。
 
 :::info AI agent 环境
-未显式配置 reporters（配置文件无 `reporters`，且 CLI 未传 `--reporters`）时，Rstest 会默认使用 `['md']`，将更适合 AI agent 的 markdown 输出到 stdout。
+未显式配置 `reporters`（配置文件未设置 `reporters`，且 CLI 未传入 `--reporters`）时，Rstest 在 AI agent 环境中默认使用 `['md']`，将适合 AI agent 读取的 Markdown 输出到 stdout。
 :::
 
-### 使用方法
+## 使用方法
 
-#### 基本示例
-
-你可以在 `rstest.config.ts` 文件中或通过 CLI 指定报告器。
+### 基本示例
 
 import { Tab, Tabs } from '@theme';
 
@@ -62,15 +62,15 @@ export default defineConfig({
 });
 ```
 
-</Tab>
+  </Tab>
 </Tabs>
 
-#### 数组形式
+### 多个报告器
 
-你可以通过数组形式同时指定多个报告器。当你既需要控制台输出又需要 CI/CD 管道的文件报告时，这非常有用。
+传入数组可同时启用多种报告器，例如同时输出控制台结果和 CI/CD 所需的报告文件：
 
 <Tabs defaultValue='rstest.config.ts'>
-<Tab label="CLI">
+  <Tab label="CLI">
 
 ```bash
 npx rstest --reporters=default --reporters=junit
@@ -87,45 +87,76 @@ export default defineConfig({
 });
 ```
 
-</Tab>
+  </Tab>
 </Tabs>
 
-#### 报告器配置
+### 报告器选项配置
 
-当报告器支持配置选项时，可以通过 `[reporterName, options]` 传递配置选项。
+在 `reporters` 数组中传入 `[reporterName, options]`，可为报告器传递配置选项：
 
-```ts title=rstest.config.ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: [
-    ['default', { verbose: true }],
-    ['github-actions', { verbose: true }],
+    ['default', { summary: false }],
+    ['github-actions', { summary: { maxCharsPerField: 1000 } }],
     ['junit', { outputPath: './test-results.xml' }],
   ],
 });
 ```
 
-#### 使用自定义报告器
+### 内置报告器选项
 
-自定义报告器可以用模块标识符传入，也可以用 `[模块标识符, 选项]` 元组把选项一起带上。模块必须默认导出一个实现了 [`Reporter`](/api/javascript-api/reporter) 接口的类；Rstest 会用选项（只写字符串时是空对象）和包含 `rootPath`、解析后的 `config` 的上下文来构造实例。模块可以是 JavaScript 或 TypeScript：在启用了类型擦除的 Node 版本（Node 22.18+ 或 24）上，`.ts`、`.mts` 模块可以直接加载：
+完整类型定义见 [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)。
 
-```ts title=rstest.config.ts
+- **`default`**：
+  - `summary?: boolean`（默认值：`true`）—— 是否输出测试汇总信息。
+  - `logger?: { outputStream: Writable; errorStream: Writable; getColumns: () => number }`（默认值：`process.stdout` / `process.stderr`）—— 自定义输出流（`Writable` 来自 `node:stream`）。
+  - `showProjectName?: boolean`（默认值：多 project 或多 browser 运行时为 `true`，否则为 `false`）—— 是否在测试文件标题中显示 project 名称。
+- **`dot`**：支持 `summary` 和 `logger`（默认值与 `default` 相同）。
+- **`verbose`**：支持 `logger` 和 `showProjectName`（默认值与 `default` 相同）。
+- **`github-actions`**：
+  - `annotations?: boolean`（默认值：`true`）—— 是否为失败测试输出 `::error` annotation。
+  - `summary?: boolean | { maxCharsPerField?: number }`（默认值：`true`；`maxCharsPerField` 默认为 `400`）—— 是否将 Markdown 汇总写入 `GITHUB_STEP_SUMMARY`。
+- **`junit`**：
+  - `outputPath?: string` —— 将 JUnit XML 报告写入指定文件，而非输出到 stdout。
+- **`json`**：
+  - `outputPath?: string` —— 将 JSON 报告写入指定文件，而非输出到 stdout。
+- **`blob`**：
+  - `outputDir?: string`（默认值：`'.rstest-reports'`）—— blob 报告的输出目录。不支持在 watch mode 下使用。
+- **`md`**：
+  - `preset?: 'normal' | 'compact' | 'full'`（默认值：`'normal'`）—— 输出详略预设。
+  - `header?: boolean | { env?: boolean }`（默认值：`{ env: true }`）—— 控制 frontmatter 中的运行时和环境信息。
+  - `reproduction?: boolean | 'file' | 'file+name'`（默认值：`'file+name'`）—— 控制失败用例的复现命令。
+  - `testLists?: 'auto' | 'always'`（默认值：`'auto'`）—— 控制何时输出 Passed / Skipped / Todo 列表。
+  - `failures?: { max?: number }`（默认值：`{ max: 50 }`）—— 展开详情的最大失败数量。
+  - `codeFrame?: boolean | { linesAbove?: number; linesBelow?: number }`（默认值：`{ linesAbove: 2, linesBelow: 2 }`）—— 代码片段上下文行数。
+  - `stack?: number | false | 'full' | 'top'`（默认值：`'top'`）—— 每个错误输出的堆栈帧数量。
+  - `candidateFiles?: boolean | { max?: number }`（默认值：`{ max: 5 }`）—— 从堆栈中提取的候选文件路径数量。
+  - `console?: boolean | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number }`（默认值：`{ maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }`）—— 控制台日志输出限制。
+  - `errors?: boolean | { unhandled?: boolean }`（默认值：`{ unhandled: true }`）—— 是否输出未捕获错误。
+
+### 使用自定义报告器
+
+传入模块标识符（或 `[模块标识符, 选项]`），该模块必须默认导出一个实现了 [`Reporter`](/api/javascript-api/reporter) 接口的类。Rstest 会以 `(options, { rootPath, config })` 实例化该类（未传选项时 `options` 为 `{}`）。在启用类型擦除的 Node.js 版本（22.18+ 或 24）上，`.ts` 和 `.mts` 模块可直接加载：
+
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: './custom-reporter.js',
 });
 
-// 传入 options：
+// 传入选项：
 export const configWithOptions = defineConfig({
   reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
 });
 ```
 
-你也可以传入已经创建、实现了 `Reporter` interface 的对象，但不能直接传入 Reporter class。
+也可以直接传入已创建并实现了 `Reporter` 接口的对象，但不能直接传入 Reporter 类。
 
-### 相关文档
+## 相关文档
 
-- [报告器指南](/guide/basic/reporters) - 使用示例和内置报告器详情
-- [Reporter API 参考](/api/javascript-api/reporter) - 自定义报告器实现
+- [报告器指南](/guide/basic/reporters) —— 使用示例和内置报告器输出格式说明
+- [Reporter API 参考](/api/javascript-api/reporter) —— 自定义报告器实现

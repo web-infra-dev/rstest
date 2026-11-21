@@ -1,18 +1,14 @@
 ---
-description: This guide covers how to test React applications and components with Rstest.
+description: Test React applications and components with Rstest using happy-dom, jsdom, SSR, or Browser Mode.
 ---
 
 # React
 
-This guide covers how to test React applications and components with Rstest. Rstest supports testing React in multiple scenarios:
-
-- **Node (with happy-dom or jsdom)**: Fast, lightweight tests running in Node.js with a simulated DOM
-- **SSR (Server-Side Rendering)**: Test server render functions in pure Node.js environment
-- **Browser Mode**: Real browser testing with Playwright for accurate DOM behavior
+Test React applications and components in Rstest using a simulated DOM in Node.js (`happy-dom` or `jsdom`), pure Node.js for SSR, or a real browser in Browser Mode.
 
 ## Node testing
 
-Node-based testing uses DOM simulators like [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to provide a DOM environment in Node.js. This approach is faster and suitable for most component testing scenarios.
+Node-based testing uses [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to simulate the DOM in Node.js for fast component and hook tests.
 
 ### Quick start
 
@@ -22,7 +18,7 @@ import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/core @rsbuild/plugin-react @testing-library/react @testing-library/jest-dom happy-dom -D" />
 
-#### 2. Configure rstest
+#### 2. Configure Rstest
 
 Create `rstest.config.ts`:
 
@@ -36,9 +32,9 @@ export default defineConfig({
 });
 ```
 
-#### 3. Setup test matchers (Optional)
+#### 3. Set up test matchers (optional)
 
-For enhanced DOM assertions with jest-dom matchers, create a setup file:
+To use `jest-dom` DOM assertions, create a setup file:
 
 ```ts title="rstest.setup.ts"
 import { afterEach, expect } from '@rstest/core';
@@ -139,27 +135,23 @@ test('renders user name', async () => {
 
 ## SSR testing
 
-Rstest supports testing React Server-Side Rendering (SSR) scenarios. You can test your server render functions using `react-dom/server`.
-
-### Example
-
-First, create a server render function:
+Test React Server-Side Rendering (SSR) functions directly in Node.js (`testEnvironment: 'node'`, the default) using `react-dom/server`:
 
 ```tsx title="src/index.server.tsx"
-import React from 'react';
-import ReactDOMServer from 'react-dom/server';
+import { StrictMode } from 'react';
+import { renderToString } from 'react-dom/server';
 import App from './App';
 
 export function render() {
-  return ReactDOMServer.renderToString(
-    <React.StrictMode>
+  return renderToString(
+    <StrictMode>
       <App />
-    </React.StrictMode>,
+    </StrictMode>,
   );
 }
 ```
 
-Then test it:
+Then test the rendered HTML:
 
 ```ts title="test/ssr.test.ts"
 import { expect, test } from '@rstest/core';
@@ -172,18 +164,11 @@ test('renders correctly on server', () => {
 });
 ```
 
-SSR tests run in Node.js environment without a DOM simulator, which is the default `testEnvironment: 'node'` setting.
-
 ## Browser mode testing
 
-For scenarios requiring real browser behavior (e.g., CSS rendering, Web APIs, visual testing), use Rstest's Browser Mode with Playwright.
+Use Node testing for fast unit tests and logic-heavy components; use Browser Mode with Playwright when tests depend on real CSS layout, browser APIs, or visual assertions.
 
-See the [Browser Testing - Framework Guides](/guide/browser-testing/framework-guides#react) for detailed setup and usage instructions.
-
-**Recommendations:**
-
-- Use **Node testing** for unit tests, logic-heavy components, and fast feedback
-- Use **Browser Mode** for integration tests, visual behavior, and when you need real browser APIs
+See the [Browser Testing - Framework Guides](/guide/browser-testing/framework-guides#react) for setup and usage instructions.
 
 ## Example projects
 

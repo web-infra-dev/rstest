@@ -1,5 +1,5 @@
 ---
-description: A list of glob patterns that match your test files. These patterns will be resolved relative to the root (process.cwd() by default).
+description: Glob patterns used to match test files, resolved relative to root.
 ---
 
 # include
@@ -8,7 +8,7 @@ description: A list of glob patterns that match your test files. These patterns 
 - **Default:** `['**/*.{test,spec}.?(c|m)[jt]s?(x)']`
 - **CLI:** `--include '**/*.test.ts' --include '**/*.spec.ts'`
 
-A list of glob patterns that match your test files. These patterns will be resolved relative to the [root](/config/test/root) (`process.cwd()` by default).
+Glob patterns that match test files, resolved relative to [root](/config/test/root) (`process.cwd()` by default). Setting `include` replaces the default patterns.
 
 import { Tab, Tabs } from '@theme';
 
@@ -29,21 +29,18 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-You can run `npx rstest list --filesOnly` to see the list of test files that Rstest will include.
+Run `npx rstest list --filesOnly` to inspect the matched test files:
 
 ```bash
 $ npx rstest list --filesOnly
 
-# the output is shown below:
 a.test.ts
 b.test.ts
 ```
 
 ## Default behavior
 
-By default, Rstest will include all javascript / typescript files with `.test.` or `.spec.` suffix in the filename.
-
-The following is a visualization of the default pattern:
+By default, Rstest matches JavaScript and TypeScript files whose filenames contain `.test.` or `.spec.`:
 
 ```bash
 ├── __tests__
@@ -58,7 +55,7 @@ The following is a visualization of the default pattern:
 └── index.js # not test
 ```
 
-It should be noted that if you specify `index.test.ts` as the include pattern, Rstest will only include `index.test.ts` in the root directory. If you want to include `index.test.ts` in all subdirectories, you need to use `**/index.test.ts`.
+Patterns without a directory prefix (such as `index.test.ts`) match only in the root directory. Use `**/index.test.ts` to match subdirectories:
 
 ```diff
 import { defineConfig } from '@rstest/core';
@@ -69,4 +66,4 @@ export default defineConfig({
 });
 ```
 
-It should be noted that for a single extension you should write `**/*.ts` instead of `**/*.{ts}`. The underlying glob libraries treat single-value braces literally, so `**/*.{ts}` will not match `.ts` files.
+For a single extension, write `**/*.ts` instead of `**/*.{ts}`. Single-value braces are matched literally, so `**/*.{ts}` does not match `.ts` files.

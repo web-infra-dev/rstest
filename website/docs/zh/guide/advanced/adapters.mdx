@@ -125,7 +125,7 @@ export default defineConfig({
 
 ### 高级用法：带选项的适配器 \{#advanced-usage-adapters-with-options}
 
-如果需要让调用方定制适配器，可以导出一个接收选项、返回 `ExtendConfigFn` 的函数。例如，下面的版本允许调用方选择测试环境，同时复用相同的别名和常量：
+如果需要让调用方定制适配器，可以导出一个接收选项、返回 `ExtendConfigFn` 的函数。例如，下面的版本可以让调用方选择测试环境，同时复用相同的别名和常量：
 
 ```ts title="my-adapter.ts"
 import type { ExtendConfigFn } from '@rstest/core';

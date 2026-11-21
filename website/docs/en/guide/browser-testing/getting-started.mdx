@@ -18,14 +18,11 @@ The quickest way is to use the `@rstest/core init browser` command for automatic
 
 When you run the command, Rstest automatically:
 
-1. **Generates boilerplate code**: Rstest detects your project's framework (for example, React), language (for example, TypeScript or JavaScript), test directory (for example, common directories like `tests/`, `test/`, or `__tests__/`, depending on what is detected), and package manager, then generates sample components and test files. The generated files adapt based on detection results:
-   - Test directory: Files are placed in the detected test directory
-   - Framework: React projects get JSX component tests, others get native DOM examples
-   - Language: TypeScript projects get `.ts`/`.tsx` files, others get `.js`/`.jsx` files
+1. **Generates boilerplate code**: Rstest detects your project's framework (React or vanilla DOM), language (TypeScript via `tsconfig.json`, or JavaScript), test directory (`tests/`, `test/`, `__tests__/`, or `src/__tests__/`, defaulting to `tests/`), and package manager, then generates sample components and test files in the detected test directory.
 
-2. **Creates configuration file**: Creates `rstest.browser.config.ts` in your project root with basic Browser Mode configuration.
+2. **Creates configuration file**: Creates `rstest.browser.config.mts` in your project root with Browser Mode enabled.
 
-3. **Updates package.json**: Adds a `test:browser` script.
+3. **Updates `package.json`**: Adds a `test:browser` script (`rstest --config=rstest.browser.config.mts`) and adds `@rstest/browser`, `playwright`, and `@testing-library/dom` (plus `@rstest/browser-react` for React projects) to `devDependencies`.
 
 Here's an example output for a React project:
 
@@ -38,7 +35,7 @@ Set up Rstest browser mode
   ✓ Test directory: tests/
 
   Created files:
-    - rstest.browser.config.ts
+    - rstest.browser.config.mts
     - tests/Counter.jsx
     - tests/Counter.test.jsx
     - Updated package.json
@@ -53,10 +50,10 @@ Set up Rstest browser mode
 
 ### Next steps
 
-After initialization, follow the "Next steps" instructions in the output: install project dependencies, install browser drivers, then run tests.
+Follow the printed next steps to install dependencies, download Playwright browsers, and run your browser tests.
 
-:::tip Non-interactive Environments
-In CI or other non-interactive environments, add the `--yes` flag to skip all prompts and use detected configuration:
+:::tip Non-interactive environments
+In CI or other non-interactive environments, add `--yes` to skip prompts and use detected defaults:
 
 ```bash
 npx @rstest/core init browser --yes
@@ -68,17 +65,17 @@ npx @rstest/core init browser --yes
 
 ### 1. Install dependencies
 
-First, install the Rstest core package and Browser Mode support package:
+Install `@rstest/core` (test runner), `@rstest/browser` (Browser Mode runtime), and `playwright` (browser driver peer dependency):
 
-<PackageManagerTabs command="add @rstest/core @rstest/browser -D" />
+<PackageManagerTabs command="add @rstest/core @rstest/browser playwright -D" />
 
-Browser Mode requires Playwright as the browser driver. Install the corresponding browser:
+Download the Playwright browser binary you want to run tests against:
 
 ```bash
 npx playwright install chromium
 ```
 
-You can also install other browsers:
+You can also install Firefox, WebKit, or all browsers:
 
 ```bash
 # Install Firefox
@@ -164,6 +161,6 @@ For complete configuration reference, see [browser configuration](/config/test/b
 
 ## Next steps
 
-- [User interactions](/guide/browser-testing/user-interactions#locator-api) - Use `page` + `expect.element` for semantic queries and assertions
-- [Framework guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
-- [User interactions](/guide/browser-testing/user-interactions) - Simulate user actions
+- [User interactions](/guide/browser-testing/user-interactions) - Simulate user interactions with Locator API, Testing Library, or native DOM APIs
+- [Framework guides](/guide/browser-testing/framework-guides) - Configuration and component testing examples for React and Vanilla JS/TS
+- [Browser mode API](/api/runtime-api/browser-mode/) - API reference for `page`, `Locator`, `expect.element`, and `@rstest/browser-react`

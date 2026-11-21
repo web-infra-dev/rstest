@@ -4,27 +4,25 @@ description: 本章节介绍如何将你的 Jest 项目迁移到 Rstest。
 
 # 从 Jest 迁移
 
-Rstest 提供兼容 Jest 的 API，这使得从 Jest 项目迁移变得简单。以下是如何将你的 Jest 项目迁移到 Rstest：
+Rstest 提供兼容 Jest 的测试、断言和 Mock API。按以下步骤将 Jest 项目迁移到 Rstest：
 
 ## 使用 Agent Skills
 
-如果你在使用支持 Skills 的 Coding Agent，可以安装 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) 技能来辅助完成从 Jest 到 Rstest 的迁移。
+如果你在使用支持 Skills 的 Coding Agent，可以安装 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) 技能来辅助从 Jest 迁移到 Rstest：
 
 ```bash
 npx skills add rstackjs/agent-skills --skill migrate-to-rstest
 ```
 
-安装后，让 Coding Agent 协助完成升级即可。
-
 ## 安装依赖
 
-首先，你需要安装 Rstest 依赖。
+将 `@rstest/core` 安装为开发依赖：
 
 import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/core -D" />
 
-接下来，更新 `package.json` 中的测试脚本，使用 [rstest](/guide/basic/cli) 替代 `jest`。例如：
+将 `package.json` 中的测试脚本从 `jest` 改为 [rstest](/guide/basic/cli)：
 
 ```diff
 "scripts": {
@@ -37,20 +35,20 @@ import { PackageManagerTabs } from '@theme';
 
 Jest 的一部分 CLI 参数可以直接映射到 Rstest，另一部分则需要迁移到配置文件中。迁移时，最常遇到的差异可以参考下表：
 
-| Jest CLI 参数                            | Rstest 对应写法                                          | 说明                                                                                       |
-| ---------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `jest`                                   | `rstest`                                                 |                                                                                            |
-| `jest --watch`                           | `rstest --watch` 或 `rstest watch`                       |                                                                                            |
-| `jest --watchAll`                        | `rstest --watch` 或 `rstest watch`                       | Rstest 不区分 `--watch` 和 `--watchAll`。                                                  |
-| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                             |                                                                                            |
-| `jest --maxWorkers=50%` 或 `jest -w 50%` | `rstest --pool.maxWorkers 50%`                           | Rstest 的 `-w` 表示 `--watch`，不是 `--maxWorkers`。                                       |
-| `jest --selectProjects app`              | `rstest --project app`                                   |                                                                                            |
-| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                         |                                                                                            |
-| `jest --forceExit`                       | `rstest --teardownTimeout 0`                             | Rstest 会在 teardown 函数和 reporter 执行完毕后立即退出。                                  |
-| `jest --openHandlesTimeout=5000`         | `rstest --teardownTimeout 5000`                          | Rstest 会在超时后强制退出；Jest 只会打印警告。                                             |
-| `jest --coverage`                        | `rstest --coverage`                                      | 还需安装与你配置对应的 provider 包：`@rstest/coverage-istanbul` 或 `@rstest/coverage-v8`。 |
-| `jest --coverageDirectory=coverage`      | 在 `rstest.config.ts` 中配置 `coverage.reportsDirectory` |                                                                                            |
-| `jest --coverageProvider=v8`             | `coverage.provider: 'v8'`                                | 安装 `@rstest/coverage-v8`，并在 `rstest.config.ts` 中配置 provider。                      |
+| Jest CLI 参数                            | Rstest 对应写法                               | 说明                                                                                       |
+| ---------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `jest`                                   | `rstest`                                      |                                                                                            |
+| `jest --watch`                           | `rstest --watch` 或 `rstest watch`            |                                                                                            |
+| `jest --watchAll`                        | `rstest --watch` 或 `rstest watch`            | Rstest 不区分 `--watch` 和 `--watchAll`。                                                  |
+| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                  |                                                                                            |
+| `jest --maxWorkers=50%` 或 `jest -w 50%` | `rstest --pool.maxWorkers 50%`                | Rstest 的 `-w` 表示 `--watch`，不是 `--maxWorkers`。                                       |
+| `jest --selectProjects app`              | `rstest --project app`                        |                                                                                            |
+| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`              |                                                                                            |
+| `jest --forceExit`                       | `rstest --teardownTimeout 0`                  | Rstest 会在 teardown 函数和 reporter 执行完毕后立即退出。                                  |
+| `jest --openHandlesTimeout=5000`         | `rstest --teardownTimeout 5000`               | Rstest 会在超时后强制退出；Jest 只会打印警告。                                             |
+| `jest --coverage`                        | `rstest --coverage`                           | 还需安装与你配置对应的 provider 包：`@rstest/coverage-istanbul` 或 `@rstest/coverage-v8`。 |
+| `jest --coverageDirectory=coverage`      | `rstest --coverage.reportsDirectory coverage` | 或在 `rstest.config.ts` 中配置 `coverage.reportsDirectory`。                               |
+| `jest --coverageProvider=v8`             | `rstest --coverage.provider v8`               | 安装 `@rstest/coverage-v8`，或在 `rstest.config.ts` 中设置 `coverage.provider: 'v8'`。     |
 
 ## 配置迁移
 
@@ -187,7 +185,7 @@ export default defineConfig({
 
 ### 代码转换
 
-Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。
+与 Jest 的 `babel-jest` 不同，Rstest 默认使用 SWC 转换代码。大多数项目无需额外配置；如需自定义，可通过 [tools.swc](/config/build/tools#toolsswc) 调整 SWC 选项。
 
 Jest 本身通过 `moduleNameMapper` 和 `transform` 配置模块解析和转换，而不是读取 `tsconfig.json`。如果你使用了 `ts-jest`，不要假设其中的 TypeScript 转换设置会自动迁移：Rstest 会自动应用 `compilerOptions.paths` 进行解析，而装饰器语法、输出 target 等转换设置需要在迁移时按需检查并通过 Rstest 配置。adapter 可能会继承或推断额外设置，请参考所用 [adapter 的文档](/guide/advanced/adapters)。详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)。
 
@@ -204,7 +202,7 @@ export default {
 }
 ```
 
-如果你有自定义的 Babel 配置或使用特定的 Babel 插件/预设，你可以添加 [Rsbuild Babel 插件](https://rsbuild.rs/zh/plugins/list/plugin-babel)：
+如果你依赖自定义的 Babel 插件或预设，可以添加 [Rsbuild Babel 插件](https://rsbuild.rs/zh/plugins/list/plugin-babel)：
 
 ```ts title='rstest.config.ts'
 import { pluginBabel } from '@rsbuild/plugin-babel';
@@ -237,14 +235,14 @@ Rstest 提供了与 Jest 这两个主要环境变量对应的实现，只是变�
 
 ### 测试 API
 
-Rstest 提供了与 Jest 兼容的 API。因此，你只需将导入从 Jest 更改为 Rstest：
+将测试 API 导入从 `@jest/globals` 改为 `@rstest/core`：
 
 ```diff
 - import { describe, expect, it, test } from '@jest/globals';
 + import { describe, expect, it, test, rs } from '@rstest/core';
 ```
 
-Rstest 提供了 `rs` API，你可以使用它来访问 Rstest 的工具函数，如 `rs.fn()` 和 `rs.mock()`。更长的 `rstest` 工具方法仍然可以作为别名使用。更多工具函数可以在 [Rstest APIs](/api/runtime-api/) 中找到。
+将 `jest.<api>` 调用替换为 `rs.<api>`（或完整别名 `rstest`）。完整列表见 [Rstest APIs](/api/runtime-api/)。
 
 ```diff
 - const fn = jest.fn();
@@ -252,6 +250,39 @@ Rstest 提供了 `rs` API，你可以使用它来访问 Rstest 的工具函数�
 
 fn.mockResolvedValue('foo');
 ```
+
+### 加载真实模块（`requireActual`）
+
+在 Jest 中，`jest.requireActual()` 既能在 `jest.mock()` 工厂函数内同步加载真实模块，也能在测试中调用。在 Rstest 中，需根据加载场景选择对应方式：
+
+- **在 hoisted 的 `rs.mock()` 工厂函数内（ESM）**：`rs.mock()` 工厂函数必须是同步的。请改用带 `with { rstest: 'importActual' }` 的静态 `import` 导入真实模块并展开导出：
+
+```diff
++ import * as actualUtils from './utils' with { rstest: 'importActual' };
++
+- jest.mock('./utils', () => ({
+-   ...jest.requireActual('./utils'),
+-   formatDate: jest.fn(() => '2024-01-01'),
+- }));
++ rs.mock('./utils', () => ({
++   ...actualUtils,
++   formatDate: rs.fn(() => '2024-01-01'),
++ }));
+```
+
+- **在异步测试或辅助函数中（ESM）**：使用 [`rs.importActual`](/api/runtime-api/rstest/mock-modules#rsimportactual)（`await rs.importActual('./utils')`）。
+- **通过 `require()` 加载的 CommonJS 模块**：使用 [`rs.requireActual`](/api/runtime-api/rstest/mock-modules#rsrequireactual)（`rs.requireActual('./utils.cjs')`）。该方法同步执行，若依赖图包含 top-level `await` 会抛出错误。
+
+### Fake timers
+
+将 `jest.useFakeTimers()` 和 `jest.useRealTimers()` 替换为 [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) 和 [`rs.useRealTimers()`](/api/runtime-api/rstest/fake-timers#rsuserealtimers)。Rstest 将选项直接透传给 `@sinonjs/fake-timers`（`toNotFake`、`toFake`、`now`、`shouldAdvanceTime`、`advanceTimeDelta`），因此需重命名 Jest 的 `doNotFake` 和 `advanceTimers` 选项：
+
+```diff
+- jest.useFakeTimers({ doNotFake: ['setImmediate'], advanceTimers: true });
++ rs.useFakeTimers({ toNotFake: ['setImmediate'], shouldAdvanceTime: true });
+```
+
+`rs.useFakeTimers()` 还会返回一个 `Disposable`，使用 `using _timers = rs.useFakeTimers()` 可在作用域退出时自动恢复真实定时器。
 
 ### 虚拟模块 mock
 
@@ -268,7 +299,7 @@ fn.mockResolvedValue('foo');
 
 ### Done 回调
 
-Rstest 不支持 `done` 回调。作为替代，你可以返回一个 Promise 或使用 `async/await` 进行异步测试。
+Rstest 不支持 `done` 回调。请改为返回 Promise 或使用 `async/await` 编写异步测试：
 
 ```diff
 - test('async test with done', (done) => {
@@ -295,16 +326,16 @@ Rstest 不支持 `done` 回调。作为替代，你可以返回一个 Promise �
 
 Rstest 默认按声明的逆序执行 `afterEach` 和 `afterAll` Hook。设置 [`sequence.hooks: 'list'`](/config/test/sequence) 后，每个 suite 内的 Hook 会按声明顺序执行，与 Jest 一致。如果多个库的清理逻辑有先后依赖，例如需要先卸载组件再重置 store，可以使用此选项。
 
-Rstest 中 `beforeEach` 和 `beforeAll` 钩子的返回函数用于执行测试后的清理工作。
+在 Rstest 中，如果 `beforeEach` 或 `beforeAll` 返回一个函数，Rstest 会将其注册为测试或 suite 结束后的清理回调。Jest 会忽略 Hook 的返回值，因此像 `beforeEach(() => doSomething())` 这样隐式返回调用结果的箭头函数，一旦 `doSomething()` 返回函数就会在清理阶段被执行。请改用花括号包裹函数体，避免意外返回：
 
 ```diff
 - beforeEach(() => doSomething());
-+ beforeEach(() => { doSomething() });
++ beforeEach(() => { doSomething(); });
 ```
 
 ### 超时设置
 
-如果你使用 `jest.setTimeout()` 来设置测试的超时时间，你可以改用 `rs.setConfig()`。
+将 `jest.setTimeout()` 替换为 `rs.setConfig()`：
 
 ```diff
 - jest.setTimeout(5_000)
@@ -317,7 +348,7 @@ Rstest 的 snapshot key 格式与 Jest 不同。原有的 Jest snapshot 文件�
 
 ### Key 分隔符变化
 
-Jest 用 `:` 把 suite 名、测试名、snapshot label 拼成一行，Rstest 用 `>`：
+Jest 用空格连接 suite 名和测试名，再用 `: ` 连接 snapshot label；Rstest 统一用 `>` 连接：
 
 ```diff
 - overlay should not show a warning when "client.overlay.warnings" is "false": page html 1
@@ -350,9 +381,9 @@ rstest overlay -u        # 只更新过滤范围
 
 ## ESM 和 CJS
 
-Rstest 默认支持 ESM。如果你的项目使用 ESM，你不需要进行任何额外配置（例如设置 `NODE_OPTIONS=--experimental-vm-modules`）。
+Rstest 默认支持 ESM。ESM 项目无需额外配置（例如设置 `NODE_OPTIONS=--experimental-vm-modules`）。
 
-如果你的项目仍在使用 CommonJS，Rstest 仍然可以正常工作，但我们建议迁移到 ESM，以获得更好的性能和未来的兼容性。
+CommonJS 项目也能正常运行，但建议逐步迁移到 ESM，以获得更好的性能和后续兼容性。
 
 ### ESM vs CJS mocking
 

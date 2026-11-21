@@ -1,5 +1,5 @@
 ---
-description: 打印每个测试的堆内存使用情况，有助于发现内存泄漏问题。
+description: 在每个测试后打印 V8 堆内存用量，用于排查内存泄漏。
 ---
 
 # logHeapUsage
@@ -8,7 +8,9 @@ description: 打印每个测试的堆内存使用情况，有助于发现内存�
 - **默认值：** `false`
 - **CLI：** `--logHeapUsage`
 
-打印每个测试的堆内存使用情况，有助于发现内存泄漏问题。
+在每个测试文件及展示的测试用例后输出 V8 `heapUsed` 内存用量，方便排查测试中的内存泄漏。
+
+仅对 Node.js 测试生效；在 [Browser Mode](/config/test/browser) 下会被忽略并输出警告。
 
 import { Tab, Tabs } from '@theme';
 
@@ -31,7 +33,7 @@ export default defineConfig({
 
 ## 示例
 
-在将 `logHeapUsage` 设置为 `true` 后，Rstest 将记录每个测试的堆内存使用情况。
+启用 `logHeapUsage: true` 后，输出中会附带堆内存用量：
 
 ```bash
  ✓ test/index.test.ts (2) 11 MB heap used

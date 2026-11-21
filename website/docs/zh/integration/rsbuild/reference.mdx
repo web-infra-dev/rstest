@@ -1,27 +1,27 @@
 ---
-description: Rstest Rsbuild adapter 的 API 和配置映射参考。
+description: Rstest Rsbuild 适配器的 API 和配置映射参考。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
-# Rsbuild adapter 配置参考
+# Rsbuild 适配器配置参考
 
-安装与快速配置请查看 [Rsbuild 集成概览](./)。本页包含完整的 adapter API、配置映射和调试方法。
+安装与快速配置请查看 [Rsbuild 集成概览](./)。本页包含完整的适配器 API、配置映射和调试方法。
 
 ## API
 
 ### `withRsbuildConfig(options)`
 
-返回一个配置函数，该函数加载或接收 Rsbuild 配置并将其转换为 Rstest 配置。
+返回一个配置函数，用于加载或接收 Rsbuild 配置并将其转换为 Rstest 配置。
 
 #### `cwd`
 
 - **类型：** `string`
 - **默认值：** `process.cwd()`
 
-`cwd` 会传递给 Rsbuild 的 `loadConfig` 函数。它是用于解析 Rsbuild 配置文件的当前工作目录。
+传递给 Rsbuild `loadConfig` 的工作目录，用于解析 Rsbuild 配置文件。
 
-当你的 Rsbuild 配置文件位于不同的目录，或者你在 monorepo 中运行测试（此时 `process.cwd()` 不是你的配置目录）时，你可以指定 `cwd` 选项从不同的目录解析 Rsbuild 配置文件。
+当 Rsbuild 配置文件位于其他目录，或在 monorepo 中运行测试（此时 `process.cwd()` 不是配置所在目录）时，可通过 `cwd` 指定解析目录：
 
 ```ts
 export default defineConfig({
@@ -109,7 +109,7 @@ export default {
 };
 ```
 
-你可以在 Rstest 配置中引用特定的环境配置。Rstest 将会把 Rsbuild 的共享配置和具有匹配 `environmentName` 的环境配置适配为 Rstest 格式。
+你可以在 Rstest 配置中引用指定的环境配置。适配器会将 Rsbuild 共享配置与匹配 `environmentName` 的环境配置合并后转换为 Rstest 配置：
 
 ```ts
 // 用于测试 'test' 环境
@@ -121,7 +121,7 @@ export default defineConfig({
 });
 ```
 
-当你需要使用不同的配置独立测试应用程序的多个部分时，你可以定义多个 Rstest 项目。每个项目可以通过设置 `environmentName` 选项来继承特定的环境配置。
+如果需要用不同配置独立测试应用的多个部分，可以定义多个 Rstest 项目，并为每个项目设置对应的 `environmentName`：
 
 ```ts
 export default defineConfig({
@@ -142,10 +142,10 @@ export default defineConfig({
 
 #### `modifyRsbuildConfig`
 
-- **类型：** `(config: RsbuildConfig) => RsbuildConfig | void`
+- **类型：** `(config: RsbuildConfig) => RsbuildConfig`
 - **默认值：** `undefined`
 
-在将 Rsbuild 配置转换为 Rstest 配置之前对其进行修改：
+在将 Rsbuild 配置转换为 Rstest 配置之前对其进行修改。回调函数必须返回修改后的 `RsbuildConfig` 对象：
 
 ```ts
 export default defineConfig({
@@ -193,7 +193,7 @@ export default defineConfig({
 - **类型：** `string`
 - **默认值：** `undefined`
 
-传入的 `rsbuildConfig` 对应的来源文件路径；它不会从该路径加载配置。适配器只用它将该文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 和 [performance.buildCache.buildDependencies](https://rsbuild.rs/zh/config/performance/build-cache#builddependencies)。
+传入的 `rsbuildConfig` 对应的来源文件路径；适配器不会从该路径加载配置，仅用于将该文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 和 [`performance.buildCache.buildDependencies`](https://rsbuild.rs/zh/config/performance/build-cache#builddependencies)。
 
 #### `environmentName`
 
@@ -211,31 +211,29 @@ export default defineConfig({
 
 ## 配置映射
 
-适配器会自动将这些 Rsbuild 选项映射到 Rstest：
+仅下表中列出的 Rsbuild 选项会被 Rstest 继承。未列出的配置（如 `dev`、`server`、`html` 等与测试运行无关的部分）会在转换时被忽略。
 
-下表中列出的字段会被继承；没有列出的 Rsbuild 选项默认不会进入 Rstest 配置。这意味着 `dev`、`server`、`html` 等与测试运行无关的配置会被自动忽略。
-
-| Rsbuild 选项             | Rstest 等效项            | 说明                                       |
-| ------------------------ | ------------------------ | ------------------------------------------ |
-| `root`                   | `root`                   | 项目根目录                                 |
-| `name` from environment  | `name`                   | 环境标识符                                 |
-| `plugins`                | `plugins`                | 插件配置                                   |
-| `source.decorators`      | `source.decorators`      | 装饰器支持                                 |
-| `source.assetsInclude`   | `source.assetsInclude`   | 额外的静态资源匹配规则                     |
-| `source.define`          | `source.define`          | 全局常量                                   |
-| `source.include`         | `source.include`         | 源文件包含模式                             |
-| `source.exclude`         | `source.exclude`         | 源文件排除模式                             |
-| `source.transformImport` | `source.transformImport` | 按需导入转换规则                           |
-| `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript 配置文件路径                    |
-| `resolve`                | `resolve`                | 模块解析                                   |
-| `output.cssModules`      | `output.cssModules`      | CSS 模块配置                               |
-| `output.emitAssets`      | `output.emitAssets`      | 是否将导入的静态资源输出到磁盘             |
-| `output.module`          | `output.module`          | 输出模块类型                               |
-| `performance.buildCache` | `performance.buildCache` | 复用并补充 rstest 场景默认值               |
-| `tools.rspack`           | `tools.rspack`           | Rspack 配置                                |
-| `tools.swc`              | `tools.swc`              | SWC 配置                                   |
-| `tools.bundlerChain`     | `tools.bundlerChain`     | Bundler 链配置                             |
-| `output.target`          | `testEnvironment`        | web 环境为 'happy-dom'，node 环境为 'node' |
+| Rsbuild 选项             | Rstest 等效项            | 说明                                                                     |
+| ------------------------ | ------------------------ | ------------------------------------------------------------------------ |
+| `root`                   | `root`                   | 项目根目录                                                               |
+| `environmentName` 选项   | `name`                   | 环境标识符                                                               |
+| `plugins`                | `plugins`                | 插件配置                                                                 |
+| `source.decorators`      | `source.decorators`      | 装饰器支持                                                               |
+| `source.assetsInclude`   | `source.assetsInclude`   | 额外的静态资源匹配规则                                                   |
+| `source.define`          | `source.define`          | 全局常量                                                                 |
+| `source.include`         | `source.include`         | 源文件包含模式                                                           |
+| `source.exclude`         | `source.exclude`         | 源文件排除模式                                                           |
+| `source.transformImport` | `source.transformImport` | 按需导入转换规则                                                         |
+| `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript 配置文件路径                                                  |
+| `resolve`                | `resolve`                | 模块解析                                                                 |
+| `output.cssModules`      | `output.cssModules`      | CSS 模块配置                                                             |
+| `output.emitAssets`      | `output.emitAssets`      | 是否将导入的静态资源输出到磁盘                                           |
+| `output.module`          | `output.module`          | 输出模块类型                                                             |
+| `performance.buildCache` | `performance.buildCache` | 复用并补充 Rstest 默认配置                                               |
+| `tools.rspack`           | `tools.rspack`           | Rspack 配置                                                              |
+| `tools.swc`              | `tools.swc`              | SWC 配置                                                                 |
+| `tools.bundlerChain`     | `tools.bundlerChain`     | Bundler 链配置                                                           |
+| `output.target`          | `testEnvironment`        | `node*` / `'async-node'` 映射为 `'node'`，其余及未设置时为 `'happy-dom'` |
 
 另外，适配器还会移除 `rsbuild:type-check` 插件，因为类型检查不属于测试运行时所需的构建链路。
 
@@ -243,7 +241,7 @@ export default defineConfig({
 
 要查看适配器返回的解析配置，可以将其包装并打印结果：
 
-```typescript
+```ts
 export default defineConfig({
   extends: async (user) => {
     const config = await withRsbuildConfig()(user);
