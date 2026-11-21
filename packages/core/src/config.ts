@@ -108,6 +108,21 @@ const resolveExtendEntry = async (
   return resolved;
 };
 
+// Local inheritance can leave own undefined fields, such as include and coverage.reporters.
+// Keep symbol keys and opaque adapter values while removing only unset record fields.
+const omitUnsetOptions = <T>(value: T): T => {
+  if (!isPlainObject(value)) return value;
+  const result = { ...value };
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === undefined) {
+      Reflect.deleteProperty(result, key);
+    } else if (isPlainObject(entry)) {
+      Reflect.set(result, key, omitUnsetOptions(entry));
+    }
+  }
+  return result;
+};
+
 /**
  * Resolves `extends`, then appends adapter triggers and the `source` config
  * files to `forceRerunTriggers` unless the config sets that option. A filled-in
@@ -117,14 +132,16 @@ const resolveExtendEntry = async (
 export const resolveExtends = async (
   config: RstestConfig,
   source?: Pick<LoadConfigResult<RstestConfig>, 'filePath' | 'dependencies'>,
-  globDefaults?: NonNullable<RstestConfig['extends']>,
+  globProject?: { root: string; extends: NonNullable<RstestConfig['extends']> },
 ): Promise<RstestConfig> => {
   const hasOwnTriggers = config.forceRerunTriggers !== undefined;
   let merged = config;
   let extendedTriggers: string[] = [];
 
   if (config.extends) {
-    const userConfig = Object.freeze({ ...config });
+    const localConfig = { ...config };
+    if (globProject) localConfig.root ??= globProject.root;
+    const userConfig = Object.freeze(localConfig);
     const extendsEntries = castArray(config.extends);
     const resolvedExtends = await Promise.all(
       extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
@@ -141,21 +158,27 @@ export const resolveExtends = async (
     );
   }
 
-  if (globDefaults) {
-    const userConfig = Object.freeze({ ...config });
+  if (globProject) {
+    const userConfig = Object.freeze({
+      ...config,
+      root: merged.root ?? globProject.root,
+    });
     const layers = await Promise.all(
-      castArray(globDefaults).map((entry) =>
+      castArray(globProject.extends).map((entry) =>
         resolveExtendEntry(entry, userConfig),
       ),
     );
-    const defaults = layers.reduce<RstestConfig>(plainDeepMerge, {});
+    const defaults = layers.reduce<RstestConfig>(
+      (base, layer) => plainDeepMerge(base, omitUnsetOptions(layer)),
+      {},
+    );
     if (
       merged.forceRerunTriggers === undefined &&
       defaults.forceRerunTriggers
     ) {
       extendedTriggers = defaults.forceRerunTriggers;
     }
-    merged = plainDeepMerge(defaults, merged);
+    merged = plainDeepMerge(defaults, omitUnsetOptions(merged));
   }
 
   const configFiles = source

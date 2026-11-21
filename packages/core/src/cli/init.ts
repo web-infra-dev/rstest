@@ -433,10 +433,11 @@ async function resolveConfig(
     });
   }
 
-  if (defaults) {
-    result.content.root ??= options.cwd;
-  }
-  result.content = await resolveExtends(result.content, result, defaults);
+  result.content = await resolveExtends(
+    result.content,
+    result,
+    defaults && { root: options.cwd, extends: defaults },
+  );
   mergeWithCLIOptions(result.content, options);
   result.content.root ||= options.cwd;
   return result;

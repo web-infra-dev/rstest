@@ -2,6 +2,8 @@
 description: Define multiple test projects. It can be an array of directories, configuration files, or glob patterns, or an object.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # projects
 
 - **Type:**
@@ -55,6 +57,8 @@ export default defineConfig({
   ],
 });
 ```
+
+<ApiMeta addedVersion="1.0.1" />
 
 To give discovered projects shared defaults, use a directory glob with `extends`:
 

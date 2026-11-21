@@ -89,12 +89,19 @@ describe('PROJECT_LOADER', () => {
   });
 
   it('applies glob defaults per directory, beneath local extends and config', async () => {
+    const inheritedRoot = join(root, 'packages/a/suite');
     const loader = rs.fn<LoadProjectConfig>(({ dirPath }) =>
       dirPath === join(root, 'packages/a')
         ? {
             content: {
-              extends: { testTimeout: 2000, setupFiles: ['./inherited.ts'] },
+              extends: ({ root }) => ({
+                root: inheritedRoot,
+                testTimeout: 2000,
+                setupFiles: ['./inherited.ts'],
+                source: { define: { PACKAGE_DIR: root } },
+              }),
               setupFiles: ['./local.ts'],
+              coverage: { enabled: false },
               source: { define: { LOCAL: 'true' } },
             },
             filePath: hostFile('a'),
@@ -109,6 +116,8 @@ describe('PROJECT_LOADER', () => {
             glob: '<rootDir>/packages/*',
             extends: ({ root }) => ({
               globals: true,
+              include: ['unit.case.ts'],
+              coverage: { enabled: true, reporters: ['text'] },
               testTimeout: 1000,
               setupFiles: ['./shared.ts'],
               source: { define: { PROJECT_ROOT: root } },
@@ -134,11 +143,18 @@ describe('PROJECT_LOADER', () => {
     expect(a).toMatchObject({
       config: {
         name: 'pkg-a',
+        root: inheritedRoot,
+        include: ['unit.case.ts'],
+        coverage: { enabled: false, reporters: ['text'] },
         globals: true,
         testTimeout: 2000,
         setupFiles: ['./inherited.ts', './local.ts'],
         source: {
-          define: { LOCAL: 'true', PROJECT_ROOT: join(root, 'packages/a') },
+          define: {
+            LOCAL: 'true',
+            PACKAGE_DIR: join(root, 'packages/a'),
+            PROJECT_ROOT: inheritedRoot,
+          },
         },
       },
       configFilePath: hostFile('a'),
