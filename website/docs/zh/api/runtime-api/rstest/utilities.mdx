@@ -251,7 +251,7 @@ await rs.waitFor(
 );
 ```
 
-启用 [fake timers](/api/runtime-api/rstest/fake-timers) 时，`rs.waitFor` 会在每次检查前将其推进 `interval` 毫秒，使 `callback` 等待的定时器能够触发。
+启用 [fake timers](/api/runtime-api/rstest/fake-timers) 时，`rs.waitFor` 会在每次检查前将其推进 `interval` 毫秒，异步 `callback` 仍在执行时也会每隔 `interval` 毫秒推进一次，使 `callback` 等待的定时器能够触发。
 
 ## rs.waitUntil
 
@@ -289,4 +289,4 @@ const serverReady = await rs.waitUntil(
 );
 ```
 
-启用 [fake timers](/api/runtime-api/rstest/fake-timers) 时，`rs.waitUntil` 会在每次检查前将其推进 `interval` 毫秒，使 `callback` 等待的定时器能够触发。
+启用 [fake timers](/api/runtime-api/rstest/fake-timers) 时，`rs.waitUntil` 会在每次检查前将其推进 `interval` 毫秒，异步 `callback` 仍在执行时也会每隔 `interval` 毫秒推进一次，使 `callback` 等待的定时器能够触发。

@@ -255,4 +255,17 @@ describe('Fake timers', () => {
     ).resolves.toBe(true);
     expect(Date.now()).toBe(200);
   });
+
+  it('should advance fake timers while an async wait callback is pending', async () => {
+    rstest.useFakeTimers({ now: 0 });
+
+    const callback = async () => {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+      return Date.now();
+    };
+    const options = { timeout: 2_000, interval: 25 };
+
+    await expect(rstest.waitFor(callback, options)).resolves.toBe(125);
+    await expect(rstest.waitUntil(callback, options)).resolves.toBe(250);
+  });
 });

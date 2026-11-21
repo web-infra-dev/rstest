@@ -109,3 +109,19 @@ it('waitUntil advances fake timers between checks', async () => {
     rs.useRealTimers();
   }
 });
+
+it('waitFor and waitUntil advance fake timers while an async callback waits', async () => {
+  rs.useFakeTimers();
+  try {
+    const callback = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return 'done';
+    };
+    const options = { timeout: 2_000, interval: 50 };
+
+    await expect(rs.waitFor(callback, options)).resolves.toBe('done');
+    await expect(rs.waitUntil(callback, options)).resolves.toBe('done');
+  } finally {
+    rs.useRealTimers();
+  }
+});

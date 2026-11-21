@@ -251,7 +251,7 @@ await rs.waitFor(
 );
 ```
 
-When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitFor` advances them by `interval` before each check, so the timers `callback` waits for can fire.
+When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitFor` advances them by `interval` before each check, and every `interval` while an async `callback` is still running, so the timers `callback` waits for can fire.
 
 ## rs.waitUntil
 
@@ -290,4 +290,4 @@ const serverReady = await rs.waitUntil(
 );
 ```
 
-When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitUntil` advances them by `interval` before each check, so the timers `callback` waits for can fire.
+When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitUntil` advances them by `interval` before each check, and every `interval` while an async `callback` is still running, so the timers `callback` waits for can fire.

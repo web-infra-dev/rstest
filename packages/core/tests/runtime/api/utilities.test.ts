@@ -229,6 +229,53 @@ describe('rstest utilities wait APIs', () => {
     }
   });
 
+  it.each(['waitFor', 'waitUntil'] as const)(
+    '%s keeps advancing fake timers while an async callback is pending',
+    async (method) => {
+      const rs = await createUtilities();
+      rs.useFakeTimers({ now: 0 });
+
+      try {
+        const settledAt = await rs[method](
+          async () => {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            return Date.now();
+          },
+          { timeout: 1_000, interval: 25 },
+        );
+
+        expect(settledAt).toBe(125);
+      } finally {
+        rs.useRealTimers();
+      }
+    },
+  );
+
+  it('waitFor stops advancing fake timers at the deadline', async () => {
+    const rs = await createUtilities();
+    const { setTimeout: realSetTimeout } = rs.getRealTimers();
+    const realSleep = (ms: number) =>
+      new Promise<void>((resolve) => realSetTimeout(resolve, ms));
+    rs.useFakeTimers({ now: 0 });
+
+    try {
+      const pending = rs.waitFor(
+        () => new Promise((resolve) => setTimeout(resolve, 10_000)),
+        { timeout: 50, interval: 10 },
+      );
+      await realSleep(100);
+      const stoppedAt = Date.now();
+      expect(stoppedAt).toBeGreaterThan(10);
+      await realSleep(50);
+      expect(Date.now()).toBe(stoppedAt);
+
+      rs.advanceTimersByTime(10_000);
+      await expect(pending).rejects.toThrow('waitFor timed out in 50ms');
+    } finally {
+      rs.useRealTimers();
+    }
+  });
+
   it('cancels abandoned waits when the file state is reset', async () => {
     const rs = await createUtilities();
     let untilAttempts = 0;
