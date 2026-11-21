@@ -680,6 +680,12 @@ const buildRstestUtilities = async (): Promise<{
             throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
+          // Like Vitest, move fake time forward by one interval before each
+          // check, so the timers the callback is waiting on can fire.
+          if (rstest.isFakeTimers()) {
+            rstest.advanceTimersByTime(interval);
+          }
+
           try {
             const value = await callback();
             if (controller.cancelled) {
@@ -724,6 +730,10 @@ const buildRstestUtilities = async (): Promise<{
           }
           if (timedOut) {
             throw createWaitUntilTimeoutError(timeout);
+          }
+
+          if (rstest.isFakeTimers()) {
+            rstest.advanceTimersByTime(interval);
           }
 
           let value: Awaited<ReturnType<typeof callback>>;

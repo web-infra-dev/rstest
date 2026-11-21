@@ -70,3 +70,42 @@ it('waitUntil should throw immediately when callback throws', async () => {
 
   expect(attempts).toBe(1);
 });
+
+it('waitFor advances fake timers between checks', async () => {
+  rs.useFakeTimers();
+  try {
+    let ready = false;
+    setTimeout(() => {
+      ready = true;
+    }, 500);
+
+    await rs.waitFor(
+      () => {
+        if (!ready) {
+          throw new Error('not ready');
+        }
+      },
+      { timeout: 2_000, interval: 50 },
+    );
+
+    expect(ready).toBe(true);
+  } finally {
+    rs.useRealTimers();
+  }
+});
+
+it('waitUntil advances fake timers between checks', async () => {
+  rs.useFakeTimers();
+  try {
+    let ready = false;
+    setTimeout(() => {
+      ready = true;
+    }, 500);
+
+    await expect(
+      rs.waitUntil(() => ready, { timeout: 2_000, interval: 50 }),
+    ).resolves.toBe(true);
+  } finally {
+    rs.useRealTimers();
+  }
+});

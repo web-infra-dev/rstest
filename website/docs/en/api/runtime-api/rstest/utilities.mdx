@@ -251,6 +251,8 @@ await rs.waitFor(
 );
 ```
 
+When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitFor` advances them by `interval` before each check, so the timers `callback` waits for can fire.
+
 ## rs.waitUntil
 
 - **Alias:** `rstest.waitUntil`
@@ -287,3 +289,5 @@ const serverReady = await rs.waitUntil(
   { timeout: 10_000, interval: 200 },
 );
 ```
+
+When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitUntil` advances them by `interval` before each check, so the timers `callback` waits for can fire.

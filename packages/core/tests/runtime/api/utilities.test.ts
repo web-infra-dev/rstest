@@ -176,6 +176,59 @@ describe('rstest utilities wait APIs', () => {
     rs.useRealTimers();
   });
 
+  it('waitFor advances fake timers by the interval before each check', async () => {
+    const rs = await createUtilities();
+    rs.useFakeTimers({ now: 0 });
+
+    try {
+      let ready = false;
+      setTimeout(() => {
+        ready = true;
+      }, 100);
+      const checkedAt: number[] = [];
+
+      await rs.waitFor(
+        () => {
+          checkedAt.push(Date.now());
+          if (!ready) {
+            throw new Error('not ready');
+          }
+        },
+        { timeout: 1_000, interval: 25 },
+      );
+
+      expect(checkedAt).toEqual([25, 50, 75, 100]);
+    } finally {
+      rs.useRealTimers();
+    }
+  });
+
+  it('waitUntil advances fake timers by the interval before each check', async () => {
+    const rs = await createUtilities();
+    rs.useFakeTimers({ now: 0 });
+
+    try {
+      let ready = false;
+      setTimeout(() => {
+        ready = true;
+      }, 100);
+      const checkedAt: number[] = [];
+
+      const result = await rs.waitUntil(
+        () => {
+          checkedAt.push(Date.now());
+          return ready && 'ready';
+        },
+        { timeout: 1_000, interval: 25 },
+      );
+
+      expect(result).toBe('ready');
+      expect(checkedAt).toEqual([25, 50, 75, 100]);
+    } finally {
+      rs.useRealTimers();
+    }
+  });
+
   it('cancels abandoned waits when the file state is reset', async () => {
     const rs = await createUtilities();
     let untilAttempts = 0;
