@@ -7,6 +7,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test projects', () => {
+  it('applies glob defaults and package overrides through the CLI', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: { cwd: join(__dirname, 'fixtures/glob-defaults') },
+      },
+    });
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('Test Files 2 passed');
+    expect(cli.stdout).toContain('Tests 2 passed');
+  });
+
   it('rejects duplicate project names even when the selection excludes them', async () => {
     const options = {
       nodeOptions: { cwd: join(__dirname, 'fixtures-duplicate-names') },

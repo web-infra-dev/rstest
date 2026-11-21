@@ -2,6 +2,8 @@
 description: 定义多个测试项目，可以是一个目录、配置文件或 glob 模式，也可以是一个对象。Rstest 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # projects
 
 - **类型：**
@@ -11,7 +13,12 @@ import type { ProjectConfig } from '@rstest/core';
 
 type InlineProjectConfig = ProjectConfig & { name: string };
 
-type Projects = (string | InlineProjectConfig)[];
+type GlobProject = {
+  glob: string;
+  extends: NonNullable<ProjectConfig['extends']>;
+};
+
+type Projects = (string | InlineProjectConfig | GlobProject)[];
 ```
 
 - **默认值：** `[<rootDir>]`
@@ -49,7 +56,26 @@ export default defineConfig({
 });
 ```
 
-任何 `projects` 数组里的对象项，包括嵌套 `projects`，都建议搭配 `defineInlineProject()`。`defineProject()` 只用于项目配置文件的顶层导出。
+<ApiMeta addedVersion="1.0.1" />
+
+要为匹配的项目设置共享默认值，可以在目录 glob 上使用 `extends`：
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      glob: 'packages/*',
+      extends: { globals: true, setupFiles: ['./setup.ts'] },
+    },
+  ],
+});
+```
+
+每个匹配的目录都是一个项目，包括没有配置文件的目录。相对的 setup 文件路径从项目目录解析。项目配置及其继承的设置优先于 glob 默认值。普通对象递归合并，项目中的数组会替换默认数组。如果多个 glob 项匹配同一目录，则使用第一个匹配项的默认值。
+
+任何 `projects` 数组里的具名内联项目，包括嵌套 `projects`，都建议搭配 `defineInlineProject()`。`defineProject()` 只用于项目配置文件的顶层导出。
 
 `defineProject()` 允许顶层导出的 project 省略 `name`，再由 Rstest 按 [name](/config/test/name) 配置项的规则自动推导。`defineInlineProject()` 则要求每个 inline project 都显式提供 `name`。
 

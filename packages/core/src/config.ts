@@ -48,17 +48,27 @@ export interface LoadedRstestConfig {
   dependencies?: string[];
 }
 
-export async function loadConfig({
-  cwd = process.cwd(),
-  path,
-  envMode,
-  configLoader,
-}: {
+type LoadRstestConfigOptions = {
   cwd?: string;
   path?: string;
   envMode?: string;
   configLoader?: LoadConfigOptions['loader'];
-} = {}): Promise<LoadConfigResult<RstestConfig>> {
+};
+
+export async function loadConfig(
+  options: LoadRstestConfigOptions = {},
+): Promise<LoadConfigResult<RstestConfig>> {
+  const result = await readConfigFile(options);
+  result.content = await resolveExtends(result.content, result);
+  return result;
+}
+
+export async function readConfigFile({
+  cwd = process.cwd(),
+  path,
+  envMode,
+  configLoader,
+}: LoadRstestConfigOptions): Promise<LoadConfigResult<RstestConfig>> {
   const result = await loadRsbuildConfig<RstestConfig>({
     cwd,
     path,
@@ -73,7 +83,6 @@ export async function loadConfig({
     logger.debug('no rstest config file found');
   }
 
-  result.content = await resolveExtends(result.content, result);
   return result;
 }
 
@@ -99,6 +108,21 @@ const resolveExtendEntry = async (
   return resolved;
 };
 
+// Local inheritance can leave own undefined fields, such as include and coverage.reporters.
+// Keep symbol keys and opaque adapter values while removing only unset record fields.
+const omitUnsetOptions = <T>(value: T): T => {
+  if (!isPlainObject(value)) return value;
+  const result = { ...value };
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === undefined) {
+      Reflect.deleteProperty(result, key);
+    } else if (isPlainObject(entry)) {
+      Reflect.set(result, key, omitUnsetOptions(entry));
+    }
+  }
+  return result;
+};
+
 /**
  * Resolves `extends`, then appends adapter triggers and the `source` config
  * files to `forceRerunTriggers` unless the config sets that option. A filled-in
@@ -108,13 +132,16 @@ const resolveExtendEntry = async (
 export const resolveExtends = async (
   config: RstestConfig,
   source?: Pick<LoadConfigResult<RstestConfig>, 'filePath' | 'dependencies'>,
+  globProject?: { root: string; extends: NonNullable<RstestConfig['extends']> },
 ): Promise<RstestConfig> => {
   const hasOwnTriggers = config.forceRerunTriggers !== undefined;
   let merged = config;
   let extendedTriggers: string[] = [];
 
   if (config.extends) {
-    const userConfig = Object.freeze({ ...config });
+    const localConfig = { ...config };
+    if (globProject) localConfig.root ??= globProject.root;
+    const userConfig = Object.freeze(localConfig);
     const extendsEntries = castArray(config.extends);
     const resolvedExtends = await Promise.all(
       extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
@@ -129,6 +156,29 @@ export const resolveExtends = async (
     extendedTriggers = resolvedExtends.flatMap(
       (entry) => entry.forceRerunTriggers || [],
     );
+  }
+
+  if (globProject) {
+    const userConfig = Object.freeze({
+      ...config,
+      root: merged.root ?? globProject.root,
+    });
+    const layers = await Promise.all(
+      castArray(globProject.extends).map((entry) =>
+        resolveExtendEntry(entry, userConfig),
+      ),
+    );
+    const defaults = layers.reduce<RstestConfig>(
+      (base, layer) => plainDeepMerge(base, omitUnsetOptions(layer)),
+      {},
+    );
+    if (
+      merged.forceRerunTriggers === undefined &&
+      defaults.forceRerunTriggers
+    ) {
+      extendedTriggers = defaults.forceRerunTriggers;
+    }
+    merged = plainDeepMerge(defaults, omitUnsetOptions(merged));
   }
 
   const configFiles = source

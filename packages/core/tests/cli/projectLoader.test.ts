@@ -88,6 +88,136 @@ describe('PROJECT_LOADER', () => {
     }
   });
 
+  it('applies glob defaults per directory, beneath local extends and config', async () => {
+    const inheritedRoot = join(root, 'packages/a/suite');
+    const loader = rs.fn<LoadProjectConfig>(({ dirPath }) =>
+      dirPath === join(root, 'packages/a')
+        ? {
+            content: {
+              extends: ({ root }) => ({
+                root: inheritedRoot,
+                testTimeout: 2000,
+                setupFiles: ['./inherited.ts'],
+                source: { define: { PACKAGE_DIR: root } },
+              }),
+              setupFiles: ['./local.ts'],
+              coverage: { enabled: false },
+              source: { define: { LOCAL: 'true' } },
+            },
+            filePath: hostFile('a'),
+            dependencies: [hostDep(dirPath)],
+          }
+        : null,
+    );
+    const projects = await resolveProjects({
+      config: {
+        projects: [
+          {
+            glob: '<rootDir>/packages/*',
+            extends: ({ root }) => ({
+              globals: true,
+              include: ['unit.case.ts'],
+              coverage: { enabled: true, reporters: ['text'] },
+              testTimeout: 1000,
+              setupFiles: ['./shared.ts'],
+              source: { define: { PROJECT_ROOT: root } },
+            }),
+          },
+          { glob: 'packages/{a,b}', extends: { globals: false } },
+          { glob: 'packages/*/*.ts', extends: { testTimeout: 1 } },
+          { glob: 'empty/*', extends: { testTimeout: 1 } },
+        ],
+      },
+      root,
+      options: {},
+      projectLoader: loader,
+    });
+
+    expect(sortedContexts(loader)).toEqual([
+      { dirPath: join(root, 'packages/a') },
+      { dirPath: join(root, 'packages/b') },
+    ]);
+    const [a, b] = projects.sort((x, y) =>
+      x.config.name!.localeCompare(y.config.name!),
+    );
+    expect(a).toMatchObject({
+      config: {
+        name: 'pkg-a',
+        root: inheritedRoot,
+        include: ['unit.case.ts'],
+        coverage: { enabled: false, reporters: ['text'] },
+        globals: true,
+        testTimeout: 2000,
+        setupFiles: ['./inherited.ts', './local.ts'],
+        source: {
+          define: {
+            LOCAL: 'true',
+            PACKAGE_DIR: join(root, 'packages/a'),
+            PROJECT_ROOT: inheritedRoot,
+          },
+        },
+      },
+      configFilePath: hostFile('a'),
+      configFileDependencies: [hostDep(join(root, 'packages/a'))],
+    });
+    expect(b).toMatchObject({
+      config: {
+        name: 'pkg-b',
+        globals: true,
+        testTimeout: 1000,
+        setupFiles: ['./shared.ts'],
+        source: { define: { PROJECT_ROOT: join(root, 'packages/b') } },
+      },
+      configFileDependencies: [],
+    });
+  });
+
+  it('keeps glob defaults when a file target resolves to the same config', async () => {
+    const projects = await resolveProjects({
+      config: {
+        projects: [
+          'packages/a/rstest.config.mjs',
+          {
+            glob: 'packages/a',
+            extends: {
+              globals: true,
+              forceRerunTriggers: ['<rootDir>/shared.ts'],
+            },
+          },
+        ],
+      },
+      root,
+      options: {},
+    });
+    expect(projects).toHaveLength(1);
+    expect(projects[0]?.config).toMatchObject({
+      name: 'from-rstest-config-a',
+      globals: true,
+      forceRerunTriggers: expect.arrayContaining([
+        '<rootDir>/shared.ts',
+        join(root, 'packages/a/rstest.config.mjs'),
+      ]),
+    });
+  });
+
+  it('deduplicates directories without a config across nested and glob projects', async () => {
+    writeFile(
+      join(root, 'nested/rstest.config.mjs'),
+      "export default { projects: ['sub'] };",
+    );
+    writeFile(join(root, 'nested/sub/package.json'), '{"name":"nested-sub"}');
+    const projects = await resolveProjects({
+      config: {
+        projects: [{ glob: '{nested,nested/sub}', extends: { globals: true } }],
+      },
+      root,
+      options: {},
+    });
+    expect(
+      projects.map((project) => [project.config.name, project.config.globals]),
+    ).toEqual([['nested-sub', true]]);
+  });
+
   it('passes `{ dirPath, filePath }` for file targets', async () => {
     const loader = createHostLoader();
     const projects = await resolveProjects({
