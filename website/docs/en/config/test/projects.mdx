@@ -2,6 +2,8 @@
 description: Define multiple test projects in a single Rstest process using directories, config files, globs, or inline project configs.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # projects
 
 - **Type:**
@@ -40,6 +42,8 @@ export default defineConfig({
   ],
 });
 ```
+
+<ApiMeta addedVersion="1.0.1" />
 
 To give discovered projects shared defaults, use a directory glob with `extends`:
 

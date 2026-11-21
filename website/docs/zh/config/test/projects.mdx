@@ -2,6 +2,8 @@
 description: 在单个 Rstest 进程中定义多个测试项目，支持目录、配置文件、glob 模式或内联项目配置。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # projects
 
 - **类型：**
@@ -40,6 +42,8 @@ export default defineConfig({
   ],
 });
 ```
+
+<ApiMeta addedVersion="1.0.1" />
 
 要为匹配的项目设置共享默认值，可以在目录 glob 上使用 `extends`：
 
