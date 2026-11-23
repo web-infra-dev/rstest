@@ -332,6 +332,7 @@ jobs:
     if: always() && github.event_name == 'schedule' && github.repository == 'web-infra-dev/rstest' && (needs.prepare.result != 'success' || needs.prepare.outputs.changed == 'true')
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       issues: write
     steps:
       - name: Report nightly status
@@ -354,7 +355,8 @@ jobs:
               (r) => r === 'failure' || r === 'cancelled',
             );
             const { owner, repo } = context.repo;
-            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const runId = context.runId;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
             const commitUrl = `${context.serverUrl}/${owner}/${repo}/commit/${context.sha}`;
             const shortSha = context.sha.slice(0, 7);
 
@@ -370,29 +372,86 @@ jobs:
             );
 
             if (failed) {
-              const summary = Object.entries(results)
-                .map(([name, result]) => `- \`${name}\`: ${result}`)
-                .join('\n');
-              const body = [
-                `Nightly full 4x4 CI failed on [\`${shortSha}\`](${commitUrl}).`,
-                '',
-                `- Workflow run: ${runUrl}`,
-                summary,
+              const failedLines = [];
+              try {
+                const { data: jobsData } =
+                  await github.rest.actions.listJobsForWorkflowRun({
+                    owner,
+                    repo,
+                    run_id: runId,
+                    per_page: 100,
+                  });
+                for (const job of jobsData.jobs) {
+                  if (
+                    job.conclusion === 'failure' ||
+                    job.conclusion === 'cancelled' ||
+                    job.conclusion === 'timed_out'
+                  ) {
+                    const failedSteps = (job.steps ?? [])
+                      .filter(
+                        (s) =>
+                          s.conclusion === 'failure' ||
+                          s.conclusion === 'cancelled' ||
+                          s.conclusion === 'timed_out',
+                      )
+                      .map((s) => `\`${s.name}\``);
+                    const stepInfo =
+                      failedSteps.length > 0
+                        ? ` — steps: ${failedSteps.join(', ')}`
+                        : '';
+                    failedLines.push(
+                      `- [\`${job.name}\`](${job.html_url}) (${job.conclusion})${stepInfo} — \`gh run view ${runId} --repo ${owner}/${repo} --job ${job.id} --log-failed\``,
+                    );
+                  }
+                }
+              } catch (err) {
+                core.warning(`Failed to list workflow jobs: ${err.message}`);
+              }
+
+              if (failedLines.length === 0) {
+                for (const [name, result] of Object.entries(results)) {
+                  if (result === 'failure' || result === 'cancelled') {
+                    failedLines.push(`- \`${name}\`: ${result}`);
+                  }
+                }
+              }
+
+              const logCmd = `gh run view ${runId} --repo ${owner}/${repo} --log-failed`;
+              const failedSection = [
+                '### Failed jobs',
+                ...failedLines,
               ].join('\n');
 
               if (existing) {
+                const commentBody = [
+                  `Still failing on [\`${shortSha}\`](${commitUrl}) (run [#${runId}](${runUrl})).`,
+                  '',
+                  failedSection,
+                  '',
+                  `Logs: \`${logCmd}\``,
+                ].join('\n');
                 await github.rest.issues.createComment({
                   owner,
                   repo,
                   issue_number: existing.number,
-                  body,
+                  body: commentBody,
                 });
               } else {
+                const issueBody = [
+                  `Nightly full 4x4 E2E CI failed on [\`${shortSha}\`](${commitUrl}) (run [#${runId}](${runUrl})).`,
+                  '',
+                  failedSection,
+                  '',
+                  '### For agent',
+                  `1. Inspect failure logs with \`${logCmd}\` (or the job-specific command above).`,
+                  '2. Determine whether this is a real regression (note: `macos-latest` and `windows-latest` only run secondary e2e modes `test:commonjs`, `test:no-isolate`, and `test:threads` on nightly/release runs) or a flake/timeout.',
+                  '3. Identify the causing commit on `main`, reproduce and fix the root cause with tests, and open a PR.',
+                ].join('\n');
                 await github.rest.issues.create({
                   owner,
                   repo,
                   title: TITLE,
-                  body,
+                  body: issueBody,
                 });
               }
             } else if (existing) {
@@ -400,7 +459,7 @@ jobs:
                 owner,
                 repo,
                 issue_number: existing.number,
-                body: `Nightly full 4x4 CI recovered on [\`${shortSha}\`](${commitUrl}) (${runUrl}). Closing this issue.`,
+                body: `Nightly full 4x4 CI recovered on [\`${shortSha}\`](${commitUrl}) (run [#${runId}](${runUrl})). Closing this issue.`,
               });
               await github.rest.issues.update({
                 owner,
