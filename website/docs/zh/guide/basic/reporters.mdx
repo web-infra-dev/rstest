@@ -62,11 +62,10 @@ export default defineConfig({
 
 **选项：**
 
-| 选项              | 类型                                                                          | 默认值                                        | 说明                                   |
-| ----------------- | ----------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------- |
-| `summary`         | `boolean`                                                                     | `true`                                        | 是否输出失败详情和运行汇总。           |
-| `logger`          | `{ outputStream: Writable; errorStream: Writable; getColumns: () => number }` | `process.stdout` / `process.stderr`           | 自定义输出流与列宽获取函数。           |
-| `showProjectName` | `boolean`                                                                     | 多项目或多浏览器运行时为 `true`，否则 `false` | 是否在测试文件路径前显示 `[project]`。 |
+| 选项              | 类型      | 默认值                                        | 说明                                   |
+| ----------------- | --------- | --------------------------------------------- | -------------------------------------- |
+| `summary`         | `boolean` | `true`                                        | 是否输出失败详情和运行汇总。           |
+| `showProjectName` | `boolean` | 多项目或多浏览器运行时为 `true`，否则 `false` | 是否在测试文件路径前显示 `[project]`。 |
 
 #### 进度报告
 
@@ -128,7 +127,7 @@ export default defineConfig({
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-**选项：** 支持 `logger` 和 `showProjectName`（与[默认报告器](#默认报告器)一致；汇总信息始终输出）。
+**选项：** 支持 `showProjectName`（与[默认报告器](#默认报告器)一致；汇总信息始终输出）。
 
 ### Dot 报告器
 
@@ -160,7 +159,7 @@ export default defineConfig({
 
 标记行输出结束后会继续打印失败详情和耗时汇总（除非设置 `summary: false`）。
 
-**选项：** 支持 `summary`（默认：`true`）和 `logger`（与[默认报告器](#默认报告器)一致）。
+**选项：** 支持 `summary`（默认：`true`，与[默认报告器](#默认报告器)一致）。
 
 ### GitHub Actions 报告器
 

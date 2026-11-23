@@ -1,12 +1,12 @@
 ---
-description: Core JavaScript APIs exported from @rstest/core for defining, merging, and loading configurations, plus registering file and worker cleanups.
+description: Core JavaScript APIs exported from @rstest/core for defining, merging, and loading configurations.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Rstest core
 
-Core configuration and cleanup functions exported from `@rstest/core`.
+Core configuration functions exported from `@rstest/core`.
 
 ## defineConfig
 
@@ -281,53 +281,3 @@ console.log('Config:', content);
 ```
 
 If no Rstest config file exists in `cwd`, `loadConfig` returns `{ content: {}, filePath: null, dependencies: [] }`.
-
-## registerFileCleanup
-
-<ApiMeta addedVersion="0.12.0" />
-
-Registers a cleanup callback that runs when the current test file finishes in Node pools, including when test collection or suite execution fails. Returns a function that removes the callback before it runs.
-
-Useful for Node-side test integrations that allocate per-file resources outside suite hooks. The registry is backed by a `Symbol.for` key on `globalThis`, so independently bundled runtime entries observe the same callbacks.
-
-- **Type:**
-
-```ts
-function registerFileCleanup(cleanup: () => MaybePromise<void>): () => boolean;
-```
-
-- **Example:**
-
-```ts
-import { registerFileCleanup } from '@rstest/core';
-
-const unregister = registerFileCleanup(async () => {
-  await closePerFileResource();
-});
-```
-
-## registerWorkerCleanup
-
-<ApiMeta addedVersion="0.11.10" />
-
-Registers a cleanup callback that runs when the current Node worker exits. Returns a function that removes the callback before it runs.
-
-Useful for Node-side integrations that keep resources (such as browser instances or connections) alive across files when `isolate` is `false`. Like `registerFileCleanup`, the registry is backed by a `Symbol.for` key on `globalThis`.
-
-- **Type:**
-
-```ts
-function registerWorkerCleanup(
-  cleanup: () => MaybePromise<void>,
-): () => boolean;
-```
-
-- **Example:**
-
-```ts
-import { registerWorkerCleanup } from '@rstest/core';
-
-const unregister = registerWorkerCleanup(async () => {
-  await closeSharedWorkerResource();
-});
-```

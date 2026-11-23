@@ -15,7 +15,7 @@ import type { Mock, Mocked, RstestConfig } from '@rstest/core';
 
 ## Configuration types
 
-Use these types when typing config objects, config factories, adapters, or custom coverage providers outside [`defineConfig`](/api/javascript-api/rstest-core#defineconfig), [`defineProject`](/api/javascript-api/rstest-core#defineproject), and [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject).
+Use these types when typing config objects, config factories, or adapters outside [`defineConfig`](/api/javascript-api/rstest-core#defineconfig), [`defineProject`](/api/javascript-api/rstest-core#defineproject), and [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject).
 
 ```ts
 import type {
@@ -24,15 +24,11 @@ import type {
   BrowserName,
   BrowserViewport,
   CoverageOptions,
-  CoverageProvider,
   ExpectConfig,
   ExpectPollConfig,
   ExtendConfig,
   ExtendConfigFn,
-  NormalizedConfig,
-  NormalizedCoverageOptions,
   ProjectConfig,
-  ResolvedRstestConfig,
   RstestCommand,
   RstestConfig,
   RstestConfigAsyncFn,
@@ -45,12 +41,10 @@ import type {
 - `RstestConfigSyncFn` / `RstestConfigAsyncFn`: Synchronous and asynchronous config factory functions returning `RstestConfig`.
 - `RstestConfigExport`: Union of `RstestConfig`, `RstestConfigSyncFn`, and `RstestConfigAsyncFn`.
 - `ProjectConfig`: Configuration type for a standalone [Rstest Project](/guide/basic/projects).
-- `NormalizedConfig`: Normalized configuration exposed on `rstest.context.config` and `ReporterContext.config`.
-- `ResolvedRstestConfig`: `RstestConfig` after CLI flags (such as `shard`) are merged in.
 - `ExtendConfig` / `ExtendConfigFn`: Return value and callback types accepted by [`extends`](/config/test/extends) and config adapters.
 - `RstestCommand`: Active CLI command (`'watch' | 'run' | 'list' | 'merge-reports'`).
 - `ExpectConfig` / `ExpectPollConfig`: Configuration types for [`expect`](/config/test/expect) and `expect.poll`.
-- `CoverageOptions` / `CoverageProvider` / `NormalizedCoverageOptions`: Coverage config and custom coverage provider types (`KnownCoverageStructure` and `RawCoverageResolveOptions` are also exported for custom provider implementations).
+- `CoverageOptions`: Configuration type for [`coverage`](/config/test/coverage).
 - `BrowserInstanceConfig` / `BrowserExpectConfig` / `BrowserName` / `BrowserViewport`: Browser Mode instance, assertion, browser name, and viewport types.
 
 ## Test API types
@@ -96,12 +90,12 @@ import type {
 - `FixtureCleanup` / `FixtureLifecycle`: Cleanup callback and `{ onCleanup }` lifecycle parameter for named fixtures (added in `0.11.7`).
 - `MaybePromise<T>`: Utility union `T | Promise<T>`.
 
-## Mock and timer types
+## Mock types
 
-Use these types when helpers accept mock functions, spies, mocked modules, or real timers.
+Use these types when helpers accept mock functions, spies, or mocked modules.
 
 ```ts
-import type { Mock, Mocked, MockInstance, RealTimers } from '@rstest/core';
+import type { Mock, Mocked, MockInstance } from '@rstest/core';
 ```
 
 ### Mock
@@ -147,10 +141,6 @@ const mockedUserApi: Mocked<typeof userApi> = rs.mocked(userApi);
 mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 ```
 
-### RealTimers
-
-`RealTimers` is the return type of [`rs.getRealTimers()`](/api/runtime-api/rstest/fake-timers#rsgetrealtimers), exposing the unmocked `setTimeout`, `clearTimeout`, and optional `setImmediate` functions.
-
 ## Reporter and result types
 
 Use these types when building custom reporters or consuming Rstest run results. See [Reporter](/api/javascript-api/reporter) for full interface definitions.
@@ -159,12 +149,10 @@ Use these types when building custom reporters or consuming Rstest run results. 
 import type {
   CoverageMapData,
   Duration,
-  GetSourcemap,
   Reporter,
   ReporterContext,
   SerializedError,
   SnapshotSummary,
-  SourceMapInput,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
@@ -185,7 +173,7 @@ import type {
 - `TestResult` / `TestFileResult` / `TestResultStatus`: Per-case, per-suite, and per-file execution results and status union (`'skipped' | 'passed' | 'failed' | 'todo'`).
 - `TestRunStartPayload` / `TestRunEndPayload` / `TestRunStatus` / `TestRunSummary`: Run-level hook payloads, run status (`'passed' | 'failed' | 'error'`), and aggregate counts.
 - `Duration` / `SerializedError` / `UserConsoleLog`: Phase timings, JSON-serializable errors, and captured stdio log records.
-- `GetSourcemap` / `SourceMapInput` / `SnapshotSummary` / `CoverageMapData`: Source map resolver, snapshot summary, and Istanbul coverage map types.
+- `SnapshotSummary` / `CoverageMapData`: Snapshot summary and Istanbul coverage map types.
 
 <ApiMeta addedVersion="0.11.1" />
 

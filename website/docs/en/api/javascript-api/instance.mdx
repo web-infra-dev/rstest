@@ -8,7 +8,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.12.0" />
 
-All APIs on this page are exported from the `@rstest/core/api` entry of [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core). Use them to create Rstest instances, run or list tests, start watch sessions, merge blob reports, load custom project configs, and invoke the CLI programmatically.
+All APIs on this page are exported from the `@rstest/core/api` entry of [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core). Use them to create Rstest instances, run or list tests, start watch sessions, merge blob reports, and invoke the CLI programmatically.
 
 ```ts
 import { createRstest } from '@rstest/core/api';
@@ -198,21 +198,8 @@ await rstest.run(); // Uses the configured 2 again.
 ```ts
 interface RunOptions {
   filters?: string[];
-  related?: boolean;
-  changed?: boolean | string;
-  shard?: string;
-  project?: string[];
-  testNamePattern?: RegExp | string;
-  update?: boolean;
-  bail?: number | boolean;
-  passWithNoTests?: boolean;
   trace?: boolean;
-
-  // Config overrides
-  include?: string[];
-  exclude?: string[];
-  globals?: boolean;
-  testEnvironment?: string;
+  repeats?: number;
   // `true` is shorthand for `{ enabled: true }`.
   browser?:
     | boolean
@@ -228,60 +215,7 @@ interface RunOptions {
         strictPort?: boolean;
         providerOptions?: Record<string, unknown>;
       };
-  federation?: boolean;
-  testTimeout?: number;
-  hookTimeout?: number;
-  retry?: number;
-  repeats?: number;
-  maxConcurrency?: number;
-  slowTestThreshold?: number;
-  clearMocks?: boolean;
-  resetMocks?: boolean;
-  restoreMocks?: boolean;
-  unstubGlobals?: boolean;
-  unstubEnvs?: boolean;
-  silent?: boolean | 'passed-only';
-  printConsoleTrace?: boolean;
-  disableConsoleIntercept?: boolean;
-  logHeapUsage?: boolean;
-  detectAsyncLeaks?: boolean;
-  hideSkippedTests?: boolean;
-  hideSkippedTestFiles?: boolean;
-  includeTaskLocation?: boolean;
-  reporters?: string | string[];
-  onlyFailures?: boolean;
-  source?: { tsconfigPath?: string };
-  dev?: { writeToDisk?: boolean };
-  output?: {
-    emitAssets?: boolean;
-    cleanDistPath?:
-      boolean | 'auto' | { enable?: boolean | 'auto'; keep?: RegExp[] };
-    module?: boolean;
-  };
-  // Root-only overrides (forwarded to every project by the engine)
-  pool?:
-    | string
-    | {
-        type?: string;
-        maxWorkers?: string | number;
-        memoryLimit?: string | number;
-        execArgv?: string[] | string;
-      };
-  isolate?: boolean;
-  coverage?:
-    | boolean
-    | {
-        enabled?: boolean | string;
-        allowExternal?: boolean;
-        provider?: 'istanbul' | 'v8';
-        include?: string | string[];
-        changed?: boolean | string;
-        exclude?: string | string[];
-        reporters?: string | string[];
-        reportsDirectory?: string;
-        reportOnFailure?: boolean | string;
-        clean?: boolean | string;
-      };
+  // ...plus other supported run and config override options matching CLI flags
 }
 
 interface RstestInstance {

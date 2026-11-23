@@ -62,11 +62,10 @@ Displays test run status, failures, and a summary in the terminal with colored o
 
 **Options:**
 
-| Option            | Type                                                                          | Default                                                      | Description                                         |
-| ----------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
-| `summary`         | `boolean`                                                                     | `true`                                                       | Display failure details and the run summary footer. |
-| `logger`          | `{ outputStream: Writable; errorStream: Writable; getColumns: () => number }` | `process.stdout` / `process.stderr`                          | Custom output logger for reporter streams.          |
-| `showProjectName` | `boolean`                                                                     | `true` for multi-project or multi-browser runs, else `false` | Print `[project]` before each test file path.       |
+| Option            | Type      | Default                                                      | Description                                         |
+| ----------------- | --------- | ------------------------------------------------------------ | --------------------------------------------------- |
+| `summary`         | `boolean` | `true`                                                       | Display failure details and the run summary footer. |
+| `showProjectName` | `boolean` | `true` for multi-project or multi-browser runs, else `false` | Print `[project]` before each test file path.       |
 
 #### Progress reporting
 
@@ -128,7 +127,7 @@ export default defineConfig({
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-**Options:** Accepts `logger` and `showProjectName` (same as [Default reporter](#default-reporter); the summary footer is always shown).
+**Options:** Accepts `showProjectName` (same as [Default reporter](#default-reporter); the summary footer is always shown).
 
 ### Dot reporter
 
@@ -160,7 +159,7 @@ export default defineConfig({
 
 After the marker stream, it prints the failure details and duration summary unless `summary: false` is set.
 
-**Options:** Accepts `summary` (default: `true`) and `logger` (same as [Default reporter](#default-reporter)).
+**Options:** Accepts `summary` (default: `true`; same as [Default reporter](#default-reporter)).
 
 ### GitHub Actions reporter
 

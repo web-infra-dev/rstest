@@ -1,12 +1,12 @@
 ---
-description: 从 @rstest/core 导出的核心 JavaScript API，用于定义、合并、加载配置以及注册文件和 worker 清理回调。
+description: 从 @rstest/core 导出的核心 JavaScript API，用于定义、合并和加载配置。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Rstest core
 
-从 `@rstest/core` 导出的核心配置与清理注册函数。
+从 `@rstest/core` 导出的核心配置函数。
 
 ## defineConfig
 
@@ -281,53 +281,3 @@ console.log('配置：', content);
 ```
 
 如果 `cwd` 目录中不存在 Rstest 配置文件，`loadConfig` 返回 `{ content: {}, filePath: null, dependencies: [] }`。
-
-## registerFileCleanup
-
-<ApiMeta addedVersion="0.12.0" />
-
-注册在当前测试文件结束时执行的清理回调（仅 Node pool），即使测试收集或套件执行失败也会运行。返回一个用于提前注销该回调的函数。
-
-适合在 suite hooks 之外管理文件级资源的 Node 侧集成。注册表基于 `globalThis` 上的 `Symbol.for` 键存储，即使运行时入口被独立打包，也能共享同一组回调。
-
-- **类型：**
-
-```ts
-function registerFileCleanup(cleanup: () => MaybePromise<void>): () => boolean;
-```
-
-- **示例：**
-
-```ts
-import { registerFileCleanup } from '@rstest/core';
-
-const unregister = registerFileCleanup(async () => {
-  await closePerFileResource();
-});
-```
-
-## registerWorkerCleanup
-
-<ApiMeta addedVersion="0.11.10" />
-
-注册在当前 Node worker 退出时执行的清理回调。返回一个用于提前注销该回调的函数。
-
-适合在关闭 `isolate` 时跨测试文件复用资源（例如浏览器实例或连接）的 Node 侧集成。与 `registerFileCleanup` 相同，注册表基于 `globalThis` 上的 `Symbol.for` 键存储。
-
-- **类型：**
-
-```ts
-function registerWorkerCleanup(
-  cleanup: () => MaybePromise<void>,
-): () => boolean;
-```
-
-- **示例：**
-
-```ts
-import { registerWorkerCleanup } from '@rstest/core';
-
-const unregister = registerWorkerCleanup(async () => {
-  await closeSharedWorkerResource();
-});
-```

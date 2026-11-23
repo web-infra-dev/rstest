@@ -70,14 +70,6 @@ Worker ID 的取值范围限定在 `[1, pool.maxWorkers]`。启动新 worker 时
 RSTEST_NO_AGENT=1 npx rstest run
 ```
 
-## `RSTEST_OUTPUT_MODULE`
-
-当未显式配置 [`output.module`](/config/build/output#outputmodule) 时，设置 `RSTEST_OUTPUT_MODULE=false` 可禁用 ESM 输出（开启 `federation` 时始终为 `false`）。配置文件中显式设置的 `output.module` 优先级高于该环境变量。
-
-```bash
-RSTEST_OUTPUT_MODULE=false npx rstest run
-```
-
 ## `DEBUG`
 
 以逗号分隔的调试作用域列表（不区分大小写），用于开启详细调试日志、将临时构建产物与最终配置写入磁盘，并打印完整错误堆栈。支持的作用域包括 `rstest`、`rsbuild`、`builder` 和 `*`。

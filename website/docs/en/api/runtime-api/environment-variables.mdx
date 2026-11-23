@@ -70,14 +70,6 @@ When no reporter is configured in config or CLI flags, Rstest detects AI coding 
 RSTEST_NO_AGENT=1 npx rstest run
 ```
 
-## `RSTEST_OUTPUT_MODULE`
-
-Set `RSTEST_OUTPUT_MODULE=false` to disable ESM output when [`output.module`](/config/build/output#outputmodule) is not explicitly configured (unless `federation` is enabled, which always forces `false`). Explicit `output.module` config takes precedence over this variable.
-
-```bash
-RSTEST_OUTPUT_MODULE=false npx rstest run
-```
-
 ## `DEBUG`
 
 Comma-separated debug scopes (case-insensitive) that enable verbose debug logging, persist temporary build artifacts and resolved configs to disk, and print full error stack traces. Recognized scopes include `rstest`, `rsbuild`, `builder`, and `*`.

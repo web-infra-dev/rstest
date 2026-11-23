@@ -8,7 +8,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.12.0" />
 
-本页介绍的 API 均由 [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 的 `@rstest/core/api` 入口导出，用于创建 Rstest 实例、运行或列出测试、启动 watch 会话、合并 blob 报告、自定义加载 project 配置以及以编程方式调用 CLI。
+本页介绍的 API 均由 [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 的 `@rstest/core/api` 入口导出，用于创建 Rstest 实例、运行或列出测试、启动 watch 会话、合并 blob 报告以及以编程方式调用 CLI。
 
 ```ts
 import { createRstest } from '@rstest/core/api';
@@ -198,21 +198,8 @@ await rstest.run(); // 恢复使用实例配置中的 2。
 ```ts
 interface RunOptions {
   filters?: string[];
-  related?: boolean;
-  changed?: boolean | string;
-  shard?: string;
-  project?: string[];
-  testNamePattern?: RegExp | string;
-  update?: boolean;
-  bail?: number | boolean;
-  passWithNoTests?: boolean;
   trace?: boolean;
-
-  // 配置覆盖项
-  include?: string[];
-  exclude?: string[];
-  globals?: boolean;
-  testEnvironment?: string;
+  repeats?: number;
   // `true` 为 `{ enabled: true }` 的简写。
   browser?:
     | boolean
@@ -228,60 +215,7 @@ interface RunOptions {
         strictPort?: boolean;
         providerOptions?: Record<string, unknown>;
       };
-  federation?: boolean;
-  testTimeout?: number;
-  hookTimeout?: number;
-  retry?: number;
-  repeats?: number;
-  maxConcurrency?: number;
-  slowTestThreshold?: number;
-  clearMocks?: boolean;
-  resetMocks?: boolean;
-  restoreMocks?: boolean;
-  unstubGlobals?: boolean;
-  unstubEnvs?: boolean;
-  silent?: boolean | 'passed-only';
-  printConsoleTrace?: boolean;
-  disableConsoleIntercept?: boolean;
-  logHeapUsage?: boolean;
-  detectAsyncLeaks?: boolean;
-  hideSkippedTests?: boolean;
-  hideSkippedTestFiles?: boolean;
-  includeTaskLocation?: boolean;
-  reporters?: string | string[];
-  onlyFailures?: boolean;
-  source?: { tsconfigPath?: string };
-  dev?: { writeToDisk?: boolean };
-  output?: {
-    emitAssets?: boolean;
-    cleanDistPath?:
-      boolean | 'auto' | { enable?: boolean | 'auto'; keep?: RegExp[] };
-    module?: boolean;
-  };
-  // 仅限根配置覆盖（由引擎转发到每个项目）
-  pool?:
-    | string
-    | {
-        type?: string;
-        maxWorkers?: string | number;
-        memoryLimit?: string | number;
-        execArgv?: string[] | string;
-      };
-  isolate?: boolean;
-  coverage?:
-    | boolean
-    | {
-        enabled?: boolean | string;
-        allowExternal?: boolean;
-        provider?: 'istanbul' | 'v8';
-        include?: string | string[];
-        changed?: boolean | string;
-        exclude?: string | string[];
-        reporters?: string | string[];
-        reportsDirectory?: string;
-        reportOnFailure?: boolean | string;
-        clean?: boolean | string;
-      };
+  // ……以及其余与 CLI 选项对应的运行期与配置覆盖字段
 }
 
 interface RstestInstance {

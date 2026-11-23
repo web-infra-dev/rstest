@@ -53,8 +53,6 @@ export default defineConfig({
 
 ```ts
 interface Reporter {
-  /** Reporter 不向 process stdout/stderr 输出时可设为 `false`。默认值：`true`。 */
-  flushOutputStreams?: boolean;
   onTestRunStart?(payload: TestRunStartPayload): MaybePromise<void>;
   onTestFileStart?(test: TestFileInfo): MaybePromise<void>;
   onTestFileReady?(test: TestFileInfo): MaybePromise<void>;
@@ -69,7 +67,6 @@ interface Reporter {
 }
 ```
 
-- `flushOutputStreams`：默认情况下，Rstest 会在每个 Reporter 的 `onTestRunEnd` 执行后刷新 `process.stdout` 和 `process.stderr`。如果 Reporter 不向标准流输出内容，可以设为 `false`。
 - `onTestSuiteResult`：`result.errors` 仅包含套件钩子（`beforeAll` 和 `afterAll`）产生的错误。
 - **元数据（Metadata）** <ApiMeta sup addedVersion="0.11.1" />：通过 `context.task.meta` 写入的运行时元数据可在 `onTestCaseResult` 收到的 `TestResult.meta` 中读取；通过钩子 `ctx.meta` 写入的元数据分别在 `onTestSuiteResult` 的 `TestResult.meta` 和 `onTestFileResult` 的 `TestFileResult.meta` 中读取。
 - **`onExit`** <ApiMeta sup addedVersion="0.12.0" />：Reporter 所属的上下文释放时调用，涵盖正常 run/merge 结束、watch 关闭、启动失败以及 CLI 异常退出。适合用来释放流或渲染器等资源。`onExit` 抛出的错误不会覆盖操作本身的结果或错误。（list 上下文不挂载 Reporter，因此 `listTests` 不会触发 `onExit`。）
@@ -342,7 +339,6 @@ import { writeFileSync } from 'node:fs';
 import type { Reporter } from '@rstest/core';
 
 const jsonReporter: Reporter = {
-  flushOutputStreams: false,
   onTestRunEnd({ results }) {
     const report = {
       timestamp: new Date().toISOString(),

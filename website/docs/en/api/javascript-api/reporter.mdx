@@ -53,8 +53,6 @@ When loading a reporter by module specifier (`reporters: [['./custom-reporter.js
 
 ```ts
 interface Reporter {
-  /** Set to `false` when the reporter does not write to process stdout/stderr. Default: `true`. */
-  flushOutputStreams?: boolean;
   onTestRunStart?(payload: TestRunStartPayload): MaybePromise<void>;
   onTestFileStart?(test: TestFileInfo): MaybePromise<void>;
   onTestFileReady?(test: TestFileInfo): MaybePromise<void>;
@@ -69,7 +67,6 @@ interface Reporter {
 }
 ```
 
-- `flushOutputStreams`: By default, Rstest flushes `process.stdout` and `process.stderr` after each reporter's `onTestRunEnd` hook. Set `flushOutputStreams: false` when a reporter does not write to stdio streams.
 - `onTestSuiteResult`: `result.errors` contains only suite hook errors (`beforeAll` and `afterAll`).
 - **Metadata** <ApiMeta sup addedVersion="0.11.1" />: Runtime metadata written via `context.task.meta` is available on `TestResult.meta` in `onTestCaseResult`. Hook metadata written via `ctx.meta` is available on the corresponding `TestResult.meta` in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
 - **`onExit`** <ApiMeta sup addedVersion="0.12.0" />: Called when the reporter's owning context is released after a normal run or merge completion, watch close, startup failure, or abnormal CLI exit. Use it to release resources such as streams or renderers. Errors thrown by `onExit` do not replace the operation's result or error. (List contexts do not attach reporters, so `onExit` does not run for `listTests`.)
@@ -342,7 +339,6 @@ import { writeFileSync } from 'node:fs';
 import type { Reporter } from '@rstest/core';
 
 const jsonReporter: Reporter = {
-  flushOutputStreams: false,
   onTestRunEnd({ results }) {
     const report = {
       timestamp: new Date().toISOString(),

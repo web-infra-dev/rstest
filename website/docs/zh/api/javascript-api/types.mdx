@@ -15,7 +15,7 @@ import type { Mock, Mocked, RstestConfig } from '@rstest/core';
 
 ## 配置类型
 
-在 [`defineConfig`](/api/javascript-api/rstest-core#defineconfig)、[`defineProject`](/api/javascript-api/rstest-core#defineproject) 和 [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject) 之外为配置对象、配置工厂、适配器或自定义覆盖率 Provider 标注类型时，可以使用以下类型：
+在 [`defineConfig`](/api/javascript-api/rstest-core#defineconfig)、[`defineProject`](/api/javascript-api/rstest-core#defineproject) 和 [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject) 之外为配置对象、配置工厂或适配器标注类型时，可以使用以下类型：
 
 ```ts
 import type {
@@ -24,15 +24,11 @@ import type {
   BrowserName,
   BrowserViewport,
   CoverageOptions,
-  CoverageProvider,
   ExpectConfig,
   ExpectPollConfig,
   ExtendConfig,
   ExtendConfigFn,
-  NormalizedConfig,
-  NormalizedCoverageOptions,
   ProjectConfig,
-  ResolvedRstestConfig,
   RstestCommand,
   RstestConfig,
   RstestConfigAsyncFn,
@@ -45,12 +41,10 @@ import type {
 - `RstestConfigSyncFn` / `RstestConfigAsyncFn`：返回 `RstestConfig` 的同步与异步配置工厂函数。
 - `RstestConfigExport`：`RstestConfig`、`RstestConfigSyncFn` 与 `RstestConfigAsyncFn` 的联合类型。
 - `ProjectConfig`：独立 [Rstest Project](/guide/basic/projects) 配置文件的类型。
-- `NormalizedConfig`：`rstest.context.config` 与 `ReporterContext.config` 上暴露的规范化配置。
-- `ResolvedRstestConfig`：合并 CLI 参数（例如 `shard`）后的 `RstestConfig`。
 - `ExtendConfig` / `ExtendConfigFn`：[`extends`](/config/test/extends) 与配置适配器使用的返回值和回调函数类型。
 - `RstestCommand`：当前执行的 CLI 命令（`'watch' | 'run' | 'list' | 'merge-reports'`）。
 - `ExpectConfig` / `ExpectPollConfig`：[`expect`](/config/test/expect) 与 `expect.poll` 的配置类型。
-- `CoverageOptions` / `CoverageProvider` / `NormalizedCoverageOptions`：覆盖率配置及自定义覆盖率 Provider 类型（另导出 `KnownCoverageStructure` 和 `RawCoverageResolveOptions` 供自定义 Provider 实现使用）。
+- `CoverageOptions`：[`coverage`](/config/test/coverage) 的配置类型。
 - `BrowserInstanceConfig` / `BrowserExpectConfig` / `BrowserName` / `BrowserViewport`：Browser Mode 实例、断言、浏览器名称与视口配置类型。
 
 ## Test API 类型
@@ -96,12 +90,12 @@ import type {
 - `FixtureCleanup` / `FixtureLifecycle`：具名 fixture 的清理回调和 `{ onCleanup }` 生命周期参数类型（`0.11.7` 新增）。
 - `MaybePromise<T>`：工具联合类型 `T | Promise<T>`。
 
-## Mock 与计时器类型
+## Mock 类型
 
-在辅助函数中接收 mock 函数、spy、mocked 模块或真实计时器时，可以使用以下类型：
+在辅助函数中接收 mock 函数、spy 或 mocked 模块时，可以使用以下类型：
 
 ```ts
-import type { Mock, Mocked, MockInstance, RealTimers } from '@rstest/core';
+import type { Mock, Mocked, MockInstance } from '@rstest/core';
 ```
 
 ### Mock
@@ -147,10 +141,6 @@ const mockedUserApi: Mocked<typeof userApi> = rs.mocked(userApi);
 mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 ```
 
-### RealTimers
-
-`RealTimers` 是 [`rs.getRealTimers()`](/api/runtime-api/rstest/fake-timers#rsgetrealtimers) 的返回值类型，包含未被 mock 的 `setTimeout`、`clearTimeout` 以及可选的 `setImmediate`。
-
 ## Reporter 与结果类型
 
 编写自定义 Reporter 或消费 Rstest 测试结果时，可以使用以下类型。完整接口定义见 [Reporter](/api/javascript-api/reporter)。
@@ -159,12 +149,10 @@ mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 import type {
   CoverageMapData,
   Duration,
-  GetSourcemap,
   Reporter,
   ReporterContext,
   SerializedError,
   SnapshotSummary,
-  SourceMapInput,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
@@ -185,7 +173,7 @@ import type {
 - `TestResult` / `TestFileResult` / `TestResultStatus`：用例、套件和文件级的执行结果，以及状态联合类型（`'skipped' | 'passed' | 'failed' | 'todo'`）。
 - `TestRunStartPayload` / `TestRunEndPayload` / `TestRunStatus` / `TestRunSummary`：运行级钩子参数、运行状态（`'passed' | 'failed' | 'error'`）及统计汇总。
 - `Duration` / `SerializedError` / `UserConsoleLog`：各阶段耗时、可 JSON 序列化的错误对象和捕获的标准输出日志。
-- `GetSourcemap` / `SourceMapInput` / `SnapshotSummary` / `CoverageMapData`：source map 解析函数、快照汇总与 Istanbul 覆盖率映射类型。
+- `SnapshotSummary` / `CoverageMapData`：快照汇总与 Istanbul 覆盖率映射类型。
 
 <ApiMeta addedVersion="0.11.1" />
 
