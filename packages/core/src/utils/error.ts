@@ -23,8 +23,11 @@ const serializeError = (
     message: value.message ?? String(error),
     stack: typeof value.stack === 'string' ? value.stack : undefined,
     diff: value.diff,
-    actual: value.actual,
-    expected: value.expected,
+    // Assertion libraries keep the compared values as they are, such as the
+    // `1n` and `2n` of Node's `assert.strictEqual(1n, 2n)`, which JSON can't
+    // write. Keep only text, like the values a worker formats.
+    actual: typeof value.actual === 'string' ? value.actual : undefined,
+    expected: typeof value.expected === 'string' ? value.expected : undefined,
     retryCount: value.retryCount,
     fullStack: value.fullStack,
   };
