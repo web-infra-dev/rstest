@@ -1,5 +1,5 @@
 ---
-description: 'Rstest 实例 API 参考：createRstest、rstest.context、rstest.run、rstest.watch、rstest.listTests、rstest.mergeReports、ListTestsError、PROJECT_LOADER 和 runCLI。'
+description: 'Rstest 实例 API 参考：createRstest、rstest.context、rstest.run、rstest.watch、rstest.listTests、rstest.mergeReports、ListTestsError 和 runCLI。'
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -486,55 +486,6 @@ interface MergeReportsOptions {
 interface RstestInstance {
   mergeReports(options?: MergeReportsOptions): Promise<TestRunResult>;
 }
-```
-
-## PROJECT_LOADER
-
-<ApiMeta addedVersion="0.12.5" />
-
-挂载在根 `RstestConfig` 上的 Symbol 键，供宿主工具（例如上层框架 CLI）从自身配置文件中解析 `projects` 条目，替代默认的 `rstest.config.*` 查找逻辑。
-
-仅读取根配置上的该 Symbol，嵌套 `projects` 也会复用根配置的加载器。返回 `null` 时会基于空配置创建项目，不再回退到 `rstest.config.*`。加载器可能被并发调用。
-
-### 示例
-
-```ts
-import type { RstestConfig } from '@rstest/core';
-import {
-  createRstest,
-  type LoadProjectConfig,
-  PROJECT_LOADER,
-} from '@rstest/core/api';
-
-const loadProject: LoadProjectConfig = async ({ dirPath, filePath }) => {
-  const configFile = filePath ?? findHostConfig(dirPath);
-  if (!configFile) return null;
-  const { test, dependencies } = await loadHostConfig(configFile);
-  return { content: test, filePath: configFile, dependencies };
-};
-
-const config: RstestConfig & { [PROJECT_LOADER]?: LoadProjectConfig } = {
-  projects: ['packages/*'],
-  [PROJECT_LOADER]: loadProject,
-};
-
-const rstest = await createRstest({ config });
-```
-
-### LoadProjectConfig
-
-- **类型：**
-
-```ts
-const PROJECT_LOADER: unique symbol;
-
-type LoadProjectConfig = (ctx: {
-  dirPath: string; // 正在加载的项目目录（规范化的绝对路径）。
-  filePath?: string; // 配置文件路径（规范化的绝对路径），仅文件条目会提供。
-}) =>
-  | LoadConfigResult<RstestConfig>
-  | null
-  | Promise<LoadConfigResult<RstestConfig> | null>;
 ```
 
 ## runCLI

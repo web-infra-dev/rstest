@@ -1,5 +1,5 @@
 ---
-description: 'Reference for the Rstest instance API: createRstest, rstest.context, rstest.run, rstest.watch, rstest.listTests, rstest.mergeReports, ListTestsError, PROJECT_LOADER, and runCLI.'
+description: 'Reference for the Rstest instance API: createRstest, rstest.context, rstest.run, rstest.watch, rstest.listTests, rstest.mergeReports, ListTestsError, and runCLI.'
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -486,55 +486,6 @@ interface MergeReportsOptions {
 interface RstestInstance {
   mergeReports(options?: MergeReportsOptions): Promise<TestRunResult>;
 }
-```
-
-## PROJECT_LOADER
-
-<ApiMeta addedVersion="0.12.5" />
-
-Symbol key attached to a root `RstestConfig` so a host tool (such as a meta-framework CLI) can resolve `projects` entries from its own config files instead of `rstest.config.*`.
-
-Only the symbol on the root config is read, and nested `projects` also use the root loader. Returning `null` creates the project from an empty config without falling back to `rstest.config.*`. The loader may be called concurrently.
-
-### Example
-
-```ts
-import type { RstestConfig } from '@rstest/core';
-import {
-  createRstest,
-  type LoadProjectConfig,
-  PROJECT_LOADER,
-} from '@rstest/core/api';
-
-const loadProject: LoadProjectConfig = async ({ dirPath, filePath }) => {
-  const configFile = filePath ?? findHostConfig(dirPath);
-  if (!configFile) return null;
-  const { test, dependencies } = await loadHostConfig(configFile);
-  return { content: test, filePath: configFile, dependencies };
-};
-
-const config: RstestConfig & { [PROJECT_LOADER]?: LoadProjectConfig } = {
-  projects: ['packages/*'],
-  [PROJECT_LOADER]: loadProject,
-};
-
-const rstest = await createRstest({ config });
-```
-
-### LoadProjectConfig
-
-- **Type:**
-
-```ts
-const PROJECT_LOADER: unique symbol;
-
-type LoadProjectConfig = (ctx: {
-  dirPath: string; // Absolute, normalized directory of the project being loaded.
-  filePath?: string; // Absolute, normalized config file path, present only for file entries.
-}) =>
-  | LoadConfigResult<RstestConfig>
-  | null
-  | Promise<LoadConfigResult<RstestConfig> | null>;
 ```
 
 ## runCLI
