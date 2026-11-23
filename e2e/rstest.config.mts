@@ -29,6 +29,8 @@ const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
  */
 const THREADS_EXCLUDES = ['browser-mode/**'];
 
+const NODE_MAJOR = Number(process.versions.node.split('.')[0]);
+
 const E2E_MODE =
   process.env.RSTEST_OUTPUT_MODULE === 'false'
     ? 'commonjs'
@@ -91,10 +93,11 @@ export default defineConfig({
     maxWorkers: '80%',
     // debug warnings
     execArgv: ['--trace-warnings'],
-    // `--isolate false` is more likely to hit resource contention on CI. Limit
-    // worker concurrency to avoid sporadic "Worker exited unexpectedly" flakes.
+    // `--isolate false` is more likely to hit resource contention on CI. Keep
+    // Node 20 single-worker to avoid upstream vm native crashes under worker
+    // reuse, while allowing 2 workers on newer Node majors.
     ...(process.env.ISOLATE === 'false'
-      ? { maxWorkers: process.env.CI ? 1 : 2 }
+      ? { maxWorkers: process.env.CI && NODE_MAJOR <= 20 ? 1 : 2 }
       : {}),
   },
   exclude: [

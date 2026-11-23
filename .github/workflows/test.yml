@@ -10,6 +10,11 @@ on:
   push:
     branches: [main]
 
+  schedule:
+    # Daily full 4x4 e2e sweep on main (02:00 UTC+8) to catch rare
+    # OS x secondary-mode regressions without slowing every main push.
+    - cron: '0 18 * * *'
+
   workflow_dispatch:
     inputs:
       fullRun:
@@ -19,7 +24,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
@@ -32,19 +37,43 @@ env:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
-      changed: ${{ steps.changes.outputs.changed }}
-      # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
-      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') || inputs.fullRun }}
+      changed: ${{ github.event_name == 'schedule' && (steps.nightly.outputs.should_skip != 'true' && 'true' || 'false') || steps.changes.outputs.changed }}
+      # 4-leg matrix (macos/24, windows/24, ubuntu/20, ubuntu/26): push to main, nightly, release PR, or manual fullRun.
+      is_full_matrix: ${{ github.event_name == 'push' || github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'release:') || inputs.fullRun }}
+      # Full 4x4 sweep (all 4 e2e scripts on all 4 legs): nightly, release PR, or manual fullRun.
+      # Regular main pushes run secondary modes (commonjs/no-isolate/threads) on ubuntu legs only.
+      is_full_modes: ${{ github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'release:') || inputs.fullRun }}
       # Opt-in macOS e2e leg on regular PRs via the `ci:macos` label.
       run_macos: ${{ contains(github.event.pull_request.labels.*.name, 'ci:macos') }}
     steps:
+      - name: Check duplicate nightly run
+        id: nightly
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/test.yml/runs?event=schedule&head_sha=${{ github.sha }}&status=success&per_page=1" \
+            --jq '.total_count')
+          if [ "$count" -gt 0 ]; then
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping nightly: commit ${{ github.sha }} already passed a scheduled run."
+          else
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: github.event_name != 'schedule'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 1
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name != 'schedule'
         id: changes
         with:
           predicate-quantifier: 'every'
@@ -55,6 +84,7 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
               - "!website/**"
+              - "!benchmarks/**"
 
   # ======== lint ========
   lint:
@@ -165,16 +195,18 @@ jobs:
         #   - Regular PRs run ubuntu/24 and windows/24 to keep PR latency low
         #     and avoid saturating the org's scarce macOS concurrency pool.
         #     Add the `ci:macos` label to a PR to opt into macos/24 pre-merge.
-        #   - Full runs (push to main, release PRs, workflow_dispatch fullRun)
-        #     run macos/24, windows/24, and ubuntu on the extra Node majors
-        #     (20, 26).
+        #   - Push to main runs all 4 legs on default `test`, and scopes the
+        #     OS-agnostic secondary modes (commonjs, no-isolate, threads) to
+        #     ubuntu/20 and ubuntu/26 so macOS/Windows stay fast.
+        #   - Nightly schedule, release PRs, and manual fullRun run all 4 legs
+        #     × all 4 scripts.
         #
         #   trigger         | combos                           | scripts run as steps
-        #   ----------------+----------------------------------+------------------------------
+        #   ----------------+----------------------------------+-------------------------------------------
         #   PR (regular)    | ubuntu/24, windows/24            | test
         #   PR (`ci:macos`) | + macos/24                       | test
-        #   push to main    | macos/24, windows/24, ubu/20, 26 | test, commonjs, no-isolate, threads
-        #   release PR      | macos/24, windows/24, ubu/20, 26 | test, commonjs, no-isolate, threads
+        #   push to main    | macos/24, windows/24, ubu/20, 26 | test (all 4); cjs/no-iso/threads (ubuntu)
+        #   nightly/release | macos/24, windows/24, ubu/20, 26 | test, commonjs, no-isolate, threads (all 4)
         #
         # The e2e scripts (test, test:commonjs, test:no-isolate, test:threads)
         # are sequential steps of one job, not a matrix axis: they share the
@@ -188,7 +220,7 @@ jobs:
         # and `localStorage` exists on globalThis before a DOM environment is set up.
         include: >-
           ${{ fromJson(
-            needs.prepare.outputs.is_full_run == 'true'
+            needs.prepare.outputs.is_full_matrix == 'true'
               && '[{"os":"macos-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"},{"os":"ubuntu-latest","node_version":"20"},{"os":"ubuntu-latest","node_version":"26"}]'
             || (needs.prepare.outputs.run_macos == 'true'
               && '[{"os":"ubuntu-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"},{"os":"macos-latest","node_version":"24"}]'
@@ -241,7 +273,7 @@ jobs:
       # results — they were independent matrix jobs before being collapsed into
       # steps.
       - name: E2E Test (test:commonjs)
-        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        if: ${{ (needs.prepare.outputs.is_full_modes == 'true' || (needs.prepare.outputs.is_full_matrix == 'true' && matrix.os == 'ubuntu-latest')) && !cancelled() && steps.build.outcome == 'success' }}
         # Playwright keeps default-mode coverage on every OS/Node combination;
         # CommonJS only needs one extra pass, on the oldest supported Node.
         run: cd e2e && pnpm test:commonjs
@@ -251,13 +283,13 @@ jobs:
       # Playwright fixtures already use isolate:false and explicitly cover pools.
       # These outer-runner modes do not add fixture coverage.
       - name: E2E Test (test:no-isolate)
-        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        if: ${{ (needs.prepare.outputs.is_full_modes == 'true' || (needs.prepare.outputs.is_full_matrix == 'true' && matrix.os == 'ubuntu-latest')) && !cancelled() && steps.build.outcome == 'success' }}
         run: cd e2e && pnpm test:no-isolate
         env:
           RSTEST_E2E_SKIP_PLAYWRIGHT: 'true'
 
       - name: E2E Test (test:threads)
-        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        if: ${{ (needs.prepare.outputs.is_full_modes == 'true' || (needs.prepare.outputs.is_full_matrix == 'true' && matrix.os == 'ubuntu-latest')) && !cancelled() && steps.build.outcome == 'success' }}
         run: cd e2e && pnpm test:threads
         env:
           RSTEST_E2E_SKIP_PLAYWRIGHT: 'true'
@@ -293,3 +325,88 @@ jobs:
               exit 1
             fi
           done
+
+  # ======== nightly-report ========
+  nightly-report:
+    needs: [prepare, lint, ut, e2e]
+    if: always() && github.event_name == 'schedule' && github.repository == 'web-infra-dev/rstest' && (needs.prepare.result != 'success' || needs.prepare.outputs.changed == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Report nightly status
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          UT_RESULT: ${{ needs.ut.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+        with:
+          script: |
+            const TITLE = 'Nightly E2E CI failed';
+            const results = {
+              prepare: process.env.PREPARE_RESULT,
+              lint: process.env.LINT_RESULT,
+              ut: process.env.UT_RESULT,
+              e2e: process.env.E2E_RESULT,
+            };
+            const failed = Object.values(results).some(
+              (r) => r === 'failure' || r === 'cancelled',
+            );
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const commitUrl = `${context.serverUrl}/${owner}/${repo}/commit/${context.sha}`;
+            const shortSha = context.sha.slice(0, 7);
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              creator: 'github-actions[bot]',
+              per_page: 50,
+            });
+            const existing = openIssues.find(
+              (issue) => !issue.pull_request && issue.title === TITLE,
+            );
+
+            if (failed) {
+              const summary = Object.entries(results)
+                .map(([name, result]) => `- \`${name}\`: ${result}`)
+                .join('\n');
+              const body = [
+                `Nightly full 4x4 CI failed on [\`${shortSha}\`](${commitUrl}).`,
+                '',
+                `- Workflow run: ${runUrl}`,
+                summary,
+              ].join('\n');
+
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  body,
+                });
+              } else {
+                await github.rest.issues.create({
+                  owner,
+                  repo,
+                  title: TITLE,
+                  body,
+                });
+              }
+            } else if (existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body: `Nightly full 4x4 CI recovered on [\`${shortSha}\`](${commitUrl}) (${runUrl}). Closing this issue.`,
+              });
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+            }
