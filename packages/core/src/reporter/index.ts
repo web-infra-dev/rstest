@@ -105,7 +105,6 @@ export class DefaultReporter implements Reporter {
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
-    this.nonTTYProgressNotifier?.notifyOutput();
 
     const { hideSkippedTestFiles, hideSkippedTests, slowTestThreshold } =
       this.resolveFileOptions(test.project);
@@ -113,6 +112,8 @@ export class DefaultReporter implements Reporter {
     if (hideSkippedTestFiles && test.status === 'skipped') {
       return;
     }
+
+    this.nonTTYProgressNotifier?.notifyOutput();
 
     const logResults = () => {
       logFileTitle(
