@@ -11,6 +11,8 @@ export type PoolWorkerKind = RstestPoolType;
 export type PoolTask = {
   worker: PoolWorkerKind;
   type: 'run' | 'collect';
+  /** Host-only identity for tasks that can share a worker. */
+  reuseKey: string;
   options: RunWorkerOptions['options'];
   rpcMethods: RuntimeRPC;
   /** Host-only callback evaluated after slot acquisition, just before sending. */
