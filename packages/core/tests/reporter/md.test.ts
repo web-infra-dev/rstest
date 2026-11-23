@@ -391,3 +391,50 @@ describe('MdReporter watch reruns', () => {
     expect(report).not.toContain('[stdout] log: a only cycle');
   });
 });
+
+describe('MdReporter error causes', () => {
+  it('reports the whole cause chain of an error', async () => {
+    const { runEnd } = setupMdReporter();
+    const test: TestResult = {
+      ...createFailedTest(PATH_A, 'loads the user'),
+      errors: [
+        {
+          name: 'Error',
+          message: 'Failed to load user',
+          stack:
+            'Error: Failed to load user\n    at loadUser (/test/root/src/user.ts:8:11)',
+          cause: {
+            name: 'TypeError',
+            message: 'fetch failed',
+            stack:
+              'TypeError: fetch failed\n    at request (/test/root/src/api.ts:3:9)',
+            cause: {
+              name: 'Error',
+              message: 'connect ECONNREFUSED 127.0.0.1:5432',
+            },
+          },
+        },
+      ],
+    };
+
+    const report = await runEnd({
+      results: [createFailedFile(PATH_A, [test])],
+      testResults: [test],
+    });
+    const [, details = ''] =
+      /details:\n\n```json\n([\s\S]*?)\n```/.exec(report) ?? [];
+
+    expect(JSON.parse(details).errors[0].cause).toEqual({
+      type: 'TypeError',
+      message: 'fetch failed',
+      topFrame: { file: 'src/api.ts', line: 3, column: 9, method: 'request' },
+      stackFrames: [],
+      cause: {
+        type: 'Error',
+        message: 'connect ECONNREFUSED 127.0.0.1:5432',
+        topFrame: null,
+        stackFrames: [],
+      },
+    });
+  });
+});

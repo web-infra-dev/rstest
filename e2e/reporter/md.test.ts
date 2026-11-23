@@ -1138,6 +1138,151 @@ describe('md', () => {
     `);
   });
 
+  it('shows the cause of an error', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/errorCause',
+        '-c',
+        './rstest.agentMd.errorCause.config.mts',
+      ],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            AI_AGENT: 'rstest-e2e',
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const normalized = normalizeStdout(cli.stdout);
+    expect(normalized).toMatchInlineSnapshot(`
+      "---
+      tool: "@rstest/core@<version>"
+      timestamp: "<timestamp>"
+      ---
+
+      # Rstest Test Execution Report
+
+      ## Summary
+
+      \`\`\`json
+      {
+        "status": "failed",
+        "counts": {
+          "testFiles": 1,
+          "failedFiles": 1,
+          "tests": 1,
+          "failedTests": 1,
+          "passedTests": 0,
+          "skippedTests": 0,
+          "todoTests": 0
+        },
+        "durationMs": {
+          "total": 0,
+          "build": 0,
+          "tests": 0
+        },
+        "snapshot": {
+          "added": 0,
+          "updated": 0,
+          "unmatched": 0,
+          "removed": 0,
+          "unchecked": 0
+        }
+      }
+      \`\`\`
+
+      ## Failures
+
+      ### [F01] fixtures/agent-md/errorCause.test.ts :: agent-md > fails with an error cause
+
+      details:
+
+      \`\`\`json
+      {
+        "testPath": "fixtures/agent-md/errorCause.test.ts",
+        "project": "rstest",
+        "fullName": "agent-md > fails with an error cause",
+        "status": "failed",
+        "duration": 0,
+        "retryCount": 0,
+        "errors": [
+          {
+            "type": "Error",
+            "message": "Failed to load user",
+            "topFrame": {
+              "file": "fixtures/agent-md/errorCause.test.ts",
+              "line": 11,
+              "column": 11,
+              "method": "loadUser"
+            },
+            "stackFrames": [],
+            "cause": {
+              "type": "Error",
+              "message": "connect ECONNREFUSED 127.0.0.1:5432",
+              "topFrame": {
+                "file": "fixtures/agent-md/errorCause.test.ts",
+                "line": 4,
+                "column": 9,
+                "method": "connect"
+              },
+              "stackFrames": []
+            }
+          }
+        ]
+      }
+      \`\`\`
+
+      "
+    `);
+  });
+
+  it('shows the cause of an unhandled error', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/errorCause',
+        '-c',
+        './rstest.agentMd.globalSetupCause.config.mts',
+      ],
+      onTestFinished,
+      unsetEnv: UNSET_ENV,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            AI_AGENT: 'rstest-e2e',
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const [, unhandledErrorJson = ''] =
+      /### Unhandled Error 1\n\n```json\n([\s\S]*?)\n```/.exec(cli.stdout) ??
+      [];
+    expect(JSON.parse(unhandledErrorJson)).toMatchObject({
+      name: 'Error',
+      message: 'Failed to start the test database',
+      cause: {
+        name: 'Error',
+        message: 'connect ECONNREFUSED 127.0.0.1:5432',
+        stack: expect.stringMatching(/at connect .*globalSetupCause\.ts:2:9/),
+      },
+    });
+  });
+
   it('escapes RegExp characters in the repro test name pattern', async ({
     onTestFinished,
   }) => {
