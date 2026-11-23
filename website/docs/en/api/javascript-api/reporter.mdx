@@ -67,7 +67,7 @@ interface Reporter {
 }
 ```
 
-- `onTestSuiteResult`: `result.errors` contains only suite hook errors (`beforeAll` and `afterAll`).
+- `onTestSuiteResult`: `result.errors` contains suite-level errors—suite hook failures (`beforeAll` and `afterAll`) and runner-generated suite errors (such as `No tests` for an empty suite when `passWithNoTests` is `false`)—not individual child test failures.
 - **Metadata** <ApiMeta sup addedVersion="0.11.1" />: Runtime metadata written via `context.task.meta` is available on `TestResult.meta` in `onTestCaseResult`. Hook metadata written via `ctx.meta` is available on the corresponding `TestResult.meta` in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
 - **`onExit`** <ApiMeta sup addedVersion="0.12.0" />: Called when the reporter's owning context is released after a normal run or merge completion, watch close, startup failure, or abnormal CLI exit. Use it to release resources such as streams or renderers. Errors thrown by `onExit` do not replace the operation's result or error. (List contexts do not attach reporters, so `onExit` does not run for `listTests`.)
 
