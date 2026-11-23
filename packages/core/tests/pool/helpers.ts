@@ -69,6 +69,7 @@ export const task = (): PoolTask =>
   ({
     worker: 'forks',
     type: 'run',
+    reuseKey: 'node',
     options: { environmentKey: 'node' },
     rpcMethods: {},
   }) as PoolTask;

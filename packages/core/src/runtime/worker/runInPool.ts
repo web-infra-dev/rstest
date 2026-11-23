@@ -177,8 +177,8 @@ let isTeardown = false;
  * bindings — an option third-party modules do not have, so here the
  * environment's lifetime moves instead.
  *
- * A worker only ever holds one environment: the scheduler restricts reuse to
- * tasks whose `environmentKey` matches (`Pool.wakeWaiters`). No
+ * The scheduler restricts non-VM reuse to tasks whose `environmentKey` matches
+ * (`Pool.wakeWaiters`). VM workers create a new environment per file. No
  * teardown runs at worker exit — the host owns termination (see
  * `pool/AGENTS.md`) and process death reclaims the environment, same as the
  * kept module cache.

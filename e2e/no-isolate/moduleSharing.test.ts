@@ -15,31 +15,32 @@ const supportsJSDOM30 =
     (nodeMinor > 22 || (nodeMinor === 22 && nodePatch >= 2)));
 
 describe('module state sharing under isolate: false', () => {
-  it('keeps workers pinned to the resolved environment module', async ({
-    onTestFinished,
-  }) => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures', 'environment-module-affinity'),
-          env: { DEBUG: 'rstest' },
+  it.for(['forks', 'vmForks', 'vmThreads'] as const)(
+    'uses the resolved environment module under %s',
+    async (pool, { onTestFinished }) => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '--pool', pool],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures', 'environment-module-affinity'),
+            env: { DEBUG: 'rstest' },
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-    if (supportsJSDOM30) {
-      expect(cli.stdout).toContain('loaded bundled test environment jsdom');
-      expect(cli.stdout + cli.stderr).not.toContain(
-        'falling back to its native entry',
-      );
-    } else {
-      expect(cli.stdout).not.toContain('bundled test environment jsdom');
-    }
-  });
+      await expectExecSuccess();
+      if (supportsJSDOM30) {
+        expect(cli.stdout).toContain('loaded bundled test environment jsdom');
+        expect(cli.stdout + cli.stderr).not.toContain(
+          'falling back to its native entry',
+        );
+      } else {
+        expect(cli.stdout).not.toContain('bundled test environment jsdom');
+      }
+    },
+  );
 
   it('restores project-scoped globals before reusing a worker', async ({
     onTestFinished,

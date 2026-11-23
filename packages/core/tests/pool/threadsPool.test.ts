@@ -38,6 +38,7 @@ const createTask = (
 ): PoolTask => ({
   worker: 'threads',
   type,
+  reuseKey: 'node',
   options: {
     context: { runtimeConfig: { env: {} } },
     // A worker is only reused for tasks carrying the same key.

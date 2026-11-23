@@ -230,10 +230,27 @@ const buildTask = async ({
     type,
   };
 
+  const colorEnvKey = JSON.stringify({
+    FORCE_COLOR: runtimeConfig.env.FORCE_COLOR,
+    NO_COLOR: runtimeConfig.env.NO_COLOR,
+  });
+  // Known limit: the config portion is `stableJson`, so environment option
+  // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
+  // function, a `virtualConsole` instance) collapse to identical bytes —
+  // two projects differing only in such values may share a worker's
+  // environment under `isolate: false`. Accepted as too narrow to guard;
+  // if it ever matters, fall back to a project-scoped key when the config
+  // is not JSON-representable instead of trying to serialize those values.
+  const environmentKey = [
+    getEnvironmentKey(runtimeConfig.testEnvironment, testEnvironmentModule),
+    colorEnvKey,
+  ].join('\0');
+
   return {
     task: {
       worker: workerKind,
       type,
+      reuseKey: isVmPoolType(workerKind) ? colorEnvKey : environmentKey,
       getKnownCoverageStructures,
       // Bundle coverage bypasses the VM cache to capture every task's assets.
       loadAssets:
@@ -252,23 +269,7 @@ const buildTask = async ({
         entryInfo,
         assetNames: taskAssetNames,
         diskSourceMapPaths,
-        // Known limit: the config portion is `stableJson`, so environment option
-        // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
-        // function, a `virtualConsole` instance) collapse to identical bytes —
-        // two projects differing only in such values may share a worker's
-        // environment under `isolate: false`. Accepted as too narrow to guard;
-        // if it ever matters, fall back to a project-scoped key when the config
-        // is not JSON-representable instead of trying to serialize those values.
-        environmentKey: [
-          getEnvironmentKey(
-            runtimeConfig.testEnvironment,
-            testEnvironmentModule,
-          ),
-          JSON.stringify({
-            FORCE_COLOR: runtimeConfig.env.FORCE_COLOR,
-            NO_COLOR: runtimeConfig.env.NO_COLOR,
-          }),
-        ].join('\0'),
+        environmentKey,
         context: {
           outputModule: project.outputModule,
           taskId: index + 1,
