@@ -188,7 +188,12 @@ describe('Test Edge Cases', () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/moduleNotFound.test.ts'],
+      args: [
+        'run',
+        '--config',
+        'rstest.moduleNotFound.config.mts',
+        'fixtures/moduleNotFound.test.ts',
+      ],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -201,7 +206,8 @@ describe('Test Edge Cases', () => {
 
     expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
     expect(logs.find((log) => log.includes('Module not found'))).toBeFalsy();
-    expect(logs.find((log) => log.includes('Tests 2 passed'))).toBeTruthy();
+    expect(cli.stderr).not.toContain('build failed');
+    expect(logs.find((log) => log.includes('Tests 4 passed'))).toBeTruthy();
   });
 
   it('test module not found codeFrame', async () => {
