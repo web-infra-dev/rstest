@@ -139,10 +139,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
+  const hasTestsToRun = hasNodeTestsToRun || hasBrowserTestsToRun;
 
   // Gated on there being something to run: auto-installing a missing coverage
   // package for a run with no work is the wrong default.
-  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
+  if (hasTestsToRun) {
     await ensureCoverageProviderInstalled(coverage, rootPath, {
       confirm: context.packageInstallerConfirm,
     });
@@ -155,17 +156,24 @@ export async function runTests(context: Rstest): Promise<void> {
   // The single run-scoped provider, built before the executors so both sides can
   // take it through their constructor. A coverage-plugin load error is only
   // thrown when something actually runs (above); on the empty path it just means
-  // no provider can be built.
+  // no provider can be built (including when the node Rsbuild boot was skipped).
   // Built for every shape, the empty ones included: an empty `--related`
   // resolution writes an empty coverage report rather than none at all.
   // "Coverage was requested and this run covered nothing" is a report, and
   // suppressing it for one run shape would re-split the single assembly.
-  const coverageProvider = planner.coveragePluginLoadError()
-    ? null
-    : await createCoverageProviderWithLog(
+  let coverageProvider = null;
+  if (!planner.coveragePluginLoadError()) {
+    try {
+      coverageProvider = await createCoverageProviderWithLog(
         context.normalizedConfig.coverage,
         rootPath,
       );
+    } catch (error) {
+      if (hasTestsToRun) {
+        throw error;
+      }
+    }
+  }
 
   // The cold-start gate, followed rather than re-decided here: the planner
   // brings up no node build for a run with zero node projects, so that run
