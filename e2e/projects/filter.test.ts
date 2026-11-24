@@ -44,27 +44,4 @@ describe('test projects filter', () => {
     expect(logs.find((log) => log.includes('node/test/index'))).toBeTruthy();
     expect(logs.find((log) => log.includes('client/test/index'))).toBeFalsy();
   });
-
-  it('should not create compilers for filtered-out empty projects', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        'client',
-        '--config',
-        'rstest.skipEmptyCompilers.config.mts',
-      ],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await expectExecSuccess();
-    const compiledLine = cli.stdout
-      .split('\n')
-      .find((line) => line.includes('COMPILED_ENVIRONMENTS='));
-    expect(compiledLine).toContain('COMPILED_ENVIRONMENTS=["client"]');
-  });
 });

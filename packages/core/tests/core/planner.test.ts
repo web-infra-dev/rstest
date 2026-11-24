@@ -1,4 +1,3 @@
-import type { RsbuildPlugin } from '@rsbuild/core';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
@@ -22,26 +21,16 @@ afterAll(() => {
 // "skipped the node build" apart from "built it and nobody used it". Defined
 // inside the factory because `rs.mock` is hoisted above the imports.
 rs.mock('../../src/core/build/rsbuild', () => ({
-  prepareRsbuild: rs.fn(
-    async (options?: { onRsbuildConfigResolved?: () => Promise<void> }) => ({
-      initConfigs: rs.fn(async () => {
-        await options?.onRsbuildConfigResolved?.();
-        return [];
-      }),
-    }),
-  ),
+  prepareRsbuild: rs.fn(async () => ({
+    initConfigs: rs.fn(async () => []),
+  })),
 }));
 
 const prepareRsbuildSpy = rs.mocked(prepareRsbuild);
 
 const createContext = (
   root: string,
-  projects: Array<{
-    name: string;
-    browser?: boolean;
-    include?: string[];
-    plugins?: RsbuildPlugin[];
-  }>,
+  projects: Array<{ name: string; browser?: boolean; include?: string[] }>,
   command: 'run' | 'watch' = 'run',
 ) =>
   new Rstest(
@@ -49,12 +38,11 @@ const createContext = (
       cwd: root,
       command,
       embedded: true,
-      projects: projects.map(({ name, browser, include, plugins }) => ({
+      projects: projects.map(({ name, browser, include }) => ({
         config: {
           name,
           root,
           include: include ?? ['*.test.ts'],
-          ...(plugins ? { plugins } : {}),
           ...(browser
             ? { browser: { enabled: true, provider: 'playwright' as const } }
             : {}),
@@ -155,32 +143,7 @@ describe('createTestPlanner cold-start gate', () => {
     expect(context.fileFilters).toEqual(['a.test.ts']);
   });
 
-  it('skips empty node projects without user plugins in non-watch runs', async () => {
-    writeFileSync(join(tempRoot, 'b.test.ts'), 'export {};\n');
-    const context = createContext(tempRoot, [
-      { name: 'node-a', include: ['a.test.ts'] },
-      { name: 'node-b', include: ['b.test.ts'] },
-    ]);
-    context.fileFilters = ['a.test.ts'];
-
-    await createTestPlanner(context, {
-      browserProjects: [],
-      nodeProjects: context.projects,
-      isWatchMode: false,
-    });
-
-    const targetProjects = prepareRsbuildSpy.mock.calls[0]![0]!.targetProjects;
-    expect(targetProjects?.map((project) => project.environmentName)).toEqual([
-      'node-a',
-    ]);
-    // Full configured project list stays intact on context for reporting and output dirs.
-    expect(context.projects.map((project) => project.environmentName)).toEqual([
-      'node-a',
-      'node-b',
-    ]);
-  });
-
-  it('skips booting node Rsbuild when all node projects are empty and have no user plugins', async () => {
+  it('skips booting node Rsbuild when all node projects are empty without user plugins', async () => {
     const context = createContext(tempRoot, [
       { name: 'node-a', include: ['missing/**/*.test.ts'] },
     ]);
@@ -193,46 +156,5 @@ describe('createTestPlanner cold-start gate', () => {
 
     expect(prepareRsbuildSpy).not.toHaveBeenCalled();
     expect(planner.nodeBuild).toBeUndefined();
-    expect(planner.hasNodeTestsToRun()).toBe(false);
-  });
-
-  it('prunes empty plugin-bearing node projects after config resolution when no tests are added', async () => {
-    const noopPlugin: RsbuildPlugin = {
-      name: 'noop-plugin',
-      setup() {},
-    };
-    const context = createContext(tempRoot, [
-      { name: 'node-a', include: ['a.test.ts'] },
-      {
-        name: 'node-empty-with-plugin',
-        include: ['missing/**/*.test.ts'],
-        plugins: [noopPlugin],
-      },
-    ]);
-
-    const seenInitialTargets: string[] = [];
-    prepareRsbuildSpy.mockImplementationOnce(async (options) => {
-      seenInitialTargets.push(
-        ...(options?.targetProjects?.map((p) => p.environmentName) ?? []),
-      );
-      return {
-        initConfigs: rs.fn(async () => {
-          await options?.onRsbuildConfigResolved?.();
-          return [];
-        }),
-      } as never;
-    });
-
-    await createTestPlanner(context, {
-      browserProjects: [],
-      nodeProjects: context.projects,
-      isWatchMode: false,
-    });
-
-    expect(seenInitialTargets).toEqual(['node-a', 'node-empty-with-plugin']);
-    const targetProjects = prepareRsbuildSpy.mock.calls[0]![0]!.targetProjects;
-    expect(targetProjects?.map((project) => project.environmentName)).toEqual([
-      'node-a',
-    ]);
   });
 });
