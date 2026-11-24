@@ -11,6 +11,7 @@ import {
   syncNodeProjects,
 } from './projectPlan';
 import { prepareRsbuild } from '../build/rsbuild';
+import { getUserRstestConfigPluginProjects } from '../config/modifyRstestConfig';
 import type { Rstest } from '../rstest';
 import {
   createSetupFileState,
@@ -104,14 +105,13 @@ export async function createTestPlanner(
 
   const plan = await resolveRunnableProjects();
 
-  // The Rsbuild project set: the planned node subset, plus every node project the
-  // plan left out — those still need an environment for their
-  // `modifyRstestConfig` hooks to fire in, and a hook is allowed to add the test
-  // files that put the project back in the plan. Assembled before
-  // `prepareRsbuild`, which captures this exact array as `targetProjects` and
-  // re-reads it inside its config hook; that is why `syncNodeProjects` splices it
-  // in place instead of replacing it. Empty — and spliced to empty forever — on a
-  // zero-node run, which never builds the node side at all.
+  // The Rsbuild project set: the planned node subset, plus any excluded node
+  // project that may still add tests via `modifyRstestConfig` (or every
+  // excluded node project in watch mode). Assembled before `prepareRsbuild`,
+  // which captures this exact array as `targetProjects` and re-reads it inside
+  // its config hook; that is why `syncNodeProjects` splices it in place instead
+  // of replacing it. Projects whose plugins did not add tests are pruned back
+  // out on `onRsbuildConfigResolved` before environments become compilers.
   const plannedNodeSourceNames = new Set(
     plan.nodeProjectsToRun.map(
       (project) =>
@@ -119,11 +119,14 @@ export async function createTestPlanner(
         project.environmentName,
     ),
   );
+  const emptyNodeProjects = nodeProjects.filter(
+    (project) => !plannedNodeSourceNames.has(project.environmentName),
+  );
   const rsbuildProjects: InternalProjectContext[] = [
     ...plan.nodeProjectsToRun,
-    ...nodeProjects.filter(
-      (project) => !plannedNodeSourceNames.has(project.environmentName),
-    ),
+    ...(isWatchMode
+      ? emptyNodeProjects
+      : getUserRstestConfigPluginProjects(emptyNodeProjects)),
   ];
 
   /**
@@ -140,7 +143,6 @@ export async function createTestPlanner(
 
   const buildNodeSide = async (): Promise<NodeBuild> => {
     const setupFileState = createSetupFileState();
-    context.projects = [...browserProjects, ...rsbuildProjects];
 
     const rsbuildInstance = await prepareRsbuild({
       context,
@@ -155,7 +157,10 @@ export async function createTestPlanner(
         globalSetupProjects: context.projects,
       }),
       onModifyRstestConfigApplied: () => resyncPlan(),
-      onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
+      onRsbuildConfigResolved: async () => {
+        await projectPlanState.validateEnvironmentComments();
+        syncNodeProjects(rsbuildProjects, getPlan().nodeProjectsToRun);
+      },
     });
 
     // Where the node `modifyRstestConfig` hooks actually fire.
@@ -165,11 +170,9 @@ export async function createTestPlanner(
   };
 
   // The cold-start gate, as a planner condition rather than an orchestrator
-  // branch: a run with no node projects has no environment for the Rsbuild
-  // instance to hold and no node `modifyRstestConfig` hook to fire, so the whole
-  // node build — `prepareRsbuild` and the `initConfigs` that triggers those
-  // hooks — is skipped and the run stays browser-only from here down.
-  const nodeBuild = nodeProjects.length ? await buildNodeSide() : undefined;
+  // branch: a run with no runnable node projects and no node config-hook
+  // candidates skips `prepareRsbuild` and `initConfigs` completely.
+  const nodeBuild = rsbuildProjects.length ? await buildNodeSide() : undefined;
 
   // The browser half of the barrier. Destructured so the discovery step is spent
   // here and only the query half reaches the returned planner — a second caller

@@ -1,4 +1,13 @@
-import { resolveStatsPathCandidate } from '../../src/core/execution/related';
+import type { RsbuildPlugin } from '@rsbuild/core';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'pathe';
+import {
+  resolveRelatedTestFiles,
+  resolveStatsPathCandidate,
+} from '../../src/core/execution/related';
+import { Rstest } from '../../src/core/rstest';
+import type { RstestExposeAPI } from '../../src/types';
 import { filterFiles } from '../../src/utils/testFiles';
 
 // Run `fn` with a stubbed `process.platform` so both platform branches of
@@ -83,5 +92,189 @@ describe('filterFiles', () => {
         ),
       ).toEqual(['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts']);
     });
+  });
+});
+
+describe('resolveRelatedTestFiles empty project pruning', () => {
+  let tempRoot: string;
+
+  beforeEach(() => {
+    tempRoot = realpathSync(
+      mkdtempSync(join(tmpdir(), 'rstest-related-prune-')),
+    );
+  });
+
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('skips compiling empty projects while keeping modifyRstestConfig-revealed projects', async () => {
+    writeFileSync(join(tempRoot, 'dep.ts'), 'export const value = 1;\n');
+    writeFileSync(
+      join(tempRoot, 'active.test.ts'),
+      "import { value } from './dep';\nexport const res = value;\n",
+    );
+    writeFileSync(
+      join(tempRoot, 'revealed.test.ts'),
+      "import { value } from './dep';\nexport const res = value;\n",
+    );
+
+    const compiledEnvs: string[] = [];
+    let compilerConfigNames: string[] = [];
+    const recordCompilerPlugin = (): RsbuildPlugin => ({
+      name: 'record-compiler-env',
+      setup(api) {
+        api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
+          compilerConfigNames = bundlerConfigs
+            .map((config) => config.name)
+            .filter((name): name is string => Boolean(name))
+            .sort();
+        });
+        api.modifyRspackConfig((_config, { environment }) => {
+          compiledEnvs.push(environment.name);
+        });
+      },
+    });
+    const revealTestsPlugin: RsbuildPlugin = {
+      name: 'reveal-tests-plugin',
+      setup(api) {
+        api.useExposed<RstestExposeAPI>('rstest')?.modifyRstestConfig((cfg) => {
+          cfg.include = ['revealed.test.ts'];
+        });
+        api.modifyRspackConfig((_config, { environment }) => {
+          compiledEnvs.push(environment.name);
+        });
+      },
+    };
+
+    const context = new Rstest(
+      {
+        cwd: tempRoot,
+        command: 'run',
+        embedded: true,
+        projects: [
+          {
+            config: {
+              name: 'active',
+              root: tempRoot,
+              include: ['active.test.ts'],
+              plugins: [recordCompilerPlugin()],
+            },
+          },
+          {
+            config: {
+              name: 'empty-plain',
+              root: tempRoot,
+              include: ['missing-plain/**/*.test.ts'],
+            },
+          },
+          {
+            config: {
+              name: 'empty-with-noop-plugin',
+              root: tempRoot,
+              include: ['missing-plugin/**/*.test.ts'],
+              plugins: [recordCompilerPlugin()],
+            },
+          },
+          {
+            config: {
+              name: 'empty-revealed-by-hook',
+              root: tempRoot,
+              include: ['missing-before-hook/**/*.test.ts'],
+              plugins: [revealTestsPlugin],
+            },
+          },
+        ],
+      },
+      { root: tempRoot },
+    );
+
+    const matched = await resolveRelatedTestFiles(context, {
+      sourceFilters: ['dep.ts'],
+    });
+
+    expect(matched).toEqual([
+      join(tempRoot, 'active.test.ts'),
+      join(tempRoot, 'revealed.test.ts'),
+    ]);
+    expect(Array.from(new Set(compiledEnvs)).sort()).toEqual([
+      'active',
+      'empty-revealed-by-hook',
+    ]);
+    expect(compilerConfigNames).toEqual(['active', 'empty-revealed-by-hook']);
+  });
+
+  it('returns empty without creating compilers when plugin-bearing projects still have no entries', async () => {
+    writeFileSync(join(tempRoot, 'dep.ts'), 'export const value = 1;\n');
+    let createdCompilers = 0;
+    const noopPlugin: RsbuildPlugin = {
+      name: 'noop-plugin',
+      setup(api) {
+        api.onBeforeCreateCompiler(() => {
+          createdCompilers += 1;
+        });
+      },
+    };
+
+    const context = new Rstest(
+      {
+        cwd: tempRoot,
+        command: 'run',
+        embedded: true,
+        projects: [
+          {
+            config: {
+              name: 'empty-with-plugin',
+              root: tempRoot,
+              include: ['missing/**/*.test.ts'],
+              plugins: [noopPlugin],
+            },
+          },
+        ],
+      },
+      { root: tempRoot },
+    );
+
+    const matched = await resolveRelatedTestFiles(context, {
+      sourceFilters: ['dep.ts'],
+    });
+
+    expect(matched).toEqual([]);
+    expect(createdCompilers).toBe(0);
+  });
+
+  it('returns empty without creating compilers when no projects have test entries', async () => {
+    writeFileSync(join(tempRoot, 'dep.ts'), 'export const value = 1;\n');
+
+    const context = new Rstest(
+      {
+        cwd: tempRoot,
+        command: 'run',
+        embedded: true,
+        projects: [
+          {
+            config: {
+              name: 'empty-a',
+              root: tempRoot,
+              include: ['missing-a/**/*.test.ts'],
+            },
+          },
+          {
+            config: {
+              name: 'empty-b',
+              root: tempRoot,
+              include: ['missing-b/**/*.test.ts'],
+            },
+          },
+        ],
+      },
+      { root: tempRoot },
+    );
+
+    const matched = await resolveRelatedTestFiles(context, {
+      sourceFilters: ['dep.ts'],
+    });
+
+    expect(matched).toEqual([]);
   });
 });
