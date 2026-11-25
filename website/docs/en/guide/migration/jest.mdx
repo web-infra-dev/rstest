@@ -293,6 +293,7 @@ Replace `jest.useFakeTimers()` and `jest.useRealTimers()` with [`rs.useFakeTimer
 ```
 
 `rs.useFakeTimers()` also returns a `Disposable`, so `using _timers = rs.useFakeTimers()` restores real timers automatically when the scope exits.
+
 ### Virtual module mocks
 
 When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:

@@ -194,7 +194,7 @@ export default defineConfig({
 
 ![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
 
-当环境中存在 `GITHUB_STEP_SUMMARY` 时，Rstest 还会追加一个可折叠的 Markdown 摘要（状态图标为 `✅`、存在重试后通过的 flaky 测试时为 `⚠️`，失败时为 `❌`），包含：
+当环境中存在 `GITHUB_STEP_SUMMARY` 时，Rstest 还会追加一个可折叠的 Markdown 摘要（无异常通过时为默认折叠的 `✅`，存在重试后通过的 flaky 测试时为默认展开的 `⚠️`，失败时为默认展开的 `❌`），包含：
 
 - 汇总表（`Test Files`、`Tests`、`Duration`，存在 flaky 测试时包含 `Flaky Tests`）
 - 最多 20 条重试后通过的 flaky 测试及之前失败的简要原因

@@ -18,7 +18,7 @@ Use `rstest` in CI so the process exits after one test pass. If your project alr
 }
 ```
 
-A minimal GitHub Actions workflow installs dependencies, restores the package-manager cache, and runs the test script:
+A minimal GitHub Actions workflow uses a supported Node.js runtime (`^20.19.0` or `>=22.12.0`), installs dependencies, restores the package-manager cache, and runs the test script:
 
 ```yaml title=".github/workflows/test.yml"
 name: Test

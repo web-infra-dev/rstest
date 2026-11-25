@@ -194,7 +194,7 @@ When an error has a `cause`, each error in the cause chain is appended to the me
 
 ![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
 
-When `GITHUB_STEP_SUMMARY` is set, Rstest appends a collapsible Markdown summary (`✅`, `⚠️` when flaky tests passed on retry, or `❌`) containing:
+When `GITHUB_STEP_SUMMARY` is set, Rstest appends a collapsible Markdown summary (`✅` collapsed by default on clean passes, `⚠️` expanded when flaky tests passed on retry, or `❌` expanded on failure) containing:
 
 - A summary table (`Test Files`, `Tests`, `Duration`, and `Flaky Tests` when present)
 - Up to 20 flaky tests that passed after retries, with previous failure summaries

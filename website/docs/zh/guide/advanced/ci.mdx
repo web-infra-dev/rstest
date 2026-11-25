@@ -18,7 +18,7 @@ Rstest 在 CI 中使用的 CLI 与本地相同。主要区别是，CI 应该通�
 }
 ```
 
-一个最小的 GitHub Actions 工作流会安装依赖、恢复包管理器缓存，并运行测试脚本：
+一个最小的 GitHub Actions 工作流使用受支持的 Node.js 版本（`^20.19.0` 或 `>=22.12.0`），安装依赖、恢复包管理器缓存，并运行测试脚本：
 
 ```yaml title=".github/workflows/test.yml"
 name: Test
