@@ -835,7 +835,11 @@ test('captures a screenshot', async () => {
       'rgb(10, 20, 30)',
       'rgb(180, 40, 20)',
     );
-    fs.writeFileSync(testPath, changedTest);
+    // Only the first capture can pass while the tolerated pixel keeps changing.
+    fs.writeFileSync(
+      testPath,
+      changedTest.replace('id="pixel"', 'id="pixel" data-animate'),
+    );
     const globalThresholdRun = await runScreenshot([
       'tests/configured.test.ts',
     ]);

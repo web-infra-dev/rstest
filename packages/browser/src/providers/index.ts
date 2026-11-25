@@ -112,6 +112,7 @@ export type DispatchBrowserRpcInput = {
   containerPage?: BrowserProviderPage;
   runnerPage?: BrowserProviderPage;
   request: BrowserRpcRequest;
+  matchesScreenshotReference?: (first: Buffer) => Promise<boolean>;
   isRequestCurrent?: () => boolean;
   timeoutFallbackMs: number;
 };

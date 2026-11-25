@@ -336,6 +336,27 @@ const validateOptions = (
   return result;
 };
 
+const comparePixels = (
+  expected: PNG,
+  actual: PNG,
+  options: ReturnType<typeof validateOptions>,
+  diff?: PNG,
+) => {
+  const differentPixels = pixelmatch(
+    expected.data,
+    actual.data,
+    diff?.data ?? null,
+    expected.width,
+    expected.height,
+    { threshold: options.threshold },
+  );
+  const maxDiffPixels = Math.max(
+    options.maxDiffPixels,
+    Math.floor(expected.width * expected.height * options.maxDiffPixelRatio),
+  );
+  return { differentPixels, maxDiffPixels };
+};
+
 export const matchBrowserScreenshot = async ({
   snapshotStore,
   testPath,
@@ -343,7 +364,7 @@ export const matchBrowserScreenshot = async ({
   projectName,
   testName,
   browserName,
-  screenshotBase64,
+  captureScreenshot,
   updateSnapshot,
   options,
   deadline,
@@ -358,7 +379,10 @@ export const matchBrowserScreenshot = async ({
   projectName: string;
   testName: string;
   browserName: 'chromium' | 'firefox' | 'webkit';
-  screenshotBase64: string;
+  /** A null result means the provider accepted the first capture against the reference. */
+  captureScreenshot: (
+    matchesReference?: (first: Buffer) => Promise<boolean>,
+  ) => Promise<string | null>;
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
   deadline?: number;
@@ -380,13 +404,44 @@ export const matchBrowserScreenshot = async ({
     screenshotDirectory,
     resolvePath,
   );
+  const readReference = () =>
+    runBeforeScreenshotDeadline(() => snapshotStore.read(filepath), deadline);
+  const matchesReference = async (first: Buffer): Promise<boolean> => {
+    const content = await readReference();
+    if (content === null) return false;
+    const reference = Buffer.from(content, 'base64');
+    if (first.equals(reference)) return true;
+    let expected: PNG;
+    try {
+      expected = PNG.sync.read(reference);
+    } catch {
+      // Report corrupt references with the stabilized actual screenshot.
+      return false;
+    }
+    const actual = PNG.sync.read(first);
+    if (expected.width !== actual.width || expected.height !== actual.height) {
+      return false;
+    }
+    const { differentPixels, maxDiffPixels } = comparePixels(
+      expected,
+      actual,
+      normalizedOptions,
+    );
+    return differentPixels <= maxDiffPixels;
+  };
+  const screenshotBase64 = await captureScreenshot(
+    updateSnapshot === 'all' ? undefined : matchesReference,
+  );
+  throwIfScreenshotDeadlinePassed(deadline);
+  if (screenshotBase64 === null) {
+    await removeFailureArtifacts(snapshotStore, filepath, deadline);
+    return 'matched';
+  }
   const actualBuffer = Buffer.from(screenshotBase64, 'base64');
   const actual = PNG.sync.read(actualBuffer);
   throwIfScreenshotDeadlinePassed(deadline);
-  const expectedContent = await runBeforeScreenshotDeadline(
-    () => snapshotStore.read(filepath),
-    deadline,
-  );
+
+  const expectedContent = await readReference();
   const expectedBuffer =
     expectedContent === null
       ? undefined
@@ -445,22 +500,13 @@ export const matchBrowserScreenshot = async ({
   }
 
   const diff = new PNG({ width: expected.width, height: expected.height });
-  const differentPixels = pixelmatch(
-    expected.data,
-    actual.data,
-    diff.data,
-    expected.width,
-    expected.height,
-    { threshold: normalizedOptions.threshold },
+  const { differentPixels, maxDiffPixels } = comparePixels(
+    expected,
+    actual,
+    normalizedOptions,
+    diff,
   );
   throwIfScreenshotDeadlinePassed(deadline);
-  const maxDiffPixels = Math.max(
-    normalizedOptions.maxDiffPixels,
-    Math.floor(
-      expected.width * expected.height * normalizedOptions.maxDiffPixelRatio,
-    ),
-  );
-
   if (differentPixels > maxDiffPixels) {
     if (updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);

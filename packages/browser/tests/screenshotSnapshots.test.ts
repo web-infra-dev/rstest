@@ -52,7 +52,7 @@ describe('matchBrowserScreenshot', () => {
       testName: 'renders a component',
       browserName: 'chromium',
       platform: 'linux',
-      screenshotBase64: createScreenshot(),
+      captureScreenshot: async () => createScreenshot(),
       updateSnapshot: 'all',
       ...overrides,
     });
@@ -84,7 +84,7 @@ describe('matchBrowserScreenshot', () => {
       expect(await match(root, { updateSnapshot: 'none' })).toBe('matched');
       expect(
         await match(root, {
-          screenshotBase64: createScreenshot([180, 40, 20, 255]),
+          captureScreenshot: async () => createScreenshot([180, 40, 20, 255]),
           updateSnapshot: 'all',
         }),
       ).toBe('updated');

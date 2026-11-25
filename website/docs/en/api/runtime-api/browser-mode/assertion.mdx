@@ -149,6 +149,8 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 
 `threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` sets an absolute limit on differing pixels; use `maxDiffPixelRatio` instead to set a fraction of the image. The defaults allow no differing pixels after applying the default `threshold` of `0.1`. Set either `maxDiffPixels` or `maxDiffPixelRatio`, not both.
 
+When a reference exists, a regular assertion passes as soon as the first capture matches it within the configured tolerance. If the first capture differs, Rstest waits for consecutive captures to stabilize before comparing again. Creating or updating a reference also uses the stability check.
+
 `stabilityTimeout` defaults to `5000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture. Rstest disables animations during capture. Use `mask` for dynamic content, `maskColor` to change the overlay color, or `style` to inject CSS before capture. The remaining capture options (`caret`, `scale`, and `omitBackground`) are passed to Playwright's screenshot API. `fullPage` is available only for page assertions.
 
 #### Element screenshots

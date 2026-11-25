@@ -616,6 +616,31 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]).not.toHaveProperty('timeout');
   });
 
+  it.each([true, false])(
+    'only captures a follow-up when the first reference comparison misses (match: %s)',
+    async (matches) => {
+      const locator = new FakeLocator();
+      const first = await locator.screenshotImplementation();
+      let comparisons = 0;
+      await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(locator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button'],
+        }),
+        matchesScreenshotReference: async (capture) => {
+          comparisons++;
+          expect(capture).toEqual(first);
+          return matches;
+        },
+        timeoutFallbackMs: 2_000,
+      });
+      expect(comparisons).toBe(1);
+      expect(locator.screenshotCalls).toHaveLength(matches ? 1 : 2);
+    },
+  );
+
   it('starts the stability window after the initial capture', async () => {
     const fakeLocator = new FakeLocator();
     let captures = 0;
