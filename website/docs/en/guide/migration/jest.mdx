@@ -253,6 +253,16 @@ Rstest provides an `rs` API that you can use to access Rstest's utilities, such 
 fn.mockResolvedValue('foo');
 ```
 
+### Manual mocks for npm packages
+
+Jest automatically uses a manual mock such as `__mocks__/zustand.ts` in the project root when a test imports `zustand`. To use the same file in Rstest, call `rs.mock('zustand')` in the test file. To apply the mock to every test file, register it once in a file listed in [`setupFiles`](/config/test/setup-files).
+
+```ts title='rstest.setup.ts'
+import { rs } from '@rstest/core';
+
+rs.mock('zustand');
+```
+
 ### Virtual module mocks
 
 When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:
