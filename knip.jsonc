@@ -36,14 +36,9 @@
       ],
     },
     "benchmarks": {
-      "entry": [
-        "createFrontendMemoryFixture.mjs",
-        // Benchmark fixtures are loaded dynamically by the benchmark entrypoints.
-        "fixtures/**/rstest.config.mts",
-        "fixtures/**/*.ts",
-      ],
+      "entry": ["createCpuFixtures.mjs", "createFrontendMemoryFixture.mjs"],
       "ignoreDependencies": [
-        // Used by the generated synthetic memory workload source files.
+        // Used by the generated synthetic benchmark workload source files.
         "antd",
         "react",
         "react-dom",

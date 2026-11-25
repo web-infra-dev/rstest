@@ -204,7 +204,7 @@ const captureStableScreenshot = async (
   beforeCapture?: () => Promise<void>,
   matchesReference?: (first: Buffer) => Promise<boolean>,
 ): Promise<Buffer | null> => {
-  const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
+  const { stabilityTimeout = 5_000, ...playwrightOptions } = options;
   if (
     typeof stabilityTimeout !== 'number' ||
     !Number.isFinite(stabilityTimeout) ||

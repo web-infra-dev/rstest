@@ -219,6 +219,7 @@ unstub
 upath
 vitest
 vnode
+walltime
 watchpack
 webm
 webp

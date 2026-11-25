@@ -50,8 +50,8 @@ tests-dist/
 .rstest-temp/
 .rstest/
 
-# Generated memory benchmark fixture
-benchmarks/fixtures/memory/
+# Generated benchmark fixtures
+benchmarks/fixtures/
 
 # Programmatic e2e per-pid run roots (created and removed per invocation; leaks
 # only when an interrupted run skips its cleanup)

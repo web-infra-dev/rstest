@@ -495,7 +495,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
     threshold: 0.1,
     maxDiffPixels: 0,
   },
-  stabilityTimeout: 2000,
+  stabilityTimeout: 5000,
   maskColor: '#FF00FF',
   caret: 'hide',
   scale: 'device',
@@ -514,7 +514,7 @@ The defaults below apply when an option is omitted. Playwright supplies the capt
 | `comparatorOptions.threshold`         | `0.1`             | Per-pixel color distance threshold from `0` (strict) to `1` (loose). |
 | `comparatorOptions.maxDiffPixels`     | `0`               | Maximum number of pixels allowed to differ.                          |
 | `comparatorOptions.maxDiffPixelRatio` | `0`               | Maximum fraction of pixels allowed to differ.                        |
-| `stabilityTimeout`                    | `2000`            | Maximum time to wait for consecutive captures to match, in ms.       |
+| `stabilityTimeout`                    | `5000`            | Maximum time to wait for consecutive captures to match, in ms.       |
 | `maskColor`                           | `#FF00FF`         | Color used to cover masked content.                                  |
 | `style`                               | Not set           | No additional CSS is injected.                                       |
 | `caret`                               | `hide`            | Hides the text caret during capture.                                 |
