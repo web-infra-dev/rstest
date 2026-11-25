@@ -256,7 +256,7 @@ export type BrowserScreenshotMatcherConfig = {
   comparatorOptions?: BrowserScreenshotComparatorOptions;
   /**
    * Time allowed for consecutive screenshots to become stable.
-   * @default 2000
+   * @default 5000
    */
   stabilityTimeout?: number;
   /**

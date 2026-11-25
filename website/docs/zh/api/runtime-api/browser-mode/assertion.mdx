@@ -149,7 +149,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
 
 `threshold` 设置单像素颜色距离阈值，范围为 `0`（严格）到 `1`（宽松）。`maxDiffPixels` 设置允许不同的像素数上限；也可以改用 `maxDiffPixelRatio` 设置差异像素比例。默认的 `threshold` 为 `0.1`，且不允许像素差异。`maxDiffPixels` 和 `maxDiffPixelRatio` 只能设置一个。
 
-`stabilityTimeout` 默认值为 `2000` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。截图时 Rstest 会禁用动画。动态内容可通过 `mask` 遮罩；也可以用 `maskColor` 修改遮罩颜色，或通过 `style` 在截图前注入 CSS。其他截图选项（`caret`、`scale` 和 `omitBackground`）会传给 Playwright screenshot API。`fullPage` 仅适用于页面断言。
+`stabilityTimeout` 默认值为 `5000` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。截图时 Rstest 会禁用动画。动态内容可通过 `mask` 遮罩；也可以用 `maskColor` 修改遮罩颜色，或通过 `style` 在截图前注入 CSS。其他截图选项（`caret`、`scale` 和 `omitBackground`）会传给 Playwright screenshot API。`fullPage` 仅适用于页面断言。
 
 #### 元素截图 \{#element-screenshots}
 

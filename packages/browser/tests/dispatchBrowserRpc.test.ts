@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rstest } from '@rstest/core';
 import { PNG } from 'pngjs';
 import type { BrowserRpcRequest } from '../src/protocol';
 import { dispatchPlaywrightBrowserRpc } from '../src/providers/playwright/dispatchBrowserRpc';
@@ -644,23 +644,29 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(captures).toBe(2);
   });
 
-  it('allows slow follow-up captures with the default stability timeout', async () => {
-    const fakeLocator = new FakeLocator();
-    await dispatchPlaywrightBrowserRpc({
-      runnerPage: new FakePage(fakeLocator) as any,
-      request: createRequest({
-        kind: 'screenshot',
-        method: 'toMatchScreenshot',
-        timeout: 3000,
-        args: ['button'],
-      }),
-      timeoutFallbackMs: 3000,
-    });
+  it.each([
+    { testTimeout: 10_000, captureTimeout: 5_000 },
+    { testTimeout: 3_000, captureTimeout: 3_000 },
+  ])(
+    'gives follow-up screenshots $captureTimeout ms with a $testTimeout ms test deadline',
+    async ({ testTimeout, captureTimeout }) => {
+      using _clock = rstest.useFakeTimers({ toFake: ['Date'] });
+      const fakeLocator = new FakeLocator();
+      await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          timeout: testTimeout,
+          args: ['button'],
+        }),
+        timeoutFallbackMs: testTimeout,
+      });
 
-    expect(fakeLocator.screenshotCalls).toHaveLength(2);
-    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeGreaterThan(500);
-    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeLessThanOrEqual(2000);
-  });
+      expect(fakeLocator.screenshotCalls).toHaveLength(2);
+      expect(fakeLocator.screenshotCalls[1]?.timeout).toBe(captureTimeout);
+    },
+  );
 
   it('bounds follow-up captures by the remaining stability timeout', async () => {
     const fakeLocator = new FakeLocator();
