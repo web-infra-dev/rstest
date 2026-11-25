@@ -831,7 +831,6 @@ test('captures a screenshot', async () => {
       'rgb(10, 20, 30)',
       'rgb(180, 40, 20)',
     );
-    // Only the first capture can pass while the tolerated pixel keeps changing.
     fs.writeFileSync(
       testPath,
       changedTest.replace('id="pixel"', 'id="pixel" data-animate'),
@@ -840,6 +839,25 @@ test('captures a screenshot', async () => {
       'tests/configured.test.ts',
     ]);
     await globalThresholdRun.expectExecSuccess();
+
+    // Only the original pixel changes between captures. The border changes
+    // the dimensions relative to the reference.
+    fs.writeFileSync(
+      testPath,
+      changedTest.replace(
+        'id="pixel" style="',
+        'id="pixel" data-animate style="border-right: 1px solid black; ',
+      ),
+    );
+    const resizedRun = await runScreenshot([
+      '--project=project-config-resolver',
+      'tests/configured.test.ts',
+    ]);
+    await resizedRun.cli.exec;
+    expect(resizedRun.cli.exec.exitCode).toBe(1);
+    expect(`${resizedRun.cli.stdout}\n${resizedRun.cli.stderr}`).toContain(
+      'Screenshot dimensions differ',
+    );
 
     fs.writeFileSync(
       testPath,

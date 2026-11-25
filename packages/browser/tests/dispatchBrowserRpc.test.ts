@@ -616,6 +616,41 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]).not.toHaveProperty('timeout');
   });
 
+  it.each([{ maxDiffPixels: 1 }, { maxDiffPixelRatio: 0.25 }])(
+    'uses the configured tolerance for same-size consecutive captures (%j)',
+    async (tolerance) => {
+      const first = new PNG({ width: 1, height: 4 });
+      const next = new PNG({ width: 4, height: 1 });
+      first.data.fill(255);
+      next.data.fill(255);
+      const frames = [PNG.sync.write(first), PNG.sync.write(next)];
+      next.data.set([0, 0, 0, 255]);
+      const last = PNG.sync.write(next);
+      frames.push(last);
+      const locator = new FakeLocator();
+      locator.screenshotImplementation = async () => {
+        const frame = frames.shift();
+        if (!frame) throw new Error('Unexpected extra screenshot');
+        return frame;
+      };
+      const result = await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(locator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button', tolerance],
+        }),
+        timeoutFallbackMs: 2_000,
+      });
+      expect(result).toBe(last.toString('base64'));
+      expect(locator.screenshotCalls).toHaveLength(3);
+      expect(locator.screenshotCalls[0]).not.toHaveProperty('maxDiffPixels');
+      expect(locator.screenshotCalls[0]).not.toHaveProperty(
+        'maxDiffPixelRatio',
+      );
+    },
+  );
+
   it.each([true, false])(
     'only captures a follow-up when the first reference comparison misses (match: %s)',
     async (matches) => {
