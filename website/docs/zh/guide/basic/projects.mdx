@@ -8,6 +8,8 @@ Rstest 支持在单个 Rstest 进程中同时运行多个测试项目，这些�
 
 在 Node.js 模式下单次全量运行时，如果没有开启覆盖率、bail 或失败筛选，先完成构建的项目可以在其他项目构建期间开始测试。配置了全局 setup 或使用需要在 `onTestRunStart` 接收完整文件清单的 reporter 时，Rstest 会等所有项目构建完成再派发测试。
 
+在 Node.js 模式下，默认同时构建的环境数最多为可用 CPU 数。`pool.maxWorkers` 控制执行测试文件的 worker 数量。
+
 ## 适用场景
 
 - Monorepo 项目：当你的代码库包含多个子包或模块时，每个子项目可能有不同的测试配置需求。

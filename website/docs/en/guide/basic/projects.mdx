@@ -8,6 +8,8 @@ Rstest supports running multiple test projects simultaneously within a single Rs
 
 In an unfiltered, one-shot Node.js run without coverage, bail, or failure selection, a project can start testing while another is still building. Runs with global setup or a reporter that needs the complete selection in `onTestRunStart` wait for all projects before dispatching tests.
 
+In Node.js mode, Rstest limits concurrent environment builds to the number of CPUs available to the process by default. The `pool.maxWorkers` option controls how many workers execute test files.
+
 ## Use cases
 
 - **Monorepo projects**: When your codebase contains multiple sub-packages or modules, each sub-project might have different test configuration requirements.

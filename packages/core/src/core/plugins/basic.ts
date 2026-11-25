@@ -10,6 +10,7 @@ import {
 import { createVmTimersShim } from '../../runtime/worker/vm/timers';
 import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
+import { getNumCpus } from '../../utils/workers';
 import { runtimeChunkNameForEnvironment } from '../build/runtimeChunk';
 import { isNodeProject } from '../environment/isBrowserProject';
 import {
@@ -39,6 +40,13 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:basic',
   setup: (api) => {
+    api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
+      if (bundlerConfigs.length > 1) {
+        const configs: Rspack.MultiRspackOptions = bundlerConfigs;
+        configs.parallelism ??= Math.min(configs.length, getNumCpus());
+      }
+    });
+
     api.modifyBundlerChain((chain, { CHAIN_ID }) => {
       // A post loader leaves preprocessing errors attributed to the user loader.
       chain.module
