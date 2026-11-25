@@ -202,7 +202,8 @@ const captureStableScreenshot = async (
   options: Record<string, unknown>,
   requestDeadline: number | undefined,
   beforeCapture?: () => Promise<void>,
-): Promise<Buffer> => {
+  matchesReference?: (first: Buffer) => Promise<boolean>,
+): Promise<Buffer | null> => {
   const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
   if (
     typeof stabilityTimeout !== 'number' ||
@@ -229,6 +230,8 @@ const captureStableScreenshot = async (
   };
   let previous = await capture();
   if (stabilityTimeout === 0) return previous;
+
+  if (await matchesReference?.(previous)) return null;
 
   const stabilityDeadline = Date.now() + stabilityTimeout;
   while (
@@ -583,12 +586,14 @@ export async function dispatchPlaywrightBrowserRpc({
   containerPage,
   runnerPage,
   request,
+  matchesScreenshotReference,
   isRequestCurrent,
   timeoutFallbackMs,
 }: {
   containerPage?: Page;
   runnerPage?: Page;
   request: BrowserRpcRequest;
+  matchesScreenshotReference?: (first: Buffer) => Promise<boolean>;
   isRequestCurrent?: () => boolean;
   timeoutFallbackMs: number;
 }): Promise<unknown> {
@@ -830,7 +835,7 @@ export async function dispatchPlaywrightBrowserRpc({
         'toMatchScreenshot fullPage is only supported when asserting the page.',
       );
     }
-    let screenshot: Buffer;
+    let screenshot: Buffer | null;
     try {
       if (isFailureCapture) {
         const screenshotTimeout = requestDeadline
@@ -848,12 +853,13 @@ export async function dispatchPlaywrightBrowserRpc({
           options,
           requestDeadline,
           beforeScreenshotCapture,
+          matchesScreenshotReference,
         );
       }
     } finally {
       await restoreScreenshotState?.();
     }
-    return screenshot.toString('base64');
+    return screenshot?.toString('base64') ?? null;
   }
 
   if (request.kind === 'locator') {

@@ -1136,17 +1136,27 @@ export const runBrowserController = async (
       throw new Error('Browser container page is not initialized');
     }
 
-    try {
-      const result = await implementation.dispatchRpc({
+    const dispatch = (
+      matchesScreenshotReference?: (first: Buffer) => Promise<boolean>,
+    ) =>
+      implementation.dispatchRpc({
         containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
-        request: dispatchRequest,
+        request: screenshotDeadline
+          ? {
+              ...dispatchRequest,
+              timeout: Math.max(1, screenshotDeadline - Date.now()),
+            }
+          : dispatchRequest,
+        matchesScreenshotReference,
         isRequestCurrent: isRunCurrent,
         timeoutFallbackMs,
       });
 
+    try {
       if (request.kind === 'screenshot') {
         if (request.method === 'captureFailure') {
+          const result = await dispatch();
           const project = projectByName.get(request.projectName);
           const testName = request.args[0];
           const testIdentity = request.args[2];
@@ -1191,7 +1201,7 @@ export const runBrowserController = async (
         }
         const [testName] = request.args;
         const screenshotAssertionOrdinal = request.args[2];
-        if (typeof result !== 'string' || typeof testName !== 'string') {
+        if (typeof testName !== 'string') {
           throw new Error('Invalid screenshot matcher response.');
         }
         if (
@@ -1226,7 +1236,13 @@ export const runBrowserController = async (
           // Reference paths differentiate per browser: the requesting page's
           // browser id, not the run-wide default, owns the reference directory.
           browserName: screenshotBrowserName,
-          screenshotBase64: result,
+          captureScreenshot: async (matchesReference) => {
+            const result = await dispatch(matchesReference);
+            if (result !== null && typeof result !== 'string') {
+              throw new Error('Invalid screenshot matcher response.');
+            }
+            return result;
+          },
           updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
           options: screenshotOptions,
           deadline: screenshotDeadline,
@@ -1247,7 +1263,7 @@ export const runBrowserController = async (
         return outcome;
       }
 
-      return result;
+      return await dispatch();
     } catch (error) {
       if (error instanceof ScreenshotMismatchError) {
         const key = fileKeyOf(request);
