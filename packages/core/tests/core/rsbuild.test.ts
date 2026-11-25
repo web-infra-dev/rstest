@@ -679,6 +679,70 @@ describe('prepareRsbuild', () => {
     });
   });
 
+  it('should not create compilers for empty node siblings when no modifyRstestConfig hook runs', async () => {
+    await withTempDir('rstest-list-empty-no-hook-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'full-node.test.ts'), 'export {};\n');
+
+      const createdCompilerNames: string[] = [];
+      const recordCompilersPlugin = (): RsbuildPlugin => ({
+        name: 'record-compilers',
+        setup(api) {
+          api.onAfterCreateCompiler(({ compiler }) => {
+            const names =
+              'compilers' in compiler
+                ? compiler.compilers.map((child) => child.name)
+                : [compiler.name];
+            createdCompilerNames.push(
+              ...names.filter((name): name is string => Boolean(name)),
+            );
+          });
+        },
+      });
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'node-full',
+                root: tempRoot,
+                include: ['full-node.test.ts'],
+                plugins: [recordCompilersPlugin()],
+              },
+            },
+            {
+              config: {
+                name: 'node-empty-plain',
+                root: tempRoot,
+                include: ['missing-plain/**/*.test.ts'],
+              },
+            },
+            {
+              config: {
+                name: 'node-empty-with-plugin',
+                root: tempRoot,
+                include: ['missing-plugin/**/*.test.ts'],
+                plugins: [recordCompilersPlugin()],
+              },
+            },
+          ],
+        },
+        { root: tempRoot },
+      );
+
+      const result = await listTests(context, {});
+      await result.close();
+
+      expect(result.list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'full-node.test.ts'),
+      ]);
+      expect(Array.from(new Set(createdCompilerNames))).toEqual(['node-full']);
+    });
+  });
+
   it('should resolve list environment dependencies after modifyRstestConfig', async () => {
     await withTempDir('rstest-list-environment-', async (tempRoot) => {
       const packageRoot = join(tempRoot, 'node_modules/jsdom');

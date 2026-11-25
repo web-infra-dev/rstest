@@ -30,7 +30,7 @@ const prepareRsbuildSpy = rs.mocked(prepareRsbuild);
 
 const createContext = (
   root: string,
-  projects: Array<{ name: string; browser?: boolean }>,
+  projects: Array<{ name: string; browser?: boolean; include?: string[] }>,
   command: 'run' | 'watch' = 'run',
 ) =>
   new Rstest(
@@ -38,11 +38,11 @@ const createContext = (
       cwd: root,
       command,
       embedded: true,
-      projects: projects.map(({ name, browser }) => ({
+      projects: projects.map(({ name, browser, include }) => ({
         config: {
           name,
           root,
-          include: ['*.test.ts'],
+          include: include ?? ['*.test.ts'],
           ...(browser
             ? { browser: { enabled: true, provider: 'playwright' as const } }
             : {}),
@@ -141,5 +141,20 @@ describe('createTestPlanner cold-start gate', () => {
     expect(filteredEntries[0]).toMatch(/a\.test\.ts$/);
     expect(allEntries).toHaveLength(2);
     expect(context.fileFilters).toEqual(['a.test.ts']);
+  });
+
+  it('skips booting node Rsbuild when all node projects are empty without user plugins', async () => {
+    const context = createContext(tempRoot, [
+      { name: 'node-a', include: ['missing/**/*.test.ts'] },
+    ]);
+
+    const planner = await createTestPlanner(context, {
+      browserProjects: [],
+      nodeProjects: context.projects,
+      isWatchMode: false,
+    });
+
+    expect(prepareRsbuildSpy).not.toHaveBeenCalled();
+    expect(planner.nodeBuild).toBeUndefined();
   });
 });
