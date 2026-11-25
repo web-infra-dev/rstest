@@ -24,7 +24,22 @@ catalog:
   '@rspack/core': ~2.3.4
   '@rspack/dev-server': ~2.2.2
   '@rspack/plugin-react-refresh': ~2.0.3
-  rstack: ^0.9.3
+  '@rstackjs/maintainer-skills': '^1.0.0'
+  '@rstackjs/skills': '^1.0.0'
+  rstack: ^0.9.4
+
+permissions:
+  '@rstackjs/maintainer-skills':
+    skills:
+      - create-draft-release-notes
+      - pr-creator
+      - rstack-docs-writer
+  '@rstackjs/skills':
+    skills:
+      - rspress-description-generator
+  rstack:
+    skills:
+      - rstack-cli-docs
 
 allowBuilds:
   '@parcel/watcher': false
@@ -45,7 +60,7 @@ hoist: false
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
-  - 'rstack@0.9.3'
+  - 'rstack@0.9.4'
   - '@module-federation/*'
   - '@swc-next/*'
   - '@rspack/*'

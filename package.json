@@ -23,6 +23,8 @@
     "typecheck": "pnpm run lint:type"
   },
   "devDependencies": {
+    "@rstackjs/maintainer-skills": "catalog:",
+    "@rstackjs/skills": "catalog:",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.1.0",
