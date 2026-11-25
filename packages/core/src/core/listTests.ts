@@ -115,61 +115,66 @@ const collectNodeTests = async ({
           globalSetupEntries,
           getSourceMaps,
           getAssetFiles,
+          releaseAssetCache,
           diskSourceMapPaths,
           assetNames,
         } = await getRsbuildStats({
           environmentName: project.environmentName,
         });
 
-        if (
-          shouldRunGlobalSetup(
-            project,
-            entries.length,
-            globalSetupEntries.length,
-          )
-        ) {
-          const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFilesPromise = getAssetFiles(files);
-          const sourceMapsPromise = getSourceMaps(files);
-          const [assetFiles, sourceMaps] = await Promise.all([
-            assetFilesPromise,
-            sourceMapsPromise,
-          ]);
+        try {
+          if (
+            shouldRunGlobalSetup(
+              project,
+              entries.length,
+              globalSetupEntries.length,
+            )
+          ) {
+            const files = globalSetupEntries.flatMap((e) => e.files!);
+            const assetFilesPromise = getAssetFiles(files);
+            const sourceMapsPromise = getSourceMaps(files);
+            const [assetFiles, sourceMaps] = await Promise.all([
+              assetFilesPromise,
+              sourceMapsPromise,
+            ]);
 
-          const { success, errors } = await runGlobalSetup(context, project, {
-            globalSetupEntries,
-            assetFiles,
-            sourceMaps,
-            interopDefault: true,
-            outputModule: project.outputModule,
-            federation: project.normalizedConfig.federation,
-          });
-          if (!success) {
-            return {
-              list: [],
-              errors,
-              assetNames,
-              getSourceMaps: () => null,
-            };
+            const { success, errors } = await runGlobalSetup(context, project, {
+              globalSetupEntries,
+              assetFiles,
+              sourceMaps,
+              interopDefault: true,
+              outputModule: project.outputModule,
+              federation: project.normalizedConfig.federation,
+            });
+            if (!success) {
+              return {
+                list: [],
+                errors,
+                assetNames,
+                getSourceMaps: () => null,
+              };
+            }
           }
+
+          const list = await activePool.collectTests({
+            entries,
+            assetNames,
+            setupEntries,
+            getAssetFiles,
+            getSourceMaps,
+            diskSourceMapPaths,
+            project,
+            updateSnapshot,
+          });
+
+          return {
+            list,
+            getSourceMaps,
+            assetNames,
+          };
+        } finally {
+          releaseAssetCache();
         }
-
-        const list = await activePool.collectTests({
-          entries,
-          assetNames,
-          setupEntries,
-          getAssetFiles,
-          getSourceMaps,
-          diskSourceMapPaths,
-          project,
-          updateSnapshot,
-        });
-
-        return {
-          list,
-          getSourceMaps,
-          assetNames,
-        };
       }),
     );
 

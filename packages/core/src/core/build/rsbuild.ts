@@ -344,6 +344,40 @@ const calcEntriesToRerun = (
   return { affectedEntries, deletedEntries: deletedPaths };
 };
 
+const collectSharedAssetPaths = ({
+  entries,
+  setupEntries,
+  globalSetupEntries,
+}: {
+  entries: EntryInfo[];
+  setupEntries: EntryInfo[];
+  globalSetupEntries: EntryInfo[];
+}): Set<string> => {
+  const shared = new Set<string>();
+
+  // Every test entry loads all setup files (`pool/index.ts#getAssetNames`).
+  if (entries.length > 1) {
+    for (const setupEntry of setupEntries) {
+      for (const file of setupEntry.files || []) {
+        shared.add(file);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  for (const entry of [...entries, ...globalSetupEntries]) {
+    for (const file of new Set(entry.files || [])) {
+      if (seen.has(file)) {
+        shared.add(file);
+      } else {
+        seen.add(file);
+      }
+    }
+  }
+
+  return shared;
+};
+
 // Work around Rsbuild compileState.wait having no settle path on failed.
 export class CompileFailedError extends Error {
   constructor(readonly error: Error) {
@@ -382,6 +416,7 @@ export const createRsbuildServer = async ({
     assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+    releaseAssetCache: () => void;
     diskSourceMapPaths?: Record<string, string>;
     /** affected test entries only available in watch mode */
     affectedEntries: EntryInfo[];
@@ -457,16 +492,8 @@ export const createRsbuildServer = async ({
       );
     }
 
-    // Ensure that when readFile is called in parallel, the file content will not be read into memory repeatedly.
-    // The memory file system returns a fresh copy per read, and the pool reads
-    // every asset and source map once per task. Run mode never rebuilds, so a
-    // successful read is kept to avoid those copies; watch mode drops it so a
-    // rebuild is read again.
-    const cachedReadFilePromises = new Map<string, Promise<Buffer>>();
-    const readFile = async (fileName: string) => {
-      if (cachedReadFilePromises.has(fileName))
-        return cachedReadFilePromises.get(fileName)!;
-      const promise = new Promise<Buffer>((resolve, reject) => {
+    const readFromOutputFs = (fileName: string): Promise<Buffer> =>
+      new Promise<Buffer>((resolve, reject) => {
         outputFileSystem.readFile(fileName, (err, data) => {
           if (err) {
             reject(err);
@@ -475,15 +502,6 @@ export const createRsbuildServer = async ({
           resolve(typeof data === 'string' ? Buffer.from(data) : data!);
         });
       });
-      cachedReadFilePromises.set(fileName, promise);
-      promise.then(
-        () => {
-          if (isWatchMode) cachedReadFilePromises.delete(fileName);
-        },
-        () => cachedReadFilePromises.delete(fileName),
-      );
-      return promise;
-    };
 
     // Watch diff baselines, keyed per environment: sibling projects must never
     // share (or clobber) each other's invalidation state.
@@ -629,13 +647,68 @@ export const createRsbuildServer = async ({
           )
         : { affectedEntries: [], deletedEntries: [] };
 
-      const getSourceMap = async (name: string): Promise<null | string> => {
+      const isDiskOutput = environment.context.config.dev.writeToDisk === true;
+      const sharedAssetPaths =
+        !isWatchMode && !isDiskOutput
+          ? collectSharedAssetPaths({
+              entries,
+              setupEntries,
+              globalSetupEntries,
+            })
+          : undefined;
+      // Coalesce concurrent reads for every file, but only retain settled
+      // Buffers / decoded source maps in run mode for in-memory assets shared
+      // across multiple tasks. Single-entry chunks and disk-backed files are
+      // dropped on settle, and `releaseAssetCache` clears both buckets once
+      // this environment's pool run finishes.
+      const envReadCache = new Map<string, Promise<Buffer>>();
+      const envSourceMapCache = new Map<string, Promise<null | string>>();
+      let cacheReleased = false;
+      const readFile = (fileName: string): Promise<Buffer> => {
+        const cached = envReadCache.get(fileName);
+        if (cached) {
+          return cached;
+        }
+        const promise = readFromOutputFs(fileName);
+        envReadCache.set(fileName, promise);
+        const shouldRetain =
+          !cacheReleased && Boolean(sharedAssetPaths?.has(fileName));
+        promise.then(
+          () => {
+            if (!shouldRetain) {
+              envReadCache.delete(fileName);
+            }
+          },
+          () => envReadCache.delete(fileName),
+        );
+        return promise;
+      };
+
+      const getSourceMap = (name: string): Promise<null | string> => {
         const sourceMapPath = sourceMapPaths[name];
         if (!sourceMapPath) {
-          return null;
+          return Promise.resolve(null);
         }
-        const file = (await readFile(sourceMapPath)).toString('utf8');
-        return inlineSourceMap ? parseInlineSourceMapStr(file) : file;
+        const cached = envSourceMapCache.get(name);
+        if (cached) {
+          return cached;
+        }
+        const promise = readFile(sourceMapPath).then((buf) => {
+          const file = buf.toString('utf8');
+          return inlineSourceMap ? parseInlineSourceMapStr(file) : file;
+        });
+        envSourceMapCache.set(name, promise);
+        const shouldRetain =
+          !cacheReleased && Boolean(sharedAssetPaths?.has(name));
+        promise.then(
+          () => {
+            if (!shouldRetain) {
+              envSourceMapCache.delete(name);
+            }
+          },
+          () => envSourceMapCache.delete(name),
+        );
+        return promise;
       };
 
       return {
@@ -647,10 +720,12 @@ export const createRsbuildServer = async ({
         globalSetupEntries,
         assetNames,
         // A filter may leave individual assets in the compiler's output FS.
-        diskSourceMapPaths:
-          environment.context.config.dev.writeToDisk === true
-            ? sourceMapPaths
-            : undefined,
+        diskSourceMapPaths: isDiskOutput ? sourceMapPaths : undefined,
+        releaseAssetCache: () => {
+          cacheReleased = true;
+          envReadCache.clear();
+          envSourceMapCache.clear();
+        },
         getAssetFiles: async (names: string[]) => {
           return Object.fromEntries(
             await Promise.all(

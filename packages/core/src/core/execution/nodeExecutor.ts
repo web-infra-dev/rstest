@@ -425,6 +425,7 @@ export function createNodeExecutor(
           globalSetupEntries,
           getAssetFiles,
           getSourceMaps,
+          releaseAssetCache,
           diskSourceMapPaths,
           affectedEntries,
           deletedEntries,
@@ -480,89 +481,94 @@ export function createNodeExecutor(
         }
 
         const execute = async (selectedEntries: EntryInfo[]) => {
-          if (
-            shouldRunGlobalSetup(
-              p,
-              selectedEntries.length,
-              globalSetupEntries.length,
-            )
-          ) {
-            const files = globalSetupEntries.flatMap((e) => e.files!);
-            const globalSetupTraceArgs = {
-              project: p.name,
-              testPath: '<globalSetup>',
-            };
-            const [assetFiles, sourceMaps] = await span(
-              'host:global-setup-assets',
-              'host',
-              () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
-              globalSetupTraceArgs,
-            );
-
-            const { success, errors } = await span(
-              'host:global-setup',
-              'host',
-              () =>
-                runGlobalSetup(context, p, {
-                  globalSetupEntries,
-                  assetFiles,
-                  sourceMaps,
-                  interopDefault: true,
-                  outputModule: p.outputModule,
-                  federation: p.normalizedConfig.federation,
-                }),
-              globalSetupTraceArgs,
-            );
-            if (!success) {
-              return {
-                ...cycleFailureOutcome(errors ?? []),
-                bundleCoverage: [],
-                assetNames,
-                getAssetFiles,
-                getSourceMaps,
+          try {
+            if (
+              shouldRunGlobalSetup(
+                p,
+                selectedEntries.length,
+                globalSetupEntries.length,
+              )
+            ) {
+              const files = globalSetupEntries.flatMap((e) => e.files!);
+              const globalSetupTraceArgs = {
+                project: p.name,
+                testPath: '<globalSetup>',
               };
+              const [assetFiles, sourceMaps] = await span(
+                'host:global-setup-assets',
+                'host',
+                () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+                globalSetupTraceArgs,
+              );
+
+              const { success, errors } = await span(
+                'host:global-setup',
+                'host',
+                () =>
+                  runGlobalSetup(context, p, {
+                    globalSetupEntries,
+                    assetFiles,
+                    sourceMaps,
+                    interopDefault: true,
+                    outputModule: p.outputModule,
+                    federation: p.normalizedConfig.federation,
+                  }),
+                globalSetupTraceArgs,
+              );
+              if (!success) {
+                return {
+                  ...cycleFailureOutcome(errors ?? []),
+                  bundleCoverage: [],
+                  assetNames,
+                  getAssetFiles,
+                  getSourceMaps,
+                };
+              }
             }
+
+            const sortedEntries = sortTestEntries(
+              selectedEntries,
+              sequenceHints,
+              (testPath) => sequenceKey(p.name, rootPath, testPath),
+            );
+
+            currentEntries.push(...sortedEntries);
+            const { results, testResults, bundleCoverage } =
+              await pool.runTests({
+                entries: sortedEntries,
+                assetNames,
+                getSourceMaps,
+                setupEntries,
+                getAssetFiles,
+                diskSourceMapPaths,
+                project: p,
+                buildId,
+                updateSnapshot,
+                onCoverageResult: (coverage) =>
+                  foldCoverage(() => mergedCoverageMap?.merge(coverage)),
+                onRawCoverageResult,
+                getKnownCoverageStructures: () =>
+                  mergedCoverageMap
+                    ? coverageProvider?.getKnownCoverageStructures?.(
+                        mergedCoverageMap,
+                      )
+                    : undefined,
+                onTraceEvents: traceRun.onEvents,
+                traceSpan: span,
+              });
+
+            return {
+              results,
+              testResults,
+              errors: [],
+              bundleCoverage,
+              assetNames,
+              getAssetFiles,
+              getSourceMaps,
+            };
+          } finally {
+            releaseAssetCache();
           }
-
-          const sortedEntries = sortTestEntries(
-            selectedEntries,
-            sequenceHints,
-            (testPath) => sequenceKey(p.name, rootPath, testPath),
-          );
-
-          currentEntries.push(...sortedEntries);
-          const { results, testResults, bundleCoverage } = await pool.runTests({
-            entries: sortedEntries,
-            assetNames,
-            getSourceMaps,
-            setupEntries,
-            getAssetFiles,
-            diskSourceMapPaths,
-            project: p,
-            buildId,
-            updateSnapshot,
-            onCoverageResult: (coverage) =>
-              foldCoverage(() => mergedCoverageMap?.merge(coverage)),
-            onRawCoverageResult,
-            getKnownCoverageStructures: () =>
-              mergedCoverageMap
-                ? coverageProvider?.getKnownCoverageStructures?.(
-                    mergedCoverageMap,
-                  )
-                : undefined,
-            onTraceEvents: traceRun.onEvents,
-            traceSpan: span,
-          });
-
-          return {
-            results,
-            testResults,
-            errors: [],
-            bundleCoverage,
-            assetNames,
-            getAssetFiles,
-            getSourceMaps,
-          };
         };
 
         return { p, finalEntries, execute };

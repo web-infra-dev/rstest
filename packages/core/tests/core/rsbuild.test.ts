@@ -317,15 +317,48 @@ describe('prepareRsbuild', () => {
   });
 
   it.each([
-    { isWatchMode: false, reads: 1 },
-    { isWatchMode: true, reads: 2 },
+    {
+      label: 'run mode in-memory',
+      isWatchMode: false,
+      writeToDisk: false,
+      sharedReads: 1,
+      entryOnlyReads: 2,
+      afterReleaseReads: 2,
+    },
+    {
+      label: 'run mode writeToDisk',
+      isWatchMode: false,
+      writeToDisk: true,
+      sharedReads: 2,
+      entryOnlyReads: 2,
+      afterReleaseReads: 3,
+    },
+    {
+      label: 'watch mode in-memory',
+      isWatchMode: true,
+      writeToDisk: false,
+      sharedReads: 2,
+      entryOnlyReads: 2,
+      afterReleaseReads: 3,
+    },
   ])(
-    'reads a built file $reads time(s) when isWatchMode is $isWatchMode',
-    async ({ isWatchMode, reads }) => {
-      const assetPath = '/out/a.js';
+    'caches only shared in-memory assets until release ($label)',
+    async ({
+      isWatchMode,
+      writeToDisk,
+      sharedReads,
+      entryOnlyReads,
+      afterReleaseReads,
+    }) => {
+      const sharedPath = '/out/shared.js';
+      const sharedMapPath = '/out/shared.js.map';
+      const entryOnlyPath = '/out/a.test.js';
+      const readCounts = new Map<string, number>();
       const readFile = rs.fn(
-        (_name: string, cb: (err: Error | null, data?: Buffer) => void) =>
-          cb(null, Buffer.from('code')),
+        (name: string, cb: (err: Error | null, data?: Buffer) => void) => {
+          readCounts.set(name, (readCounts.get(name) ?? 0) + 1);
+          cb(null, Buffer.from('code'));
+        },
       );
       const { rsbuildInstance } = createFakeRsbuild({
         compiler: {
@@ -338,33 +371,63 @@ describe('prepareRsbuild', () => {
               toJson: () => ({
                 outputPath: '/out',
                 chunks: [],
-                entrypoints: {},
-                assets: [{ name: 'a.js', size: 4, info: {} }],
+                entrypoints: {
+                  a: { assets: [{ name: 'a.test.js', size: 4 }] },
+                  b: { assets: [{ name: 'b.test.js', size: 4 }] },
+                },
+                assets: [
+                  {
+                    name: 'shared.js',
+                    size: 4,
+                    info: { related: { sourceMap: ['shared.js.map'] } },
+                  },
+                  { name: 'a.test.js', size: 4, info: {} },
+                  { name: 'b.test.js', size: 4, info: {} },
+                ],
               }),
             }),
             context: {
-              config: { dev: { writeToDisk: false } },
-              manifest: { entries: {} },
+              config: { dev: { writeToDisk } },
+              manifest: {
+                entries: {
+                  a: { initial: { js: ['shared.js', 'a.test.js'] } },
+                  b: { initial: { js: ['shared.js', 'b.test.js'] } },
+                },
+              },
             },
           },
         },
       });
 
       const { getRsbuildStats } = await createRsbuildServer({
-        globTestSourceEntries: async () => ({}),
+        globTestSourceEntries: async () => ({
+          a: '/src/a.test.ts',
+          b: '/src/b.test.ts',
+        }),
         setupFiles: {},
         globalSetupFiles: {},
         rsbuildInstance,
         isWatchMode,
         rootPath,
       });
-      const { getAssetFiles } = await getRsbuildStats({
-        environmentName: 'node',
-      });
-      await getAssetFiles([assetPath]);
-      await getAssetFiles([assetPath]);
+      const { getAssetFiles, getSourceMaps, releaseAssetCache } =
+        await getRsbuildStats({
+          environmentName: 'node',
+        });
 
-      expect(readFile).toHaveBeenCalledTimes(reads);
+      await getAssetFiles([sharedPath, entryOnlyPath]);
+      await getAssetFiles([sharedPath, entryOnlyPath]);
+      await getSourceMaps([sharedPath]);
+      await getSourceMaps([sharedPath]);
+      expect(readCounts.get(sharedPath)).toBe(sharedReads);
+      expect(readCounts.get(sharedMapPath)).toBe(sharedReads);
+      expect(readCounts.get(entryOnlyPath)).toBe(entryOnlyReads);
+
+      releaseAssetCache();
+      await getAssetFiles([sharedPath]);
+      await getSourceMaps([sharedPath]);
+      expect(readCounts.get(sharedPath)).toBe(afterReleaseReads);
+      expect(readCounts.get(sharedMapPath)).toBe(afterReleaseReads);
     },
   );
 
