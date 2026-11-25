@@ -115,6 +115,7 @@ const collectNodeTests = async ({
           globalSetupEntries,
           getSourceMaps,
           getAssetFiles,
+          sourceMapPaths,
           diskSourceMapPaths,
           assetNames,
         } = await getRsbuildStats({
@@ -160,6 +161,7 @@ const collectNodeTests = async ({
           setupEntries,
           getAssetFiles,
           getSourceMaps,
+          sourceMapPaths,
           diskSourceMapPaths,
           project,
           updateSnapshot,

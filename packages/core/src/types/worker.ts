@@ -149,6 +149,14 @@ export type WorkerContext = {
   trace?: boolean;
 };
 
+export type AssetSocketInfo = {
+  socketPath: string;
+  token: string;
+  providerId: number;
+  /** Inline maps point to the bundle itself, matching `diskSourceMapPaths`. */
+  sourceMapPaths: Record<string, string>;
+};
+
 export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
@@ -157,6 +165,8 @@ export type RunWorkerOptions = {
     assetNames: string[];
     /** Present for full disk output. Inline maps point to the bundle itself. */
     diskSourceMapPaths?: Record<string, string>;
+    /** Local socket endpoint for streaming in-memory assets directly to fork workers. */
+    assetSocket?: AssetSocketInfo;
     context: WorkerContext;
     /** Env deletions use a separate JSON-safe wire field because JSON drops `undefined`. */
     deletedEnvKeys: string[];

@@ -382,6 +382,7 @@ export const createRsbuildServer = async ({
     assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+    sourceMapPaths: Record<string, string>;
     diskSourceMapPaths?: Record<string, string>;
     /** affected test entries only available in watch mode */
     affectedEntries: EntryInfo[];
@@ -646,6 +647,7 @@ export const createRsbuildServer = async ({
         setupEntries,
         globalSetupEntries,
         assetNames,
+        sourceMapPaths,
         // A filter may leave individual assets in the compiler's output FS.
         diskSourceMapPaths:
           environment.context.config.dev.writeToDisk === true

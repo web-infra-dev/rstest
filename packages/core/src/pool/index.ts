@@ -49,6 +49,7 @@ import {
   sinkToRuntimeRpc,
 } from '../core/execution/runnerEventSink';
 import { reporterFileKey } from '../reporter/utils';
+import { AssetServer, type RegisteredAssetProvider } from './assetServer';
 import { MAX_OOM_ATTEMPTS, Pool } from './pool';
 import { WorkerOomKillError } from './poolRunner';
 import type { PoolTask, PoolWorkerKind } from './types';
@@ -121,6 +122,7 @@ type PoolDispatchParams = {
   assetNames: string[];
   getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+  sourceMapPaths?: Record<string, string>;
   diskSourceMapPaths?: Record<string, string>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
@@ -149,7 +151,9 @@ const buildTask = async ({
   updateSnapshot,
   getAssetFiles,
   getSourceMaps,
+  sourceMapPaths: projectSourceMapPaths,
   diskSourceMapPaths: projectDiskSourceMapPaths,
+  assetProvider,
   rpcMethods,
   getKnownCoverageStructures,
   traceSpan,
@@ -173,7 +177,9 @@ const buildTask = async ({
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
+  sourceMapPaths?: PoolDispatchParams['sourceMapPaths'];
   diskSourceMapPaths?: PoolDispatchParams['diskSourceMapPaths'];
+  assetProvider?: RegisteredAssetProvider;
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
   getKnownCoverageStructures?: PoolTask['getKnownCoverageStructures'];
   traceSpan: TraceSpan;
@@ -201,6 +207,23 @@ const buildTask = async ({
       const mapPath = projectDiskSourceMapPaths[name];
       if (mapPath) diskSourceMapPaths[name] = mapPath;
     }
+  }
+  let assetSocket: PoolTask['options']['assetSocket'];
+  if (
+    !diskSourceMapPaths &&
+    assetProvider &&
+    projectSourceMapPaths &&
+    !captureBundleCoverage
+  ) {
+    const taskSourceMapPaths: Record<string, string> = {};
+    for (const name of taskAssetNames) {
+      const mapPath = projectSourceMapPaths[name];
+      if (mapPath) taskSourceMapPaths[name] = mapPath;
+    }
+    assetSocket = {
+      ...assetProvider,
+      sourceMapPaths: taskSourceMapPaths,
+    };
   }
   const getAssets = async (
     requestedAssetNames = taskAssetNames,
@@ -255,6 +278,7 @@ const buildTask = async ({
       // Bundle coverage bypasses the VM cache to capture every task's assets.
       loadAssets:
         !diskSourceMapPaths &&
+        !assetSocket &&
         (!isVmPoolType(workerKind) || captureBundleCoverage) &&
         !project.normalizedConfig.federation
           ? () =>
@@ -269,6 +293,7 @@ const buildTask = async ({
         entryInfo,
         assetNames: taskAssetNames,
         diskSourceMapPaths,
+        assetSocket,
         environmentKey,
         context: {
           outputModule: project.outputModule,
@@ -483,6 +508,66 @@ export const createPool = async ({
   ): RunnerEventSink =>
     createRunnerEventSink(context, project.normalizedConfig);
   const captureBundleCoverage = isBundleCoverageDebugEnabled();
+  const assetServer =
+    workerKind === 'forks' || workerKind === 'vmForks'
+      ? new AssetServer()
+      : undefined;
+
+  const registerAssetProvider = async ({
+    entries,
+    assetNames,
+    setupAssets,
+    getAssetFiles,
+    sourceMapPaths,
+    diskSourceMapPaths,
+    projectName,
+    type,
+    traceSpan,
+  }: {
+    entries: EntryInfo[];
+    assetNames: string[];
+    setupAssets: string[];
+    getAssetFiles: PoolDispatchParams['getAssetFiles'];
+    sourceMapPaths?: Record<string, string>;
+    diskSourceMapPaths?: Record<string, string>;
+    projectName: string;
+    type: 'run' | 'collect';
+    traceSpan: TraceSpan;
+  }): Promise<RegisteredAssetProvider | undefined> => {
+    if (
+      !assetServer ||
+      entries.length === 0 ||
+      diskSourceMapPaths ||
+      captureBundleCoverage ||
+      !sourceMapPaths
+    ) {
+      return undefined;
+    }
+    const allowedPaths = new Set<string>(assetNames);
+    for (const file of setupAssets) {
+      allowedPaths.add(file);
+    }
+    for (const entry of entries) {
+      for (const file of entry.files || []) {
+        allowedPaths.add(file);
+      }
+    }
+    for (const mapPath of Object.values(sourceMapPaths)) {
+      allowedPaths.add(mapPath);
+    }
+    const tracedGetAssetFiles = (names: string[]) =>
+      traceSpan(
+        'host:get-assets-by-entry',
+        'host',
+        () => getAssetFiles(names),
+        {
+          project: projectName,
+          type,
+          mode: 'socket',
+        },
+      );
+    return assetServer.registerProvider(tracedGetAssetFiles, allowedPaths);
+  };
 
   return {
     runTests: async ({
@@ -490,6 +575,7 @@ export const createPool = async ({
       assetNames,
       getAssetFiles,
       getSourceMaps,
+      sourceMapPaths,
       diskSourceMapPaths,
       setupEntries,
       project,
@@ -513,136 +599,162 @@ export const createPool = async ({
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const assetProvider = await registerAssetProvider({
+        entries,
+        assetNames,
+        setupAssets,
+        getAssetFiles,
+        sourceMapPaths,
+        diskSourceMapPaths,
+        projectName,
+        type: 'run',
+        traceSpan,
+      });
 
       // Preserve perf-sorted slot claims even if task preparation finishes out
       // of order. Asset reads begin only after dispatch acquires a runner.
       let dispatchGate: Promise<void> = Promise.resolve();
 
-      const dispatchedResults = await Promise.all(
-        entries.map(async (entryInfo, index) => {
-          const gate = dispatchGate;
-          let releaseGate!: () => void;
-          dispatchGate = new Promise<void>((r) => {
-            releaseGate = r;
-          });
-
-          try {
-            if (pool.closing) return;
-            const traceArgs = {
-              project: projectName,
-              testPath: entryInfo.testPath,
-            };
-            const { task, bundleCoverageAssets } = await traceSpan(
-              'host:build-task',
-              'host',
-              () =>
-                buildTask({
-                  type: 'run',
-                  workerKind,
-                  entryInfo,
-                  index,
-                  context,
-                  project,
-                  runtimeConfig,
-                  deletedEnvKeys,
-                  color,
-                  setupEntries,
-                  setupAssets,
-                  assetNames,
-                  updateSnapshot,
-                  getAssetFiles,
-                  getSourceMaps,
-                  diskSourceMapPaths,
-                  rpcMethods,
-                  getKnownCoverageStructures,
-                  traceSpan,
-                  testEnvironmentModule: testEnvironmentModules?.get(
-                    project.environmentName,
-                  ),
-                  buildId,
-                  workerCacheLimit,
-                  captureBundleCoverage,
-                }),
-              traceArgs,
-            );
-
-            task.onRetry = (attempt, ceiling) => {
-              sink.discardAttempt(entryInfo.testPath);
-              logger.warn(
-                `${entryInfo.testPath}: worker killed by SIGKILL (likely OOM), attempt ${attempt}/${MAX_OOM_ATTEMPTS}; re-running with concurrency ceiling ${ceiling}`,
-              );
-            };
-            await gate;
-            if (pool.closing) return;
-            // `pool.runTest` claims a slot (or parks in `slotWaiters`)
-            // synchronously before its first await, and `traceSpan` invokes
-            // its callback synchronously, so releasing after this returns
-            // preserves the exact enqueue order.
-            const resultPromise = traceSpan(
-              'host:pool-run-test',
-              'host',
-              () => pool.runTest(task),
-              { ...traceArgs, worker: task.worker },
-            );
-            releaseGate();
-
-            const result = await resultPromise.catch(async (err: unknown) => {
-              if (err instanceof AssetLoadError) throw err.cause;
-              // Closing deliberately rejects queued and running tasks. They
-              // must not become worker-crash results during cancellation.
-              if (pool.closing) return;
-              const { fileResult, crashedResults } = workerErrorToResult(
-                err,
-                entryInfo.testPath,
-                projectName,
-                context,
-              );
-              // Each crashed case already fired `onTestCaseStart`; complete the
-              // pair with a live `onTestCaseResult` so incremental reporters
-              // (dot, custom accounting) render it, matching the final totals.
-              // Counting stays sourced from `fileResult.results`, so the state
-              // manager is intentionally not touched here to avoid
-              // double-counting.
-              for (const caseResult of crashedResults) {
-                await sink.emitTestCaseResult(caseResult);
-              }
-              return fileResult;
+      let dispatchedResults: Array<
+        | {
+            result: TestFileResult;
+            bundleCoverage?: BundleCoverageResult;
+          }
+        | undefined
+      >;
+      try {
+        dispatchedResults = await Promise.all(
+          entries.map(async (entryInfo, index) => {
+            const gate = dispatchGate;
+            let releaseGate!: () => void;
+            dispatchGate = new Promise<void>((r) => {
+              releaseGate = r;
             });
 
-            if (!result || pool.closing) return;
+            try {
+              if (pool.closing) return;
+              const traceArgs = {
+                project: projectName,
+                testPath: entryInfo.testPath,
+              };
+              const { task, bundleCoverageAssets } = await traceSpan(
+                'host:build-task',
+                'host',
+                () =>
+                  buildTask({
+                    type: 'run',
+                    workerKind,
+                    entryInfo,
+                    index,
+                    context,
+                    project,
+                    runtimeConfig,
+                    deletedEnvKeys,
+                    color,
+                    setupEntries,
+                    setupAssets,
+                    assetNames,
+                    updateSnapshot,
+                    getAssetFiles,
+                    getSourceMaps,
+                    sourceMapPaths,
+                    diskSourceMapPaths,
+                    assetProvider,
+                    rpcMethods,
+                    getKnownCoverageStructures,
+                    traceSpan,
+                    testEnvironmentModule: testEnvironmentModules?.get(
+                      project.environmentName,
+                    ),
+                    buildId,
+                    workerCacheLimit,
+                    captureBundleCoverage,
+                  }),
+                traceArgs,
+              );
 
-            if (result.coverage) {
-              onCoverageResult?.(result.coverage);
-              delete result.coverage;
+              task.onRetry = (attempt, ceiling) => {
+                sink.discardAttempt(entryInfo.testPath);
+                logger.warn(
+                  `${entryInfo.testPath}: worker killed by SIGKILL (likely OOM), attempt ${attempt}/${MAX_OOM_ATTEMPTS}; re-running with concurrency ceiling ${ceiling}`,
+                );
+              };
+              await gate;
+              if (pool.closing) return;
+              // `pool.runTest` claims a slot (or parks in `slotWaiters`)
+              // synchronously before its first await, and `traceSpan` invokes
+              // its callback synchronously, so releasing after this returns
+              // preserves the exact enqueue order.
+              const resultPromise = traceSpan(
+                'host:pool-run-test',
+                'host',
+                () => pool.runTest(task),
+                { ...traceArgs, worker: task.worker },
+              );
+              releaseGate();
+
+              const result = await resultPromise.catch(async (err: unknown) => {
+                if (err instanceof AssetLoadError) throw err.cause;
+                // Closing deliberately rejects queued and running tasks. They
+                // must not become worker-crash results during cancellation.
+                if (pool.closing) return;
+                const { fileResult, crashedResults } = workerErrorToResult(
+                  err,
+                  entryInfo.testPath,
+                  projectName,
+                  context,
+                );
+                // Each crashed case already fired `onTestCaseStart`; complete the
+                // pair with a live `onTestCaseResult` so incremental reporters
+                // (dot, custom accounting) render it, matching the final totals.
+                // Counting stays sourced from `fileResult.results`, so the state
+                // manager is intentionally not touched here to avoid
+                // double-counting.
+                for (const caseResult of crashedResults) {
+                  await sink.emitTestCaseResult(caseResult);
+                }
+                return fileResult;
+              });
+
+              if (!result || pool.closing) return;
+
+              if (result.coverage) {
+                onCoverageResult?.(result.coverage);
+                delete result.coverage;
+              }
+              const bundleCoverage: BundleCoverageResult | undefined =
+                bundleCoverageAssets
+                  ? {
+                      project: projectName,
+                      testPath: entryInfo.testPath,
+                      assets: bundleCoverageAssets,
+                      rawV8: result.coverageRaw ?? null,
+                    }
+                  : undefined;
+              if (result.coverageRaw != null) {
+                onRawCoverageResult?.(result.coverageRaw);
+                delete result.coverageRaw;
+              }
+              if (result.traceEvents) {
+                onTraceEvents?.(result.traceEvents);
+                delete result.traceEvents;
+              }
+              const enrichedResult = await sink.onTestFileResult(result);
+              return { result: enrichedResult, bundleCoverage };
+            } finally {
+              // Unblock the next entry even if `buildTask` threw before the
+              // dispatch above ran — otherwise the whole chain would deadlock.
+              // A second call after the in-`try` release is a harmless no-op
+              // (a Promise's resolve settles once).
+              releaseGate();
             }
-            const bundleCoverage: BundleCoverageResult | undefined =
-              bundleCoverageAssets
-                ? {
-                    project: projectName,
-                    testPath: entryInfo.testPath,
-                    assets: bundleCoverageAssets,
-                    rawV8: result.coverageRaw ?? null,
-                  }
-                : undefined;
-            if (result.coverageRaw != null) {
-              onRawCoverageResult?.(result.coverageRaw);
-              delete result.coverageRaw;
-            }
-            if (result.traceEvents) {
-              onTraceEvents?.(result.traceEvents);
-              delete result.traceEvents;
-            }
-            const enrichedResult = await sink.onTestFileResult(result);
-            return { result: enrichedResult, bundleCoverage };
-          } finally {
-            // Unblock the next entry even if `buildTask` threw before the
-            // dispatch above ran — otherwise the whole chain would deadlock.
-            // A second call after the in-`try` release is a harmless no-op
-            // (a Promise's resolve settles once).
-            releaseGate();
-          }
-        }),
-      );
+          }),
+        );
+      } finally {
+        if (assetProvider) {
+          assetServer?.unregisterProvider(assetProvider.providerId);
+        }
+      }
 
       const results = dispatchedResults.filter(
         (result) => result !== undefined,
@@ -664,6 +776,7 @@ export const createPool = async ({
       assetNames,
       getAssetFiles,
       getSourceMaps,
+      sourceMapPaths,
       diskSourceMapPaths,
       setupEntries,
       project,
@@ -680,52 +793,77 @@ export const createPool = async ({
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const assetProvider = await registerAssetProvider({
+        entries,
+        assetNames,
+        setupAssets,
+        getAssetFiles,
+        sourceMapPaths,
+        diskSourceMapPaths,
+        projectName,
+        type: 'collect',
+        traceSpan: noopTraceSpan,
+      });
 
-      return Promise.all(
-        entries.map(async (entryInfo, index) => {
-          const { task } = await buildTask({
-            type: 'collect',
-            workerKind,
-            entryInfo,
-            index,
-            context,
-            project,
-            runtimeConfig,
-            deletedEnvKeys,
-            color,
-            setupEntries,
-            setupAssets,
-            assetNames,
-            updateSnapshot,
-            getAssetFiles,
-            getSourceMaps,
-            diskSourceMapPaths,
-            rpcMethods,
-            // `collect` does not participate in tracing.
-            traceSpan: noopTraceSpan,
-            testEnvironmentModule: testEnvironmentModules?.get(
-              project.environmentName,
-            ),
-            workerCacheLimit,
-          });
+      try {
+        return await Promise.all(
+          entries.map(async (entryInfo, index) => {
+            const { task } = await buildTask({
+              type: 'collect',
+              workerKind,
+              entryInfo,
+              index,
+              context,
+              project,
+              runtimeConfig,
+              deletedEnvKeys,
+              color,
+              setupEntries,
+              setupAssets,
+              assetNames,
+              updateSnapshot,
+              getAssetFiles,
+              getSourceMaps,
+              sourceMapPaths,
+              diskSourceMapPaths,
+              assetProvider,
+              rpcMethods,
+              // `collect` does not participate in tracing.
+              traceSpan: noopTraceSpan,
+              testEnvironmentModule: testEnvironmentModules?.get(
+                project.environmentName,
+              ),
+              workerCacheLimit,
+            });
 
-          return pool.collectTests(task).catch((err: unknown) => {
-            if (err instanceof AssetLoadError) throw err.cause;
-            const error = toSerializedError(err);
-            error.fullStack = true;
-            return {
-              project: projectName,
-              testPath: entryInfo.testPath,
-              tests: [],
-              errors: [error],
-            };
-          });
-        }),
-      );
+            return pool.collectTests(task).catch((err: unknown) => {
+              if (err instanceof AssetLoadError) throw err.cause;
+              const error = toSerializedError(err);
+              error.fullStack = true;
+              return {
+                project: projectName,
+                testPath: entryInfo.testPath,
+                tests: [],
+                errors: [error],
+              };
+            });
+          }),
+        );
+      } finally {
+        if (assetProvider) {
+          assetServer?.unregisterProvider(assetProvider.providerId);
+        }
+      }
     },
     cleanupWorkerFixtures: () => pool.cleanupWorkerFixtures(),
     drainWorkerStopErrors: () => pool.drainWorkerStopErrors(),
     interrupt: () => pool.interrupt(),
-    close: () => pool.close(),
+    close: async () => {
+      try {
+        await pool.close();
+      } finally {
+        await assetServer?.close();
+      }
+    },
   };
 };

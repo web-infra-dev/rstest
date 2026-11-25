@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { AssetServer } from '../../../../src/pool/assetServer';
 import {
   createWorkerAssetCache,
   loadCachedAssets,
@@ -149,4 +150,109 @@ it('reads bundled assets and their source maps from disk without requesting byte
     },
     sourceMaps: { [external]: externalMap, [inline]: inlineMap },
   });
+});
+
+it('streams in-memory assets and source maps over AssetServer without invoking RPC', async ({
+  onTestFinished,
+}) => {
+  const server = new AssetServer();
+  onTestFinished(() => server.close());
+
+  const inlineMap = '{"version":3,"sources":["inline.ts"]}';
+  const externalMap = '{"version":3,"sources":["external.ts"]}';
+  const inlineBundle = `//# sourceMappingURL=data:application/json;base64,${Buffer.from(inlineMap).toString('base64')}`;
+  const largeBundle = Buffer.alloc(256 * 1024, 0x61);
+  const files: Record<string, Buffer> = {
+    '/mem/external.js': largeBundle,
+    '/mem/external.js.map': Buffer.from(externalMap),
+    '/mem/inline.js': Buffer.from(inlineBundle),
+    '/mem/empty.js': Buffer.alloc(0),
+  };
+
+  const getAssetFiles = rs.fn(async (names: string[]) =>
+    Object.fromEntries(names.map((name) => [name, files[name]!])),
+  );
+  const registered = await server.registerProvider(
+    getAssetFiles,
+    new Set(Object.keys(files)),
+  );
+  expect(registered).toBeDefined();
+
+  const getAssetsByEntry = rs.fn();
+  const assets = await loadTaskAssets(
+    {
+      assetNames: ['/mem/external.js', '/mem/inline.js', '/mem/empty.js'],
+      assetSocket: {
+        ...registered!,
+        sourceMapPaths: {
+          '/mem/external.js': '/mem/external.js.map',
+          '/mem/inline.js': '/mem/inline.js',
+        },
+      },
+      context: { pool: 'forks' },
+    },
+    undefined,
+    { getAssetsByEntry },
+  );
+
+  expect(getAssetsByEntry).not.toHaveBeenCalled();
+  expect(getAssetFiles).toHaveBeenCalledTimes(1);
+  expect(assets.assetFiles).toEqual({
+    '/mem/external.js': largeBundle,
+    '/mem/inline.js': Buffer.from(inlineBundle),
+    '/mem/empty.js': Buffer.alloc(0),
+  });
+  expect(assets.sourceMaps).toEqual({
+    '/mem/external.js': externalMap,
+    '/mem/inline.js': inlineMap,
+  });
+  // Each streamed asset gets its own backing ArrayBuffer so VM LRU eviction cannot pin siblings.
+  expect((assets.assetFiles['/mem/external.js'] as Buffer).buffer).not.toBe(
+    (assets.assetFiles['/mem/inline.js'] as Buffer).buffer,
+  );
+});
+
+it('rejects AssetServer requests with an invalid token or disallowed path', async ({
+  onTestFinished,
+}) => {
+  const server = new AssetServer();
+  onTestFinished(() => server.close());
+
+  const registered = await server.registerProvider(
+    async () => ({ '/mem/allowed.js': Buffer.from('ok') }),
+    new Set(['/mem/allowed.js']),
+  );
+  expect(registered).toBeDefined();
+
+  const getAssetsByEntry = rs.fn();
+  await expect(
+    loadTaskAssets(
+      {
+        assetNames: ['/mem/allowed.js'],
+        assetSocket: {
+          ...registered!,
+          token: 'wrong-token',
+          sourceMapPaths: {},
+        },
+        context: { pool: 'forks' },
+      },
+      undefined,
+      { getAssetsByEntry },
+    ),
+  ).rejects.toThrow('Invalid asset socket request');
+
+  await expect(
+    loadTaskAssets(
+      {
+        assetNames: ['/mem/secret.js'],
+        assetSocket: {
+          ...registered!,
+          sourceMapPaths: {},
+        },
+        context: { pool: 'forks' },
+      },
+      undefined,
+      { getAssetsByEntry },
+    ),
+  ).rejects.toThrow('Asset path not allowed');
 });
