@@ -406,8 +406,15 @@ export const matchBrowserScreenshot = async ({
   );
   const readReference = () =>
     runBeforeScreenshotDeadline(() => snapshotStore.read(filepath), deadline);
+  const canAddReference = updateSnapshot === 'new' || updateSnapshot === 'all';
+  const requiredReference = canAddReference ? undefined : await readReference();
+  if (requiredReference === null) {
+    throw new ScreenshotMismatchError(
+      `No screenshot reference found for "${testName}". Run Rstest with --update to create it.\nReference: ${filepath}`,
+    );
+  }
   const matchesReference = async (first: Buffer): Promise<boolean> => {
-    const content = await readReference();
+    const content = requiredReference ?? (await readReference());
     if (content === null) return false;
     const reference = Buffer.from(content, 'base64');
     if (first.equals(reference)) return true;
@@ -441,21 +448,16 @@ export const matchBrowserScreenshot = async ({
   const actual = PNG.sync.read(actualBuffer);
   throwIfScreenshotDeadlinePassed(deadline);
 
-  const expectedContent = await readReference();
+  const expectedContent = requiredReference ?? (await readReference());
   const expectedBuffer =
     expectedContent === null
       ? undefined
       : Buffer.from(expectedContent, 'base64');
 
   if (!expectedBuffer) {
-    if (updateSnapshot === 'new' || updateSnapshot === 'all') {
-      await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
-      await removeFailureArtifacts(snapshotStore, filepath, deadline);
-      return 'added';
-    }
-    throw new ScreenshotMismatchError(
-      `No screenshot reference found for "${testName}". Run Rstest with --update to create it.\nReference: ${filepath}`,
-    );
+    await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
+    await removeFailureArtifacts(snapshotStore, filepath, deadline);
+    return 'added';
   }
 
   let expected: PNG;

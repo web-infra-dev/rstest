@@ -78,6 +78,27 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('reports a missing read-only reference before capturing', async () => {
+    await withRoot(async (root) => {
+      let captures = 0;
+      await expect(
+        match(root, {
+          updateSnapshot: 'none',
+          rootPath: root,
+          resolvePath: () => 'required.png',
+          captureScreenshot: async () => {
+            captures++;
+            return createScreenshot();
+          },
+        }),
+      ).rejects.toThrow('required.png');
+      expect(captures).toBe(0);
+      await expect(
+        fs.access(path.join(root, 'required.png')),
+      ).rejects.toThrow();
+    });
+  });
+
   it('reports whether a screenshot was added, updated, or matched', async () => {
     await withRoot(async (root) => {
       expect(await match(root, { updateSnapshot: 'new' })).toBe('added');
