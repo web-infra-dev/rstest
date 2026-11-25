@@ -495,7 +495,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
     threshold: 0.1,
     maxDiffPixels: 0,
   },
-  stabilityTimeout: 2000,
+  stabilityTimeout: 5000,
   maskColor: '#FF00FF',
   caret: 'hide',
   scale: 'device',
@@ -514,7 +514,7 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 | `comparatorOptions.threshold`         | `0.1`             | 单像素颜色距离阈值，`0` 最严格，`1` 最宽松。 |
 | `comparatorOptions.maxDiffPixels`     | `0`               | 允许差异的最大像素数。                       |
 | `comparatorOptions.maxDiffPixelRatio` | `0`               | 允许差异像素所占的最大比例。                 |
-| `stabilityTimeout`                    | `2000`            | 等待连续截图一致的最长时间，单位为毫秒。     |
+| `stabilityTimeout`                    | `5000`            | 等待连续截图一致的最长时间，单位为毫秒。     |
 | `maskColor`                           | `#FF00FF`         | 遮罩内容使用的颜色。                         |
 | `style`                               | 未设置            | 不注入额外 CSS。                             |
 | `caret`                               | `hide`            | 截图时隐藏文本光标。                         |

@@ -203,7 +203,7 @@ const captureStableScreenshot = async (
   requestDeadline: number | undefined,
   beforeCapture?: () => Promise<void>,
 ): Promise<Buffer> => {
-  const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
+  const { stabilityTimeout = 5_000, ...playwrightOptions } = options;
   if (
     typeof stabilityTimeout !== 'number' ||
     !Number.isFinite(stabilityTimeout) ||
