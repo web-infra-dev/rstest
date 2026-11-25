@@ -1,3 +1,4 @@
+import type { RsbuildPlugin } from '@rsbuild/core';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -5,6 +6,21 @@ export default defineConfig({
     {
       name: 'node',
       root: 'packages/node',
+      plugins: [
+        {
+          name: 'report-compiler-parallelism',
+          setup(api) {
+            api.onAfterCreateCompiler(({ compiler }) => {
+              if ('compilers' in compiler) {
+                console.log(
+                  'Compiler parallelism:',
+                  compiler.options.parallelism,
+                );
+              }
+            });
+          },
+        } satisfies RsbuildPlugin,
+      ],
       globals: true,
     },
     {
