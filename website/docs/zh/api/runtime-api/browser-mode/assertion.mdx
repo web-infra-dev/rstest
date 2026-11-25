@@ -147,7 +147,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot({
 });
 ```
 
-`threshold` 设置单像素颜色距离阈值，范围为 `0`（严格）到 `1`（宽松）。`maxDiffPixels` 设置允许不同的像素数上限；也可以改用 `maxDiffPixelRatio` 设置差异像素比例。默认的 `threshold` 为 `0.1`，且不允许像素差异。`maxDiffPixels` 和 `maxDiffPixelRatio` 只能设置一个。
+`threshold` 设置单像素颜色距离阈值，范围为 `0`（严格）到 `1`（宽松）。`maxDiffPixels` 限制差异像素数，`maxDiffPixelRatio` 限制差异像素占整张图的比例。例如，设置 `{ maxDiffPixels: 100, maxDiffPixelRatio: 0.01 }` 时，最多允许 100 个像素不同，且不能超过整张图的 1%。两项均未设置时，应用默认的 `threshold`（`0.1`）后不允许有像素差异。
 
 已有基准图时，如果首张截图在配置的容差范围内匹配基准图，普通断言会立即通过。如果首张截图不匹配，Rstest 会等待连续截图稳定后再比较。创建或更新基准图时也会执行稳定性检查。
 

@@ -242,16 +242,17 @@ export type BrowserScreenshotPathOptions = {
 export type BrowserScreenshotComparatorOptions = {
   /** Per-pixel color distance threshold from 0 (strict) to 1 (loose). @default 0.1 */
   threshold?: number;
-  /** Maximum number of pixels allowed to differ. @default 0 */
+  /** Maximum number of pixels allowed to differ. */
   maxDiffPixels?: number;
-  /** Maximum fraction of pixels allowed to differ. @default 0 */
+  /** Maximum fraction of pixels allowed to differ, from 0 to 1. */
   maxDiffPixelRatio?: number;
 };
 
 export type BrowserScreenshotMatcherConfig = {
   /**
    * Options passed to the pixel comparator.
-   * @default `{ threshold: 0.1, maxDiffPixels: 0, maxDiffPixelRatio: 0 }`
+   * Both pixel limits apply when set. Omitting both allows no differing pixels.
+   * @default `{ threshold: 0.1 }`
    */
   comparatorOptions?: BrowserScreenshotComparatorOptions;
   /**

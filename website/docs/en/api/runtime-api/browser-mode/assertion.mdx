@@ -147,7 +147,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot({
 });
 ```
 
-`threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` sets an absolute limit on differing pixels; use `maxDiffPixelRatio` instead to set a fraction of the image. The defaults allow no differing pixels after applying the default `threshold` of `0.1`. Set either `maxDiffPixels` or `maxDiffPixelRatio`, not both.
+`threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` limits the number of differing pixels, and `maxDiffPixelRatio` limits their fraction of the image. With `{ maxDiffPixels: 100, maxDiffPixelRatio: 0.01 }`, a screenshot passes if at most 100 pixels differ and those pixels cover at most 1% of the image. With neither limit set, no pixels may differ after applying the default `threshold` of `0.1`.
 
 When a reference exists, a regular assertion passes as soon as the first capture matches it within the configured tolerance. If the first capture differs, Rstest waits for consecutive captures to stabilize before comparing again. Creating or updating a reference also uses the stability check.
 
