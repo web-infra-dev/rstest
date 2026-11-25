@@ -1,7 +1,9 @@
 import { Rstest } from '../../src/core/rstest';
 import { createPool } from '../../src/pool';
 import { Pool } from '../../src/pool/pool';
+import { wrapWorkerResponse } from '../../src/pool/protocol';
 import { createPoolWorker } from '../../src/pool/workers';
+import { loadTaskAssets } from '../../src/runtime/worker/vm/assetCache';
 import { noopTraceSpan } from '../../src/utils/trace';
 import {
   ControlledWorker,
@@ -86,6 +88,83 @@ it('runTests rejects asset loader failures without reporting a worker crash', as
       }),
     ).rejects.toBe(failure);
     expect(createPoolWorker).toHaveBeenCalledOnce();
+    expect(onTestFileResult).not.toHaveBeenCalled();
+  } finally {
+    await pool.close();
+  }
+});
+
+it('runTests propagates socket asset loader failures instead of reporting a failed test file', async () => {
+  const worker = new ControlledWorker(false);
+  worker.send.mockImplementation((request) => {
+    if (request.type === 'start') {
+      queueMicrotask(() =>
+        worker.emit('message', wrapWorkerResponse({ type: 'started', pid: 1 })),
+      );
+      return;
+    }
+    if (request.type === 'run') {
+      void loadTaskAssets(request.options, request.options.assets, {
+        getAssetsByEntry: async () => ({ assetFiles: {}, sourceMaps: {} }),
+      }).catch((err: unknown) => {
+        worker.emit(
+          'message',
+          wrapWorkerResponse({
+            type: 'runFinished',
+            taskId: request.taskId,
+            result: {
+              testId: 'first',
+              project: request.options.context.project,
+              testPath: request.options.entryInfo.testPath,
+              status: 'failed',
+              name: '',
+              results: [],
+              errors: [{ message: String(err) }],
+            },
+          }),
+        );
+      });
+    }
+  });
+  rs.mocked(createPoolWorker).mockReturnValueOnce(worker);
+
+  const context = new Rstest(
+    {
+      cwd: __dirname,
+      command: 'run',
+      projects: [],
+      initializeReporters: false,
+    },
+    { pool: { maxWorkers: 1 }, isolate: false },
+  );
+  const onTestFileResult = rs.fn();
+  context.reporters.push({ onTestFileResult });
+  const failure = new Error('memfs asset read failed');
+  const getAssetFiles = rs.fn(async () => {
+    throw failure;
+  });
+  const pool = await createPool({ context });
+  try {
+    await expect(
+      pool.runTests({
+        entries: [
+          {
+            testPath: '/first.test.ts',
+            distPath: '/first.js',
+            chunks: [],
+            files: ['/first.js'],
+          },
+        ],
+        assetNames: ['/first.js'],
+        getAssetFiles,
+        getSourceMaps: async () => ({}),
+        sourceMapPaths: {},
+        setupEntries: [],
+        updateSnapshot: 'none',
+        project: context.projects[0]!,
+        traceSpan: noopTraceSpan,
+      }),
+    ).rejects.toBe(failure);
     expect(onTestFileResult).not.toHaveBeenCalled();
   } finally {
     await pool.close();

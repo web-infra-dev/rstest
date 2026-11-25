@@ -523,6 +523,7 @@ export const createPool = async ({
     projectName,
     type,
     traceSpan,
+    onLoadError,
   }: {
     entries: EntryInfo[];
     assetNames: string[];
@@ -533,6 +534,7 @@ export const createPool = async ({
     projectName: string;
     type: 'run' | 'collect';
     traceSpan: TraceSpan;
+    onLoadError: (error: unknown) => void;
   }): Promise<RegisteredAssetProvider | undefined> => {
     if (
       !assetServer ||
@@ -566,7 +568,33 @@ export const createPool = async ({
           mode: 'socket',
         },
       );
-    return assetServer.registerProvider(tracedGetAssetFiles, allowedPaths);
+    return assetServer.registerProvider(
+      tracedGetAssetFiles,
+      allowedPaths,
+      onLoadError,
+    );
+  };
+
+  const createAssetLoadFailure = () => {
+    let failed = false;
+    let firstError: unknown;
+    let rejectFailure!: (error: AssetLoadError) => void;
+    const promise = new Promise<never>((_, reject) => {
+      rejectFailure = reject;
+    });
+    // Suppress unhandled rejection if no task is currently racing this promise.
+    void promise.catch(() => undefined);
+    return {
+      promise,
+      hasFailed: () => failed,
+      getError: () => firstError,
+      fail: (error: unknown) => {
+        if (failed) return;
+        failed = true;
+        firstError = error;
+        rejectFailure(new AssetLoadError(error));
+      },
+    };
   };
 
   return {
@@ -599,6 +627,7 @@ export const createPool = async ({
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const assetLoadFailure = createAssetLoadFailure();
       const assetProvider = await registerAssetProvider({
         entries,
         assetNames,
@@ -609,6 +638,7 @@ export const createPool = async ({
         projectName,
         type: 'run',
         traceSpan,
+        onLoadError: assetLoadFailure.fail,
       });
 
       // Preserve perf-sorted slot claims even if task preparation finishes out
@@ -693,8 +723,15 @@ export const createPool = async ({
               );
               releaseGate();
 
-              const result = await resultPromise.catch(async (err: unknown) => {
+              void resultPromise.catch(() => undefined);
+              const result = await Promise.race([
+                resultPromise,
+                assetLoadFailure.promise,
+              ]).catch(async (err: unknown) => {
                 if (err instanceof AssetLoadError) throw err.cause;
+                if (assetLoadFailure.hasFailed()) {
+                  throw assetLoadFailure.getError();
+                }
                 // Closing deliberately rejects queued and running tasks. They
                 // must not become worker-crash results during cancellation.
                 if (pool.closing) return;
@@ -716,6 +753,9 @@ export const createPool = async ({
                 return fileResult;
               });
 
+              if (assetLoadFailure.hasFailed()) {
+                throw assetLoadFailure.getError();
+              }
               if (!result || pool.closing) return;
 
               if (result.coverage) {
@@ -793,6 +833,7 @@ export const createPool = async ({
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const assetLoadFailure = createAssetLoadFailure();
       const assetProvider = await registerAssetProvider({
         entries,
         assetNames,
@@ -803,6 +844,7 @@ export const createPool = async ({
         projectName,
         type: 'collect',
         traceSpan: noopTraceSpan,
+        onLoadError: assetLoadFailure.fail,
       });
 
       try {
@@ -836,8 +878,16 @@ export const createPool = async ({
               workerCacheLimit,
             });
 
-            return pool.collectTests(task).catch((err: unknown) => {
+            const collectPromise = pool.collectTests(task);
+            void collectPromise.catch(() => undefined);
+            return Promise.race([
+              collectPromise,
+              assetLoadFailure.promise,
+            ]).catch((err: unknown) => {
               if (err instanceof AssetLoadError) throw err.cause;
+              if (assetLoadFailure.hasFailed()) {
+                throw assetLoadFailure.getError();
+              }
               const error = toSerializedError(err);
               error.fullStack = true;
               return {

@@ -12,6 +12,7 @@ const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 type AssetProvider = {
   getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
   allowedPaths: Set<string>;
+  onLoadError?: (error: unknown) => void;
 };
 
 type AssetSocketRequest = {
@@ -118,6 +119,7 @@ export class AssetServer {
   async registerProvider(
     getAssetFiles: AssetProvider['getAssetFiles'],
     allowedPaths: Set<string>,
+    onLoadError?: AssetProvider['onLoadError'],
   ): Promise<RegisteredAssetProvider | undefined> {
     if (this.closed) {
       return undefined;
@@ -127,7 +129,11 @@ export class AssetServer {
       return undefined;
     }
     const providerId = this.nextProviderId++;
-    this.providers.set(providerId, { getAssetFiles, allowedPaths });
+    this.providers.set(providerId, {
+      getAssetFiles,
+      allowedPaths,
+      onLoadError,
+    });
     return {
       socketPath,
       token: this.token,
@@ -305,7 +311,20 @@ export class AssetServer {
         }
       }
 
-      const loaded = await provider.getAssetFiles(parsed.paths);
+      let loaded: Record<string, Buffer>;
+      try {
+        loaded = await provider.getAssetFiles(parsed.paths);
+      } catch (error) {
+        provider.onLoadError?.(error);
+        if (!socket.destroyed) {
+          await writeFrameHeader(socket, {
+            ok: false,
+            error: toError(error).message,
+          });
+          socket.end();
+        }
+        return;
+      }
       if (socket.destroyed) {
         return;
       }
@@ -315,9 +334,11 @@ export class AssetServer {
       for (const filePath of parsed.paths) {
         const content = loaded[filePath];
         if (!content) {
+          const error = new Error(`Asset not found: ${filePath}`);
+          provider.onLoadError?.(error);
           await writeFrameHeader(socket, {
             ok: false,
-            error: `Asset not found: ${filePath}`,
+            error: error.message,
           });
           socket.end();
           return;
