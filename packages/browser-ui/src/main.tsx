@@ -399,10 +399,10 @@ const BrowserRunner: React.FC<{
   );
 
   const handleRerunTestCase = useCallback(
-    (file: string, testName: string) => {
+    (file: string, testNamePattern: string) => {
       setActive(file);
       if (rpc && connected) {
-        void rpc.rerunTest(file, testName);
+        void rpc.rerunTest(file, testNamePattern);
       }
     },
     [rpc, connected],

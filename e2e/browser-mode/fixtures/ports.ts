@@ -25,6 +25,7 @@ export const BROWSER_PORTS = {
   snapshot: 5196,
   watch: 5186,
   'watch-headed': 5270,
+  'watch-headed-cdp': 5314,
   webkit: 5198,
   viewport: 5214,
   'viewport-preset': 5216,
