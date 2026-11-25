@@ -19,6 +19,15 @@ on:
         description: 'Git ref to benchmark (branch, tag, or SHA). Defaults to the selected branch.'
         required: false
         type: string
+      suite:
+        description: 'Which benchmark suite to run.'
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - cpu
+          - memory
 
 concurrency:
   group: codspeed-${{ github.event.pull_request.number || inputs.ref || github.sha }}
@@ -81,7 +90,7 @@ jobs:
     # CPU walltime benchmark runs on codspeed-macro (expensive), only on weekly schedule or manual trigger
     if: |
       needs.check-skip.outputs.skip_cpu != 'true' &&
-      ((github.event_name == 'schedule' && github.event.schedule == '0 0 * * 0') || github.event_name == 'workflow_dispatch')
+      ((github.event_name == 'schedule' && github.event.schedule == '0 0 * * 0') || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'cpu' || inputs.suite == '')))
     # Walltime mode requires CodSpeed bare-metal runners for stable measurements.
     # CPU simulation (Valgrind) is incompatible with child_process.fork — rstest's
     # worker pool generates excessive system calls, making flame graphs unavailable.
@@ -122,7 +131,7 @@ jobs:
     # Memory benchmark runs daily on main (ubuntu-latest), plus manual trigger or workflow_call
     if: |
       needs.check-skip.outputs.skip_memory != 'true' &&
-      ((github.event_name == 'schedule' && github.event.schedule == '0 20 * * *') || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      ((github.event_name == 'schedule' && github.event.schedule == '0 20 * * *') || github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'memory' || inputs.suite == '')))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

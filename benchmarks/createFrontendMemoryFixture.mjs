@@ -66,6 +66,8 @@ export default defineConfig({
   root,
   include: ['tests/**/*.test.tsx'],
   setupFiles: ['./src/setupDom.ts'],
+  testTimeout: 30_000,
+  hookTimeout: 30_000,
   performance: {
     buildCache: {
       cacheDirectory: ${JSON.stringify(cacheDir)},
