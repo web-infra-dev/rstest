@@ -6,6 +6,7 @@ import { BROWSER_PORTS } from './fixtures/ports';
 import {
   deleteFixtureTarget,
   killCliProcessTree,
+  runBrowserWatchCli,
   runBrowserWatchCliWithCwd,
   runBrowserWatchCrud,
   shouldRunHeadedBrowserTests,
@@ -15,6 +16,49 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('browser mode - headed watch', () => {
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'reruns the selected case or suite from the browser UI',
+    async () => {
+      const { chromium } = await import('playwright');
+      const { cli } = await runBrowserWatchCli('browser-react', {
+        args: ['-c', 'rstest.rerun.config.mts', '--reporter=verbose'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        const browser = await chromium.connectOverCDP(
+          `http://127.0.0.1:${BROWSER_PORTS['watch-headed-cdp']}`,
+        );
+        const page = browser
+          .contexts()
+          .flatMap((context) => context.pages())
+          .find((page) => page.url().startsWith('http://localhost:'));
+        if (!page) throw new Error('Browser UI page is missing');
+
+        await page.getByTestId('test-files-toggle-expand').click();
+        const cases = page.getByTestId('test-case-title');
+        const selected = cases.filter({
+          hasText: 'should work with getByRole query',
+        });
+        await selected.waitFor();
+        const caseCount = await cases.count();
+
+        cli.resetStd();
+        await selected.getByTestId('test-case-rerun').click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*should work with getByRole query/);
+        expect(cli.stdout).toContain(`1 passed | ${caseCount - 1} skipped`);
+
+        cli.resetStd();
+        await page.getByTestId('test-suite-rerun').click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(new RegExp(`Tests\\s+${caseCount} passed`));
+      } finally {
+        await killCliProcessTree(cli);
+      }
+    },
+    60_000,
+  );
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'runs added files after an empty headed watch start',
     async () => {

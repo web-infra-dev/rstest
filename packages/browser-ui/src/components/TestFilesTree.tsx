@@ -41,7 +41,7 @@ type TestFilesTreeProps = {
   onExpandChange: (keys: string[]) => void;
   onSelect: (file: string) => void;
   onRerunFile: (file: string) => void;
-  onRerunTestCase: (file: string, testName: string) => void;
+  onRerunTestCase: (file: string, testNamePattern: string) => void;
 };
 
 // ============================================================================
@@ -54,6 +54,14 @@ type TreeNode = {
   children: Map<string, TreeNode>;
   cases: CaseInfo[];
   status: CaseStatus;
+};
+
+const rerunPattern = (names: string[], type: 'case' | 'suite'): string => {
+  // A literal " > " selects the runner's suite-qualified name format.
+  const separator = ' > ';
+  const fullName = names.filter(Boolean).join(separator);
+  const literal = fullName.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+  return `^${literal}${type === 'suite' ? separator : '$'}`;
 };
 
 // ============================================================================
@@ -205,7 +213,10 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
                 onRerun={
                   connected
                     ? () => {
-                        onRerunTestCase(file, suiteFullName);
+                        onRerunTestCase(
+                          file,
+                          rerunPattern(child.fullPath, 'suite'),
+                        );
                       }
                     : undefined
                 }
@@ -231,7 +242,13 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
                 onRerun={
                   connected
                     ? () => {
-                        onRerunTestCase(file, testCase.fullName);
+                        onRerunTestCase(
+                          file,
+                          rerunPattern(
+                            [...testCase.parentNames, testCase.name],
+                            'case',
+                          ),
+                        );
                       }
                     : undefined
                 }
