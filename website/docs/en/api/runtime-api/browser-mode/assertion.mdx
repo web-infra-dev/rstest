@@ -121,7 +121,7 @@ Retries check the same element. If a rerender replaces it, use a query Locator t
 
 <ApiMeta addedVersion="0.12.4" />
 
-With the Playwright provider, `toMatchScreenshot()` captures either a Locator or the page and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference. When snapshot updates are disabled and the reference is missing, the assertion reports the expected path before capturing a screenshot.
+With the Playwright provider, `toMatchScreenshot()` captures either a Locator or the page and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
 
 The matcher accepts an optional reference name and capture or comparison options.
 

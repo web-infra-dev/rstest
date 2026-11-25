@@ -121,7 +121,7 @@ await expect.element(button).not.toBeDisabled();
 
 <ApiMeta addedVersion="0.12.4" />
 
-使用 Playwright provider 时，`toMatchScreenshot()` 可以截取 Locator 或页面，并与 PNG 基线比较。若当前 snapshot 更新模式允许新增基线，首次运行会保存基线。之后的运行会与基线比较；需要替换不匹配的基线时，使用 `--update`。当快照更新被禁用且基准图缺失时，断言会在截图前报告预期的基准图路径。
+使用 Playwright provider 时，`toMatchScreenshot()` 可以截取 Locator 或页面，并与 PNG 基线比较。若当前 snapshot 更新模式允许新增基线，首次运行会保存基线。之后的运行会与基线比较；需要替换不匹配的基线时，使用 `--update`。
 
 matcher 接收可选的基线名称，以及截图或比较选项。
 
