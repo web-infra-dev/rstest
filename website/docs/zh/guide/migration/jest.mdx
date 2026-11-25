@@ -253,6 +253,16 @@ Rstest 提供了 `rs` API，你可以使用它来访问 Rstest 的工具函数�
 fn.mockResolvedValue('foo');
 ```
 
+### npm 包的手动 mock \{#manual-mocks-for-npm-packages}
+
+如果项目根目录下有 `__mocks__/zustand.ts`，Jest 会在测试导入 `zustand` 时自动使用这个 mock。在 Rstest 中，要使用同一个 mock 文件，需要在测试文件里调用 `rs.mock('zustand')`。如果所有测试文件都要使用它，在 [`setupFiles`](/config/test/setup-files) 指定的文件里声明一次即可。
+
+```ts title='rstest.setup.ts'
+import { rs } from '@rstest/core';
+
+rs.mock('zustand');
+```
+
 ### 虚拟模块 mock
 
 迁移 Jest 虚拟模块 mock 时，请先[声明模块并配置 `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)。这套配置同时适用于 Node 和浏览器模式。然后删除 Jest 的第三个参数：
