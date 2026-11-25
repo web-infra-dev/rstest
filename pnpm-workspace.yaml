@@ -60,7 +60,7 @@ hoist: false
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
-  - 'rstack@0.9.4'
+  - 'rstack'
   - '@module-federation/*'
   - '@swc-next/*'
   - '@rspack/*'
