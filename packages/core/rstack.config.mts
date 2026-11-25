@@ -323,6 +323,8 @@ define.lib({
     {
       id: 'worker_lazy_deps',
       format: 'cjs',
+      // The worker can load these chunks after a test has replaced globalThis.document.
+      shims: { cjs: { 'import.meta.url': false } },
       syntax: 'es2023',
       dts: false,
       output: {
@@ -335,6 +337,10 @@ define.lib({
         },
       },
       source: {
+        define: {
+          'import.meta.url':
+            'require("node:url").pathToFileURL(__filename).href',
+        },
         entry: {
           'worker-fake-timers': './src/runtime/api/fakeTimers.ts',
           'worker-source-map-support':
