@@ -90,10 +90,11 @@ export type ToMatchScreenshotOptions = {
 
 declare module '@rstest/core' {
   interface Assertion<T> {
-    toMatchScreenshot: (
+    toMatchScreenshot(options?: ToMatchScreenshotOptions): Promise<void>;
+    toMatchScreenshot(
       name?: string,
       options?: ToMatchScreenshotOptions,
-    ) => Promise<void>;
+    ): Promise<void>;
   }
 
   interface ExpectStatic {

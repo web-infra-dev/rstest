@@ -137,10 +137,10 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 
 同一测试中的未命名断言会自动使用不同的基线。在 `test.concurrent` 中，使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）即可继续使用测试名称；若使用共享的文件级 `expect`，则需要显式传入名称。
 
-第二个参数用于设置比较和截图选项。例如，允许最多 20 个像素不同、最多等待一秒让截图稳定，并遮罩每次运行都会变化的时间戳：
+只传选项对象时，使用默认基线名称。要自定义基线名称，可以先传名称，再传选项。下面的示例允许最多 20 个像素不同，最多等待一秒让截图稳定，并遮罩每次运行都会变化的时间戳。
 
 ```ts
-await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+await expect(page.locator('#profile-card')).toMatchScreenshot({
   maxDiffPixels: 20,
   stabilityTimeout: 1000,
   mask: [page.locator('[data-testid="updated-at"]')],

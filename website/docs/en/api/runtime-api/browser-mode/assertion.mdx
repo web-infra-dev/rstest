@@ -137,10 +137,10 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
 
 Unnamed assertions in the same test are assigned distinct references automatically. In `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) to use the test name; if you use the shared file-level `expect`, provide a name explicitly.
 
-The second argument controls comparison and capture. For example, allow up to 20 differing pixels, wait up to one second for a stable capture, and mask a timestamp that changes between runs:
+Pass the options object on its own to use the default reference name, or after a name to use a custom reference. This example allows up to 20 differing pixels, waits up to one second for a stable capture, and masks a timestamp that changes between runs.
 
 ```ts
-await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+await expect(page.locator('#profile-card')).toMatchScreenshot({
   maxDiffPixels: 20,
   stabilityTimeout: 1000,
   mask: [page.locator('[data-testid="updated-at"]')],
