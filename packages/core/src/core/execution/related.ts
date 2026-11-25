@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { isAbsolute, normalize, relative, resolve } from 'pathe';
+import { extname, isAbsolute, normalize, relative, resolve } from 'pathe';
 import type {
   InternalContext,
   InternalProjectContext,
@@ -383,7 +384,19 @@ const collectProjectEntries = async (
   return entries;
 };
 
-const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
+/**
+ * Missing source files are materialized as empty modules in the analysis build
+ * so imports that still reference them keep their module-graph edges. Only JSON
+ * needs non-empty content to parse; an empty source is a valid JS/ESM module.
+ * The execution build always uses the real filesystem, so a selected test still
+ * fails on the missing import.
+ */
+const createMissingSourcePlaceholder = (filePath: string): string =>
+  extname(filePath).toLowerCase() === '.json' ? '{}' : '';
+
+const createRelatedBuildSafeguardsPlugin = (
+  missingSources: string[],
+): RsbuildPlugin => ({
   name: 'rstest:related-build-safeguards',
   setup(api) {
     api.modifyRsbuildConfig((config) => ({
@@ -397,12 +410,26 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
         buildCache: false,
       },
     }));
-    api.modifyRspackConfig((rspackConfig) => {
+    api.modifyRspackConfig((rspackConfig, { rspack }) => {
       // Related-file graph collection needs a complete, fresh graph.
       // Keep it independent from user-enabled lazy compilation and
       // persistent cache settings.
       rspackConfig.lazyCompilation = false;
       rspackConfig.cache = false;
+      // Keep incoming edges to deleted files in this analysis-only build.
+      // The execution build still resolves against the real filesystem.
+      if (missingSources.length) {
+        rspackConfig.plugins.push(
+          new rspack.experiments.VirtualModulesPlugin(
+            Object.fromEntries(
+              missingSources.map((file) => [
+                file,
+                createMissingSourcePlaceholder(file),
+              ]),
+            ),
+          ),
+        );
+      }
     });
   },
 });
@@ -478,6 +505,12 @@ export async function resolveRelatedTestFiles(
     sourceFilters: string[];
     filterLabel?: string;
     allowEmpty?: boolean;
+    /**
+     * Paths Git reports as deleted. One that exists again as something other
+     * than a file (a file replaced by a same-name directory) is still a
+     * missing import target.
+     */
+    deletedFiles?: string[];
   },
 ): Promise<string[]> {
   const {
@@ -485,6 +518,7 @@ export async function resolveRelatedTestFiles(
     filterLabel = '--related',
     allowEmpty = false,
   } = options;
+  const deletedFiles = new Set(options.deletedFiles);
 
   if (sourceFilters.length === 0) {
     if (allowEmpty) {
@@ -501,6 +535,19 @@ export async function resolveRelatedTestFiles(
     projectEntries.get(environmentName) ?? {};
 
   const setupFileState = createSetupFileState();
+  const sourcePaths = new Set(
+    sourceFilters.map((source) => normalize(resolve(context.rootPath, source))),
+  );
+  const missingSources = (
+    await Promise.all(
+      Array.from(sourcePaths).map(async (source) => {
+        const stats = await stat(source).catch(() => undefined);
+        const missing = deletedFiles.has(source) ? !stats?.isFile() : !stats;
+
+        return missing ? source : undefined;
+      }),
+    )
+  ).filter((source): source is string => source !== undefined);
   projectEntries = await collectProjectEntries(context);
 
   const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
@@ -514,7 +561,7 @@ export async function resolveRelatedTestFiles(
       setupFileState,
       targetProjects: context.projects,
       exposeRstestAPIProjects: context.projects,
-      extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      extraPlugins: [createRelatedBuildSafeguardsPlugin(missingSources)],
       logLevel: 'silent',
       getSetupFileProjects: () => ({
         setupProjects: context.projects,
@@ -571,11 +618,12 @@ export async function resolveRelatedTestFiles(
         reasons: true,
       });
 
-      const virtualModulePaths = new Set(
-        Object.keys(
+      const virtualModulePaths = new Set([
+        ...missingSources,
+        ...Object.keys(
           setupFileState.virtualModules[project.environmentName] || {},
         ),
-      );
+      ]);
       const moduleGraph = collectModuleGraph({
         modules,
         projectRoot: project.rootPath,
