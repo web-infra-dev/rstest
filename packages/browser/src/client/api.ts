@@ -211,8 +211,8 @@ registerElementExpect(element);
 expect.extend({
   async toMatchScreenshot(
     received: unknown,
-    name?: string,
-    options?: ToMatchScreenshotOptions,
+    nameOrOptions?: string | ToMatchScreenshotOptions,
+    screenshotOptions?: ToMatchScreenshotOptions,
   ) {
     if (this.isNot) {
       throw new Error('toMatchScreenshot() does not support .not.');
@@ -225,6 +225,10 @@ expect.extend({
       );
     }
 
+    const [name, options] =
+      typeof nameOrOptions === 'object'
+        ? [undefined, nameOrOptions]
+        : [nameOrOptions, screenshotOptions];
     const assertion = Reflect.get(this, 'assertion');
     const hasAssertionFlag = (flag: string): boolean =>
       Object.prototype.hasOwnProperty.call(assertion, flag) &&

@@ -28,7 +28,7 @@ test('matches a full page screenshot', async () => {
   await expect(page).toMatchScreenshot('viewport', {
     mask: [page.locator('h1')],
   });
-  await expect(page).toMatchScreenshot('whole-page', { fullPage: true });
+  await expect(page).toMatchScreenshot({ fullPage: true });
 }, 30_000);
 
 test('uses distinct references for duplicate test titles', async () => {

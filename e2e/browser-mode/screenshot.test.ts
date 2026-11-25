@@ -91,16 +91,13 @@ describe.sequential('browser mode - screenshot matching', () => {
       path.join(screenshotDir, viewportScreenshotName),
     );
     expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
-    const pageScreenshotName = screenshotNames.find((name) =>
-      name.startsWith('whole-page~'),
-    );
-    if (!pageScreenshotName) {
-      throw new Error('Expected the full page screenshot reference.');
-    }
     const pageScreenshot = fs.readFileSync(
-      path.join(screenshotDir, pageScreenshotName),
+      path.join(
+        screenshotDir,
+        `matches-a-full-page-screenshot-1-chromium-${process.platform}.png`,
+      ),
     );
-    expect(pageScreenshot.readUInt32BE(20)).toBeGreaterThan(1000);
+    expect(pageScreenshot.readUInt32BE(20)).toBeGreaterThanOrEqual(1800);
     expect(
       screenshotNames.every((name) => Buffer.byteLength(name) <= 240),
     ).toBe(true);
@@ -353,10 +350,9 @@ import { expect, test } from '@rstest/core';
 
 test('rejects invalid screenshot options', async () => {
   document.body.innerHTML = '<button>Save</button>';
-  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
-    'invalid-options',
-    { threshold: 2 },
-  );
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot({
+    threshold: 2,
+  });
 });
 
 test('rejects a short screenshot stability timeout', async () => {
