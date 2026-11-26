@@ -2386,13 +2386,7 @@ describe('prepareRsbuild', () => {
               resolve: {},
               source: {},
               output: {},
-              tools: {
-                rspack: {
-                  experiments: {
-                    runtimeMode: 'rspack',
-                  },
-                },
-              },
+              tools: {},
               testEnvironment: {
                 name: 'node',
               },
@@ -2410,7 +2404,7 @@ describe('prepareRsbuild', () => {
       origin: { bundlerConfigs },
     } = await rsbuildInstance.inspectConfig();
 
-    expect(bundlerConfigs[0]?.experiments?.runtimeMode).toBe('webpack');
+    expect(bundlerConfigs[0]?.experiments?.runtimeMode).toBe('rspack');
     expect(bundlerConfigs[0]).toMatchSnapshot();
   });
 

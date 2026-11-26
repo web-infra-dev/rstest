@@ -8,7 +8,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "experiments": {
     "asyncWebAssembly": false,
     "nativeWatcher": true,
-    "runtimeMode": "webpack",
+    "runtimeMode": "rspack",
     "sourceImport": true,
   },
   "externals": [
@@ -752,7 +752,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "experiments": {
     "asyncWebAssembly": false,
     "nativeWatcher": true,
-    "runtimeMode": "webpack",
+    "runtimeMode": "rspack",
     "sourceImport": true,
   },
   "externals": [
@@ -1451,7 +1451,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "experiments": {
     "asyncWebAssembly": false,
     "nativeWatcher": true,
-    "runtimeMode": "webpack",
+    "runtimeMode": "rspack",
     "sourceImport": true,
   },
   "externals": [
@@ -2137,7 +2137,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "experiments": {
     "asyncWebAssembly": false,
     "nativeWatcher": true,
-    "runtimeMode": "webpack",
+    "runtimeMode": "rspack",
     "sourceImport": true,
   },
   "externals": [
@@ -3193,7 +3193,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "experiments": {
     "asyncWebAssembly": false,
     "nativeWatcher": true,
-    "runtimeMode": "webpack",
+    "runtimeMode": "rspack",
     "sourceImport": true,
   },
   "externals": [
@@ -3892,7 +3892,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "experiments": {
     "asyncWebAssembly": false,
     "nativeWatcher": true,
-    "runtimeMode": "webpack",
+    "runtimeMode": "rspack",
     "sourceImport": true,
   },
   "externals": [
