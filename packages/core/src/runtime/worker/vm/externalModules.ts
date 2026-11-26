@@ -17,12 +17,8 @@ import {
   getOrCreateSyntheticModule,
   interopModule,
 } from '../interop';
-import {
-  createVmTimersLoader,
-  createVmTimersPromisesLoader,
-  VM_PROMISE_TIMER_EXPORTS,
-  VM_TIMER_EXPORTS,
-} from './timers';
+import { VM_PROMISE_TIMER_EXPORTS, VM_TIMER_EXPORTS } from './timerExports';
+import { createVmTimersLoader, createVmTimersPromisesLoader } from './timers';
 import {
   clearExternalModuleCache,
   getCommonJsCompilationCache,
