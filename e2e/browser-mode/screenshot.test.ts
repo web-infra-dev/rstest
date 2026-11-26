@@ -31,9 +31,13 @@ describe.sequential('browser mode - screenshot matching', () => {
   let cliToKill:
     Awaited<ReturnType<typeof runBrowserCliWithCwd>>['cli'] | undefined;
 
-  const runScreenshot = async (args: string[] = []) => {
+  const runScreenshot = async (
+    args: string[] = [],
+    env?: Record<string, string>,
+  ) => {
     const result = await runBrowserCliWithCwd(fixtureDir, {
       args: ['--browser.port=0', ...args],
+      env,
     });
     cliToKill = result.cli;
     return result;
@@ -335,6 +339,28 @@ describe.sequential('browser mode - screenshot matching', () => {
     await result.expectExecSuccess();
     expect(parseJsonReport(result.cli.stdout).snapshot.added).toBe(1);
     expect(parseJsonReport(result.cli.stdout).snapshot.matched).toBe(1);
+  });
+
+  it('reports a missing reference in CI even when the locator cannot be captured', async () => {
+    const testPath = path.join(fixtureDir, 'tests', 'configured.test.ts');
+    fs.writeFileSync(
+      testPath,
+      fs
+        .readFileSync(testPath, 'utf8')
+        .replace("page.locator('#pixel')", "page.locator('#absent')"),
+    );
+    const result = await runScreenshot(
+      ['--project=project-config-resolver', 'tests/configured.test.ts'],
+      { CI: 'true' },
+    );
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).toBe(1);
+    const output = `${result.cli.stdout}\n${result.cli.stderr}`;
+    expect(output).toContain(
+      'No screenshot reference found for "global-default"',
+    );
+    expect(output).toContain('global-default.png');
+    expect(fs.existsSync(path.join(fixtureDir, 'custom-paths'))).toBe(false);
   });
 
   it('rejects invalid options before creating a reference', async () => {
