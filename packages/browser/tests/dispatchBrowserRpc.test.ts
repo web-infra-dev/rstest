@@ -616,6 +616,26 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]).not.toHaveProperty('timeout');
   });
 
+  it('skips PNG decoding when consecutive screenshot bytes match', async ({
+    onTestFinished,
+  }) => {
+    const locator = new FakeLocator();
+    const decode = rstest.spyOn(PNG.sync, 'read');
+    onTestFinished(() => decode.mockRestore());
+
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        args: ['button'],
+      }),
+      timeoutFallbackMs: 2_000,
+    });
+    expect(locator.screenshotCalls).toHaveLength(2);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it.each([{ maxDiffPixels: 1 }, { maxDiffPixelRatio: 0.25 }])(
     'uses the configured tolerance for same-size consecutive captures (%j)',
     async (tolerance) => {

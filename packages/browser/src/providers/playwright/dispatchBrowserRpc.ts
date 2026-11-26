@@ -247,7 +247,8 @@ const captureStableScreenshot = async (
   if (await matchesReference?.(first)) return null;
 
   const stabilityDeadline = Date.now() + stabilityTimeout;
-  let previous = PNG.sync.read(first);
+  let previousBuffer = first;
+  let previousImage: PNG | undefined;
   while (
     Date.now() < stabilityDeadline &&
     (!requestDeadline || Date.now() < requestDeadline)
@@ -274,19 +275,22 @@ const captureStableScreenshot = async (
         `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
       );
     }
+    if (current.equals(previousBuffer)) return current;
+    previousImage ??= PNG.sync.read(previousBuffer);
     const decoded = PNG.sync.read(current);
     if (
-      previous.width === decoded.width &&
-      previous.height === decoded.height
+      previousImage.width === decoded.width &&
+      previousImage.height === decoded.height
     ) {
       const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
-        previous,
+        previousImage,
         decoded,
         comparison,
       );
       if (differentPixels <= maxDiffPixels) return current;
     }
-    previous = decoded;
+    previousBuffer = current;
+    previousImage = decoded;
   }
 
   throw new Error(
