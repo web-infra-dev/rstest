@@ -133,16 +133,23 @@ describe('browser mode - headed watch', () => {
 
         cli.resetStd();
         fs.update(file, (content) => content.replace(failing, passing));
-        await cli.waitForStdout('Test Files 1 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toContain('Test Files 2 passed');
         await hookFrame.waitFor();
         expect(
           await page.getByTestId('view-preview').getAttribute('aria-pressed'),
         ).toBe('true');
         await page.getByTestId('view-results').click();
         await page.getByRole('heading', { name: hookName }).waitFor();
-        await cases
-          .filter({ hasText: 'uses Testing Library elements' })
+        await page
+          .getByTestId('test-file-title')
+          .filter({ hasText: 'testingLibraryDom.test.tsx' })
           .click();
+        const repairedCase = page
+          .getByTestId('result-row')
+          .filter({ hasText: 'uses Testing Library elements' });
+        expect(await repairedCase.innerText()).toMatch(/passed/i);
+        await repairedCase.click();
         await page
           .getByRole('heading', { name: /uses Testing Library elements/i })
           .waitFor();
