@@ -52,13 +52,13 @@ const BROWSER_KINDS: readonly BrowserKind[] = ['chromium', 'firefox', 'webkit'];
 const GRID_ROWS = 8;
 const PIXEL_SIZE = 2;
 const FRAME_INTERVAL_MS = 33;
+const HOVER_DECAY_PER_SEC = 1.1;
 
 interface Slot {
   c: number;
   r: number;
   cx: number;
   cy: number;
-  wavePos: number;
   inCenterClear: boolean;
   kind: GlyphKind;
   tone: Tone;
@@ -124,7 +124,6 @@ function createSlots(
         r,
         cx: (c + 0.5) * cellW,
         cy: (r + 0.5) * cellH,
-        wavePos: (c + 0.5) / cols + (r / GRID_ROWS) * 0.08,
         inCenterClear,
         kind,
         tone,
@@ -138,37 +137,17 @@ function createSlots(
 
 function resolveSlotVisual(
   slot: Slot,
-  scanHead: number,
   baseFloor: number,
 ): { kind: GlyphKind; intensity: number; tone: Tone } {
-  const delta = scanHead - slot.wavePos;
-
-  let kind: GlyphKind = slot.kind;
-  let intensity = baseFloor;
-  let tone: Tone = TONE_ETCHED;
-
-  if (delta > -0.05 && delta < 0.08) {
-    kind = 'arc';
-    intensity = 0.84;
-    tone = TONE_RUN;
-  } else if (delta >= 0.08 && delta < 0.45) {
-    const wake = 1 - (delta - 0.08) / 0.37;
-    intensity = baseFloor + wake * 0.76;
-    tone = slot.tone;
+  if (slot.hoverBoost <= 0.05) {
+    return { kind: slot.kind, intensity: baseFloor, tone: TONE_ETCHED };
   }
 
-  if (slot.hoverBoost > 0.05) {
-    intensity = Math.max(intensity, Math.min(0.92, slot.hoverBoost));
-    if (slot.hoverBoost > 0.66) {
-      kind = 'arc';
-      tone = TONE_RUN;
-    } else {
-      kind = slot.kind;
-      tone = slot.tone;
-    }
+  const intensity = Math.max(baseFloor, Math.min(0.92, slot.hoverBoost));
+  if (slot.hoverBoost > 0.66) {
+    return { kind: 'arc', intensity, tone: TONE_RUN };
   }
-
-  return { kind, intensity, tone };
+  return { kind: slot.kind, intensity, tone: slot.tone };
 }
 
 function drawGlyph(
@@ -316,8 +295,8 @@ function applyBayerDither(
 }
 
 /**
- * Low-saturation Bayer-dithered test & browser icon matrix driven by a calm
- * left-to-right execution scan wave. Columns stay a multiple of 4 so grid lines
+ * Low-saturation Bayer-dithered test & browser icon matrix rendered statically
+ * at rest and animated on pointer hover. Columns stay a multiple of 4 so cells
  * align with the page's 25% / 50% / 75% architectural rails.
  */
 export function HeroDitherMatrix() {
@@ -350,11 +329,11 @@ export function HeroDitherMatrix() {
     let slots: Slot[] = [];
     let toneMap = new Uint8Array(0);
     let outImg: ImageData | null = null;
-    let inView = true;
     let rafId = 0;
-    let elapsed = 2.1;
-    let lastNow = performance.now();
+    let elapsed = 0;
+    let lastNow = 0;
     let lastDraw = 0;
+    let lastCellKey = -1;
 
     const rebuild = () => {
       const rect = host.getBoundingClientRect();
@@ -374,30 +353,33 @@ export function HeroDitherMatrix() {
       grid = { width, height, cols, cellW, cellH };
       toneMap = new Uint8Array(cols * GRID_ROWS);
       slots = createSlots(cols, cellW, cellH, clearMargin);
+      lastCellKey = -1;
     };
 
-    const drawFrame = (dt: number) => {
-      if (!outImg || grid.width === 0 || grid.height === 0) return;
+    const drawFrame = (dt: number): boolean => {
+      if (!outImg || grid.width === 0 || grid.height === 0) return false;
 
       offscreenCtx.clearRect(0, 0, grid.width, grid.height);
       toneMap.fill(TONE_ETCHED);
 
       const isDark = document.documentElement.classList.contains('dark');
-      const baseFloor = isDark ? 0.15 : 0.13;
+      const baseFloor = isDark ? 0.16 : 0.14;
       const iconSize = Math.min(grid.cellW, grid.cellH) * 0.62;
-      const scanHead = ((elapsed * 0.17) % 1.45) - 0.18;
+      let hasActive = false;
 
       for (const slot of slots) {
         if (slot.inCenterClear) continue;
-        if (dt > 0) {
-          slot.hoverBoost = Math.max(0, slot.hoverBoost - dt * 1.8);
+        if (dt > 0 && slot.hoverBoost > 0) {
+          slot.hoverBoost = Math.max(
+            0,
+            slot.hoverBoost - dt * HOVER_DECAY_PER_SEC,
+          );
+        }
+        if (slot.hoverBoost > 0) {
+          hasActive = true;
         }
 
-        const { kind, intensity, tone } = resolveSlotVisual(
-          slot,
-          scanHead,
-          baseFloor,
-        );
+        const { kind, intensity, tone } = resolveSlotVisual(slot, baseFloor);
         toneMap[slot.r * grid.cols + slot.c] = tone;
         drawGlyph(
           offscreenCtx,
@@ -421,20 +403,30 @@ export function HeroDitherMatrix() {
         isDark ? DARK_PALETTE : LIGHT_PALETTE,
       );
       ctx.putImageData(outImg, 0, 0);
+      return hasActive;
     };
 
     const tick = (now: number) => {
-      rafId = requestAnimationFrame(tick);
-      if (!inView || document.hidden) {
-        lastNow = now;
+      if (now - lastDraw < FRAME_INTERVAL_MS) {
+        rafId = requestAnimationFrame(tick);
         return;
       }
-      if (now - lastDraw < FRAME_INTERVAL_MS) return;
       const dt = Math.min(0.05, (now - lastNow) / 1000);
       lastNow = now;
       lastDraw = now;
       elapsed += dt;
-      drawFrame(dt);
+      if (drawFrame(dt)) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = 0;
+      }
+    };
+
+    const startLoop = () => {
+      if (rafId !== 0) return;
+      lastNow = performance.now();
+      lastDraw = 0;
+      rafId = requestAnimationFrame(tick);
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -443,11 +435,24 @@ export function HeroDitherMatrix() {
       const lx = (event.clientX - rect.left) / PIXEL_SIZE;
       const ly = (event.clientY - rect.top) / PIXEL_SIZE;
       if (lx < 0 || ly < 0 || lx >= grid.width || ly >= grid.height) return;
+
       const c = Math.floor(lx / grid.cellW);
       const r = Math.floor(ly / grid.cellH);
-      const slot = slots[r * grid.cols + c];
-      if (!slot || slot.inCenterClear) return;
+      const cellKey = r * grid.cols + c;
+      const slot = slots[cellKey];
+      if (!slot || slot.inCenterClear) {
+        lastCellKey = -1;
+        return;
+      }
+      // Avoid resetting the spinner while the pointer jitters inside the same active cell.
+      if (cellKey === lastCellKey && slot.hoverBoost > 0.35) return;
+      lastCellKey = cellKey;
       slot.hoverBoost = 0.94;
+      startLoop();
+    };
+
+    const onPointerLeave = () => {
+      lastCellKey = -1;
     };
 
     const resizeObserver = new ResizeObserver(() => {
@@ -456,16 +461,8 @@ export function HeroDitherMatrix() {
     });
     resizeObserver.observe(host);
 
-    const intersectionObserver = new IntersectionObserver(
-      (entries) => {
-        inView = entries[0]?.isIntersecting ?? true;
-      },
-      { threshold: 0 },
-    );
-    intersectionObserver.observe(host);
-
     const themeObserver = new MutationObserver(() => {
-      if (reducedMotion) drawFrame(0);
+      drawFrame(0);
     });
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -473,19 +470,17 @@ export function HeroDitherMatrix() {
     });
 
     host.addEventListener('pointermove', onPointerMove, { passive: true });
+    host.addEventListener('pointerleave', onPointerLeave, { passive: true });
 
     rebuild();
     drawFrame(0);
-    if (!reducedMotion) {
-      rafId = requestAnimationFrame(tick);
-    }
 
     return () => {
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
-      intersectionObserver.disconnect();
       themeObserver.disconnect();
       host.removeEventListener('pointermove', onPointerMove);
+      host.removeEventListener('pointerleave', onPointerLeave);
     };
   }, []);
 
