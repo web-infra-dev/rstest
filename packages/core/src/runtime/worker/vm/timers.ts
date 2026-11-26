@@ -1,17 +1,4 @@
-export const VM_TIMER_EXPORTS = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-] as const;
-
-export const VM_PROMISE_TIMER_EXPORTS = [
-  'setTimeout',
-  'setImmediate',
-  'scheduler',
-] as const;
+import { VM_TIMER_EXPORTS } from './timerExports';
 
 const vmTimerExports = new Set<string>(VM_TIMER_EXPORTS);
 
@@ -216,27 +203,3 @@ export const createVmTimersPromisesLoader = (
   };
   return loadTimersPromises;
 };
-
-export const createVmTimersShim =
-  (): string => `const __rstest_timer_exports = new Set(${JSON.stringify(VM_TIMER_EXPORTS)});
-let __rstest_timers_proxy;
-const __rstest_load_timers = (id) => {
-  const timers = __rstest_native_require(id);
-  // This source is emitted as an Rspack banner, where bracket placeholders
-  // such as "[name]" are expanded using the chunk name.
-  const usesGlobalTimers = [...__rstest_timer_exports].some(
-    (name) => Reflect.get(timers, name) !== Reflect.get(globalThis, name),
-  );
-  if (!usesGlobalTimers) return timers;
-  if (!__rstest_timers_proxy) {
-    __rstest_timers_proxy = new Proxy(timers, {
-      get(target, property, receiver) {
-        if (typeof property === 'string' && __rstest_timer_exports.has(property)) {
-          return globalThis[property];
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-  }
-  return __rstest_timers_proxy;
-};`;

@@ -7,12 +7,12 @@ import {
   RSTEST_IMPORT_META_RESOLVE_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../runtime/worker/runtimeHooks';
-import { createVmTimersShim } from '../../runtime/worker/vm/timers';
 import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
-import { getNumCpus } from '../../utils/workers';
+import { getNumCpus, isVmPoolType } from '../../utils/workers';
 import { runtimeChunkNameForEnvironment } from '../build/runtimeChunk';
 import { isNodeProject } from '../environment/isBrowserProject';
+import { createRequireBanner } from './esmRequireBanner';
 import {
   applyMockExportsPresence,
   forceWebpackRuntimeMode,
@@ -20,20 +20,6 @@ import {
 } from './mockBuild';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const requireShim = `// Rstest ESM shims
-import __rstest_shim_module__ from 'node:module';
-const __rstest_native_require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
-${createVmTimersShim()}
-const require = (id) =>
-  id === 'timers' || id === 'node:timers'
-    ? __rstest_load_timers(id)
-    : __rstest_native_require(id);
-require.resolve = __rstest_native_require.resolve;
-require.main = __rstest_native_require.main;
-require.cache = __rstest_native_require.cache;
-require.extensions = __rstest_native_require.extensions;
-`;
 
 export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
   context,
@@ -256,9 +242,13 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
               });
 
               if (outputModule) {
+                const { pool, isolate } = context.normalizedConfig;
                 config.plugins.push(
                   new rspack.BannerPlugin({
-                    banner: requireShim,
+                    banner: createRequireBanner(
+                      isVmPoolType(pool.type) ||
+                        (isolate && testEnvironment.name !== 'node'),
+                    ),
                     // Just before minify stage, to perform tree shaking.
                     stage: rspack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE - 1,
                     raw: true,
