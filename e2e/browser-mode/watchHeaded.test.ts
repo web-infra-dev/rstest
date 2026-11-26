@@ -40,6 +40,7 @@ describe('browser mode - headed watch', () => {
         await cli.waitForStdout('Waiting for file changes...');
         const page = await getBrowserUiPage();
 
+        await page.getByRole('heading', { name: 'Run results' }).waitFor();
         await page.getByTestId('test-files-toggle-expand').click();
         const cases = page.getByTestId('test-case-title');
         const selected = cases.filter({
@@ -66,7 +67,7 @@ describe('browser mode - headed watch', () => {
   );
 
   it.runIf(shouldRunHeadedBrowserTests)(
-    'shows assertion failures in the preview and clears them after a passing rerun',
+    'opens the failed case in Results and restores the chosen preview after a watch rerun',
     async () => {
       const fixturesTargetPath = path.join(
         __dirname,
@@ -84,14 +85,23 @@ describe('browser mode - headed watch', () => {
       const failing = "toHaveText('51', { timeout: 500 })";
       fs.update(file, (content) => content.replace(passing, failing));
       const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
-        args: ['-c', 'rstest.rerun.config.mts'],
+        args: [
+          '-c',
+          'rstest.rerun.config.mts',
+          '--include',
+          'tests/{testingLibraryDom,renderHook}.test.tsx',
+        ],
       });
       try {
         await cli.waitForStdout('Waiting for file changes...');
         const page = await getBrowserUiPage();
         const panel = page.getByRole('region', { name: 'Failure details' });
         await panel.waitFor();
-        await page.getByTestId('test-files-toggle-expand').click();
+        expect(
+          await page
+            .getByRole('heading', { name: /uses Testing Library elements/i })
+            .isVisible(),
+        ).toBe(true);
         const cases = page.getByTestId('test-case-title');
         await cases
           .filter({ hasText: 'should work with getByRole query' })
@@ -105,13 +115,44 @@ describe('browser mode - headed watch', () => {
         expect(await panel.innerText()).toContain('unexpected value "2"');
         await panel.getByText('Stack trace', { exact: true }).click();
         expect(await panel.locator('details pre').isVisible()).toBe(true);
-        expect(await page.locator('iframe[data-test-file]').isVisible()).toBe(
-          true,
+        await page
+          .getByTestId('test-file-title')
+          .filter({ hasText: 'renderHook.test.tsx' })
+          .click();
+        const hookName = 'should render hook with initial value';
+        const hookRow = page
+          .getByTestId('result-row')
+          .filter({ hasText: hookName });
+        expect(await hookRow.innerText()).toMatch(/\d+ (ms|s)/);
+        await hookRow.click();
+        await page.getByTestId('view-preview').click();
+        const hookFrame = page.locator(
+          'iframe[data-test-file$="renderHook.test.tsx"]',
         );
+        await hookFrame.waitFor();
 
         cli.resetStd();
         fs.update(file, (content) => content.replace(failing, passing));
-        await cli.waitForStdout('Test Files 1 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toContain('Test Files 2 passed');
+        await hookFrame.waitFor();
+        expect(
+          await page.getByTestId('view-preview').getAttribute('aria-pressed'),
+        ).toBe('true');
+        await page.getByTestId('view-results').click();
+        await page.getByRole('heading', { name: hookName }).waitFor();
+        await page
+          .getByTestId('test-file-title')
+          .filter({ hasText: 'testingLibraryDom.test.tsx' })
+          .click();
+        const repairedCase = page
+          .getByTestId('result-row')
+          .filter({ hasText: 'uses Testing Library elements' });
+        expect(await repairedCase.innerText()).toMatch(/passed/i);
+        await repairedCase.click();
+        await page
+          .getByRole('heading', { name: /uses Testing Library elements/i })
+          .waitFor();
         await panel.waitFor({ state: 'hidden' });
       } finally {
         await killCliProcessTree(cli);

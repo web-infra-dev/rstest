@@ -18,7 +18,7 @@ import React, {
 import ReactDOM from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
-import { FailureDetails } from './components/FailureDetails';
+import { RunResults } from './components/RunResults';
 import { PreviewHeader } from './components/PreviewHeader';
 import { ResizablePanel, ResizablePanelGroup } from './components/Resizable';
 import { SidebarHeader } from './components/SidebarHeader';
@@ -85,8 +85,10 @@ const BrowserRunner: React.FC<{
     version: 0,
   });
   const testFiles = fileSet.files;
-  const [selection, setSelection] = useState<TestSelection | null>(null);
-  const active = selection?.file;
+  // Undefined follows failures automatically; null explicitly opens the run summary.
+  const [inspection, setSelection] = useState<TestSelection | null>();
+  const [view, setView] = useState<'results' | 'preview'>('results');
+  const [grantedFile, setGrantedFile] = useState<string>();
   const [fileStates, setFileStates] = useState<Record<string, FileState>>({});
   const [caseMap, setCaseMap] = useState<
     Record<string, Record<string, CaseInfo>>
@@ -228,6 +230,7 @@ const BrowserRunner: React.FC<{
           ...caseInfo,
           status: 'running',
           errors: undefined,
+          duration: undefined,
         };
       }
       return { ...prev, [file]: updatedCases };
@@ -243,9 +246,7 @@ const BrowserRunner: React.FC<{
         testFile,
         testNamePattern ?? '',
       );
-      setSelection((previous) =>
-        previous?.file === testFile ? previous : { file: testFile },
-      );
+
       setTestViewports((previous) => {
         if (!previous[testFile]) return previous;
         const next = { ...previous };
@@ -258,6 +259,7 @@ const BrowserRunner: React.FC<{
       // full reload, a stray in-flight one) reads this lease and confers the
       // current identity on whatever document booted.
       leasesRef.current.grant(testFile, runId, testNamePattern);
+      setGrantedFile(testFile);
       bumpLeases();
 
       markFileRunning(testFile);
@@ -300,8 +302,7 @@ const BrowserRunner: React.FC<{
     setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
 
     setSelection((prev) => {
-      if (prev && testPaths.includes(prev.file)) return prev;
-      return testFiles[0] ? { file: testFiles[0].testPath } : null;
+      return prev && !testPaths.includes(prev.file) ? undefined : prev;
     });
   }, [testFiles]);
 
@@ -589,10 +590,48 @@ const BrowserRunner: React.FC<{
     };
   }, [caseMap]);
 
-  const isAnyFileRunning = useMemo(
-    () => Object.values(fileStates).some((file) => file.status === 'running'),
-    [fileStates],
+  const runningFile =
+    grantedFile && fileStates[grantedFile]?.status === 'running'
+      ? grantedFile
+      : undefined;
+  const failedFile = testFiles.find(
+    (file) => fileStates[file.testPath]?.status === 'failed',
   );
+  const failedCase =
+    failedFile &&
+    Object.values(caseMap[failedFile.testPath] ?? {}).find(
+      (test) => test.status === 'failed',
+    );
+  const selection =
+    inspection === undefined
+      ? failedFile && { file: failedFile.testPath, caseId: failedCase?.id }
+      : inspection;
+  // Playwright needs the executing frame exposed for pointer actions and screenshots.
+  const visibleView = runningFile ? 'preview' : view;
+  const active = runningFile ?? selection?.file;
+  const inspectedCase = selection?.caseId
+    ? caseMap[selection.file]?.[selection.caseId]
+    : undefined;
+
+  useEffect(() => {
+    if (!inspectedCase) return;
+    const file = testFiles.find((entry) => entry.testPath === selection?.file);
+    if (!file) return;
+    const ancestors = [file.testPath];
+    if (testFiles.some((entry) => entry.projectName !== file.projectName)) {
+      ancestors.push(toProjectKey(file.projectName));
+    }
+    for (let i = 1; i <= inspectedCase.parentNames.length; i++) {
+      ancestors.push(
+        suiteKey(file.testPath, inspectedCase.parentNames.slice(0, i)),
+      );
+    }
+    setOpenFiles((previous) =>
+      ancestors.every((key) => previous.includes(key))
+        ? previous
+        : [...new Set([...previous, ...ancestors])],
+    );
+  }, [inspectedCase, selection?.file, testFiles]);
 
   // Collect all expandable node keys for expand/collapse all functionality
   const allExpandableKeys = useMemo(() => {
@@ -703,11 +742,6 @@ const BrowserRunner: React.FC<{
     [writeStoredViewport],
   );
 
-  const activeCases = active ? caseMap[active] : undefined;
-  const selectedCase = selection?.caseId
-    ? activeCases?.[selection.caseId]
-    : undefined;
-
   return (
     <div
       className="m-0 h-screen w-full overflow-hidden p-0"
@@ -754,7 +788,7 @@ const BrowserRunner: React.FC<{
               }}
               onRerun={connected ? handleRerunAll : undefined}
               counts={caseCounts}
-              isRunning={isAnyFileRunning}
+              isRunning={Boolean(runningFile)}
             />
 
             <div
@@ -770,8 +804,8 @@ const BrowserRunner: React.FC<{
                 loading={loading}
                 connected={connected}
                 openFiles={openFiles}
-                selection={selection}
-                selectedCase={selectedCase}
+                selection={selection ?? null}
+                selectedCase={inspectedCase}
                 token={token}
                 filterText={filterText}
                 onExpandChange={setOpenFiles}
@@ -795,14 +829,50 @@ const BrowserRunner: React.FC<{
               status={
                 active ? (fileStates[active]?.status ?? 'idle') : undefined
               }
-              viewport={activeProjectName ? activeViewport : undefined}
+              view={visibleView}
+              running={Boolean(runningFile)}
+              hasFiles={testFiles.length > 0}
+              onViewChange={(next) => {
+                if (next === 'preview' && !selection && testFiles[0]) {
+                  setSelection({ file: testFiles[0].testPath });
+                } else {
+                  setSelection(selection ?? null);
+                }
+                setView(next);
+              }}
+              viewport={
+                visibleView === 'preview' && activeProjectName
+                  ? activeViewport
+                  : undefined
+              }
               onViewportChange={
                 activeProjectName ? handleViewportChange : undefined
               }
             />
 
+            {visibleView === 'results' && (
+              <RunResults
+                testFiles={testFiles}
+                rootPath={options.rootPath}
+                fileStates={fileStates}
+                caseMap={caseMap}
+                counts={caseCounts}
+                file={active}
+                selectedCase={inspectedCase}
+                comparisons={
+                  active
+                    ? leasesRef.current.get(active)?.comparisons
+                    : undefined
+                }
+                onSelect={setSelection}
+              />
+            )}
             <div
-              className="relative min-h-0 flex-1 overflow-auto"
+              className={
+                visibleView === 'preview'
+                  ? 'relative min-h-0 flex-1 overflow-auto'
+                  : 'hidden'
+              }
               style={{ background: token.colorBgLayout }}
             >
               {!active && (
@@ -923,19 +993,6 @@ const BrowserRunner: React.FC<{
                 })(),
               )}
             </div>
-            {active && (
-              <FailureDetails
-                comparisons={leasesRef.current.get(active)?.comparisons}
-                fileErrors={
-                  selectedCase ? undefined : fileStates[active]?.errors
-                }
-                cases={
-                  selectedCase
-                    ? [selectedCase]
-                    : Object.values(activeCases ?? {})
-                }
-              />
-            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

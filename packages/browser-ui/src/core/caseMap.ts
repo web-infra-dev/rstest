@@ -25,6 +25,7 @@ export const projectCaseInfo = ({
     testPath?: string;
     location?: CaseInfo['location'];
     errors?: CaseInfo['errors'];
+    duration?: number;
   };
   status: CaseInfo['status'];
   previousCase?: CaseInfo;
@@ -38,6 +39,9 @@ export const projectCaseInfo = ({
     parentNames,
     fullName,
     status,
+    duration:
+      test.duration ??
+      (status === previousCase?.status ? previousCase.duration : undefined),
     errors:
       status === 'failed' ? (test.errors ?? previousCase?.errors) : undefined,
     filePath: test.testPath || previousCase?.filePath || filePath,

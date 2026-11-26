@@ -57,6 +57,7 @@ export type CaseInfo = {
   parentNames: string[];
   fullName: string;
   status: CaseStatus;
+  duration?: number;
   errors?: TestErrors;
   filePath: string;
   location?: {
