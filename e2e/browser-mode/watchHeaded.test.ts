@@ -157,7 +157,6 @@ it('compares a swatch', async () => {
           source.replace('background: red', 'background: blue'),
         );
         const page = await getBrowserUiPage();
-        await page.setViewportSize({ width: 1000, height: 720 });
         const panel = page.getByRole('region', { name: 'Failure details' });
         const expected = panel.getByRole('img', {
           name: 'Expected screenshot',
@@ -192,8 +191,12 @@ it('compares a swatch', async () => {
         });
         const header = comparison.getByText('Expected', { exact: true });
         const headerTop = (await header.boundingBox())!.y;
-        expect(left!.width).toBe(128);
-        expect(left!.height).toBe(600);
+        expect(left).toMatchObject(
+          await expected.evaluate((image: HTMLImageElement) => ({
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+          })),
+        );
         const scroll = await comparison.evaluate((el) => {
           el.scrollTop = el.scrollHeight;
           return el.scrollTop;
