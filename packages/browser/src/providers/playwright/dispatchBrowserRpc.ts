@@ -18,6 +18,10 @@ import type {
   BrowserLocatorText,
   BrowserRpcRequest,
 } from '../../rpcProtocol';
+import {
+  resolveScreenshotComparisonOptions,
+  compareScreenshotPixels,
+} from '../../screenshotSnapshots';
 import { createSerialTaskQueue } from '../../serialTaskQueue';
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
@@ -208,6 +212,7 @@ const assertStringArg = (
 const captureStableScreenshot = async (
   target: Locator | Page,
   options: Record<string, unknown>,
+  comparison: ReturnType<typeof resolveScreenshotComparisonOptions>,
   requestDeadline: number | undefined,
   beforeCapture?: () => Promise<void>,
   matchesReference?: (first: Buffer) => Promise<boolean>,
@@ -236,12 +241,13 @@ const captureStableScreenshot = async (
       ...(timeout === undefined ? {} : { timeout }),
     } as any);
   };
-  let previous = await capture();
-  if (stabilityTimeout === 0) return previous;
+  const first = await capture();
+  if (stabilityTimeout === 0) return first;
 
-  if (await matchesReference?.(previous)) return null;
+  if (await matchesReference?.(first)) return null;
 
   const stabilityDeadline = Date.now() + stabilityTimeout;
+  let previous = PNG.sync.read(first);
   while (
     Date.now() < stabilityDeadline &&
     (!requestDeadline || Date.now() < requestDeadline)
@@ -268,16 +274,19 @@ const captureStableScreenshot = async (
         `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
       );
     }
-    const before = PNG.sync.read(previous);
-    const after = PNG.sync.read(current);
+    const decoded = PNG.sync.read(current);
     if (
-      before.width === after.width &&
-      before.height === after.height &&
-      before.data.equals(after.data)
+      previous.width === decoded.width &&
+      previous.height === decoded.height
     ) {
-      return current;
+      const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
+        previous,
+        decoded,
+        comparison,
+      );
+      if (differentPixels <= maxDiffPixels) return current;
     }
-    previous = current;
+    previous = decoded;
   }
 
   throw new Error(
@@ -287,9 +296,11 @@ const captureStableScreenshot = async (
 
 const readScreenshotOptions = async (
   root: FrameLocator | Page,
-  value: unknown,
-): Promise<Record<string, unknown>> => {
-  if (value === undefined) return {};
+  value: unknown = {},
+): Promise<{
+  capture: Record<string, unknown>;
+  comparison: ReturnType<typeof resolveScreenshotComparisonOptions>;
+}> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('toMatchScreenshot options must be an object.');
   }
@@ -331,20 +342,23 @@ const readScreenshotOptions = async (
   }
 
   return {
-    ...(options.stabilityTimeout === undefined
-      ? {}
-      : { stabilityTimeout: options.stabilityTimeout }),
-    ...(options.mask === undefined ? {} : { mask: options.mask }),
-    ...(options.maskColor === undefined
-      ? {}
-      : { maskColor: options.maskColor }),
-    ...(options.fullPage === undefined ? {} : { fullPage: options.fullPage }),
-    ...(options.style === undefined ? {} : { style: options.style }),
-    ...(options.caret === undefined ? {} : { caret: options.caret }),
-    ...(options.scale === undefined ? {} : { scale: options.scale }),
-    ...(options.omitBackground === undefined
-      ? {}
-      : { omitBackground: options.omitBackground }),
+    comparison: resolveScreenshotComparisonOptions(options),
+    capture: {
+      ...(options.stabilityTimeout === undefined
+        ? {}
+        : { stabilityTimeout: options.stabilityTimeout }),
+      ...(options.mask === undefined ? {} : { mask: options.mask }),
+      ...(options.maskColor === undefined
+        ? {}
+        : { maskColor: options.maskColor }),
+      ...(options.fullPage === undefined ? {} : { fullPage: options.fullPage }),
+      ...(options.style === undefined ? {} : { style: options.style }),
+      ...(options.caret === undefined ? {} : { caret: options.caret }),
+      ...(options.scale === undefined ? {} : { scale: options.scale }),
+      ...(options.omitBackground === undefined
+        ? {}
+        : { omitBackground: options.omitBackground }),
+    },
   };
 };
 
@@ -770,9 +784,10 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const isFailureCapture = request.method === 'captureFailure';
-    const options = isFailureCapture
-      ? {}
-      : await readScreenshotOptions(locatorRoot, request.args[1]);
+    const { capture: options, comparison } = await readScreenshotOptions(
+      locatorRoot,
+      isFailureCapture ? undefined : request.args[1],
+    );
     let screenshotTarget: Locator | Page = locator;
     let restoreScreenshotState: (() => Promise<void>) | undefined;
     let beforeScreenshotCapture: (() => Promise<void>) | undefined;
@@ -860,6 +875,7 @@ export async function dispatchPlaywrightBrowserRpc({
         screenshot = await captureStableScreenshot(
           screenshotTarget,
           options,
+          comparison,
           requestDeadline,
           beforeScreenshotCapture,
           matchesScreenshotReference,

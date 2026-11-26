@@ -287,7 +287,7 @@ const writeFailureArtifacts = async ({
   return { actualPath: paths.actual };
 };
 
-const validateOptions = (
+export const resolveScreenshotComparisonOptions = (
   options: ScreenshotMatchOptions | undefined,
 ): Required<
   Pick<
@@ -336,12 +336,12 @@ const validateOptions = (
   return result;
 };
 
-const comparePixels = (
+export const compareScreenshotPixels = (
   expected: PNG,
   actual: PNG,
-  options: ReturnType<typeof validateOptions>,
+  options: ReturnType<typeof resolveScreenshotComparisonOptions>,
   diff?: PNG,
-) => {
+): { differentPixels: number; maxDiffPixels: number } => {
   const differentPixels = pixelmatch(
     expected.data,
     actual.data,
@@ -392,7 +392,7 @@ export const matchBrowserScreenshot = async ({
   platform?: string;
 }): Promise<ScreenshotMatchOutcome> => {
   throwIfScreenshotDeadlinePassed(deadline);
-  const normalizedOptions = validateOptions(options);
+  const normalizedOptions = resolveScreenshotComparisonOptions(options);
   const filepath = resolveScreenshotPath(
     rootPath,
     testPath,
@@ -422,7 +422,7 @@ export const matchBrowserScreenshot = async ({
     if (expected.width !== actual.width || expected.height !== actual.height) {
       return false;
     }
-    const { differentPixels, maxDiffPixels } = comparePixels(
+    const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
       expected,
       actual,
       normalizedOptions,
@@ -500,7 +500,7 @@ export const matchBrowserScreenshot = async ({
   }
 
   const diff = new PNG({ width: expected.width, height: expected.height });
-  const { differentPixels, maxDiffPixels } = comparePixels(
+  const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
     expected,
     actual,
     normalizedOptions,
