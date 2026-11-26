@@ -2,25 +2,35 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type { InternalProjectContext } from '../../types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 class MockRuntimeRspackPlugin {
+  constructor(private readonly federation: boolean) {}
+
   apply(compiler: Rspack.Compiler) {
     const { RuntimeGlobals, RuntimeModule } = compiler.webpack;
 
+    const { federation } = this;
     class RetestImportRuntimeModule extends RuntimeModule {
       constructor() {
         super('rstest runtime');
       }
 
       override generate() {
-        const code = fs.readFileSync(
-          path.join(__dirname, './mockRuntimeCode.js'),
+        const runtime = fs.readFileSync(
+          path.join(__dirname, 'mockRuntimeCode.js'),
           'utf8',
         );
-
-        return code;
+        const federationRuntime = federation
+          ? fs.readFileSync(
+              path.join(__dirname, 'federationRuntimeCode.js'),
+              'utf8',
+            )
+          : '';
+        // The two runtime fragments share a single proxy on __webpack_require__.
+        return `const rstestRequireHandlers = {};\n${runtime}\n${federationRuntime}`;
       }
     }
 
@@ -40,7 +50,9 @@ class MockRuntimeRspackPlugin {
   }
 }
 
-export const pluginMockRuntime: RsbuildPlugin = {
+export const createMockRuntimePlugin = (
+  projects?: InternalProjectContext[],
+): RsbuildPlugin => ({
   name: 'rstest:mock-runtime',
   setup: (api) => {
     api.modifyBundlerChain((chain) => {
@@ -53,8 +65,18 @@ export const pluginMockRuntime: RsbuildPlugin = {
         .end();
     });
 
-    api.modifyRspackConfig((config) => {
-      config.plugins.push(new MockRuntimeRspackPlugin());
+    api.modifyRspackConfig((config, { environment }) => {
+      const project = projects?.find(
+        (p) => p.environmentName === environment.name,
+      );
+      config.plugins.push(
+        new MockRuntimeRspackPlugin(
+          project?.normalizedConfig.federation === true,
+        ),
+      );
     });
   },
-};
+});
+
+// Browser pages use the web federation runtime.
+export const pluginMockRuntime: RsbuildPlugin = createMockRuntimePlugin();

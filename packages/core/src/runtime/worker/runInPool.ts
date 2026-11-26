@@ -36,6 +36,7 @@ import { runSetupFiles } from '../runner/setup';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { applyRuntimeColors } from './color';
 import { createCustomConsole } from './console';
+import { createFederationConsole } from './federationConsole';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
@@ -413,12 +414,10 @@ const preparePool = async (
       setVirtualConsoleTarget = vmRealm.setVirtualConsoleTarget;
     }
 
-    // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
-    // flag, so it must be set before any bundle code is evaluated.
     const federation = context.runtimeConfig.federation === true;
     runtimeGlobal.__rstest_federation__ = federation;
     // With `isolate: false` a previous file in this worker may have installed the
-    // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
+    // global dynamic-import fallback. Hide it from
     // non-federation files so federation stays strictly opt-in, and hand it back
     // on federation re-entry — the installing runtime chunk is kept across files
     // and never re-executes, so dropping it outright would be permanent.
@@ -460,13 +459,14 @@ const preparePool = async (
       writeOriginalLog,
     });
 
+    let fileConsole = globalThis.console;
     if (shouldInterceptConsole) {
       // Keep a minimal internal interception path when `silent` is enabled.
       // In `disableConsoleIntercept + silent` mode, logs are buffered in the
       // worker first and later replayed to the original worker streams according
       // to the silent policy, instead of being reported to the host.
 
-      const customConsole = createCustomConsole({
+      fileConsole = createCustomConsole({
         silent: silent === true,
         onConsoleLog: (log) => {
           silentConsoleController.onConsoleLog(log);
@@ -476,15 +476,22 @@ const preparePool = async (
         printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
         getCurrentTask: () => taskContext.getCurrent(),
       });
+    }
+
+    if (shouldInterceptConsole || isVmPool) {
       globalCleanups.push(
-        installGlobalProperty(runtimeGlobal, 'console', customConsole),
+        installGlobalProperty(runtimeGlobal, 'console', fileConsole),
       );
-    } else if (isVmPool) {
-      // `vm.createContext` installs a console that intentionally discards
-      // output. With interception disabled, expose the worker console so
-      // direct `console.log` calls retain Node's normal stdout/stderr behavior.
-      globalCleanups.push(
-        installGlobalProperty(runtimeGlobal, 'console', globalThis.console),
+    }
+    if (federation) {
+      // Restore the file's console at teardown. Native non-isolated workers
+      // keep the underlying console for late logs until the next task starts.
+      cleanupFns.push(
+        installGlobalProperty(
+          runtimeGlobal,
+          'console',
+          createFederationConsole(fileConsole),
+        ),
       );
     }
 

@@ -8,6 +8,11 @@ const runtimeCode = readFileSync(
   'utf-8',
 );
 
+const federationRuntimeCode = readFileSync(
+  join(__dirname, '../../../src/core/plugins/federationRuntimeCode.js'),
+  'utf-8',
+);
+
 type WebpackRequireStub = ((id: string) => unknown) & Record<string, any>;
 
 const createWebpackRequireStub = (): WebpackRequireStub =>
@@ -38,11 +43,13 @@ const evaluateRuntimeCode = ({
     '__webpack_require__',
     '__webpack_modules__',
     '__webpack_module_cache__',
-    `${runtimeCode}\nreturn __webpack_require__;`,
+    'rstestRequireHandlers',
+    `${runtimeCode}\n${federation ? federationRuntimeCode : ''}\nreturn __webpack_require__;`,
   );
   const proxiedRequire: WebpackRequireStub = evaluate(
     fakeGlobal,
     webpackRequire,
+    {},
     {},
     {},
   );

@@ -76,6 +76,7 @@
       "entry": [
         // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
         "src/core/plugins/mockRuntimeCode.js",
+        "src/core/plugins/federationRuntimeCode.js",
         "src/core/plugins/importActualLoader.mjs",
         "src/core/plugins/wasmLoader.mjs",
         "src/core/plugins/styleFallbackLoader.mjs",
