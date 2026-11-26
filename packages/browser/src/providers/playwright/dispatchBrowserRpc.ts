@@ -161,11 +161,19 @@ const callExpect = async (
   locator: Locator,
   expectMethod: string,
   options: { isNot: boolean; timeout: number } & Record<string, unknown>,
-  fallbackMessage: string,
+  description: string,
+  expectedText?: BrowserLocatorText,
 ): Promise<null> => {
   const result = await expectWithProbes(locator, expectMethod, options);
   if (result.matches !== !options.isNot) {
-    throw new Error(formatExpectError(result) || fallbackMessage);
+    const details = formatExpectError(result);
+    if (!expectedText) throw new Error(details || description);
+    const value =
+      expectedText.type === 'string'
+        ? JSON.stringify(expectedText.value)
+        : `/${expectedText.source}/${expectedText.flags}`;
+    const assertion = `${options.isNot ? 'not.' : ''}${description}(${value})`;
+    throw new Error([assertion, details].filter(Boolean).join('\n'));
   }
   return null;
 };
@@ -425,7 +433,8 @@ const dispatchExpectMatcher = (
         timeout,
         expectedText: serializeExpectedText(expected, textDef.textOptions),
       },
-      `Expected element ${method}`,
+      method,
+      expected,
     );
   }
 

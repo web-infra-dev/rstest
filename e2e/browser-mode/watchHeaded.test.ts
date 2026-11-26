@@ -15,24 +15,29 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+async function getBrowserUiPage() {
+  const { chromium } = await import('playwright');
+  const browser = await chromium.connectOverCDP(
+    `http://127.0.0.1:${BROWSER_PORTS['watch-headed-cdp']}`,
+  );
+  const page = browser
+    .contexts()
+    .flatMap((context) => context.pages())
+    .find((page) => page.url().startsWith('http://localhost:'));
+  if (!page) throw new Error('Browser UI page is missing');
+  return page;
+}
+
 describe('browser mode - headed watch', () => {
   it.runIf(shouldRunHeadedBrowserTests)(
     'reruns the selected case or suite from the browser UI',
     async () => {
-      const { chromium } = await import('playwright');
       const { cli } = await runBrowserWatchCli('browser-react', {
         args: ['-c', 'rstest.rerun.config.mts', '--reporter=verbose'],
       });
       try {
         await cli.waitForStdout('Waiting for file changes...');
-        const browser = await chromium.connectOverCDP(
-          `http://127.0.0.1:${BROWSER_PORTS['watch-headed-cdp']}`,
-        );
-        const page = browser
-          .contexts()
-          .flatMap((context) => context.pages())
-          .find((page) => page.url().startsWith('http://localhost:'));
-        if (!page) throw new Error('Browser UI page is missing');
+        const page = await getBrowserUiPage();
 
         await page.getByTestId('test-files-toggle-expand').click();
         const cases = page.getByTestId('test-case-title');
@@ -54,6 +59,62 @@ describe('browser mode - headed watch', () => {
         expect(cli.stdout).toMatch(new RegExp(`Tests\\s+${caseCount} passed`));
       } finally {
         await killCliProcessTree(cli);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'shows assertion failures in the preview and clears them after a passing rerun',
+    async () => {
+      const fixturesTargetPath = path.join(
+        __dirname,
+        'fixtures/fixtures-test-browser-failure-details',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-react'),
+        fixturesTargetPath,
+      });
+      const file = path.join(
+        fixturesTargetPath,
+        'tests/testingLibraryDom.test.tsx',
+      );
+      const passing = "toHaveText('2')";
+      const failing = "toHaveText('51', { timeout: 500 })";
+      fs.update(file, (content) => content.replace(passing, failing));
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.rerun.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        const page = await getBrowserUiPage();
+        const panel = page.getByRole('region', { name: 'Failure details' });
+        await panel.waitFor();
+        await page.getByTestId('test-files-toggle-expand').click();
+        const cases = page.getByTestId('test-case-title');
+        await cases
+          .filter({ hasText: 'should work with getByRole query' })
+          .click();
+        await panel.waitFor({ state: 'hidden' });
+        await cases
+          .filter({ hasText: 'uses Testing Library elements' })
+          .click();
+        await panel.waitFor();
+        expect(await panel.innerText()).toContain('toHaveText("51")');
+        expect(await panel.innerText()).toContain('unexpected value "2"');
+        await panel.getByText('Stack trace', { exact: true }).click();
+        expect(await panel.locator('details pre').isVisible()).toBe(true);
+        expect(await page.locator('iframe[data-test-file]').isVisible()).toBe(
+          true,
+        );
+
+        cli.resetStd();
+        fs.update(file, (content) => content.replace(failing, passing));
+        await cli.waitForStdout('Test Files 1 passed');
+        await panel.waitFor({ state: 'hidden' });
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
       }
     },
     60_000,
