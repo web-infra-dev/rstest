@@ -478,19 +478,20 @@ const preparePool = async (
       });
     }
 
+    if (shouldInterceptConsole || isVmPool) {
+      globalCleanups.push(
+        installGlobalProperty(runtimeGlobal, 'console', fileConsole),
+      );
+    }
     if (federation) {
-      // VM globals can expose the worker console directly. Keep the federation
-      // warning filter local to this file, including when interception is off.
+      // Restore the file's console at teardown. Native non-isolated workers
+      // keep the underlying console for late logs until the next task starts.
       cleanupFns.push(
         installGlobalProperty(
           runtimeGlobal,
           'console',
           createFederationConsole(fileConsole),
         ),
-      );
-    } else if (shouldInterceptConsole || isVmPool) {
-      globalCleanups.push(
-        installGlobalProperty(runtimeGlobal, 'console', fileConsole),
       );
     }
 
