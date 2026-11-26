@@ -44,8 +44,8 @@ function markLargeRegion(
     const left = (tile % columns) * tileSize;
     const right = Math.min(left + tileSize, image.width);
     const top = Math.floor(tile / columns) * tileSize;
-    // Keep a single light band behind nearby changed scanlines so individual
-    // glyphs remain legible. Only counted scanlines receive a gutter mark.
+    // Tint nearby changed pixel rows together to keep text legible. The gutter
+    // marks only rows that contain a changed pixel.
     let previous = -tileSize;
     for (let dy = 0; dy < tileSize; dy++) {
       if (!(rowMasks[tile]! & (1 << dy))) continue;
@@ -75,7 +75,7 @@ export const createRegionDiff = (
   if (Math.min(width, height) <= 2 * strokeColors.length) return undefined;
   const columns = Math.ceil(width / tileSize);
   const rows = Math.ceil(height / tileSize);
-  // Each bit is one of the 16 horizontal scanlines in a tile.
+  // Each bit represents one pixel row in the tile.
   const rowMasks = new Uint16Array(columns * rows);
   for (let y = 0; y < height; y++) {
     const row = Math.floor(y / tileSize) * columns;
