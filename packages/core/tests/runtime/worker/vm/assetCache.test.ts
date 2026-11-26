@@ -255,4 +255,81 @@ it('rejects AssetServer requests with an invalid token or disallowed path', asyn
       { getAssetsByEntry },
     ),
   ).rejects.toThrow('Asset path not allowed');
+
+  // Subsequent valid requests recover cleanly on a fresh connection.
+  const recovered = await loadTaskAssets(
+    {
+      assetNames: ['/mem/allowed.js'],
+      assetSocket: {
+        ...registered!,
+        sourceMapPaths: {},
+      },
+      context: { pool: 'forks' },
+    },
+    undefined,
+    { getAssetsByEntry },
+  );
+  expect(recovered.assetFiles['/mem/allowed.js']).toEqual(Buffer.from('ok'));
+});
+
+it('reuses a keep-alive AssetServer connection across requests and reconnects if dropped while idle', async ({
+  onTestFinished,
+}) => {
+  const server = new AssetServer();
+  onTestFinished(() => server.close());
+
+  const files: Record<string, Buffer> = {
+    '/mem/a.js': Buffer.from('aaa'),
+    '/mem/b.js': Buffer.alloc(0),
+    '/mem/c.js': Buffer.from('ccc'),
+  };
+  const registered = await server.registerProvider(
+    async (names) =>
+      Object.fromEntries(names.map((name) => [name, files[name]!])),
+    new Set(Object.keys(files)),
+  );
+  expect(registered).toBeDefined();
+
+  const internal = server as unknown as {
+    server: { on: (event: string, listener: () => void) => void };
+    sockets: Set<{ destroy: () => void }>;
+  };
+  let acceptedConnections = 0;
+  internal.server.on('connection', () => {
+    acceptedConnections++;
+  });
+
+  const getAssetsByEntry = rs.fn();
+  const fetchOne = (name: string) =>
+    loadTaskAssets(
+      {
+        assetNames: [name],
+        assetSocket: { ...registered!, sourceMapPaths: {} },
+        context: { pool: 'vmForks' },
+      },
+      undefined,
+      { getAssetsByEntry },
+    );
+
+  expect((await fetchOne('/mem/a.js')).assetFiles['/mem/a.js']).toEqual(
+    files['/mem/a.js'],
+  );
+  expect((await fetchOne('/mem/b.js')).assetFiles['/mem/b.js']).toEqual(
+    files['/mem/b.js'],
+  );
+  expect((await fetchOne('/mem/c.js')).assetFiles['/mem/c.js']).toEqual(
+    files['/mem/c.js'],
+  );
+  expect(acceptedConnections).toBe(1);
+
+  // Drop the idle keep-alive socket from the server side and verify transparent reconnect.
+  for (const socket of internal.sockets) {
+    socket.destroy();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  expect((await fetchOne('/mem/a.js')).assetFiles['/mem/a.js']).toEqual(
+    files['/mem/a.js'],
+  );
+  expect(acceptedConnections).toBe(2);
 });

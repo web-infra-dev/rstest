@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { chmodSync, unlinkSync } from 'node:fs';
-import { createServer, type Server, type Socket } from 'node:net';
+import type { Server, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { toError } from '../utils';
@@ -159,6 +159,11 @@ export class AssetServer {
       return undefined;
     }
 
+    const { createServer } = await import('node:net');
+    if (this.closed) {
+      return undefined;
+    }
+
     const server = createServer((socket) => {
       this.handleConnection(socket);
     });
@@ -228,6 +233,7 @@ export class AssetServer {
       return;
     }
 
+    socket.unref();
     this.sockets.add(socket);
     socket.once('close', () => {
       this.sockets.delete(socket);
@@ -236,43 +242,73 @@ export class AssetServer {
       // Workers killed mid-transfer can trigger EPIPE/ECONNRESET; ignore.
     });
 
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
-    let expectedLength: number | undefined;
-    let handled = false;
+    let pending: Buffer = Buffer.alloc(0);
+    const requestQueue: Buffer[] = [];
+    let draining = false;
+    let closing = false;
 
-    socket.on('data', (chunk: Buffer) => {
-      if (handled) {
+    const drainQueue = async () => {
+      if (draining) {
         return;
       }
-      chunks.push(chunk);
-      totalBytes += chunk.byteLength;
-
-      if (expectedLength === undefined) {
-        if (totalBytes < 4) {
-          return;
+      draining = true;
+      try {
+        while (requestQueue.length > 0 && !closing && !socket.destroyed) {
+          const keepAlive = await this.serveRequest(
+            socket,
+            requestQueue.shift()!,
+          );
+          if (!keepAlive) {
+            closing = true;
+            requestQueue.length = 0;
+            if (!socket.destroyed) {
+              socket.end();
+            }
+            return;
+          }
         }
-        const headerBuf =
-          chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks);
-        expectedLength = headerBuf.readUInt32BE(0);
+      } finally {
+        draining = false;
+      }
+    };
+
+    socket.on('data', (chunk: Buffer) => {
+      if (closing || socket.destroyed) {
+        return;
+      }
+      pending =
+        pending.byteLength === 0 ? chunk : Buffer.concat([pending, chunk]);
+
+      while (pending.byteLength >= 4) {
+        const expectedLength = pending.readUInt32BE(0);
         if (expectedLength > MAX_REQUEST_BYTES) {
-          handled = true;
+          closing = true;
+          requestQueue.length = 0;
           socket.destroy();
           return;
         }
-        chunks.length = 0;
-        chunks.push(headerBuf);
+        const frameLength = 4 + expectedLength;
+        if (pending.byteLength < frameLength) {
+          break;
+        }
+        const payload = pending.subarray(4, frameLength);
+        pending =
+          pending.byteLength === frameLength
+            ? Buffer.alloc(0)
+            : pending.subarray(frameLength);
+        requestQueue.push(payload);
       }
 
-      if (totalBytes >= 4 + expectedLength) {
-        const full = chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks);
-        handled = true;
-        void this.serveRequest(socket, full.subarray(4, 4 + expectedLength));
+      if (requestQueue.length > 0) {
+        void drainQueue();
       }
     });
   }
 
-  private async serveRequest(socket: Socket, rawJson: Buffer): Promise<void> {
+  private async serveRequest(
+    socket: Socket,
+    rawJson: Buffer,
+  ): Promise<boolean> {
     try {
       const parsed = JSON.parse(rawJson.toString('utf8')) as AssetSocketRequest;
 
@@ -286,8 +322,7 @@ export class AssetServer {
           ok: false,
           error: 'Invalid asset socket request',
         });
-        socket.end();
-        return;
+        return false;
       }
 
       const provider = this.providers.get(parsed.providerId);
@@ -296,8 +331,7 @@ export class AssetServer {
           ok: false,
           error: 'Asset provider is no longer active',
         });
-        socket.end();
-        return;
+        return false;
       }
 
       for (const filePath of parsed.paths) {
@@ -306,8 +340,7 @@ export class AssetServer {
             ok: false,
             error: `Asset path not allowed: ${filePath}`,
           });
-          socket.end();
-          return;
+          return false;
         }
       }
 
@@ -321,12 +354,11 @@ export class AssetServer {
             ok: false,
             error: toError(error).message,
           });
-          socket.end();
         }
-        return;
+        return false;
       }
       if (socket.destroyed) {
-        return;
+        return false;
       }
 
       const orderedBuffers: Buffer[] = [];
@@ -340,8 +372,7 @@ export class AssetServer {
             ok: false,
             error: error.message,
           });
-          socket.end();
-          return;
+          return false;
         }
         filesMeta.push([filePath, content.byteLength]);
         orderedBuffers.push(content);
@@ -350,11 +381,11 @@ export class AssetServer {
       await writeFrameHeader(socket, { ok: true, files: filesMeta });
       for (const buf of orderedBuffers) {
         if (socket.destroyed) {
-          return;
+          return false;
         }
         await writeBuffer(socket, buf);
       }
-      socket.end();
+      return true;
     } catch (error) {
       if (!socket.destroyed) {
         try {
@@ -362,11 +393,11 @@ export class AssetServer {
             ok: false,
             error: toError(error).message,
           });
-          socket.end();
         } catch {
           socket.destroy();
         }
       }
+      return false;
     }
   }
 

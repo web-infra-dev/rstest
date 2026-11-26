@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { createConnection } from 'node:net';
+import type { Socket } from 'node:net';
 import type {
   AssetFileContent,
   AssetFiles,
@@ -168,166 +168,366 @@ const isTransientConnectError = (error: unknown): boolean => {
   return code === 'ECONNREFUSED' || code === 'EAGAIN';
 };
 
-const fetchSocketBuffersOnce = (
-  assetSocket: Pick<AssetSocketInfo, 'socketPath' | 'token' | 'providerId'>,
-  paths: string[],
-): Promise<Map<string, Buffer>> => {
-  if (paths.length === 0) {
-    return Promise.resolve(new Map());
+let netModulePromise: Promise<typeof import('node:net')> | undefined;
+const loadNet = (): Promise<typeof import('node:net')> => {
+  netModulePromise ??= import('node:net');
+  return netModulePromise;
+};
+
+type PendingSocketRequest = {
+  frame: Buffer;
+  resolve: (value: Map<string, Buffer>) => void;
+  reject: (error: Error) => void;
+};
+
+class AssetSocketTransportError extends Error {
+  readonly causeError?: unknown;
+  readonly code?: string;
+
+  constructor(message: string, causeError?: unknown) {
+    super(message);
+    this.name = 'AssetSocketTransportError';
+    this.causeError = causeError;
+    this.code = (causeError as NodeJS.ErrnoException | undefined)?.code;
   }
+}
 
-  return new Promise<Map<string, Buffer>>((resolve, reject) => {
-    const socket = createConnection(assetSocket.socketPath);
-    const result = new Map<string, Buffer>();
-    let settled = false;
+/**
+ * Reusable keep-alive client for `AssetServer`. Avoids per-task Unix domain
+ * socket connect/accept/close overhead in reused workers (`vmForks` and
+ * non-isolated `forks`), while calling `socket.unref()` when idle so worker
+ * exit is never blocked.
+ */
+class AssetSocketClient {
+  readonly socketPath: string;
+  private readonly socket: Socket;
+  private readonly queue: PendingSocketRequest[] = [];
+  private active: PendingSocketRequest | undefined;
+  private connected = false;
+  private closed = false;
 
-    const fail = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      reject(error);
-    };
+  // Streaming response parser state for the active request.
+  private phase: 'len' | 'header' | 'body' = 'len';
+  private lenFilled = 0;
+  private readonly lenBuf = Buffer.allocUnsafe(4);
+  private headerBuf: Buffer | undefined;
+  private headerFilled = 0;
+  private fileMeta: Array<[string, number]> = [];
+  private fileIndex = 0;
+  private currentBuf: Buffer | undefined;
+  private currentFilled = 0;
+  private result = new Map<string, Buffer>();
 
-    const succeed = () => {
-      if (settled) return;
-      settled = true;
-      resolve(result);
-    };
-
-    // Streaming parser: reads 4-byte header length, JSON header, then copies
-    // each file's bytes directly into its own right-sized Buffer so VM LRU
-    // eviction never pins a shared response buffer.
-    let phase: 'len' | 'header' | 'body' | 'done' = 'len';
-    let lenFilled = 0;
-    const lenBuf = Buffer.allocUnsafe(4);
-    let headerBuf: Buffer | undefined;
-    let headerFilled = 0;
-    let fileMeta: Array<[string, number]> = [];
-    let fileIndex = 0;
-    let currentBuf: Buffer | undefined;
-    let currentFilled = 0;
-
-    const advanceFile = () => {
-      while (fileIndex < fileMeta.length) {
-        const [name, size] = fileMeta[fileIndex]!;
-        const buf = Buffer.allocUnsafe(size);
-        result.set(name, buf);
-        if (size === 0) {
-          fileIndex++;
-          continue;
-        }
-        currentBuf = buf;
-        currentFilled = 0;
-        return;
-      }
-      currentBuf = undefined;
-      phase = 'done';
-    };
+  constructor(socketPath: string, socket: Socket, onClose: () => void) {
+    this.socketPath = socketPath;
+    this.socket = socket;
 
     socket.on('connect', () => {
-      const json = JSON.stringify({
-        token: assetSocket.token,
-        providerId: assetSocket.providerId,
-        paths,
-      });
-      const payloadLen = Buffer.byteLength(json, 'utf8');
-      const frame = Buffer.allocUnsafe(4 + payloadLen);
-      frame.writeUInt32BE(payloadLen, 0);
-      frame.write(json, 4, payloadLen, 'utf8');
-      socket.write(frame);
+      this.connected = true;
+      if (this.active) {
+        socket.write(this.active.frame);
+      }
     });
 
     socket.on('data', (chunk: Buffer) => {
-      let offset = 0;
-      while (offset < chunk.byteLength && phase !== 'done') {
-        if (phase === 'len') {
-          const take = Math.min(4 - lenFilled, chunk.byteLength - offset);
-          chunk.copy(lenBuf, lenFilled, offset, offset + take);
-          lenFilled += take;
-          offset += take;
-          if (lenFilled === 4) {
-            const headerLen = lenBuf.readUInt32BE(0);
-            headerBuf = Buffer.allocUnsafe(headerLen);
-            headerFilled = 0;
-            phase = 'header';
-          }
-        } else if (phase === 'header') {
-          const buf = headerBuf!;
-          const take = Math.min(
-            buf.byteLength - headerFilled,
-            chunk.byteLength - offset,
-          );
-          chunk.copy(buf, headerFilled, offset, offset + take);
-          headerFilled += take;
-          offset += take;
-          if (headerFilled === buf.byteLength) {
-            let parsed: SocketResponseHeader;
-            try {
-              parsed = JSON.parse(buf.toString('utf8')) as SocketResponseHeader;
-            } catch (error) {
-              fail(
-                error instanceof Error
-                  ? error
-                  : new Error('Invalid asset socket header'),
-              );
-              return;
-            }
-            if (!parsed.ok) {
-              fail(new Error(parsed.error));
-              return;
-            }
-            fileMeta = parsed.files;
-            fileIndex = 0;
-            phase = 'body';
-            advanceFile();
-          }
-        } else if (phase === 'body') {
-          const buf = currentBuf!;
-          const take = Math.min(
-            buf.byteLength - currentFilled,
-            chunk.byteLength - offset,
-          );
-          chunk.copy(buf, currentFilled, offset, offset + take);
-          currentFilled += take;
-          offset += take;
-          if (currentFilled === buf.byteLength) {
-            fileIndex++;
-            advanceFile();
-          }
-        }
-      }
+      this.handleData(chunk);
     });
 
     socket.on('end', () => {
-      if (phase === 'done') {
-        succeed();
-      } else {
-        fail(new Error('Asset socket closed before response completed'));
-      }
+      this.failAll(
+        new AssetSocketTransportError(
+          'Asset socket closed before response completed',
+        ),
+      );
     });
 
     socket.on('error', (error: Error) => {
-      fail(error);
+      this.failAll(
+        new AssetSocketTransportError(
+          error.message || 'Asset socket transport error',
+          error,
+        ),
+      );
     });
+
+    socket.once('close', () => {
+      this.closed = true;
+      onClose();
+      this.failAll(
+        new AssetSocketTransportError(
+          'Asset socket closed before response completed',
+        ),
+      );
+    });
+  }
+
+  get isUsable(): boolean {
+    return !this.closed && !this.socket.destroyed;
+  }
+
+  request(frame: Buffer): Promise<Map<string, Buffer>> {
+    if (!this.isUsable) {
+      return Promise.reject(
+        new AssetSocketTransportError('Asset socket is already closed'),
+      );
+    }
+
+    return new Promise<Map<string, Buffer>>((resolve, reject) => {
+      this.queue.push({ frame, resolve, reject });
+      this.socket.ref();
+      this.startNext();
+    });
+  }
+
+  destroy(): void {
+    this.closed = true;
+    this.socket.destroy();
+  }
+
+  private resetParser(): void {
+    this.phase = 'len';
+    this.lenFilled = 0;
+    this.headerBuf = undefined;
+    this.headerFilled = 0;
+    this.fileMeta = [];
+    this.fileIndex = 0;
+    this.currentBuf = undefined;
+    this.currentFilled = 0;
+    this.result = new Map<string, Buffer>();
+  }
+
+  private startNext(): void {
+    if (this.active || this.closed || this.socket.destroyed) {
+      return;
+    }
+    const next = this.queue.shift();
+    if (!next) {
+      this.socket.unref();
+      return;
+    }
+    this.active = next;
+    this.resetParser();
+    if (this.connected) {
+      this.socket.write(next.frame);
+    }
+  }
+
+  private finishActive(): void {
+    const active = this.active;
+    if (!active) {
+      return;
+    }
+    const result = this.result;
+    this.active = undefined;
+    this.resetParser();
+    active.resolve(result);
+    this.startNext();
+  }
+
+  private failActive(error: Error): void {
+    const active = this.active;
+    this.active = undefined;
+    this.resetParser();
+    this.closed = true;
+    this.socket.destroy();
+    active?.reject(error);
+    this.failQueued(
+      new AssetSocketTransportError(
+        'Asset socket closed after request failure',
+      ),
+    );
+  }
+
+  private failQueued(error: Error): void {
+    while (this.queue.length > 0) {
+      this.queue.shift()!.reject(error);
+    }
+  }
+
+  private failAll(error: Error): void {
+    this.closed = true;
+    const active = this.active;
+    this.active = undefined;
+    this.resetParser();
+    if (!this.socket.destroyed) {
+      this.socket.destroy();
+    }
+    active?.reject(error);
+    this.failQueued(error);
+  }
+
+  private advanceFile(): boolean {
+    while (this.fileIndex < this.fileMeta.length) {
+      const [name, size] = this.fileMeta[this.fileIndex]!;
+      // Allocate each file into its own right-sized Buffer so VM LRU eviction
+      // never pins a shared response buffer.
+      const buf = Buffer.allocUnsafe(size);
+      this.result.set(name, buf);
+      if (size === 0) {
+        this.fileIndex++;
+        continue;
+      }
+      this.currentBuf = buf;
+      this.currentFilled = 0;
+      return false;
+    }
+    this.currentBuf = undefined;
+    return true;
+  }
+
+  private handleData(chunk: Buffer): void {
+    let offset = 0;
+    while (offset < chunk.byteLength && this.active) {
+      if (this.phase === 'len') {
+        const take = Math.min(4 - this.lenFilled, chunk.byteLength - offset);
+        chunk.copy(this.lenBuf, this.lenFilled, offset, offset + take);
+        this.lenFilled += take;
+        offset += take;
+        if (this.lenFilled === 4) {
+          const headerLen = this.lenBuf.readUInt32BE(0);
+          this.headerBuf = Buffer.allocUnsafe(headerLen);
+          this.headerFilled = 0;
+          this.phase = 'header';
+        }
+      } else if (this.phase === 'header') {
+        const buf = this.headerBuf!;
+        const take = Math.min(
+          buf.byteLength - this.headerFilled,
+          chunk.byteLength - offset,
+        );
+        chunk.copy(buf, this.headerFilled, offset, offset + take);
+        this.headerFilled += take;
+        offset += take;
+        if (this.headerFilled === buf.byteLength) {
+          let parsed: SocketResponseHeader;
+          try {
+            parsed = JSON.parse(buf.toString('utf8')) as SocketResponseHeader;
+          } catch (error) {
+            this.failActive(
+              error instanceof Error
+                ? error
+                : new Error('Invalid asset socket header'),
+            );
+            return;
+          }
+          if (!parsed.ok) {
+            this.failActive(new Error(parsed.error));
+            return;
+          }
+          this.fileMeta = parsed.files;
+          this.fileIndex = 0;
+          this.phase = 'body';
+          if (this.advanceFile()) {
+            this.finishActive();
+          }
+        }
+      } else if (this.phase === 'body') {
+        const buf = this.currentBuf!;
+        const take = Math.min(
+          buf.byteLength - this.currentFilled,
+          chunk.byteLength - offset,
+        );
+        chunk.copy(buf, this.currentFilled, offset, offset + take);
+        this.currentFilled += take;
+        offset += take;
+        if (this.currentFilled === buf.byteLength) {
+          this.fileIndex++;
+          if (this.advanceFile()) {
+            this.finishActive();
+          }
+        }
+      }
+    }
+  }
+}
+
+let cachedSocketClient: AssetSocketClient | undefined;
+
+const getOrCreateSocketClient = async (
+  socketPath: string,
+): Promise<{ client: AssetSocketClient; reused: boolean }> => {
+  if (
+    cachedSocketClient?.socketPath === socketPath &&
+    cachedSocketClient.isUsable
+  ) {
+    return { client: cachedSocketClient, reused: true };
+  }
+  if (cachedSocketClient) {
+    cachedSocketClient.destroy();
+    cachedSocketClient = undefined;
+  }
+  const { createConnection } = await loadNet();
+  const socket = createConnection(socketPath);
+  const client = new AssetSocketClient(socketPath, socket, () => {
+    if (cachedSocketClient === client) {
+      cachedSocketClient = undefined;
+    }
   });
+  cachedSocketClient = client;
+  return { client, reused: false };
+};
+
+const encodeAssetRequestFrame = (
+  assetSocket: Pick<AssetSocketInfo, 'token' | 'providerId'>,
+  paths: string[],
+): Buffer => {
+  const json = JSON.stringify({
+    token: assetSocket.token,
+    providerId: assetSocket.providerId,
+    paths,
+  });
+  const payloadLen = Buffer.byteLength(json, 'utf8');
+  const frame = Buffer.allocUnsafe(4 + payloadLen);
+  frame.writeUInt32BE(payloadLen, 0);
+  frame.write(json, 4, payloadLen, 'utf8');
+  return frame;
 };
 
 const fetchSocketBuffers = async (
   assetSocket: Pick<AssetSocketInfo, 'socketPath' | 'token' | 'providerId'>,
   paths: string[],
 ): Promise<Map<string, Buffer>> => {
+  if (paths.length === 0) {
+    return new Map();
+  }
+
+  const frame = encodeAssetRequestFrame(assetSocket, paths);
   const retryDelaysMs = [5, 15, 50];
-  for (let attempt = 0; ; attempt++) {
+  let freshConnectAttempt = 0;
+
+  for (;;) {
+    const { client, reused } = await getOrCreateSocketClient(
+      assetSocket.socketPath,
+    );
     try {
-      return await fetchSocketBuffersOnce(assetSocket, paths);
+      return await client.request(frame);
     } catch (error) {
-      if (attempt >= retryDelaysMs.length || !isTransientConnectError(error)) {
+      if (!(error instanceof AssetSocketTransportError)) {
         throw error;
+      }
+      if (cachedSocketClient === client) {
+        cachedSocketClient = undefined;
+      }
+      client.destroy();
+
+      // If an idle keep-alive connection was closed by the server between
+      // tasks, transparently reconnect once without waiting.
+      if (reused) {
+        continue;
+      }
+
+      const cause = error.causeError ?? error;
+      if (
+        freshConnectAttempt >= retryDelaysMs.length ||
+        !isTransientConnectError(cause)
+      ) {
+        throw cause;
       }
       setRealTimers();
       const scheduleTimeout = getRealTimers().setTimeout!;
+      const delay = retryDelaysMs[freshConnectAttempt++]!;
       await new Promise<void>((resolve) => {
-        scheduleTimeout(resolve, retryDelaysMs[attempt]);
+        scheduleTimeout(resolve, delay);
       });
     }
   }
