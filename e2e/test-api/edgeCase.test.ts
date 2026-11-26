@@ -207,7 +207,7 @@ describe('Test Edge Cases', () => {
     expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
     expect(logs.find((log) => log.includes('Module not found'))).toBeFalsy();
     expect(cli.stderr).not.toContain('build failed');
-    expect(logs.find((log) => log.includes('Tests 4 passed'))).toBeTruthy();
+    expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
   });
 
   it('test module not found codeFrame', async () => {

@@ -101,7 +101,10 @@ __webpack_require__ = new Proxy(__webpack_require__, {
       return Reflect.apply(target, thisArg, args);
     } catch (e) {
       const errMsg = e.message ?? e.toString();
-      if (errMsg.includes('__webpack_modules__[moduleId] is not a function')) {
+      if (
+        errMsg.includes('__webpack_modules__[moduleId] is not a function') ||
+        errMsg.includes('__rspack_modules[moduleId] is not a function')
+      ) {
         throw new Error(`[Rstest] Cannot find module "${args[0]}"`);
       }
       throw e;

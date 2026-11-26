@@ -14,8 +14,8 @@ import { getNumCpus } from '../../utils/workers';
 import { runtimeChunkNameForEnvironment } from '../build/runtimeChunk';
 import { isNodeProject } from '../environment/isBrowserProject';
 import {
+  applyDefaultRuntimeMode,
   applyMockExportsPresence,
-  forceWebpackRuntimeMode,
   getMockRstestPluginOptions,
 } from './mockBuild';
 
@@ -242,7 +242,7 @@ export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
                 type: 'javascript/esm',
               });
 
-              const experiments = forceWebpackRuntimeMode(config);
+              const experiments = applyDefaultRuntimeMode(config);
               // Disable rspack's built-in `webassembly/async` handling and turn
               // every `.wasm` into a self-contained JS module via wasmLoader.mjs
               // that reads its on-disk SOURCE bytes and instantiates them, so
