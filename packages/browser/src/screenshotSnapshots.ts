@@ -426,6 +426,7 @@ export const matchBrowserScreenshot = async ({
       `No screenshot reference found for "${testName}". Run Rstest with --update to create it.\nReference: ${filepath}`,
     );
   }
+  let decodedRequiredReference: PNG | undefined;
   const matchesReference = async (first: Buffer): Promise<boolean> => {
     const content = requiredReference ?? (await readReference());
     if (content === null) return false;
@@ -438,6 +439,7 @@ export const matchBrowserScreenshot = async ({
       // Report corrupt references with the stabilized actual screenshot.
       return false;
     }
+    if (requiredReference !== undefined) decodedRequiredReference = expected;
     const actual = PNG.sync.read(first);
     if (expected.width !== actual.width || expected.height !== actual.height) {
       return false;
@@ -453,7 +455,10 @@ export const matchBrowserScreenshot = async ({
     updateSnapshot === 'all' ? undefined : matchesReference,
   );
   throwIfScreenshotDeadlinePassed(deadline);
-  if (screenshotBase64 === null) {
+  if (
+    screenshotBase64 === null ||
+    (decodedRequiredReference && screenshotBase64 === requiredReference)
+  ) {
     await removeFailureArtifacts(snapshotStore, filepath, deadline);
     return 'matched';
   }
@@ -470,7 +475,9 @@ export const matchBrowserScreenshot = async ({
 
   let expected: PNG;
   try {
-    expected = PNG.sync.read(Buffer.from(expectedContent, 'base64'));
+    expected =
+      decodedRequiredReference ??
+      PNG.sync.read(Buffer.from(expectedContent, 'base64'));
   } catch (error) {
     throwIfScreenshotDeadlinePassed(deadline);
     if (updateSnapshot === 'all') {
