@@ -33,11 +33,25 @@ export const createWatchSignals = (
   /**
    * Latest-wins interrupts installed by active lanes (headless cancels its
    * in-flight run; headed skips remaining queued files in the superseded
-   * cycle). Core serializes cycles, so a trigger arriving mid-cycle would
-   * otherwise wait out a run the user has already superseded.
+   * cycle). Each handler carries its lane scope (`'headless'` or a headed
+   * `containerId`) so container-scoped UI reruns interrupt only their own
+   * lane without cancelling sibling work.
    */
-  const interruptHandlers: Array<() => Promise<void> | void> = [];
+  const interruptHandlers: Array<{
+    scope: string;
+    fn: () => Promise<void> | void;
+  }> = [];
   const abortHandlers: Array<() => Promise<void> | void> = [];
+
+  const runInterrupts = async (
+    scope: 'all' | string = 'all',
+  ): Promise<void> => {
+    const matching =
+      scope === 'all'
+        ? interruptHandlers
+        : interruptHandlers.filter((entry) => entry.scope === scope);
+    await Promise.all(matching.map((entry) => entry.fn()));
+  };
 
   /**
    * The cycle core is running for the scope last signalled. Only an explicit
@@ -52,19 +66,20 @@ export const createWatchSignals = (
   const runInvalidation = (
     fileFilters: string[],
     updateSnapshot?: SnapshotUpdateState,
-  ): Promise<void> =>
-    Promise.resolve(
-      onInvalidate?.({
-        isFirstBuild: false,
-        fileFilters,
-        ...(updateSnapshot === undefined ? {} : { updateSnapshot }),
-      }),
-    ).then(
+  ): { rawCycle: unknown; cycle: Promise<void> } => {
+    const rawCycle = onInvalidate?.({
+      isFirstBuild: false,
+      fileFilters,
+      ...(updateSnapshot === undefined ? {} : { updateSnapshot }),
+    });
+    const cycle = Promise.resolve(rawCycle).then(
       () => {},
       (error) => {
         logger.error(color.red('Browser Mode watch cycle failed:'), error);
       },
     );
+    return { rawCycle, cycle };
+  };
 
   return {
     setDispatchRerun(
@@ -81,11 +96,11 @@ export const createWatchSignals = (
     ): Promise<void> {
       await dispatchRerun?.(updateSnapshot, requestedTestPaths);
     },
-    addInterrupt(fn: () => Promise<void> | void): void {
-      interruptHandlers.push(fn);
+    addInterrupt(fn: () => Promise<void> | void, scope = 'all'): void {
+      interruptHandlers.push({ scope, fn });
     },
-    async interrupt(): Promise<void> {
-      await Promise.all(interruptHandlers.map((fn) => fn()));
+    async interrupt(scope: 'all' | string = 'all'): Promise<void> {
+      await runInterrupts(scope);
     },
     addAbort(fn: () => Promise<void> | void): void {
       abortHandlers.push(fn);
@@ -108,30 +123,27 @@ export const createWatchSignals = (
      * The in-flight run is cut short here rather than at the trigger, because only
      * this point knows a replacement cycle is actually coming: a trigger that
      * resolves to no affected files must leave the running cycle alone, or it
-     * finalizes on results it never produced.
+     * finalizes on results it never produced. `interruptScope` restricts
+     * interruption to the triggering lane for container-scoped UI reruns so
+     * sibling lanes' in-flight work is never dropped.
      */
     async signalInvalidation(
       fileFilters: string[],
       /**
-       * Run state this trigger binds to its own paths, taken in the same turn as
-       * the handover — after any interrupt, so no queued cycle can be dequeued in
-       * between and read it. The headed rerun's per-file test-name pattern is the
-       * one such state; core's cycle options cannot carry it, so the only thing
-       * that makes it the property of one cycle is claiming it here. The
-       * snapshot policy is passed through the invalidation hint below, so core
-       * can attach it to the queued cycle.
-       *
-       * Returns a handle to the cycle THIS signal started (still not awaited
-       * here — see above). A caller with state to restore must await the
-       * returned `cycle` rather than `awaitSignalledCycle`: the shared slot
-       * can be overwritten by a concurrent trigger between signal and wait.
+       * Invoked synchronously immediately after core's `onInvalidate` returns
+       * the raw queued cycle handle (before any microtask can start `runCycle`).
+       * Core returns the same promise when it folds into an open queued cycle
+       * and a new promise when it queues a separate cycle (e.g. differing
+       * `updateSnapshot` policies), allowing the coordinator to bind container
+       * targets and test-name patterns to the exact queued cycle.
        */
-      claimScope?: () => void,
+      onSignalled?: (rawCycle: unknown) => void,
       updateSnapshot?: SnapshotUpdateState,
+      interruptScope: 'all' | string = 'all',
     ): Promise<{ cycle: Promise<void> }> {
-      await Promise.all(interruptHandlers.map((fn) => fn()));
-      claimScope?.();
-      const cycle = runInvalidation(fileFilters, updateSnapshot);
+      await runInterrupts(interruptScope);
+      const { rawCycle, cycle } = runInvalidation(fileFilters, updateSnapshot);
+      onSignalled?.(rawCycle);
       signalledCycle = cycle;
       return { cycle };
     },
@@ -139,10 +151,13 @@ export const createWatchSignals = (
       cycle: Promise<void>,
       fileFilters: string[],
       updateSnapshot?: SnapshotUpdateState,
+      onSignalled?: (rawCycle: unknown) => void,
     ): void {
-      signalledCycle = cycle.then(() =>
-        runInvalidation(fileFilters, updateSnapshot),
-      );
+      signalledCycle = cycle.then(() => {
+        const next = runInvalidation(fileFilters, updateSnapshot);
+        onSignalled?.(next.rawCycle);
+        return next.cycle;
+      });
     },
     async awaitSignalledCycle(): Promise<void> {
       await signalledCycle;

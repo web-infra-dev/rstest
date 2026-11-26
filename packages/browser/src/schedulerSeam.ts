@@ -76,12 +76,9 @@ export type HeadedLaneResult = {
   runScope: (
     testPaths: string[],
     updateSnapshot: SnapshotUpdateState,
+    testNamePatterns?: Map<string, string>,
   ) => Promise<unknown[]>;
   syncFileSet: (allCurrentTestFiles: readonly TestFileInfo[]) => Promise<void>;
-  setPendingTestNamePattern: (
-    testPath: string,
-    testNamePattern?: string,
-  ) => void;
   setUiRerunHandler: (
     handler: (file: TestFileInfo, testNamePattern?: string) => Promise<void>,
   ) => void;

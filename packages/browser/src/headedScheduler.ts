@@ -387,10 +387,11 @@ export const createHeadedScheduler = async ({
   let cycleGeneration = 0;
   // Skipping queued files in a superseded cycle lets the replacement watch
   // cycle start right after the currently running iframe finishes instead of
-  // draining stale files first.
+  // draining stale files first. Scoped to `containerId` so a UI rerun in one
+  // window never cuts short a sibling window's queued files.
   watchSignals.addInterrupt(() => {
     cycleGeneration += 1;
-  });
+  }, containerId);
   // Dropping every retained path and marking the current frame set ready
   // settles everything the cycle is waiting on, so it unwinds instead of
   // hanging on a container that is about to go away. `aborted` keeps the
@@ -707,10 +708,6 @@ export const createHeadedScheduler = async ({
     testTime = Date.now() - testStart;
   }
 
-  // Per-file test-name pattern set by the in-page rerun trigger and consumed
-  // synchronously at the top of the cycle that reloads that file.
-  const pendingTestNamePatterns = new Map<string, string>();
-
   /**
    * Re-deliver the host config so runner iframes reloaded by the next cycle
    * observe live per-rerun values ('u' flips updateSnapshot between reruns);
@@ -732,6 +729,7 @@ export const createHeadedScheduler = async ({
   const runScope = async (
     testPaths: string[],
     updateSnapshot: SnapshotUpdateState,
+    testNamePatterns: Map<string, string> = new Map(),
   ): Promise<unknown[]> => {
     await refreshHostConfig(updateSnapshot);
     rawCoverage = [];
@@ -742,7 +740,7 @@ export const createHeadedScheduler = async ({
     const cycleScope = claimHeadedCycleScope(
       testPaths,
       currentTestFiles,
-      pendingTestNamePatterns,
+      testNamePatterns,
     );
     for (const { file, testNamePattern } of cycleScope) {
       await enqueueHeadedReload(file, testNamePattern, generation);
@@ -769,18 +767,6 @@ export const createHeadedScheduler = async ({
     await rpcSession.notifyTestFileUpdate(currentTestFiles, version);
     if (currentTestFiles.length > 0) {
       await waitForFrameSet(version);
-    }
-  };
-
-  const setPendingTestNamePattern = (
-    testPath: string,
-    testNamePattern?: string,
-  ): void => {
-    const key = getTestPathKey(testPath);
-    if (testNamePattern === undefined) {
-      pendingTestNamePatterns.delete(key);
-    } else {
-      pendingTestNamePatterns.set(key, testNamePattern);
     }
   };
 
@@ -812,7 +798,6 @@ export const createHeadedScheduler = async ({
     rawCoverage,
     runScope,
     syncFileSet,
-    setPendingTestNamePattern,
     setUiRerunHandler,
     close: closeContainerLane,
   };

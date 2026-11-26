@@ -1111,7 +1111,7 @@ export const createHeadlessScheduler = async ({
     }
     runLifecycle.invalidateActiveToken();
     await runLifecycle.cancel(active, { waitForDone: false });
-  });
+  }, 'headless');
 
   const testStart = Date.now();
   const rawCoverage = await runFilesWithPool(allTestFiles);

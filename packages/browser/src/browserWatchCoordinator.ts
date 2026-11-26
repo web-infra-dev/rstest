@@ -75,35 +75,79 @@ export const createBrowserWatchCoordinator = ({
 }: BrowserWatchCoordinatorDeps): BrowserWatchSession => {
   const headlessRowsByProject = groupRowsByProject(headlessRows);
 
-  // Per-path lane target claimed synchronously when a trigger signals core:
-  // `'all'` means every lane owning the path runs (file edit / CLI shortcut);
-  // a `Set<containerId>` scopes execution and reporting strictly to the headed
-  // container(s) whose UI button requested the rerun.
-  const pendingPathTargets = new Map<string, Set<string> | 'all'>();
+  // FIFO queue of per-cycle lane targets and per-container test-name patterns,
+  // bound to the raw cycle handle returned by core's `onInvalidate`. When core
+  // folds two triggers into one queued cycle it returns the same promise handle
+  // (so targets merge); when it keeps two triggers as separate cycles (e.g.
+  // differing `updateSnapshot` policies) it returns a new handle (so each
+  // queued cycle keeps its own isolated targets and patterns).
+  type QueuedCycleScope = {
+    rawCycle: unknown;
+    targets: Map<string, Set<string> | 'all'>;
+    testNamePatterns: Map<string, Map<string, string>>;
+  };
+  const pendingCycleScopes: QueuedCycleScope[] = [];
 
-  const markPathsForAll = (paths: readonly string[]): void => {
+  const getOrCreateCycleScope = (rawCycle: unknown): QueuedCycleScope => {
+    const last = pendingCycleScopes.at(-1);
+    if (rawCycle !== undefined && last && last.rawCycle === rawCycle) {
+      return last;
+    }
+    const created: QueuedCycleScope = {
+      rawCycle,
+      targets: new Map(),
+      testNamePatterns: new Map(),
+    };
+    pendingCycleScopes.push(created);
+    return created;
+  };
+
+  const recordPathsForAll = (
+    rawCycle: unknown,
+    paths: readonly string[],
+  ): void => {
+    const scope = getOrCreateCycleScope(rawCycle);
     for (const testPath of paths) {
-      pendingPathTargets.set(getTestPathKey(testPath), 'all');
+      const key = getTestPathKey(testPath);
+      scope.targets.set(key, 'all');
+      for (const patterns of scope.testNamePatterns.values()) {
+        patterns.delete(key);
+      }
     }
   };
 
-  const markPathForContainer = (
+  const recordPathForContainer = (
+    rawCycle: unknown,
     testPath: string,
     containerId: string,
+    testNamePattern?: string,
   ): void => {
+    const scope = getOrCreateCycleScope(rawCycle);
     const key = getTestPathKey(testPath);
-    const existing = pendingPathTargets.get(key);
-    if (existing === 'all') {
-      return;
+    const existing = scope.targets.get(key);
+    if (existing !== 'all') {
+      if (existing) {
+        existing.add(containerId);
+      } else {
+        scope.targets.set(key, new Set([containerId]));
+      }
     }
-    if (existing) {
-      existing.add(containerId);
-      return;
+    let patterns = scope.testNamePatterns.get(containerId);
+    if (!patterns) {
+      patterns = new Map();
+      scope.testNamePatterns.set(containerId, patterns);
     }
-    pendingPathTargets.set(key, new Set([containerId]));
+    if (testNamePattern === undefined) {
+      patterns.delete(key);
+    } else {
+      patterns.set(key, testNamePattern);
+    }
   };
 
   const claimCycleTargets = (testPaths: string[]) => {
+    const cycleScope = pendingCycleScopes.shift();
+    const targets = cycleScope?.targets;
+    const testNamePatterns = cycleScope?.testNamePatterns;
     const headlessPaths: string[] = [];
     const headedPathsByContainer = new Map<string, string[]>(
       headedLanes.map((lane) => [lane.containerId, []]),
@@ -119,8 +163,7 @@ export const createBrowserWatchCoordinator = ({
       }
       seenKeys.add(key);
 
-      const target = pendingPathTargets.get(key) ?? 'all';
-      pendingPathTargets.delete(key);
+      const target = targets?.get(key) ?? 'all';
 
       const matchingFiles = watchState.lastTestFiles.filter(
         (file) => getTestPathKey(file.testPath) === key,
@@ -170,6 +213,7 @@ export const createBrowserWatchCoordinator = ({
     return {
       headlessPaths,
       headedPathsByContainer,
+      testNamePatterns,
       selectedFiles,
       executedFileKeys,
     };
@@ -208,9 +252,12 @@ export const createBrowserWatchCoordinator = ({
           logger.log(color.cyan(rerunPlan.decision.message));
           logWatchReady();
           if (rerunPlan.deferredTestPaths) {
+            const deferredPaths = rerunPlan.deferredTestPaths;
             watchSignals.queueInvalidationAfter(
               Promise.resolve(),
-              rerunPlan.deferredTestPaths,
+              deferredPaths,
+              undefined,
+              (rawCycle) => recordPathsForAll(rawCycle, deferredPaths),
             );
           }
         });
@@ -224,11 +271,17 @@ export const createBrowserWatchCoordinator = ({
         rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths;
       const { cycle } = await watchSignals.signalInvalidation(
         targetPaths,
-        () => markPathsForAll(targetPaths),
+        (rawCycle) => recordPathsForAll(rawCycle, targetPaths),
         updateSnapshot,
       );
       if (rerunPlan.deferredTestPaths) {
-        watchSignals.queueInvalidationAfter(cycle, rerunPlan.deferredTestPaths);
+        const deferredPaths = rerunPlan.deferredTestPaths;
+        watchSignals.queueInvalidationAfter(
+          cycle,
+          deferredPaths,
+          undefined,
+          (rawCycle) => recordPathsForAll(rawCycle, deferredPaths),
+        );
       }
     } catch (error) {
       logWatchReady();
@@ -250,10 +303,17 @@ export const createBrowserWatchCoordinator = ({
     lane.setUiRerunHandler(async (file, testNamePattern) => {
       const { cycle } = await watchSignals.signalInvalidation(
         [file.testPath],
-        () => {
-          markPathForContainer(file.testPath, lane.containerId);
-          lane.setPendingTestNamePattern(file.testPath, testNamePattern);
-        },
+        (rawCycle) =>
+          recordPathForContainer(
+            rawCycle,
+            file.testPath,
+            lane.containerId,
+            testNamePattern,
+          ),
+        undefined,
+        // Interrupt only the clicked container's queue so sibling headed and
+        // headless lanes finish their in-flight work undisturbed.
+        lane.containerId,
       );
       // Await the cycle THIS signal started — not whichever signal last wrote
       // the shared slot, which a concurrent rebuild trigger can overwrite
@@ -266,6 +326,7 @@ export const createBrowserWatchCoordinator = ({
     runCycle: async (testPaths, updateSnapshot, onSelected) => {
       const fatalCompileError = getFatalCompileError();
       if (fatalCompileError) {
+        pendingCycleScopes.length = 0;
         return {
           ...buildRerunOutcome({
             rerunTestPaths: [],
@@ -283,6 +344,7 @@ export const createBrowserWatchCoordinator = ({
       const {
         headlessPaths,
         headedPathsByContainer,
+        testNamePatterns,
         selectedFiles,
         executedFileKeys,
       } = claimCycleTargets(testPaths);
@@ -309,7 +371,13 @@ export const createBrowserWatchCoordinator = ({
       for (const lane of headedLanes) {
         const lanePaths = headedPathsByContainer.get(lane.containerId)!;
         if (lanePaths.length > 0) {
-          laneTasks.push(lane.runScope(lanePaths, updateSnapshot));
+          laneTasks.push(
+            lane.runScope(
+              lanePaths,
+              updateSnapshot,
+              testNamePatterns?.get(lane.containerId),
+            ),
+          );
         }
       }
 
