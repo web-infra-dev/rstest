@@ -254,45 +254,24 @@ const fixtureUrl = resolve('./fixture.json');
 
 ### 自动模拟模块
 
-Vitest 和 Rstest 都支持在 mock 调用只包含模块路径时自动 mock。Rstest 会先尝试从对应 `__mocks__` 目录加载手写 mock；如果没找到，再自动 mock 整个模块，把函数导出替换为空 mock 函数。
-
-该行为从 Rstest 0.11.0 开始支持。更早版本中，如果没有手写 mock，需要显式传入 `{ mock: true }` 来请求自动 mock。
-
-```ts
-// Rstest
-import { rs, test, expect } from '@rstest/core';
-import { someFunction } from './module';
-
-// 优先查找 __mocks__/module.js，然后自动 mock。
-rs.mock('./module');
-
-test('should be mocked', () => {
-  expect(rs.isMockFunction(someFunction)).toBe(true);
-  someFunction(); // 返回 undefined
-});
-```
-
-如果你想跳过 `__mocks__` 查找并直接请求自动 mock，可以显式传入 `{ mock: true }`：
-
-```ts
-rs.mock('./module', { mock: true });
-```
+与 Vitest 类似，`rs.mock('./module')` 会先查找 `__mocks__`，未命中时自动 mock（从 Rstest 0.11.0 起支持）。传入 `{ mock: true }` 可跳过 `__mocks__` 直接自动 mock（早期版本也需显式传入）。详见 [Mocking](/guide/basic/mock)。
 
 ### Mock 异步模块
 
-Rstest 不支持异步 mock factory。请改用带 `with { rstest: 'importActual' }` 的同步静态导入（参见 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual)）：
+与 Vitest 不同，Rstest 不支持异步的 `rs.mock()` 工厂函数。请改用带 `with { rstest: 'importActual' }` 的同步静态导入（若需与 factory 共享 mock 值可配合 `rs.hoisted()`），详见 [Mocking](/guide/basic/mock#mock-esm-模块)：
 
-```ts
-import * as apiActual from './api' with { rstest: 'importActual' };
-
-// 部分 mock './api' 模块
-rs.mock('./api', () => ({
-  ...apiActual,
-  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
-}));
+```diff
+- vi.mock('./api', async (importOriginal) => ({
+-   ...(await importOriginal()),
+-   fetchUser: vi.fn().mockResolvedValue({ id: 'mocked' }),
+- }));
++ import * as apiActual from './api' with { rstest: 'importActual' };
++
++ rs.mock('./api', () => ({
++   ...apiActual,
++   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
++ }));
 ```
-
-mock factory 是 hoisted 执行的；依赖同模块中后初始化的变量会触发初始化顺序错误。共享值可放到 hoisted initializer（例如 `rs.hoisted(...)`）中规避。
 
 ## Snapshot
 

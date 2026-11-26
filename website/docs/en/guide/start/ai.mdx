@@ -96,25 +96,9 @@ https://rstest.rs/guide/start/index.md
 
 ## Markdown reporter
 
-Use the `md` reporter when an AI agent consumes test results directly. It prints a single Markdown document to stdout that is more concise and easier for LLMs to parse than ANSI terminal output.
+When running inside an AI agent environment with no reporter configured, Rstest defaults to the `md` reporter (`['md']`), printing a concise Markdown document to stdout for LLMs to parse. Set `RSTEST_NO_AGENT=1` to disable agent detection and keep the default console reporter.
 
-When running inside an AI agent environment with no reporter configured in `rstest.config.ts` or CLI flags, Rstest defaults to `['md']`. Set `RSTEST_NO_AGENT=1` to disable agent detection and keep the default console reporter.
-
-```bash
-npx rstest --reporters=md
-```
-
-You can also configure it in `rstest.config.ts` and combine it with other reporters:
-
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: ['md'],
-});
-```
-
-See [Markdown reporter](/guide/basic/reporters#markdown-reporter) for presets and options.
+See [Markdown reporter](/guide/basic/reporters#markdown-reporter) for presets, CLI flags, and configuration options.
 
 ## AGENTS.md
 

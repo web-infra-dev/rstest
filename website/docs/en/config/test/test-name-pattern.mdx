@@ -8,9 +8,9 @@ description: Run only tests whose full name matches a string or RegExp pattern.
 - **Default:** `undefined`
 - **CLI:** `-t=<value>`, `--testNamePattern=<value>`
 
-Filter which tests run by matching their full name against a `RegExp` or regex pattern string (compiled with `new RegExp()`). Tests that do not match are skipped.
+Filter which tests run by matching their full name against a `RegExp` or regex pattern string (compiled with `new RegExp()`).
 
-The full name combines any enclosing `describe` suite names and the test case name, separated by spaces (or `' > '` when the pattern contains `>`). Because suite names are part of the matched string, a pattern matching a `describe` name runs every test inside that suite.
+The full name joins enclosing `describe` suite names and the test name with spaces (or `' > '` when the pattern contains `>`).
 
 import { Tab, Tabs } from '@theme';
 
@@ -28,36 +28,7 @@ export default defineConfig({
   testNamePattern: 'bar',
 });
 ```
-</Tab>
+  </Tab>
 </Tabs>
 
-With `testNamePattern: 'bar'`:
-
-```ts
-// skipped
-test('test foo', () => {
-  expect(true).toBe(true);
-});
-
-// runs
-test('test bar', () => {
-  expect(true).toBe(true);
-});
-
-// runs all tests in this suite
-describe('bar', () => {
-  it('should add two numbers correctly', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
-```
-
-To exclude tests whose names match a pattern, use a negative lookahead `RegExp`:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  testNamePattern: /^(?!.*bar).*$/,
-});
-```
+See [Filter by test name](/guide/basic/test-filter#filter-by-test-name) for matching rules, full-name examples, and negative-lookahead regex patterns.

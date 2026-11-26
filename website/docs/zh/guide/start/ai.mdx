@@ -96,25 +96,9 @@ https://rstest.rs/guide/start/index.md
 
 ## Markdown 报告器
 
-需要让 AI 直接消费测试结果时，可以使用 `md` 报告器。它会将测试结果以单份 Markdown 文档输出到 stdout，相比带 ANSI 颜色的终端日志更简洁，也更容易被 LLM 解析。
+在 Agent 环境中未显式配置报告器时，Rstest 默认启用 `md` 报告器（`['md']`），向 stdout 输出精简的 Markdown 文档供 LLM 解析。设置 `RSTEST_NO_AGENT=1` 可关闭 Agent 环境检测并保留默认的控制台报告器。
 
-在 Agent 环境中，如果在 `rstest.config.ts` 或 CLI 参数中均未显式配置 reporter，Rstest 会默认使用 `['md']`。设置 `RSTEST_NO_AGENT=1` 可以关闭 Agent 环境检测，保留默认的控制台报告器。
-
-```bash
-npx rstest --reporters=md
-```
-
-也可以在 `rstest.config.ts` 中配置并与其他报告器组合使用：
-
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: ['md'],
-});
-```
-
-预设与配置项详情见 [Markdown 报告器](/guide/basic/reporters#markdown-报告器)。
+预设、CLI 参数与配置项详情见 [Markdown 报告器](/guide/basic/reporters#markdown-报告器)。
 
 ## AGENTS.md
 

@@ -3,7 +3,6 @@ description: This E2E testing guide covers how to use @rstest/playwright to test
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
-import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # E2E testing
@@ -16,7 +15,7 @@ The test code runs in Node.js workers and uses Playwright to drive a real browse
 
 ## Install
 
-Install both packages (requires `playwright >= 1.49.1`):
+Install both packages (requires `playwright ^1.49.1`):
 
 - [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) adds the Rstest fixtures and assertions.
 - [playwright](https://www.npmjs.com/package/playwright) provides the browser automation runtime.
@@ -169,23 +168,7 @@ Using `extends: definePlaywrightConfig({})` also provides these defaults for the
 | Playwright locator/page assertion timeout | `expect.poll.timeout` (`5000ms` with this helper) |
 | Rstest `expect.poll.timeout`              | `5000ms`                                          |
 
-Explicit Rstest configuration overrides the inherited defaults. For example:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-import { definePlaywrightConfig } from '@rstest/playwright/config';
-
-export default defineConfig({
-  extends: definePlaywrightConfig({}),
-  testTimeout: 60_000,
-  hookTimeout: 45_000,
-  expect: {
-    poll: { timeout: 2000 },
-  },
-});
-```
-
-Here, Playwright locator/page assertions and `expect.poll()` both use `2000ms`. Per-call timeout options still take precedence for both APIs.
+Explicit Rstest configuration overrides the inherited defaults (for example, `testTimeout`, `hookTimeout`, and [`expect.poll.timeout`](#assertion-timeout)).
 
 These defaults apply only when using `definePlaywrightConfig`; importing `test` or `expect` from `@rstest/playwright` alone does not change Rstest's runner defaults. In a mixed unit/E2E workspace, apply the helper only to the E2E project.
 
@@ -241,9 +224,7 @@ describe('dashboard', () => {
 });
 ```
 
-Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook; otherwise, Rstest fails that test before invoking the hook and reports the missing fixture. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
-
-Declare fixture dependencies through direct object destructuring in the hook parameter. Destructuring a named context inside the hook body does not request fixtures. Rest properties and default values are not supported in fixture-aware callbacks.
+See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks) for scoping, destructuring, and lifecycle rules.
 
 ### Using fixtures with `test.for`
 
@@ -297,10 +278,6 @@ test('multiple pages', async ({ context }) => {
 });
 ```
 
-### `page`
-
-See [Basic usage](#basic-usage) for the common E2E flow of opening and asserting a page.
-
 ### `request`
 
 Use `request` when you only need Playwright's API client and do not need to launch a browser:
@@ -314,10 +291,6 @@ test('health check', async ({ request }) => {
   expect(response.ok()).toBe(true);
 });
 ```
-
-### `serve`
-
-See [Local app server](#local-app-server) for serving a built app from local files.
 
 ## Assertions
 
@@ -576,19 +549,4 @@ Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the
 
 ## Migrate from Playwright
 
-An existing Playwright Test project can be migrated by a Coding Agent that supports Skills, using the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill. Agent Skills are domain knowledge packs installed into a Coding Agent so it gives more accurate suggestions or performs actions for a specific scenario; the [skills](https://www.npmjs.com/package/skills) package installs them. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
-
-Install the skill first:
-
-<PackageManagerTabs
-  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
-  dlx
-/>
-
-Then copy the following prompt and send it to your Coding Agent:
-
-<Prompt
-  title="Migrate Playwright to @rstest/playwright"
-  description="Copy this prompt and send it to your Coding Agent."
-  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
-/>
+Migrate an existing Playwright Test project to `@rstest/playwright` using the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) Agent Skill or the migration prompt on the [AI guide](/guide/start/ai).

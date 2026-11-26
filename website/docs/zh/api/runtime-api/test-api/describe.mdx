@@ -65,7 +65,7 @@ describe(add, () => {
 - 测试级别的选项始终优先于套件级别的值。
 - 嵌套的 `describe` 会继承父级选项，由最内层的值覆盖外层。
 - 若测试和外层套件均未设置 `timeout`，则回退到 [`test.testTimeout`](/config/test/test-timeout)。
-- `meta` <ApiMeta sup addedVersion="0.11.1" /> 会从父套件向子套件或测试合并：子级顶层同名字段覆盖父级字段，继承值会为每个子级创建独立副本。
+- `meta` <ApiMeta sup addedVersion="0.11.1" /> 会从父套件向子套件或测试合并：子级顶层同名字段覆盖父级字段，继承值会为每个子级创建独立副本。详见[为套件添加 metadata](/guide/advanced/metadata#为套件添加-metadata)。
 
 ```ts
 describe('parent', { retry: 2, timeout: 100 }, () => {
@@ -83,26 +83,6 @@ describe('parent', { retry: 2, timeout: 100 }, () => {
     });
   });
 });
-```
-
-```ts
-describe(
-  'mutation run',
-  { meta: { runner: 'stryker', shared: 'suite' } },
-  () => {
-    test('inherits suite metadata', ({ task }) => {
-      // task.meta 为 { runner: 'stryker', shared: 'suite' }
-    });
-
-    test(
-      'overrides suite metadata',
-      { meta: { shared: 'test' } },
-      ({ task }) => {
-        // task.meta 为 { runner: 'stryker', shared: 'test' }
-      },
-    );
-  },
-);
 ```
 
 ## describe.only

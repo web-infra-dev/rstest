@@ -81,36 +81,11 @@ test('composes locators', async () => {
 });
 ```
 
-当前支持的查询与组合能力包括：
-
-- 语义和属性查询：[getByRole](/api/runtime-api/browser-mode/locator#getbyrole)、[getByText](/api/runtime-api/browser-mode/locator#getbytext)、[getByLabel](/api/runtime-api/browser-mode/locator#getbylabel)、[getByPlaceholder](/api/runtime-api/browser-mode/locator#getbyplaceholder)、[getByAltText](/api/runtime-api/browser-mode/locator#getbyalttext)、[getByTitle](/api/runtime-api/browser-mode/locator#getbytitle)、[getByTestId](/api/runtime-api/browser-mode/locator#getbytestid)（可通过 [setTestIdAttribute](/api/runtime-api/browser-mode/locator#settestidattribute) 自定义属性名）
-- 选择、过滤与 DOM 包装：[locator](/api/runtime-api/browser-mode/locator#locator)、[filter](/api/runtime-api/browser-mode/locator#filter)、[elementLocator](/api/runtime-api/browser-mode/locator#elementlocator)
-- 集合组合与定位：[and](/api/runtime-api/browser-mode/locator#and--or)、[or](/api/runtime-api/browser-mode/locator#and--or)、[nth](/api/runtime-api/browser-mode/locator#nth--first--last)、[first](/api/runtime-api/browser-mode/locator#nth--first--last)、[last](/api/runtime-api/browser-mode/locator#nth--first--last)
-
-优先使用语义查询（[getByRole](/api/runtime-api/browser-mode/locator#getbyrole)、[getByLabel](/api/runtime-api/browser-mode/locator#getbylabel)），仅在语义信息不足时再使用 [getByTestId](/api/runtime-api/browser-mode/locator#getbytestid) 或 CSS 选择器。
+优先使用语义查询（`getByRole`、`getByLabel`），仅在语义信息不足时再使用 `getByTestId` 或 CSS 选择器。Locator API 涵盖语义与属性查询、过滤与 DOM 包装以及集合组合与索引；完整查询方法与严格模式规则（匹配多个元素时需通过 `first()`、`last()` 或 `nth()` 指定具体元素，否则操作会报错）见 [Locator API 文档](/api/runtime-api/browser-mode/locator)。
 
 ### 常用交互与断言
 
-Locator 支持元素操作（如 [click](/api/runtime-api/browser-mode/locator#click)、[fill](/api/runtime-api/browser-mode/locator#fill)、[check](/api/runtime-api/browser-mode/locator#check)、[hover](/api/runtime-api/browser-mode/locator#hover)、[press](/api/runtime-api/browser-mode/locator#press)、[selectOption](/api/runtime-api/browser-mode/locator#selectoption)），同时 `page` 还提供用于焦点键盘输入的 [page.keyboard](/api/runtime-api/browser-mode/keyboard)（`press`、`tab`）和用于调整单个测试视口尺寸的 [page.viewport()](/api/runtime-api/browser-mode/locator#pageviewport)。断言可搭配 [expect.element](/api/runtime-api/browser-mode/assertion) DOM 断言或 [toMatchScreenshot()](/api/runtime-api/browser-mode/assertion#toMatchScreenshot) 视觉截图对比（可通过 [browser.screenshotFailures](/config/test/browser#screenshotfailures) 配置失败截图）：
-
-- 状态断言：[toBeVisible](/api/runtime-api/browser-mode/assertion#tobevisible)、[toBeHidden](/api/runtime-api/browser-mode/assertion#tobehidden)、[toBeEnabled](/api/runtime-api/browser-mode/assertion#tobeenabled)、[toBeDisabled](/api/runtime-api/browser-mode/assertion#tobedisabled)
-- 表单和结构断言：[toBeChecked](/api/runtime-api/browser-mode/assertion#tobechecked)、[toBeFocused](/api/runtime-api/browser-mode/assertion#tobefocused)、[toBeEmpty](/api/runtime-api/browser-mode/assertion#tobeempty)
-- 文本和值断言：[toHaveText](/api/runtime-api/browser-mode/assertion#tohavetext)、[toContainText](/api/runtime-api/browser-mode/assertion#tocontaintext)、[toHaveValue](/api/runtime-api/browser-mode/assertion#tohavevalue)、[toHaveCount](/api/runtime-api/browser-mode/assertion#tohavecount)
-- 属性断言：[toHaveAttribute](/api/runtime-api/browser-mode/assertion#tohaveattribute)、[toHaveClass](/api/runtime-api/browser-mode/assertion#tohaveclass)、[toHaveCSS](/api/runtime-api/browser-mode/assertion#tohavecss)、[toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty)
-- 视觉断言：[toMatchScreenshot](/api/runtime-api/browser-mode/assertion#toMatchScreenshot)
-
-建议在关键交互后立即断言可观察结果（如状态文本、按钮状态或字段值），便于快速定位失败原因。
-
-:::info 自动等待 vs 自动重试
-Locator API 中有两种不同的等待机制：
-
-- **自动等待（交互）**：`click()`、`fill()`、`check()` 等方法会自动等待目标元素可见、启用、稳定后再执行操作。
-- **自动重试（断言）**：`expect.element` 的 matcher 会在超时时间内持续重试，直到断言通过，适合处理异步渲染场景。
-
-大多数情况下，你只需要 `await` 每个调用——框架会在内部处理所有等待和重试。
-:::
-
-你也可以链式使用 [not](/api/runtime-api/browser-mode/assertion#not) 和可选 `timeout`：
+可通过 Locator 操作（如 `click`、`fill`、`check`、`hover`、`press`、`selectOption`）、[page.keyboard](/api/runtime-api/browser-mode/keyboard) 和 `page.viewport()` 驱动页面交互，并在关键操作后立即断言可观察结果。Locator 交互会自动等待元素可见、启用且稳定，而 [expect.element](/api/runtime-api/browser-mode/assertion) 断言会自动重试状态、表单、文本、属性与视觉（[toMatchScreenshot()](/api/runtime-api/browser-mode/assertion#toMatchScreenshot)）检查，直到通过或超时。你也可以链式使用 `not` 并传入可选 `timeout`：
 
 ```ts
 await expect
@@ -118,9 +93,7 @@ await expect
   .not.toBeDisabled({ timeout: 1000 });
 ```
 
-:::warning 严格模式
-Locator 的交互操作是严格的：如果一个 locator 匹配到多个元素，`click`、`fill` 等操作会抛出错误。请使用 `first()`、`last()` 或 `nth()` 选择特定元素。
-:::
+完整方法列表见 [Locator API](/api/runtime-api/browser-mode/locator) 和 [浏览器断言 API](/api/runtime-api/browser-mode/assertion)，失败截图配置见 [browser.screenshotFailures](/config/test/browser#screenshotfailures)。
 
 ## Testing library
 

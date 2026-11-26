@@ -34,8 +34,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -179,8 +177,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
@@ -201,8 +197,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
@@ -216,7 +210,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-每个分片会将测试结果和实际采集的覆盖率写入 `.rstest-reports/blob-{index}-{count}.json`。支持延迟最终处理的 coverage provider 会让使用 `blob` reporter 的分片不生成覆盖率报告，也不检查阈值；未使用 `blob` reporter 的分片仍会正常完成覆盖率处理。旧版 provider 保持原有的单次运行最终处理行为。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果补齐未测试文件、运行已配置的 reporter 并检查覆盖率阈值。请把覆盖率最终处理参数放在共享配置中，或将相同的 `--coverage.*` 参数传给合并命令，因为只传给分片的 CLI 参数不会写入 blob。更多细节请查看[测试分片](/guide/basic/cli#sharding-tests)和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
+每个分片都会将 blob 文件写入 `.rstest-reports/`，随后由合并 job 基于全部结果统一生成报告并完成覆盖率最终处理（包括补齐未测试文件和检查阈值）。请将覆盖率最终处理参数放在共享配置中，或在 `merge-reports` 命令中重复传入 `--coverage.*` 参数；详见[测试分片](/guide/basic/cli#sharding-tests)和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
 
 ## 发布机器可读报告
 

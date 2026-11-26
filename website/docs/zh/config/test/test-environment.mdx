@@ -1,5 +1,5 @@
 ---
-description: Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 jsdom 或 happy-dom。
+description: 设置用于运行测试的环境。
 ---
 
 # testEnvironment
@@ -91,11 +91,9 @@ Rstest 可以在 worker 加载测试环境前对其进行预打包。当大量�
 
 `prebundle` 支持以下值：
 
-- `'auto'`：预打包经过 Rstest 验证的内置 `jsdom` 和 `happy-dom` 版本。未知版本使用原生加载。
-- `true`：强制预打包选中的内置环境。
-- `false`：关闭预打包，原生加载环境。
-
-当前自动兼容矩阵覆盖 jsdom 15–26、29–30 和 happy-dom 20–21。其他大版本默认保留原生加载路径，除非显式设置 `prebundle: true`。
+- `'auto'`（默认）：预打包经过验证的 `jsdom` 和 `happy-dom` 版本；遇到不支持的版本或校验失败时自动回退到原生加载。
+- `true`：强制预打包选中的内置环境（构建或校验失败时仍会回退到原生加载）。
+- `false`：关闭预打包，直接原生加载环境。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -110,16 +108,7 @@ export default defineConfig({
 
 ##### 预打包问题排查 \{#troubleshooting-the-prebundle}
 
-预打包是可选的优化。如果 DOM 环境在预打包后的行为发生变化，请设置 `prebundle: false`，改用原生加载。
-
-预打包仅用于测试环境本身。测试代码及依赖中导入的 `jsdom` 或 `happy-dom` 仍遵循正常的打包与外部依赖规则，不会复用测试环境的预打包产物，因此这些导入提供的 DOM 构造器可能与测试环境中的构造器不同。
-
-如果 Rstest 无法构建、加载或验证预打包产物，会自动回退到原生加载。验证只覆盖已知问题，无法检查每个 API：
-
-- 即使 bundle 能成功导入，打包仍可能改变环境解析运行时资源、可执行辅助文件、可选依赖或原生依赖的方式。
-- 例如，jsdom 27 和 28 在打包后可能以不同方式解析可选的 CSS 实现，导致 `getComputedStyle()` 失败。`auto` 对这些版本使用原生加载；使用 `prebundle: true` 时，Rstest 会探测这个已知问题，并在验证失败时回退。
-
-环境包优先从当前项目的依赖解析，再回退到 Rstest workspace 根目录，最后通过 `@rstest/core` 的原生依赖解析保持向后兼容。
+预打包是可选优化，且仅作用于测试环境本身（测试代码及依赖中直接导入的 `jsdom` 或 `happy-dom` 仍遵循正常的打包与外部化规则，因此其 DOM 构造器可能与测试环境不同）。如果 DOM 环境在预打包后行为异常或失败，请设置 `prebundle: false` 关闭预打包，改用原生加载。
 
 ### 环境注释
 

@@ -130,14 +130,7 @@ test('overrides one export', () => {
 
 ### Load a registered mock
 
-When a test needs to load a mocked module object imperatively instead of via `import` or `require()`, use:
-
-- [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock): asynchronously loads an ESM module mock and returns a `Promise`.
-- [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock): synchronously loads a CommonJS module mock.
-
-Neither API auto-mocks an unmocked module on its own. Each resolves an already-registered mock (`rs.mock` / `rs.doMock` or `rs.mockRequire` / `rs.doMockRequire`) or, when passed a string literal path, a matching file in `__mocks__`. If none exists, it throws a `Cannot find module` error. When a factory function was registered, its returned exports are returned as-is.
-
-To obtain an auto-mocked module through `rs.importMock()`, register the auto-mock first:
+When a test needs to load an already-registered mock (`rs.mock` / `rs.doMock` / `rs.mockRequire` / `rs.doMockRequire`, or a `__mocks__` file) imperatively instead of via `import` or `require()`, use [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) (ESM) or [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) (CommonJS):
 
 ```ts title="math.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -151,7 +144,7 @@ test('loads an auto-mocked module', async () => {
 });
 ```
 
-In TypeScript, pass a returned module whose static type is unchanged to `rs.mocked(module, true)` before calling mock methods such as `mockReturnValue`. Match `importMock` vs. `requireMock` to the module entry your code uses.
+See [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) and [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) for error behavior and TypeScript typing with `rs.mocked()`.
 
 ### Spy on a whole module
 
@@ -197,9 +190,7 @@ test('keeps parseDate real', async () => {
 });
 ```
 
-Because `rs.mock()` factories are hoisted, values shared with the factory must come from a static `importActual` import or [`rs.hoisted()`](#share-values-with-a-hoisted-mock-factory).
-
-If the real module graph uses top-level `await`, do not statically import the mocked module in the same test file — the factory may run before the actual exports are ready. Dynamically import it with `await import()` inside an async test instead; see [partial mock with `importActual`](/api/runtime-api/rstest/mock-modules#partial-mock-with-importactual).
+Because `rs.mock()` factories are hoisted, shared values must come from a static `importActual` import or [`rs.hoisted()`](#share-values-with-a-hoisted-mock-factory). For modules with top-level `await`, load them dynamically inside the test; see [partial mock with `importActual`](/api/runtime-api/rstest/mock-modules#partial-mock-with-importactual).
 
 ### Mock virtual modules
 
@@ -286,27 +277,11 @@ Pass `'get'` or `'set'` as the third argument (`rs.spyOn(obj, 'prop', 'get')`) t
 
 <ApiMeta addedVersion="0.10.2" />
 
-Rstest supports `using` to restore a spy automatically when its block exits:
-
-```ts title="logger.test.ts"
-import { expect, rs, test } from '@rstest/core';
-
-test('logs a warning when validation fails', () => {
-  {
-    using warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-    console.warn('invalid payload');
-
-    expect(warn).toHaveBeenCalledWith('invalid payload');
-  }
-
-  // console.warn is restored here
-});
-```
+Rstest supports `using` to restore spies, env/global stubs, and fake timers automatically when a block exits; see [Scoped cleanup](/guide/advanced/scoped-cleanup) for examples.
 
 ## Deep-mock objects
 
-Use [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) to recursively convert methods on an existing object into mocks:
+Use [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) to recursively convert methods on an existing object into mocks (or pass `{ spy: true }` to keep implementations while recording calls):
 
 ```ts title="service.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -329,9 +304,7 @@ test('mocks nested methods', async () => {
 });
 ```
 
-By default, `rs.mockObject()` replaces arrays with empty arrays (`[]`). Pass `{ spy: true }` to keep original implementations, preserve array elements, and wrap nested functions and plain objects in spies while still recording calls.
-
-See [Mock functions](/api/runtime-api/rstest/mock-functions) and [MockInstance](/api/runtime-api/rstest/mock-instance).
+See [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) for array handling and [MockInstance](/api/runtime-api/rstest/mock-instance).
 
 ## Stub environment variables and globals
 
@@ -353,7 +326,7 @@ test('stubs env and global values', () => {
 });
 ```
 
-Both APIs return a `Disposable` for `using`, and can also be restored manually with [`rs.unstubAllEnvs()`](/api/runtime-api/rstest/utilities#rsunstuballenvs) and [`rs.unstubAllGlobals()`](/api/runtime-api/rstest/utilities#rsunstuballglobals) or automatically before each test with [`unstubEnvs`](/config/test/unstub-envs) and [`unstubGlobals`](/config/test/unstub-globals).
+See [Utilities](/api/runtime-api/rstest/utilities) for manual restoration and [`unstubEnvs`](/config/test/unstub-envs) / [`unstubGlobals`](/config/test/unstub-globals) for automatic cleanup.
 
 ## Mock timers
 
@@ -373,7 +346,7 @@ test('advances timers without waiting', () => {
 });
 ```
 
-Use `rs.setSystemTime()` to pin the current system time and `rs.useRealTimers()` when restoring timers manually.
+See [Fake timers](/api/runtime-api/rstest/fake-timers) for `rs.setSystemTime()`, async advancement, and manual restoration.
 
 ## Type and identify mock functions
 

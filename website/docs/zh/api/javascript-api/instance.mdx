@@ -172,7 +172,7 @@ console.log(result.summary.tests);
 
 ### RunOptions
 
-`RunOptions` 支持运行周期选项及配置覆盖，不接受创建阶段的选项（`config`、`configLoader`、`root`）和仅用于 CLI 的 `teardownTimeout`。对应的 CLI 参数见 [CLI 选项](/guide/basic/cli#cli-选项)。
+`RunOptions` 支持运行周期选项以及可通过 CLI 覆盖的配置子集（并非完整的 `RstestConfig`；例如 `reporters` 仅接受 `string | string[]`）。不接受创建阶段的选项（`config`、`configLoader`、`root`）和仅用于 CLI 的 `teardownTimeout`。对应的 CLI 参数见 [CLI 选项](/guide/basic/cli#cli-选项)。
 
 对于覆盖配置项的字段，优先级为：**本次 `run()` 显式传入的值 > 实例配置值 > 配置项默认值**。未传入或值为 `undefined` 的字段保留实例配置；嵌套对象和数组遵循对应配置项的合并规则。
 

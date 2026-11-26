@@ -53,10 +53,8 @@ This timeout applies to these APIs:
 | Ordinary assertions such as `expect(value).toBe(...)`                                | No; they do not retry       | —                                  |
 | `expect(locator).toContainText(...)` from `@rstest/playwright`                       | Yes, since 0.12.0           | `toContainText(text, { timeout })` |
 
-An explicit per-call timeout takes precedence over this configuration. For Browser Mode `expect.element()` and `@rstest/playwright` locator/page assertions, it is still capped by the remaining active test or hook time when that context is available. For `expect.poll()`, an explicit timeout is used as provided and can still be ended by the outer test or hook timeout. When no explicit timeout is provided, Rstest uses the smaller of the configured timeout and the remaining active time. For example, a configured `5000ms` timeout with only `2000ms` remaining does not grant the assertion another five seconds.
+An explicit per-call timeout overrides this setting (for `expect.poll()`, it can still be ended by the outer test or hook timeout; Browser Mode `expect.element()` and `@rstest/playwright` locator/page assertions cap it by the remaining active test or hook time). When omitted, Rstest uses the smaller of the configured timeout and the remaining active time.
 
-In Browser Mode concurrent tests, use the test-scoped `expect` fixture to account for that test's remaining time. Shared file-level `expect` and hooks in `describe.concurrent` use the configured polling timeout instead. See [Browser Mode assertion timeouts](/api/runtime-api/browser-mode/assertion).
-
-When using [`definePlaywrightConfig`](/guide/basic/e2e-testing#e2e-defaults), the helper defaults `expect.poll.timeout` to `5000ms`. An explicit `expect.poll.timeout` overrides that value for both polling and Playwright locator/page assertions. Without the helper, Node Mode defaults to `1000ms`.
-
-With [`sequence.hooks: 'parallel'`](/config/test/sequence#sequencehooks), polling and element assertions inside lifecycle hooks use the configured assertion timeout. They do not inherit a sibling hook's remaining time; each hook's own timeout still bounds its execution.
+- **Browser Mode:** Defaults to `5000ms`; in concurrent tests, use the test-scoped `expect` fixture to bound assertions by that test's remaining time (see [Browser Mode assertion timeouts](/api/runtime-api/browser-mode/assertion)).
+- **`@rstest/playwright`:** [`definePlaywrightConfig`](/guide/basic/e2e-testing#e2e-defaults) defaults `expect.poll.timeout` to `5000ms` (otherwise Node Mode defaults to `1000ms`), and an explicit setting overrides both polling and Playwright locator/page assertions.
+- **Parallel hooks:** With [`sequence.hooks: 'parallel'`](/config/test/sequence#sequencehooks), assertions inside lifecycle hooks use the configured timeout rather than inheriting a sibling hook's remaining time.

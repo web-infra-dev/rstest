@@ -26,20 +26,7 @@ export default defineConfig({
     // Monorepo：每个包目录作为一个 project
     'packages/*',
 
-    // apps 目录下所有包含 rstest 配置文件的项目
-    'apps/**/rstest.config.ts',
-
-    // 指定的项目目录
-    '<rootDir>/services/auth',
-
-    // 指定项目的配置文件
-    './projects/web/rstest.config.ts',
-
     // 内联项目配置
-    defineInlineProject({
-      name: 'node',
-      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-    }),
     defineInlineProject({
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
@@ -49,8 +36,6 @@ export default defineConfig({
 });
 ```
 
-任何 `projects` 数组里的对象项，包括嵌套 `projects`，都请使用 `defineInlineProject()`。`defineProject()` 只用于项目配置文件的顶层导出。
+`projects` 数组中的对象项请使用 `defineInlineProject()`（必须提供 [`name`](/config/test/name)），项目配置文件的顶层导出请使用 `defineProject()`（可省略并自动推导 `name`）。
 
-`defineProject()` 允许顶层导出的 project 省略 `name`，再由 Rstest 按 [name](/config/test/name) 配置项的规则自动推导。`defineInlineProject()` 则要求每个 inline project 都显式提供 `name`。
-
-如需在命令行只运行特定项目，可传入 `--project <name>`（支持通配符）。关于共享配置、全局配置项和嵌套项目，请参考[多项目测试](/guide/basic/projects)。
+如需在命令行只运行特定项目，可传入 `--project <name>`（支持通配符）。关于目录或 glob 条目、共享配置、全局配置项和嵌套项目，请参考[多项目测试](/guide/basic/projects)。

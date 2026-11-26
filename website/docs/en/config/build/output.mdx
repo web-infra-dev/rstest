@@ -286,7 +286,7 @@ If you reuse an Rsbuild config through [@rstest/adapter-rsbuild](/integration/rs
 
 Sets the global root directory for Rstest's temporary build outputs.
 
-By default, Rstest keeps temporary build files in memory. When [dev.writeToDisk](/config/build/dev#devwritetodisk) or `DEBUG` mode is enabled, Rstest writes temporary artifacts under `dist/.rstest-temp` (including compiled Node.js test bundles and Browser Mode runner files and virtual manifests).
+By default, Rstest keeps temporary build files in memory. When [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled, Rstest writes compiled Node.js test bundles and Browser Mode server/runner outputs under `dist/.rstest-temp`; running with `DEBUG` also writes `.rsbuild` inspect configs there.
 
 In multi-project runs, Rstest uses a single global output root and creates per-project subdirectories under it rather than switching to each project's `root`.
 

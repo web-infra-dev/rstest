@@ -3,7 +3,6 @@ description: 本 E2E 测试指南介绍如何使用 @rstest/playwright，在运�
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
-import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # E2E 测试
@@ -16,7 +15,7 @@ E2E 测试（端到端测试）从用户的角度验证一个完整的页面或�
 
 ## 安装
 
-安装以下两个包（要求 `playwright >= 1.49.1`）：
+安装以下两个包（要求 `playwright ^1.49.1`）：
 
 - [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) 提供 Rstest fixtures 和断言。
 - [playwright](https://www.npmjs.com/package/playwright) 提供浏览器自动化运行时。
@@ -169,23 +168,7 @@ test('mobile page', async ({ page }) => {
 | Playwright Locator/Page 断言超时 | `expect.poll.timeout`（使用此 helper 时为 `5000ms`） |
 | Rstest `expect.poll.timeout`     | `5000ms`                                             |
 
-显式的 Rstest 配置会覆盖继承的默认值。例如：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-import { definePlaywrightConfig } from '@rstest/playwright/config';
-
-export default defineConfig({
-  extends: definePlaywrightConfig({}),
-  testTimeout: 60_000,
-  hookTimeout: 45_000,
-  expect: {
-    poll: { timeout: 2000 },
-  },
-});
-```
-
-这里的 Playwright Locator/Page 断言和 `expect.poll()` 都使用 `2000ms`。两类 API 都可以通过单次调用的 timeout 进一步覆盖默认值。
+显式的 Rstest 配置会覆盖继承的默认值（例如 `testTimeout`、`hookTimeout` 以及 [`expect.poll.timeout`](#assertion-timeout)）。
 
 这些默认值只在使用 `definePlaywrightConfig` 时生效。仅从 `@rstest/playwright` 导入 `test` 或 `expect` 不会改变 Rstest 的运行默认值。单元测试与 E2E 混用的 workspace 应只在 E2E project 中使用此 helper。
 
@@ -241,9 +224,7 @@ describe('dashboard', () => {
 });
 ```
 
-Hook 的作用域是所在的 `describe` 块，而不是某个扩展后的 test 对象。因此，该块内的每个测试都必须提供 hook 请求的 fixture；否则，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture。`afterEach` 和 `beforeEach` 返回的清理函数同样支持这一行为。在一次测试执行内，hook 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
-
-请在 hook 参数中通过直接对象解构声明 fixture 依赖。在 hook 函数体内再解构 context 对象不会请求 fixture。使用 fixture 的回调不支持剩余属性（rest property）和默认值。
+作用域、参数解构和生命周期规则见[在 hook 中使用 fixture](/api/runtime-api/test-api/test#在-hook-中使用-fixture)。
 
 ### 在 `test.for` 中使用 fixture
 
@@ -297,10 +278,6 @@ test('multiple pages', async ({ context }) => {
 });
 ```
 
-### `page`
-
-常见的 E2E 页面访问和断言流程见[基本用法](#基本用法)。
-
 ### `request`
 
 当你只需要 Playwright 的 API 客户端，而不需要启动浏览器时，可以使用 `request`：
@@ -314,10 +291,6 @@ test('health check', async ({ request }) => {
   expect(response.ok()).toBe(true);
 });
 ```
-
-### `serve`
-
-从本地文件启动静态应用的示例见[本地应用 server](#本地应用-server)。
 
 ## 断言
 
@@ -576,19 +549,4 @@ Rstest 浏览器模式会把测试模块打包后放进浏览器运行时执行�
 
 ## 从 Playwright 迁移
 
-已有的 Playwright Test 项目可以交给支持 Skills 的 Coding Agent 迁移，使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill。Agent Skills 是安装到 Coding Agent 里的领域知识包，让 Agent 在特定场景下给出更准确的建议或直接执行操作，[skills](https://www.npmjs.com/package/skills) 包负责安装它们。`migrate-to-rstest` skill 包含 Playwright 配置、fixtures 和行为一致性的迁移指南。
-
-先安装该 skill：
-
-<PackageManagerTabs
-  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
-  dlx
-/>
-
-然后复制下面的 prompt 并发送给你的 Coding Agent：
-
-<Prompt
-  title="将 Playwright 迁移到 @rstest/playwright"
-  description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
-/>
+如需将已有的 Playwright Test 项目迁移到 `@rstest/playwright`，可使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) Agent Skill 或 [AI 指南](/guide/start/ai)中的迁移提示词。

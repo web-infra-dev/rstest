@@ -121,28 +121,7 @@ test('renders JSX component correctly', async () => {
 });
 ```
 
-### 模拟模块
-
-使用 `rs.mock()` 模拟依赖：
-
-```ts title="test/UserProfile.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { mount, flushPromises } from '@vue/test-utils';
-import UserProfile from '../src/UserProfile.vue';
-
-rs.mock('../src/api', () => ({
-  fetchUser: () => Promise.resolve({ name: 'John Doe' }),
-}));
-
-test('renders user name', async () => {
-  const wrapper = mount(UserProfile, {
-    props: { userId: '1' },
-  });
-
-  await flushPromises();
-  expect(wrapper.text()).toContain('John Doe');
-});
-```
+如需在组件测试中 mock 模块或 API 依赖，请参考 [Mocking](/guide/basic/mock)。
 
 ## 浏览器模式测试
 

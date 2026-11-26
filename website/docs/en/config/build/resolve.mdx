@@ -25,7 +25,7 @@ Controls precedence between `resolve.alias` and `compilerOptions.paths` in `tsco
 
 Redirects or simplifies module import paths, matching Rspack's [resolve.alias](https://rspack.rs/config/resolve#resolvealias).
 
-For TypeScript projects, Rstest automatically reads `compilerOptions.paths` from `tsconfig.json`, so you do not need to duplicate those mappings in `resolve.alias`.
+For TypeScript projects, Rstest automatically reads [`compilerOptions.paths`](https://www.typescriptlang.org/tsconfig/#paths) from `tsconfig.json`, so you do not need to duplicate those mappings in `resolve.alias`.
 
 ## resolve.dedupe <RsbuildDocBadge path="/config/resolve/dedupe" text="resolve.dedupe" />
 
@@ -39,7 +39,7 @@ Forces Rstest to resolve the specified packages from the project root, preventin
 - **Type:** `string[]`
 - **Default:** `['.ts', '.tsx', '.mjs', '.js', '.jsx', '.json', '.cjs']`
 
-File extensions resolved automatically when importing modules without an explicit extension. Rstest inherits Rsbuild's defaults and appends `.cjs`.
+File extensions resolved automatically when importing modules without an explicit extension. In Node-mode builds (`node`, `jsdom`, and `happy-dom`), Rstest inherits Rsbuild's defaults and appends `.cjs`; Browser Mode keeps Rsbuild's default extensions.
 
 ## resolve.conditionNames <RsbuildDocBadge path="/config/resolve/condition-names" text="resolve.conditionNames" />
 

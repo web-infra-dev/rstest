@@ -86,12 +86,12 @@ export default defineConfig({
 | `injectGlobals`              | [`globals`](/config/test/globals)                                                                 | Jest 默认是 `true`；Rstest 的 `globals` 默认是 `false`。如果你的测试依赖裸 `describe` / `test` / `expect`（不做 import），需显式设置 `globals: true`，并在 `tsconfig.json` 的 `compilerOptions.types` 中加上 `@rstest/core/globals`。                                                                                                                                    |
 | `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                             | `resolve.alias` 只支持字符串前缀。前缀型映射改写为：`'^@/(.*)$': '<rootDir>/src/$1'` → `resolve: { alias: { '@': './src' } }`。TypeScript 项目推荐直接用 `tsconfig.json` 的 `compilerOptions.paths`，Rstest 会自动读取。正则或 asset 占位（如 `'\\.(css\|svg)$': 'identity-obj-proxy'`）没有对等字段；Rstest 原生处理 CSS/资源，大多数占位可以删除。                     |
 | `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                            |                                                                                                                                                                                                                                                                                                                                                                          |
-| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                        | 需要在单个测试内改 timeout 时，把 `jest.setTimeout(n)` 替换为 `rs.setConfig({ testTimeout: n })`。                                                                                                                                                                                                                                                                       |
+| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                        | 需要在单个测试内改 timeout 时，把 `jest.setTimeout(5_000)` 替换为 `rs.setConfig({ testTimeout: 5_000 })`。                                                                                                                                                                                                                                                               |
 | `slowTestThreshold`          | [`slowTestThreshold`](/config/test/slow-test-threshold)                                           | Jest 按秒计（默认 5）；Rstest 按毫秒计（默认 300）。Jest 的值需要乘以 1000。                                                                                                                                                                                                                                                                                             |
 | `openHandlesTimeout`         | [`teardownTimeout`](/config/test/teardown-timeout)                                                | Rstest 会在超时后强制退出；Jest 只会打印警告。                                                                                                                                                                                                                                                                                                                           |
 | `forceExit`                  | [`teardownTimeout: 0`](/config/test/teardown-timeout)                                             | 测试、global teardown 和 reporter 完成后立即退出。                                                                                                                                                                                                                                                                                                                       |
 | `detectOpenHandles`          | 无完全等价项；可考虑用 [`detectAsyncLeaks`](/config/test/detect-async-leaks) 排查测试文件异步泄漏 | 不是 1:1 映射。`detectAsyncLeaks` 会让存在活跃异步资源的测试文件失败，但这些泄漏不会阻止进程退出。若 reporter、plugin 或配置留下的 handle 导致运行一直无法退出，可用 [`teardownTimeout`](/config/test/teardown-timeout) 限制等待时间。                                                                                                                                   |
-| `fakeTimers`                 | [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers)                         | 没有配置字段。在 `setupFiles` 或单个测试中调用 `rs.useFakeTimers(opts)`；用 `rs.useRealTimers()` 还原。                                                                                                                                                                                                                                                                  |
+| `fakeTimers`                 | [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers)                         | 没有配置字段。将 `jest.useFakeTimers()` / `jest.useRealTimers()` 替换为 `rs.useFakeTimers(opts)` / `rs.useRealTimers()`（或 `using _timers = rs.useFakeTimers()`），并把 Jest 的 `doNotFake` → `toNotFake`、`advanceTimers` → `shouldAdvanceTime`（同时支持 `toFake`、`now`、`advanceTimeDelta`）。                                                                      |
 | `bail`                       | [`bail`](/config/test/bail)                                                                       |                                                                                                                                                                                                                                                                                                                                                                          |
 | `clearMocks`                 | [`clearMocks`](/config/test/clear-mocks)                                                          |                                                                                                                                                                                                                                                                                                                                                                          |
 | `resetMocks`                 | [`resetMocks`](/config/test/reset-mocks)                                                          |                                                                                                                                                                                                                                                                                                                                                                          |
@@ -263,9 +263,7 @@ rs.mock('zustand');
 
 ### 加载真实模块（`requireActual`）
 
-在 Jest 中，`jest.requireActual()` 既能在 `jest.mock()` 工厂函数内同步加载真实模块，也能在测试中调用。在 Rstest 中，需根据加载场景选择对应方式：
-
-- **在 hoisted 的 `rs.mock()` 工厂函数内（ESM）**：`rs.mock()` 工厂函数必须是同步的。请改用带 `with { rstest: 'importActual' }` 的静态 `import` 导入真实模块并展开导出：
+在 Jest 中，`jest.requireActual()` 可在 `jest.mock()` 工厂或测试中同步加载真实模块；在 Rstest 中，hoisted `rs.mock()` 工厂必须保持同步，请改用带 `with { rstest: 'importActual' }` 的静态 `import`（异步测试中用 [`rs.importActual`](/api/runtime-api/rstest/mock-modules#rsimportactual)，CJS 模块用 [`rs.requireActual`](/api/runtime-api/rstest/mock-modules#rsrequireactual)，详见 [Mocking](/guide/basic/mock)）：
 
 ```diff
 + import * as actualUtils from './utils' with { rstest: 'importActual' };
@@ -280,23 +278,9 @@ rs.mock('zustand');
 + }));
 ```
 
-- **在异步测试或辅助函数中（ESM）**：使用 [`rs.importActual`](/api/runtime-api/rstest/mock-modules#rsimportactual)（`await rs.importActual('./utils')`）。
-- **通过 `require()` 加载的 CommonJS 模块**：使用 [`rs.requireActual`](/api/runtime-api/rstest/mock-modules#rsrequireactual)（`rs.requireActual('./utils.cjs')`）。该方法同步执行，若依赖图包含 top-level `await` 会抛出错误。
-
-### Fake timers
-
-将 `jest.useFakeTimers()` 和 `jest.useRealTimers()` 替换为 [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) 和 [`rs.useRealTimers()`](/api/runtime-api/rstest/fake-timers#rsuserealtimers)。Rstest 将选项直接透传给 `@sinonjs/fake-timers`（`toNotFake`、`toFake`、`now`、`shouldAdvanceTime`、`advanceTimeDelta`），因此需重命名 Jest 的 `doNotFake` 和 `advanceTimers` 选项：
-
-```diff
-- jest.useFakeTimers({ doNotFake: ['setImmediate'], advanceTimers: true });
-+ rs.useFakeTimers({ toNotFake: ['setImmediate'], shouldAdvanceTime: true });
-```
-
-`rs.useFakeTimers()` 还会返回一个 `Disposable`，使用 `using _timers = rs.useFakeTimers()` 可在作用域退出时自动恢复真实定时器。
-
 ### 虚拟模块 mock
 
-迁移 Jest 虚拟模块 mock 时，请先[声明模块并配置 `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)。这套配置同时适用于 Node 和浏览器模式。然后删除 Jest 的第三个参数：
+迁移 Jest 虚拟模块 mock 时，先[声明模块并配置 `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)（详见 [Mocking](/guide/basic/mock)），再去掉第三个参数：
 
 ```diff
 - jest.mock('native-runtime', () => ({ platform: 'test' }), {
@@ -304,8 +288,6 @@ rs.mock('zustand');
 - });
 + rs.mock('native-runtime', () => ({ platform: 'test' }));
 ```
-
-`rs.mock` factory 或匹配的手写 mock 会提供模块的运行时导出。
 
 ### Done 回调
 
@@ -343,15 +325,6 @@ Rstest 默认按声明的逆序执行 `afterEach` 和 `afterAll` Hook。设置 [
 + beforeEach(() => { doSomething(); });
 ```
 
-### 超时设置
-
-将 `jest.setTimeout()` 替换为 `rs.setConfig()`：
-
-```diff
-- jest.setTimeout(5_000)
-+ rs.setConfig({ testTimeout: 5_000 })
-```
-
 ## Snapshot 格式
 
 Rstest 的 snapshot key 格式与 Jest 不同。原有的 Jest snapshot 文件在 Rstest 首次运行时不会匹配，snapshot body 本身不变，仅 key 的书写形式不同。
@@ -383,27 +356,19 @@ rstest overlay -u        # 只更新过滤范围
 
 ### Diff 审查
 
-迁移之后，snapshot 文件里的大多数变化都是非功能性的：
-
-- 仅分隔符变化的 key rename 属于格式变化，不是行为变化。
-- key 顺序变动、但 body 无 diff 同样属于纯格式变化。
-- 只有 key 不变、body 内容变了，才是真实的行为变化。
+仅分隔符变化或 key 顺序变动且 body 无差异都属于纯格式变化；只有同一 key 下 body 内容发生变化，才代表真实的行为差异。
 
 ## ESM 和 CJS
 
-Rstest 默认支持 ESM。ESM 项目无需额外配置（例如设置 `NODE_OPTIONS=--experimental-vm-modules`）。
-
-CommonJS 项目也能正常运行，但建议逐步迁移到 ESM，以获得更好的性能和后续兼容性。
+Rstest 原生支持 ESM（无需设置 `NODE_OPTIONS=--experimental-vm-modules`），同时也支持 CommonJS 项目。
 
 ### ESM vs CJS mocking
 
-在 Rstest 中，`rs.mock()` 针对 `import` 解析到的入口，而 `rs.mockRequire()` 针对 `require()` 解析到的入口。如果两者解析到同一个打包模块，`rs.mock()` 也会影响 `require()`；如果包提供了单独的 CJS 入口，请使用 `rs.mockRequire()`。
+在 Rstest 中，`rs.mock()` 针对 `import` 入口，而通过 `require()` 加载独立 CJS 入口的模块需使用 `rs.mockRequire()`（详见 [Mock CommonJS 模块](/guide/basic/mock#mock-commonjs-模块)）：
 
-代码中使用 `require()` 时，`rs.mockRequire()` 对应 CJS 入口的 mock：
-
-```ts
-// Mock 一个 CJS 模块
-rs.mockRequire('./math.cjs', () => ({
+```diff
+- jest.mock('./math.cjs', () => ({
++ rs.mockRequire('./math.cjs', () => ({
   sum: (a, b) => a + b + 100,
 }));
 ```

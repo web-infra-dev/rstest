@@ -130,27 +130,17 @@ const original = {
 
 const mocked = rs.mockObject(original);
 
-// Methods return undefined by default
-expect(mocked.method()).toBe(undefined);
-expect(mocked.nested.getValue()).toBe(undefined);
+// Methods are mock functions and return undefined by default
+expect(rs.isMockFunction(mocked.method)).toBe(true);
+expect(mocked.method()).toBeUndefined();
+expect(mocked.nested.getValue()).toBeUndefined();
+
+// Configure return values with standard Mock methods
+mocked.method.mockReturnValue(100);
+expect(mocked.method()).toBe(100);
 
 // Primitive values are preserved
 expect(mocked.prop).toBe('foo');
-
-// Methods are mock functions
-expect(rs.isMockFunction(mocked.method)).toBe(true);
-```
-
-### Mocking return values
-
-```ts
-const mocked = rs.mockObject({
-  fetchData: () => 'real data',
-});
-
-mocked.fetchData.mockReturnValue('mocked data');
-
-expect(mocked.fetchData()).toBe('mocked data');
 ```
 
 ### Spy mode
@@ -183,7 +173,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mocking classes
 
-Pass a class constructor to mock it. With `{ spy: true }`, instances retain their original methods as spies:
+Pass a class constructor to mock it. Without `{ spy: true }`, `rs.mockObject(Class)` returns a plain mock function (`new` returns `undefined`, with no prototype method mocking). With `{ spy: true }`, instances retain their original methods as spies:
 
 ```ts
 class UserService {

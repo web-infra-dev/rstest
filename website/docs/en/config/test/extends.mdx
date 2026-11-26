@@ -97,7 +97,7 @@ Merge rules:
 
 - Primitive fields such as `testTimeout`, `retry`, and `globals` are overridden by the later value.
 - `setupFiles`, `globalSetup`, and `plugins` are concatenated across presets.
-- `include`, `reporters`, and `coverage.reporters` are replaced by the later value.
+- `include`, `forceRerunTriggers`, `reporters`, and `coverage.reporters` are replaced by the later value.
 - Object fields such as `source`, `resolve`, `output`, `tools`, `env`, and `coverage` are deep-merged.
 - `browser` deep-merges plain objects, including nested `providerOptions`; arrays, functions, and class instances are replaced by the later value (for example, overriding `providerOptions.launch.args` replaces the array while preserving `launch.timeout` and `context.locale`).
 - `projects` is ignored in every extended config.

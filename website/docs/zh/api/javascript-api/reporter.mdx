@@ -68,7 +68,7 @@ interface Reporter {
 ```
 
 - `onTestSuiteResult`：`result.errors` 仅包含套件级错误——即套件钩子（`beforeAll` 和 `afterAll`）错误以及运行器生成的套件错误（例如 `passWithNoTests` 为 `false` 时空套件产生的 `No tests` 错误），不包含子测试用例的失败错误。
-- **元数据（Metadata）** <ApiMeta sup addedVersion="0.11.1" />：通过 `context.task.meta` 写入的运行时元数据可在 `onTestCaseResult` 收到的 `TestResult.meta` 中读取；通过钩子 `ctx.meta` 写入的元数据分别在 `onTestSuiteResult` 的 `TestResult.meta` 和 `onTestFileResult` 的 `TestFileResult.meta` 中读取。
+- **元数据（Metadata）** <ApiMeta sup addedVersion="0.11.1" />：通过 `context.task.meta` 写入的运行时元数据可在 `onTestCaseResult` 收到的 `TestResult.meta` 中读取；通过钩子 `ctx.meta` 写入的元数据分别在 `onTestSuiteResult` 的 `TestResult.meta` 和 `onTestFileResult` 的 `TestFileResult.meta` 中读取。详见[在自定义 Reporter 中读取 metadata](/guide/advanced/metadata#在自定义-reporter-中读取-metadata)。
 - **`onExit`** <ApiMeta sup addedVersion="0.12.0" />：Reporter 所属的上下文释放时调用，涵盖正常 run/merge 结束、watch 关闭、启动失败以及 CLI 异常退出。适合用来释放流或渲染器等资源。`onExit` 抛出的错误不会覆盖操作本身的结果或错误。（list 上下文不挂载 Reporter，因此 `listTests` 不会触发 `onExit`。）
 
 ### onTestRunStart
@@ -351,26 +351,6 @@ const jsonReporter: Reporter = {
     };
 
     writeFileSync('test-report.json', JSON.stringify(report, null, 2));
-  },
-};
-```
-
-### 读取运行时 metadata
-
-```ts
-import type { Reporter } from '@rstest/core';
-
-const metadataReporter: Reporter = {
-  onTestCaseResult(result) {
-    console.log(result.name, result.meta);
-  },
-
-  onTestSuiteResult(result) {
-    console.log(result.name, result.meta);
-  },
-
-  onTestFileResult(result) {
-    console.log(result.testPath, result.meta);
   },
 };
 ```

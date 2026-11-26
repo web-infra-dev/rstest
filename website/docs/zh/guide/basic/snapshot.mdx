@@ -2,8 +2,6 @@
 description: 通过 Rstest 快照测试捕获并比对序列化的输出，及时发现数据结构或 UI 的意外变化。
 ---
 
-import { Tab, Tabs } from '@theme';
-
 # 快照测试
 
 快照测试会将值序列化并与已保存的参考快照进行比对。预期内的改动可以更新快照，意外的差异则会让测试失败。
@@ -105,33 +103,7 @@ test('file snapshot', async () => {
 
 ## 更新快照
 
-在默认配置（`update: false`）下：
-
-- **本地开发**：新增的快照会自动写入文件，已有快照不匹配时测试失败。
-- **CI 环境**（存在 `process.env.CI`）：既不自动创建新快照，也不更新已有快照——缺失或不匹配都会报错。
-
-当输出变更是预期行为时，可以通过 `-u` / `--update` 参数、`update: true` 配置，或在交互式 watch 模式下按 `u` 快捷键来更新快照：
-
-<Tabs>
-  <Tab label="CLI">
-```bash
-npx rstest -u
-# 或
-npx rstest --update
-```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  update: true,
-});
-```
-  </Tab>
-</Tabs>
-
-启用 `-u` / `--update` 或 `update: true` 时，Rstest 会更新所有发生变化的快照并删除过期快照。
+默认配置（`update: false`）下，本地会自动写入新增快照（存在 `process.env.CI` 时禁用），不匹配则报错。需要更新变更的快照并删除过期快照时，可运行 `npx rstest -u`、配置 `update: true`，或在交互式 watch 模式下按 `u`，详见 [update](/config/test/update)。
 
 ## 序列化输出
 
@@ -173,77 +145,4 @@ test('serialized snapshot', () => {
 
 ## 快照输出路径
 
-默认情况下，`.snap` 文件保存在与测试文件同级的 `__snapshots__` 目录中：
-
-```
-src/
-├── components/
-│   ├── button.test.ts
-│   └── __snapshots__/
-│       └── button.test.ts.snap
-```
-
-可以通过 [resolveSnapshotPath](/config/test/resolve-snapshot-path) 自定义快照路径：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  resolveSnapshotPath: (testPath, snapExtension) => {
-    // 将快照保存在测试文件同级目录
-    return `${testPath}${snapExtension}`;
-  },
-});
-```
-
-## 最佳实践
-
-### 保持快照简洁
-
-只序列化与当前断言相关的字段，避免包含时间戳、随机 session ID 或 User-Agent 等易变字段（或通过属性匹配器处理）：
-
-```ts
-// ✅ 推荐 - 仅包含关键字段
-test('user info snapshot', () => {
-  const userInfo = {
-    name: 'Alice',
-    role: 'admin',
-    permissions: ['read', 'write'],
-  };
-  expect(userInfo).toMatchSnapshot();
-});
-
-// ❌ 避免 - 包含过多易变字段
-test('complete user object snapshot', () => {
-  const fullUser = {
-    ...user,
-    lastLogin: new Date(),
-    sessionId: 'abc123',
-    userAgent: 'Mozilla/5.0...',
-  };
-  expect(fullUser).toMatchSnapshot();
-});
-```
-
-### 使用有区分度的快照名称
-
-同一测试内有多个快照时，为每个快照传入描述性名称：
-
-```ts
-test('component state changes', () => {
-  const component = new MyComponent();
-
-  expect(component.initialState).toMatchSnapshot('initial state');
-
-  component.update();
-  expect(component.updatedState).toMatchSnapshot('updated state');
-});
-```
-
-### 定期审查快照
-
-像审查业务代码一样对待快照文件：
-
-- 更新前先确认 diff 是否符合预期，不要盲目执行 `-u`。
-- 删除或重构测试时，及时清理不再使用的快照。
-- 简短的输出优先使用内联快照，便于在测试文件中直接阅读。
+默认情况下，`.snap` 文件保存在与测试文件同级的 `__snapshots__` 目录中。如需自定义存储路径，请配置 [resolveSnapshotPath](/config/test/resolve-snapshot-path)。

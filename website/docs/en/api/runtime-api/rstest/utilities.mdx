@@ -60,15 +60,7 @@ rs.unstubAllEnvs();
 expect(process.env.NODE_ENV).toBe(originalNodeEnv);
 ```
 
-To restore automatically after every test without enabling `unstubEnvs`, call it in [`afterEach`](/api/runtime-api/test-api/hooks#aftereach):
-
-```ts
-import { afterEach } from '@rstest/core';
-
-afterEach(() => {
-  rs.unstubAllEnvs();
-});
-```
+To restore manually after every test instead of enabling [`unstubEnvs`](/config/test/unstub-envs), call `rs.unstubAllEnvs()` in [`afterEach`](/api/runtime-api/test-api/hooks#aftereach).
 
 ## rs.stubGlobal
 
@@ -116,15 +108,7 @@ rs.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
 
-To restore automatically after every test without enabling `unstubGlobals`, call it in [`afterEach`](/api/runtime-api/test-api/hooks#aftereach):
-
-```ts
-import { afterEach } from '@rstest/core';
-
-afterEach(() => {
-  rs.unstubAllGlobals();
-});
-```
+To restore manually after every test instead of enabling [`unstubGlobals`](/config/test/unstub-globals), call `rs.unstubAllGlobals()` in [`afterEach`](/api/runtime-api/test-api/hooks#aftereach).
 
 ## rs.setConfig
 

@@ -89,45 +89,7 @@ Rstest 不使用 Jest 的第三个 `{ virtual: true }` 参数。请在类型声�
 
 `rs.mock` 会被提升，覆盖静态 `import`；动态 `import()` 需在导入前调用 `rs.doMock`，而解析到独立 CommonJS 入口的 `require()` 请使用 `rs.mockRequire` 或 `rs.doMockRequire`。由于映射为 `false` 的 alias 没有真实实现，请使用工厂函数或手写 mock，不要使用 `{ mock: true }`、`{ spy: true }` 或 `rs.importActual`。
 
-#### 使用 `rs.fn()` 追踪调用
-
-在工厂函数中返回 `rs.fn()`，以追踪调用并配置返回值：
-
-```ts title="src/api.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { fetchUser, fetchPosts } from './api';
-
-rs.mock('./api', () => ({
-  fetchUser: rs.fn().mockResolvedValue({ id: 1, name: 'John' }),
-  fetchPosts: rs.fn().mockResolvedValue([{ id: 1, title: 'Hello' }]),
-}));
-
-test('获取用户数据', async () => {
-  const user = await fetchUser(1);
-  expect(user).toEqual({ id: 1, name: 'John' });
-  expect(fetchUser).toHaveBeenCalledWith(1);
-});
-```
-
-#### 使用 `rs.mockObject()` 自动 mock
-
-```ts title="src/service.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { userService } from './userService';
-
-rs.mock('./userService', () => ({
-  userService: rs.mockObject({
-    getUser: () => {},
-    updateUser: () => {},
-    deleteUser: () => {},
-  }),
-}));
-
-test('服务方法被 mock', () => {
-  userService.getUser(1);
-  expect(userService.getUser).toHaveBeenCalledWith(1);
-});
-```
+可在工厂函数内结合 [`rs.fn()`](/api/runtime-api/rstest/mock-functions#rsfn) 或 [`rs.mockObject()`](/api/runtime-api/rstest/mock-functions#rsmockobject) 来追踪调用、配置返回值或自动 mock 对象。
 
 #### 使用 `importActual` 部分 mock
 
@@ -195,20 +157,6 @@ rs.mock('lodash');
 rs.mock('../src/multiple');
 
 lodash.random(multiple(1, 2), multiple(3, 4));
-```
-
-未找到手写 mock 时，Rstest 会自动 mock 该模块：
-
-```ts title="src/math.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { add } from './math';
-
-rs.mock('./math');
-
-test('回退为自动 mock', () => {
-  expect(rs.isMockFunction(add)).toBe(true);
-  expect(add(1, 2)).toBeUndefined();
-});
 ```
 
 ### 使用 `{ spy: true }` 选项 \{#with-spy-true-option}

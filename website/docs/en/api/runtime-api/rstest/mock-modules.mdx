@@ -89,45 +89,7 @@ Rstest does not use Jest's third `{ virtual: true }` argument. Keep the same spe
 
 `rs.mock` covers static `import` statements; call `rs.doMock` before dynamic `import()` calls, and use `rs.mockRequire` / `rs.doMockRequire` when `require()` resolves to a separate CommonJS entry. Because an alias mapped to `false` has no underlying module, use a factory or manual mock instead of `{ mock: true }`, `{ spy: true }`, or `rs.importActual`.
 
-#### With `rs.fn()` for call tracking
-
-Return `rs.fn()` mocks from the factory to track calls and configure return values:
-
-```ts title="src/api.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { fetchUser, fetchPosts } from './api';
-
-rs.mock('./api', () => ({
-  fetchUser: rs.fn().mockResolvedValue({ id: 1, name: 'John' }),
-  fetchPosts: rs.fn().mockResolvedValue([{ id: 1, title: 'Hello' }]),
-}));
-
-test('fetch user data', async () => {
-  const user = await fetchUser(1);
-  expect(user).toEqual({ id: 1, name: 'John' });
-  expect(fetchUser).toHaveBeenCalledWith(1);
-});
-```
-
-#### With `rs.mockObject()` for auto-mocking
-
-```ts title="src/service.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { userService } from './userService';
-
-rs.mock('./userService', () => ({
-  userService: rs.mockObject({
-    getUser: () => {},
-    updateUser: () => {},
-    deleteUser: () => {},
-  }),
-}));
-
-test('service methods are mocked', () => {
-  userService.getUser(1);
-  expect(userService.getUser).toHaveBeenCalledWith(1);
-});
-```
+Use [`rs.fn()`](/api/runtime-api/rstest/mock-functions#rsfn) or [`rs.mockObject()`](/api/runtime-api/rstest/mock-functions#rsmockobject) inside the factory to track calls, configure return values, or auto-mock service objects.
 
 #### Partial mock with `importActual`
 
@@ -195,20 +157,6 @@ rs.mock('lodash');
 rs.mock('../src/multiple');
 
 lodash.random(multiple(1, 2), multiple(3, 4));
-```
-
-If no manual mock exists, Rstest auto-mocks the module:
-
-```ts title="src/math.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { add } from './math';
-
-rs.mock('./math');
-
-test('falls back to auto-mocking', () => {
-  expect(rs.isMockFunction(add)).toBe(true);
-  expect(add(1, 2)).toBeUndefined();
-});
 ```
 
 ### With `{ spy: true }` option \{#with-spy-true-option}

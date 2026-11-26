@@ -14,16 +14,12 @@ Run all tests:
 rstest
 ```
 
-Positional filters match paths relative to the project root using case-insensitive substring matching. For example, `rstest foo` runs `foo.test.ts`, `foo/index.test.ts`, and `foo-bar/index.test.ts`:
+Positional filters accept substrings, relative or absolute file paths, and directory paths (multiple filters match any of them):
 
 ```bash
 rstest foo
-```
-
-Pass multiple positional filters to run files matching any of them:
-
-```bash
 rstest test/foo.test.ts test/bar.test.ts
+rstest packages/core
 ```
 
 Wrap a filter in quotes for exact whole-path matching (for example, to avoid matching `foo.test.tsx` when targeting `foo.test.ts`). Because the shell strips one layer of quotes, pass two layers:
@@ -32,27 +28,10 @@ Wrap a filter in quotes for exact whole-path matching (for example, to avoid mat
 rstest '"test/foo.test.ts"'
 ```
 
-Use `--include` for glob patterns, quoted to prevent shell expansion:
+Rstest does not parse positional filters as glob patterns. Use `--include` for glob patterns, quoted to prevent shell expansion:
 
 ```bash
 rstest --include "test/**/*.test.ts"
-```
-
-### Filter by file path
-
-Rstest does not parse positional filters as glob patterns. An unquoted glob may be expanded differently by each shell; use `--include` for glob matching.
-
-Positional filters accept absolute paths, paths relative to the Rstest root directory, and directory paths:
-
-```bash
-# Filter by absolute path
-rstest /path/to/project/packages/core/tests/index.test.ts
-
-# Filter by relative path
-rstest packages/core/tests/index.test.ts
-
-# Filter by directory
-rstest packages/core
 ```
 
 ### include/exclude
@@ -186,66 +165,30 @@ rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePatter
 
 This command runs only tests whose names contain `login` across `.test.ts` files under `test/`, excluding `test/legacy/`.
 
-## Common usage
-
-- **Run a single file:** `rstest '"test/foo.test.ts"'`
-- **Run tests in a directory:** `rstest --include "test/api/*.test.ts"`
-- **Exclude files:** `rstest --exclude "test/legacy/**"`
-- **Filter by test name:** `rstest -t login`
-- **Re-run previous failures:** `rstest -f`
-- **Combine filters:** `rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login`
-
 ## Filter via test API
 
 Control which suites and test cases run directly in test code with [`test`](/api/runtime-api/test-api/test) and [`describe`](/api/runtime-api/test-api/describe) modifiers:
 
-- `.only`: runs only the marked suites or test cases inside the current file.
+- `.only`: runs only the marked suites or test cases inside the current file (combine with a CLI file filter to isolate one file).
 - `.skip` / `.todo`: skips suites or test cases, or marks them as todo.
-- `.skipIf(condition)` / `.runIf(condition)`: skips or runs a suite or test case conditionally based on a boolean expression.
-- `context.skip()`: skips a test dynamically while it is running and stops executing the rest of the test body.
-
-```ts
-import { describe, expect, test } from '@rstest/core';
-
-describe.only('suite A', () => {
-  test('runs because suite A has .only', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
-
-describe('suite B', () => {
-  test('skipped because another suite has .only', () => {
-    // ...
-  });
-});
-```
-
-:::note
-`.only` only scopes execution within the current test file. Combine it with a CLI file filter when debugging a single file.
-:::
+- `.skipIf(condition)` / `.runIf(condition)`: conditionally skips or runs suites or test cases.
+- `context.skip()`: skips a test dynamically during execution.
 
 ```ts
 import { describe, test } from '@rstest/core';
 
-describe.skip('suite A', () => {
-  // ...
+describe.only('suite A', () => {
+  test('runs only this suite in the file', () => {});
 });
 
-test.todo('case A');
+describe.skip('suite B', () => {});
+test.todo('pending case');
+test.skipIf(process.platform === 'win32')('POSIX only', () => {});
+test.runIf(Boolean(process.env.CI))('CI only', () => {});
 
-test.skipIf(process.platform === 'win32')('runs on POSIX only', () => {
-  // ...
-});
-
-test.runIf(Boolean(process.env.CI))('runs in CI only', () => {
-  // ...
-});
-
-test('skips dynamically at runtime', (context) => {
+test('skips dynamically', (context) => {
   if (!process.env.API_TOKEN) {
     context.skip();
   }
-
-  // Skipped assertions below do not execute
 });
 ```

@@ -43,7 +43,7 @@ function defineConfig(config: RstestConfigExport): RstestConfigExport;
 
 - **Examples:**
 
-Pass a config object directly:
+Pass a config object or a sync/async factory function:
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -57,21 +57,10 @@ export default defineConfig({
 });
 ```
 
-Return a config from a synchronous factory:
-
 ```ts
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig(() => ({
-  testTimeout: 10000,
-}));
-```
-
-Return a config from an asynchronous factory:
-
-```ts
-import { defineConfig } from '@rstest/core';
-
+// Or return a config from a sync (`() => ({ ... })`) or async factory:
 export default defineConfig(async () => ({
   testTimeout: 10000,
 }));
@@ -108,7 +97,7 @@ function defineProject(config: NestedProjectConfig): NestedProjectConfig;
 
 - **Examples:**
 
-Pass a project config object directly:
+Pass a project config object or a sync/async factory function:
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -119,22 +108,10 @@ export default defineProject({
 });
 ```
 
-Return a project config from a synchronous factory:
-
 ```ts
 import { defineProject } from '@rstest/core';
 
-export default defineProject(() => ({
-  root: './apps/web',
-  testEnvironment: 'node',
-}));
-```
-
-Return a project config from an asynchronous factory:
-
-```ts
-import { defineProject } from '@rstest/core';
-
+// Or return a project config from a sync (`() => ({ ... })`) or async factory:
 export default defineProject(async () => ({
   root: './apps/web',
   testEnvironment: 'node',
@@ -194,7 +171,7 @@ export default defineConfig({
 
 ## mergeRstestConfig
 
-Deeply merges multiple Rstest config objects into a single config. Multiple function values are combined into sequentially executed functions (except under `browser`, which uses plain deep merge so arrays and functions are replaced). Later configs replace rather than concatenate `include`, `forceRerunTriggers`, `reporters`, and `coverage.reporters`.
+Deeply merges multiple Rstest config objects into a single config. Multiple function values are combined into sequentially executed functions (except under `browser`, which uses plain deep merge so arrays and functions are replaced). Later configs replace rather than concatenate `include`, `forceRerunTriggers`, `reporters`, `coverage.reporters`, and `exclude` when passed in `{ patterns, override: true }` form.
 
 - **Type:**
 

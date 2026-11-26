@@ -43,7 +43,7 @@ function defineConfig(config: RstestConfigExport): RstestConfigExport;
 
 - **示例：**
 
-直接传入配置对象：
+直接传入配置对象，或传入同步 / 异步工厂函数：
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -57,21 +57,10 @@ export default defineConfig({
 });
 ```
 
-通过同步工厂函数返回配置：
-
 ```ts
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig(() => ({
-  testTimeout: 10000,
-}));
-```
-
-通过异步工厂函数返回配置：
-
-```ts
-import { defineConfig } from '@rstest/core';
-
+// 也可以通过同步（`() => ({ ... })`）或异步工厂函数返回配置：
 export default defineConfig(async () => ({
   testTimeout: 10000,
 }));
@@ -108,7 +97,7 @@ function defineProject(config: NestedProjectConfig): NestedProjectConfig;
 
 - **示例：**
 
-直接传入项目配置对象：
+直接传入项目配置对象，或传入同步 / 异步工厂函数：
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -119,22 +108,10 @@ export default defineProject({
 });
 ```
 
-通过同步工厂函数返回项目配置：
-
 ```ts
 import { defineProject } from '@rstest/core';
 
-export default defineProject(() => ({
-  root: './apps/web',
-  testEnvironment: 'node',
-}));
-```
-
-通过异步工厂函数返回项目配置：
-
-```ts
-import { defineProject } from '@rstest/core';
-
+// 也可以通过同步（`() => ({ ... })`）或异步工厂函数返回项目配置：
 export default defineProject(async () => ({
   root: './apps/web',
   testEnvironment: 'node',
@@ -194,7 +171,7 @@ export default defineConfig({
 
 ## mergeRstestConfig
 
-将多个 Rstest 配置对象深度合并为单个配置。多个函数值会合并为按顺序执行的函数数组（`browser` 配置除外，它采用普通对象深合并，会直接替换数组和函数）。后续配置中的 `include`、`forceRerunTriggers`、`reporters` 和 `coverage.reporters` 会覆盖前值，而非拼接。
+将多个 Rstest 配置对象深度合并为单个配置。多个函数值会合并为按顺序执行的函数数组（`browser` 配置除外，它采用普通对象深合并，会直接替换数组和函数）。后续配置中的 `include`、`forceRerunTriggers`、`reporters`、`coverage.reporters`，以及使用 `{ patterns, override: true }` 形式的 `exclude` 会覆盖前值，而非拼接。
 
 - **类型：**
 

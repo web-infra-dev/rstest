@@ -31,11 +31,11 @@ Reporter hooks 和 programmatic API 可以从 `TestResult.meta` 读取这些声�
 
 ```ts
 test('records runtime data', ({ task }) => {
-  task.meta = {
-    durationBucket: 'fast',
-  };
+  task.meta.durationBucket = 'fast';
 });
 ```
+
+建议直接修改 `task.meta` 上的单个属性；直接赋值 `task.meta = { ... }` 会替换整个对象，清除此前声明或从套件继承的字段。
 
 ## 为套件添加 metadata
 
@@ -149,21 +149,7 @@ for (const file of result.results) {
 
 ## Metadata 值类型
 
-Metadata 必须可 JSON 序列化。`TaskMeta` 和 `TaskMetaValue` 从 `@rstest/core` 导出：
-
-```ts
-type TaskMeta = Record<string, TaskMetaValue>;
-
-type TaskMetaValue =
-  | string
-  | number
-  | boolean
-  | null
-  | TaskMetaValue[]
-  | { [key: string]: TaskMetaValue };
-```
-
-不要在 metadata 中存储函数、类实例、symbol、`BigInt` 或大型对象。建议使用小型字符串、数字、布尔值、数组和普通对象。
+Metadata 必须可 JSON 序列化（建议使用小型字符串、数字、布尔值、`null`、数组和普通对象；不要存储函数、类实例、symbol、`BigInt` 或大型对象）。`@rstest/core` 导出的类型定义见 [`TaskMeta` 与 `TaskMetaValue`](/api/runtime-api/test-api/test#testoptions)。
 
 ## 继承和隔离规则
 

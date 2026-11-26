@@ -13,25 +13,7 @@ Reporters control how Rstest formats and outputs test results. Use built-in repo
 
 ## Using reporters
 
-Configure reporters via:
-
-1. **CLI**: `--reporters=<name>` (repeatable; `--reporter` is also accepted as an alias)
-2. **Config file**: Set [reporters](/config/test/reporters) in `rstest.config.ts`
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-import { customReporter } from './path/to/custom-reporter';
-
-export default defineConfig({
-  reporters: [
-    'default',
-    ['junit', { outputPath: './test-results.xml' }],
-    customReporter,
-  ],
-});
-```
-
-See [reporters configuration](/config/test/reporters) for all config shapes, and [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts) for the built-in option types (the `junit` option type is `Record<string, unknown>` in the public union; see [JUnit reporter](#junit-reporter) below).
+Configure reporters via `--reporters=<name>` (`--reporter` alias, repeatable) on the CLI or [reporters](/config/test/reporters) in `rstest.config.ts`. See [reporters configuration](/config/test/reporters) for all config shapes and combinations.
 
 ## Built-in reporters
 
@@ -164,25 +146,6 @@ After the marker stream, it prints the failure details and duration summary unle
 ### GitHub Actions reporter
 
 Emits [GitHub Actions workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) for failed tests so errors annotate the pull request diff in CI.
-
-**Auto-enablement:** Automatically enabled alongside `default` when `process.env.GITHUB_ACTIONS === 'true'` and no reporter is explicitly configured.
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-```bash
-npx rstest --reporters=github-actions
-```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: ['github-actions'],
-});
-```
-  </Tab>
-</Tabs>
 
 Failed assertions emit workflow commands like:
 
@@ -401,48 +364,7 @@ export default defineConfig({
 
 #### Output structure
 
-Each report starts with YAML frontmatter and `# Rstest Test Execution Report`, followed by `## Summary`, optional `## Tests` (on focused passing runs or `testLists: 'always'`), `## Failures`, and `## Unhandled Errors` when applicable.
-
-When all tests pass on a full run:
-
-````md
-## Summary
-
-```json
-{
-  "status": "passed",
-  "counts": {
-    "testFiles": 2,
-    "failedFiles": 0,
-    "tests": 14,
-    "failedTests": 0,
-    "passedTests": 13,
-    "skippedTests": 1,
-    "todoTests": 0
-  },
-  "durationMs": {
-    "total": 120,
-    "build": 25,
-    "tests": 95
-  },
-  "snapshot": {
-    "added": 0,
-    "updated": 0,
-    "unmatched": 0,
-    "removed": 0,
-    "unchecked": 0
-  }
-}
-```
-
-## Failures
-
-No test failures reported.
-
-Note: all tests passed. Lists omitted for brevity.
-````
-
-When tests fail:
+Each report starts with YAML frontmatter and `# Rstest Test Execution Report`, followed by `## Summary`, optional `## Tests` (on focused passing runs or `testLists: 'always'`), `## Failures`, and `## Unhandled Errors` when applicable. When all tests pass on a full run, `## Failures` omits test lists for brevity; when tests fail, each failure includes a `repro` command, JSON `details`, and `diff`:
 
 ````md
 ## Summary
@@ -459,55 +381,18 @@ When tests fail:
     "skippedTests": 0,
     "todoTests": 0
   },
-  "durationMs": {
-    "total": 84,
-    "build": 18,
-    "tests": 66
-  },
-  "snapshot": {
-    "added": 0,
-    "updated": 0,
-    "unmatched": 0,
-    "removed": 0,
-    "unchecked": 0
-  }
+  "durationMs": { "total": 84, "build": 18, "tests": 66 }
 }
 ```
 
 ## Failures
 
-### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+### [F01] tests/math.test.ts :: math > adds numbers
 
 repro:
 
 ```bash
-pnpm exec rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'
-```
-
-details:
-
-```json
-{
-  "testPath": "fixtures/agent-md/index.test.ts",
-  "project": "rstest",
-  "fullName": "agent-md > fails with diff",
-  "status": "failed",
-  "duration": 12,
-  "retryCount": 0,
-  "errors": [
-    {
-      "type": "AssertionError",
-      "message": "expected 2 to be 3",
-      "topFrame": {
-        "file": "fixtures/agent-md/index.test.ts",
-        "line": 4,
-        "column": 15,
-        "method": null
-      },
-      "stackFrames": []
-    }
-  ]
-}
+pnpm exec rstest 'tests/math.test.ts' --testNamePattern 'math > adds numbers'
 ```
 
 diff:
@@ -575,20 +460,10 @@ export default defineConfig({
 });
 ```
 
-When coverage is enabled, each blob stores only the coverage collected during that run. With coverage providers that support deferred finalization, runs using the blob reporter do not generate coverage reports, add untested files from `coverage.include`, or check coverage thresholds (runs without the blob reporter finalize coverage normally, including sharded runs; older providers retain per-run finalization). Run [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) with coverage enabled after all shards finish to finalize coverage once across the unified result. Coverage options passed only on a blob-producing run are not stored in the blob; keep finalization options in the config file or repeat them on `merge-reports`.
-
-See [split tests with shards](/guide/advanced/ci#split-tests-with-shards) for a complete CI workflow example.
+With coverage enabled, each blob stores only that shard's coverage; providers with deferred finalization skip report generation and threshold checks until [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) runs across all blobs. Keep coverage finalization options in `rstest.config.ts` or repeat them on `merge-reports`, and see [split tests with shards](/guide/advanced/ci#split-tests-with-shards) for a full CI workflow.
 
 ## Custom reporters
 
-Pass a custom reporter by module specifier (or `[moduleName, options]`) whose default export is a `Reporter` class, or pass a constructed object implementing the `Reporter` interface. Passing a class constructor directly is not supported. `.ts` and `.mts` reporter modules load directly on Node 22.18+ / 24 with type stripping enabled.
+Pass a module specifier (`'./custom-reporter.js'` or `['./custom-reporter.js', options]`) whose default export is a `Reporter` class, or pass a constructed `Reporter` instance; passing a class constructor directly is not supported. Node 22.18+ / 24 loads `.ts` and `.mts` reporter modules directly with type stripping.
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
-});
-```
-
-See the [Reporter API reference](/api/javascript-api/reporter) for lifecycle hooks and payload types.
+See the [Reporter API reference](/api/javascript-api/reporter) for lifecycle hooks, configuration examples, and payload types.

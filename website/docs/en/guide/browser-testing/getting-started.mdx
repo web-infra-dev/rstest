@@ -10,7 +10,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## Automatic initialization
 
-The quickest way is to use the `@rstest/core init browser` command for automatic configuration:
+The quickest way is to run `npx @rstest/core init browser` for automatic configuration:
 
 <PackageManagerTabs command="@rstest/core init browser" dlx />
 
@@ -130,32 +130,11 @@ test('counter increments on click', async () => {
 });
 ```
 
-This example uses `page.getByRole()` to locate a button by its semantic role, triggers an interaction with `click()`, and asserts the result with `expect.element().toBeVisible()`. The assertion automatically waits for the element state to change — no manual polling needed.
-
 ## Headless vs headed mode
 
-By default, Browser Mode automatically selects the running mode based on the environment:
-
-- **CI environment**: Automatically uses headless mode (no UI)
-- **Local development**: Uses headed mode by default (shows browser window)
+By default, Browser Mode uses headless mode in CI environments and headed mode (showing the browser window) during local development. Configure [`browser.headless`](/config/test/browser#headless) or pass `--browser.headless` to override this behavior.
 
 The headed window shows the running file in **Preview**. After the run, **Results** opens the first failure or shows a summary if all tests pass. Select a file to see its tests and durations. Watch reruns return to the file, test, and view you selected.
-
-### Configuring headless mode
-
-You can explicitly specify this in your configuration file:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-    headless: true, // Always use headless mode
-  },
-});
-```
 
 ## Configuration reference
 

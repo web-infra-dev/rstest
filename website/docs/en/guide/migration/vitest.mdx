@@ -254,45 +254,24 @@ If you enable Rspack's `module.parser.javascript.importMetaResolve` through `too
 
 ### Auto-mocking modules
 
-Both Vitest and Rstest support auto-mocking when the mock call only includes the module path. Rstest first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all function exports with empty mock functions.
-
-This behavior is supported starting from Rstest 0.11.0. In earlier versions, pass `{ mock: true }` explicitly to request auto-mocking when no manual mock exists.
-
-```ts
-// Rstest
-import { rs, test, expect } from '@rstest/core';
-import { someFunction } from './module';
-
-// Looks for __mocks__/module.js first, then auto-mocks.
-rs.mock('./module');
-
-test('should be mocked', () => {
-  expect(rs.isMockFunction(someFunction)).toBe(true);
-  someFunction(); // returns undefined
-});
-```
-
-If you want to skip the `__mocks__` lookup and request auto-mocking directly, pass `{ mock: true }` explicitly:
-
-```ts
-rs.mock('./module', { mock: true });
-```
+Like Vitest, `rs.mock('./module')` checks `__mocks__` first and falls back to auto-mocking (since Rstest 0.11.0). Pass `{ mock: true }` to skip `__mocks__` lookup and auto-mock directly (required on earlier versions). See [Mocking](/guide/basic/mock).
 
 ### Mock async modules
 
-Rstest does not support async mock factories. Use a synchronous static import with `with { rstest: 'importActual' }` instead (see [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual)):
+Unlike Vitest, Rstest does not support async `rs.mock()` factories. Replace them with a synchronous static import using `with { rstest: 'importActual' }` (and `rs.hoisted()` when sharing mock values with the factory); see [Mocking](/guide/basic/mock#mock-esm-modules):
 
-```ts
-import * as apiActual from './api' with { rstest: 'importActual' };
-
-// Partially mock the './api' module
-rs.mock('./api', () => ({
-  ...apiActual,
-  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
-}));
+```diff
+- vi.mock('./api', async (importOriginal) => ({
+-   ...(await importOriginal()),
+-   fetchUser: vi.fn().mockResolvedValue({ id: 'mocked' }),
+- }));
++ import * as apiActual from './api' with { rstest: 'importActual' };
++
++ rs.mock('./api', () => ({
++   ...apiActual,
++   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
++ }));
 ```
-
-Because mock factories are hoisted, avoid relying on values initialized later in the same module. If needed, move shared values to a hoisted initializer (for example `rs.hoisted(...)`) to avoid initialization-order errors.
 
 ## Snapshots
 

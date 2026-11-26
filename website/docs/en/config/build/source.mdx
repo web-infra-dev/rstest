@@ -130,16 +130,4 @@ Configures a custom `tsconfig.json` path (relative to the project root or absolu
 
 When unset, Rstest detects `tsconfig.json` in each project's root and uses its `compilerOptions.paths` mappings for module resolution.
 
-Rstest does not convert other `compilerOptions` into transform settings. Configure build options explicitly when needed—such as [`source.decorators`](#sourcedecorators) for decorator syntax or [`tools.swc`](/config/build/tools#toolsswc) for SWC target settings—or use an [adapter](/guide/advanced/adapters) that maps them for you. For example, to enable legacy decorators:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  source: {
-    decorators: {
-      version: 'legacy',
-    },
-  },
-});
-```
+Rstest does not convert other `compilerOptions` into transform settings. Configure build options explicitly when needed—such as [`source.decorators`](#sourcedecorators) for decorator syntax (for example, `version: 'legacy'`) or [`tools.swc`](/config/build/tools#toolsswc) for SWC target settings—or use an [adapter](/guide/advanced/adapters) that maps them for you.

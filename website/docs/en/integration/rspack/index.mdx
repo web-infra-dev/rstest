@@ -33,13 +33,9 @@ export default defineConfig({
 });
 ```
 
-The adapter checks `rspack.config.{js,ts,mjs,mts,cjs,cts}` (starting with `.js`), merges compatible compiler options with the generated test build, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers) so `--changed` runs the full test suite when that config changes. If no config file is found, it returns `{}`. It also removes Rsbuild's built-in CSS plugins (`rsbuild:css`, `rsbuild:less`, `rsbuild:sass`) so your Rspack CSS rules and loaders take effect directly.
+The adapter checks `rspack.config.{js,ts,mjs,mts,cjs,cts}` (starting with `.js`), merges compatible compiler options with the generated test build, and adds the loaded config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers) so `--changed` runs the full test suite when that config changes. If no config file is found, it returns `{}`. It also removes Rsbuild's built-in CSS plugins (`rsbuild:css`, `rsbuild:less`, `rsbuild:sass`), so configure CSS rules in your Rspack config rather than Rsbuild options like `output.cssModules`; see the [configuration reference](./reference) for details.
 
-:::warning
-Because Rsbuild's built-in CSS plugins are removed, Rsbuild-specific CSS options such as `output.cssModules` are unavailable when using this adapter. Configure CSS processing in your Rspack config instead.
-:::
-
-Use `cwd`, `configPath`, `configName`, `env`, or `nodeEnv` when the default Rspack config does not match your project. If you already have an Rspack config object in memory, use `toRstestConfig` instead of loading a file. See the [configuration reference](./reference) for both entry points, options, mapping behavior, and debug instructions.
+Use `cwd`, `configPath`, `configName`, `env`, or `nodeEnv` when the default Rspack config does not match your project, or `toRstestConfig` when an Rspack config object is already in memory.
 
 ## Example project
 

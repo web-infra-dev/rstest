@@ -84,7 +84,7 @@ import type {
 - `TestForFn`：`test.for` 的调用签名类型。
 - `Describe`：`describe` API 的类型。
 - `Expect` / `ExpectStatic`：可调用的 `expect` API 类型（`Expect` 是 `ExpectStatic` 的别名）。
-- `TaskMeta` / `TaskMetaValue`：可 JSON 序列化的元数据对象与值类型。
+- `TaskMeta` / `TaskMetaValue`：可 JSON 序列化的元数据对象与值类型。详见 [Metadata](/guide/advanced/metadata)。
 - `Fixtures` / `Use`：`test.extend` 使用的 fixtures 对象映射及 `use(value)` 回调类型。
 - `FileFixtureOptions` / `WorkerFixtureOptions`：具名 fixture 的作用域选项（`{ scope: 'file' }` 与 `{ scope: 'worker' }`）。
 - `FixtureCleanup` / `FixtureLifecycle`：具名 fixture 的清理回调和 `{ onCleanup }` 生命周期参数类型（`0.11.7` 新增）。
@@ -174,22 +174,6 @@ import type {
 - `TestRunStartPayload` / `TestRunEndPayload` / `TestRunStatus` / `TestRunSummary`：运行级钩子参数、运行状态（`'passed' | 'failed' | 'error'`）及统计汇总。
 - `Duration` / `SerializedError` / `UserConsoleLog`：各阶段耗时、可 JSON 序列化的错误对象和捕获的标准输出日志。
 - `SnapshotSummary` / `CoverageMapData`：快照汇总与 Istanbul 覆盖率映射类型。
-
-<ApiMeta addedVersion="0.11.1" />
-
-`meta` 字段保存可 JSON 序列化的元数据，由 `TestOptions.meta` 初始化，并可通过 `context.task.meta` 或钩子的 `ctx.meta` 更新。套件元数据会向子套件和测试用例继承（每个子级拥有独立副本，子级顶层同名字段覆盖父级字段）。
-
-```ts
-import { afterAll, test } from '@rstest/core';
-
-afterAll((ctx) => {
-  ctx.meta.fileTag = 'mutation-run';
-});
-
-test('records metadata', { meta: { owner: 'stryker' } }, (ctx) => {
-  ctx.task.meta.hitCount = 1;
-});
-```
 
 ## Assertion 类型
 

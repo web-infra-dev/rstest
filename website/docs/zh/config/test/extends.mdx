@@ -97,7 +97,7 @@ extends[0] < extends[1] < ... < extends[n] < local config
 
 - `testTimeout`、`retry`、`globals` 等基本类型字段由后者直接覆盖前者。
 - `setupFiles`、`globalSetup` 和 `plugins` 会依次拼接，便于多个预设追加配置。
-- `include`、`reporters` 和 `coverage.reporters` 会被后者整体替换。
+- `include`、`forceRerunTriggers`、`reporters` 和 `coverage.reporters` 会被后者整体替换。
 - `source`、`resolve`、`output`、`tools`、`env` 和 `coverage` 等对象字段会执行深度合并。
 - `browser` 中的普通对象会执行深度合并（包括嵌套的 `providerOptions`）；数组、函数和类实例由后者整体替换（例如覆盖 `providerOptions.launch.args` 会替换整个参数数组，同时保留之前的 `launch.timeout` 和 `context.locale`）。
 - 每个扩展配置中的 `projects` 都会被忽略。

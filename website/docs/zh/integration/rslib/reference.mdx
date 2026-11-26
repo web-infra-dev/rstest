@@ -34,9 +34,9 @@ export default defineConfig({
 #### `configPath`
 
 - **类型：** `string`
-- **默认值：** `'./rslib.config.ts'`
+- **默认值：** `undefined`
 
-Rslib 配置文件的路径。
+Rslib 配置文件的路径。未指定时会在 `cwd` 中自动查找 `rslib.config.*`。
 
 :::tip
 如果同时提供 `config` 和 `configPath`，配置内容以 `config` 为准。
@@ -205,17 +205,7 @@ export default defineConfig({
 
 ## 调试配置
 
-如需查看适配器返回的解析后配置，可以将其包装并打印结果：
-
-```ts
-export default defineConfig({
-  extends: async (user) => {
-    const config = await withRslibConfig({ libId: 'react' })(user);
-    console.log('Extended config:', JSON.stringify(config, null, 2));
-    return config;
-  },
-});
-```
+使用 `DEBUG=rstest` 运行测试可将最终解析的 Rstest、Rsbuild 与 Rspack 配置写入磁盘，详见[开启调试模式](/guide/debug/debugging#开启调试模式)。
 
 ## 相关文档
 

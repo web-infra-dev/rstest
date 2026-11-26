@@ -9,7 +9,7 @@ description: 本指南提供各前端框架在浏览器模式下的测试配置�
 :::tip 前置条件
 在继续之前，请确保你已完成浏览器模式的基础配置。你可以通过以下两种方式初始化：
 
-- **自动初始化**：运行 `npx rstest init browser` 命令
+- **自动初始化**：运行 `npx @rstest/core init browser` 命令
 - **手动配置**：参考 [快速开始](/guide/browser-testing/getting-started#手动配置) 指南
 
 完成后再按照本页指南进行框架特定的配置。
@@ -53,11 +53,9 @@ export default defineConfig({
 });
 ```
 
-<span id="组件测试" />
-
 ### 组件测试 \{#component-testing}
 
-`render` 将 React 组件挂载到真实浏览器 DOM 中，并返回 `{ container, baseElement, rerender, unmount, asFragment }`。使用 [Locator API](/guide/browser-testing/user-interactions#locator-api)（`page` + `expect.element`）查询元素、触发交互并断言渲染结果：
+`render` 将 React 组件挂载到真实浏览器 DOM 中。使用 [Locator API](/guide/browser-testing/user-interactions#locator-api)（`page` + `expect.element`）查询元素、触发交互并断言渲染结果：
 
 ```tsx title="src/Counter.test.tsx"
 import { page } from '@rstest/browser';
@@ -113,11 +111,7 @@ await render(<App />, {
 
 ### Hook 测试
 
-`renderHook` 让你无需编写包装组件就能测试自定义 Hook。它返回：
-
-- `result.current`：Hook 的当前返回值，会随 Hook 更新而变化
-- `act`：用于包裹会触发状态更新的操作，确保断言在更新完成后执行
-- `rerender`：使用新的 props 重新调用 Hook
+`renderHook` 让你无需编写包装组件就能测试自定义 Hook（返回值字段见 [RenderHookResult](/api/runtime-api/browser-mode/react#renderhookresult)）：
 
 ```tsx title="src/useCounter.test.tsx"
 import { renderHook } from '@rstest/browser-react';
@@ -152,43 +146,11 @@ test('hook reacts to prop changes', async () => {
 
 ### 更多配置
 
-- **React Strict Mode**：使用 `configure({ reactStrictMode: true })` 启用，帮助发现潜在问题
-- **手动清理**：默认每个测试前自动清理。如需手动控制清理时机，从 `@rstest/browser-react/pure` 导入并调用 `cleanup()`
-
-完整用法请参考 [React API 文档](/api/runtime-api/browser-mode/react)，其中包含 `render`、`renderHook`、`act`、`cleanup` 和 `configure` 的参数及返回值。
+完整用法请参考 [React API 文档](/api/runtime-api/browser-mode/react)，其中包含 `render`、`renderHook`、`act`、`configure({ reactStrictMode: true })` 以及从 `@rstest/browser-react/pure` 手动调用 `cleanup()` 的参数及返回值。
 
 ## Vanilla JS/TS
 
-对于不使用框架的项目，可以直接将 DOM 元素挂载到 `document.body`，配合 [`page` 和 `expect.element`](/guide/browser-testing/user-interactions#locator-api) 测试（Testing Library 和原生 DOM 事件示例见[浏览器交互](/guide/browser-testing/user-interactions)）：
-
-### 示例测试
-
-```ts title="src/counter.test.ts"
-import { page } from '@rstest/browser';
-import { expect, test } from '@rstest/core';
-
-test('counter increments on click', async () => {
-  const container = document.createElement('div');
-  container.innerHTML = `
-    <p>Count: 0</p>
-    <button type="button">Increment</button>
-  `;
-  document.body.appendChild(container);
-
-  let count = 0;
-  const display = container.querySelector('p')!;
-  const button = container.querySelector('button')!;
-
-  button.addEventListener('click', () => {
-    count++;
-    display.textContent = `Count: ${count}`;
-  });
-
-  await expect.element(page.getByText('Count: 0')).toBeVisible();
-  await page.getByRole('button', { name: 'Increment' }).click();
-  await expect.element(page.getByText('Count: 1')).toBeVisible();
-});
-```
+对于不使用框架的项目，可以直接将 DOM 元素挂载到 `document.body`，配合 [`page` 和 `expect.element`](/guide/browser-testing/user-interactions#locator-api) 测试（DOM 计数器示例见[快速开始](/guide/browser-testing/getting-started#3-编写测试)，Testing Library 和原生 DOM 事件示例见[浏览器交互](/guide/browser-testing/user-interactions)）。
 
 ### 测试 Web components
 
@@ -208,26 +170,4 @@ test('renders content in shadow DOM', () => {
 
 ## 多框架项目
 
-如果项目同时包含浏览器端和 Node 端测试，可以使用 [projects](/config/test/projects) 为不同部分配置独立的测试环境：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: [
-    {
-      name: 'react',
-      include: ['src/react/**/*.test.{ts,tsx}'],
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-      },
-    },
-    {
-      name: 'node',
-      include: ['src/utils/**/*.test.ts'],
-      testEnvironment: 'node',
-    },
-  ],
-});
-```
+如果项目同时包含浏览器端和 Node 端测试，可以使用 [projects](/config/test/projects) 为不同部分配置独立的测试环境，配置示例见[与 Node 测试混合](/config/test/browser#与-node-测试混合)和 [Browser mode 中的 projects](/guide/basic/projects#browser-mode-中的-projects)。

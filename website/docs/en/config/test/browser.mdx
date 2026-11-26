@@ -3,7 +3,6 @@ description: Browser Mode configuration. When enabled, tests run in a real brows
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
-import { Tab, Tabs } from '@theme';
 
 # browser
 
@@ -117,10 +116,10 @@ export default defineConfig({
 ```
 
 :::tip
-Browser Mode requires [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) and Playwright browsers:
+Browser Mode requires [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser), `playwright`, and Playwright browsers:
 
 ```bash
-npm add @rstest/browser -D
+npm add @rstest/browser playwright -D
 npx playwright install chromium
 ```
 
@@ -131,7 +130,7 @@ npx playwright install chromium
 - **Type:** `'playwright'`
 - **Default:** `'playwright'`
 
-Browser driver provider. Currently only [Playwright](https://playwright.dev/) is supported.
+Browser driver provider. Currently only [Playwright](https://playwright.dev/) is supported. `provider` is required in `BrowserModeConfig` TypeScript types; at runtime it defaults to `'playwright'`.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -245,9 +244,7 @@ Install the matching Playwright browser (for example, `npx playwright install fi
 
 Run browsers in headless mode (without a UI window). Items in [`instances`](#instances) can override this per browser, subject to the [one headed browser per run](#launch-rules) rule.
 
-<Tabs defaultValue="rstest.config.ts">
-  <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -258,23 +255,8 @@ export default defineConfig({
   },
 });
 ```
-  </Tab>
-  <Tab label="CI (GitHub Actions)">
-```yaml
-# .github/workflows/test.yml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm install
-      - run: npx playwright install chromium
-      - run: npm test
-```
-  </Tab>
-</Tabs>
 
-Set `headless: process.env.CI === 'true'` if you want headed mode locally and headless mode in CI.
+Set `headless: process.env.CI === 'true'` if you want headed mode locally and headless mode in CI. See [CI setup](/guide/advanced/ci) for GitHub Actions workflow examples.
 
 ### screenshotFailures
 
@@ -436,27 +418,9 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 }
 ```
 
-With neither pixel limit set, no pixels may differ after applying `threshold`. `style` is unset by default, and `mask` is assertion-only because it takes browser `Locator` objects.
+Configures project-wide defaults for [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#toMatchScreenshot). Pixel-comparison tolerances (`threshold`, `maxDiffPixels`, `maxDiffPixelRatio`) belong under `comparatorOptions`; capture and path options (`stabilityTimeout`, `maskColor`, `style`, `caret`, `scale`, `omitBackground`, `screenshotDirectory`, `resolveScreenshotPath`) are siblings of it (`mask` is assertion-only).
 
-Configures project-wide defaults for [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#screenshot-matching). Pixel-comparison tolerances belong under `comparatorOptions`; capture and path options are siblings of it. Assertion-level options override these defaults.
-
-The table below lists the defaults applied when each option is omitted (`maskColor`, `caret`, `scale`, and `omitBackground` use Playwright's capture defaults):
-
-| Option                                | Default           | Description                                                          |
-| ------------------------------------- | ----------------- | -------------------------------------------------------------------- |
-| `comparatorOptions.threshold`         | `0.1`             | Per-pixel color distance threshold from `0` (strict) to `1` (loose). |
-| `comparatorOptions.maxDiffPixels`     | Not set           | Maximum number of pixels allowed to differ.                          |
-| `comparatorOptions.maxDiffPixelRatio` | Not set           | Maximum fraction of pixels allowed to differ.                        |
-| `stabilityTimeout`                    | `5000`            | Maximum time to wait for consecutive captures to match, in ms.       |
-| `maskColor`                           | `#FF00FF`         | Color used to cover masked content.                                  |
-| `style`                               | Not set           | No additional CSS is injected.                                       |
-| `caret`                               | `hide`            | Hides the text caret during capture.                                 |
-| `scale`                               | `device`          | Captures at the device pixel ratio.                                  |
-| `omitBackground`                      | `false`           | Keeps the page background in the screenshot.                         |
-| `screenshotDirectory`                 | `__screenshots__` | Directory for references beside each test file.                      |
-| `resolveScreenshotPath`               | Built-in          | Uses the path layout described below.                                |
-
-When both pixel limits are set, the stricter one applies. An assertion that specifies either limit replaces the project-level pixel limits for that assertion; an assertion that specifies neither inherits both.
+Assertion-level options override these defaults; see [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#toMatchScreenshot) for per-option defaults and pixel-limit precedence.
 
 A relative `screenshotDirectory` resolves from each test file's directory (defaulting to `__screenshots__`). When a shared directory is used, Rstest separates references by project name and test file; when the chosen directory is the test file's own directory, references are placed in its `__screenshots__` subdirectory.
 
@@ -549,32 +513,7 @@ Reporters are browser-agnostic. When a project runs more than one browser, each 
 
 ## Multi-project config isolation
 
-With `projects` in Browser Mode, each project compiles and runs with its own build config (`plugins`, `include`, framework setup, etc.).
-
-Build-scoped options (`provider`, `port`, `strictPort`) remain per-project, while instances, defaults, and per-browser overrides (`instances`, `headless`, `viewport`, `providerOptions`) are owned by each project. Different browser projects can run different browsers in the same run; when two projects configure the same browser, [Launch rules](#launch-rules) apply.
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
-});
-```
-
-```ts title="project-a/rstest.config.ts"
-import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  name: 'project-a',
-  plugins: [pluginReact()],
-  include: ['tests/**/*.test.tsx'],
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-  },
-});
-```
+With `projects` in Browser Mode, each project compiles and runs with its own build config (`plugins`, `include`, framework setup, etc.). Build-scoped options (`provider`, `port`, `strictPort`) remain per-project, while instances, defaults, and per-browser overrides (`instances`, `headless`, `viewport`, `screenshotFailures`, `expect`, `providerOptions`) are owned by each project. See [Projects in browser mode](/guide/basic/projects#projects-in-browser-mode) for a multi-project config example.
 
 ## Mixing with node tests
 
@@ -597,12 +536,6 @@ export default defineConfig({
       name: 'node',
       include: ['src/**/*.node.test.ts'],
       testEnvironment: 'node',
-    },
-    {
-      name: 'jsdom',
-      include: ['src/**/*.test.ts'],
-      exclude: ['src/**/*.browser.test.ts', 'src/**/*.node.test.ts'],
-      testEnvironment: 'jsdom',
     },
   ],
 });

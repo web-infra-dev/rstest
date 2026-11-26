@@ -61,19 +61,12 @@ rstest -c scripts/rstest.config.mjs
 Rstest 基于 Rsbuild 构建测试文件，支持直接配置大部分 Rsbuild 构建选项：
 
 - 通过 [plugins](/config/build/plugins) 注册 Rsbuild 插件
+- 在 Rsbuild 插件中[读取](/config/build/plugins#get-rstest-config)或[修改](/config/build/plugins#modify-rstest-config)当前 Rstest project 配置
 - 通过 [resolve](/config/build/resolve) 配置模块解析行为
 - 通过 [tools.rspack](/config/build/tools#toolsrspack) 自定义 Rspack 配置
 - 通过 [tools.swc](/config/build/tools#toolsswc) 配置 `builtin:swc-loader`
 
 全部可用构建选项详见[构建配置](/config/#build-configurations)。
-
-### 在 Rsbuild 插件中读取 Rstest 配置 \{#get-rstest-config}
-
-可以通过 Rstest 暴露的 API 读取当前 Rsbuild environment 解析后的 Rstest 配置。用法和类型见[在 Rsbuild 插件中读取 Rstest 配置](/config/build/plugins#get-rstest-config)。
-
-### 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
-
-可以在 Rsbuild 插件中修改当前 Rstest project 的配置。用法、类型和限制见[在 Rsbuild 插件中修改 Rstest 配置](/config/build/plugins#modify-rstest-config)。
 
 ## 配置 Rspack
 

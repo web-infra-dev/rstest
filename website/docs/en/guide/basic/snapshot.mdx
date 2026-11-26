@@ -2,8 +2,6 @@
 description: Capture and compare serialized outputs across test runs with Rstest snapshot testing.
 ---
 
-import { Tab, Tabs } from '@theme';
-
 # Snapshot testing
 
 Snapshot testing serializes a value and compares it against a stored reference on subsequent runs. When an intentional change alters the output, you update the snapshot; unexpected diffs fail the test.
@@ -105,33 +103,7 @@ Snapshot matchers do not support `.not`. Calling `expect(value).not.toMatchSnaps
 
 ## Updating snapshots
 
-By default (`update: false`):
-
-- **Locally**: Rstest writes newly added snapshots automatically, while mismatches fail the test.
-- **In CI** (`process.env.CI` is set): Rstest neither creates new snapshots nor updates existing ones—both missing and mismatched snapshots fail.
-
-When changes are intentional, update snapshots using `-u` / `--update`, the `update: true` config option, or by pressing `u` in interactive watch mode:
-
-<Tabs>
-  <Tab label="CLI">
-```bash
-npx rstest -u
-# or
-npx rstest --update
-```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  update: true,
-});
-```
-  </Tab>
-</Tabs>
-
-Updating with `-u` / `--update` or `update: true` writes all changed snapshots and deletes obsolete ones.
+By default (`update: false`), new snapshots are written locally (disabled when `process.env.CI` is set) and mismatches fail. Update changed snapshots and remove obsolete ones with `npx rstest -u`, `update: true`, or pressing `u` in interactive watch mode; see [update](/config/test/update).
 
 ## Serialization output
 
@@ -173,77 +145,4 @@ test('serialized snapshot', () => {
 
 ## Snapshot output path
 
-By default, `.snap` files live in a `__snapshots__` directory beside each test file:
-
-```
-src/
-├── components/
-│   ├── button.test.ts
-│   └── __snapshots__/
-│       └── button.test.ts.snap
-```
-
-Customize the path with [resolveSnapshotPath](/config/test/resolve-snapshot-path):
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  resolveSnapshotPath: (testPath, snapExtension) => {
-    // Store snapshots next to test files
-    return `${testPath}${snapExtension}`;
-  },
-});
-```
-
-## Best practices
-
-### Keep snapshots concise
-
-Serialize only the fields relevant to the behavior under test—exclude volatile fields such as timestamps, session IDs, or User-Agent strings unless matched via property matchers:
-
-```ts
-// ✅ Good - only include relevant fields
-test('user info snapshot', () => {
-  const userInfo = {
-    name: 'Alice',
-    role: 'admin',
-    permissions: ['read', 'write'],
-  };
-  expect(userInfo).toMatchSnapshot();
-});
-
-// ❌ Avoid - includes volatile fields
-test('complete user object snapshot', () => {
-  const fullUser = {
-    ...user,
-    lastLogin: new Date(),
-    sessionId: 'abc123',
-    userAgent: 'Mozilla/5.0...',
-  };
-  expect(fullUser).toMatchSnapshot();
-});
-```
-
-### Use descriptive snapshot names
-
-Pass a name when a single test asserts multiple snapshots:
-
-```ts
-test('component state changes', () => {
-  const component = new MyComponent();
-
-  expect(component.initialState).toMatchSnapshot('initial state');
-
-  component.update();
-  expect(component.updatedState).toMatchSnapshot('updated state');
-});
-```
-
-### Regularly review snapshots
-
-Treat snapshot files like code during review:
-
-- Inspect snapshot diffs instead of blindly running `-u`.
-- Remove obsolete snapshots when removing or refactoring tests.
-- Prefer inline snapshots for small values so the expected output stays visible in the test.
+By default, `.snap` files live in a `__snapshots__` directory beside each test file. To store snapshots elsewhere, configure [resolveSnapshotPath](/config/test/resolve-snapshot-path).

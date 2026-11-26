@@ -37,27 +37,6 @@ Browser Mode provides a Playwright-style Locator workflow: query elements with `
 
 See [User interactions](/guide/browser-testing/user-interactions#locator-api) for detailed usage.
 
-## When to use browser mode
-
-Use this decision tree to determine if you need Browser Mode:
-
-```
-Depends on real browser APIs? ─── Yes ─▶ ✅ Browser Mode
-         │ No
-         ▼
-Need cross-browser testing?  ─── Yes ─▶ ✅ Browser Mode
-         │ No
-         ▼
-Unexpected behavior in jsdom? ── Yes ─▶ ✅ Browser Mode
-         │ No
-         ▼
-    💡 jsdom is fine
-```
-
-:::tip Recommendation
-Even if your tests work fine in jsdom, we still **recommend using Browser Mode**. See the comparison table below for specific advantages.
-:::
-
 ## Browser mode vs jsdom/happy-dom
 
 Browser Mode and jsdom/happy-dom represent different trade-offs: Browser Mode provides full browser compatibility and visual debugging but consumes more resources; jsdom/happy-dom runs faster and lighter but can only simulate a subset of browser APIs.

@@ -81,36 +81,11 @@ test('composes locators', async () => {
 });
 ```
 
-Currently available query and composition APIs:
-
-- Semantic and attribute queries: [getByRole](/api/runtime-api/browser-mode/locator#getbyrole), [getByText](/api/runtime-api/browser-mode/locator#getbytext), [getByLabel](/api/runtime-api/browser-mode/locator#getbylabel), [getByPlaceholder](/api/runtime-api/browser-mode/locator#getbyplaceholder), [getByAltText](/api/runtime-api/browser-mode/locator#getbyalttext), [getByTitle](/api/runtime-api/browser-mode/locator#getbytitle), [getByTestId](/api/runtime-api/browser-mode/locator#getbytestid) (customize the attribute via [setTestIdAttribute](/api/runtime-api/browser-mode/locator#settestidattribute))
-- Selection, filtering, and DOM wrapping: [locator](/api/runtime-api/browser-mode/locator#locator), [filter](/api/runtime-api/browser-mode/locator#filter), [elementLocator](/api/runtime-api/browser-mode/locator#elementlocator)
-- Set composition and indexing: [and](/api/runtime-api/browser-mode/locator#and--or), [or](/api/runtime-api/browser-mode/locator#and--or), [nth](/api/runtime-api/browser-mode/locator#nth--first--last), [first](/api/runtime-api/browser-mode/locator#nth--first--last), [last](/api/runtime-api/browser-mode/locator#nth--first--last)
-
-Prefer semantic queries ([getByRole](/api/runtime-api/browser-mode/locator#getbyrole), [getByLabel](/api/runtime-api/browser-mode/locator#getbylabel)) first, and fall back to [getByTestId](/api/runtime-api/browser-mode/locator#getbytestid) or CSS selectors only when semantic information is insufficient.
+Prefer semantic queries (`getByRole`, `getByLabel`) first, falling back to `getByTestId` or CSS selectors only when semantic information is insufficient. Locator queries cover semantic/attribute queries, filtering/DOM wrapping, and set composition/indexing; see the [Locator API reference](/api/runtime-api/browser-mode/locator) for all query methods and strictness rules (actions throw when a locator matches multiple elements unless narrowed with `first()`, `last()`, or `nth()`).
 
 ### Common interactions and assertions
 
-Locators support element actions ([click](/api/runtime-api/browser-mode/locator#click), [fill](/api/runtime-api/browser-mode/locator#fill), [check](/api/runtime-api/browser-mode/locator#check), [hover](/api/runtime-api/browser-mode/locator#hover), [press](/api/runtime-api/browser-mode/locator#press), [selectOption](/api/runtime-api/browser-mode/locator#selectoption)), while `page` also provides [page.keyboard](/api/runtime-api/browser-mode/keyboard) (`press`, `tab`) for focus-based keyboard input and [page.viewport()](/api/runtime-api/browser-mode/locator#pageviewport) for resizing the viewport per test. Combine them with [expect.element](/api/runtime-api/browser-mode/assertion) DOM assertions or [toMatchScreenshot()](/api/runtime-api/browser-mode/assertion#toMatchScreenshot) visual comparisons (and configure [browser.screenshotFailures](/config/test/browser#screenshotfailures) to capture failure screenshots):
-
-- State assertions: [toBeVisible](/api/runtime-api/browser-mode/assertion#tobevisible), [toBeHidden](/api/runtime-api/browser-mode/assertion#tobehidden), [toBeEnabled](/api/runtime-api/browser-mode/assertion#tobeenabled), [toBeDisabled](/api/runtime-api/browser-mode/assertion#tobedisabled)
-- Form and structure assertions: [toBeChecked](/api/runtime-api/browser-mode/assertion#tobechecked), [toBeFocused](/api/runtime-api/browser-mode/assertion#tobefocused), [toBeEmpty](/api/runtime-api/browser-mode/assertion#tobeempty)
-- Text and value assertions: [toHaveText](/api/runtime-api/browser-mode/assertion#tohavetext), [toContainText](/api/runtime-api/browser-mode/assertion#tocontaintext), [toHaveValue](/api/runtime-api/browser-mode/assertion#tohavevalue), [toHaveCount](/api/runtime-api/browser-mode/assertion#tohavecount)
-- Attribute assertions: [toHaveAttribute](/api/runtime-api/browser-mode/assertion#tohaveattribute), [toHaveClass](/api/runtime-api/browser-mode/assertion#tohaveclass), [toHaveCSS](/api/runtime-api/browser-mode/assertion#tohavecss), [toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty)
-- Visual assertions: [toMatchScreenshot](/api/runtime-api/browser-mode/assertion#toMatchScreenshot)
-
-Assert observable results immediately after key interactions (such as status text, button state, or field values) so failures pinpoint the exact step.
-
-:::info Auto-wait vs Auto-retry
-These are two distinct mechanisms in the Locator API:
-
-- **Auto-wait (interactions)**: Methods like `click()`, `fill()`, `check()` automatically wait for the target element to be visible, enabled, and stable before executing the action.
-- **Auto-retry (assertions)**: `expect.element` matchers continuously retry the assertion within the timeout until it passes, ideal for async rendering scenarios.
-
-In most cases, you only need to `await` each call — the framework handles all waiting and retrying internally.
-:::
-
-You can also chain [not](/api/runtime-api/browser-mode/assertion#not) and use an optional `timeout`:
+Use Locator actions (such as `click`, `fill`, `check`, `hover`, `press`, `selectOption`), [page.keyboard](/api/runtime-api/browser-mode/keyboard), and `page.viewport()` to drive the UI, then assert observable results immediately after key interactions. Locator interactions auto-wait for elements to become visible, enabled, and stable, while [expect.element](/api/runtime-api/browser-mode/assertion) assertions auto-retry state, form, text, attribute, and visual ([toMatchScreenshot()](/api/runtime-api/browser-mode/assertion#toMatchScreenshot)) checks until they pass or time out. You can also chain `not` and pass an optional `timeout`:
 
 ```ts
 await expect
@@ -118,9 +93,7 @@ await expect
   .not.toBeDisabled({ timeout: 1000 });
 ```
 
-:::warning Strictness
-Locator actions are strict: if a locator matches more than one element, actions like `click` and `fill` will throw an error. Use `first()`, `last()`, or `nth()` to select a specific element.
-:::
+See the [Locator API](/api/runtime-api/browser-mode/locator) and [Browser assertion API](/api/runtime-api/browser-mode/assertion) for the full method list, and [browser.screenshotFailures](/config/test/browser#screenshotfailures) for failure screenshots.
 
 ## Testing library
 

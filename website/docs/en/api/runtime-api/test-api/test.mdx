@@ -171,7 +171,7 @@ test.each([null, 42, ['a']])('rejects %o', (value) => {
 });
 ```
 
-You can format test names using [printf placeholders](https://nodejs.org/api/util.html#utilformatformat-args) (`%s`, `%d`, `%i`, `%f`, `%j`, `%o`, `%#` for 0-based index, `%$` for 1-based index, `%%` for literal `%`) or `$property` placeholders for object rows:
+You can format test names using [printf placeholders](https://nodejs.org/api/util.html#utilformatformat-args) (`%s`, `%d`, `%i`, `%f`, `%j`, `%o`, `%O`, `%c`, `%#` for 0-based index, `%$` for 1-based index, `%%` for literal `%`) or `$property` placeholders for object rows:
 
 ```ts
 test.each([
@@ -356,8 +356,9 @@ Fixture-aware callbacks (tests, fixtures, and per-test hooks) must declare fixtu
 
 Each entry in a fixtures object is a plain value, a fixture function `(context, use) => Promise<void>`, or a `[fixture, { auto?: boolean }]` tuple.
 
-- `context` contains previously defined fixtures and [`TestContext`](#testcontext).
-- `await use(value)` supplies the fixture value to the test; code before `use` is setup and code after `use` is teardown.
+- **Plain values:** Provide non-function values directly (such as `baseURL: 'https://api.example.com'`) when no setup or teardown is needed.
+- **`TestContext` access:** Fixture functions receive previously defined fixtures and [`TestContext`](#testcontext) fields (such as `{ task }`) in their first parameter `context`.
+- **Setup and teardown:** `await use(value)` supplies the fixture value to the test; code before `use` is setup and code after `use` is teardown.
 
 ```ts
 import { test } from '@rstest/core';
@@ -443,32 +444,6 @@ const apiTest = test.extend(
 - Can depend only on earlier worker-scoped fixtures; cannot access `TestContext` or file-scoped fixtures (file-scoped fixtures can depend on worker-scoped ones).
 - Setup is bounded by the timeout of the first requesting test; cleanup is bounded by the worker host (a force-terminated worker cannot run user cleanup callbacks).
 - In browser mode, `isolate: false` shares the fixture across files assigned to the same browser worker unless the project configures `setupFiles` (which keeps files isolated). With default isolation, lifetime equals one file.
-
-### Plain value fixtures
-
-Provide non-function values directly when no setup or teardown is needed:
-
-```ts
-import { test } from '@rstest/core';
-
-const myTest = test.extend({
-  baseURL: 'https://api.example.com',
-});
-```
-
-### Accessing TestContext
-
-Fixture functions in object form or test-scoped named form receive `TestContext` fields on their first parameter:
-
-```ts
-import { test } from '@rstest/core';
-
-const myTest = test.extend({
-  traceId: async ({ task }, use) => {
-    await use(`trace:${task.name}`);
-  },
-});
-```
 
 ### Fixture dependencies
 
@@ -659,25 +634,3 @@ test('loads a large fixture', { timeout: 1_000 }, async ({ signal }) => {
 ```
 
 When an attempt times out after 1000 ms, `signal.reason` is the timeout error reported by Rstest (for example, `Error: test timed out in 1000ms (no expect assertions completed)`). Node APIs like `fs.readFile` reject with an `AbortError` whose `cause` is `signal.reason`.
-
-Use `context.task.meta` to attach or replace JSON-serializable metadata on the current test result (readable on `TestResult.meta`):
-
-```ts
-import { test } from '@rstest/core';
-
-test('tracks runtime data', (context) => {
-  context.task.meta.coveredBranches = ['a', 'b'];
-});
-```
-
-Use `context.skip()` to skip a test dynamically at runtime:
-
-```ts
-import { expect, test } from '@rstest/core';
-
-test('skipped test', (context) => {
-  context.skip();
-
-  expect(1 + 1).toBe(3);
-});
-```

@@ -31,11 +31,11 @@ Reporter hooks and the programmatic API can read this declared metadata from `Te
 
 ```ts
 test('records runtime data', ({ task }) => {
-  task.meta = {
-    durationBucket: 'fast',
-  };
+  task.meta.durationBucket = 'fast';
 });
 ```
+
+Prefer mutating individual properties on `task.meta`; assigning `task.meta = { ... }` replaces the entire object and wipes any declared or suite-inherited keys.
 
 ## Add metadata to a suite
 
@@ -149,21 +149,7 @@ This is useful when an external tool owns the Node.js process and wants to run R
 
 ## Metadata value type
 
-Metadata must be JSON-serializable. `TaskMeta` and `TaskMetaValue` are exported from `@rstest/core`:
-
-```ts
-type TaskMeta = Record<string, TaskMetaValue>;
-
-type TaskMetaValue =
-  | string
-  | number
-  | boolean
-  | null
-  | TaskMetaValue[]
-  | { [key: string]: TaskMetaValue };
-```
-
-Do not store functions, class instances, symbols, `BigInt`, or large objects in metadata. Prefer small strings, numbers, booleans, arrays, and plain objects.
+Metadata must be JSON-serializable (prefer small strings, numbers, booleans, `null`, arrays, and plain objects; do not store functions, class instances, symbols, `BigInt`, or large objects). See [`TaskMeta` and `TaskMetaValue`](/api/runtime-api/test-api/test#testoptions) for the exported `@rstest/core` type definitions.
 
 ## Inheritance and isolation rules
 

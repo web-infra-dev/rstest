@@ -14,16 +14,12 @@ Rstest 支持通过命令行参数、配置选项、watch 快捷键或测试 API
 rstest
 ```
 
-位置参数默认对相对于项目根目录的路径执行不区分大小写的子字符串匹配。例如，`rstest foo` 会运行 `foo.test.ts`、`foo/index.test.ts` 和 `foo-bar/index.test.ts`：
+位置参数支持子字符串（不区分大小写）、相对或绝对文件路径以及目录路径（传入多个参数时匹配其中任意一个）：
 
 ```bash
 rstest foo
-```
-
-传入多个位置参数时，匹配其中任意一个条件的文件都会运行：
-
-```bash
 rstest test/foo.test.ts test/bar.test.ts
+rstest packages/core
 ```
 
 用引号包裹参数可启用完整路径精确匹配（例如只运行 `foo.test.ts` 而不匹配 `foo.test.tsx`）。Shell 会去掉一层引号，因此需要两层：
@@ -32,27 +28,10 @@ rstest test/foo.test.ts test/bar.test.ts
 rstest '"test/foo.test.ts"'
 ```
 
-使用 `--include` 传入 glob 模式，并加上引号防止 shell 提前展开：
+Rstest 不会将位置参数解析为 glob 模式。需要 glob 匹配时请使用 `--include`，并加上引号防止 shell 提前展开：
 
 ```bash
 rstest --include "test/**/*.test.ts"
-```
-
-### 根据文件路径过滤
-
-Rstest 不会将位置参数解析为 glob 模式。不带引号的通配符在不同 shell 中的展开行为不一致，需要 glob 匹配时请使用 `--include`。
-
-位置参数支持绝对路径、相对于 Rstest 根目录的路径以及目录路径：
-
-```bash
-# 根据绝对路径过滤
-rstest /path/to/project/packages/core/tests/index.test.ts
-
-# 根据相对路径过滤
-rstest packages/core/tests/index.test.ts
-
-# 根据目录过滤
-rstest packages/core
 ```
 
 ### include/exclude
@@ -186,66 +165,30 @@ rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePatter
 
 该命令会在 `test/` 目录下除 `test/legacy/` 之外的所有 `.test.ts` 文件中，只运行名称包含 `login` 的测试用例。
 
-## 常见用法
-
-- **只运行单个文件**：`rstest '"test/foo.test.ts"'`
-- **只运行某个目录下的测试**：`rstest --include "test/api/*.test.ts"`
-- **排除指定文件**：`rstest --exclude "test/legacy/**"`
-- **按测试名称过滤**：`rstest -t login`
-- **仅重跑上次失败的文件**：`rstest -f`
-- **组合过滤**：`rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login`
-
 ## 通过测试 API 过滤
 
 在测试代码中，可以通过 [`test`](/api/runtime-api/test-api/test) 和 [`describe`](/api/runtime-api/test-api/describe) 的修饰符控制要执行的套件或用例：
 
-- `.only`：仅运行当前文件内标记了 `.only` 的套件或测试用例。
-- `.skip` / `.todo`：无条件跳过套件或测试用例，或将其标记为待实现。
+- `.only`：仅运行当前文件内标记了 `.only` 的套件或测试用例（只调试单个文件时可配合 CLI 文件过滤使用）。
+- `.skip` / `.todo`：跳过套件或测试用例，或将其标记为待实现。
 - `.skipIf(condition)` / `.runIf(condition)`：根据布尔表达式按条件跳过或运行套件和测试用例。
-- `context.skip()`：在测试执行过程中动态跳过当前测试，并立即中止后续代码执行。
-
-```ts
-import { describe, expect, test } from '@rstest/core';
-
-describe.only('suite A', () => {
-  test('runs because suite A has .only', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
-
-describe('suite B', () => {
-  test('skipped because another suite has .only', () => {
-    // ...
-  });
-});
-```
-
-:::note
-`.only` 仅对当前测试文件生效。若只调试单个文件里的特定用例，请配合 CLI 文件过滤一起使用。
-:::
+- `context.skip()`：在测试执行过程中动态跳过当前测试。
 
 ```ts
 import { describe, test } from '@rstest/core';
 
-describe.skip('suite A', () => {
-  // ...
+describe.only('suite A', () => {
+  test('runs only this suite in the file', () => {});
 });
 
-test.todo('case A');
+describe.skip('suite B', () => {});
+test.todo('pending case');
+test.skipIf(process.platform === 'win32')('POSIX only', () => {});
+test.runIf(Boolean(process.env.CI))('CI only', () => {});
 
-test.skipIf(process.platform === 'win32')('runs on POSIX only', () => {
-  // ...
-});
-
-test.runIf(Boolean(process.env.CI))('runs in CI only', () => {
-  // ...
-});
-
-test('skips dynamically at runtime', (context) => {
+test('skips dynamically', (context) => {
   if (!process.env.API_TOKEN) {
     context.skip();
   }
-
-  // 下方的断言不会执行
 });
 ```

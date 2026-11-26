@@ -49,11 +49,7 @@ $ npx rstest
     Duration 189 ms (build 22 ms, tests 167 ms)
 ```
 
-用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径；shell 会去掉一层引号，因此需要两层：
-
-```bash
-rstest run '"src/foo.test.ts"'
-```
+位置参数匹配、完整路径精确匹配及测试名称过滤详见[过滤测试](/guide/basic/test-filter)。
 
 ### Watch 模式
 
@@ -404,27 +400,11 @@ Rstest CLI 参数按命令注册，并不是所有命令共享同一套参数。
 
 ### rstest merge-reports
 
-`rstest merge-reports` 只注册一组更小的参数集合：
+`rstest merge-reports` 与[测试命令](#测试命令)共享 `-h/--help`、`-c/--config`、`--config-loader`、`-r/--root`、`--reporters`、`--coverage` 和 `--coverage.*` 参数，并额外提供：
 
-| 参数                                | 说明                                                                                                                                                                |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--cleanup`                         | 合并完成后删除 blob 报告输入                                                                                                                                        |
-| `-c, --config <config>`             | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                                                 |
-| `--config-loader <loader>`          | 指定配置加载器（`auto` \| `jiti` \| `native`，默认：`'auto'`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
-| `--coverage`                        | 合并完成后生成覆盖率报告，详见 [coverage](/config/test/coverage)                                                                                                    |
-| `--coverage.allowExternal`          | 收集项目根目录之外文件的覆盖率，详见 [coverage.allowExternal](/config/test/coverage#allowexternal)                                                                  |
-| `--coverage.changed [commit]`       | 只收集当前 Git 仓库中变更文件的覆盖率，也可以指定从某个 commit 以来的变更                                                                                           |
-| `--coverage.clean`                  | 写入报告前清理覆盖率目录，详见 [coverage.clean](/config/test/coverage#clean)                                                                                        |
-| `--coverage.enabled`                | 启用代码覆盖率收集，详见 [coverage.enabled](/config/test/coverage#enabled)                                                                                          |
-| `--coverage.exclude <pattern>`      | 指定需要排除覆盖率收集的文件，详见 [coverage.exclude](/config/test/coverage#exclude)                                                                                |
-| `--coverage.include <pattern>`      | 指定需要收集覆盖率的文件，详见 [coverage.include](/config/test/coverage#include)                                                                                    |
-| `--coverage.provider <provider>`    | 选择覆盖率 provider（`istanbul` \| `v8`），详见 [coverage.provider](/config/test/coverage#provider)                                                                 |
-| `--coverage.reporters <reporter>`   | 指定一个或多个覆盖率报告器（可重复传入），详见 [coverage.reporters](/config/test/coverage#reporters)                                                                |
-| `--coverage.reportOnFailure`        | 测试失败时仍生成覆盖率报告，详见 [coverage.reportOnFailure](/config/test/coverage#reportonfailure)                                                                  |
-| `--coverage.reportsDirectory <dir>` | 指定覆盖率报告目录，详见 [coverage.reportsDirectory](/config/test/coverage#reportsdirectory)                                                                        |
-| `-h, --help`                        | 显示帮助信息                                                                                                                                                        |
-| `--reporters, --reporter <name>`    | 指定在合并结果上运行的一个或多个报告器，详见 [reporters](/config/test/reporters)                                                                                    |
-| `-r, --root <root>`                 | 指定项目根目录，详见 [root](/config/test/root)                                                                                                                      |
+| 参数        | 说明                         |
+| ----------- | ---------------------------- |
+| `--cleanup` | 合并完成后删除 blob 报告输入 |
 
 ### rstest init
 

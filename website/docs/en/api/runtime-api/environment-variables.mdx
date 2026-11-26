@@ -22,15 +22,13 @@ if (import.meta.env.NODE_ENV === 'test') {
 
 Available as both `process.env.RSTEST` and `import.meta.env.RSTEST` across all test environments, including [browser mode](/guide/browser-testing/). Set to `'true'` while the test runner is active.
 
-In browser mode, Rstest replaces these expressions at build time without adding a global `process` object. Prefer `import.meta.env.RSTEST` in browser-compatible ESM source code, and do not guard access with `typeof process !== 'undefined'` because that check remains `false` in the browser.
-
 ```ts
 if (import.meta.env.RSTEST === 'true') {
   // running under Rstest
 }
 ```
 
-For production builds, define the expression used by your source code as `false` so the bundler can eliminate the dead branch — see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
+In browser mode, Rstest replaces these expressions at build time without defining a global `process`, so prefer `import.meta.env.RSTEST` in browser-compatible ESM source code. For browser guard details and production dead-code elimination (`define` as `false`), see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
 
 For [in-source tests](/config/test/include-source), prefer `import.meta.rstest` — it exposes the Rstest test API directly and is `undefined` in production builds.
 
@@ -64,7 +62,7 @@ Worker IDs are bounded to `[1, pool.maxWorkers]`. Rstest assigns the lowest unus
 
 Set `RSTEST_NO_AGENT=1` to disable AI coding agent detection.
 
-When no reporter is configured in config or CLI flags, Rstest detects AI coding agents and automatically switches the default reporter to `md` while disabling default terminal colors. Setting `RSTEST_NO_AGENT=1` keeps the `default` console reporter and normal TTY color detection.
+During CLI runs, when no reporter is configured in config or CLI flags, Rstest detects AI coding agents and automatically switches the default reporter to `md` while disabling default terminal colors. Setting `RSTEST_NO_AGENT=1` falls back to the normal default reporters (`['default']`, or `['default', 'github-actions']` on GitHub Actions) and standard TTY color detection.
 
 ```bash
 RSTEST_NO_AGENT=1 npx rstest run

@@ -9,6 +9,8 @@ description: Custom handler for resolving snapshot paths in tests.
 
 Customize where Rstest stores snapshot files.
 
+This is a global option set in the root config and cannot be overridden per project in [`projects`](/config/test/projects).
+
 By default, Rstest saves snapshot files in a `__snapshots__` directory next to each test file. Return a custom path from `resolveSnapshotPath` to change this location.
 
 For example, store snapshots beside test files instead of inside `__snapshots__`:

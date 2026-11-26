@@ -8,9 +8,9 @@ description: 仅运行完整名称匹配字符串或正则表达式的测试。
 - **默认值：** `undefined`
 - **CLI：** `-t=<value>`, `--testNamePattern=<value>`
 
-按 `RegExp` 或正则模式字符串（通过 `new RegExp()` 编译）过滤测试的完整名称，不匹配的测试会被跳过。
+按 `RegExp` 或正则模式字符串（通过 `new RegExp()` 编译）过滤测试的完整名称。
 
-完整名称由外层 `describe` 套件名称与测试用例名称拼接而成，默认以空格分隔（当模式中包含 `>` 时以 `' > '` 分隔）。由于套件名称也包含在匹配文本中，只要 `describe` 名称匹配，该套件内的所有测试都会执行。
+完整名称将外层 `describe` 套件名称与测试用例名称用空格拼接（当模式中包含 `>` 时改为用 `' > '` 拼接）。
 
 import { Tab, Tabs } from '@theme';
 
@@ -31,33 +31,4 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-当配置 `testNamePattern: 'bar'` 时：
-
-```ts
-// 跳过
-test('test foo', () => {
-  expect(true).toBe(true);
-});
-
-// 执行
-test('test bar', () => {
-  expect(true).toBe(true);
-});
-
-// 执行该套件内的所有测试
-describe('bar', () => {
-  it('should add two numbers correctly', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
-```
-
-如需排除名称匹配的测试，可以使用负向先行断言 `RegExp`：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  testNamePattern: /^(?!.*bar).*$/,
-});
-```
+匹配规则、完整名称示例以及排除测试的负向先行断言正则写法，请参考[根据测试名称过滤](/guide/basic/test-filter#根据测试名称过滤)。

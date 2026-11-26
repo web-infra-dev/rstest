@@ -36,37 +36,7 @@ export default {
   root: '/path/to/project',
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: {
-    patterns: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/.{idea,git,cache,output,temp}/**',
-      '**/dist/.rstest-temp',
-    ],
-    override: false,
-  },
-  includeSource: [],
-  pool: {
-    type: 'forks',
-  },
-  isolate: true,
-  globals: false,
-  passWithNoTests: false,
-  onlyFailures: false,
-  update: false,
-  testTimeout: 5000,
-  hookTimeout: 10000,
-  teardownTimeout: 10000,
-  testEnvironment: {
-    name: 'node',
-  },
-  retry: 0,
-  repeats: 0,
-  clearMocks: false,
-  resetMocks: false,
-  restoreMocks: false,
-  slowTestThreshold: 300,
-  // other configs...
+  // ...
 };
 ```
 

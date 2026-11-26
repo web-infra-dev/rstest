@@ -198,21 +198,6 @@ You can use V8 coverage data to see how much of the generated test bundle actual
 The `v8` provider recognizes ignore hints using `istanbul`, `c8`, `v8`, or `node:coverage` prefixes (`next`, `if`, `else`, `start`/`stop`, `file`). Use one prefix consistently:
 
 ```ts
-/* v8 ignore next */
-const value = optionalExpensivePath();
-
-/* v8 ignore if */
-if (process.env.NODE_ENV === 'test') {
-  setupTestOnlyState();
-}
-
-/* v8 ignore else */
-if (hasNativeFeature()) {
-  useNativeFeature();
-} else {
-  useFallback();
-}
-
 /* v8 ignore start */
 const generatedLookup = createGeneratedLookup();
 /* v8 ignore stop */
@@ -367,7 +352,7 @@ export default class CustomCoverageReporter {
 }
 ```
 
-Reference it by package name or path, or pass an inline reporter object directly in `rstest.config.ts`:
+Reference it by package name or path, or pass an inline reporter object with an `execute(context)` method directly in `rstest.config.ts`:
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -378,15 +363,6 @@ export default defineConfig({
     reporters: [
       'text',
       ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
-      {
-        execute(context) {
-          const summary = context
-            .getTree('flat')
-            .getRoot()
-            .getCoverageSummary();
-          console.log(summary.toJSON());
-        },
-      },
     ],
   },
 });
@@ -520,10 +496,10 @@ export default defineConfig({
 When coverage falls short, the run fails and prints the unmet thresholds:
 
 ```bash
-Error: Coverage for statements 75% does not meet global threshold 80%
-Error: Coverage for functions 75% does not meet global threshold 80%
-Error: Coverage for branches 75% does not meet global threshold 80%
-Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
+Error: coverage for statements 75% does not meet global threshold 80%
+Error: coverage for functions 75% does not meet global threshold 80%
+Error: coverage for branches 75% does not meet global threshold 80%
+Error: uncovered lines 20 exceeds maximum global threshold allowed 10
 ```
 
 #### Glob pattern

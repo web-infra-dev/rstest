@@ -33,6 +33,8 @@ Configure which reporters to use for test result output.
 
 Built-in reporter names: `default`, `dot`, `verbose`, `md`, `github-actions`, `junit`, `json`, and `blob`.
 
+This is a global option set in the root config and cannot be overridden per project in [`projects`](/config/test/projects).
+
 :::info AI agent environments
 When no `reporters` are configured (neither in config nor via `--reporters`), Rstest defaults to `['md']` in AI agent environments and writes agent-friendly Markdown to stdout.
 :::
@@ -107,22 +109,7 @@ export default defineConfig({
 
 ### Custom reporters
 
-Pass a module specifier (or `[specifier, options]`) whose default export is a class implementing [`Reporter`](/api/javascript-api/reporter). Rstest instantiates it with `(options, { rootPath, config })` (passing `{}` when no options are provided). On Node.js 22.18+ or 24 with type stripping enabled, `.ts` and `.mts` reporter modules load directly:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: './custom-reporter.js',
-});
-
-// With options:
-export const configWithOptions = defineConfig({
-  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
-});
-```
-
-You can also pass an already constructed object implementing `Reporter`. Reporter classes cannot be passed directly.
+Pass a module specifier (or `[specifier, options]`) whose default export is a class implementing `Reporter`, or pass an already constructed `Reporter` object directly (reporter classes cannot be passed directly). See the [Reporter API reference](/api/javascript-api/reporter) for the `Reporter` interface, constructor signature, and TypeScript support.
 
 ## Related documentation
 

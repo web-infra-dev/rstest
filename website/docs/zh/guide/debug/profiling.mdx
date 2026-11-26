@@ -16,81 +16,15 @@ npx skills add rstackjs/agent-skills --skill rstest-debugging
 
 ## 常见性能瓶颈
 
-排查变慢问题时，先区分耗时主要在构建阶段还是测试执行阶段：
+先使用 [`--trace`](#using-trace) 运行一次测试以区分构建耗时与测试执行耗时，再按对应分支排查：
 
-- 启动等待时间长，且小幅修改代码后重跑依然较慢，通常说明瓶颈在构建阶段。
-- 测试能够快速开始执行，但单个文件或测试用例本身耗时较长，通常说明瓶颈在测试执行阶段。
-
-使用 [`--trace`](#using-trace) 运行一次测试，即可直接测量两部分的时间占比。
-
-### 构建性能排查
-
-在 `jsdom`、`happy-dom` 等类浏览器环境中，Rstest 默认会将 `node_modules` 中的第三方依赖打进 bundle，而不是像 `node` 环境那样默认 externalize。如果测试入口间接引入了体积较大的 UI 库、图表库或编辑器库（即使只用到其中一小部分 API），构建时间会明显上升。
-
-**1. 使用 `DEBUG=rstest` 检查构建日志与产物体积**
-
-```bash
-DEBUG=rstest rstest run
-```
-
-启用 `DEBUG=rstest` 后，Rstest 会打印详细的构建日志，并将临时构建产物写入 `dist/.rstest-temp`（或 [`output.distPath.root`](/config/build/output#outputdistpath)）。观察构建日志中耗时较长的阶段，以及临时目录下是否存在体积异常大的产物。
-
-**2. 使用 `output.bundleDependencies` externalize 第三方依赖**
-
-将 [`output.bundleDependencies`](/config/build/output#outputbundledependencies) 设为 `false`，让类浏览器环境也像 `node` 环境一样默认 externalize `node_modules` 依赖：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  testEnvironment: 'jsdom',
-  output: {
-    bundleDependencies: false,
-  },
-});
-```
-
-修改后重新使用 `DEBUG=rstest` 运行一次，对比构建耗时和临时产物体积是否明显下降。
-
-:::warning
-`output.bundleDependencies: false` 仅适用于非[浏览器模式](/guide/browser-testing)。在浏览器模式下，所有依赖始终会被打包。
-:::
-
-**3. 使用 `output.externals` 排除特定大体积依赖**
-
-如果只需要 externalize 少数几个体积较大的依赖，同时对其余依赖保持打包，使用 [`output.externals`](/config/build/output#outputexternals)：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  output: {
-    externals: ['react', 'lodash'],
-  },
-});
-```
-
-**4. 开启持久化构建缓存**
-
-对于本地或 CI 中重复执行的 `rstest run`，开启 [`performance.buildCache`](/config/build/performance#performancebuildcache) 可以将 Rspack 编译缓存持久化到磁盘。
-
-**5. 使用 Rsdoctor 分析编译耗时分布**
-
-如果排查后仍不清楚瓶颈来自哪类 loader、插件或依赖链，使用 [Rsdoctor](#使用-rsdoctor) 查看具体的编译时间分布。
-
-### 测试执行性能排查
-
-**1. 使用 `verbose` 报告器查看文件与用例耗时**
-
-启用 [`verbose` 报告器](/guide/basic/reporters#详细报告器)（`--reporters=verbose`），直接查看每个测试文件和单个测试用例的耗时。
-
-**2. 按 phase、suite 与 case 拆解运行耗时**
-
-使用 [`--trace`](#using-trace) 重新运行同一批测试。终端摘要会对最慢的 phase、文件和测试用例排序，方便判断耗时集中在加载阶段、setup 文件还是测试体本身。
-
-**3. 对热点运行时代码进行采样**
-
-定位到具体的慢文件或慢用例后，使用 [samply](#使用-samply) 或 [Node.js profiling](#nodejs-profiling) 分析 CPU 耗时或内存分配。工具选择见下文 [Profiler](#profiler)。
+1. **构建耗时占主导**（常见于 `jsdom` 或 `happy-dom` 等类浏览器环境，默认会打包 `node_modules` 依赖而非像 `node` 环境那样 externalize）：
+   - 运行 `DEBUG=rstest rstest run`，检查构建日志和 `dist/.rstest-temp`（或 [`output.distPath.root`](/config/build/output#outputdistpath)）下的临时产物体积。
+   - 设置 [`output.bundleDependencies: false`](/config/build/output#outputbundledependencies) 将第三方依赖 externalize（不适用于[浏览器模式](/guide/browser-testing)），或通过 [`output.externals`](/config/build/output#outputexternals) 排除特定大体积包。
+   - 对重复执行的 `rstest run` 开启 [`performance.buildCache`](/config/build/performance#performancebuildcache)，或使用 [Rsdoctor](#使用-rsdoctor) 分析 loader 与插件的编译耗时。
+2. **测试执行耗时占主导**（启动快，但单个文件或用例慢）：
+   - 通过 `--reporters=verbose`（[`verbose` 报告器](/guide/basic/reporters#详细报告器)）或 `--trace` 摘要查看各文件与用例的耗时排序。
+   - 使用 [samply](#使用-samply) 或 [Node.js profiling](#nodejs-profiling) 采样热点代码（见 [Profiler](#profiler)）。
 
 ## 使用 --trace \{#using-trace}
 
@@ -102,7 +36,7 @@ npx rstest run --trace
 
 `--trace` 是可选开关。开启后每次运行会记录带 status 和 retry count 标注的 suite 与 case slices，在每个 phase 边界采样一次 heap 计数，并为每个测试文件的各个 phase 生成一个 slice：
 
-- `prepare`：初始化 worker 运行时、全局 API，以及启用覆盖率时的 coverage provider。每个测试文件会进入两次，分别位于 `envSetup` 前后。
+- `prepare`：初始化 worker 运行时、全局 API，以及启用覆盖率时的 coverage provider。
 - `envSetup`：初始化 test environment。`node` 环境下，以及非 isolate 的 worker 已锁定该环境时，耗时接近 0。
 - `load`：接收该测试入口的构建产物。host 侧生成产物的耗时会记录为 host span。
 - `setupFiles`：执行配置的 setup 文件。
@@ -111,7 +45,7 @@ npx rstest run --trace
 - `coverage`：从 provider 收集覆盖率数据。未启用覆盖率，或该文件在此之前 bail 或抛错时，不会出现。
 - `teardown`：清理 coverage provider 和 worker 状态；启用 `isolate` 时还会清理 test environment。
 
-Node pool 还会记录 `file:load` 区间（`cat: "file"`），其耗时与 `TestFileResult.loadDuration` 完全一致，加载失败时也会记录。它覆盖 worker 内的产物加载、setup 文件执行、测试模块求值和 suite 收集。该区间与加载阶段的明细重叠，不会再次计入阶段或 host 汇总。Trace 区间耗时以微秒为单位，`loadDuration` 以毫秒为单位。
+Node pool 还会记录 `file:load` 汇总区间，覆盖 worker 内的产物加载、setup 文件执行、测试模块求值与 suite 收集（对应 `TestFileResult.loadDuration`）。
 
 浏览器模式只记录 `prepare` 和 `tests` 两个 phase，由 host 根据页面发来的消息计时。
 
@@ -128,7 +62,6 @@ Rstest 会向 `<rootPath>/.rstest/` 写入两个文件，并在 watch 模式每�
 
 :::tip
 借助 Coding Agent 排查性能问题时，把两个文件都交给它：摘要给出排序结果，trace 包含完整事件数据。可配合 [rstest-debugging](#使用-agent-skills) 技能使用。
-
 :::
 
 ## 使用 Rsdoctor

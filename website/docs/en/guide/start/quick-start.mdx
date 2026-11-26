@@ -21,24 +21,7 @@ You can try Rstest online without any setup by using the following examples:
 
 ## Setup environment
 
-Before getting started, install [Node.js](https://nodejs.org/) 20.19.0 or later in the 20.x line, or 22.12.0 or later (`^20.19.0 || >=22.12.0`). We recommend an LTS version.
-
-Check the current Node.js version with the following command:
-
-```bash
-node -v
-```
-
-If you do not have Node.js installed in current environment, or the installed version is too low, you can use [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm) to install.
-
-Here is an example of how to install via nvm:
-
-```bash
-# Install Node.js LTS
-nvm install --lts
-# Switch to Node.js LTS
-nvm use --lts
-```
+Rstest requires [Node.js](https://nodejs.org/) `^20.19.0 || >=22.12.0` (an LTS version is recommended).
 
 ## Using Rstest
 
@@ -46,22 +29,13 @@ import { PackageManagerTabs } from '@theme';
 
 ### Agent prompt
 
-If you are using a coding agent, you can copy the following prompt to set up Rstest automatically:
+If you are using a coding agent, copy the following prompt to set up Rstest automatically (for migrating from Jest, Vitest, or Playwright Test, or installing Agent Skills, see the [AI guide](/guide/start/ai)):
 
 <Prompt
   title="Set up Rstest"
   description="Copy this prompt and send it to your coding agent."
   prompt={`Set up Rstest, the JavaScript testing framework, in this project by following the instructions here:
 https://rstest.rs/guide/start/agent-install.md`}
-/>
-
-If you are migrating from an existing Jest, Vitest, or Playwright Test project, use this prompt. Playwright Test projects migrate to `@rstest/playwright`:
-
-<Prompt
-  title="Migrate to Rstest"
-  description="Copy this prompt and send it to your coding agent."
-  prompt={`Migrate this project to Rstest, the JavaScript testing framework. Detect whether it uses Jest, Vitest, or Playwright Test; for Playwright Test, migrate to @rstest/playwright. Follow the instructions here:
-https://rstest.rs/guide/start/agent-migrate.md`}
 />
 
 ### Manual installation

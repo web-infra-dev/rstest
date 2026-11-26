@@ -13,25 +13,7 @@ Reporter 控制 Rstest 如何格式化与输出测试结果。你可以使用内
 
 ## 配置方式
 
-可通过以下方式配置报告器：
-
-1. **CLI**：`--reporters=<name>`（可多次使用；同时支持别名 `--reporter`）
-2. **配置文件**：在 `rstest.config.ts` 中设置 [reporters](/config/test/reporters)
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-import { customReporter } from './path/to/custom-reporter';
-
-export default defineConfig({
-  reporters: [
-    'default',
-    ['junit', { outputPath: './test-results.xml' }],
-    customReporter,
-  ],
-});
-```
-
-完整配置方式见[报告器配置](/config/test/reporters)，内置报告器选项类型定义见 [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)（其中 `junit` 在公开联合类型中声明为 `Record<string, unknown>`，实际选项见下方 [JUnit 报告器](#junit-报告器)）。
+可通过 CLI 参数 `--reporters=<name>`（支持别名 `--reporter`，可重复传入）或在 `rstest.config.ts` 中设置 [reporters](/config/test/reporters) 来配置报告器。完整配置格式与组合方式见[报告器配置](/config/test/reporters)。
 
 ## 内置报告器
 
@@ -164,25 +146,6 @@ export default defineConfig({
 ### GitHub Actions 报告器
 
 在测试失败时通过 [GitHub Actions 工作流命令](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 输出错误注解，用于在 PR diff 中直接定位失败位置。
-
-**自动启用：** 当 `process.env.GITHUB_ACTIONS === 'true'` 且未手动配置报告器时，自动与 `default` 一并启用。
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-```bash
-npx rstest --reporters=github-actions
-```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: ['github-actions'],
-});
-```
-  </Tab>
-</Tabs>
 
 失败断言会输出如下工作流命令：
 
@@ -401,48 +364,7 @@ export default defineConfig({
 
 #### 输出结构
 
-报告以 YAML frontmatter 和 `# Rstest Test Execution Report` 开头，随后依次输出 `## Summary`、可选的 `## Tests`（聚焦运行全部通过或 `testLists: 'always'` 时）、`## Failures`，以及存在未捕获异常时的 `## Unhandled Errors`。
-
-全量运行且全部通过时的摘录：
-
-````md
-## Summary
-
-```json
-{
-  "status": "passed",
-  "counts": {
-    "testFiles": 2,
-    "failedFiles": 0,
-    "tests": 14,
-    "failedTests": 0,
-    "passedTests": 13,
-    "skippedTests": 1,
-    "todoTests": 0
-  },
-  "durationMs": {
-    "total": 120,
-    "build": 25,
-    "tests": 95
-  },
-  "snapshot": {
-    "added": 0,
-    "updated": 0,
-    "unmatched": 0,
-    "removed": 0,
-    "unchecked": 0
-  }
-}
-```
-
-## Failures
-
-No test failures reported.
-
-Note: all tests passed. Lists omitted for brevity.
-````
-
-存在失败时的摘录：
+报告以 YAML frontmatter 和 `# Rstest Test Execution Report` 开头，随后依次输出 `## Summary`、可选的 `## Tests`（聚焦运行全部通过或 `testLists: 'always'` 时）、`## Failures`，以及存在未捕获异常时的 `## Unhandled Errors`。全量运行且全部通过时，`## Failures` 会省略用例列表以保持精简；存在失败时，每条失败记录包含 `repro` 命令、JSON `details` 和 `diff`：
 
 ````md
 ## Summary
@@ -459,55 +381,18 @@ Note: all tests passed. Lists omitted for brevity.
     "skippedTests": 0,
     "todoTests": 0
   },
-  "durationMs": {
-    "total": 84,
-    "build": 18,
-    "tests": 66
-  },
-  "snapshot": {
-    "added": 0,
-    "updated": 0,
-    "unmatched": 0,
-    "removed": 0,
-    "unchecked": 0
-  }
+  "durationMs": { "total": 84, "build": 18, "tests": 66 }
 }
 ```
 
 ## Failures
 
-### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+### [F01] tests/math.test.ts :: math > adds numbers
 
 repro:
 
 ```bash
-pnpm exec rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'
-```
-
-details:
-
-```json
-{
-  "testPath": "fixtures/agent-md/index.test.ts",
-  "project": "rstest",
-  "fullName": "agent-md > fails with diff",
-  "status": "failed",
-  "duration": 12,
-  "retryCount": 0,
-  "errors": [
-    {
-      "type": "AssertionError",
-      "message": "expected 2 to be 3",
-      "topFrame": {
-        "file": "fixtures/agent-md/index.test.ts",
-        "line": 4,
-        "column": 15,
-        "method": null
-      },
-      "stackFrames": []
-    }
-  ]
-}
+pnpm exec rstest 'tests/math.test.ts' --testNamePattern 'math > adds numbers'
 ```
 
 diff:
@@ -575,20 +460,10 @@ export default defineConfig({
 });
 ```
 
-启用覆盖率时，每个 blob 只保存当次运行采集到的覆盖率数据。对于支持延迟最终处理的 coverage provider，使用 blob 报告器的运行不会生成覆盖率报告、不会按 `coverage.include` 补齐未测试文件，也不会检查覆盖率阈值（不使用 blob 报告器的运行仍会正常完成最终处理，包括分片运行；旧版 provider 维持单次最终处理）。所有分片完成后，执行带覆盖率的 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 对汇总结果统一执行这些步骤。仅通过命令行传给生成 blob 运行的覆盖率参数不会写入 blob；请将最终处理参数写入配置文件，或在执行 `merge-reports` 时再次传入。
-
-完整 CI 工作流见[使用分片拆分测试](/guide/advanced/ci#split-tests-with-shards)。
+启用覆盖率时，每个 blob 仅保存该分片运行采集的覆盖率数据；支持延迟最终处理的 coverage provider 会跳过报告生成和阈值检查，待所有分片完成后由 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 统一汇总完成最终处理。请将最终处理参数写入 `rstest.config.ts`，或在执行 `merge-reports` 时再次传入。完整 CI 工作流见[使用分片拆分测试](/guide/advanced/ci#split-tests-with-shards)。
 
 ## 自定义报告器
 
-可通过模块路径（`'./custom-reporter.js'` 或 `['./custom-reporter.js', options]`，需默认导出 `Reporter` 类），或直接传入实现 `Reporter` 接口的实例对象来使用自定义报告器；不支持直接传入类构造函数。在启用类型擦除的 Node 22.18+ / 24 运行时下，可直接加载 `.ts` 和 `.mts` 模块。
+可传入默认导出 `Reporter` 类的模块路径（`'./custom-reporter.js'` 或 `['./custom-reporter.js', options]`），或直接传入实现 `Reporter` 接口的实例对象；不支持直接传入类构造函数。在启用类型擦除的 Node 22.18+ / 24 运行时下，可直接加载 `.ts` 和 `.mts` 模块。
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
-});
-```
-
-生命周期钩子和载荷类型定义见 [Reporter API 参考](/api/javascript-api/reporter)。
+生命周期钩子、配置示例和载荷类型定义见 [Reporter API 参考](/api/javascript-api/reporter)。

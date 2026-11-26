@@ -84,7 +84,7 @@ import type {
 - `TestForFn`: Call signature type of `test.for`.
 - `Describe`: Type of the `describe` API.
 - `Expect` / `ExpectStatic`: Callable `expect` API type (`Expect` is an alias of `ExpectStatic`).
-- `TaskMeta` / `TaskMetaValue`: JSON-serializable metadata map and value types.
+- `TaskMeta` / `TaskMetaValue`: JSON-serializable metadata map and value types. See [Metadata](/guide/advanced/metadata).
 - `Fixtures` / `Use`: Fixtures object map and `use(value)` callback type for `test.extend`.
 - `FileFixtureOptions` / `WorkerFixtureOptions`: Scope options (`{ scope: 'file' }` and `{ scope: 'worker' }`) for named fixtures.
 - `FixtureCleanup` / `FixtureLifecycle`: Cleanup callback and `{ onCleanup }` lifecycle parameter for named fixtures (added in `0.11.7`).
@@ -174,22 +174,6 @@ import type {
 - `TestRunStartPayload` / `TestRunEndPayload` / `TestRunStatus` / `TestRunSummary`: Run-level hook payloads, run status (`'passed' | 'failed' | 'error'`), and aggregate counts.
 - `Duration` / `SerializedError` / `UserConsoleLog`: Phase timings, JSON-serializable errors, and captured stdio log records.
 - `SnapshotSummary` / `CoverageMapData`: Snapshot summary and Istanbul coverage map types.
-
-<ApiMeta addedVersion="0.11.1" />
-
-`meta` fields hold JSON-serializable metadata initialized from `TestOptions.meta` and updated via `context.task.meta` or hook `ctx.meta`. Suite metadata propagates to descendant suites and tests (copied per descendant, with child top-level keys overriding parent keys).
-
-```ts
-import { afterAll, test } from '@rstest/core';
-
-afterAll((ctx) => {
-  ctx.meta.fileTag = 'mutation-run';
-});
-
-test('records metadata', { meta: { owner: 'stryker' } }, (ctx) => {
-  ctx.task.meta.hitCount = 1;
-});
-```
 
 ## Assertion types
 

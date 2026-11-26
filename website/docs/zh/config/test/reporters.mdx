@@ -1,6 +1,5 @@
 ---
 description: 配置用于测试结果输出的报告器。
-overviewHeaders: []
 ---
 
 # reporters
@@ -33,6 +32,8 @@ process.env.GITHUB_ACTIONS === 'true'
 配置用于测试结果输出的报告器。
 
 内置报告器名称包括 `default`、`dot`、`verbose`、`md`、`github-actions`、`junit`、`json` 和 `blob`。
+
+这是一个全局配置项，只能在根配置中设置，无法在 [`projects`](/config/test/projects) 中按项目覆盖。
 
 :::info AI agent 环境
 未显式配置 `reporters`（配置文件未设置 `reporters`，且 CLI 未传入 `--reporters`）时，Rstest 在 AI agent 环境中默认使用 `['md']`，将适合 AI agent 读取的 Markdown 输出到 stdout。
@@ -108,22 +109,7 @@ export default defineConfig({
 
 ### 使用自定义报告器
 
-传入模块标识符（或 `[模块标识符, 选项]`），该模块必须默认导出一个实现了 [`Reporter`](/api/javascript-api/reporter) 接口的类。Rstest 会以 `(options, { rootPath, config })` 实例化该类（未传选项时 `options` 为 `{}`）。在启用类型擦除的 Node.js 版本（22.18+ 或 24）上，`.ts` 和 `.mts` 模块可直接加载：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: './custom-reporter.js',
-});
-
-// 传入选项：
-export const configWithOptions = defineConfig({
-  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
-});
-```
-
-也可以直接传入已创建并实现了 `Reporter` 接口的对象，但不能直接传入 Reporter 类。
+传入默认导出 `Reporter` 实现类的模块标识符（或 `[模块标识符, 选项]`），或直接传入已创建的 `Reporter` 实例对象（不能直接传入 Reporter 类）。关于 `Reporter` 接口、构造函数签名及 TypeScript 支持，见 [Reporter API 参考](/api/javascript-api/reporter)。
 
 ## 相关文档
 

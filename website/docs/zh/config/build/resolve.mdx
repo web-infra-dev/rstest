@@ -39,7 +39,7 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 - **类型：** `string[]`
 - **默认值：** `['.ts', '.tsx', '.mjs', '.js', '.jsx', '.json', '.cjs']`
 
-在导入模块未写明扩展名时自动解析的文件扩展名列表。Rstest 继承 Rsbuild 的默认值并追加了 `.cjs`。
+在导入模块未写明扩展名时自动解析的文件扩展名列表。在 Node 模式构建（`node`、`jsdom` 和 `happy-dom`）中，Rstest 会继承 Rsbuild 的默认值并追加 `.cjs`；Browser Mode 则保持 Rsbuild 默认的扩展名列表。
 
 ## resolve.conditionNames <RsbuildDocBadge path="/config/resolve/condition-names" text="resolve.conditionNames" />
 

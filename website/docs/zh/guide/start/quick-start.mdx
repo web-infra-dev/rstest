@@ -21,24 +21,7 @@ import { Prompt } from '@rspress/core/theme';
 
 ## 环境准备
 
-开始之前，需要先安装 [Node.js](https://nodejs.org/) 20.x 中的 20.19.0 及以上版本，或 22.12.0 及以上版本（`^20.19.0 || >=22.12.0`）。推荐使用 LTS 版本。
-
-通过以下命令检查当前的 Node.js 版本：
-
-```bash
-node -v
-```
-
-如果你的环境中尚未安装 Node.js，或是版本太低，可以通过 [nvm](https://github.com/nvm-sh/nvm) 或 [fnm](https://github.com/Schniz/fnm) 安装。
-
-下面是通过 nvm 安装的例子：
-
-```bash
-# 安装 Node.js LTS
-nvm install --lts
-# 切换 Node.js LTS
-nvm use --lts
-```
+Rstest 需要 [Node.js](https://nodejs.org/) `^20.19.0 || >=22.12.0`（推荐使用 LTS 版本）。
 
 ## 使用 Rstest
 
@@ -46,22 +29,13 @@ import { PackageManagerTabs } from '@theme';
 
 ### Agent prompt
 
-如果你正在使用 Coding Agent，可以复制下面的 prompt 来自动设置 Rstest：
+如果你正在使用 Coding Agent，可以复制下面的 prompt 自动设置 Rstest（如需从 Jest、Vitest 或 Playwright Test 迁移，或安装 Agent Skills，见 [AI 指南](/guide/start/ai)）：
 
 <Prompt
   title="设置 Rstest"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
   prompt={`Set up Rstest, the JavaScript testing framework, in this project by following the instructions here:
 https://rstest.rs/guide/start/agent-install.md`}
-/>
-
-如果要从已有的 Jest、Vitest 或 Playwright Test 项目迁移，请使用这个 prompt。Playwright Test 项目会迁移到 `@rstest/playwright`：
-
-<Prompt
-  title="迁移到 Rstest"
-  description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this project to Rstest, the JavaScript testing framework. Detect whether it uses Jest, Vitest, or Playwright Test; for Playwright Test, migrate to @rstest/playwright. Follow the instructions here:
-https://rstest.rs/guide/start/agent-migrate.md`}
 />
 
 ### 手动安装

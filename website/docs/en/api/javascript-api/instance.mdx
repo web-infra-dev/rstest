@@ -172,7 +172,7 @@ console.log(result.summary.tests);
 
 ### RunOptions
 
-`RunOptions` accepts run-cycle options and config overrides. Creation-time options (`config`, `configLoader`, and `root`) and the CLI-only `teardownTimeout` are not accepted. See [CLI options](/guide/basic/cli#cli-options) for corresponding CLI flags.
+`RunOptions` accepts run-cycle options and the CLI-overridable subset of config options (not full `RstestConfig`; for example, `reporters` takes `string | string[]`). Creation-time options (`config`, `configLoader`, and `root`) and the CLI-only `teardownTimeout` are not accepted. See [CLI options](/guide/basic/cli#cli-options) for corresponding CLI flags.
 
 For fields that override configuration options, precedence is: **value passed to `run()` > instance configuration > option default**. Omitted or `undefined` fields retain the instance configuration value. Nested objects and arrays follow the merge rules of the corresponding configuration option.
 

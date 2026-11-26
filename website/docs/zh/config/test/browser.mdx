@@ -3,7 +3,6 @@ description: 浏览器模式配置。启用后，测试将在真实浏览器中�
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
-import { Tab, Tabs } from '@theme';
 
 # browser
 
@@ -117,10 +116,10 @@ export default defineConfig({
 ```
 
 :::tip
-启用浏览器模式需要安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 和 Playwright 浏览器：
+启用浏览器模式需要安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)、`playwright` 和 Playwright 浏览器：
 
 ```bash
-npm add @rstest/browser -D
+npm add @rstest/browser playwright -D
 npx playwright install chromium
 ```
 
@@ -131,7 +130,7 @@ npx playwright install chromium
 - **类型：** `'playwright'`
 - **默认值：** `'playwright'`
 
-浏览器驱动提供者。目前仅支持 [Playwright](https://playwright.dev/)。
+浏览器驱动提供者。目前仅支持 [Playwright](https://playwright.dev/)。在 `BrowserModeConfig` TypeScript 类型中 `provider` 为必填字段；运行时默认值为 `'playwright'`。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -245,9 +244,7 @@ export default defineConfig({
 
 以无头模式（无 UI 窗口）运行浏览器。[`instances`](#instances) 的每一项可按浏览器覆盖它，并受[每次 run 只能有一个 headed 浏览器](#launch-rules)规则约束。
 
-<Tabs defaultValue="rstest.config.ts">
-  <Tab label="rstest.config.ts">
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -258,23 +255,8 @@ export default defineConfig({
   },
 });
 ```
-  </Tab>
-  <Tab label="CI (GitHub Actions)">
-```yaml
-# .github/workflows/test.yml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm install
-      - run: npx playwright install chromium
-      - run: npm test
-```
-  </Tab>
-</Tabs>
 
-如果希望本地调试使用 headed 模式、CI 中使用 headless，可配置 `headless: process.env.CI === 'true'`。
+如果希望本地调试使用 headed 模式、CI 中使用 headless，可配置 `headless: process.env.CI === 'true'`。GitHub Actions 工作流示例见 [CI 集成](/guide/advanced/ci)。
 
 ### screenshotFailures
 
@@ -436,27 +418,9 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 }
 ```
 
-两项像素差异上限均未设置时，应用 `threshold` 后不允许有像素差异。默认不注入额外的 `style`；`mask` 因需要浏览器 `Locator` 对象，仅支持在单次断言中传入。
+为 Browser Mode 项目中的 [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#toMatchScreenshot) 配置全局默认值。像素比较容差（`threshold`、`maxDiffPixels`、`maxDiffPixelRatio`）位于 `comparatorOptions` 下，截图与路径选项（`stabilityTimeout`、`maskColor`、`style`、`caret`、`scale`、`omitBackground`、`screenshotDirectory`、`resolveScreenshotPath`）与其同级（`mask` 仅支持在单次断言中传入）。
 
-为 Browser Mode 项目中的 [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#screenshot-matching) 配置全局默认值。像素比较容差位于 `comparatorOptions` 下，截图和路径选项与其同级；单次断言传入的选项会覆盖对应的全局值。
-
-下表列出各选项省略时的默认行为（`maskColor`、`caret`、`scale` 和 `omitBackground` 采用 Playwright 默认值）：
-
-| 选项                                  | 默认值            | 说明                                         |
-| ------------------------------------- | ----------------- | -------------------------------------------- |
-| `comparatorOptions.threshold`         | `0.1`             | 单像素颜色距离阈值，`0` 最严格，`1` 最宽松。 |
-| `comparatorOptions.maxDiffPixels`     | 未设置            | 允许差异的最大像素数。                       |
-| `comparatorOptions.maxDiffPixelRatio` | 未设置            | 允许差异像素所占的最大比例。                 |
-| `stabilityTimeout`                    | `5000`            | 等待连续截图一致的最长时间（毫秒）。         |
-| `maskColor`                           | `#FF00FF`         | 遮罩内容使用的颜色。                         |
-| `style`                               | 未设置            | 不注入额外 CSS。                             |
-| `caret`                               | `hide`            | 截图时隐藏文本光标。                         |
-| `scale`                               | `device`          | 按设备像素比截图。                           |
-| `omitBackground`                      | `false`           | 截图保留页面背景。                           |
-| `screenshotDirectory`                 | `__screenshots__` | 测试文件旁存放基线的目录。                   |
-| `resolveScreenshotPath`               | 内置默认          | 使用下文介绍的默认路径布局。                 |
-
-同时设置两项上限时，取更严格的一项。单次断言只要指定了任一上限，就会覆盖项目级像素上限；两项均未指定时，沿用项目设置。
+单次断言传入的选项会覆盖这些默认值；各选项默认值及像素上限优先级详见 [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#toMatchScreenshot)。
 
 相对路径的 `screenshotDirectory` 从各测试文件所在目录解析（默认为 `__screenshots__`）。共用同一目录时，Rstest 会按项目名和测试文件隔离基线；若所选目录就是测试文件所在目录，基线会存入其中的 `__screenshots__` 子目录。
 
@@ -549,32 +513,7 @@ Reporter 不感知浏览器。当项目运行多个浏览器时，每个 `(proje
 
 ## 多项目配置隔离
 
-在 Browser Mode 下使用 `projects` 时，每个项目按自己的构建配置独立编译和执行（如 `plugins`、`include` 和框架设置）。
-
-构建作用域选项（`provider`、`port`、`strictPort`）按项目保留，浏览器列表、默认值及按浏览器覆盖（`instances`、`headless`、`viewport`、`providerOptions`）归各项目自持。不同 browser 项目可以在同一次 run 中运行不同浏览器；多个项目配置相同浏览器时遵循[启动规则](#launch-rules)共用浏览器实例。
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
-});
-```
-
-```ts title="project-a/rstest.config.ts"
-import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  name: 'project-a',
-  plugins: [pluginReact()],
-  include: ['tests/**/*.test.tsx'],
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-  },
-});
-```
+在 Browser Mode 下使用 `projects` 时，每个项目按自己的构建配置独立编译和执行（如 `plugins`、`include` 和框架设置）。构建作用域选项（`provider`、`port`、`strictPort`）按项目保留，浏览器列表、默认值及按浏览器覆盖（`instances`、`headless`、`viewport`、`screenshotFailures`、`expect`、`providerOptions`）归各项目自持。多项目配置示例见 [Browser mode 中的 projects](/guide/basic/projects#browser-mode-中的-projects)。
 
 ## 与 Node 测试混合
 
@@ -597,12 +536,6 @@ export default defineConfig({
       name: 'node',
       include: ['src/**/*.node.test.ts'],
       testEnvironment: 'node',
-    },
-    {
-      name: 'jsdom',
-      include: ['src/**/*.test.ts'],
-      exclude: ['src/**/*.browser.test.ts', 'src/**/*.node.test.ts'],
-      testEnvironment: 'jsdom',
     },
   ],
 });

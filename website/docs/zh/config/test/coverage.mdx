@@ -200,21 +200,6 @@ if (hasNativeFeature()) {
 `v8` provider 支持 `istanbul`、`c8`、`v8` 和 `node:coverage` 前缀的忽略注释（`next`、`if`、`else`、`start`/`stop`、`file`）。建议在项目中统一使用同一种前缀：
 
 ```ts
-/* v8 ignore next */
-const value = optionalExpensivePath();
-
-/* v8 ignore if */
-if (process.env.NODE_ENV === 'test') {
-  setupTestOnlyState();
-}
-
-/* v8 ignore else */
-if (hasNativeFeature()) {
-  useNativeFeature();
-} else {
-  useFallback();
-}
-
 /* v8 ignore start */
 const generatedLookup = createGeneratedLookup();
 /* v8 ignore stop */
@@ -369,7 +354,7 @@ export default class CustomCoverageReporter {
 }
 ```
 
-可以在 `rstest.config.ts` 中通过包名或文件路径引用，也可以直接传入内联的 reporter 对象：
+可以在 `rstest.config.ts` 中通过包名或文件路径引用，也可以直接传入带有 `execute(context)` 方法的内联 reporter 对象：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -380,15 +365,6 @@ export default defineConfig({
     reporters: [
       'text',
       ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
-      {
-        execute(context) {
-          const summary = context
-            .getTree('flat')
-            .getRoot()
-            .getCoverageSummary();
-          console.log(summary.toJSON());
-        },
-      },
     ],
   },
 });
@@ -522,10 +498,10 @@ export default defineConfig({
 覆盖率未达到阈值时，测试会失败并输出未满足的项：
 
 ```bash
-Error: Coverage for statements 75% does not meet global threshold 80%
-Error: Coverage for functions 75% does not meet global threshold 80%
-Error: Coverage for branches 75% does not meet global threshold 80%
-Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
+Error: coverage for statements 75% does not meet global threshold 80%
+Error: coverage for functions 75% does not meet global threshold 80%
+Error: coverage for branches 75% does not meet global threshold 80%
+Error: uncovered lines 20 exceeds maximum global threshold allowed 10
 ```
 
 #### glob 模式

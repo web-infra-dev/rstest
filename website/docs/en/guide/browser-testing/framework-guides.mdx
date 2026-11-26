@@ -9,7 +9,7 @@ This guide provides testing configuration examples for various frontend framewor
 :::tip Prerequisites
 Before continuing, make sure you've completed the basic Browser Mode setup. You can initialize using either method:
 
-- **Automatic initialization**: Run `npx rstest init browser`
+- **Automatic initialization**: Run `npx @rstest/core init browser`
 - **Manual configuration**: Follow the [Getting Started](/guide/browser-testing/getting-started#manual-configuration) guide
 
 Then follow this guide for framework-specific configuration.
@@ -55,7 +55,7 @@ export default defineConfig({
 
 ### Component testing
 
-`render` mounts a React component into the real browser DOM and returns `{ container, baseElement, rerender, unmount, asFragment }`. Use the [Locator API](/guide/browser-testing/user-interactions#locator-api) (`page` + `expect.element`) to query elements, trigger interactions, and assert rendered output:
+`render` mounts a React component into the real browser DOM. Use the [Locator API](/guide/browser-testing/user-interactions#locator-api) (`page` + `expect.element`) to query elements, trigger interactions, and assert rendered output:
 
 ```tsx title="src/Counter.test.tsx"
 import { page } from '@rstest/browser';
@@ -111,11 +111,7 @@ await render(<App />, {
 
 ### Hook testing
 
-`renderHook` lets you test custom Hooks without writing wrapper components. It returns:
-
-- `result.current`: The Hook's current return value, which updates as the Hook changes
-- `act`: Wraps operations that trigger state updates, ensuring assertions run after updates complete
-- `rerender`: Calls the Hook again with new props
+`renderHook` lets you test custom Hooks without writing wrapper components (see [RenderHookResult](/api/runtime-api/browser-mode/react#renderhookresult) for its return fields):
 
 ```tsx title="src/useCounter.test.tsx"
 import { renderHook } from '@rstest/browser-react';
@@ -150,43 +146,11 @@ test('hook reacts to prop changes', async () => {
 
 ### Additional configuration
 
-- **React Strict Mode**: Enable with `configure({ reactStrictMode: true })` to help catch potential issues
-- **Manual cleanup**: Automatic cleanup runs before each test by default. For manual control, import from `@rstest/browser-react/pure` and call `cleanup()`
-
-See the [React API reference](/api/runtime-api/browser-mode/react) for `render`, `renderHook`, `act`, `cleanup`, and `configure`, including their options and return values.
+See the [React API reference](/api/runtime-api/browser-mode/react) for all options and return values of `render`, `renderHook`, `act`, `configure({ reactStrictMode: true })`, and manual `cleanup()` via `@rstest/browser-react/pure`.
 
 ## Vanilla JS/TS
 
-For projects without a framework, append DOM elements to `document.body` and test them with [`page` and `expect.element`](/guide/browser-testing/user-interactions#locator-api) (or see [User interactions](/guide/browser-testing/user-interactions) for Testing Library and native DOM event examples):
-
-### Example tests
-
-```ts title="src/counter.test.ts"
-import { page } from '@rstest/browser';
-import { expect, test } from '@rstest/core';
-
-test('counter increments on click', async () => {
-  const container = document.createElement('div');
-  container.innerHTML = `
-    <p>Count: 0</p>
-    <button type="button">Increment</button>
-  `;
-  document.body.appendChild(container);
-
-  let count = 0;
-  const display = container.querySelector('p')!;
-  const button = container.querySelector('button')!;
-
-  button.addEventListener('click', () => {
-    count++;
-    display.textContent = `Count: ${count}`;
-  });
-
-  await expect.element(page.getByText('Count: 0')).toBeVisible();
-  await page.getByRole('button', { name: 'Increment' }).click();
-  await expect.element(page.getByText('Count: 1')).toBeVisible();
-});
-```
+For projects without a framework, append DOM elements to `document.body` and test them with [`page` and `expect.element`](/guide/browser-testing/user-interactions#locator-api) (see [Getting started](/guide/browser-testing/getting-started#3-write-tests) for a DOM counter test, or [User interactions](/guide/browser-testing/user-interactions) for Testing Library and native DOM event examples).
 
 ### Testing web components
 
@@ -206,26 +170,4 @@ test('renders content in shadow DOM', () => {
 
 ## Multi-framework projects
 
-Use [projects](/config/test/projects) when different parts of a repository target browser and Node environments:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: [
-    {
-      name: 'react',
-      include: ['src/react/**/*.test.{ts,tsx}'],
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-      },
-    },
-    {
-      name: 'node',
-      include: ['src/utils/**/*.test.ts'],
-      testEnvironment: 'node',
-    },
-  ],
-});
-```
+Use [projects](/config/test/projects) when different parts of a repository target browser and Node environments; see [Mixing with node tests](/config/test/browser#mixing-with-node-tests) and [Projects in browser mode](/guide/basic/projects#projects-in-browser-mode) for configuration examples.

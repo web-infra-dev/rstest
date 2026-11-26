@@ -34,9 +34,9 @@ export default defineConfig({
 #### `configPath`
 
 - **Type:** `string`
-- **Default:** `'./rslib.config.ts'`
+- **Default:** `undefined`
 
-Path to rslib config file.
+Path to the Rslib config file. When omitted, auto-discovers `rslib.config.*` in `cwd`.
 
 :::tip
 If both `config` and `configPath` are provided, `config` takes precedence as the config content.
@@ -205,17 +205,7 @@ The adapter also applies these rules during conversion:
 
 ## Debug config
 
-To see the resolved configuration returned by the adapter, wrap it and log the result:
-
-```ts
-export default defineConfig({
-  extends: async (user) => {
-    const config = await withRslibConfig({ libId: 'react' })(user);
-    console.log('Extended config:', JSON.stringify(config, null, 2));
-    return config;
-  },
-});
-```
+Run with `DEBUG=rstest` to write the resolved Rstest, Rsbuild, and Rspack configurations to disk. See [Debug mode](/guide/debug/debugging#debug-mode).
 
 ## Related documentation
 

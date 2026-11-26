@@ -22,7 +22,7 @@ export type RstestPoolOptions = {
    * Memory threshold used to recycle a worker after it finishes a test file.
    * This is a worker-recycling threshold, not a hard process RSS limit.
    * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
-   * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
+   * and strings may use `%`, `KB`, `KiB`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
    * Uses RSS for `forks` with `isolate: false`, and V8 heap for VM pools.
    * Ignored by `threads` and isolated `forks`.
    * @default undefined (`system memory / maxWorkers` for VM pools)
@@ -77,16 +77,10 @@ Rstest saves these results in `node_modules/.cache/.rstest-results/results.json`
 
 All pools serialize environment options before sending them to workers, so functions are not supported in those options. See [`testEnvironment.options`](/config/test/test-environment#environment-options) for the requirements.
 
-### forks
-
-Creates Node.js child processes with `child_process.fork`. Each worker has separate process memory and process-level state. By default, every file gets a new process; with [`isolate: false`](/config/test/isolate), multiple files can reuse the same child process.
-
-With the default isolation setting, each file incurs process startup and initialization costs.
-
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --pool forks
+  npx rstest --pool threads
   ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -94,11 +88,18 @@ With the default isolation setting, each file incurs process startup and initial
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  pool: 'forks',
+  // 'forks' | 'threads' | 'vmForks' | 'vmThreads'
+  pool: 'threads',
 });
 ```
   </Tab>
 </Tabs>
+
+### forks
+
+Creates Node.js child processes with `child_process.fork`. Each worker has separate process memory and process-level state. By default, every file gets a new process; with [`isolate: false`](/config/test/isolate), multiple files can reuse the same child process.
+
+With the default isolation setting, each file incurs process startup and initialization costs.
 
 ### threads
 
@@ -114,45 +115,11 @@ Threads generally start faster than child processes, but have some Node.js API r
 
 See the [Node.js Worker documentation](https://nodejs.org/api/worker_threads.html#class-worker) for the full list of differences.
 
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool threads
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: 'threads',
-});
-```
-  </Tab>
-</Tabs>
-
 ### vmForks
 
 <ApiMeta addedVersion="0.12.0" />
 
 Reuses child processes and creates a fresh `vm.Context` for each test file, reducing repeated process startup. Process APIs such as `process.chdir()` remain available, but files in the same child process can share process-level state.
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool vmForks
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: 'vmForks',
-});
-```
-  </Tab>
-</Tabs>
 
 ### vmThreads
 
@@ -161,26 +128,6 @@ export default defineConfig({
 Reuses worker threads and creates a fresh `vm.Context` for each test file, reducing repeated thread startup. It provides the same VM isolation as `vmForks`, with the worker-thread restrictions described above.
 
 For the isolation scope and compatibility requirements of both VM pools, see [VM pool behavior](#vm-pool-behavior) at the end of this page.
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool vmThreads --pool.memoryLimit 256MB
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: {
-    type: 'vmThreads',
-    memoryLimit: '256MB',
-  },
-});
-```
-  </Tab>
-</Tabs>
 
 ## Configure worker concurrency and memory
 
@@ -297,15 +244,9 @@ These restrictions apply to both `vmForks` and `vmThreads`.
 
 ### Isolation and cleanup
 
-Each file gets a fresh VM context, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file, regardless of [`isolate`](/config/test/isolate). Workers are reused, however, so state outside the VM, such as `process.env` and native-addon state, may persist across files.
+Each file gets a fresh `vm.Context`, module graph, and test environment. Worker-scoped fixtures are also created and cleaned up per file, regardless of [`isolate`](/config/test/isolate). Workers are reused, however, so state outside the VM—such as `process.env`, native-addon state, and direct mutations or patches to native modules like `fs`—may persist across files; restore your own mutations when they should not persist.
 
-`fs` and `fs/promises` use the worker's native modules. Aliases such as `fs` and `node:fs`, and `fs.promises` and `fs/promises`, share the same underlying state. Composite operations, streams, and `syncBuiltinESMExports()` retain Node.js behavior, including when native implementations capture a method during initialization. Direct assignments and dependency patches such as those from `graceful-fs` can persist across files; restore your own direct mutations when they should not persist.
-
-At the end of each VM test file, Rstest resets registered mocks (including call history and queued one-time implementations) and restores spies. This runs after file cleanup callbacks and before environment teardown, even when a test or cleanup callback fails. It applies regardless of `clearMocks`, `resetMocks`, and `restoreMocks`, which control cleanup between tests. Native builtin ESM exports are synchronized after restoration. This file-end mock cleanup is specific to VM pools.
-
-Tests must still await or cancel asynchronous work before the file finishes. Teardown clears timers managed by Rstest, but does not cancel arbitrary Promise chains, native I/O, or background tasks.
-
-Pending wrapped `node:timers/promises` and promisified timeout/immediate operations are cancelled with `AbortError`. Cancellation may run user `catch` or `finally` handlers, so teardown does not guarantee that no user code runs afterward.
+At the end of each VM test file, Rstest resets registered mocks and restores spies even when a test or cleanup callback fails, regardless of `clearMocks`, `resetMocks`, and `restoreMocks`. Tests must still await or cancel asynchronous work before the file finishes: teardown clears Rstest-managed timers, not arbitrary Promise chains, native I/O, or background tasks.
 
 ### Cross-realm assertions
 
@@ -313,27 +254,9 @@ Values from Node.js, workers, or DOM environments may use different constructors
 
 ### Module loading
 
-Test and setup bundles, external JavaScript ESM, and CommonJS can run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
-
-Calling `module.register()` or `module.registerHooks()` in a VM pool throws an error. Use `forks` or `threads` for tests that register Node.js loader hooks.
-
-Synchronous `require(esm)` requires Node.js 24.9+, VM graph support, and a dependency graph without top-level await. Otherwise, use dynamic `import()`. Native addons can only be loaded through direct CommonJS `require()`, and their state is outside VM isolation.
-
-WebAssembly source-phase imports (`import source` and `import.source()`) are unsupported in VM pools because `node:vm` does not expose an API for providing a module source object. Use `forks` for tests that depend on these imports.
-
-<details>
-<summary>Module loading compatibility</summary>
-
-VM loading differs from the native Node.js loader in the following ways:
-
-| Loading path                               | Support and limits                                                                                                                                                                                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Test/setup bundles and external JavaScript | Execute in the file VM, including static and dynamic imports. Setup and evaluated module state are recreated per file.                                                                                                                                  |
-| CommonJS named exports                     | Statically detected own exports, including non-enumerable properties and getters, are read from the original `module.exports` receiver. They are snapshots, not live bindings; `interopDefault` still applies.                                          |
-| JSON, WebAssembly, and `data:` URLs        | External JSON ESM imports require `type: 'json'`. Asynchronous WebAssembly instance imports and JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported. Synchronous Wasm `require()` is unsupported.                                       |
-| Synchronous `require(esm)`                 | Requires Node.js 24.9+ and VM graph support. Async graphs throw `ERR_REQUIRE_ASYNC_MODULE`; older VM implementations reject ESM require with `ERR_REQUIRE_ESM`.                                                                                         |
-| Native addons                              | Direct CommonJS `require()` delegates to Node.js. VM ESM imports of `.node` files are unsupported, and addon state is not VM-isolated.                                                                                                                  |
-| CommonJS resolution                        | Node.js `require.resolve()` selects paths and export conditions. Rstest does not choose a fallback entry if the selected entry cannot run in the VM.                                                                                                    |
-| `Module._cache`                            | Exposes the file's `require.cache` for inspecting and deleting CommonJS/JSON entries. Replacing or deleting `_cache` itself is unsupported. Synchronous `require(esm)` uses the VM ESM cache without CommonJS cache records or `module.children` links. |
-
-</details>
+- **Unsupported loaders and external TypeScript:** Test/setup bundles, external JavaScript ESM, and CommonJS run in the VM. Custom Node.js loaders and external TypeScript execution are unsupported; compile or bundle those files first.
+- **Loader registration hooks:** Calling `module.register()` or `module.registerHooks()` throws an error. Use `forks` or `threads` for tests that register Node.js loader hooks.
+- **Synchronous `require(esm)`:** Requires Node.js 24.9+ and a dependency graph without top-level await; otherwise use dynamic `import()`.
+- **Native addons:** `.node` addons can only be loaded through CommonJS `require()` (not VM ESM `import`), and their state is not VM-isolated.
+- **WebAssembly source-phase imports:** `import source` and `import.source()` are unsupported in VM pools; use `forks` for tests that depend on them. Synchronous `require()` of `.wasm` is also unsupported; use async `import()`.
+- **JSON and `data:` URLs:** External JSON ESM imports require `with { type: 'json' }`. JavaScript, JSON, and base64 WebAssembly `data:` URLs are supported.

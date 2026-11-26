@@ -130,14 +130,7 @@ test('overrides one export', () => {
 
 ### 加载已注册的 mock
 
-当测试需要通过代码显式加载 mock 模块对象，而不是通过 `import` 或 `require()` 时，可以使用：
-
-- [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock)：异步加载 ESM 模块 mock 并返回 `Promise`。
-- [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock)：同步加载 CommonJS 模块 mock。
-
-这两个 API 本身**不会**对未 mock 的模块执行自动 mock。它们只会解析已注册的 mock（通过 `rs.mock` / `rs.doMock` 或 `rs.mockRequire` / `rs.doMockRequire` 注册），或在传入字符串字面量路径时查找匹配的 `__mocks__` 文件；若均不存在，会抛出 `Cannot find module` 错误。若注册的是工厂函数，则会原样返回工厂函数的导出。
-
-若要通过 `rs.importMock()` 获取自动 mock 的模块对象，需要先注册自动 mock：
+当测试需要显式加载已注册的 mock（通过 `rs.mock` / `rs.doMock`、`rs.mockRequire` / `rs.doMockRequire` 或 `__mocks__` 文件注册），而不是通过 `import` 或 `require()` 加载时，可以使用 [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock)（ESM）或 [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock)（CommonJS）：
 
 ```ts title="math.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -151,7 +144,7 @@ test('loads an auto-mocked module', async () => {
 });
 ```
 
-在 TypeScript 中，如果返回的模块仍保持原始静态类型，请先传给 `rs.mocked(module, true)` 再调用 `mockReturnValue` 等 mock 方法。选择 `importMock` 还是 `requireMock` 时，应匹配代码实际使用的模块入口。
+未注册时的报错行为及配合 `rs.mocked()` 的 TypeScript 类型收窄见 [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) 和 [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock)。
 
 ### Spy 整个模块
 
@@ -197,9 +190,7 @@ test('keeps parseDate real', async () => {
 });
 ```
 
-由于 factory 会被提升，与 factory 共享的值必须来自静态 `importActual` import 或 [`rs.hoisted()`](#与提升的-mock-factory-共享值)。
-
-如果真实模块依赖图使用了 top-level `await`，不要在同一个测试文件中静态导入被 mock 的模块，否则 factory 可能会在真实导出就绪前执行。应在异步测试中通过 `await import()` 动态导入 mock 模块，示例见[使用 `importActual` 部分 mock](/api/runtime-api/rstest/mock-modules#使用-importactual-部分-mock)。
+由于 factory 会被提升，与 factory 共享的值必须来自静态 `importActual` import 或 [`rs.hoisted()`](#与提升的-mock-factory-共享值)。若真实模块依赖图使用了 top-level `await`，请在测试中通过 `await import()` 动态导入，详见[使用 `importActual` 部分 mock](/api/runtime-api/rstest/mock-modules#使用-importactual-部分-mock)。
 
 ### Mock 虚拟模块
 
@@ -286,27 +277,11 @@ test('logs a warning when validation fails', () => {
 
 <ApiMeta addedVersion="0.10.2" />
 
-Rstest 支持使用 `using` 语法在代码块退出时自动恢复 spy：
-
-```ts title="logger.test.ts"
-import { expect, rs, test } from '@rstest/core';
-
-test('logs a warning when validation fails', () => {
-  {
-    using warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-    console.warn('invalid payload');
-
-    expect(warn).toHaveBeenCalledWith('invalid payload');
-  }
-
-  // console.warn 在这里已恢复
-});
-```
+Rstest 支持使用 `using` 在代码块退出时自动恢复 spy、环境变量/全局变量 stub 以及 fake timers，示例见[作用域清理](/guide/advanced/scoped-cleanup)。
 
 ## 深度 mock 对象
 
-使用 [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) 可以将内存中已有对象的嵌套方法递归转换为 mock：
+使用 [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) 可以将已有对象的嵌套方法递归转换为 mock（传入 `{ spy: true }` 可保留原实现并记录调用）：
 
 ```ts title="service.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -329,9 +304,7 @@ test('mocks nested methods', async () => {
 });
 ```
 
-默认情况下，`rs.mockObject()` 会将数组替换为空数组（`[]`）。传入 `{ spy: true }` 会保留原始实现、保留数组元素（并将嵌套的函数与普通对象包装为 spy），同时记录调用。
-
-完整 API 和更多示例见 [Mock functions](/api/runtime-api/rstest/mock-functions) 和 [MockInstance](/api/runtime-api/rstest/mock-instance)。
+数组处理规则与更多选项见 [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) 和 [MockInstance](/api/runtime-api/rstest/mock-instance)。
 
 ## 替换环境变量和全局变量
 
@@ -353,7 +326,7 @@ test('stubs env and global values', () => {
 });
 ```
 
-这两个 API 均返回支持 `using` 的 `Disposable` 对象，也可以通过 [`rs.unstubAllEnvs()`](/api/runtime-api/rstest/utilities#rsunstuballenvs) 和 [`rs.unstubAllGlobals()`](/api/runtime-api/rstest/utilities#rsunstuballglobals) 手动恢复，或通过配置 [`unstubEnvs`](/config/test/unstub-envs) 和 [`unstubGlobals`](/config/test/unstub-globals) 在每个测试前自动恢复。
+手动恢复与基于 [`unstubEnvs`](/config/test/unstub-envs) / [`unstubGlobals`](/config/test/unstub-globals) 的自动恢复见 [Utilities](/api/runtime-api/rstest/utilities)。
 
 ## Mock 定时器
 
@@ -373,7 +346,7 @@ test('advances timers without waiting', () => {
 });
 ```
 
-使用 `rs.setSystemTime()` 可以固定当前系统时间，手动恢复真实定时器可调用 `rs.useRealTimers()`。
+`rs.setSystemTime()`、异步推进及手动恢复见 [Fake timers](/api/runtime-api/rstest/fake-timers)。
 
 ## 标注与识别 mock 函数
 

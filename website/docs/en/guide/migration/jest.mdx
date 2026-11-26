@@ -263,9 +263,7 @@ rs.mock('zustand');
 
 ### Loading actual modules (`requireActual`)
 
-In Jest, `jest.requireActual()` synchronously loads the unmocked implementation both inside `jest.mock()` factories and inside tests. In Rstest, choose the helper based on where and how the module is loaded:
-
-- **Inside a hoisted `rs.mock()` factory (ESM):** `rs.mock()` factories must be synchronous. Load the unmocked module with a static `import` using `with { rstest: 'importActual' }` and spread its exports:
+In Jest, `jest.requireActual()` synchronously loads the unmocked implementation in factories and tests; in Rstest, hoisted `rs.mock()` factories must be synchronous, so use a static `import` with `with { rstest: 'importActual' }` (use [`rs.importActual`](/api/runtime-api/rstest/mock-modules#rsimportactual) in async tests, [`rs.requireActual`](/api/runtime-api/rstest/mock-modules#rsrequireactual) for CommonJS modules, and see [Mocking](/guide/basic/mock)):
 
 ```diff
 + import * as actualUtils from './utils' with { rstest: 'importActual' };
@@ -280,23 +278,9 @@ In Jest, `jest.requireActual()` synchronously loads the unmocked implementation 
 + }));
 ```
 
-- **Inside an async test or helper (ESM):** Use [`rs.importActual`](/api/runtime-api/rstest/mock-modules#rsimportactual) (`await rs.importActual('./utils')`).
-- **CommonJS modules loaded with `require()`:** Use [`rs.requireActual`](/api/runtime-api/rstest/mock-modules#rsrequireactual) (`rs.requireActual('./utils.cjs')`). It runs synchronously and throws if the dependency graph uses top-level `await`.
-
-### Fake timers
-
-Replace `jest.useFakeTimers()` and `jest.useRealTimers()` with [`rs.useFakeTimers()`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) and [`rs.useRealTimers()`](/api/runtime-api/rstest/fake-timers#rsuserealtimers). Rstest forwards options directly to `@sinonjs/fake-timers` (`toNotFake`, `toFake`, `now`, `shouldAdvanceTime`, `advanceTimeDelta`), so rename Jest's `doNotFake` and `advanceTimers` options:
-
-```diff
-- jest.useFakeTimers({ doNotFake: ['setImmediate'], advanceTimers: true });
-+ rs.useFakeTimers({ toNotFake: ['setImmediate'], shouldAdvanceTime: true });
-```
-
-`rs.useFakeTimers()` also returns a `Disposable`, so `using _timers = rs.useFakeTimers()` restores real timers automatically when the scope exits.
-
 ### Virtual module mocks
 
-When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:
+When migrating a Jest virtual mock, [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules) (see [Mocking](/guide/basic/mock)), then remove Jest's third argument:
 
 ```diff
 - jest.mock('native-runtime', () => ({ platform: 'test' }), {
@@ -304,8 +288,6 @@ When migrating a Jest virtual mock, first [declare the module and configure `res
 - });
 + rs.mock('native-runtime', () => ({ platform: 'test' }));
 ```
-
-The `rs.mock` factory or a matching manual mock provides the module's runtime exports.
 
 ### Done callback
 
@@ -343,15 +325,6 @@ When `beforeEach` or `beforeAll` returns a function, Rstest registers it as a cl
 + beforeEach(() => { doSomething(); });
 ```
 
-### Timeout
-
-Replace `jest.setTimeout()` with `rs.setConfig()`:
-
-```diff
-- jest.setTimeout(5_000)
-+ rs.setConfig({ testTimeout: 5_000 })
-```
-
 ## Snapshot format
 
 Rstest snapshots use a different key format than Jest. Existing Jest snapshot files will not match Rstest's generated keys on the first run — the snapshot bodies are unchanged, only the key formatting differs.
@@ -383,27 +356,19 @@ rstest overlay -u        # update a filtered scope
 
 ### Reviewing the diff
 
-Most snapshot churn after migration is non-functional:
-
-- Separator-only key renames are formatting changes, not behavior changes.
-- Key-order churn without any body difference is also formatting-only.
-- Body content changes under the same key are the only signal of a real behavior change.
+Separator-only key renames and key-order changes with no body diff are formatting-only; only body changes under the same key indicate real behavior changes.
 
 ## ESM and CJS
 
-Rstest supports ESM by default. ESM projects require no extra configuration such as `NODE_OPTIONS=--experimental-vm-modules`.
-
-CommonJS projects also work, though migrating to ESM gives better performance and future compatibility.
+Rstest supports ESM natively (no `NODE_OPTIONS=--experimental-vm-modules` needed) as well as CommonJS projects.
 
 ### ESM vs CJS mocking
 
-In Rstest, `rs.mock()` targets the entry resolved for `import`, while `rs.mockRequire()` targets the entry resolved for `require()`. If both resolve to the same bundled module, `rs.mock()` also affects `require()`; use `rs.mockRequire()` when a package has a separate CJS entry.
+In Rstest, `rs.mock()` targets the `import` entry, whereas modules loaded through `require()` with a separate CommonJS entry need `rs.mockRequire()` (see [Mock CommonJS modules](/guide/basic/mock#mock-commonjs-modules)):
 
-For code that uses `require()`, `rs.mockRequire()` targets the CJS entry:
-
-```ts
-// Mocking a CJS module
-rs.mockRequire('./math.cjs', () => ({
+```diff
+- jest.mock('./math.cjs', () => ({
++ rs.mockRequire('./math.cjs', () => ({
   sum: (a, b) => a + b + 100,
 }));
 ```

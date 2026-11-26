@@ -10,7 +10,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## 自动初始化
 
-最快速的方式是使用 `@rstest/core init browser` 命令自动完成配置：
+最快速的方式是运行 `npx @rstest/core init browser` 自动完成配置：
 
 <PackageManagerTabs command="@rstest/core init browser" dlx />
 
@@ -130,32 +130,11 @@ test('counter increments on click', async () => {
 });
 ```
 
-这个示例使用 `page.getByRole()` 按语义角色定位按钮，通过 `click()` 触发交互，再用 `expect.element().toBeVisible()` 断言结果。断言会自动等待元素状态变化，无需手写轮询。
-
 ## headless vs headed 模式
 
-默认情况下，浏览器模式会根据环境自动选择运行方式：
-
-- **CI 环境**：自动使用 headless 模式（无界面）
-- **本地开发**：默认使用 headed 模式（显示浏览器窗口）
+默认情况下，浏览器模式在 CI 环境自动使用 headless 模式，在本地开发默认使用 headed 模式（显示浏览器窗口）。可通过 [`browser.headless`](/config/test/browser#headless) 或 `--browser.headless` 显式覆盖。
 
 在 headed 窗口中，**Preview** 会展示正在运行的测试页面。运行结束后，**Results** 自动打开第一个失败结果；全部通过时显示运行摘要。选择文件可以查看其中的用例和耗时。Watch 重跑结束后会回到你手动选择的文件、用例和视图。
-
-### 配置 headless 模式
-
-你可以在配置文件中明确指定：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-    headless: true, // 始终使用无界面模式
-  },
-});
-```
 
 ## 配置参考
 

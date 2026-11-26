@@ -61,19 +61,12 @@ rstest -c scripts/rstest.config.mjs
 Rstest builds test files with Rsbuild and exposes most Rsbuild build options directly:
 
 - Register Rsbuild plugins via [plugins](/config/build/plugins)
+- Read or modify the resolved Rstest project config from Rsbuild plugins via [Rstest plugin APIs](/config/build/plugins#get-rstest-config) (see [modify Rstest config](/config/build/plugins#modify-rstest-config))
 - Configure module resolution via [resolve](/config/build/resolve)
 - Customize Rspack via [tools.rspack](/config/build/tools#toolsrspack)
 - Customize `builtin:swc-loader` via [tools.swc](/config/build/tools#toolsswc)
 
 See [Build configurations](/config/#build-configurations) for all supported options.
-
-### Read Rstest config in Rsbuild plugins \{#get-rstest-config}
-
-Read the resolved Rstest config for an Rsbuild environment using the API exposed by Rstest. See [Read Rstest config in Rsbuild plugins](/config/build/plugins#get-rstest-config) for usage and types.
-
-### Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
-
-Modify the current Rstest project config from an Rsbuild plugin. See [Modify Rstest config in Rsbuild plugins](/config/build/plugins#modify-rstest-config) for usage, types, and limitations.
 
 ## Configure Rspack
 

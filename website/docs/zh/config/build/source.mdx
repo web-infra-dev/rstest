@@ -130,16 +130,4 @@ export default defineConfig({
 
 未设置时，Rstest 会在每个项目的根目录探测 `tsconfig.json`，并读取其中的 `compilerOptions.paths` 用于模块解析。
 
-Rstest 不会自动将其他 `compilerOptions` 转换为代码转换设置。需要时请显式配置对应的 Rstest 构建选项——例如用 [`source.decorators`](#sourcedecorators) 配置装饰器语法，用 [`tools.swc`](/config/build/tools#toolsswc) 配置 SWC 输出 target 等——或通过 [adapter](/guide/advanced/adapters) 自动映射。例如，直接配置 legacy 装饰器：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  source: {
-    decorators: {
-      version: 'legacy',
-    },
-  },
-});
-```
+Rstest 不会自动将其他 `compilerOptions` 转换为代码转换设置。需要时请显式配置对应的 Rstest 构建选项——例如用 [`source.decorators`](#sourcedecorators) 配置装饰器语法（如 `version: 'legacy'`），用 [`tools.swc`](/config/build/tools#toolsswc) 配置 SWC 输出 target 等——或通过 [adapter](/guide/advanced/adapters) 自动映射。

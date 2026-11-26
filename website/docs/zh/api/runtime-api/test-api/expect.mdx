@@ -213,7 +213,7 @@ expect('secret:123').toMatchSnapshot();
   - `getState: () => MatcherState`
   - `setState: (state: Partial<MatcherState>) => void`
 
-读取或更新内部匹配器状态。
+读取或更新内部匹配器状态（`MatcherState` 为内部匹配器状态类型，未从 `@rstest/core` 直接重新导出）。
 
 ```ts
 const state = expect.getState();
@@ -340,6 +340,8 @@ expect(before).toHaveBeenCalledBefore(after);
 ```
 
 ### 快照匹配器
+
+关于快照配置、更新流程与序列化规则，详见[快照测试](/guide/basic/snapshot)。
 
 - `toMatchSnapshot(propertiesOrMessage?, message?)`：与已保存的 `.snap` 快照对比。
 - `toMatchInlineSnapshot(propertiesOrSnapshot?, snapshotOrMessage?, message?)`：与测试文件中的内联快照对比。

@@ -1,5 +1,5 @@
 ---
-description: 默认情况下，Rstest 会将快照文件保存在测试文件所在目录下的 __snapshots__ 文件夹中。使用 resolveSnapshotPath 可以自定义快照文件的存放路径。
+description: 用于自定义测试快照路径解析的处理函数。
 ---
 
 # resolveSnapshotPath
@@ -8,6 +8,8 @@ description: 默认情况下，Rstest 会将快照文件保存在测试文件所
 - **默认值：** `undefined`
 
 自定义快照文件的存储路径。
+
+这是一个全局配置项，只能在根配置中设置，无法在 [`projects`](/config/test/projects) 中按项目覆盖。
 
 默认情况下，Rstest 会将快照文件保存在测试文件所在目录下的 `__snapshots__` 文件夹中。通过 `resolveSnapshotPath` 可以覆盖这一路径解析规则。
 

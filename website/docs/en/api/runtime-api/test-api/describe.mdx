@@ -65,7 +65,7 @@ Pass a [`TestOptions`](/api/runtime-api/test-api/test#testoptions) object as the
 - A test-level option always overrides the suite-level value.
 - Nested `describe` blocks inherit parent options; the nearest enclosing value wins.
 - If no `timeout` is set on a test or enclosing suite, Rstest falls back to [`test.testTimeout`](/config/test/test-timeout).
-- `meta` <ApiMeta sup addedVersion="0.11.1" /> merges from parent suite to child suite or test: child top-level keys override parent keys, and inherited values are copied per descendant.
+- `meta` <ApiMeta sup addedVersion="0.11.1" /> merges from parent suite to child suite or test: child top-level keys override parent keys, and inherited values are copied per descendant. See [Add metadata to a suite](/guide/advanced/metadata#add-metadata-to-a-suite).
 
 ```ts
 describe('parent', { retry: 2, timeout: 100 }, () => {
@@ -83,26 +83,6 @@ describe('parent', { retry: 2, timeout: 100 }, () => {
     });
   });
 });
-```
-
-```ts
-describe(
-  'mutation run',
-  { meta: { runner: 'stryker', shared: 'suite' } },
-  () => {
-    test('inherits suite metadata', ({ task }) => {
-      // task.meta is { runner: 'stryker', shared: 'suite' }
-    });
-
-    test(
-      'overrides suite metadata',
-      { meta: { shared: 'test' } },
-      ({ task }) => {
-        // task.meta is { runner: 'stryker', shared: 'test' }
-      },
-    );
-  },
-);
 ```
 
 ## describe.only

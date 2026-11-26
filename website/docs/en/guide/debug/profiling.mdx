@@ -16,81 +16,15 @@ npx skills add rstackjs/agent-skills --skill rstest-debugging
 
 ## Common performance bottlenecks
 
-First separate build time from test execution time:
+Run [`--trace`](#using-trace) first to split build time from test execution time, then follow the matching branch:
 
-- Slow startup and slow reruns after a small edit usually point to the build stage.
-- Fast startup with slow individual files or test cases points to test execution.
-
-Run the suite once with [`--trace`](#using-trace) to measure the split directly.
-
-### Investigating build performance
-
-In browser-like environments such as `jsdom` or `happy-dom`, Rstest bundles `node_modules` dependencies by default instead of externalizing them like the `node` environment. Build time often spikes when a test entry pulls in a large UI, charting, or editor package when only a small part of it is used.
-
-**1. Check build logs and bundle size with `DEBUG=rstest`**
-
-```bash
-DEBUG=rstest rstest run
-```
-
-`DEBUG=rstest` prints verbose build logs and writes temporary build outputs to `dist/.rstest-temp` (or [`output.distPath.root`](/config/build/output#outputdistpath)). Look for long pauses in build stages or unusually large output bundles under that directory.
-
-**2. Externalize third-party dependencies with `output.bundleDependencies`**
-
-Set [`output.bundleDependencies`](/config/build/output#outputbundledependencies) to `false` to externalize `node_modules` dependencies in `jsdom` or `happy-dom`, matching `node` behavior:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  testEnvironment: 'jsdom',
-  output: {
-    bundleDependencies: false,
-  },
-});
-```
-
-Rerun with `DEBUG=rstest` to check whether build time and temporary output size drop.
-
-:::warning
-`output.bundleDependencies: false` only applies outside [Browser Mode](/guide/browser-testing), where dependencies are always bundled.
-:::
-
-**3. Externalize specific heavy packages with `output.externals`**
-
-To keep bundling most dependencies while excluding a few heavy packages, list them in [`output.externals`](/config/build/output#outputexternals):
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  output: {
-    externals: ['react', 'lodash'],
-  },
-});
-```
-
-**4. Enable persistent build caching**
-
-For repeated `rstest run` invocations across CI or local runs, enable [`performance.buildCache`](/config/build/performance#performancebuildcache) to cache Rspack compilation artifacts on disk.
-
-**5. Analyze compile time with Rsdoctor**
-
-If the slowdown is still unclear (for example, time spent in specific loaders, plugins, or dependency chains), inspect the build with [Rsdoctor](#using-rsdoctor).
-
-### Investigating test execution performance
-
-**1. Inspect file and case durations with the `verbose` reporter**
-
-Run with the [verbose reporter](/guide/basic/reporters#verbose-reporter) (`--reporters=verbose`) to see per-file and per-case durations.
-
-**2. Break the run down by phase, suite, and case**
-
-Run the same tests with [`--trace`](#using-trace). The printed summary ranks the slowest phases, files, and test cases so you can tell whether time is spent in loading, setup files, or test bodies.
-
-**3. Profile hot runtime code**
-
-Once you know which files or cases are slow, use [samply](#using-samply) or [Node.js profiling](#nodejs-profiling) to inspect CPU time or memory allocation. See [Profiler](#profiler) to choose a tool.
+1. **Build time dominates** (common in `jsdom` or `happy-dom`, where `node_modules` dependencies are bundled by default instead of externalized like in `node`):
+   - Inspect build logs and temporary output sizes under `dist/.rstest-temp` (or [`output.distPath.root`](/config/build/output#outputdistpath)) with `DEBUG=rstest rstest run`.
+   - Externalize all third-party packages with [`output.bundleDependencies: false`](/config/build/output#outputbundledependencies) (not supported in [Browser Mode](/guide/browser-testing)) or exclude heavy ones with [`output.externals`](/config/build/output#outputexternals).
+   - Enable [`performance.buildCache`](/config/build/performance#performancebuildcache) for repeated `rstest run` invocations, or inspect loader/plugin compile time with [Rsdoctor](#using-rsdoctor).
+2. **Test execution dominates** (fast startup, slow files or cases):
+   - Check per-file and per-case durations with `--reporters=verbose` ([verbose reporter](/guide/basic/reporters#verbose-reporter)) or the `--trace` summary.
+   - Profile hot runtime code with [samply](#using-samply) or [Node.js profiling](#nodejs-profiling) (see [Profiler](#profiler)).
 
 ## Using --trace \{#using-trace}
 
@@ -102,7 +36,7 @@ npx rstest run --trace
 
 The flag is opt-in. Each run records per-suite and per-case slices annotated with status and retry count, a heap counter sampled at each phase boundary, and one slice per phase of every test file:
 
-- `prepare`: set up the worker runtime, the global API, and the coverage provider when coverage is enabled. It is entered twice per test file, before and after `envSetup`.
+- `prepare`: set up the worker runtime, the global API, and the coverage provider when coverage is enabled.
 - `envSetup`: install the test environment. Close to zero for `node`, and when a non-isolated worker is already pinned to the environment.
 - `load`: receive the built assets of the test entry. The host-side cost of producing them is reported as a host span instead.
 - `setupFiles`: evaluate the configured setup files.
@@ -111,7 +45,7 @@ The flag is opt-in. Each run records per-suite and per-case slices annotated wit
 - `coverage`: collect coverage data from the provider. Absent when coverage is disabled, or when the file bailed or threw before this point.
 - `teardown`: clean up the coverage provider and the worker state, plus the test environment when `isolate` is enabled.
 
-Node pools also emit a `file:load` slice (`cat: "file"`) whose duration exactly matches `TestFileResult.loadDuration`, including when loading fails. It covers worker-side asset loading, setup files, test module evaluation, and suite collection. This overlaps the detailed loading phases and is excluded from phase and host totals to avoid double-counting. Trace slice durations use microseconds; `loadDuration` uses milliseconds.
+Node pools also emit a `file:load` summary slice covering worker-side asset loading, setup files, test module evaluation, and suite collection (matching `TestFileResult.loadDuration`).
 
 Browser Mode records only `prepare` and `tests`, measured on the host from the messages the page sends.
 

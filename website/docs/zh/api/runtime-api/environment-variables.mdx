@@ -22,15 +22,13 @@ if (import.meta.env.NODE_ENV === 'test') {
 
 `process.env.RSTEST` 和 `import.meta.env.RSTEST` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下均可用，在测试运行期间值为 `'true'`。
 
-在 browser mode 下，Rstest 会在构建阶段替换这些表达式，不会注入全局 `process` 对象。在兼容浏览器的 ESM 源码中建议优先使用 `import.meta.env.RSTEST`，并且不要用 `typeof process !== 'undefined'` 做前置判断，因为该条件在浏览器中始终为 `false`。
-
 ```ts
 if (import.meta.env.RSTEST === 'true') {
   // 运行在 Rstest 中
 }
 ```
 
-在生产构建中将源码使用的表达式定义为 `false`，以便打包工具消除死代码，详见[检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
+在 browser mode 下，Rstest 会在构建阶段替换这些表达式而不会注入全局 `process`，因此在兼容浏览器的 ESM 源码中建议优先使用 `import.meta.env.RSTEST`。关于浏览器判断注意事项与生产构建死代码消除（将其 `define` 为 `false`），详见[检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
 
 对于[源码内联测试](/config/test/include-source)，建议使用 `import.meta.rstest` —— 它直接暴露 Rstest 测试 API，且在生产构建中为 `undefined`。
 
@@ -64,7 +62,7 @@ Worker ID 的取值范围限定在 `[1, pool.maxWorkers]`。启动新 worker 时
 
 设置 `RSTEST_NO_AGENT=1` 可关闭 AI coding agent 自动检测。
 
-当配置文件和 CLI 参数均未显式指定 reporter 时，Rstest 在检测到 AI coding agent 环境后会自动将默认 reporter 切换为 `md`，并关闭默认的终端彩色输出。设置 `RSTEST_NO_AGENT=1` 会保留 `default` 控制台 reporter 及常规 TTY 彩色输出检测。
+在 CLI 运行中，当配置文件和 CLI 参数均未显式指定 reporter 时，Rstest 在检测到 AI coding agent 环境后会自动将默认 reporter 切换为 `md`，并关闭默认的终端彩色输出。设置 `RSTEST_NO_AGENT=1` 会回退到正常的默认 reporter（`['default']`，在 GitHub Actions 中为 `['default', 'github-actions']`）及常规 TTY 彩色输出检测。
 
 ```bash
 RSTEST_NO_AGENT=1 npx rstest run

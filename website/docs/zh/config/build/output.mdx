@@ -284,7 +284,7 @@ export default defineConfig({
 
 控制 Rstest 临时构建产物的全局输出根目录。
 
-默认情况下，Rstest 不会将测试临时文件写入磁盘。开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 或在 `DEBUG` 模式下运行时，Rstest 会将临时产物写入 `dist/.rstest-temp` 目录，包括 Node.js 测试运行时使用的编译产物以及 Browser Mode 生成的 runner 文件和 virtual manifest 等。
+默认情况下，Rstest 不会将测试临时文件写入磁盘。开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 时，Rstest 会将编译后的 Node.js 测试产物以及 Browser Mode 的 server/runner 产物写入 `dist/.rstest-temp` 目录；开启 `DEBUG` 模式时，还会在该目录下写入 `.rsbuild` 调试配置产物。
 
 在多 project 场景下，Rstest 仍只使用一个全局输出根目录，可能会在该目录下为不同 project 创建子目录，但基础根目录本身不会切换到各个 project 的 `root`。
 

@@ -130,27 +130,17 @@ const original = {
 
 const mocked = rs.mockObject(original);
 
-// 方法默认返回 undefined
-expect(mocked.method()).toBe(undefined);
-expect(mocked.nested.getValue()).toBe(undefined);
+// 方法会被替换为 mock 函数，默认返回 undefined
+expect(rs.isMockFunction(mocked.method)).toBe(true);
+expect(mocked.method()).toBeUndefined();
+expect(mocked.nested.getValue()).toBeUndefined();
+
+// 可通过标准 Mock 方法配置返回值
+mocked.method.mockReturnValue(100);
+expect(mocked.method()).toBe(100);
 
 // 原始值保持不变
 expect(mocked.prop).toBe('foo');
-
-// 方法是 mock 函数
-expect(rs.isMockFunction(mocked.method)).toBe(true);
-```
-
-### Mock 返回值
-
-```ts
-const mocked = rs.mockObject({
-  fetchData: () => 'real data',
-});
-
-mocked.fetchData.mockReturnValue('mocked data');
-
-expect(mocked.fetchData()).toBe('mocked data');
 ```
 
 ### Spy 模式
@@ -183,7 +173,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mock 类
 
-传入类构造函数即可 mock 该类。使用 `{ spy: true }` 时，实例会保留原方法并附加 spy：
+传入类构造函数即可 mock 该类。不传 `{ spy: true }` 时，`rs.mockObject(Class)` 只返回一个普通 mock 函数（`new` 返回 `undefined`，不会 mock 原型方法）。使用 `{ spy: true }` 时，实例会保留原方法并附加 spy：
 
 ```ts
 class UserService {

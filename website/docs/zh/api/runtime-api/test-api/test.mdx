@@ -171,7 +171,7 @@ test.each([null, 42, ['a']])('rejects %o', (value) => {
 });
 ```
 
-测试名称支持 [printf 占位符](https://nodejs.org/api/util.html#utilformatformat-args)（`%s`、`%d`、`%i`、`%f`、`%j`、`%o`、`%#` 表示从 0 开始的索引、`%$` 表示从 1 开始的索引、`%%` 表示 `%`），对象行还支持 `$属性名` 占位符：
+测试名称支持 [printf 占位符](https://nodejs.org/api/util.html#utilformatformat-args)（`%s`、`%d`、`%i`、`%f`、`%j`、`%o`、`%O`、`%c`、`%#` 表示从 0 开始的索引、`%$` 表示从 1 开始的索引、`%%` 表示 `%`），对象行还支持 `$属性名` 占位符：
 
 ```ts
 test.each([
@@ -356,8 +356,9 @@ myTest('has user in context', ({ user, expect }) => {
 
 fixtures 对象中的每一项可以是普通值、fixture 函数 `(context, use) => Promise<void>`，或 `[fixture, { auto?: boolean }]` 元组。
 
-- `context` 包含已声明的其他 fixture 以及 [`TestContext`](#testcontext)。
-- 调用 `await use(value)` 向测试传入 fixture 值；`use` 之前为 setup，之后为 teardown。
+- **普通值 fixture**：不需要 setup 或 teardown 逻辑时，可直接提供非函数值（例如 `baseURL: 'https://api.example.com'`）。
+- **访问 `TestContext`**：fixture 函数会在第一个参数 `context` 中收到已声明的其他 fixture 以及 [`TestContext`](#testcontext) 字段（例如 `{ task }`）。
+- **setup 与 teardown**：调用 `await use(value)` 向测试传入 fixture 值；`use` 之前为 setup，之后为 teardown。
 
 ```ts
 import { test } from '@rstest/core';
@@ -443,32 +444,6 @@ const apiTest = test.extend(
 - 只能依赖链中更早声明的 worker scope fixture，不可访问 `TestContext` 或 file scope fixture（file scope fixture 可依赖 worker scope fixture）。
 - setup 受首次请求它的测试超时限制；清理受 worker 宿主超时保护（worker 被强制终止时无法执行用户清理回调）。
 - 在 Browser Mode 中，`isolate: false` 会让分配到同一浏览器 worker 的文件共享该 fixture；若项目配置了 `setupFiles`，文件仍保持隔离。默认隔离模式下其生命周期等同于单文件。
-
-### 普通值 fixture
-
-不需要 setup 或 teardown 逻辑时，直接提供非函数值即可：
-
-```ts
-import { test } from '@rstest/core';
-
-const myTest = test.extend({
-  baseURL: 'https://api.example.com',
-});
-```
-
-### 访问 TestContext
-
-对象写法或 test scope 具名写法中的 fixture 函数会在第一个参数收到 `TestContext` 字段：
-
-```ts
-import { test } from '@rstest/core';
-
-const myTest = test.extend({
-  traceId: async ({ task }, use) => {
-    await use(`trace:${task.name}`);
-  },
-});
-```
 
 ### Fixture 之间的依赖
 
@@ -659,25 +634,3 @@ test('loads a large fixture', { timeout: 1_000 }, async ({ signal }) => {
 ```
 
 在 1000 ms 超时后，`signal.reason` 即为 Rstest 报告的超时错误（例如 `Error: test timed out in 1000ms (no expect assertions completed)`）。`fs.readFile` 等 Node API 会抛出 `AbortError`，其 `cause` 指向 `signal.reason`。
-
-使用 `context.task.meta` 为当前测试结果附加或替换可 JSON 序列化的元数据（可在 `TestResult.meta` 中读取）：
-
-```ts
-import { test } from '@rstest/core';
-
-test('tracks runtime data', (context) => {
-  context.task.meta.coveredBranches = ['a', 'b'];
-});
-```
-
-使用 `context.skip()` 在运行过程中动态跳过测试：
-
-```ts
-import { expect, test } from '@rstest/core';
-
-test('skipped test', (context) => {
-  context.skip();
-
-  expect(1 + 1).toBe(3);
-});
-```

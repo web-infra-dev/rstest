@@ -33,13 +33,9 @@ export default defineConfig({
 });
 ```
 
-适配器会按顺序查找 `rspack.config.{js,ts,mjs,mts,cjs,cts}`（优先 `.js`），将兼容的编译器选项与生成的测试构建合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)——当该配置发生变化时，`--changed` 会运行完整测试套件；如果未找到配置文件，则返回 `{}`。同时，适配器会移除 Rsbuild 内置的 CSS 插件（`rsbuild:css`、`rsbuild:less`、`rsbuild:sass`），让你的 Rspack CSS 规则和 loader 直接生效。
+适配器会按顺序查找 `rspack.config.{js,ts,mjs,mts,cjs,cts}`（优先 `.js`），将兼容的编译器选项与生成的测试构建合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)——当该配置发生变化时，`--changed` 会运行完整测试套件；如果未找到配置文件，则返回 `{}`。同时，适配器会移除 Rsbuild 内置的 CSS 插件（`rsbuild:css`、`rsbuild:less`、`rsbuild:sass`），因此请在 Rspack 中配置 CSS 规则（`output.cssModules` 等 Rsbuild 专属 CSS 选项不可用）；详见[配置参考](./reference)。
 
-:::warning
-由于移除了 Rsbuild 内置的 CSS 插件，使用此适配器时，部分 Rsbuild 专属 CSS 选项（例如 `output.cssModules`）不可用，请在 Rspack 配置中处理 CSS。
-:::
-
-如果默认的 Rspack 配置与当前项目不匹配，可以通过 `cwd`、`configPath`、`configName`、`env` 或 `nodeEnv` 指定加载方式。如果内存中已有 Rspack 配置对象，可以使用 `toRstestConfig` 直接转换。两种入口、选项详情、映射规则和调试方法请查看[配置参考](./reference)。
+如果默认的 Rspack 配置与当前项目不匹配，可以通过 `cwd`、`configPath`、`configName`、`env` 或 `nodeEnv` 指定加载方式；如果内存中已有 Rspack 配置对象，可以使用 `toRstestConfig` 直接转换。
 
 ## 示例项目
 

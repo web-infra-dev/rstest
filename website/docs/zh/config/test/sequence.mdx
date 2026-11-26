@@ -28,8 +28,6 @@ import { ApiMeta } from '@components/ApiMeta';
 
 `beforeEach` 返回的清理函数在所有 `afterEach` Hook 之后执行；`beforeAll` 返回的清理函数在所属 suite 的 `afterAll` Hook 之后执行。它们也跟随此配置：`'stack'` 按对应 setup Hook 执行的逆序清理，`'list'` 按相同顺序清理。对于嵌套的 `beforeEach` Hook，此顺序涵盖父、子 suite 返回的所有清理函数。在 `'parallel'` 模式下，返回的清理函数也并行执行，并发数同样受 `maxConcurrency` 限制。
 
-v0.12.6 修复了清理顺序不一致的问题：此前，返回的清理函数按 setup 顺序执行，而 `afterEach` 和 `afterAll` 按逆序执行。现在，返回的清理函数默认也按 setup 的逆序执行，其执行顺序与旧版本有所不同。
-
 同组 Hook 不依赖彼此的副作用时，可以使用 `'parallel'`。此模式同时适用于 Node Mode 和 Browser Mode。
 
 并行 Hook 内的轮询断言使用配置的轮询超时，不共用任务的剩余时间；每个 Hook 仍受自身的超时限制。
