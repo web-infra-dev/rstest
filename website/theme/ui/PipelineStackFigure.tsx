@@ -32,7 +32,7 @@ export function PipelineStackFigure({
     <div
       className={`flex min-w-0 items-center justify-center p-4 sm:p-6 ${className}`}
     >
-      <div className="w-full max-w-[390px] overflow-hidden">
+      <div className="w-full max-w-[370px] overflow-hidden">
         <div
           ref={host}
           className="-mt-[12%] -mb-[2%] aspect-[5/4] [--hairline-plate:var(--home-stage-bg,var(--rp-c-bg))]"

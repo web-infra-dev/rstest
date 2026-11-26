@@ -493,77 +493,6 @@ function FeaturePoints({ points }: { points: string[] }) {
   );
 }
 
-function SpotlightRow({
-  id,
-  index,
-  description,
-  feature,
-  href,
-  linkLabel,
-  stageFirst = false,
-  figure,
-}: {
-  id?: string;
-  index: string;
-  description: string;
-  feature: Feature;
-  href: string;
-  linkLabel: string;
-  stageFirst?: boolean;
-  figure: ReactNode;
-}) {
-  // Locked to 50% / 50% so the center rail stays continuous from Hero to Footer.
-  return (
-    <article
-      id={id}
-      className="grid scroll-mt-20 grid-cols-1 lg:grid-cols-2 lg:items-stretch"
-    >
-      <div
-        className={`flex min-w-0 flex-col justify-between bg-[var(--home-bg)] p-6 sm:p-8 lg:p-9 ${
-          stageFirst
-            ? 'lg:order-2 lg:border-l lg:border-[var(--home-border)]'
-            : 'lg:border-r lg:border-[var(--home-border)]'
-        }`}
-      >
-        <div>
-          <div className="flex items-baseline gap-2.5 text-[13px]/[1.5] text-fg-muted">
-            <span className="shrink-0 font-mono text-[11.5px] font-medium tracking-[0.12em] text-brand">
-              {index}
-            </span>
-            <span className="text-[var(--home-border-strong)] select-none">
-              /
-            </span>
-            <span>{description}</span>
-          </div>
-          <h2 className="mt-4 text-[25px]/[1.18] font-semibold tracking-[-0.03em] text-fg sm:text-[28px]">
-            {feature.title}
-          </h2>
-          <p className="mt-3 text-[15px]/[1.65] text-fg-muted">
-            {feature.body}
-          </p>
-          <FeaturePoints points={feature.points} />
-        </div>
-        <div className="mt-7">
-          <FeatureLink href={href} label={linkLabel} LinkComp={Link} />
-        </div>
-      </div>
-      <div
-        className={`home-stage relative flex min-h-[270px] items-center justify-center border-t border-[var(--home-border)] lg:min-h-[360px] lg:border-t-0 ${
-          stageFirst ? 'lg:order-1' : ''
-        }`}
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute top-4 left-5 font-mono text-[11px] tracking-[0.14em] text-fg-subtle select-none"
-        >
-          FIG.{index}
-        </span>
-        {figure}
-      </div>
-    </article>
-  );
-}
-
 function GridFeatureCell({
   id,
   index,
@@ -571,7 +500,6 @@ function GridFeatureCell({
   feature,
   href,
   linkLabel,
-  stageClassName = 'h-[260px] sm:h-[296px]',
   figure,
 }: {
   id?: string;
@@ -580,14 +508,11 @@ function GridFeatureCell({
   feature: Feature;
   href: string;
   linkLabel: string;
-  stageClassName?: string;
   figure: ReactNode;
 }) {
   return (
     <article id={id} className="flex scroll-mt-20 flex-col bg-[var(--home-bg)]">
-      <div
-        className={`home-stage relative order-2 flex items-center justify-center overflow-hidden border-t border-[var(--home-border)] lg:order-1 lg:border-t-0 lg:border-b ${stageClassName}`}
-      >
+      <div className="home-stage relative flex h-[268px] items-center justify-center overflow-hidden border-b border-[var(--home-border)] sm:h-[308px]">
         <span
           aria-hidden
           className="pointer-events-none absolute top-4 left-5 font-mono text-[11px] tracking-[0.14em] text-fg-subtle select-none"
@@ -596,7 +521,7 @@ function GridFeatureCell({
         </span>
         {figure}
       </div>
-      <div className="order-1 flex flex-1 flex-col p-6 sm:p-8 lg:order-2 lg:p-9">
+      <div className="flex flex-1 flex-col p-6 sm:p-8 lg:p-9">
         <div className="flex items-baseline gap-2.5 text-[13px]/[1.5] text-fg-muted lg:min-h-[2.5rem]">
           <span className="shrink-0 font-mono text-[11.5px] font-medium tracking-[0.12em] text-brand">
             {index}
@@ -716,8 +641,8 @@ export function HomeLayout() {
       <HatchBand />
 
       <section className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-        <div className="divide-y divide-[var(--home-border)] border-x border-[var(--home-border)]">
-          <SpotlightRow
+        <div className="grid grid-cols-1 gap-px border-x border-[var(--home-border)] bg-[var(--home-border)] lg:grid-cols-2">
+          <GridFeatureCell
             id="ecosystem"
             index="01"
             description={ECOSYSTEM_DESC[lang]}
@@ -726,61 +651,51 @@ export function HomeLayout() {
             linkLabel={LEARN_MORE[lang]}
             figure={<PopperFigure className="w-full" />}
           />
-
-          <div className="grid grid-cols-1 divide-y divide-[var(--home-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-            <GridFeatureCell
-              id="pipeline"
-              index="02"
-              description={t('productionAccurateTestingDesc')}
-              feature={PIPELINE[lang]}
-              href={tUrl('/guide/start/')}
-              linkLabel={LEARN_MORE[lang]}
-              figure={<PipelineStackFigure className="w-full" />}
-            />
-            <GridFeatureCell
-              id="browser"
-              index="03"
-              description={t('realBrowserTestingDesc')}
-              feature={BROWSER[lang]}
-              href={tUrl('/guide/browser-testing/')}
-              linkLabel={LEARN_MORE[lang]}
-              figure={<BrowserStackFigure className="w-full" />}
-            />
-          </div>
-
-          <SpotlightRow
+          <GridFeatureCell
+            id="pipeline"
+            index="02"
+            description={t('productionAccurateTestingDesc')}
+            feature={PIPELINE[lang]}
+            href={tUrl('/guide/start/')}
+            linkLabel={LEARN_MORE[lang]}
+            figure={<PipelineStackFigure className="w-full" />}
+          />
+          <GridFeatureCell
+            id="browser"
+            index="03"
+            description={t('realBrowserTestingDesc')}
+            feature={BROWSER[lang]}
+            href={tUrl('/guide/browser-testing/')}
+            linkLabel={LEARN_MORE[lang]}
+            figure={<BrowserStackFigure className="w-full" />}
+          />
+          <GridFeatureCell
             id="adapters"
             index="04"
             description={ADAPTER_DESC[lang]}
             feature={ADAPTER[lang]}
             href={tUrl('/guide/advanced/adapters')}
             linkLabel={LEARN_MORE[lang]}
-            stageFirst
             figure={<AdaptersPatchFigure className="w-full" />}
           />
-
-          <div className="grid grid-cols-1 divide-y divide-[var(--home-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-            <GridFeatureCell
-              id="jest"
-              index="05"
-              description={JEST_DESC[lang]}
-              feature={JEST[lang]}
-              href={tUrl('/guide/migration/jest')}
-              linkLabel={LEARN_MORE[lang]}
-              stageClassName="h-[248px] sm:h-[276px]"
-              figure={<JestMigrateFigure className="w-full" />}
-            />
-            <GridFeatureCell
-              id="playwright"
-              index="06"
-              description={PLAYWRIGHT_DESC[lang]}
-              feature={PLAYWRIGHT[lang]}
-              href={tUrl('/guide/basic/e2e-testing')}
-              linkLabel={LEARN_MORE[lang]}
-              stageClassName="h-[248px] sm:h-[276px]"
-              figure={<PlaywrightBeltFigure className="w-full" />}
-            />
-          </div>
+          <GridFeatureCell
+            id="jest"
+            index="05"
+            description={JEST_DESC[lang]}
+            feature={JEST[lang]}
+            href={tUrl('/guide/migration/jest')}
+            linkLabel={LEARN_MORE[lang]}
+            figure={<JestMigrateFigure className="w-full" />}
+          />
+          <GridFeatureCell
+            id="playwright"
+            index="06"
+            description={PLAYWRIGHT_DESC[lang]}
+            feature={PLAYWRIGHT[lang]}
+            href={tUrl('/guide/basic/e2e-testing')}
+            linkLabel={LEARN_MORE[lang]}
+            figure={<PlaywrightBeltFigure className="w-full" />}
+          />
         </div>
       </section>
 
