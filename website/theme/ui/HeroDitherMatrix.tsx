@@ -12,40 +12,30 @@ const BAYER_8 = [
   [63, 31, 55, 23, 61, 29, 53, 21],
 ].map((row) => row.map((v) => (v + 0.5) / 64));
 
-type GlyphKind =
-  'pass' | 'running' | 'failed' | 'chromium' | 'firefox' | 'webkit';
-
-type SlotState = 'idle' | 'in' | 'hold' | 'out';
+type GlyphKind = 'pass' | 'arc' | 'chromium' | 'firefox' | 'webkit';
 
 interface Slot {
+  c: number;
+  r: number;
   cx: number;
   cy: number;
+  wavePos: number;
   inCenterClear: boolean;
-  baseKind: GlyphKind;
-  kind: GlyphKind;
-  state: SlotState;
-  timer: number;
-  duration: number;
-  level: number;
+  browserKind: 'chromium' | 'firefox' | 'webkit' | null;
   phase: number;
   hoverBoost: number;
 }
 
-const ICON_POOL: GlyphKind[] = [
-  'pass',
-  'pass',
-  'pass',
+const BROWSER_KINDS: ('chromium' | 'firefox' | 'webkit')[] = [
   'chromium',
   'firefox',
   'webkit',
-  'running',
-  'failed',
 ];
 
 const PIXEL_SIZE = 2;
 const FRAME_INTERVAL_MS = 33;
 
-function drawIcon(
+function drawGlyph(
   g: CanvasRenderingContext2D,
   kind: GlyphKind,
   cx: number,
@@ -58,92 +48,69 @@ function drawIcon(
   if (intensity <= 0.02) return;
   g.save();
   g.translate(cx, cy);
-  const r = size * 0.44;
+  const r = size * 0.43;
   g.lineCap = 'round';
   g.lineJoin = 'round';
 
-  const gradOf = (rgb: string, base: number) => {
-    const gr = g.createLinearGradient(-r, -r, r, r);
-    gr.addColorStop(0, `rgba(${rgb}, ${(base * 0.72).toFixed(3)})`);
-    gr.addColorStop(1, `rgba(${rgb}, ${Math.min(1, base * 1.05).toFixed(3)})`);
-    return gr;
-  };
+  const grad = g.createLinearGradient(-r, -r, r, r);
+  grad.addColorStop(0, `rgba(255, 255, 255, ${(intensity * 0.7).toFixed(3)})`);
+  grad.addColorStop(
+    1,
+    `rgba(255, 255, 255, ${Math.min(1, intensity * 1.05).toFixed(3)})`,
+  );
+  g.strokeStyle = grad;
+  g.fillStyle = grad;
 
   if (kind === 'pass') {
-    g.strokeStyle = gradOf('25, 240, 140', intensity);
-    g.lineWidth = Math.max(2.2, size * 0.16);
+    g.lineWidth = Math.max(2.1, size * 0.15);
     g.beginPath();
-    g.moveTo(-r * 0.56, r * 0.04);
-    g.lineTo(-r * 0.14, r * 0.48);
-    g.lineTo(r * 0.62, -r * 0.44);
+    g.moveTo(-r * 0.54, r * 0.04);
+    g.lineTo(-r * 0.13, r * 0.48);
+    g.lineTo(r * 0.6, -r * 0.44);
     g.stroke();
-  } else if (kind === 'running') {
-    const rot = t * 3.2 + phase;
-    const spokes = 8;
-    for (let i = 0; i < spokes; i++) {
-      const a = rot + (i * Math.PI * 2) / spokes;
-      const alpha = intensity * (0.18 + (i / spokes) * 0.82);
-      g.strokeStyle = `rgba(248, 182, 48, ${alpha.toFixed(3)})`;
-      g.lineWidth = Math.max(1.8, size * 0.11);
-      g.beginPath();
-      g.moveTo(Math.cos(a) * r * 0.34, Math.sin(a) * r * 0.34);
-      g.lineTo(Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8);
-      g.stroke();
-    }
-  } else if (kind === 'failed') {
-    g.strokeStyle = gradOf('244, 82, 82', intensity);
-    g.lineWidth = Math.max(2.2, size * 0.15);
+  } else if (kind === 'arc') {
+    const start = t * 4.2 + phase;
+    g.lineWidth = Math.max(1.9, size * 0.13);
     g.beginPath();
-    g.moveTo(-r * 0.46, -r * 0.46);
-    g.lineTo(r * 0.46, r * 0.46);
-    g.moveTo(r * 0.46, -r * 0.46);
-    g.lineTo(-r * 0.46, r * 0.46);
+    g.arc(0, 0, r * 0.68, start, start + Math.PI * 1.32);
     g.stroke();
   } else if (kind === 'chromium') {
-    const rgb = '90, 130, 255';
-    g.strokeStyle = gradOf(rgb, intensity * 0.92);
-    g.lineWidth = Math.max(1.8, size * 0.1);
+    g.lineWidth = Math.max(1.7, size * 0.1);
     g.beginPath();
-    g.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+    g.arc(0, 0, r * 0.78, 0, Math.PI * 2);
     g.stroke();
 
-    g.fillStyle = gradOf(rgb, intensity);
     g.beginPath();
-    g.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    g.arc(0, 0, r * 0.29, 0, Math.PI * 2);
     g.fill();
 
     for (let i = 0; i < 3; i++) {
       const a = -Math.PI / 2 + (i * Math.PI * 2) / 3;
       g.beginPath();
-      g.moveTo(Math.cos(a) * r * 0.3, Math.sin(a) * r * 0.3);
-      g.lineTo(Math.cos(a + 0.62) * r * 0.8, Math.sin(a + 0.62) * r * 0.8);
+      g.moveTo(Math.cos(a) * r * 0.29, Math.sin(a) * r * 0.29);
+      g.lineTo(Math.cos(a + 0.62) * r * 0.78, Math.sin(a + 0.62) * r * 0.78);
       g.stroke();
     }
   } else if (kind === 'firefox') {
-    const rgb = '90, 130, 255';
-    g.strokeStyle = gradOf(rgb, intensity * 0.95);
-    g.lineWidth = Math.max(2.3, size * 0.15);
+    g.lineWidth = Math.max(2.2, size * 0.15);
     g.beginPath();
     g.arc(0, 0, r * 0.72, -0.45, Math.PI * 1.48);
     g.stroke();
 
-    g.fillStyle = gradOf(rgb, intensity * 0.6);
+    g.fillStyle = `rgba(255, 255, 255, ${(intensity * 0.58).toFixed(3)})`;
     g.beginPath();
-    g.arc(0, r * 0.04, r * 0.33, 0, Math.PI * 2);
+    g.arc(0, r * 0.04, r * 0.32, 0, Math.PI * 2);
     g.fill();
   } else {
-    const rgb = '90, 130, 255';
-    g.strokeStyle = gradOf(rgb, intensity * 0.9);
-    g.lineWidth = Math.max(1.7, size * 0.095);
+    g.lineWidth = Math.max(1.6, size * 0.095);
     g.beginPath();
-    g.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+    g.arc(0, 0, r * 0.78, 0, Math.PI * 2);
     g.stroke();
 
-    g.fillStyle = gradOf(rgb, intensity);
     g.beginPath();
-    g.moveTo(r * 0.54, -r * 0.54);
+    g.moveTo(r * 0.52, -r * 0.52);
     g.lineTo(r * 0.14, r * 0.14);
-    g.lineTo(-r * 0.54, r * 0.54);
+    g.lineTo(-r * 0.52, r * 0.52);
     g.lineTo(-r * 0.14, -r * 0.14);
     g.closePath();
     g.fill();
@@ -152,17 +119,10 @@ function drawIcon(
   g.restore();
 }
 
-function triggerSlot(slot: Slot, nextKind: GlyphKind) {
-  slot.kind = nextKind;
-  slot.state = 'in';
-  slot.timer = 0;
-  slot.duration = nextKind === 'running' ? 1.35 : 2.1 + Math.random() * 1.4;
-}
-
 /**
- * Fixed-slot Bayer dithered test & browser icon matrix behind the Hero.
- * Columns are always a multiple of 4 so vertical lines stay aligned with the
- * page's 25% / 50% / 75% architectural grid.
+ * Monochrome + mint Bayer-dithered test & browser icon matrix driven by a calm
+ * left-to-right execution scan wave. Columns stay a multiple of 4 so grid lines
+ * align with the page's 25% / 50% / 75% architectural rails.
  */
 export function HeroDitherMatrix() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -183,15 +143,18 @@ export function HeroDitherMatrix() {
     ).matches;
 
     let slots: Slot[] = [];
+    let toneMap = new Uint8Array(0);
     let gw = 0;
     let gh = 0;
     let cols = 16;
+    let rows = 8;
     let cellW = 0;
     let cellH = 0;
     let outImg: ImageData | null = null;
     let inView = true;
     let rafId = 0;
-    let elapsed = 0;
+    // Start with the scan wave already entering the left flank on initial paint.
+    let elapsed = 2.1;
     let lastNow = performance.now();
     let lastDraw = 0;
 
@@ -209,8 +172,9 @@ export function HeroDitherMatrix() {
 
       cols = rect.width >= 960 ? 16 : rect.width >= 640 ? 12 : 8;
       cellW = gw / cols;
-      const rows = Math.max(5, Math.round(gh / cellW));
+      rows = Math.max(5, Math.round(gh / cellW));
       cellH = gh / rows;
+      toneMap = new Uint8Array(cols * rows);
 
       const isNarrow = rect.width < 640;
       slots = [];
@@ -222,24 +186,20 @@ export function HeroDitherMatrix() {
             : nx > 0.2 && nx < 0.8 && r > 0 && r < rows - 1;
 
           const hash = (((r + 1) * 73856093) ^ ((c + 1) * 19349663)) >>> 0;
-          const baseKind = ICON_POOL[hash % ICON_POOL.length] ?? 'pass';
-          const startLit = !inCenterClear && hash % 10 < 3;
-          const initialKind =
-            ICON_POOL[(hash >>> 4) % (ICON_POOL.length - 1)] ?? 'pass';
+          const browserKind =
+            hash % 3 === 0
+              ? (BROWSER_KINDS[(hash >>> 3) % BROWSER_KINDS.length] ?? null)
+              : null;
 
           slots.push({
+            c,
+            r,
             cx: (c + 0.5) * cellW,
             cy: (r + 0.5) * cellH,
+            wavePos: nx + (r / rows) * 0.08,
             inCenterClear,
-            baseKind,
-            kind: startLit ? initialKind : baseKind,
-            state: startLit ? 'hold' : 'idle',
-            timer: startLit
-              ? 0.6 + (hash % 7) * 0.45
-              : 0.4 + (hash % 29) * 0.25,
-            duration: 2.2 + (hash % 4) * 0.5,
-            level: startLit ? 0.92 : 0,
-            phase: (r * cols + c) * 0.9,
+            browserKind,
+            phase: (r * cols + c) * 0.65,
             hoverBoost: 0,
           });
         }
@@ -250,77 +210,55 @@ export function HeroDitherMatrix() {
       if (!outImg || gw === 0 || gh === 0) return;
 
       offscreenCtx.clearRect(0, 0, gw, gh);
+      toneMap.fill(0);
+
       const isDark = document.documentElement.classList.contains('dark');
-      const baseFloor = isDark ? 0.17 : 0.14;
-      const iconSize = Math.min(cellW, cellH) * 0.64;
+      const baseFloor = isDark ? 0.16 : 0.14;
+      const iconSize = Math.min(cellW, cellH) * 0.62;
+      // Calm 6.5s sweep across the hero with a short quiet pause between runs.
+      const scanHead = ((elapsed * 0.17) % 1.45) - 0.18;
 
       for (const s of slots) {
         if (s.inCenterClear) continue;
-
-        if (!reducedMotion && dt > 0) {
-          if (s.state === 'idle') {
-            s.level = Math.max(0, s.level - dt * 1.6);
-            s.timer -= dt;
-            if (s.timer <= 0) {
-              const roll = Math.random();
-              const next: GlyphKind =
-                roll < 0.34
-                  ? 'running'
-                  : roll < 0.64
-                    ? 'pass'
-                    : roll < 0.76
-                      ? 'chromium'
-                      : roll < 0.87
-                        ? 'firefox'
-                        : roll < 0.95
-                          ? 'webkit'
-                          : 'failed';
-              triggerSlot(s, next);
-            }
-          } else if (s.state === 'in') {
-            s.level = Math.min(1, s.level + dt * 2.2);
-            if (s.level >= 1) {
-              s.state = 'hold';
-              s.timer = s.duration;
-            }
-          } else if (s.state === 'hold') {
-            s.timer -= dt;
-            if (s.timer <= 0) {
-              if (s.kind === 'running') {
-                s.kind = Math.random() < 0.9 ? 'pass' : 'failed';
-                s.timer = 2.0 + Math.random() * 1.2;
-              } else if (s.kind === 'failed') {
-                // Failed test retries into running -> pass like watch mode.
-                s.kind = 'running';
-                s.timer = 1.2;
-              } else {
-                s.state = 'out';
-              }
-            }
-          } else {
-            s.level = Math.max(0, s.level - dt * 1.4);
-            if (s.level <= 0) {
-              s.state = 'idle';
-              s.timer = 1.8 + Math.random() * 5.2;
-            }
-          }
-          s.hoverBoost = Math.max(0, s.hoverBoost - dt * 2.4);
+        if (dt > 0) {
+          s.hoverBoost = Math.max(0, s.hoverBoost - dt * 1.8);
         }
 
-        const drawLevel = Math.min(
-          1,
-          Math.max(baseFloor, s.level, s.hoverBoost),
-        );
-        const drawKind =
-          s.level > 0.04 || s.hoverBoost > 0.04 ? s.kind : s.baseKind;
+        const delta = scanHead - s.wavePos;
+        let kind: GlyphKind = s.browserKind ?? 'pass';
+        let intensity = baseFloor;
+        // 0 = etched base, 1 = active monochrome, 2 = mint pass highlight
+        let tone = 0;
 
-        drawIcon(
+        if (delta > -0.05 && delta < 0.075) {
+          kind = 'arc';
+          intensity = 0.86;
+          tone = 1;
+        } else if (delta >= 0.075 && delta < 0.44) {
+          const wake = 1 - (delta - 0.075) / 0.365;
+          intensity = baseFloor + wake * 0.78;
+          tone = s.browserKind ? 1 : 2;
+        }
+
+        if (s.hoverBoost > 0.05) {
+          intensity = Math.max(intensity, Math.min(0.95, s.hoverBoost));
+          if (s.hoverBoost > 0.68) {
+            kind = 'arc';
+            tone = 1;
+          } else {
+            kind = s.browserKind ?? 'pass';
+            tone = s.browserKind ? 1 : 2;
+          }
+        }
+
+        toneMap[s.r * cols + s.c] = tone;
+        drawGlyph(
           offscreenCtx,
-          drawKind,
+          kind,
           s.cx,
           s.cy,
           iconSize,
-          drawLevel,
+          intensity,
           elapsed,
           s.phase,
         );
@@ -330,26 +268,21 @@ export function HeroDitherMatrix() {
       const dst = outImg.data;
       dst.fill(0);
 
-      const colPass: [number, number, number] = isDark
+      const colMint: [number, number, number] = isDark
         ? [56, 198, 156]
         : [49, 162, 129];
-      const colRun: [number, number, number] = isDark
-        ? [230, 174, 74]
-        : [204, 134, 30];
-      const colFail: [number, number, number] = isDark
-        ? [228, 98, 92]
-        : [210, 72, 66];
-      const colBrowser: [number, number, number] = isDark
-        ? [154, 164, 160]
-        : [94, 106, 101];
+      const colMono: [number, number, number] = isDark
+        ? [150, 160, 156]
+        : [92, 104, 99];
       const colGrid: [number, number, number] = isDark
         ? [36, 40, 38]
         : [226, 230, 228];
-      const gridAlpha = isDark ? 88 : 108;
+      const gridAlpha = isDark ? 84 : 104;
 
       for (let y = 0; y < gh; y++) {
         const bayerRow = BAYER_8[y & 7]!;
         const isHLine = y > 0 && Math.abs(y % cellH) < 1;
+        const rIdx = Math.min(rows - 1, Math.floor(y / cellH));
 
         for (let x = 0; x < gw; x++) {
           const idx = (y * gw + x) * 4;
@@ -366,30 +299,25 @@ export function HeroDitherMatrix() {
           if (a <= 0.03) continue;
 
           if (a > bayerRow[x & 7]!) {
-            const r = src[idx] ?? 0;
-            const g = src[idx + 1] ?? 0;
-
-            let col = colBrowser;
-            let alpha = isDark ? 182 : 160;
-
-            if (a < baseFloor + 0.06) {
-              col = colBrowser;
-              alpha = isDark ? 96 : 74;
-            } else if (g > 170 && r < 120) {
-              col = colPass;
-              alpha = isDark ? 228 : 205;
-            } else if (r > 180 && g > 130) {
-              col = colRun;
-              alpha = isDark ? 208 : 186;
-            } else if (r > 180 && g < 130) {
-              col = colFail;
-              alpha = isDark ? 208 : 186;
-            }
+            const cIdx = Math.min(cols - 1, Math.floor(x / cellW));
+            const tone = toneMap[rIdx * cols + cIdx] ?? 0;
+            const isMint = tone === 2 && a > baseFloor + 0.08;
+            const col = isMint ? colMint : colMono;
 
             dst[idx] = col[0];
             dst[idx + 1] = col[1];
             dst[idx + 2] = col[2];
-            dst[idx + 3] = alpha;
+            dst[idx + 3] = isMint
+              ? isDark
+                ? 210
+                : 190
+              : tone === 0 || a < baseFloor + 0.06
+                ? isDark
+                  ? 92
+                  : 70
+                : isDark
+                  ? 176
+                  : 156;
           }
         }
       }
@@ -421,10 +349,7 @@ export function HeroDitherMatrix() {
       const r = Math.floor(ly / cellH);
       const slot = slots[r * cols + c];
       if (!slot || slot.inCenterClear) return;
-      slot.hoverBoost = 0.98;
-      if (slot.state === 'idle') {
-        triggerSlot(slot, 'running');
-      }
+      slot.hoverBoost = 0.96;
     };
 
     const resizeObserver = new ResizeObserver(() => {
