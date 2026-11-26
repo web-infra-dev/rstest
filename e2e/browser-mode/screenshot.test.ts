@@ -872,7 +872,7 @@ test('captures a screenshot', async () => {
       testPath,
       changedTest.replace(
         'id="pixel" style="',
-        'id="pixel" data-animate style="border-right: 1px solid black; ',
+        'id="pixel" data-animate style="border-left: 1px solid black; ',
       ),
     );
     const resizedRun = await runScreenshot([
