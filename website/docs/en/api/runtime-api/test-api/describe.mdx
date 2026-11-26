@@ -284,10 +284,10 @@ describe.sequential('sequential suite', () => {
 
 ## Chainable modifiers
 
-`describe` modifiers can be chained in any order before calling the suite function:
+`describe` modifiers (`.only`, `.skip`, `.runIf`, `.skipIf`, `.concurrent`, `.sequential`) can be chained in any order before calling the suite function, or before `.each(cases)` / `.for(cases)` (modifiers must precede `.each` / `.for`):
 
 - `describe.only.runIf(condition)` / `describe.runIf(condition).only`
 - `describe.skipIf(condition).concurrent` / `describe.concurrent.skipIf(condition)`
 - `describe.runIf(condition).concurrent` / `describe.concurrent.runIf(condition)`
 - `describe.only.concurrent` / `describe.concurrent.only`
-- `describe.concurrent.each(cases)` / `describe.each(cases)` chained with `.only`, `.skip`, `.runIf`, or `.skipIf`
+- `describe.only.each(cases)` / `describe.skip.each(cases)` / `describe.concurrent.each(cases)` / `describe.runIf(condition).each(cases)` / `describe.skipIf(condition).each(cases)`

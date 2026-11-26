@@ -173,7 +173,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mock 类
 
-传入类构造函数即可 mock 该类。不传 `{ spy: true }` 时，`rs.mockObject(Class)` 只返回一个普通 mock 函数（`new` 返回 `undefined`，不会 mock 原型方法）。使用 `{ spy: true }` 时，实例会保留原方法并附加 spy：
+传入类构造函数即可 mock 该类。不传 `{ spy: true }` 时，原构造函数逻辑不会执行，原型方法和静态方法会被替换为返回 `undefined` 的 mock 函数（使用 `new` 会返回带有这些 mocked 原型方法的实例）。使用 `{ spy: true }` 时，实例会执行原构造函数并保留原方法作为 spy：
 
 ```ts
 class UserService {

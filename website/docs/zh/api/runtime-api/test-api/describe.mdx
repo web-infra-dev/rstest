@@ -284,10 +284,10 @@ describe.sequential('顺序套件', () => {
 
 ## 链式修饰符
 
-`describe` 的修饰符支持按任意顺序链式组合：
+`describe` 的修饰符（`.only`、`.skip`、`.runIf`、`.skipIf`、`.concurrent`、`.sequential`）支持按任意顺序链式组合，也可以放在 `.each(cases)` / `.for(cases)` 之前（修饰符必须位于 `.each` / `.for` 之前）：
 
 - `describe.only.runIf(condition)` / `describe.runIf(condition).only`
 - `describe.skipIf(condition).concurrent` / `describe.concurrent.skipIf(condition)`
 - `describe.runIf(condition).concurrent` / `describe.concurrent.runIf(condition)`
 - `describe.only.concurrent` / `describe.concurrent.only`
-- `describe.concurrent.each(cases)` / `describe.each(cases)` 与 `.only`、`.skip`、`.runIf`、`.skipIf` 组合
+- `describe.only.each(cases)` / `describe.skip.each(cases)` / `describe.concurrent.each(cases)` / `describe.runIf(condition).each(cases)` / `describe.skipIf(condition).each(cases)`

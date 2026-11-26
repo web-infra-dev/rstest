@@ -173,7 +173,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mocking classes
 
-Pass a class constructor to mock it. Without `{ spy: true }`, `rs.mockObject(Class)` returns a plain mock function (`new` returns `undefined`, with no prototype method mocking). With `{ spy: true }`, instances retain their original methods as spies:
+Pass a class constructor to mock it. Without `{ spy: true }`, the original constructor implementation is not executed, and prototype and static methods are replaced with mock functions returning `undefined` (calling `new` returns an instance with those mocked prototype methods). With `{ spy: true }`, instances run the original constructor and retain their original methods as spies:
 
 ```ts
 class UserService {
