@@ -25,7 +25,7 @@ import { createSerialTaskQueue } from './serialTaskQueue';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type { RequestedTestPaths, WatchSignals } from './watchSignals';
 
-export type BuildRerunOutcome = (options: {
+type BuildRerunOutcome = (options: {
   rerunTestPaths: string[];
   executedFileKeys?: ReadonlySet<string>;
   testTime: number;
@@ -33,7 +33,7 @@ export type BuildRerunOutcome = (options: {
   unhandledErrors?: Error[];
 }) => ExecutorCycleOutcome;
 
-export type BrowserWatchCoordinatorDeps = {
+type BrowserWatchCoordinatorDeps = {
   watchState: BrowserRuntime['watchState'];
   watchSignals: WatchSignals;
   headlessLane?: HeadlessLaneResult;
