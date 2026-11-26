@@ -37,6 +37,7 @@ html:not(.dark) .rstest-home {
   --home-stage-bg: #f6f8f7;
   --home-dot: rgb(15 23 20 / 0.08);
   --home-hatch: rgb(15 23 20 / 0.055);
+  --home-grid-line: rgb(15 23 20 / 0.06);
   --home-hero-sub: #676f6b;
   --home-surface-hover: #f2f5f3;
 }
@@ -55,6 +56,7 @@ html:not(.dark) .rstest-home .text-fg-muted {
   --home-stage-bg: #0e100f;
   --home-dot: rgb(255 255 255 / 0.075);
   --home-hatch: rgb(255 255 255 / 0.055);
+  --home-grid-line: rgb(255 255 255 / 0.055);
   --home-hero-sub: #8f9894;
   --home-surface-hover: #191c1b;
 }

@@ -409,6 +409,9 @@ const HERO_TITLE = {
 const AGENT_PROMPT =
   'Set up Rstest in this project: https://rstest.rs/guide/start/agent-install.md';
 
+const HERO_GRID_COLS = Array.from({ length: 16 }, (_, i) => i);
+const HERO_GRID_ROWS = Array.from({ length: 8 }, (_, i) => i);
+
 const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
 
 function FeaturePoints({ points }: { points: string[] }) {
@@ -566,10 +569,36 @@ export function HomeLayout() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <section className="border-x border-[var(--home-border)]">
           <div className="relative overflow-hidden bg-[var(--home-bg)]">
+            {/* True 1px CSS grid overlays share the exact same tracks as InstallCommand. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:grid-cols-12 lg:grid-cols-16"
+            >
+              {HERO_GRID_COLS.map((i) => (
+                <div
+                  key={i}
+                  className={
+                    i >= 12
+                      ? 'hidden lg:block'
+                      : i >= 8
+                        ? 'hidden sm:block'
+                        : ''
+                  }
+                />
+              ))}
+            </div>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 grid grid-rows-[repeat(8,66px)] divide-y divide-[var(--home-grid-line)] sm:grid-rows-[repeat(8,74px)]"
+            >
+              {HERO_GRID_ROWS.map((i) => (
+                <div key={i} />
+              ))}
+            </div>
             <HeroDitherMatrix />
-            <div className="relative z-10 flex flex-col items-center pt-18 pb-[12.5%] text-center sm:pt-22 sm:pb-[8.3333%] lg:pt-24 lg:pb-[6.25%]">
-              <div className="flex flex-col items-center px-6 sm:px-10">
-                <h1 className="text-[44px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
+            <div className="relative z-10 grid grid-cols-8 grid-rows-[repeat(8,66px)] text-center sm:grid-cols-12 sm:grid-rows-[repeat(8,74px)] lg:grid-cols-16">
+              <div className="col-span-8 row-start-2 row-span-4 flex flex-col items-center justify-center px-6 sm:col-span-12 sm:row-start-2 sm:row-span-5 sm:px-10 lg:col-span-16">
+                <h1 className="text-[42px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
                   <span className="block text-fg">
                     {HERO_TITLE[lang][0]}
                     <span className="text-brand">Rspack</span>
@@ -579,10 +608,10 @@ export function HomeLayout() {
                     {HERO_TITLE[lang][2]}
                   </span>
                 </h1>
-                <p className="mt-6 max-w-2xl text-[17px]/[1.6] text-fg-muted sm:text-[19px]/[1.55]">
+                <p className="mt-5 max-w-2xl text-[16px]/[1.55] text-fg-muted sm:mt-6 sm:text-[19px]/[1.55]">
                   {t('slogan')}
                 </p>
-                <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <div className="mt-6 flex flex-wrap justify-center gap-3 sm:mt-8">
                   <Button
                     href={tUrl('/guide/start/quick-start')}
                     LinkComp={Link}
@@ -610,12 +639,10 @@ export function HomeLayout() {
                   </Button>
                 </div>
               </div>
-              {/* Snaps flush to the inner dither grid tracks: 8/8 mobile, 10/12 tablet, 10/16 desktop. */}
-              <div className="mt-9 flex w-full justify-center">
+              <div className="col-span-8 row-start-6 row-span-2 sm:col-start-2 sm:col-span-10 sm:row-start-7 sm:row-span-1 lg:col-start-4 lg:col-span-10">
                 <InstallCommand
                   prompt={AGENT_PROMPT}
                   args="add @rstest/core -D"
-                  className="sm:w-[83.3333%] lg:w-[62.5%]"
                 />
               </div>
             </div>

@@ -148,9 +148,10 @@ export function InstallCommand({
   };
 
   return (
-    <div className={`w-full text-left ${className}`}>
-      <div className="border border-[var(--home-border-strong)] bg-[var(--home-bg)]">
-        <div className="relative flex items-center justify-between gap-2 border-b border-[var(--home-border)] px-2 font-mono text-[12px]">
+    <div className={`h-full w-full text-left ${className}`}>
+      {/* Inset by 1px on top/left so the surrounding 1px CSS grid tracks act as the outer frame. */}
+      <div className="mt-px flex h-[calc(100%-1px)] w-full flex-col bg-[var(--home-bg)] sm:ml-px sm:w-[calc(100%-1px)]">
+        <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-[var(--home-grid-line)] px-2 font-mono text-[12px]">
           <div className="relative flex items-center">
             {tabs.map((name) => (
               <button
@@ -213,7 +214,7 @@ export function InstallCommand({
             {copied ? 'copied' : 'copy'}
           </button>
         </div>
-        <div className="flex items-start gap-3 bg-[var(--home-stage-bg)] px-4 py-2 font-mono text-[12.5px]/[1.5]">
+        <div className="flex flex-1 items-center gap-3 bg-[var(--home-stage-bg)] px-4 py-2 font-mono text-[12.5px]/[1.5]">
           <span className="font-medium text-brand select-none">
             {tab === 'prompt' ? '>' : '$'}
           </span>

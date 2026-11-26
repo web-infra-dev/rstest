@@ -186,19 +186,19 @@ export function HeroDitherMatrix() {
       off.height = gh;
       outImg = ctx.createImageData(gw, gh);
 
-      // Match Tailwind breakpoints (sm: 640px, lg: 1024px) so InstallCommand
-      // snaps to the exact same column tracks at every viewport width.
+      // Match the parent CSS grid tracks (8/12/16 cols x 8 rows) so every icon
+      // centers cleanly inside its own 1px CSS cell.
       cols = window.innerWidth >= 1024 ? 16 : window.innerWidth >= 640 ? 12 : 8;
+      rows = 8;
       cellW = gw / cols;
-      rows = Math.max(5, Math.round(gh / cellW));
       cellH = gh / rows;
       toneMap = new Uint8Array(cols * rows);
 
       const isNarrow = window.innerWidth < 640;
+      const isTablet = window.innerWidth >= 640 && window.innerWidth < 1024;
       slots = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const isTablet = window.innerWidth >= 640 && window.innerWidth < 1024;
           const inCenterClear = isNarrow
             ? r > 0 && r < rows - 1
             : isTablet
@@ -312,27 +312,13 @@ export function HeroDitherMatrix() {
       const colMono: [number, number, number] = isDark
         ? [136, 144, 140]
         : [104, 114, 110];
-      const colGrid: [number, number, number] = isDark
-        ? [36, 40, 38]
-        : [226, 230, 228];
-      const gridAlpha = isDark ? 82 : 100;
 
       for (let y = 0; y < gh; y++) {
         const bayerRow = BAYER_8[y & 7]!;
-        const isHLine = y > 0 && Math.abs(y % cellH) < 1;
         const rIdx = Math.min(rows - 1, Math.floor(y / cellH));
 
         for (let x = 0; x < gw; x++) {
           const idx = (y * gw + x) * 4;
-          const isVLine = x > 0 && Math.abs(x % cellW) < 1;
-
-          if (isHLine || isVLine) {
-            dst[idx] = colGrid[0];
-            dst[idx + 1] = colGrid[1];
-            dst[idx + 2] = colGrid[2];
-            dst[idx + 3] = gridAlpha;
-          }
-
           const a = (src[idx + 3] ?? 0) / 255;
           if (a <= 0.03) continue;
 
