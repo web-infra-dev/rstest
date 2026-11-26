@@ -8,10 +8,12 @@ export function FailureDetails({
   comparisons,
   fileErrors,
   cases,
+  selectedCase,
 }: {
   comparisons?: ReadonlyMap<string, ScreenshotComparison>;
   fileErrors?: TestErrors;
   cases: CaseInfo[];
+  selectedCase?: CaseInfo;
 }) {
   const failures = cases.flatMap((test) =>
     test.status === 'failed' && test.errors?.length
@@ -34,11 +36,13 @@ export function FailureDetails({
     <section
       aria-label="Failure details"
       data-testid="failure-details"
-      className="max-h-[40%] has-[img]:max-h-[68%] shrink-0 overflow-auto border-0 border-t border-solid border-(--border) bg-(--background) px-4 py-3 text-(--foreground)"
+      className="my-5 rounded-lg border border-solid border-(--border) bg-(--muted) p-4 text-(--foreground)"
     >
       {failures.map(({ id, title, errors }) => (
         <div key={id} className="mb-3 last:mb-0">
-          <h3 className="m-0 text-sm font-semibold">{title}</h3>
+          <h3 className="m-0 text-sm font-semibold">
+            {selectedCase?.id === id ? 'Error details' : title}
+          </h3>
           {errors.map((error, index) => {
             const images =
               error.screenshotComparisonId &&
