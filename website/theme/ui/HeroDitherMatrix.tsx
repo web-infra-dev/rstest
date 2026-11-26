@@ -12,7 +12,15 @@ const BAYER_8 = [
   [63, 31, 55, 23, 61, 29, 53, 21],
 ].map((row) => row.map((v) => (v + 0.5) / 64));
 
-type GlyphKind = 'pass' | 'arc' | 'chromium' | 'firefox' | 'webkit';
+type GlyphKind = 'pass' | 'failed' | 'arc' | 'chromium' | 'firefox' | 'webkit';
+
+// 0 = quiet etched base, 1 = monochrome browser, 2 = muted mint pass,
+// 3 = muted amber running arc, 4 = muted dusty-red failed cross.
+const TONE_ETCHED = 0;
+const TONE_MONO = 1;
+const TONE_PASS = 2;
+const TONE_RUN = 3;
+const TONE_FAIL = 4;
 
 interface Slot {
   c: number;
@@ -22,6 +30,7 @@ interface Slot {
   wavePos: number;
   inCenterClear: boolean;
   browserKind: 'chromium' | 'firefox' | 'webkit' | null;
+  isFailed: boolean;
   phase: number;
   hoverBoost: number;
 }
@@ -67,6 +76,14 @@ function drawGlyph(
     g.moveTo(-r * 0.54, r * 0.04);
     g.lineTo(-r * 0.13, r * 0.48);
     g.lineTo(r * 0.6, -r * 0.44);
+    g.stroke();
+  } else if (kind === 'failed') {
+    g.lineWidth = Math.max(2.0, size * 0.14);
+    g.beginPath();
+    g.moveTo(-r * 0.44, -r * 0.44);
+    g.lineTo(r * 0.44, r * 0.44);
+    g.moveTo(r * 0.44, -r * 0.44);
+    g.lineTo(-r * 0.44, r * 0.44);
     g.stroke();
   } else if (kind === 'arc') {
     const start = t * 4.2 + phase;
@@ -120,7 +137,7 @@ function drawGlyph(
 }
 
 /**
- * Monochrome + mint Bayer-dithered test & browser icon matrix driven by a calm
+ * Low-saturation Bayer-dithered test & browser icon matrix driven by a calm
  * left-to-right execution scan wave. Columns stay a multiple of 4 so grid lines
  * align with the page's 25% / 50% / 75% architectural rails.
  */
@@ -153,7 +170,6 @@ export function HeroDitherMatrix() {
     let outImg: ImageData | null = null;
     let inView = true;
     let rafId = 0;
-    // Start with the scan wave already entering the left flank on initial paint.
     let elapsed = 2.1;
     let lastNow = performance.now();
     let lastDraw = 0;
@@ -190,6 +206,8 @@ export function HeroDitherMatrix() {
             hash % 3 === 0
               ? (BROWSER_KINDS[(hash >>> 3) % BROWSER_KINDS.length] ?? null)
               : null;
+          // Keep failed cells sparse (~1 in 10 non-browser slots) so the matrix reads balanced.
+          const isFailed = !browserKind && (hash >>> 6) % 10 === 0;
 
           slots.push({
             c,
@@ -199,6 +217,7 @@ export function HeroDitherMatrix() {
             wavePos: nx + (r / rows) * 0.08,
             inCenterClear,
             browserKind,
+            isFailed,
             phase: (r * cols + c) * 0.65,
             hoverBoost: 0,
           });
@@ -210,12 +229,11 @@ export function HeroDitherMatrix() {
       if (!outImg || gw === 0 || gh === 0) return;
 
       offscreenCtx.clearRect(0, 0, gw, gh);
-      toneMap.fill(0);
+      toneMap.fill(TONE_ETCHED);
 
       const isDark = document.documentElement.classList.contains('dark');
-      const baseFloor = isDark ? 0.16 : 0.14;
+      const baseFloor = isDark ? 0.15 : 0.13;
       const iconSize = Math.min(cellW, cellH) * 0.62;
-      // Calm 6.5s sweep across the hero with a short quiet pause between runs.
       const scanHead = ((elapsed * 0.17) % 1.45) - 0.18;
 
       for (const s of slots) {
@@ -225,29 +243,36 @@ export function HeroDitherMatrix() {
         }
 
         const delta = scanHead - s.wavePos;
-        let kind: GlyphKind = s.browserKind ?? 'pass';
-        let intensity = baseFloor;
-        // 0 = etched base, 1 = active monochrome, 2 = mint pass highlight
-        let tone = 0;
+        const resolvedKind: GlyphKind =
+          s.browserKind ?? (s.isFailed ? 'failed' : 'pass');
+        const resolvedTone = s.browserKind
+          ? TONE_MONO
+          : s.isFailed
+            ? TONE_FAIL
+            : TONE_PASS;
 
-        if (delta > -0.05 && delta < 0.075) {
+        let kind: GlyphKind = resolvedKind;
+        let intensity = baseFloor;
+        let tone = TONE_ETCHED;
+
+        if (delta > -0.05 && delta < 0.08) {
           kind = 'arc';
-          intensity = 0.86;
-          tone = 1;
-        } else if (delta >= 0.075 && delta < 0.44) {
-          const wake = 1 - (delta - 0.075) / 0.365;
-          intensity = baseFloor + wake * 0.78;
-          tone = s.browserKind ? 1 : 2;
+          intensity = 0.84;
+          tone = TONE_RUN;
+        } else if (delta >= 0.08 && delta < 0.45) {
+          const wake = 1 - (delta - 0.08) / 0.37;
+          intensity = baseFloor + wake * 0.76;
+          tone = resolvedTone;
         }
 
         if (s.hoverBoost > 0.05) {
-          intensity = Math.max(intensity, Math.min(0.95, s.hoverBoost));
-          if (s.hoverBoost > 0.68) {
+          intensity = Math.max(intensity, Math.min(0.92, s.hoverBoost));
+          if (s.hoverBoost > 0.66) {
             kind = 'arc';
-            tone = 1;
+            tone = TONE_RUN;
           } else {
-            kind = s.browserKind ?? 'pass';
-            tone = s.browserKind ? 1 : 2;
+            kind = resolvedKind;
+            tone = resolvedTone;
           }
         }
 
@@ -268,16 +293,24 @@ export function HeroDitherMatrix() {
       const dst = outImg.data;
       dst.fill(0);
 
-      const colMint: [number, number, number] = isDark
-        ? [56, 198, 156]
-        : [49, 162, 129];
+      // Low-saturation architectural print palette: preserves green/amber/red
+      // test semantics while staying quiet behind the Hero typography.
+      const colPass: [number, number, number] = isDark
+        ? [82, 158, 134]
+        : [78, 152, 128];
+      const colRun: [number, number, number] = isDark
+        ? [180, 152, 98]
+        : [176, 138, 76];
+      const colFail: [number, number, number] = isDark
+        ? [178, 108, 106]
+        : [182, 104, 102];
       const colMono: [number, number, number] = isDark
-        ? [150, 160, 156]
-        : [92, 104, 99];
+        ? [136, 144, 140]
+        : [104, 114, 110];
       const colGrid: [number, number, number] = isDark
         ? [36, 40, 38]
         : [226, 230, 228];
-      const gridAlpha = isDark ? 84 : 104;
+      const gridAlpha = isDark ? 82 : 100;
 
       for (let y = 0; y < gh; y++) {
         const bayerRow = BAYER_8[y & 7]!;
@@ -300,24 +333,30 @@ export function HeroDitherMatrix() {
 
           if (a > bayerRow[x & 7]!) {
             const cIdx = Math.min(cols - 1, Math.floor(x / cellW));
-            const tone = toneMap[rIdx * cols + cIdx] ?? 0;
-            const isMint = tone === 2 && a > baseFloor + 0.08;
-            const col = isMint ? colMint : colMono;
+            const tone = toneMap[rIdx * cols + cIdx] ?? TONE_ETCHED;
+            const isResting = tone === TONE_ETCHED || a < baseFloor + 0.06;
+
+            let col = colMono;
+            let alpha = isDark ? 148 : 132;
+
+            if (isResting) {
+              col = colMono;
+              alpha = isDark ? 84 : 66;
+            } else if (tone === TONE_PASS) {
+              col = colPass;
+              alpha = isDark ? 164 : 146;
+            } else if (tone === TONE_RUN) {
+              col = colRun;
+              alpha = isDark ? 156 : 142;
+            } else if (tone === TONE_FAIL) {
+              col = colFail;
+              alpha = isDark ? 156 : 142;
+            }
 
             dst[idx] = col[0];
             dst[idx + 1] = col[1];
             dst[idx + 2] = col[2];
-            dst[idx + 3] = isMint
-              ? isDark
-                ? 210
-                : 190
-              : tone === 0 || a < baseFloor + 0.06
-                ? isDark
-                  ? 92
-                  : 70
-                : isDark
-                  ? 176
-                  : 156;
+            dst[idx + 3] = alpha;
           }
         }
       }
@@ -349,7 +388,7 @@ export function HeroDitherMatrix() {
       const r = Math.floor(ly / cellH);
       const slot = slots[r * cols + c];
       if (!slot || slot.inCenterClear) return;
-      slot.hoverBoost = 0.96;
+      slot.hoverBoost = 0.94;
     };
 
     const resizeObserver = new ResizeObserver(() => {
