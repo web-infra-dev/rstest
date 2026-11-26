@@ -123,11 +123,20 @@ export function InstallCommand({
   const [copied, setCopied] = useState(false);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const tabRefs = useRef(new Map<InstallTab, HTMLButtonElement>());
+  const tabListRef = useRef<HTMLDivElement>(null);
   const line = lineOf(tab);
 
   useLayoutEffect(() => {
-    const el = tabRefs.current.get(tab);
-    if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    const syncIndicator = () => {
+      const el = tabRefs.current.get(tab);
+      if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    syncIndicator();
+    const list = tabListRef.current;
+    if (!list) return;
+    const observer = new ResizeObserver(syncIndicator);
+    observer.observe(list);
+    return () => observer.disconnect();
   }, [tab]);
 
   const select = (next: InstallTab) => {
@@ -146,8 +155,8 @@ export function InstallCommand({
 
   return (
     <div className="flex h-full w-full flex-col text-left">
-      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-[var(--home-grid-line)] px-3 font-mono text-[13px]">
-        <div className="relative flex items-center">
+      <div className="relative flex shrink-0 items-center justify-between gap-1 border-b border-[var(--home-grid-line)] px-2 font-mono text-[12px] sm:gap-2 sm:px-3 sm:text-[13px]">
+        <div ref={tabListRef} className="relative flex items-center">
           {INSTALL_TABS.map((name) => (
             <button
               key={name}
@@ -157,7 +166,7 @@ export function InstallCommand({
               type="button"
               aria-pressed={name === tab}
               onClick={() => select(name)}
-              className={`cursor-pointer bg-transparent! px-2.5 py-2.5 transition-colors sm:px-3 ${
+              className={`cursor-pointer bg-transparent! px-1.5 py-2.5 transition-colors sm:px-3 ${
                 name === tab
                   ? 'font-medium text-fg'
                   : 'text-fg-muted/75 hover:text-fg'
@@ -183,7 +192,7 @@ export function InstallCommand({
               ? 'Copied'
               : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
           }
-          className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-3 py-1.5 transition-colors hover:bg-[var(--home-surface-hover)]! ${
+          className={`flex shrink-0 cursor-pointer items-center gap-1 bg-transparent! px-2 py-1.5 transition-colors hover:bg-[var(--home-surface-hover)]! sm:gap-1.5 sm:px-3 ${
             copied ? 'text-brand' : 'text-fg-muted hover:text-fg'
           }`}
         >
@@ -209,7 +218,7 @@ export function InstallCommand({
           {copied ? 'copied' : 'copy'}
         </button>
       </div>
-      <div className="flex flex-1 items-center gap-3.5 px-5 py-3 font-mono text-[14px]/[1.5]">
+      <div className="flex flex-1 items-center gap-2.5 px-3.5 py-2.5 font-mono text-[12.5px]/[1.5] sm:gap-3.5 sm:px-5 sm:py-3 sm:text-[14px]/[1.5]">
         <span className="font-medium text-brand select-none">
           {tab === 'prompt' ? '>' : '$'}
         </span>
