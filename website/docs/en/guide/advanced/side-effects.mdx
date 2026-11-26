@@ -4,9 +4,70 @@ description: Learn how Rstest handles module side effects, sideEffects declarati
 
 # Module side effects
 
-Rstest bundles tests with Rspack, which enables [`lazyBarrel`](https://rspack.rs/guide/advanced/lazy-barrel) and [tree shaking](https://rspack.rs/guide/optimization/tree-shaking) by default to skip unused modules and re-export branches. When a module has `sideEffects: false` in `package.json`, bare imports for initialization (such as `import './register-mocks'` that register `rs.mock()`, polyfills, or globals) or intermediate barrel files can be dropped. Only adjust `sideEffects` when required initialization is skipped; omitting `sideEffects` does not treat files as side-effect-free.
+Rstest bundles tests with Rspack, which can skip unused modules during the build to reduce the dependencies that need to be built and executed. Optimizations such as lazyBarrel speed up test startup, provided the skipped modules contain no required initialization code.
+
+The `sideEffects` declaration tells build tools which modules can be skipped. This page explains its relationship to module side effects and lazyBarrel, and how to retain initialization that your tests need.
+
+## What counts as a side effect
+
+A side effect here is a change to external state when a module loads, beyond providing exported values. For example:
+
+```ts title="test/register-mocks.ts"
+import { rs } from '@rstest/core';
+
+rs.mock('../src/api', () => ({
+  fetchUser: () => ({ name: 'Alice' }),
+}));
+```
+
+This module exports nothing, but evaluating it registers a mock. Other common side effects include modifying globals, installing polyfills, and registering event listeners.
+
+The following bare import runs the module's initialization code:
+
+```ts title="test/user.test.ts"
+import './register-mocks';
+```
+
+## How side-effect declarations affect module execution
+
+Setting `sideEffects: false` in `package.json` tells the bundler that files in the package can be skipped when their exports are unused.
+
+```json title="package.json"
+{
+  "name": "my-project",
+  "sideEffects": false
+}
+```
+
+When this declaration applies to the registration module and the relevant optimizations are enabled, even an explicit `import './register-mocks'` can be removed. Build tools trust the `sideEffects` declaration; registration code in a file does not guarantee that the file will be retained.
+
+See Rspack's [tree shaking documentation](https://rspack.rs/guide/optimization/tree-shaking).
+
+## Faster test builds with barrel optimization
+
+Rstest builds tests with Rspack, which enables `lazyBarrel` optimization by default without switching to production mode. When a barrel file (`index.ts`) re-exports multiple modules and is marked side-effect-free, Rspack only builds the re-exported branches that the test actually uses and skips unused branches.
+
+```ts title="src/utils/index.ts"
+export { sum } from './sum';
+export { formatDate } from './format-date';
+```
+
+```ts title="test/sum.test.ts"
+import { expect, test } from '@rstest/core';
+import { sum } from '../src/utils';
+
+test('sum', () => {
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
+If `src/utils/index.ts` is marked side-effect-free and nothing else imports `formatDate`, Rspack skips transforming and parsing `format-date.ts` and its exclusive dependencies. Note that `export *` re-exports can limit this optimization when Rspack must inspect modules to locate exports.
+
+Because `lazyBarrel` and tree shaking trust `sideEffects` declarations instead of analyzing every module upfront, an inaccurate `sideEffects: false` can drop required initialization—both through barrel re-exports and bare imports such as `import './register-mocks'`. See Rspack's [barrel file optimization](https://rspack.rs/guide/advanced/lazy-barrel) guide for details.
 
 ## Declare modules with side effects
+
+Only adjust these declarations when initialization modules have been incorrectly marked as side-effect-free. Omitting `sideEffects` is not equivalent to setting `sideEffects: false`. Using Rstest or putting registration code in a separate file does not by itself require additional side-effect configuration.
 
 ### Declare side effects for a package
 

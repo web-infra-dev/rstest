@@ -21,7 +21,22 @@ import { Prompt } from '@rspress/core/theme';
 
 ## 环境准备
 
-Rstest 需要 [Node.js](https://nodejs.org/) `^20.19.0 || >=22.12.0`（推荐使用 LTS 版本）。
+开始之前，需要先安装 [Node.js](https://nodejs.org/) 20.x 中的 20.19.0 及以上版本，或 22.12.0 及以上版本（`^20.19.0 || >=22.12.0`）。推荐使用 LTS 版本。
+
+通过以下命令检查当前的 Node.js 版本：
+
+```bash
+node -v
+```
+
+如果你的环境中尚未安装 Node.js，或是版本太低，可以通过 [nvm](https://github.com/nvm-sh/nvm) 或 [fnm](https://github.com/Schniz/fnm) 安装：
+
+```bash
+# 安装 Node.js LTS
+nvm install --lts
+# 切换 Node.js LTS
+nvm use --lts
+```
 
 ## 使用 Rstest
 

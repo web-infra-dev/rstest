@@ -146,3 +146,21 @@ test('serialized snapshot', () => {
 ## Snapshot output path
 
 By default, `.snap` files live in a `__snapshots__` directory beside each test file. To store snapshots elsewhere, configure [resolveSnapshotPath](/config/test/resolve-snapshot-path).
+
+## Best practices
+
+- **Keep snapshots focused**: Serialize only fields relevant to the behavior under test, and handle volatile fields (timestamps, random IDs) with [property matchers](#property-matchers) or custom serializers.
+- **Name multiple snapshots**: Pass a descriptive label when a single test asserts multiple snapshots:
+
+```ts
+test('component state changes', () => {
+  const component = new MyComponent();
+
+  expect(component.initialState).toMatchSnapshot('initial state');
+
+  component.update();
+  expect(component.updatedState).toMatchSnapshot('updated state');
+});
+```
+
+- **Review diffs before updating**: Inspect snapshot diffs before running `-u`, prefer inline snapshots for small values, and remove obsolete snapshots when refactoring tests.

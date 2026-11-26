@@ -77,7 +77,22 @@ test('renders greeting', () => {
 
 ### Reusing Rsbuild configuration
 
-If your project already uses Rsbuild, use [@rstest/adapter-rsbuild](/integration/rsbuild) with `extends: withRsbuildConfig()` to inherit your Rsbuild plugins, aliases, and build configuration. See the [Rsbuild integration guide](/integration/rsbuild).
+If your project already uses Rsbuild, you can reuse your existing configuration with [@rstest/adapter-rsbuild](/integration/rsbuild):
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+```ts title="rstest.config.ts"
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+  testEnvironment: 'happy-dom',
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+This will automatically inherit your Rsbuild plugins, aliases, and other build configuration.
 
 ### Testing components
 
@@ -99,7 +114,24 @@ test('increments counter on click', () => {
 });
 ```
 
-To mock modules or API dependencies in component tests, see [Mocking](/guide/basic/mock).
+### Mocking modules
+
+Use `rs.mock()` to mock dependencies:
+
+```tsx title="src/UserProfile.test.tsx"
+import { expect, rs, test } from '@rstest/core';
+import { render, screen } from '@testing-library/react';
+import UserProfile from './UserProfile';
+
+rs.mock('./api', () => ({
+  fetchUser: () => Promise.resolve({ name: 'John Doe' }),
+}));
+
+test('renders user name', async () => {
+  render(<UserProfile userId="1" />);
+  expect(await screen.findByText('John Doe')).toBeInTheDocument();
+});
+```
 
 ## SSR testing
 

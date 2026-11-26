@@ -146,3 +146,21 @@ test('serialized snapshot', () => {
 ## 快照输出路径
 
 默认情况下，`.snap` 文件保存在与测试文件同级的 `__snapshots__` 目录中。如需自定义存储路径，请配置 [resolveSnapshotPath](/config/test/resolve-snapshot-path)。
+
+## 最佳实践
+
+- **保持快照聚焦**：只序列化与当前断言相关的字段，时间戳、随机 ID 等易变字段用[属性匹配器](#属性匹配器)或自定义序列化器处理。
+- **为多个快照命名**：同一测试内有多个快照时，传入有区分度的名称：
+
+```ts
+test('component state changes', () => {
+  const component = new MyComponent();
+
+  expect(component.initialState).toMatchSnapshot('initial state');
+
+  component.update();
+  expect(component.updatedState).toMatchSnapshot('updated state');
+});
+```
+
+- **更新前审查 diff**：运行 `-u` 前先确认差异是否符合预期；简短输出优先使用内联快照，重构测试时及时清理过期快照。
