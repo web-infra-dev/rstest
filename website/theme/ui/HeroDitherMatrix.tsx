@@ -12,15 +12,46 @@ const BAYER_8 = [
   [63, 31, 55, 23, 61, 29, 53, 21],
 ].map((row) => row.map((v) => (v + 0.5) / 64));
 
-type GlyphKind = 'pass' | 'failed' | 'arc' | 'chromium' | 'firefox' | 'webkit';
+type BrowserKind = 'chromium' | 'firefox' | 'webkit';
+type GlyphKind = 'pass' | 'failed' | 'arc' | BrowserKind;
+type RGBA = readonly [number, number, number, number];
+type Palette = readonly [RGBA, RGBA, RGBA, RGBA, RGBA];
 
-// 0 = quiet etched base, 1 = monochrome browser, 2 = muted mint pass,
-// 3 = muted amber running arc, 4 = muted dusty-red failed cross.
+// Tone indices into DARK_PALETTE / LIGHT_PALETTE.
 const TONE_ETCHED = 0;
 const TONE_MONO = 1;
 const TONE_PASS = 2;
 const TONE_RUN = 3;
 const TONE_FAIL = 4;
+type Tone =
+  | typeof TONE_ETCHED
+  | typeof TONE_MONO
+  | typeof TONE_PASS
+  | typeof TONE_RUN
+  | typeof TONE_FAIL;
+
+// Low-saturation architectural print palettes: preserves green/amber/red
+// test semantics while staying quiet behind the Hero typography.
+const DARK_PALETTE: Palette = [
+  [136, 144, 140, 84],
+  [136, 144, 140, 148],
+  [82, 158, 134, 164],
+  [180, 152, 98, 156],
+  [178, 108, 106, 156],
+];
+
+const LIGHT_PALETTE: Palette = [
+  [104, 114, 110, 66],
+  [104, 114, 110, 132],
+  [78, 152, 128, 146],
+  [176, 138, 76, 142],
+  [182, 104, 102, 142],
+];
+
+const BROWSER_KINDS: readonly BrowserKind[] = ['chromium', 'firefox', 'webkit'];
+const GRID_ROWS = 8;
+const PIXEL_SIZE = 2;
+const FRAME_INTERVAL_MS = 33;
 
 interface Slot {
   c: number;
@@ -29,111 +60,259 @@ interface Slot {
   cy: number;
   wavePos: number;
   inCenterClear: boolean;
-  browserKind: 'chromium' | 'firefox' | 'webkit' | null;
-  isFailed: boolean;
+  kind: GlyphKind;
+  tone: Tone;
   phase: number;
   hoverBoost: number;
 }
 
-const BROWSER_KINDS: ('chromium' | 'firefox' | 'webkit')[] = [
-  'chromium',
-  'firefox',
-  'webkit',
-];
+interface GridMetrics {
+  width: number;
+  height: number;
+  cols: number;
+  cellW: number;
+  cellH: number;
+}
 
-const PIXEL_SIZE = 2;
-const FRAME_INTERVAL_MS = 33;
+// Match the parent CSS grid tracks (8/12/16 cols x 8 rows) so every icon
+// centers cleanly inside its own 1px CSS cell.
+function getGridLayout(viewportWidth: number): {
+  cols: number;
+  clearMargin: number;
+} {
+  if (viewportWidth >= 1024) return { cols: 16, clearMargin: 3 };
+  if (viewportWidth >= 640) return { cols: 12, clearMargin: 1 };
+  return { cols: 8, clearMargin: 0 };
+}
+
+function createSlots(
+  cols: number,
+  cellW: number,
+  cellH: number,
+  clearMargin: number,
+): Slot[] {
+  const slots: Slot[] = [];
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < cols; c++) {
+      const inCenterClear =
+        c >= clearMargin &&
+        c < cols - clearMargin &&
+        r > 0 &&
+        r < GRID_ROWS - 1;
+      const hash = (((r + 1) * 73856093) ^ ((c + 1) * 19349663)) >>> 0;
+      const browserKind =
+        hash % 3 === 0
+          ? BROWSER_KINDS[(hash >>> 3) % BROWSER_KINDS.length]
+          : undefined;
+
+      let kind: GlyphKind;
+      let tone: Tone;
+      if (browserKind) {
+        kind = browserKind;
+        tone = TONE_MONO;
+      } else if ((hash >>> 6) % 10 === 0) {
+        // Keep failed cells sparse (~1 in 10 non-browser slots) so the matrix reads balanced.
+        kind = 'failed';
+        tone = TONE_FAIL;
+      } else {
+        kind = 'pass';
+        tone = TONE_PASS;
+      }
+
+      slots.push({
+        c,
+        r,
+        cx: (c + 0.5) * cellW,
+        cy: (r + 0.5) * cellH,
+        wavePos: (c + 0.5) / cols + (r / GRID_ROWS) * 0.08,
+        inCenterClear,
+        kind,
+        tone,
+        phase: (r * cols + c) * 0.65,
+        hoverBoost: 0,
+      });
+    }
+  }
+  return slots;
+}
+
+function resolveSlotVisual(
+  slot: Slot,
+  scanHead: number,
+  baseFloor: number,
+): { kind: GlyphKind; intensity: number; tone: Tone } {
+  const delta = scanHead - slot.wavePos;
+
+  let kind: GlyphKind = slot.kind;
+  let intensity = baseFloor;
+  let tone: Tone = TONE_ETCHED;
+
+  if (delta > -0.05 && delta < 0.08) {
+    kind = 'arc';
+    intensity = 0.84;
+    tone = TONE_RUN;
+  } else if (delta >= 0.08 && delta < 0.45) {
+    const wake = 1 - (delta - 0.08) / 0.37;
+    intensity = baseFloor + wake * 0.76;
+    tone = slot.tone;
+  }
+
+  if (slot.hoverBoost > 0.05) {
+    intensity = Math.max(intensity, Math.min(0.92, slot.hoverBoost));
+    if (slot.hoverBoost > 0.66) {
+      kind = 'arc';
+      tone = TONE_RUN;
+    } else {
+      kind = slot.kind;
+      tone = slot.tone;
+    }
+  }
+
+  return { kind, intensity, tone };
+}
 
 function drawGlyph(
-  g: CanvasRenderingContext2D,
+  ctx: CanvasRenderingContext2D,
   kind: GlyphKind,
   cx: number,
   cy: number,
   size: number,
   intensity: number,
-  t: number,
+  elapsed: number,
   phase: number,
 ) {
   if (intensity <= 0.02) return;
-  g.save();
-  g.translate(cx, cy);
+  ctx.save();
+  ctx.translate(cx, cy);
   const r = size * 0.43;
-  g.lineCap = 'round';
-  g.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
-  const grad = g.createLinearGradient(-r, -r, r, r);
+  const grad = ctx.createLinearGradient(-r, -r, r, r);
   grad.addColorStop(0, `rgba(255, 255, 255, ${(intensity * 0.7).toFixed(3)})`);
   grad.addColorStop(
     1,
     `rgba(255, 255, 255, ${Math.min(1, intensity * 1.05).toFixed(3)})`,
   );
-  g.strokeStyle = grad;
-  g.fillStyle = grad;
+  ctx.strokeStyle = grad;
+  ctx.fillStyle = grad;
 
-  if (kind === 'pass') {
-    g.lineWidth = Math.max(2.1, size * 0.15);
-    g.beginPath();
-    g.moveTo(-r * 0.54, r * 0.04);
-    g.lineTo(-r * 0.13, r * 0.48);
-    g.lineTo(r * 0.6, -r * 0.44);
-    g.stroke();
-  } else if (kind === 'failed') {
-    g.lineWidth = Math.max(2.0, size * 0.14);
-    g.beginPath();
-    g.moveTo(-r * 0.44, -r * 0.44);
-    g.lineTo(r * 0.44, r * 0.44);
-    g.moveTo(r * 0.44, -r * 0.44);
-    g.lineTo(-r * 0.44, r * 0.44);
-    g.stroke();
-  } else if (kind === 'arc') {
-    const start = t * 4.2 + phase;
-    g.lineWidth = Math.max(1.9, size * 0.13);
-    g.beginPath();
-    g.arc(0, 0, r * 0.68, start, start + Math.PI * 1.32);
-    g.stroke();
-  } else if (kind === 'chromium') {
-    g.lineWidth = Math.max(1.7, size * 0.1);
-    g.beginPath();
-    g.arc(0, 0, r * 0.78, 0, Math.PI * 2);
-    g.stroke();
+  switch (kind) {
+    case 'pass':
+      ctx.lineWidth = Math.max(2.1, size * 0.15);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.54, r * 0.04);
+      ctx.lineTo(-r * 0.13, r * 0.48);
+      ctx.lineTo(r * 0.6, -r * 0.44);
+      ctx.stroke();
+      break;
 
-    g.beginPath();
-    g.arc(0, 0, r * 0.29, 0, Math.PI * 2);
-    g.fill();
+    case 'failed':
+      ctx.lineWidth = Math.max(2.0, size * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.44, -r * 0.44);
+      ctx.lineTo(r * 0.44, r * 0.44);
+      ctx.moveTo(r * 0.44, -r * 0.44);
+      ctx.lineTo(-r * 0.44, r * 0.44);
+      ctx.stroke();
+      break;
 
-    for (let i = 0; i < 3; i++) {
-      const a = -Math.PI / 2 + (i * Math.PI * 2) / 3;
-      g.beginPath();
-      g.moveTo(Math.cos(a) * r * 0.29, Math.sin(a) * r * 0.29);
-      g.lineTo(Math.cos(a + 0.62) * r * 0.78, Math.sin(a + 0.62) * r * 0.78);
-      g.stroke();
+    case 'arc': {
+      const start = elapsed * 4.2 + phase;
+      ctx.lineWidth = Math.max(1.9, size * 0.13);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.68, start, start + Math.PI * 1.32);
+      ctx.stroke();
+      break;
     }
-  } else if (kind === 'firefox') {
-    g.lineWidth = Math.max(2.2, size * 0.15);
-    g.beginPath();
-    g.arc(0, 0, r * 0.72, -0.45, Math.PI * 1.48);
-    g.stroke();
 
-    g.fillStyle = `rgba(255, 255, 255, ${(intensity * 0.58).toFixed(3)})`;
-    g.beginPath();
-    g.arc(0, r * 0.04, r * 0.32, 0, Math.PI * 2);
-    g.fill();
-  } else {
-    g.lineWidth = Math.max(1.6, size * 0.095);
-    g.beginPath();
-    g.arc(0, 0, r * 0.78, 0, Math.PI * 2);
-    g.stroke();
+    case 'chromium':
+      ctx.lineWidth = Math.max(1.7, size * 0.1);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
 
-    g.beginPath();
-    g.moveTo(r * 0.52, -r * 0.52);
-    g.lineTo(r * 0.14, r * 0.14);
-    g.lineTo(-r * 0.52, r * 0.52);
-    g.lineTo(-r * 0.14, -r * 0.14);
-    g.closePath();
-    g.fill();
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.29, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (let i = 0; i < 3; i++) {
+        const angle = -Math.PI / 2 + (i * Math.PI * 2) / 3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * r * 0.29, Math.sin(angle) * r * 0.29);
+        ctx.lineTo(
+          Math.cos(angle + 0.62) * r * 0.78,
+          Math.sin(angle + 0.62) * r * 0.78,
+        );
+        ctx.stroke();
+      }
+      break;
+
+    case 'firefox':
+      ctx.lineWidth = Math.max(2.2, size * 0.15);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.72, -0.45, Math.PI * 1.48);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255, 255, 255, ${(intensity * 0.58).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(0, r * 0.04, r * 0.32, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'webkit':
+      ctx.lineWidth = Math.max(1.6, size * 0.095);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(r * 0.52, -r * 0.52);
+      ctx.lineTo(r * 0.14, r * 0.14);
+      ctx.lineTo(-r * 0.52, r * 0.52);
+      ctx.lineTo(-r * 0.14, -r * 0.14);
+      ctx.closePath();
+      ctx.fill();
+      break;
   }
 
-  g.restore();
+  ctx.restore();
+}
+
+function applyBayerDither(
+  src: Uint8ClampedArray,
+  dst: Uint8ClampedArray,
+  grid: GridMetrics,
+  toneMap: Uint8Array,
+  baseFloor: number,
+  palette: Palette,
+) {
+  const { width, height, cols, cellW, cellH } = grid;
+  dst.fill(0);
+
+  for (let y = 0; y < height; y++) {
+    const bayerRow = BAYER_8[y & 7]!;
+    const rIdx = Math.min(GRID_ROWS - 1, Math.floor(y / cellH));
+
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const alpha = (src[idx + 3] ?? 0) / 255;
+      if (alpha <= 0.03 || alpha <= bayerRow[x & 7]!) continue;
+
+      const cIdx = Math.min(cols - 1, Math.floor(x / cellW));
+      const rawTone = toneMap[rIdx * cols + cIdx] ?? TONE_ETCHED;
+      const tone =
+        rawTone === TONE_ETCHED || alpha < baseFloor + 0.06
+          ? TONE_ETCHED
+          : rawTone;
+      const rgba = palette[tone] ?? palette[TONE_ETCHED];
+
+      dst[idx] = rgba[0];
+      dst[idx + 1] = rgba[1];
+      dst[idx + 2] = rgba[2];
+      dst[idx + 3] = rgba[3];
+    }
+  }
 }
 
 /**
@@ -151,22 +330,25 @@ export function HeroDitherMatrix() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const off = document.createElement('canvas');
-    const offscreenCtx = off.getContext('2d', { willReadFrequently: true });
+    const offscreen = document.createElement('canvas');
+    const offscreenCtx = offscreen.getContext('2d', {
+      willReadFrequently: true,
+    });
     if (!offscreenCtx) return;
 
     const reducedMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches;
 
+    let grid: GridMetrics = {
+      width: 0,
+      height: 0,
+      cols: 16,
+      cellW: 0,
+      cellH: 0,
+    };
     let slots: Slot[] = [];
     let toneMap = new Uint8Array(0);
-    let gw = 0;
-    let gh = 0;
-    let cols = 16;
-    let rows = 8;
-    let cellW = 0;
-    let cellH = 0;
     let outImg: ImageData | null = null;
     let inView = true;
     let rafId = 0;
@@ -178,180 +360,66 @@ export function HeroDitherMatrix() {
       const rect = host.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) return;
 
-      gw = Math.max(120, Math.floor(rect.width / PIXEL_SIZE));
-      gh = Math.max(100, Math.floor(rect.height / PIXEL_SIZE));
-      canvas.width = gw;
-      canvas.height = gh;
-      off.width = gw;
-      off.height = gh;
-      outImg = ctx.createImageData(gw, gh);
+      const width = Math.max(120, Math.floor(rect.width / PIXEL_SIZE));
+      const height = Math.max(100, Math.floor(rect.height / PIXEL_SIZE));
+      canvas.width = width;
+      canvas.height = height;
+      offscreen.width = width;
+      offscreen.height = height;
+      outImg = ctx.createImageData(width, height);
 
-      // Match the parent CSS grid tracks (8/12/16 cols x 8 rows) so every icon
-      // centers cleanly inside its own 1px CSS cell.
-      cols = window.innerWidth >= 1024 ? 16 : window.innerWidth >= 640 ? 12 : 8;
-      rows = 8;
-      cellW = gw / cols;
-      cellH = gh / rows;
-      toneMap = new Uint8Array(cols * rows);
-
-      const isNarrow = window.innerWidth < 640;
-      const isTablet = window.innerWidth >= 640 && window.innerWidth < 1024;
-      slots = [];
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const inCenterClear = isNarrow
-            ? r > 0 && r < rows - 1
-            : isTablet
-              ? c >= 1 && c < cols - 1 && r > 0 && r < rows - 1
-              : c >= 3 && c < cols - 3 && r > 0 && r < rows - 1;
-
-          const nx = (c + 0.5) / cols;
-          const hash = (((r + 1) * 73856093) ^ ((c + 1) * 19349663)) >>> 0;
-          const browserKind =
-            hash % 3 === 0
-              ? (BROWSER_KINDS[(hash >>> 3) % BROWSER_KINDS.length] ?? null)
-              : null;
-          // Keep failed cells sparse (~1 in 10 non-browser slots) so the matrix reads balanced.
-          const isFailed = !browserKind && (hash >>> 6) % 10 === 0;
-
-          slots.push({
-            c,
-            r,
-            cx: (c + 0.5) * cellW,
-            cy: (r + 0.5) * cellH,
-            wavePos: nx + (r / rows) * 0.08,
-            inCenterClear,
-            browserKind,
-            isFailed,
-            phase: (r * cols + c) * 0.65,
-            hoverBoost: 0,
-          });
-        }
-      }
+      const { cols, clearMargin } = getGridLayout(window.innerWidth);
+      const cellW = width / cols;
+      const cellH = height / GRID_ROWS;
+      grid = { width, height, cols, cellW, cellH };
+      toneMap = new Uint8Array(cols * GRID_ROWS);
+      slots = createSlots(cols, cellW, cellH, clearMargin);
     };
 
     const drawFrame = (dt: number) => {
-      if (!outImg || gw === 0 || gh === 0) return;
+      if (!outImg || grid.width === 0 || grid.height === 0) return;
 
-      offscreenCtx.clearRect(0, 0, gw, gh);
+      offscreenCtx.clearRect(0, 0, grid.width, grid.height);
       toneMap.fill(TONE_ETCHED);
 
       const isDark = document.documentElement.classList.contains('dark');
       const baseFloor = isDark ? 0.15 : 0.13;
-      const iconSize = Math.min(cellW, cellH) * 0.62;
+      const iconSize = Math.min(grid.cellW, grid.cellH) * 0.62;
       const scanHead = ((elapsed * 0.17) % 1.45) - 0.18;
 
-      for (const s of slots) {
-        if (s.inCenterClear) continue;
+      for (const slot of slots) {
+        if (slot.inCenterClear) continue;
         if (dt > 0) {
-          s.hoverBoost = Math.max(0, s.hoverBoost - dt * 1.8);
+          slot.hoverBoost = Math.max(0, slot.hoverBoost - dt * 1.8);
         }
 
-        const delta = scanHead - s.wavePos;
-        const resolvedKind: GlyphKind =
-          s.browserKind ?? (s.isFailed ? 'failed' : 'pass');
-        const resolvedTone = s.browserKind
-          ? TONE_MONO
-          : s.isFailed
-            ? TONE_FAIL
-            : TONE_PASS;
-
-        let kind: GlyphKind = resolvedKind;
-        let intensity = baseFloor;
-        let tone = TONE_ETCHED;
-
-        if (delta > -0.05 && delta < 0.08) {
-          kind = 'arc';
-          intensity = 0.84;
-          tone = TONE_RUN;
-        } else if (delta >= 0.08 && delta < 0.45) {
-          const wake = 1 - (delta - 0.08) / 0.37;
-          intensity = baseFloor + wake * 0.76;
-          tone = resolvedTone;
-        }
-
-        if (s.hoverBoost > 0.05) {
-          intensity = Math.max(intensity, Math.min(0.92, s.hoverBoost));
-          if (s.hoverBoost > 0.66) {
-            kind = 'arc';
-            tone = TONE_RUN;
-          } else {
-            kind = resolvedKind;
-            tone = resolvedTone;
-          }
-        }
-
-        toneMap[s.r * cols + s.c] = tone;
+        const { kind, intensity, tone } = resolveSlotVisual(
+          slot,
+          scanHead,
+          baseFloor,
+        );
+        toneMap[slot.r * grid.cols + slot.c] = tone;
         drawGlyph(
           offscreenCtx,
           kind,
-          s.cx,
-          s.cy,
+          slot.cx,
+          slot.cy,
           iconSize,
           intensity,
           elapsed,
-          s.phase,
+          slot.phase,
         );
       }
 
-      const src = offscreenCtx.getImageData(0, 0, gw, gh).data;
-      const dst = outImg.data;
-      dst.fill(0);
-
-      // Low-saturation architectural print palette: preserves green/amber/red
-      // test semantics while staying quiet behind the Hero typography.
-      const colPass: [number, number, number] = isDark
-        ? [82, 158, 134]
-        : [78, 152, 128];
-      const colRun: [number, number, number] = isDark
-        ? [180, 152, 98]
-        : [176, 138, 76];
-      const colFail: [number, number, number] = isDark
-        ? [178, 108, 106]
-        : [182, 104, 102];
-      const colMono: [number, number, number] = isDark
-        ? [136, 144, 140]
-        : [104, 114, 110];
-
-      for (let y = 0; y < gh; y++) {
-        const bayerRow = BAYER_8[y & 7]!;
-        const rIdx = Math.min(rows - 1, Math.floor(y / cellH));
-
-        for (let x = 0; x < gw; x++) {
-          const idx = (y * gw + x) * 4;
-          const a = (src[idx + 3] ?? 0) / 255;
-          if (a <= 0.03) continue;
-
-          if (a > bayerRow[x & 7]!) {
-            const cIdx = Math.min(cols - 1, Math.floor(x / cellW));
-            const tone = toneMap[rIdx * cols + cIdx] ?? TONE_ETCHED;
-            const isResting = tone === TONE_ETCHED || a < baseFloor + 0.06;
-
-            let col = colMono;
-            let alpha = isDark ? 148 : 132;
-
-            if (isResting) {
-              col = colMono;
-              alpha = isDark ? 84 : 66;
-            } else if (tone === TONE_PASS) {
-              col = colPass;
-              alpha = isDark ? 164 : 146;
-            } else if (tone === TONE_RUN) {
-              col = colRun;
-              alpha = isDark ? 156 : 142;
-            } else if (tone === TONE_FAIL) {
-              col = colFail;
-              alpha = isDark ? 156 : 142;
-            }
-
-            dst[idx] = col[0];
-            dst[idx + 1] = col[1];
-            dst[idx + 2] = col[2];
-            dst[idx + 3] = alpha;
-          }
-        }
-      }
-
+      const src = offscreenCtx.getImageData(0, 0, grid.width, grid.height).data;
+      applyBayerDither(
+        src,
+        outImg.data,
+        grid,
+        toneMap,
+        baseFloor,
+        isDark ? DARK_PALETTE : LIGHT_PALETTE,
+      );
       ctx.putImageData(outImg, 0, 0);
     };
 
@@ -369,15 +437,15 @@ export function HeroDitherMatrix() {
       drawFrame(dt);
     };
 
-    const onPointerMove = (e: PointerEvent) => {
-      if (reducedMotion || cellW === 0 || cellH === 0) return;
+    const onPointerMove = (event: PointerEvent) => {
+      if (reducedMotion || grid.cellW === 0 || grid.cellH === 0) return;
       const rect = host.getBoundingClientRect();
-      const lx = (e.clientX - rect.left) / PIXEL_SIZE;
-      const ly = (e.clientY - rect.top) / PIXEL_SIZE;
-      if (lx < 0 || ly < 0 || lx >= gw || ly >= gh) return;
-      const c = Math.floor(lx / cellW);
-      const r = Math.floor(ly / cellH);
-      const slot = slots[r * cols + c];
+      const lx = (event.clientX - rect.left) / PIXEL_SIZE;
+      const ly = (event.clientY - rect.top) / PIXEL_SIZE;
+      if (lx < 0 || ly < 0 || lx >= grid.width || ly >= grid.height) return;
+      const c = Math.floor(lx / grid.cellW);
+      const r = Math.floor(ly / grid.cellH);
+      const slot = slots[r * grid.cols + c];
       if (!slot || slot.inCenterClear) return;
       slot.hoverBoost = 0.94;
     };

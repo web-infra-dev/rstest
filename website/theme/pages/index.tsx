@@ -409,8 +409,68 @@ const HERO_TITLE = {
 const AGENT_PROMPT =
   'Set up Rstest in this project: https://rstest.rs/guide/start/agent-install.md';
 
-const HERO_GRID_COLS = Array.from({ length: 16 }, (_, i) => i);
+const HERO_GRID_ROW_TRACKS =
+  'grid-rows-[repeat(8,66px)] sm:grid-rows-[repeat(8,74px)]';
 const HERO_GRID_ROWS = Array.from({ length: 8 }, (_, i) => i);
+const HERO_GRID_COL_CLASSES = Array.from({ length: 16 }, (_, i) => {
+  if (i >= 12) return 'hidden lg:block';
+  if (i >= 8) return 'hidden sm:block';
+  return '';
+});
+
+function HeroGridColCells() {
+  return (
+    <>
+      {HERO_GRID_COL_CLASSES.map((className, i) => (
+        <div key={i} className={className} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * True 1px CSS grid overlays behind the Hero: the prompt row merges its spanned
+ * cells horizontally so no vertical lines cut through InstallCommand.
+ */
+function HeroGridOverlay() {
+  return (
+    <>
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 grid ${HERO_GRID_ROW_TRACKS}`}
+      >
+        <div className="row-start-1 row-span-5 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:row-span-6 sm:grid-cols-12 lg:grid-cols-16">
+          <HeroGridColCells />
+        </div>
+        <div className="row-start-6 row-span-2 hidden divide-x divide-[var(--home-grid-line)] sm:row-start-7 sm:row-span-1 sm:grid sm:grid-cols-12 lg:hidden">
+          <div />
+          <div className="col-span-10" />
+          <div />
+        </div>
+        <div className="row-start-7 row-span-1 hidden grid-cols-16 divide-x divide-[var(--home-grid-line)] lg:grid">
+          <div />
+          <div />
+          <div />
+          <div className="col-span-10" />
+          <div />
+          <div />
+          <div />
+        </div>
+        <div className="row-start-8 row-span-1 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:grid-cols-12 lg:grid-cols-16">
+          <HeroGridColCells />
+        </div>
+      </div>
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 grid divide-y divide-[var(--home-grid-line)] ${HERO_GRID_ROW_TRACKS}`}
+      >
+        {HERO_GRID_ROWS.map((i) => (
+          <div key={i} />
+        ))}
+      </div>
+    </>
+  );
+}
 
 const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
 
@@ -569,64 +629,11 @@ export function HomeLayout() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <section className="border-x border-[var(--home-border)]">
           <div className="relative overflow-hidden bg-[var(--home-bg)]">
-            {/* True 1px CSS grid overlays: the prompt row merges its spanned cells horizontally so no vertical lines cut through InstallCommand. */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 grid grid-rows-[repeat(8,66px)] sm:grid-rows-[repeat(8,74px)]"
-            >
-              <div className="row-start-1 row-span-5 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:row-span-6 sm:grid-cols-12 lg:grid-cols-16">
-                {HERO_GRID_COLS.map((i) => (
-                  <div
-                    key={i}
-                    className={
-                      i >= 12
-                        ? 'hidden lg:block'
-                        : i >= 8
-                          ? 'hidden sm:block'
-                          : ''
-                    }
-                  />
-                ))}
-              </div>
-              <div className="row-start-6 row-span-2 hidden divide-x divide-[var(--home-grid-line)] sm:row-start-7 sm:row-span-1 sm:grid sm:grid-cols-12 lg:hidden">
-                <div />
-                <div className="col-span-10" />
-                <div />
-              </div>
-              <div className="row-start-7 row-span-1 hidden grid-cols-16 divide-x divide-[var(--home-grid-line)] lg:grid">
-                <div />
-                <div />
-                <div />
-                <div className="col-span-10" />
-                <div />
-                <div />
-                <div />
-              </div>
-              <div className="row-start-8 row-span-1 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:grid-cols-12 lg:grid-cols-16">
-                {HERO_GRID_COLS.map((i) => (
-                  <div
-                    key={i}
-                    className={
-                      i >= 12
-                        ? 'hidden lg:block'
-                        : i >= 8
-                          ? 'hidden sm:block'
-                          : ''
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 grid grid-rows-[repeat(8,66px)] divide-y divide-[var(--home-grid-line)] sm:grid-rows-[repeat(8,74px)]"
-            >
-              {HERO_GRID_ROWS.map((i) => (
-                <div key={i} />
-              ))}
-            </div>
+            <HeroGridOverlay />
             <HeroDitherMatrix />
-            <div className="relative z-10 grid grid-cols-8 grid-rows-[repeat(8,66px)] text-center sm:grid-cols-12 sm:grid-rows-[repeat(8,74px)] lg:grid-cols-16">
+            <div
+              className={`relative z-10 grid grid-cols-8 text-center sm:grid-cols-12 lg:grid-cols-16 ${HERO_GRID_ROW_TRACKS}`}
+            >
               <div className="col-span-8 row-start-2 row-span-4 flex flex-col items-center justify-center px-6 sm:col-span-12 sm:row-start-2 sm:row-span-5 sm:px-10 lg:col-span-16">
                 <h1 className="text-[42px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
                   <span className="block text-fg">
@@ -871,23 +878,22 @@ export function HomeLayout() {
                     {column.title}
                   </h3>
                   <ul className="mt-3.5 space-y-2.5">
-                    {column.links.map((link) => (
-                      <li key={link.label}>
-                        <a
-                          href={
-                            link.href.startsWith('http')
-                              ? link.href
-                              : tUrl(link.href)
-                          }
-                          {...(link.href.startsWith('http')
-                            ? { target: '_blank', rel: 'noreferrer' }
-                            : {})}
-                          className="text-[13px] text-fg-muted transition-colors hover:text-fg"
-                        >
-                          {link.label}
-                        </a>
-                      </li>
-                    ))}
+                    {column.links.map((link) => {
+                      const isExternal = link.href.startsWith('http');
+                      return (
+                        <li key={link.label}>
+                          <a
+                            href={isExternal ? link.href : tUrl(link.href)}
+                            {...(isExternal
+                              ? { target: '_blank', rel: 'noreferrer' }
+                              : {})}
+                            className="text-[13px] text-fg-muted transition-colors hover:text-fg"
+                          >
+                            {link.label}
+                          </a>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}

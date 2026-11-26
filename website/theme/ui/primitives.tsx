@@ -16,13 +16,11 @@ export function Button({
   href,
   variant = 'primary',
   LinkComp,
-  className = '',
   children,
 }: {
   href: string;
   variant?: 'primary' | 'secondary';
   LinkComp?: LinkComp;
-  className?: string;
   children: ReactNode;
 }) {
   // Full-pill flat buttons contrast crisply against the sharp 0px hairline grid.
@@ -31,7 +29,6 @@ export function Button({
     variant === 'primary'
       ? 'bg-brand text-on-brand hover:bg-[var(--rp-c-brand-dark)]'
       : 'border border-[var(--home-border-strong)] bg-[var(--home-bg)] text-fg hover:border-fg/35 hover:bg-[var(--home-surface-hover)]',
-    className,
   ].join(' ');
 
   const Comp = LinkComp ?? 'a';
@@ -48,7 +45,7 @@ export function Button({
 }
 
 /** Crisp 9px registration mark placed on structural rail intersections. */
-export function Crosshair({ className = '' }: { className?: string }) {
+function Crosshair({ className }: { className: string }) {
   return (
     <svg
       viewBox="0 0 9 9"
@@ -83,17 +80,15 @@ export function FeatureLink({
   href,
   label,
   LinkComp,
-  className = '',
 }: {
   href: string;
   label: string;
   LinkComp: LinkComp;
-  className?: string;
 }) {
   return (
     <LinkComp
       href={href}
-      className={`group/link inline-flex w-fit items-center gap-1.5 font-mono text-[13px] font-medium text-brand transition-colors hover:text-[var(--rp-c-brand-dark)] ${className}`}
+      className="group/link inline-flex w-fit items-center gap-1.5 font-mono text-[13px] font-medium text-brand transition-colors hover:text-[var(--rp-c-brand-dark)]"
     >
       <span>{label}</span>
       <span
@@ -106,7 +101,8 @@ export function FeatureLink({
   );
 }
 
-const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun'];
+const INSTALL_TABS = ['prompt', 'npm', 'pnpm', 'yarn', 'bun'] as const;
+type InstallTab = (typeof INSTALL_TABS)[number];
 
 /**
  * A copyable way to install: a coding-agent prompt first, then one command per package manager.
@@ -115,19 +111,16 @@ const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun'];
 export function InstallCommand({
   prompt,
   args,
-  className = '',
 }: {
   prompt: string;
   args: string;
-  className?: string;
 }) {
-  const tabs = ['prompt', ...PACKAGE_MANAGERS];
-  const lineOf = (tab: string) =>
+  const lineOf = (tab: InstallTab) =>
     tab === 'prompt' ? prompt : `${tab} ${args}`;
-  const [tab, setTab] = useState('prompt');
+  const [tab, setTab] = useState<InstallTab>('prompt');
   const [copied, setCopied] = useState(false);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
-  const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const tabRefs = useRef(new Map<InstallTab, HTMLButtonElement>());
   const line = lineOf(tab);
 
   useLayoutEffect(() => {
@@ -135,11 +128,12 @@ export function InstallCommand({
     if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
   }, [tab]);
 
-  const select = (next: string) => {
+  const select = (next: InstallTab) => {
     if (next === tab) return;
     setTab(next);
     setCopied(false);
   };
+
   const copy = () => {
     navigator.clipboard.writeText(line).then(() => {
       setCopied(true);
@@ -148,88 +142,82 @@ export function InstallCommand({
   };
 
   return (
-    <div className={`h-full w-full text-left ${className}`}>
-      <div className="flex h-full w-full flex-col">
-        <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-[var(--home-grid-line)] px-2 font-mono text-[12px]">
-          <div className="relative flex items-center">
-            {tabs.map((name) => (
-              <button
-                key={name}
-                ref={(el) => {
-                  if (el) tabRefs.current.set(name, el);
-                }}
-                type="button"
-                aria-pressed={name === tab}
-                onClick={() => select(name)}
-                className={`cursor-pointer bg-transparent! px-2 py-2 transition-colors sm:px-2.5 ${
-                  name === tab
-                    ? 'font-medium text-fg'
-                    : 'text-fg-muted/75 hover:text-fg'
-                }`}
-              >
-                {name}
-              </button>
-            ))}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute bottom-[-1px] h-[2px] bg-brand transition-[transform,width] duration-200 ease-out"
-              style={{
-                width: indicator.width,
-                transform: `translateX(${indicator.left}px)`,
+    <div className="flex h-full w-full flex-col text-left">
+      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-[var(--home-grid-line)] px-2 font-mono text-[12px]">
+        <div className="relative flex items-center">
+          {INSTALL_TABS.map((name) => (
+            <button
+              key={name}
+              ref={(el) => {
+                if (el) tabRefs.current.set(name, el);
               }}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={copy}
-            aria-label={
-              copied
-                ? 'Copied'
-                : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
-            }
-            className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-2.5 py-1 transition-colors hover:bg-[var(--home-surface-hover)]! ${
-              copied ? 'text-brand' : 'text-fg-muted hover:text-fg'
-            }`}
-          >
-            <svg
-              viewBox="0 0 16 16"
-              className="size-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+              type="button"
+              aria-pressed={name === tab}
+              onClick={() => select(name)}
+              className={`cursor-pointer bg-transparent! px-2 py-2 transition-colors sm:px-2.5 ${
+                name === tab
+                  ? 'font-medium text-fg'
+                  : 'text-fg-muted/75 hover:text-fg'
+              }`}
             >
-              {copied ? (
-                <path d="M3 8.5l3.2 3L13 4.5" />
-              ) : (
-                <>
-                  <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
-                  <path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
-                </>
-              )}
-            </svg>
-            {copied ? 'copied' : 'copy'}
-          </button>
+              {name}
+            </button>
+          ))}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute bottom-[-1px] h-[2px] bg-brand transition-[transform,width] duration-200 ease-out"
+            style={{
+              width: indicator.width,
+              transform: `translateX(${indicator.left}px)`,
+            }}
+          />
         </div>
-        <div className="flex flex-1 items-center gap-3 px-4 py-2 font-mono text-[12.5px]/[1.5]">
-          <span className="font-medium text-brand select-none">
-            {tab === 'prompt' ? '>' : '$'}
-          </span>
-          {/* Every tab's full line sits in one grid cell, so the box keeps the tallest one's height. */}
-          <div className="grid min-w-0 flex-1 break-words">
-            {tabs.map((name) => (
-              <span
-                key={name}
-                aria-hidden
-                className="invisible [grid-area:1/1]"
-              >
-                {lineOf(name)}
-              </span>
-            ))}
-            <code className="text-fg [grid-area:1/1]">{line}</code>
-          </div>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={
+            copied
+              ? 'Copied'
+              : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
+          }
+          className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-2.5 py-1 transition-colors hover:bg-[var(--home-surface-hover)]! ${
+            copied ? 'text-brand' : 'text-fg-muted hover:text-fg'
+          }`}
+        >
+          <svg
+            viewBox="0 0 16 16"
+            className="size-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            {copied ? (
+              <path d="M3 8.5l3.2 3L13 4.5" />
+            ) : (
+              <>
+                <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+                <path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
+              </>
+            )}
+          </svg>
+          {copied ? 'copied' : 'copy'}
+        </button>
+      </div>
+      <div className="flex flex-1 items-center gap-3 px-4 py-2 font-mono text-[12.5px]/[1.5]">
+        <span className="font-medium text-brand select-none">
+          {tab === 'prompt' ? '>' : '$'}
+        </span>
+        {/* Every tab's full line sits in one grid cell, so the box keeps the tallest one's height. */}
+        <div className="grid min-w-0 flex-1 break-words">
+          {INSTALL_TABS.map((name) => (
+            <span key={name} aria-hidden className="invisible [grid-area:1/1]">
+              {lineOf(name)}
+            </span>
+          ))}
+          <code className="text-fg [grid-area:1/1]">{line}</code>
         </div>
       </div>
     </div>

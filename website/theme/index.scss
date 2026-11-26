@@ -19,16 +19,13 @@
 
 // Homepage-only flat architectural tokens. Scoped to `.rstest-home` so docs
 // pages keep Rspress defaults untouched.
+.rstest-home {
+  --home-bg: var(--rp-c-bg);
+}
+
 html:not(.dark) .rstest-home {
-  --color-line: #e3e6e4;
-  --color-fg-muted: color-mix(
-    in oklab,
-    var(--rp-c-text-2) 72%,
-    var(--rp-c-text-1)
-  );
   --rp-c-divider-light: #e3e6e4;
 
-  --home-bg: var(--rp-c-bg);
   --home-border: #e3e6e4;
   --home-border-strong: #c8ceca;
   --home-crosshair: #aeb6b1;
@@ -47,8 +44,6 @@ html:not(.dark) .rstest-home .text-fg-muted {
 }
 
 .dark .rstest-home {
-  --color-line: #232625;
-  --home-bg: var(--rp-c-bg);
   --home-border: #232625;
   --home-border-strong: #393f3d;
   --home-crosshair: #535b58;
