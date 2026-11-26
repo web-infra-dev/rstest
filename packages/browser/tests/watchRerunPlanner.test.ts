@@ -194,4 +194,135 @@ describe('watch rerun planner', () => {
       deletedTestPaths: [removedTestPath],
     });
   });
+
+  it('scopes rebuilds and rerun-all requests by active filterTestPaths', () => {
+    const projectEntries = [
+      {
+        project: { name: 'project-a' },
+        testFiles: ['/basic.test.ts', '/snap.test.ts'],
+      },
+    ];
+    const previousTestFiles = collectWatchTestFiles(projectEntries);
+    const onlyBasic = (paths: string[]) =>
+      paths.filter((filePath) => filePath.includes('basic'));
+
+    // Non-matching edit stays idle.
+    expect(
+      planWatchRerun({
+        projectEntries,
+        previousTestFiles,
+        affectedTestFiles: ['/snap.test.ts'],
+        filterTestPaths: onlyBasic,
+      }).decision.kind,
+    ).toBe('idle');
+
+    // Shared dependency edit reruns only the matching file.
+    expect(
+      planWatchRerun({
+        projectEntries,
+        previousTestFiles,
+        affectedTestFiles: ['/basic.test.ts', '/snap.test.ts'],
+        filterTestPaths: onlyBasic,
+      }).decision,
+    ).toEqual({
+      kind: 'rerun',
+      testPaths: ['/basic.test.ts'],
+      message: 'Re-running 1 affected test file(s)...\n',
+    });
+
+    // `requestedTestPaths: 'all'` (e.g. `t`) respects the active file filter.
+    expect(
+      planWatchRerun({
+        projectEntries,
+        previousTestFiles,
+        affectedTestFiles: [],
+        requestedTestPaths: 'all',
+        filterTestPaths: onlyBasic,
+      }).decision,
+    ).toEqual({
+      kind: 'rerun',
+      testPaths: ['/basic.test.ts'],
+      message: 'Re-running 1 affected test file(s)...\n',
+    });
+
+    // Explicit paths (e.g. `f`/`u`) run even when outside the active file filter.
+    expect(
+      planWatchRerun({
+        projectEntries,
+        previousTestFiles,
+        affectedTestFiles: [],
+        requestedTestPaths: ['/snap.test.ts'],
+        filterTestPaths: onlyBasic,
+      }).decision,
+    ).toEqual({
+      kind: 'rerun',
+      testPaths: ['/snap.test.ts'],
+      message: 'Re-running 1 affected test file(s)...\n',
+    });
+  });
+
+  it('commits unfiltered disk additions while filtering rerun decisions', () => {
+    const previousTestFiles = [
+      { testPath: '/basic.test.ts', projectName: 'project-a' },
+    ];
+    const onlyBasic = (paths: string[]) =>
+      paths.filter((filePath) => filePath.includes('basic'));
+
+    // Adding an unrelated file updates lastTestFiles without rerunning basic.
+    const unrelatedAdd = planWatchRerun({
+      projectEntries: [
+        {
+          project: { name: 'project-a' },
+          testFiles: ['/basic.test.ts', '/other.test.ts'],
+        },
+      ],
+      previousTestFiles,
+      affectedTestFiles: [],
+      filterTestPaths: onlyBasic,
+    });
+    expect(unrelatedAdd.fileSetUpdate?.currentTestFiles).toHaveLength(2);
+    expect(unrelatedAdd.decision.kind).toBe('idle');
+
+    // Adding a matching file reruns the matching subset.
+    const matchingAdd = planWatchRerun({
+      projectEntries: [
+        {
+          project: { name: 'project-a' },
+          testFiles: [
+            '/basic.test.ts',
+            '/basic-extra.test.ts',
+            '/other.test.ts',
+          ],
+        },
+      ],
+      previousTestFiles: unrelatedAdd.fileSetUpdate!.currentTestFiles,
+      affectedTestFiles: [],
+      filterTestPaths: onlyBasic,
+    });
+    expect(matchingAdd.decision).toEqual({
+      kind: 'rerun',
+      testPaths: ['/basic.test.ts', '/basic-extra.test.ts'],
+      message: 'Test file set changed, re-running 2 file(s)...\n',
+    });
+
+    // Deleting the last matching file emits an empty decision so core prunes it.
+    const matchingDelete = planWatchRerun({
+      projectEntries: [
+        {
+          project: { name: 'project-a' },
+          testFiles: ['/other.test.ts'],
+        },
+      ],
+      previousTestFiles: [
+        { testPath: '/basic.test.ts', projectName: 'project-a' },
+        { testPath: '/other.test.ts', projectName: 'project-a' },
+      ],
+      affectedTestFiles: [],
+      filterTestPaths: onlyBasic,
+    });
+    expect(matchingDelete.fileSetUpdate?.deletedTestPaths).toEqual([
+      '/basic.test.ts',
+    ]);
+    expect(matchingDelete.decision.kind).toBe('empty');
+  });
 });

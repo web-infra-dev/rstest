@@ -718,6 +718,7 @@ export const createHeadedScheduler = async ({
   ): Promise<void> => {
     const refreshedHostOptions: BrowserHostConfig = {
       ...headedHostOptions,
+      projects: [toWireRow(headedRow)],
       snapshot: {
         updateSnapshot,
       },

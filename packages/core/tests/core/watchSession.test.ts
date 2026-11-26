@@ -780,6 +780,7 @@ describe('createWatchShortcutHandlers arming', () => {
       rerun: async () => {
         cycles.push('browser');
       },
+      globTestEntries: async () => ['/b.test.ts'],
     },
   });
 
@@ -844,38 +845,77 @@ describe('createWatchShortcutHandlers arming', () => {
     expect(context.snapshotManager.options.updateSnapshot).toBe(original);
   });
 
-  it('keeps interactive file filters on the node target', async () => {
-    const context = createContext();
-    context.fileFilters = ['startup-filter'];
+  it('scopes mixed `p`, `t`, and `a` shortcuts to matching targets and syncs per-project testNamePattern', async () => {
+    const context = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'watch',
+        projects: [
+          { config: { root: rootPath, name: 'node' } },
+          {
+            config: {
+              root: rootPath,
+              name: 'browser',
+              browser: { enabled: true, provider: 'playwright' },
+            },
+          },
+        ],
+      },
+      {},
+    );
+    context.embedded = true;
+    context.reporters = [];
+
     const cycles: string[] = [];
     let nodeFileFilters: string[] | undefined;
     const handlers = createWatchShortcutHandlers(
       context,
       {
         node: {
-          runCycle: async () => {
-            cycles.push('node');
+          runCycle: async (opts) => {
+            cycles.push(`node:${opts?.fileFilters?.join(',') ?? 'all'}`);
           },
           globTestEntries: async (filters) =>
-            filters?.length ? ['/node.test.ts'] : [],
+            !filters?.length || filters.some((f) => f.includes('node'))
+              ? ['/node.test.ts']
+              : [],
           setFileFilters: (filters) => {
             nodeFileFilters = filters;
           },
         },
         browser: {
-          rerun: async () => {
-            cycles.push('browser');
+          rerun: async (paths) => {
+            cycles.push(`browser:${paths?.join(',') ?? 'all'}`);
           },
+          globTestEntries: async (filters) =>
+            !filters?.length || filters.some((f) => f.includes('browser'))
+              ? ['/browser.test.ts']
+              : [],
         },
       },
       async () => {},
     );
 
-    await handlers.runWithFileFilters!(['node']);
+    await handlers.runWithFileFilters(['browser']);
+    expect(context.fileFilters).toEqual(['browser']);
+    expect(nodeFileFilters).toEqual([]);
+    expect(cycles).toEqual(['browser:/browser.test.ts']);
 
-    expect(nodeFileFilters).toEqual(['/node.test.ts']);
-    expect(context.fileFilters).toEqual(['startup-filter']);
-    expect(cycles).toEqual(['node']);
+    cycles.length = 0;
+    await handlers.runWithTestNamePattern('alpha');
+    expect(
+      context.projects.map((p) => p.normalizedConfig.testNamePattern),
+    ).toEqual(['alpha', 'alpha']);
+    expect(cycles).toEqual(['browser:/browser.test.ts']);
+
+    cycles.length = 0;
+    await handlers.runAll();
+    expect(context.fileFilters).toBeUndefined();
+    expect(
+      context.projects.map((p) => p.normalizedConfig.testNamePattern),
+    ).toEqual([undefined, undefined]);
+    expect(nodeFileFilters).toBeUndefined();
+    expect(cycles).toEqual(['node:all', 'browser:all']);
   });
 
   it('leaves the quit handler reachable before the first cycle', async () => {

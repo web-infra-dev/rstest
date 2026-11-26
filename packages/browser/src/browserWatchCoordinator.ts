@@ -13,7 +13,7 @@ import {
 } from './browserRsbuild';
 import { toError } from './hostPayloads';
 import { getTestPathKey } from './pathUtils';
-import type { BrowserProjectRuntime } from './protocol';
+import type { BrowserProjectRuntime, TestFileInfo } from './protocol';
 import {
   type BrowserWatchSession,
   expandToRows,
@@ -22,7 +22,11 @@ import {
   type HeadlessLaneResult,
 } from './schedulerSeam';
 import { createSerialTaskQueue } from './serialTaskQueue';
-import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
+import {
+  collectWatchTestFiles,
+  commitWatchFileSetUpdate,
+  planWatchRerun,
+} from './watchRerunPlanner';
 import type { RequestedTestPaths, WatchSignals } from './watchSignals';
 
 type BuildRerunOutcome = (options: {
@@ -42,8 +46,13 @@ type BrowserWatchCoordinatorDeps = {
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
   >;
+  filterWatchTestPaths?: (testPaths: string[]) => string[];
+  syncRuntimeConfig?: () => void;
   logWatchReady: () => void;
-  hasMatchingTestPath: (testPaths: string[]) => boolean;
+  hasMatchingTestPath: (
+    testPaths: string[],
+    files?: readonly TestFileInfo[],
+  ) => boolean;
   getFatalCompileError: () => Error | undefined;
   fatalErrorRef: { current: Error | null };
   buildRerunOutcome: BuildRerunOutcome;
@@ -67,6 +76,8 @@ export const createBrowserWatchCoordinator = ({
   headlessRows,
   headedLanes,
   collectProjectEntries,
+  filterWatchTestPaths,
+  syncRuntimeConfig,
   logWatchReady,
   hasMatchingTestPath,
   getFatalCompileError,
@@ -230,6 +241,7 @@ export const createBrowserWatchCoordinator = ({
         previousTestFiles: watchState.lastTestFiles,
         affectedTestFiles: drainPendingAffectedTestFiles(watchState),
         requestedTestPaths,
+        filterTestPaths: filterWatchTestPaths,
       });
 
       commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
@@ -239,11 +251,25 @@ export const createBrowserWatchCoordinator = ({
       const failureScreenshotCleanup =
         watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
 
-      if (rerunPlan.fileSetUpdate && headedLanes.length > 0) {
+      if (headedLanes.length > 0) {
+        let visibleFiles = watchState.lastTestFiles;
+        if (filterWatchTestPaths) {
+          const visiblePaths = new Set(
+            [
+              ...filterWatchTestPaths(
+                watchState.lastTestFiles.map((file) => file.testPath),
+              ),
+              ...(rerunPlan.decision.kind === 'rerun'
+                ? rerunPlan.decision.testPaths
+                : []),
+            ].map(getTestPathKey),
+          );
+          visibleFiles = watchState.lastTestFiles.filter((file) =>
+            visiblePaths.has(getTestPathKey(file.testPath)),
+          );
+        }
         await Promise.all(
-          headedLanes.map((lane) =>
-            lane.syncFileSet(rerunPlan.fileSetUpdate!.currentTestFiles),
-          ),
+          headedLanes.map((lane) => lane.syncFileSet(visibleFiles)),
         );
       }
 
@@ -362,6 +388,7 @@ export const createBrowserWatchCoordinator = ({
 
       const rerunStartTime = Date.now();
       fatalErrorRef.current = null;
+      syncRuntimeConfig?.();
       await watchState.awaitFailureScreenshotCleanups?.();
 
       const laneTasks: Promise<unknown[]>[] = [];
@@ -403,7 +430,10 @@ export const createBrowserWatchCoordinator = ({
     },
     requestRerun: async (testPaths, updateSnapshot) => {
       if (testPaths && !hasMatchingTestPath(testPaths)) {
-        return;
+        const freshFiles = collectWatchTestFiles(await collectProjectEntries());
+        if (!hasMatchingTestPath(testPaths, freshFiles)) {
+          return;
+        }
       }
       await watchSignals.runDispatchRerun(updateSnapshot, testPaths ?? 'all');
       await watchSignals.awaitSignalledCycle();

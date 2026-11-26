@@ -428,8 +428,8 @@ export function createWatchCycleDriver({
 
 /**
  * The executors a watch session drives, in teardown order. `node`/`browser` are
- * present only when that side has tests to run, which is what decides whether a
- * shortcut fans out to it — and, for `t`/`p`, whether the key is offered at all.
+ * present only when that side has tests to run, which is what decides which
+ * executors a shortcut fans out to.
  */
 export interface WatchSessionTargets {
   node?: {
@@ -445,15 +445,14 @@ export interface WatchSessionTargets {
       testPaths?: string[],
       updateSnapshot?: SnapshotUpdateState,
     ) => Promise<void>;
+    /** Select browser entries for the `p`/`t` filter shortcuts. */
+    globTestEntries: (filters?: string[]) => Promise<string[]>;
   };
 }
 
 /**
  * Build the watch-mode shortcut handlers — one implementation for every watch
- * shape: node-only, browser-only, and mixed. `t`/`p` scope the node side only
- * (the browser rerun pipeline takes no filter input), so a run without node
- * tests omits their callbacks and `setupCliShortcuts` renders greyed hints for
- * those keys instead.
+ * shape: node-only, browser-only, and mixed.
  *
  * Returns the handler bag rather than installing it, so the caller keeps
  * `setupCliShortcuts` — the single stdin owner — as its own injection point.
@@ -468,11 +467,8 @@ export function createWatchShortcutHandlers(
    * owner), so until it lands a rerun key would reach a node side whose dev
    * server is still coming up — starting a second full startup run — or a
    * browser side whose watch session does not exist yet, which drops the
-   * keystroke in silence. One gate covers every key, the node-only `t`/`p`
-   * included: `p` queues no browser cycle, and its selected paths stay on the
-   * node target. `t`'s pattern crosses the seam only inside the runtime config
-   * the host projects at launch, so a `t` pressed later never reaches the
-   * browser side at all.
+   * keystroke in silence. One gate covers every key, the prompt-opening `t`/`p`
+   * included.
    */
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {
@@ -501,6 +497,46 @@ export function createWatchShortcutHandlers(
     };
   };
 
+  // Multi-project configs give each project its own `normalizedConfig` object,
+  // and both the node pool and browser host project runtime config per project.
+  const setTestNamePattern = (pattern: string | undefined): void => {
+    context.normalizedConfig.testNamePattern = pattern;
+    for (const project of context.projects) {
+      project.normalizedConfig.testNamePattern = pattern;
+    }
+  };
+
+  const runFilteredTargets = async (
+    filters: string[] | undefined,
+    { persist }: { persist: boolean },
+  ): Promise<void> => {
+    const [nodeEntries, browserEntries] = await Promise.all([
+      node ? node.globTestEntries(filters) : Promise.resolve([]),
+      browser ? browser.globTestEntries(filters) : Promise.resolve([]),
+    ]);
+    if (persist) {
+      node?.setFileFilters(filters ? nodeEntries : undefined);
+    }
+
+    if (!nodeEntries.length && !browserEntries.length) {
+      logger.log(
+        filters
+          ? color.yellow(
+              `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
+            )
+          : color.yellow('\nNo matching test files to run.\n'),
+      );
+      return;
+    }
+
+    if (node && nodeEntries.length > 0) {
+      await node.runCycle({ fileFilters: nodeEntries });
+    }
+    if (browser && browserEntries.length > 0) {
+      await browser.rerun(filters ? browserEntries : undefined);
+    }
+  };
+
   // Node cycle first, browser cycle second: each finalizes on its own, and that
   // output order is the shape a mixed watch shortcut has always produced.
   const fanOut = async (
@@ -516,56 +552,47 @@ export function createWatchShortcutHandlers(
     canRerun,
     runAll: whenArmed(async () => {
       clearScreen();
-      context.normalizedConfig.testNamePattern = undefined;
+      setTestNamePattern(undefined);
       context.fileFilters = undefined;
+      node?.setFileFilters(undefined);
       if (node) {
-        node.setFileFilters(undefined);
         await node.runCycle({ mode: 'all', trigger: 'run-all' });
       }
       await browser?.rerun();
     }),
-    runWithTestNamePattern:
-      node &&
-      whenArmed(async (pattern: string | undefined) => {
-        clearScreen();
-        context.normalizedConfig.testNamePattern = pattern;
+    runWithTestNamePattern: whenArmed(async (pattern: string | undefined) => {
+      clearScreen();
+      setTestNamePattern(pattern);
 
-        if (pattern) {
-          logger.log(
-            `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
-          );
-        } else {
-          logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
-        }
-        await node.runCycle();
-      }),
-    runWithFileFilters:
-      node &&
-      whenArmed(async (filters: string[] | undefined) => {
-        clearScreen();
-        if (filters && filters.length > 0) {
-          logger.log(
-            `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
-          );
-        } else {
-          logger.log(`\n${color.dim('Cleared file filters')}\n`);
-        }
+      if (pattern) {
+        logger.log(
+          `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
+        );
+      } else {
+        logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
+      }
 
-        const entries = await node.globTestEntries(filters);
-        node.setFileFilters(filters ? entries : undefined);
+      if (context.fileFilters !== undefined) {
+        await runFilteredTargets(context.fileFilters, { persist: false });
+        return;
+      }
 
-        if (!entries.length) {
-          logger.log(
-            filters
-              ? color.yellow(
-                  `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
-                )
-              : color.yellow('\nNo matching test files to run.\n'),
-          );
-          return;
-        }
-        await node.runCycle({ fileFilters: entries });
-      }),
+      await node?.runCycle();
+      await browser?.rerun();
+    }),
+    runWithFileFilters: whenArmed(async (filters: string[] | undefined) => {
+      clearScreen();
+      if (filters && filters.length > 0) {
+        logger.log(
+          `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
+        );
+      } else {
+        logger.log(`\n${color.dim('Cleared file filters')}\n`);
+      }
+
+      context.fileFilters = filters;
+      await runFilteredTargets(filters, { persist: true });
+    }),
     runFailedTests: whenArmed(async () => {
       const failedTests = collectFailedTestPaths(context);
 

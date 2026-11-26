@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { prepareFixtures } from '../scripts';
+import { prepareFixtures, sleep } from '../scripts';
 import { BROWSER_PORTS } from './fixtures/ports';
 import {
   deleteFixtureTarget,
@@ -701,6 +701,80 @@ export default defineConfig({
         await cli.waitForStdout('✓ [app-a] tests/index.test.ts');
         await cli.waitForStdout('✓ [app-b] tests/index.test.ts');
         await cli.waitForStdout('Test Files 2 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    90_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'supports t/p/a watch shortcuts in headed watch mode',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-shortcuts`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch-shortcuts`,
+        fixturesTargetPath,
+      });
+      fs.update(
+        path.join(fixturesTargetPath, 'tests/snap.test.ts'),
+        () => `import { expect, it } from '@rstest/core';
+
+it('headed gamma', () => {
+  expect(typeof document).toBe('object');
+});
+`,
+      );
+
+      const result = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+          '--reporter=verbose',
+        ],
+      });
+      const { cli } = result;
+      try {
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Tests 3 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        await sleep(1000);
+
+        // `t` filters tests by name in headed iframes.
+        cli.resetStd();
+        cli.exec.process!.stdin!.write('t');
+        await cli.waitForStdout('Enter test name pattern');
+        cli.exec.process!.stdin!.write('alpha\r');
+        await cli.waitForStdout('Applied testNamePattern: alpha');
+        await cli.waitForStdout('Tests 1 passed | 2 skipped');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*passes alpha/);
+
+        // `p` narrows to `basic` and keeps active `t alpha`.
+        cli.resetStd();
+        cli.exec.process!.stdin!.write('p');
+        await cli.waitForStdout('Enter file name pattern');
+        cli.exec.process!.stdin!.write('basic\r');
+        await cli.waitForStdout('Applied file filters: basic');
+        await cli.waitForStdout('Tests 1 passed | 2 skipped');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*passes alpha/);
+        expect(cli.stdout).not.toContain('snap.test.ts');
+
+        // `a` clears both `p` and `t` and restores all files & tests in headed UI.
+        cli.resetStd();
+        cli.exec.process!.stdin!.write('a');
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Tests 3 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*passes alpha/);
+        expect(cli.stdout).toMatch(/✓.*passes beta/);
+        expect(cli.stdout).toMatch(/✓.*headed gamma/);
+
+        cli.exec.process!.stdin!.write('q');
+        await result.expectExecSuccess();
       } finally {
         await killCliProcessTree(cli);
         await deleteFixtureTarget(fs, fixturesTargetPath);

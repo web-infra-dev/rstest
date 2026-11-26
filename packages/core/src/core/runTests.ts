@@ -42,6 +42,7 @@ import {
 } from './environment/isBrowserProject';
 import { RunTimer } from './execution/runTimer';
 import { createTestPlanner } from './execution/planner';
+import { getProjectEntries } from './execution/projectPlan';
 import type { Rstest } from './rstest';
 import {
   createWatchCycleDriver,
@@ -522,6 +523,16 @@ export async function runTests(context: Rstest): Promise<void> {
     browser: browserTarget && {
       rerun: (testPaths, updateSnapshot) =>
         browserTarget.requestRerun(testPaths, updateSnapshot),
+      globTestEntries: async (filters) => {
+        const entries = await Promise.all(
+          planner
+            .getBrowserProjectsToRun()
+            .map((project) =>
+              getProjectEntries({ context, project, fileFilters: filters }),
+            ),
+        );
+        return [...new Set(entries.flatMap((entry) => Object.values(entry)))];
+      },
     },
   };
 
