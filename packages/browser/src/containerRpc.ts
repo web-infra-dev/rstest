@@ -1,6 +1,7 @@
+import type { IncomingMessage } from 'node:http';
 import { logger } from '@rstest/core/internal/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
-import { type WebSocket, WebSocketServer } from 'ws';
+import type { WebSocket, WebSocketServer } from 'ws';
 import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
@@ -58,15 +59,15 @@ export type ContainerRpcMethods = {
 export type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
 
 // ============================================================================
-// RPC Manager - Encapsulates WebSocket and birpc management
+// RPC Session & Hub - Multiplexes WebSocket connections per headed container
 // ============================================================================
 
 /**
- * Manages the WebSocket connection and birpc communication with the container UI.
- * Provides a clean interface for sending RPC calls and handling connections.
+ * Manages one headed container window's WebSocket connection and birpc channel.
+ * Multiple containers share a single WebSocketServer through {@link ContainerRpcHub},
+ * while each session keeps its own transport epoch and settlement callbacks.
  */
-export class ContainerRpcManager {
-  private wss: WebSocketServer;
+export class ContainerRpcSession {
   private ws: WebSocket | null = null;
   private rpc: ContainerRpc | null = null;
   private methods: HostRpcMethods;
@@ -76,16 +77,13 @@ export class ContainerRpcManager {
   private transportEpoch = 0;
 
   constructor(
-    wss: WebSocketServer,
     methods: HostRpcMethods,
     onDisconnect?: (error: Error) => void,
     onAttach?: (transportEpoch: number) => void,
   ) {
-    this.wss = wss;
     this.methods = methods;
     this.onDisconnect = onDisconnect;
     this.onAttach = onAttach;
-    this.setupConnectionHandler();
   }
 
   /** Update the RPC methods (used when starting a new test run) */
@@ -103,17 +101,7 @@ export class ContainerRpcManager {
     }
   }
 
-  private setupConnectionHandler(): void {
-    this.wss.on('connection', (ws: WebSocket) => {
-      logger.debug('[Browser UI] Container WebSocket connected');
-      logger.debug(
-        `[Browser UI] Current ws: ${this.ws ? 'exists' : 'null'}, new ws: ${ws ? 'exists' : 'null'}`,
-      );
-      this.attachWebSocket(ws);
-    });
-  }
-
-  private attachWebSocket(ws: WebSocket): void {
+  attachWebSocket(ws: WebSocket): void {
     this.detachActiveSocketListeners?.();
     if (this.rpc && !this.rpc.$closed) {
       this.rpc.$close(new Error('Container RPC transport reattached'));
@@ -184,19 +172,9 @@ export class ContainerRpcManager {
     };
   }
 
-  /** Check if a container is currently connected */
+  /** Check if this container is currently connected */
   get isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === this.ws.OPEN;
-  }
-
-  /** Get the current WebSocket instance (for reuse in watch mode) */
-  get currentWebSocket(): WebSocket | null {
-    return this.ws;
-  }
-
-  /** Reattach an existing WebSocket (for watch mode reuse) */
-  reattach(ws: WebSocket): void {
-    this.attachWebSocket(ws);
   }
 
   /** Notify container of test file changes */
@@ -228,5 +206,109 @@ export class ContainerRpcManager {
       `[Browser UI] Calling reloadTestFile: ${testFile} (run ${runId})`,
     );
     await this.rpc.reloadTestFile(testFile, runId, testNamePattern);
+  }
+}
+
+const parseContainerId = (req?: IncomingMessage): string | null => {
+  if (!req?.url) {
+    return null;
+  }
+  try {
+    return new URL(req.url, 'http://localhost').searchParams.get('containerId');
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Multiplexes one shared `WebSocketServer` across any number of headed
+ * container windows. Each container connects with `?containerId=<id>` so a
+ * sibling window's connection never replaces another container's transport.
+ */
+export class ContainerRpcHub {
+  private sessions = new Map<string, ContainerRpcSession>();
+  private pendingSockets = new Map<
+    string,
+    { ws: WebSocket; cleanup: () => void }
+  >();
+
+  constructor(wss: WebSocketServer) {
+    wss.on('connection', (ws: WebSocket, req?: IncomingMessage) => {
+      const containerId = parseContainerId(req);
+      logger.debug(
+        `[Browser UI] Container WebSocket connected (containerId: ${containerId ?? '<default>'})`,
+      );
+      if (containerId) {
+        const session = this.sessions.get(containerId);
+        if (session) {
+          session.attachWebSocket(ws);
+          return;
+        }
+        this.stashPendingSocket(containerId, ws);
+        return;
+      }
+
+      if (this.sessions.size === 1) {
+        const sole = this.sessions.values().next().value!;
+        sole.attachWebSocket(ws);
+        return;
+      }
+
+      if (this.sessions.size === 0) {
+        this.stashPendingSocket('', ws);
+      }
+    });
+  }
+
+  private stashPendingSocket(key: string, ws: WebSocket): void {
+    const previous = this.pendingSockets.get(key);
+    if (previous) {
+      previous.cleanup();
+      this.pendingSockets.delete(key);
+    }
+    const handleClose = () => {
+      if (this.pendingSockets.get(key)?.ws === ws) {
+        this.pendingSockets.delete(key);
+      }
+    };
+    ws.on('close', handleClose);
+    this.pendingSockets.set(key, {
+      ws,
+      cleanup: () => {
+        ws.off('close', handleClose);
+      },
+    });
+  }
+
+  private claimPendingSocket(key: string): WebSocket | undefined {
+    const entry = this.pendingSockets.get(key);
+    if (!entry) {
+      return undefined;
+    }
+    entry.cleanup();
+    this.pendingSockets.delete(key);
+    return entry.ws.readyState === entry.ws.OPEN ? entry.ws : undefined;
+  }
+
+  register(
+    containerId: string,
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+    onAttach?: (transportEpoch: number) => void,
+  ): ContainerRpcSession {
+    const existing = this.sessions.get(containerId);
+    if (existing) {
+      existing.updateMethods(methods, onDisconnect, onAttach);
+      return existing;
+    }
+    const session = new ContainerRpcSession(methods, onDisconnect, onAttach);
+    this.sessions.set(containerId, session);
+    const pending =
+      this.claimPendingSocket(containerId) ??
+      (this.sessions.size === 1 ? this.claimPendingSocket('') : undefined);
+    if (pending) {
+      session.attachWebSocket(pending);
+    }
+    return session;
   }
 }

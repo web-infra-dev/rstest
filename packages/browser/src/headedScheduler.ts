@@ -11,12 +11,9 @@ import {
 import { normalize, relative } from 'pathe';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getTestPathKey } from './pathUtils';
-import {
-  type BrowserRuntime,
-  drainPendingAffectedTestFiles,
-} from './browserRsbuild';
+import type { BrowserRuntime } from './browserRsbuild';
 import type { ConcurrencyLimiter } from './concurrencyLimiter';
-import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
+import { ContainerRpcHub, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedRunRegistry } from './headedRunRegistry';
 import { createSerialTaskQueue } from './serialTaskQueue';
@@ -38,14 +35,12 @@ import type {
   BrowserProviderContext,
   BrowserProviderPage,
 } from './providers';
-import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
-import {
-  type BrowserV8CoverageRuntime,
-  type BrowserWatchSession,
-  type DispatchLanes,
-  type SchedulerRunResult,
+import type {
+  BrowserV8CoverageRuntime,
+  DispatchPageResolver,
+  HeadedLaneResult,
 } from './schedulerSeam';
-import type { RequestedTestPaths, WatchSignals } from './watchSignals';
+import type { WatchSignals } from './watchSignals';
 
 type HeadedSchedulerContext = Pick<
   InternalContext,
@@ -58,14 +53,13 @@ type HeadedSchedulerDeps = {
   context: HeadedSchedulerContext;
   runtime: BrowserRuntime;
   /**
-   * Single headed pair per run (validated): the row whose launch is headed.
-   * In a pure-headed run this is also the runtime's default launch; in a
-   * hybrid run the default launch may belong to a headless row, so the row
-   * picks the container's browser explicitly. The scheduler owns the
-   * container's `projects` slice, so the full row is required.
+   * The headed `(project, browser)` row this container window owns. Each
+   * headed row gets its own container window, RPC session, run registry, and
+   * reload queue, while rows sharing a launch key reuse one Playwright browser
+   * process via `runtime.launchPool`.
    */
   headedRow: BrowserProjectRuntime;
-  /** Mixed runs only: the budget shared with the headless lane. */
+  /** Multi-lane runs only: the budget shared across all active lanes. */
   fileLimiter?: ConcurrencyLimiter;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
@@ -80,25 +74,11 @@ type HeadedSchedulerDeps = {
     handleTestFileComplete: (payload: RawTestFileResult) => Promise<void>;
   };
   fatalErrorRef: { current: Error | null };
-  watchSignals: Pick<
-    WatchSignals,
-    | 'setDispatchRerun'
-    | 'signalInvalidation'
-    | 'setAbort'
-    | 'queueInvalidationAfter'
-  >;
-  setDispatchPageResolver: (lanes: Pick<DispatchLanes, 'headed'>) => void;
-  createWatchSession: (
-    execute: (
-      testPaths: string[],
-      updateSnapshot: SnapshotUpdateState,
-    ) => Promise<unknown[]>,
-  ) => BrowserWatchSession;
-  collectProjectEntries: () => Promise<
-    Parameters<typeof planWatchRerun>[0]['projectEntries']
-  >;
-  logWatchReady: () => void;
-  destroyRuntime: () => Promise<void>;
+  watchSignals: Pick<WatchSignals, 'addInterrupt' | 'addAbort'>;
+  setDispatchPageResolver: (
+    containerId: string,
+    resolver: DispatchPageResolver,
+  ) => void;
 };
 
 /**
@@ -142,6 +122,13 @@ export const claimHeadedCycleScope = (
   return scope;
 };
 
+const sameTestPaths = (
+  a: readonly TestFileInfo[],
+  b: readonly TestFileInfo[],
+): boolean =>
+  a.length === b.length &&
+  a.every((file, index) => file.testPath === b[index]!.testPath);
+
 export const createHeadedScheduler = async ({
   context,
   runtime,
@@ -157,33 +144,23 @@ export const createHeadedScheduler = async ({
   fatalErrorRef,
   watchSignals,
   setDispatchPageResolver,
-  createWatchSession,
-  collectProjectEntries,
-  logWatchReady,
-  destroyRuntime,
-}: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
+}: HeadedSchedulerDeps): Promise<HeadedLaneResult> => {
   const { watchState, wss } = runtime;
-  // The container window belongs to the headed pair's launch: headless rows
-  // reuse a different browser process entirely (hybrid runs). The scheduler
-  // constructor's caller only builds one with a headed row, so the row and
-  // its provider options are required. A headed launch is pinned in the pool
-  // (never evicted, outside the headless cap), so this lease is held until the
-  // runtime closes the pool and never released.
+  const containerId = headedRow.instanceName;
+  // A headed launch is pinned in the pool (never evicted, outside the headless
+  // cap), so this lease is held until the runtime closes the pool and never
+  // released. Multiple headed rows sharing a launch key share one browser
+  // process while keeping independent contexts/windows.
   let headedBrowser: BrowserProviderBrowser | undefined;
-  // The container window runs only this headed pair's row — its scheduler
-  // owns the `projects` slice, so the base host config needs no headed
-  // variant.
   const headedHostOptions: BrowserHostConfig = {
     ...hostOptions,
+    containerId,
     projects: [toWireRow(headedRow)],
   };
-  const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
-  // The headed lane runs its row's project only: it stamps each file with the
-  // row it runs on, keeping the one-head lane's reload queue out of other
-  // rows' files and threading the row's browserName to the frames (browser-ui
-  // forwards it in the window options, so a frame resolves its row strictly).
-  // Watch file-set updates commit path-keyed sets, so every commit re-stamps
-  // through this helper.
+  runtime.setContainerOptions(headedHostOptions, containerId);
+  const containerUrl = `http://localhost:${runtime.containerServer.port}/?containerId=${encodeURIComponent(containerId)}`;
+  // Each headed lane runs its row's project only and stamps each file with its
+  // browserName so the container forwards it in the iframe options.
   const stampLaneFiles = (
     files: readonly { testPath: string; projectName: string }[],
   ): TestFileInfo[] =>
@@ -203,8 +180,22 @@ export const createHeadedScheduler = async ({
   // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
 
-  // `watchState.headedFileSetVersion` is the committed file set's monotonic
-  // version, acked by the container once its frame set for that version is in
+  let containerState = isWatchMode
+    ? watchState.headedContainers.get(containerId)
+    : undefined;
+  if (!containerState) {
+    containerState = {
+      runs: createHeadedRunRegistry(),
+      fileSetVersion: 1,
+    };
+    if (isWatchMode) {
+      watchState.headedContainers.set(containerId, containerState);
+    }
+  }
+  const runs = containerState.runs;
+
+  // `containerState.fileSetVersion` is the committed file set's monotonic
+  // version, acked by this container once its frame set for that version is in
   // the DOM. A counter only increases, so a stale ack can never satisfy a
   // newer wait (the content signature it replaces could ABA back to a
   // previously-acked value).
@@ -220,7 +211,7 @@ export const createHeadedScheduler = async ({
     // An ack above anything ever sent can only be a previous session's late
     // echo on the reused socket — accepting it would let every future wait
     // short-circuit.
-    if (version > watchState.headedFileSetVersion) {
+    if (version > containerState.fileSetVersion) {
       return;
     }
     if (version > ackedFrameSetVersion) {
@@ -318,10 +309,14 @@ export const createHeadedScheduler = async ({
     return { context: nextContext, page: nextPage };
   };
 
-  if (isWatchMode && runtime.containerPage && runtime.containerContext) {
-    containerContext = runtime.containerContext;
-    containerPage = runtime.containerPage;
-    logger.log(color.gray('\n[Watch] Reusing existing container page\n'));
+  if (isWatchMode && containerState.page && containerState.context) {
+    containerContext = containerState.context;
+    containerPage = containerState.page;
+    logger.log(
+      color.gray(
+        `\n[Watch] Reusing existing container page (${containerId})\n`,
+      ),
+    );
   } else {
     isNewPage = true;
     const created = await createContainerPage();
@@ -329,16 +324,21 @@ export const createHeadedScheduler = async ({
     containerPage = created.page;
 
     if (isWatchMode) {
-      runtime.containerPage = containerPage;
-      runtime.containerContext = containerContext;
+      containerState.page = containerPage;
+      containerState.context = containerContext;
     }
   }
 
-  setDispatchPageResolver({
-    headed: (_target, runId) => ({
-      containerPage,
-      isRunCurrent: runId ? () => runs.isCurrent(runId) : undefined,
-    }),
+  setDispatchPageResolver(containerId, (_target, runId) => {
+    if (!runId) {
+      return { containerPage };
+    }
+    return runs.has(runId)
+      ? {
+          containerPage,
+          isRunCurrent: () => runs.isCurrent(runId),
+        }
+      : {};
   });
 
   const dispatchRouter = createDispatchRouter();
@@ -375,6 +375,7 @@ export const createHeadedScheduler = async ({
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
+    _generation?: number,
   ): Promise<void> => {
     throw new Error('Headed reload queue is not initialized');
   };
@@ -382,21 +383,23 @@ export const createHeadedScheduler = async ({
   const isCurrentTestFile = (testPath: string): boolean =>
     findTestFileInfo(testPath) !== undefined;
 
-  // The settlement contract — every run settles exactly once, and any host
-  // action that makes a completion impossible settles it — lives in the
-  // registry. It survives controller re-entry on the runtime's watch state,
-  // so a re-entering scheduler cannot orphan the previous entry's runs.
-  const runs = (watchState.headedRuns ??= createHeadedRunRegistry());
-
   let aborted = false;
+  let cycleGeneration = 0;
+  // Skipping queued files in a superseded cycle lets the replacement watch
+  // cycle start right after the currently running iframe finishes instead of
+  // draining stale files first. Scoped to `containerId` so a UI rerun in one
+  // window never cuts short a sibling window's queued files.
+  watchSignals.addInterrupt(() => {
+    cycleGeneration += 1;
+  }, containerId);
   // Dropping every retained path and marking the current frame set ready
   // settles everything the cycle is waiting on, so it unwinds instead of
   // hanging on a container that is about to go away. `aborted` keeps the
   // teardown errors that follow from being reported as a fatal run failure.
-  watchSignals.setAbort(async () => {
+  watchSignals.addAbort(() => {
     aborted = true;
     runs.retainPaths([]);
-    markFrameSetReady(watchState.headedFileSetVersion);
+    markFrameSetReady(containerState.fileSetVersion);
   });
 
   // A wedged cleanup does not stay its own problem: every runner iframe and
@@ -412,11 +415,11 @@ export const createHeadedScheduler = async ({
     containerContext = created.context;
     containerPage = created.page;
     if (isWatchMode) {
-      runtime.containerPage = containerPage;
-      runtime.containerContext = containerContext;
+      containerState.page = containerPage;
+      containerState.context = containerContext;
     }
     await containerPage.goto(containerUrl, { waitUntil: 'load' });
-    await waitForFrameSet(watchState.headedFileSetVersion);
+    await waitForFrameSet(containerState.fileSetVersion);
   };
 
   // The runner announces its fixture-cleanup window over the `file-cleanup`
@@ -486,7 +489,7 @@ export const createHeadedScheduler = async ({
     // delivery — its failure settles the run like any other settler, and if
     // the run was already settled (boot deadline, transport epoch) the late
     // rejection is a no-op.
-    rpcManager
+    rpcSession
       .reloadTestFile(file.testPath, runId, testNamePattern)
       .catch((error) => runs.reject(runId, error));
     try {
@@ -518,9 +521,8 @@ export const createHeadedScheduler = async ({
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
     async rerunTest(testFile: string, testNamePattern?: string) {
-      const projectName = context.normalizedConfig.name || 'project';
       const relativePath = relative(context.rootPath, testFile);
-      const displayPath = `<${projectName}>/${relativePath}`;
+      const displayPath = `<${headedRow.instanceName}>/${relativePath}`;
       logger.log(
         color.cyan(
           `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
@@ -531,7 +533,7 @@ export const createHeadedScheduler = async ({
     async getTestFiles() {
       return {
         files: currentTestFiles,
-        version: watchState.headedFileSetVersion,
+        version: containerState.fileSetVersion,
       };
     },
     async onFrameSetReady(version: number) {
@@ -610,34 +612,14 @@ export const createHeadedScheduler = async ({
     },
   });
 
-  // Setup RPC manager
-  let rpcManager: ContainerRpcManager;
-
-  if (isWatchMode && runtime.rpcManager) {
-    rpcManager = runtime.rpcManager;
-    // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(
-      createRpcMethods(),
-      runs.rejectAll,
-      runs.setTransportEpoch,
-    );
-    // Reattach if we have an existing WebSocket
-    const existingWs = rpcManager.currentWebSocket;
-    if (existingWs) {
-      rpcManager.reattach(existingWs);
-    }
-  } else {
-    rpcManager = new ContainerRpcManager(
-      wss,
-      createRpcMethods(),
-      runs.rejectAll,
-      runs.setTransportEpoch,
-    );
-
-    if (isWatchMode) {
-      runtime.rpcManager = rpcManager;
-    }
-  }
+  // Register this container's RPC session on the runtime's shared WebSocket hub.
+  const rpcHub = (runtime.rpcHub ??= new ContainerRpcHub(wss));
+  const rpcSession = rpcHub.register(
+    containerId,
+    createRpcMethods(),
+    runs.rejectAll,
+    runs.setTransportEpoch,
+  );
 
   // Only navigate on first creation
   if (isNewPage) {
@@ -645,15 +627,25 @@ export const createHeadedScheduler = async ({
       waitUntil: 'load',
     });
 
-    logger.log(color.cyan(`\nBrowser mode opened at ${containerUrl}\n`));
+    logger.log(
+      color.cyan(
+        `\nBrowser mode opened at ${containerUrl} (${headedRow.instanceName})\n`,
+      ),
+    );
   }
+
+  const isReloadStopped = (generation?: number): boolean =>
+    aborted ||
+    Boolean(fatalErrorRef.current) ||
+    (generation !== undefined && generation !== cycleGeneration);
 
   enqueueHeadedReload = async (
     file: TestFileInfo,
     testNamePattern?: string,
+    generation?: number,
   ): Promise<void> => {
     return headedReloadQueue.enqueue(async () => {
-      if (aborted || fatalErrorRef.current) {
+      if (isReloadStopped(generation)) {
         return;
       }
       // `claimHeadedCycleScope` checks membership once per cycle, but the queue
@@ -667,11 +659,11 @@ export const createHeadedScheduler = async ({
         );
         return;
       }
-      // A mixed run's headless workers hold slots of the same budget, so the
-      // headed file runs only once one is free.
+      // Multi-lane runs share one file budget, so the headed file runs only
+      // once a slot is free.
       const release = await fileLimiter?.acquire();
       try {
-        if (aborted || fatalErrorRef.current) {
+        if (isReloadStopped(generation)) {
           return;
         }
         await reloadTestFileAndWait(file, testNamePattern);
@@ -684,21 +676,22 @@ export const createHeadedScheduler = async ({
   let testTime = 0;
   if (currentTestFiles.length > 0) {
     const testStart = Date.now();
+    const initialGeneration = cycleGeneration;
     try {
       // A container connected before this scheduler existed (controller
       // re-entry on the persistent runtime) never re-pulls `getTestFiles`, so
       // push the set — the commit effect acks the version either way.
-      if (rpcManager.isConnected) {
-        await rpcManager.notifyTestFileUpdate(
+      if (rpcSession.isConnected) {
+        await rpcSession.notifyTestFileUpdate(
           currentTestFiles,
-          watchState.headedFileSetVersion,
+          containerState.fileSetVersion,
         );
       }
-      await waitForFrameSet(watchState.headedFileSetVersion);
+      await waitForFrameSet(containerState.fileSetVersion);
 
       for (const file of currentTestFiles) {
-        await enqueueHeadedReload(file);
-        if (fatalErrorRef.current) {
+        await enqueueHeadedReload(file, undefined, initialGeneration);
+        if (isReloadStopped(initialGeneration)) {
           break;
         }
       }
@@ -715,180 +708,75 @@ export const createHeadedScheduler = async ({
     testTime = Date.now() - testStart;
   }
 
-  let watchSession: BrowserWatchSession | undefined;
-  if (isWatchMode) {
-    // Set by the in-page rerun trigger and consumed by the cycle that reloads
-    // that file — the pattern is a headed-UI concept core's cycle options
-    // cannot carry, so it travels beside the scope rather than inside it.
-    // Keyed by test path rather than held in one slot: core queues cycles, so
-    // an unrelated trigger can be dequeued between the click and its own cycle,
-    // and a single slot would hand the pattern to whichever cycle ran first.
-    // An entry is written with its own signal and read at a cycle's first
-    // synchronous step, so the cycle that takes it is the one that signal
-    // started — or, when the file was already in a queued scope, the one it
-    // folded into, which is the cycle that runs the file. That holds as long as
-    // nothing yields between the two. Today nothing does: core closes the
-    // fold window and dispatches the cycle in the same turn (the reporters'
-    // run-start hook is awaited later, at the first file event). That is a
-    // property of the driver's ordering, not a contract, so the gap stays
-    // tracked: were a yield to land between the two, a second click on the
-    // same file inside it would overwrite the entry, the earlier cycle would
-    // claim the newer pattern, and the later one would find it gone and reload
-    // the file unfiltered. Closing it for good means the pattern crossing the
-    // seam inside the queued cycle's own options instead of traveling beside
-    // the scope.
-    const pendingTestNamePatterns = new Map<string, string>();
-
-    const runScope = async (
-      testPaths: string[],
-      updateSnapshot: SnapshotUpdateState,
-    ): Promise<unknown[]> => {
-      await watchState.awaitFailureScreenshotCleanups?.();
-      await refreshHostConfig(updateSnapshot);
-      rawCoverage = [];
-      // Claimed in this synchronous prefix, before `runCycle` suspends, so
-      // nothing this cycle does can change what it runs or which patterns it
-      // takes.
-      const cycleScope = claimHeadedCycleScope(
-        testPaths,
-        currentTestFiles,
-        pendingTestNamePatterns,
-      );
-      for (const { file, testNamePattern } of cycleScope) {
-        await enqueueHeadedReload(file, testNamePattern);
-      }
-      return rawCoverage;
+  /**
+   * Re-deliver the host config so runner iframes reloaded by the next cycle
+   * observe live per-rerun values ('u' flips updateSnapshot between reruns);
+   * `setContainerOptions` keeps full container reloads in sync.
+   */
+  const refreshHostConfig = async (
+    updateSnapshot: SnapshotUpdateState,
+  ): Promise<void> => {
+    const refreshedHostOptions: BrowserHostConfig = {
+      ...headedHostOptions,
+      snapshot: {
+        updateSnapshot,
+      },
     };
+    runtime.setContainerOptions(refreshedHostOptions, containerId);
+    await rpcSession.updateHostConfig(refreshedHostOptions);
+  };
 
-    /**
-     * Re-deliver the host config so runner iframes reloaded by the next cycle
-     * observe live per-rerun values ('u' flips updateSnapshot between reruns);
-     * `setContainerOptions` keeps full container reloads in sync.
-     */
-    const refreshHostConfig = async (
-      updateSnapshot: SnapshotUpdateState,
-    ): Promise<void> => {
-      const refreshedHostOptions: BrowserHostConfig = {
-        ...headedHostOptions,
-        snapshot: {
-          updateSnapshot,
-        },
-      };
-      runtime.setContainerOptions(refreshedHostOptions);
-      await rpcManager.updateHostConfig(refreshedHostOptions);
-    };
-
-    const runDispatchRerunOnce = async (
-      updateSnapshot?: SnapshotUpdateState,
-      requestedTestPaths?: RequestedTestPaths,
-    ): Promise<void> => {
-      // Exactly one of `signalInvalidation` / `logWatchReady` must run on
-      // every exit path: a rejection escaping after the file-set commit (for
-      // example the frame-set wait timing out) would otherwise leave watch
-      // committed but never signalled — silently dead, with no error and no
-      // disconnect to show for it.
-      try {
-        // Independent: config push to the container vs. local entry collection.
-        const newProjectEntries = await collectProjectEntries();
-        const rerunPlan = planWatchRerun({
-          projectEntries: newProjectEntries,
-          previousTestFiles: watchState.lastTestFiles,
-          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-          requestedTestPaths,
-        });
-
-        commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
-        watchState.removeFailureScreenshots?.(
-          rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
-        );
-        const failureScreenshotCleanup =
-          watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
-
-        if (rerunPlan.fileSetUpdate) {
-          currentTestFiles = stampLaneFiles(
-            rerunPlan.fileSetUpdate.currentTestFiles,
-          );
-          const version = (watchState.headedFileSetVersion += 1);
-          // Must run before the container is told: `notifyTestFileUpdate` is
-          // what unmounts the dropped iframes, and their runs must already be
-          // settled (and out of the registry) when that happens.
-          runs.retainPaths(currentTestFiles.map((file) => file.testPath));
-          await rpcManager.notifyTestFileUpdate(currentTestFiles, version);
-          if (currentTestFiles.length > 0) {
-            await waitForFrameSet(version);
-          }
-        }
-
-        if (rerunPlan.decision.kind === 'idle') {
-          void failureScreenshotCleanup.then(() => {
-            logger.log(color.cyan(rerunPlan.decision.message));
-            logWatchReady();
-            if (rerunPlan.deferredTestPaths) {
-              watchSignals.queueInvalidationAfter(
-                Promise.resolve(),
-                rerunPlan.deferredTestPaths,
-              );
-            }
-          });
-          return;
-        }
-
-        void failureScreenshotCleanup.then(() => {
-          logger.log(color.cyan(rerunPlan.decision.message));
-        });
-        const { cycle } = await watchSignals.signalInvalidation(
-          rerunPlan.decision.kind === 'empty'
-            ? []
-            : rerunPlan.decision.testPaths,
-          undefined,
-          updateSnapshot,
-        );
-        if (rerunPlan.deferredTestPaths) {
-          watchSignals.queueInvalidationAfter(
-            cycle,
-            rerunPlan.deferredTestPaths,
-          );
-        }
-      } catch (error) {
-        logWatchReady();
-        throw error;
-      }
-    };
-
-    // Serialized against itself: each per-project compiler fires its own
-    // `onAfterDevCompile`, and two interleaved planning passes would race on
-    // the drain-once affected set and the file-set commit.
-    const dispatchRerunQueue = createSerialTaskQueue();
-    watchSignals.setDispatchRerun((updateSnapshot, requestedTestPaths) =>
-      dispatchRerunQueue.enqueue(() =>
-        runDispatchRerunOnce(updateSnapshot, requestedTestPaths),
-      ),
+  const runScope = async (
+    testPaths: string[],
+    updateSnapshot: SnapshotUpdateState,
+    testNamePatterns: Map<string, string> = new Map(),
+  ): Promise<unknown[]> => {
+    await refreshHostConfig(updateSnapshot);
+    rawCoverage = [];
+    const generation = cycleGeneration;
+    // Claimed in this synchronous prefix, before reloading suspends, so
+    // nothing this cycle does can change what it runs or which patterns it
+    // takes.
+    const cycleScope = claimHeadedCycleScope(
+      testPaths,
+      currentTestFiles,
+      testNamePatterns,
     );
+    for (const { file, testNamePattern } of cycleScope) {
+      await enqueueHeadedReload(file, testNamePattern, generation);
+      if (isReloadStopped(generation)) {
+        break;
+      }
+    }
+    return rawCoverage;
+  };
 
-    runUiRequestedRerun = async (file, testNamePattern) => {
-      const { cycle } = await watchSignals.signalInvalidation(
-        [file.testPath],
-        () => {
-          if (testNamePattern === undefined) {
-            pendingTestNamePatterns.delete(getTestPathKey(file.testPath));
-          } else {
-            pendingTestNamePatterns.set(
-              getTestPathKey(file.testPath),
-              testNamePattern,
-            );
-          }
-        },
-      );
-      // Await the cycle THIS signal started — not whichever signal last wrote
-      // the shared slot, which a concurrent rebuild trigger can overwrite
-      // between the signal and the wait.
-      await cycle;
-    };
+  const syncFileSet = async (
+    allCurrentTestFiles: readonly TestFileInfo[],
+  ): Promise<void> => {
+    const nextFiles = stampLaneFiles(allCurrentTestFiles);
+    if (sameTestPaths(currentTestFiles, nextFiles)) {
+      return;
+    }
+    currentTestFiles = nextFiles;
+    const version = (containerState.fileSetVersion += 1);
+    // Must run before the container is told: `notifyTestFileUpdate` is
+    // what unmounts the dropped iframes, and their runs must already be
+    // settled (and out of the registry) when that happens.
+    runs.retainPaths(currentTestFiles.map((file) => file.testPath));
+    await rpcSession.notifyTestFileUpdate(currentTestFiles, version);
+    if (currentTestFiles.length > 0) {
+      await waitForFrameSet(version);
+    }
+  };
 
-    watchSession = createWatchSession(runScope);
-  }
+  const setUiRerunHandler = (
+    handler: (file: TestFileInfo, testNamePattern?: string) => Promise<void>,
+  ): void => {
+    runUiRequestedRerun = handler;
+  };
 
-  const closeContainerRuntime = !isWatchMode
+  const closeContainerLane = !isWatchMode
     ? async () => {
         try {
           await containerPage.close();
@@ -900,16 +788,17 @@ export const createHeadedScheduler = async ({
         } catch {
           // ignore
         }
-        await destroyRuntime();
       }
     : undefined;
 
   return {
+    containerId,
+    row: headedRow,
     testTime,
     rawCoverage,
-    watchSession,
-    // `closeContainerRuntime` is already `undefined` in watch mode: the watch
-    // runtime outlives the cycle and is torn down through `executor.close()`.
-    close: closeContainerRuntime,
+    runScope,
+    syncFileSet,
+    setUiRerunHandler,
+    close: closeContainerLane,
   };
 };

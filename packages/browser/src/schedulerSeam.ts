@@ -4,7 +4,11 @@ import type {
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getHeadlessConcurrency } from './concurrency';
-import type { BrowserDispatchRequest, BrowserProjectRuntime } from './protocol';
+import type {
+  BrowserDispatchRequest,
+  BrowserProjectRuntime,
+  TestFileInfo,
+} from './protocol';
 import type { BrowserProviderPage } from './providers';
 
 /**
@@ -46,15 +50,38 @@ export type BrowserV8CoverageRuntime = {
 };
 
 /**
- * What a run branch produces. Results and errors accumulate in the sinks the
- * controller owns, so a scheduler reports only what it alone knows: how long
- * the tests took, the session it left behind, and how to tear down a runtime
- * that does not outlive the run.
+ * What the headless scheduler produces after its initial cycle. Watch
+ * planning is owned by the controller-level coordinator; the lane exposes only
+ * execution and lifecycle hooks.
  */
-export type SchedulerRunResult = {
+export type HeadlessLaneResult = {
   testTime: number;
   rawCoverage?: unknown[];
-  watchSession?: BrowserWatchSession;
+  runScope: (
+    testPaths: string[],
+    updateSnapshot: SnapshotUpdateState,
+  ) => Promise<unknown[]>;
+  close?: () => Promise<void>;
+};
+
+/**
+ * What one headed container scheduler produces after its initial cycle. Each
+ * headed `(project, browser)` row has its own lane and container window.
+ */
+export type HeadedLaneResult = {
+  containerId: string;
+  row: BrowserProjectRuntime;
+  testTime: number;
+  rawCoverage?: unknown[];
+  runScope: (
+    testPaths: string[],
+    updateSnapshot: SnapshotUpdateState,
+    testNamePatterns?: Map<string, string>,
+  ) => Promise<unknown[]>;
+  syncFileSet: (allCurrentTestFiles: readonly TestFileInfo[]) => Promise<void>;
+  setUiRerunHandler: (
+    handler: (file: TestFileInfo, testNamePattern?: string) => Promise<void>,
+  ) => void;
   close?: () => Promise<void>;
 };
 
@@ -75,13 +102,13 @@ export type DispatchPageResolver = (
 /**
  * The dispatch lanes a run's schedulers install, keyed by request shape: a
  * session target shot resolves in the headless lane's registry, a runId-named
- * shot resolves in the headed container lane. No cross-lane fallback — a
- * request that misses its own lane produces `{}` and the dispatch layer's
- * existing errors surface instead.
+ * shot resolves across the headed container lanes to the registry that minted
+ * that runId. No cross-lane fallback — a request that misses its own lane
+ * produces `{}` and the dispatch layer's existing errors surface instead.
  */
 export type DispatchLanes = {
   headless?: DispatchPageResolver;
-  headed?: DispatchPageResolver;
+  headed?: Map<string, DispatchPageResolver>;
 };
 
 /**
@@ -161,10 +188,10 @@ export const expandToRows = (
 };
 
 /**
- * The shared file budget of a mixed run: `pool.maxWorkers` (or the headless
- * default) clamped by the runs actually scheduled — `file x row` on the
- * headless lane (the same expansion its queue uses) plus the headed lane's
- * runs — so one file fanned out over several rows is not clamped to one slot.
+ * The shared file budget across multiple lanes (mixed headless+headed or
+ * multiple headed windows): `pool.maxWorkers` (or the headless default)
+ * clamped by the runs actually scheduled — `file x row` across all lanes —
+ * so one file fanned out over several rows is not clamped to one slot.
  */
 export const getMixedLaneConcurrency = (
   context: Parameters<typeof getHeadlessConcurrency>[0],
@@ -172,13 +199,13 @@ export const getMixedLaneConcurrency = (
     headlessFiles: readonly { testPath: string; projectName: string }[];
     headlessRows: readonly BrowserProjectRuntime[];
     headedFiles: readonly { testPath: string; projectName: string }[];
-    headedRow: BrowserProjectRuntime;
+    headedRows: readonly BrowserProjectRuntime[];
   },
 ): number =>
   getHeadlessConcurrency(
     context,
     expandToRows(lanes.headlessFiles, groupRowsByProject(lanes.headlessRows))
       .length +
-      expandToRows(lanes.headedFiles, groupRowsByProject([lanes.headedRow]))
+      expandToRows(lanes.headedFiles, groupRowsByProject(lanes.headedRows))
         .length,
   );

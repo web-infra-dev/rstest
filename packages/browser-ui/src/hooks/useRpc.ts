@@ -29,6 +29,7 @@ export const useRpc = (
     runId: string,
     testNamePattern?: string,
   ) => Promise<void>,
+  containerId?: string,
 ): RpcState => {
   const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
     null,
@@ -66,7 +67,7 @@ export const useRpc = (
     const connect = () => {
       if (!isMounted) return;
 
-      ws = new WebSocket(createWebSocketUrl(wsPort));
+      ws = new WebSocket(createWebSocketUrl(wsPort, containerId));
       activeWsRef.current = ws;
       const messageHandlers = new WeakMap<
         (data: any) => void,
@@ -231,7 +232,7 @@ export const useRpc = (
         ws.close();
       }
     };
-  }, [wsPort]); // Only depend on wsPort
+  }, [wsPort, containerId]);
 
   return { rpc, loading, connected };
 };

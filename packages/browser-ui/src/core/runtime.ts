@@ -1,8 +1,14 @@
 export const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16_000, 30_000];
 
-export const createWebSocketUrl = (wsPort: number): string => {
+export const createWebSocketUrl = (
+  wsPort: number,
+  containerId?: string,
+): string => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.hostname}:${wsPort}`;
+  const base = `${protocol}//${window.location.hostname}:${wsPort}`;
+  return containerId
+    ? `${base}/?containerId=${encodeURIComponent(containerId)}`
+    : base;
 };
 
 /**

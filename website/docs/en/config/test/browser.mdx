@@ -211,7 +211,6 @@ Validation rules:
 
 - Each `browserName` may appear at most once per project.
 - `instances` cannot be empty — omit the option to run the default Chromium instance.
-- At most one `(project, browser)` pair may run headed (`headless: false`) per run; see [Launch rules](#launch-rules).
 - [`coverage.provider: 'v8'`](/config/test/coverage) requires every selected browser to be Chromium; see [Launch rules](#launch-rules).
 
 ### browser (deprecated) \{#browser-deprecated}
@@ -242,7 +241,7 @@ Install the matching Playwright browser (for example, `npx playwright install fi
 - **Default:** `true` in CI environments, `false` for local development
 - **CLI:** `--browser.headless`
 
-Run browsers in headless mode (without a UI window). Items in [`instances`](#instances) can override this per browser, subject to the [one headed browser per run](#launch-rules) rule.
+Run browsers in headless mode (without a UI window). Items in [`instances`](#instances) can override this per browser; see [Launch rules](#launch-rules) for how headed and headless instances run together.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -475,13 +474,12 @@ Each `rstest` run launches one browser process per unique `(provider, browserNam
 
 Browsers launch on demand when the first test file needs them, so a broken launch (such as a missing executable) fails when that file runs. At most [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) headless browsers stay open concurrently; when another launch needs a slot, the least recently used idle browser closes. In watch mode, idle browsers remain open between runs until a slot is needed. Headed browsers are not counted against this limit and stay open for the entire run.
 
+Headed and mixed-mode behavior:
+
+- **Multiple headed browsers.** Each headed `(project, browser)` pair opens its own Browser UI window and runs its test files serially inside that window, while separate headed windows run concurrently (sharing the same `pool.maxWorkers` file budget). Pass `--browser.instances <name>` or `--project` if you only want to open a single debug window.
+- **Mixing headed and headless browsers.** Both `run` and `watch` support mixing headed and headless instances across projects or within the same project. In watch mode, file changes and CLI shortcuts rerun every affected lane; clicking rerun inside a headed Browser UI window reruns only that window's instance.
+
 Before any browser launches, Rstest validates:
-
-- **One headed browser per run.** Browser Mode opens a single debug window, so at most one `(project, browser)` pair may set `headless: false`; all others must use `headless: true`:
-
-  > Only one (project, browser) pair can run headed per run: "web" ("chromium"). Browser mode opens one debug window, so every other browser must set headless: true. Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.
-
-- **Watch mode cannot mix headed and headless browsers.** If one browser is headed and another is headless, watch mode rejects the run during validation; set `headless: true` on all browsers or run without watch mode.
 
 - **Coverage provider `v8` requires Chromium.** With `coverage.enabled` and `coverage.provider: 'v8'`, selecting any non-Chromium browser fails validation. Switch to `coverage.provider: 'istanbul'`, or filter to Chromium (`--browser.instances chromium`).
 

@@ -48,6 +48,14 @@ describe('shouldEnableBrowserHmr', () => {
     ).toBe(true);
   });
 
+  it('stays off in watch when a project mixes headed and headless instances', () => {
+    const project = makeProject(true, [
+      { browserName: 'chromium', headless: false },
+      { browserName: 'webkit', headless: true },
+    ]);
+    expect(shouldEnableBrowserHmr(true, project)).toBe(false);
+  });
+
   it('stays off outside watch mode', () => {
     expect(
       shouldEnableBrowserHmr(

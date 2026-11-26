@@ -179,11 +179,10 @@ export default defineProject({
 
 每个 Browser Mode 项目都会使用各自的构建配置独立编译并运行，不同技术栈或插件配置的项目可以在同一个 Rstest 进程中执行。
 
-目前唯一支持的 `provider` 是 `'playwright'`。同一次运行中可以通过 `browser.instances` 在不同项目间使用不同浏览器，或将 Browser Mode 项目与 `testEnvironment: 'node'` / `'jsdom'` 项目混跑，但需满足以下约束：
+目前唯一支持的 `provider` 是 `'playwright'`。同一次运行中可以通过 `browser.instances` 在不同项目间使用不同浏览器，在 `run` 与 `watch` 下同时打开多个 headed 调试窗口或混用 headed 与 headless instance，也可以将 Browser Mode 项目与 `testEnvironment: 'node'` / `'jsdom'` 项目混跑，但需满足以下约束：
 
-- **每次运行最多只能有一个 headed 浏览器**：其余浏览器必须设为 `headless: true`（需要时可用 `--browser.instances` 或 `--project` 缩小范围），详见[启动规则](/config/test/browser#launch-rules)。
-- **Watch 模式不支持混用 headed 与 headless**：`rstest watch` 仅支持单个 headed 浏览器，不允许同时混用两种模式，详见[启动规则](/config/test/browser#launch-rules)。
 - **汇报名称不能冲突**：运行多个浏览器的项目会以 `<project> (<browser>)` 汇报，请避免与其他项目的 `name` 重复，详见[多浏览器的 reporter 表现](/config/test/browser#多浏览器的-reporter-表现)。
+- **V8 覆盖率需要 Chromium**：当 `coverage.provider` 为 `'v8'` 时，选中的浏览器必须全部为 Chromium，详见[启动规则](/config/test/browser#launch-rules)。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

@@ -179,11 +179,10 @@ export default defineProject({
 
 Each Browser Mode project compiles and runs with its own build configuration, so projects with different stacks or plugins can run in the same Rstest process.
 
-Currently `'playwright'` is the only supported `provider`. Within a run, you can target different browsers across projects (via `browser.instances`) or mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdom'` projects, subject to these constraints:
+Currently `'playwright'` is the only supported `provider`. Within a run, you can target different browsers across projects (via `browser.instances`), open multiple headed debug windows or mix headed and headless instances in both `run` and `watch`, or mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdom'` projects, subject to these constraints:
 
-- **At most one headed browser per run**: All other browsers must set `headless: true` (narrow with `--browser.instances` or `--project` if needed); see [Launch rules](/config/test/browser#launch-rules).
-- **No mixed headed + headless in watch mode**: `rstest watch` allows a single headed browser, not both modes together; see [Launch rules](/config/test/browser#launch-rules).
 - **Unique reported project names**: Multi-browser projects report as `<project> (<browser>)`, which must not collide with another project's `name`; see [Multi-browser reporting](/config/test/browser#multi-browser-reporting).
+- **V8 coverage requires Chromium**: When `coverage.provider` is `'v8'`, every selected browser must be Chromium; see [Launch rules](/config/test/browser#launch-rules).
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
