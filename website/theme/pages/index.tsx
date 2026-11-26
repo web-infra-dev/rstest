@@ -1,19 +1,19 @@
 import { useI18n, useLang } from '@rspress/core/runtime';
 import { Link } from '@rspress/core/theme-original';
+import type { ReactNode } from 'react';
 import { useI18nUrl } from '../components/utils';
 import { AdaptersPatchFigure } from '../ui/AdaptersPatchFigure';
 import { BrowserStackFigure } from '../ui/BrowserStackFigure';
+import { HeroDitherMatrix } from '../ui/HeroDitherMatrix';
 import { JestMigrateFigure } from '../ui/JestMigrateFigure';
 import { PipelineStackFigure } from '../ui/PipelineStackFigure';
 import { PlaywrightBeltFigure } from '../ui/PlaywrightBeltFigure';
 import { PopperFigure } from '../ui/PopperFigure';
 import {
   Button,
-  FeatureText,
+  FeatureLink,
+  HatchBand,
   InstallCommand,
-  Grid,
-  Panel,
-  PanelHeader,
 } from '../ui/primitives';
 
 type RstackTool = {
@@ -102,13 +102,69 @@ const RSTACK_TOOLS: RstackTool[] = [
   },
 ];
 
+const HERO_ANCHORS: Record<
+  'en' | 'zh',
+  { index: string; href: string; title: string; desc: string }[]
+> = {
+  en: [
+    {
+      index: '02',
+      href: '#pipeline',
+      title: 'Rspack Pipeline',
+      desc: 'Rust-fast compilation sharing Rsbuild plugins and config',
+    },
+    {
+      index: '03',
+      href: '#browser',
+      title: 'Real Browsers',
+      desc: 'Chromium, Firefox, and WebKit with Locator assertions',
+    },
+    {
+      index: '04',
+      href: '#adapters',
+      title: 'Build Adapters',
+      desc: 'Reuse Rsbuild, Rslib, Rspack, Lynx, and Modern.js configs',
+    },
+    {
+      index: '06',
+      href: '#playwright',
+      title: 'Playwright E2E',
+      desc: 'Unit, component, and end-to-end tests in one runner',
+    },
+  ],
+  zh: [
+    {
+      index: '02',
+      href: '#pipeline',
+      title: 'Rspack 构建链路',
+      desc: '复用 Rsbuild 插件与配置，测试编译极速完成',
+    },
+    {
+      index: '03',
+      href: '#browser',
+      title: '真实浏览器 DOM',
+      desc: '在 Chromium、Firefox 与 WebKit 中运行组件测试',
+    },
+    {
+      index: '04',
+      href: '#adapters',
+      title: '复用构建配置',
+      desc: '通过适配器无缝复用 Rsbuild、Rslib、Rspack 等配置',
+    },
+    {
+      index: '06',
+      href: '#playwright',
+      title: '端到端同一 Runner',
+      desc: '单元测试与 Playwright E2E 共享配置与报告流程',
+    },
+  ],
+};
+
 const ADAPTER_DESC = {
   en: 'Reuse build config from Rsbuild, Rslib, Rspack, Lynx, and Modern.js projects through adapters',
   zh: '通过适配器复用 Rsbuild、Rslib、Rspack、Lynx 和 Modern.js 项目的构建配置，无缝接入现有项目',
 };
 
-// Each feature block reads like the rstack-cli homepage: a short title, one
-// sentence on what it does, then three short points.
 type Feature = { title: string; body: string; points: string[] };
 
 const PIPELINE: Record<'en' | 'zh', Feature> = {
@@ -344,7 +400,6 @@ const RSTACK_DESC = {
   zh: '高性能、一体化的 JavaScript 工具链，为开发者与 Agent 打造',
 };
 
-// The `subtitle` i18n entry split over two lines, around the accented "Rspack".
 const HERO_TITLE = {
   en: ['', '-based', 'Testing Framework'],
   zh: ['基于 ', ' 的', '测试框架'],
@@ -356,23 +411,148 @@ const AGENT_PROMPT =
 
 const LEARN_MORE = { en: 'Learn more', zh: '了解更多' };
 
-const BODY = 'mt-3 text-[15px]/[1.7] text-fg-muted';
-
-function FeatureCopy({ body, points }: Feature) {
+function FeaturePoints({ points }: { points: string[] }) {
   return (
-    <>
-      <p className={BODY}>{body}</p>
-      <ul className="mt-5 space-y-2.5">
-        {points.map((point) => (
-          <li
-            key={point}
-            className="flex gap-3 text-[15px]/[1.5] text-fg before:mt-[0.6em] before:size-1 before:shrink-0 before:rounded-full before:bg-fg-subtle"
-          >
-            {point}
-          </li>
-        ))}
-      </ul>
-    </>
+    <ul className="mt-5 space-y-2.5">
+      {points.map((point) => (
+        <li
+          key={point}
+          className="flex items-start gap-2.5 text-[14.5px]/[1.55] text-fg"
+        >
+          <span
+            aria-hidden
+            className="mt-[0.68em] h-[2px] w-2 shrink-0 bg-brand"
+          />
+          <span>{point}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SpotlightRow({
+  id,
+  index,
+  description,
+  feature,
+  href,
+  linkLabel,
+  stageFirst = false,
+  figure,
+}: {
+  id?: string;
+  index: string;
+  description: string;
+  feature: Feature;
+  href: string;
+  linkLabel: string;
+  stageFirst?: boolean;
+  figure: ReactNode;
+}) {
+  // Locked to 50% / 50% so the center rail stays continuous from Hero to Footer.
+  return (
+    <article
+      id={id}
+      className="grid scroll-mt-20 grid-cols-1 lg:grid-cols-2 lg:items-stretch"
+    >
+      <div
+        className={`flex min-w-0 flex-col justify-between bg-[var(--home-bg)] p-6 sm:p-8 lg:p-9 ${
+          stageFirst
+            ? 'lg:order-2 lg:border-l lg:border-[var(--home-border)]'
+            : 'lg:border-r lg:border-[var(--home-border)]'
+        }`}
+      >
+        <div>
+          <div className="flex items-baseline gap-2.5 text-[13px]/[1.5] text-fg-muted">
+            <span className="shrink-0 font-mono text-[11.5px] font-medium tracking-[0.12em] text-brand">
+              {index}
+            </span>
+            <span className="text-[var(--home-border-strong)] select-none">
+              /
+            </span>
+            <span>{description}</span>
+          </div>
+          <h2 className="mt-4 text-[25px]/[1.18] font-semibold tracking-[-0.03em] text-fg sm:text-[28px]">
+            {feature.title}
+          </h2>
+          <p className="mt-3 text-[15px]/[1.65] text-fg-muted">
+            {feature.body}
+          </p>
+          <FeaturePoints points={feature.points} />
+        </div>
+        <div className="mt-7">
+          <FeatureLink href={href} label={linkLabel} LinkComp={Link} />
+        </div>
+      </div>
+      <div
+        className={`home-stage relative flex min-h-[270px] items-center justify-center border-t border-[var(--home-border)] lg:min-h-[360px] lg:border-t-0 ${
+          stageFirst ? 'lg:order-1' : ''
+        }`}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-4 left-5 font-mono text-[11px] tracking-[0.14em] text-fg-subtle select-none"
+        >
+          FIG.{index}
+        </span>
+        {figure}
+      </div>
+    </article>
+  );
+}
+
+function GridFeatureCell({
+  id,
+  index,
+  description,
+  feature,
+  href,
+  linkLabel,
+  stageClassName = 'h-[260px] sm:h-[296px]',
+  figure,
+}: {
+  id?: string;
+  index: string;
+  description: string;
+  feature: Feature;
+  href: string;
+  linkLabel: string;
+  stageClassName?: string;
+  figure: ReactNode;
+}) {
+  return (
+    <article id={id} className="flex scroll-mt-20 flex-col bg-[var(--home-bg)]">
+      <div
+        className={`home-stage relative order-2 flex items-center justify-center overflow-hidden border-t border-[var(--home-border)] lg:order-1 lg:border-t-0 lg:border-b ${stageClassName}`}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-4 left-5 font-mono text-[11px] tracking-[0.14em] text-fg-subtle select-none"
+        >
+          FIG.{index}
+        </span>
+        {figure}
+      </div>
+      <div className="order-1 flex flex-1 flex-col p-6 sm:p-8 lg:order-2 lg:p-9">
+        <div className="flex items-baseline gap-2.5 text-[13px]/[1.5] text-fg-muted lg:min-h-[2.5rem]">
+          <span className="shrink-0 font-mono text-[11.5px] font-medium tracking-[0.12em] text-brand">
+            {index}
+          </span>
+          <span className="text-[var(--home-border-strong)] select-none">
+            /
+          </span>
+          <span>{description}</span>
+        </div>
+        <h2 className="mt-3.5 text-[23px]/[1.2] font-semibold tracking-[-0.025em] text-fg sm:text-[26px]">
+          {feature.title}
+        </h2>
+        <p className="mt-3 text-[15px]/[1.65] text-fg-muted">{feature.body}</p>
+        <FeaturePoints points={feature.points} />
+        <div className="mt-auto pt-7">
+          <FeatureLink href={href} label={linkLabel} LinkComp={Link} />
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -380,227 +560,289 @@ export function HomeLayout() {
   const t = useI18n<typeof import('i18n')>();
   const tUrl = useI18nUrl();
   const lang = useLang() === 'zh' ? 'zh' : 'en';
+
   return (
-    <main className="rstest-home relative isolate pb-6">
-      <div
-        aria-hidden
-        className="home-hero-backdrop pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] lg:h-[720px]"
-      >
-        <div className="home-hero-grid absolute inset-0" />
-        <div className="home-hero-glow absolute inset-0" />
+    <main className="rstest-home relative isolate">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <section className="border-x border-[var(--home-border)]">
+          <div className="relative overflow-hidden bg-[var(--home-bg)]">
+            <HeroDitherMatrix />
+            <div className="relative z-10 flex flex-col items-center px-6 pt-18 pb-16 text-center sm:px-10 sm:pt-22 sm:pb-18 lg:pt-24 lg:pb-20">
+              <h1 className="text-[44px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
+                <span className="block text-fg">
+                  {HERO_TITLE[lang][0]}
+                  <span className="text-brand">Rspack</span>
+                  {HERO_TITLE[lang][1]}
+                </span>
+                <span className="home-hero-sub mt-1.5 block">
+                  {HERO_TITLE[lang][2]}
+                </span>
+              </h1>
+              <p className="mt-6 max-w-2xl text-[17px]/[1.6] text-fg-muted sm:text-[19px]/[1.55]">
+                {t('slogan')}
+              </p>
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <Button href={tUrl('/guide/start/quick-start')} LinkComp={Link}>
+                  <span>{t('quickStart')}</span>
+                  <span
+                    aria-hidden
+                    className="transition-transform duration-150 group-hover:translate-x-0.5"
+                  >
+                    →
+                  </span>
+                </Button>
+                <Button
+                  href="https://github.com/web-infra-dev/rstest"
+                  variant="secondary"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="size-4 fill-current"
+                    aria-hidden
+                  >
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
+                  </svg>
+                  <span>GitHub</span>
+                </Button>
+              </div>
+              <div className="mt-8 flex w-full justify-center">
+                <InstallCommand
+                  prompt={AGENT_PROMPT}
+                  args="add @rstest/core -D"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-px border-t border-[var(--home-border)] bg-[var(--home-border)] sm:grid-cols-2 lg:grid-cols-4">
+            {HERO_ANCHORS[lang].map((anchor) => (
+              <a
+                key={anchor.href}
+                href={anchor.href}
+                className="home-anchor group flex flex-col gap-1.5 px-6 py-5 lg:px-8 lg:py-6"
+              >
+                <div className="flex items-center justify-between font-mono text-[11px] text-brand">
+                  <span className="tracking-[0.12em]">{anchor.index}</span>
+                  <span
+                    aria-hidden
+                    className="transition-transform duration-150 group-hover:translate-x-0.5 group-hover:translate-y-0.5"
+                  >
+                    ↘
+                  </span>
+                </div>
+                <h2 className="mt-0.5 text-[14.5px]/[1.35] font-semibold tracking-[-0.015em] text-fg">
+                  {anchor.title}
+                </h2>
+                <p className="text-[12.5px]/[1.55] text-fg-muted">
+                  {anchor.desc}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
       </div>
-      <section className="mx-auto flex w-full max-w-6xl flex-col items-center px-6 pt-10 pb-12 text-center lg:pt-16 lg:pb-16">
-        <h1 className="text-[40px]/[1.1] font-semibold tracking-[-0.055em] sm:text-[64px]/[1.1]">
-          <span className="block text-fg">
-            {HERO_TITLE[lang][0]}
-            <span className="text-brand">Rspack</span>
-            {HERO_TITLE[lang][1]}
-          </span>
-          <span className="home-hero-sub block">{HERO_TITLE[lang][2]}</span>
-        </h1>
-        <p className="mt-6 max-w-2xl text-[19px]/[1.6] text-balance text-fg-muted">
-          {t('slogan')}
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Button href={tUrl('/guide/start/quick-start')} LinkComp={Link}>
-            {t('quickStart')}
-          </Button>
-          <Button
-            href="https://github.com/web-infra-dev/rstest"
-            variant="secondary"
-          >
-            GitHub
-          </Button>
-        </div>
-        <div className="mt-6 flex w-full justify-center">
-          <InstallCommand prompt={AGENT_PROMPT} args="add @rstest/core -D" />
+
+      <HatchBand />
+
+      <section className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+        <div className="divide-y divide-[var(--home-border)] border-x border-[var(--home-border)]">
+          <SpotlightRow
+            id="ecosystem"
+            index="01"
+            description={ECOSYSTEM_DESC[lang]}
+            feature={ECOSYSTEM[lang]}
+            href={tUrl('/guide/start/features')}
+            linkLabel={LEARN_MORE[lang]}
+            figure={<PopperFigure className="w-full" />}
+          />
+
+          <div className="grid grid-cols-1 divide-y divide-[var(--home-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+            <GridFeatureCell
+              id="pipeline"
+              index="02"
+              description={t('productionAccurateTestingDesc')}
+              feature={PIPELINE[lang]}
+              href={tUrl('/guide/start/')}
+              linkLabel={LEARN_MORE[lang]}
+              figure={<PipelineStackFigure className="w-full" />}
+            />
+            <GridFeatureCell
+              id="browser"
+              index="03"
+              description={t('realBrowserTestingDesc')}
+              feature={BROWSER[lang]}
+              href={tUrl('/guide/browser-testing/')}
+              linkLabel={LEARN_MORE[lang]}
+              figure={<BrowserStackFigure className="w-full" />}
+            />
+          </div>
+
+          <SpotlightRow
+            id="adapters"
+            index="04"
+            description={ADAPTER_DESC[lang]}
+            feature={ADAPTER[lang]}
+            href={tUrl('/guide/advanced/adapters')}
+            linkLabel={LEARN_MORE[lang]}
+            stageFirst
+            figure={<AdaptersPatchFigure className="w-full" />}
+          />
+
+          <div className="grid grid-cols-1 divide-y divide-[var(--home-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+            <GridFeatureCell
+              id="jest"
+              index="05"
+              description={JEST_DESC[lang]}
+              feature={JEST[lang]}
+              href={tUrl('/guide/migration/jest')}
+              linkLabel={LEARN_MORE[lang]}
+              stageClassName="h-[248px] sm:h-[276px]"
+              figure={<JestMigrateFigure className="w-full" />}
+            />
+            <GridFeatureCell
+              id="playwright"
+              index="06"
+              description={PLAYWRIGHT_DESC[lang]}
+              feature={PLAYWRIGHT[lang]}
+              href={tUrl('/guide/basic/e2e-testing')}
+              linkLabel={LEARN_MORE[lang]}
+              stageClassName="h-[248px] sm:h-[276px]"
+              figure={<PlaywrightBeltFigure className="w-full" />}
+            />
+          </div>
         </div>
       </section>
 
-      <Panel>
-        <PanelHeader index="01" description={ECOSYSTEM_DESC[lang]} />
-        <Grid columns="lg:grid-cols-2">
-          <FeatureText
-            title={ECOSYSTEM[lang].title}
-            href={tUrl('/guide/start/features')}
-            linkLabel={LEARN_MORE[lang]}
-            LinkComp={Link}
-          >
-            <FeatureCopy {...ECOSYSTEM[lang]} />
-          </FeatureText>
-          <PopperFigure className="home-figure-cell" />
-        </Grid>
+      <HatchBand />
 
-        <PanelHeader
-          index="02"
-          description={t('productionAccurateTestingDesc')}
-        />
-        {/* Zigzag: this showcase runs animation-left / text-right on desktop.
-            DOM keeps text first so mobile still reads copy before the visual. */}
-        <Grid columns="lg:grid-cols-2">
-          <FeatureText
-            title={PIPELINE[lang].title}
-            href={tUrl('/guide/start/')}
-            linkLabel={LEARN_MORE[lang]}
-            LinkComp={Link}
-            className="lg:order-2"
-          >
-            <FeatureCopy {...PIPELINE[lang]} />
-          </FeatureText>
-          <PipelineStackFigure className="home-figure-cell lg:order-1" />
-        </Grid>
+      <section className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+        <div className="border-x border-[var(--home-border)]">
+          <div className="border-b border-[var(--home-border)] p-6 sm:p-8 lg:p-9">
+            <p className="font-mono text-[11.5px] font-medium tracking-[0.14em] text-brand uppercase">
+              07 / Rstack
+            </p>
+            <h2 className="mt-3 max-w-3xl text-[24px]/[1.2] font-semibold tracking-[-0.03em] text-fg sm:text-[30px]">
+              {RSTACK_DESC[lang]}
+            </h2>
+          </div>
 
-        <PanelHeader index="03" description={t('realBrowserTestingDesc')} />
-        <Grid columns="lg:grid-cols-2">
-          <FeatureText
-            title={BROWSER[lang].title}
-            href={tUrl('/guide/browser-testing/')}
-            linkLabel={LEARN_MORE[lang]}
-            LinkComp={Link}
-          >
-            <FeatureCopy {...BROWSER[lang]} />
-          </FeatureText>
-          <BrowserStackFigure className="home-figure-cell" />
-        </Grid>
+          <div className="grid grid-cols-1 gap-px bg-[var(--home-border)] sm:grid-cols-2 lg:grid-cols-4">
+            {RSTACK_TOOLS.map((tool) => {
+              const isCurrent = tool.slug === 'rstest';
+              return (
+                <a
+                  key={tool.name}
+                  href={tool.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-tool={tool.slug}
+                  data-current={isCurrent ? 'true' : undefined}
+                  className="rstack-tool group flex flex-col px-6 py-6 lg:px-8 lg:py-7"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <img
+                      src={tool.logo}
+                      alt=""
+                      className="size-9 shrink-0 object-contain"
+                    />
+                    {isCurrent ? (
+                      <span
+                        aria-hidden
+                        className="mt-1.5 size-1.5 rounded-full bg-brand"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden
+                        className="font-mono text-[13px] text-fg-subtle transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-fg"
+                      >
+                        ↗
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-5 flex flex-col gap-0.5">
+                    <h3 className="text-[16px]/[1.3] font-semibold tracking-[-0.015em] text-fg">
+                      {tool.name}
+                    </h3>
+                    <span className="rstack-tool__domain font-mono text-[12px]/[1.5]">
+                      {tool.domain}
+                    </span>
+                  </div>
+                  <p className="mt-2.5 text-[13px]/[1.55] text-fg-muted">
+                    {tool[lang]}
+                  </p>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-        <PanelHeader index="04" description={ADAPTER_DESC[lang]} />
-        {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
-        <Grid columns="lg:grid-cols-2">
-          <FeatureText
-            title={ADAPTER[lang].title}
-            href={tUrl('/guide/advanced/adapters')}
-            linkLabel={LEARN_MORE[lang]}
-            LinkComp={Link}
-            className="lg:order-2"
-          >
-            <FeatureCopy {...ADAPTER[lang]} />
-          </FeatureText>
-          <AdaptersPatchFigure className="home-figure-cell lg:order-1" />
-        </Grid>
+      <HatchBand />
 
-        <PanelHeader index="05" description={JEST_DESC[lang]} />
-        <Grid columns="lg:grid-cols-2">
-          <FeatureText
-            title={JEST[lang].title}
-            href={tUrl('/guide/migration/jest')}
-            linkLabel={LEARN_MORE[lang]}
-            LinkComp={Link}
-          >
-            <FeatureCopy {...JEST[lang]} />
-          </FeatureText>
-          <JestMigrateFigure className="home-figure-cell" />
-        </Grid>
-
-        <PanelHeader index="06" description={PLAYWRIGHT_DESC[lang]} />
-        {/* Zigzag: animation-left / text-right on desktop, text-first in DOM. */}
-        <Grid columns="lg:grid-cols-2">
-          <FeatureText
-            title={PLAYWRIGHT[lang].title}
-            href={tUrl('/guide/basic/e2e-testing')}
-            linkLabel={LEARN_MORE[lang]}
-            LinkComp={Link}
-            className="lg:order-2"
-          >
-            <FeatureCopy {...PLAYWRIGHT[lang]} />
-          </FeatureText>
-          <PlaywrightBeltFigure className="home-figure-cell lg:order-1" />
-        </Grid>
-      </Panel>
-
-      <Panel className="mt-16 lg:mt-24">
-        <PanelHeader index="07" description={RSTACK_DESC[lang]} />
-        <Grid columns="grid-cols-2">
-          {RSTACK_TOOLS.map((tool) => (
-            <a
-              key={tool.name}
-              href={tool.url}
-              target="_blank"
-              rel="noreferrer"
-              data-tool={tool.slug}
-              className="rstack-tool group relative flex flex-col gap-2 bg-surface p-4 sm:grid sm:min-h-[132px] sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center sm:gap-x-5 sm:py-5 sm:pr-5 sm:pl-8 lg:min-h-[144px] lg:grid-cols-[76px_minmax(0,1fr)] lg:pl-[34px]"
-            >
-              <div className="relative col-start-1 size-8 shrink-0 self-start sm:size-16 sm:self-center lg:size-[76px]">
-                <img
-                  src={tool.logo}
-                  alt=""
-                  className="block size-8 object-contain object-left sm:absolute sm:inset-0 sm:size-full"
-                />
-              </div>
-              <div className="col-start-2 flex min-w-0 flex-col gap-y-0.5 sm:self-center">
-                <h3 className="text-[16px]/6 font-semibold text-fg sm:text-[24px]/8">
-                  {tool.name}
-                </h3>
-                <span className="rstack-tool__domain font-mono text-[12px]/[1.5] sm:text-[15px]/[1.5]">
-                  {tool.domain}
-                </span>
-                <p className="min-w-0 text-[13px]/[1.45] text-fg-muted sm:text-[15px]/[1.5]">
-                  {tool[lang]}
+      <footer>
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+          <div className="border-x border-[var(--home-border)]">
+            <div className="grid grid-cols-1 gap-px bg-[var(--home-border)] sm:grid-cols-2 lg:grid-cols-4">
+              <div className="bg-[var(--home-bg)] px-6 py-10 lg:px-8 lg:py-12">
+                <a
+                  href={tUrl('/')}
+                  className="inline-flex items-center gap-2.5"
+                  aria-label="Rstest"
+                >
+                  <img src={FOOTER_LOGO} alt="" className="size-7" />
+                  <span className="text-[15px] font-semibold text-fg">
+                    Rstest
+                  </span>
+                </a>
+                <p className="mt-4 text-[13px]/[1.7] text-fg-muted">
+                  {t('slogan')}
                 </p>
               </div>
-            </a>
-          ))}
-        </Grid>
-      </Panel>
-
-      <footer className="mt-16 border-t border-line lg:mt-24">
-        <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:py-16">
-          <div className="grid grid-cols-3 gap-x-6 gap-y-10 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
-            <div className="col-span-3 lg:col-span-1">
-              <a
-                href={tUrl('/')}
-                className="inline-flex items-center gap-2.5"
-                aria-label="Rstest"
-              >
-                <img src={FOOTER_LOGO} alt="" className="size-7" />
-                <span className="text-[15px] font-semibold text-fg">
-                  Rstest
-                </span>
-              </a>
-              <p className="mt-4 max-w-[17rem] text-[13px]/[1.7] text-fg-muted">
-                {t('slogan')}
+              {FOOTER_COLUMNS[lang].map((column) => (
+                <div
+                  key={column.title}
+                  className="bg-[var(--home-bg)] px-6 py-10 lg:px-8 lg:py-12"
+                >
+                  <h3 className="font-mono text-[11.5px] font-medium tracking-[0.12em] text-fg uppercase">
+                    {column.title}
+                  </h3>
+                  <ul className="mt-3.5 space-y-2.5">
+                    {column.links.map((link) => (
+                      <li key={link.label}>
+                        <a
+                          href={
+                            link.href.startsWith('http')
+                              ? link.href
+                              : tUrl(link.href)
+                          }
+                          {...(link.href.startsWith('http')
+                            ? { target: '_blank', rel: 'noreferrer' }
+                            : {})}
+                          className="text-[13px] text-fg-muted transition-colors hover:text-fg"
+                        >
+                          {link.label}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2 border-t border-[var(--home-border)] px-6 py-5 text-[12px] text-fg-subtle sm:flex-row sm:items-center sm:justify-between lg:px-8">
+              <p>© 2024-present ByteDance Inc.</p>
+              <p>
+                {FOOTER_LICENSE[lang].prefix}
+                <a
+                  href={FOOTER_LICENSE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline decoration-line underline-offset-4 transition-colors hover:text-fg"
+                >
+                  {FOOTER_LICENSE[lang].link}
+                </a>
+                {FOOTER_LICENSE[lang].suffix}
               </p>
             </div>
-            {FOOTER_COLUMNS[lang].map((column) => (
-              <div key={column.title}>
-                <h3 className="text-[13px] font-semibold text-fg">
-                  {column.title}
-                </h3>
-                <ul className="mt-3 space-y-2">
-                  {column.links.map((link) => (
-                    <li key={link.label}>
-                      <a
-                        href={
-                          link.href.startsWith('http')
-                            ? link.href
-                            : tUrl(link.href)
-                        }
-                        {...(link.href.startsWith('http')
-                          ? { target: '_blank', rel: 'noreferrer' }
-                          : {})}
-                        className="text-[13px] text-fg-muted transition-colors hover:text-fg"
-                      >
-                        {link.label}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div className="mt-12 flex flex-col gap-2 border-t border-line pt-6 text-[12px] text-fg-subtle sm:flex-row sm:items-center sm:justify-between">
-            <p>© 2024-present ByteDance Inc.</p>
-            <p>
-              {FOOTER_LICENSE[lang].prefix}
-              <a
-                href={FOOTER_LICENSE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="underline decoration-line underline-offset-4 transition-colors hover:text-fg"
-              >
-                {FOOTER_LICENSE[lang].link}
-              </a>
-              {FOOTER_LICENSE[lang].suffix}
-            </p>
           </div>
         </div>
       </footer>

@@ -28,12 +28,12 @@ export function PopperFigure({ className = '' }: { className?: string }) {
   // whose box the kernel maps pointer coordinates against.
   return (
     <div
-      className={`flex min-w-0 items-center justify-center bg-surface p-6 ${className}`}
+      className={`flex min-w-0 items-center justify-center p-4 sm:p-6 ${className}`}
     >
-      <div className="w-full max-w-[360px] overflow-hidden">
+      <div className="w-full max-w-[420px] overflow-hidden">
         <div
           ref={host}
-          className="-mt-[8%] -mb-[2%] aspect-[5/4] [--hairline-plate:var(--rp-c-bg)]"
+          className="-mt-[8%] -mb-[2%] aspect-[5/4] [--hairline-plate:var(--home-stage-bg,var(--rp-c-bg))]"
         />
       </div>
     </div>

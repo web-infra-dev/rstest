@@ -17,14 +17,104 @@
   --rstest-on-brand: #012b20;
 }
 
-// Rstack tool grid: each card lights up in its own product hue on hover, and
-// its domain label carries the same hue instead of the Rstest brand color. The
-// hue lives on `data-tool`, so the markup stays color-free; the tint, rule and
-// label are derived from it with color-mix so both themes follow.
+// Homepage-only flat architectural tokens. Scoped to `.rstest-home` so docs
+// pages keep Rspress defaults untouched.
+html:not(.dark) .rstest-home {
+  --color-line: #e3e6e4;
+  --color-fg-muted: color-mix(
+    in oklab,
+    var(--rp-c-text-2) 72%,
+    var(--rp-c-text-1)
+  );
+  --rp-c-divider-light: #e3e6e4;
+
+  --home-bg: var(--rp-c-bg);
+  --home-border: #e3e6e4;
+  --home-border-strong: #c8ceca;
+  --home-crosshair: #aeb6b1;
+
+  // Solid neutral plate so Hairline's opaque occlusion fills blend seamlessly.
+  --home-stage-bg: #f6f8f7;
+  --home-dot: rgb(15 23 20 / 0.08);
+  --home-hatch: rgb(15 23 20 / 0.055);
+  --home-hero-sub: #676f6b;
+  --home-surface-hover: #f2f5f3;
+}
+
+html:not(.dark) .rstest-home .text-fg-muted {
+  color: color-mix(in oklab, var(--rp-c-text-2) 72%, var(--rp-c-text-1));
+}
+
+.dark .rstest-home {
+  --color-line: #232625;
+  --home-bg: var(--rp-c-bg);
+  --home-border: #232625;
+  --home-border-strong: #393f3d;
+  --home-crosshair: #535b58;
+
+  --home-stage-bg: #0e100f;
+  --home-dot: rgb(255 255 255 / 0.075);
+  --home-hatch: rgb(255 255 255 / 0.055);
+  --home-hero-sub: #8f9894;
+  --home-surface-hover: #191c1b;
+}
+
+.rstest-home .home-hero-sub {
+  color: var(--home-hero-sub);
+}
+
+// Flat 45-degree technical hatching for structural section separators.
+.rstest-home .home-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--home-hatch) 0,
+    var(--home-hatch) 1px,
+    transparent 1px,
+    transparent 8px
+  );
+}
+
+.rstest-home .home-stage {
+  background-color: var(--home-stage-bg);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    var(--home-dot) 1px,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+
+.rstest-home .home-anchor {
+  position: relative;
+  background-color: var(--home-bg);
+  transition: background-color 150ms ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: var(--rp-c-brand);
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  &:hover {
+    background-color: var(--home-surface-hover);
+
+    &::before {
+      opacity: 1;
+    }
+  }
+}
+
+// Rstack flat matrix: each cell carries its own product hue on hover via a
+// flat 2px top rule and subtle surface tint.
 .rstack-tool {
   --tool-accent: var(--rp-c-brand);
   position: relative;
-  transition: background-color 160ms ease;
+  background-color: var(--home-bg);
+  transition: background-color 150ms ease;
 
   &::before {
     content: '';
@@ -33,20 +123,24 @@
     height: 2px;
     background: var(--tool-accent);
     opacity: 0;
-    transition: opacity 160ms ease;
+    transition: opacity 150ms ease;
   }
 
   &:hover {
     background-color: color-mix(
       in oklab,
-      var(--tool-accent) 12%,
-      var(--rp-c-bg)
+      var(--tool-accent) 7%,
+      var(--home-bg)
     );
 
     &::before {
       opacity: 1;
     }
   }
+}
+
+.rstack-tool[data-current='true']::before {
+  opacity: 0.9;
 }
 
 // Mixed toward the text color so a pale accent (Rsdoctor's white, Rspack's
@@ -80,7 +174,7 @@
 // White only works as an accent on the dark surface; on white it would vanish,
 // so the light theme uses the coat's shadow tone instead.
 .rstack-tool[data-tool='rsdoctor'] {
-  --tool-accent: #b6bcc6;
+  --tool-accent: #9aa2ae;
 }
 
 .dark .rstack-tool[data-tool='rsdoctor'] {
@@ -99,77 +193,6 @@
   --tool-accent: #f17453;
 
   img {
-    transform: scale(0.7);
+    transform: scale(0.76);
   }
-}
-
-// Homepage-only treatments. `rstest-home` keeps the light-mode contrast bump,
-// hero backdrop and dot grid off the docs pages.
-
-html:not(.dark) .rstest-home {
-  --color-line: var(--rp-c-divider);
-  --color-fg-muted: color-mix(
-    in oklab,
-    var(--rp-c-text-2) 70%,
-    var(--rp-c-text-1)
-  );
-  --rp-c-divider-light: var(--rp-c-divider);
-}
-
-html:not(.dark) .rstest-home .text-fg-muted {
-  color: color-mix(in oklab, var(--rp-c-text-2) 70%, var(--rp-c-text-1));
-}
-
-.rstest-home {
-  --home-grid-line: color-mix(in oklab, var(--rp-c-brand) 14%, transparent);
-  --home-glow: color-mix(in oklab, var(--rp-c-brand) 16%, transparent);
-  --home-dot: rgb(0 0 0 / 0.08);
-}
-
-.dark .rstest-home {
-  --home-grid-line: rgb(255 255 255 / 0.05);
-  --home-glow: color-mix(in oklab, var(--rp-c-brand) 12%, transparent);
-  --home-dot: rgb(255 255 255 / 0.07);
-}
-
-.rstest-home .home-hero-sub {
-  color: #999;
-}
-
-html:not(.dark) .rstest-home .home-hero-sub {
-  color: color-mix(in oklab, var(--rp-c-text-1) 55%, var(--rp-c-bg));
-}
-
-.rstest-home .home-hero-grid {
-  background-image:
-    linear-gradient(to right, var(--home-grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--home-grid-line) 1px, transparent 1px);
-  background-size: 48px 48px;
-  -webkit-mask-image: radial-gradient(
-    ellipse 60% 70% at 50% 0%,
-    #000 30%,
-    transparent 75%
-  );
-  mask-image: radial-gradient(
-    ellipse 60% 70% at 50% 0%,
-    #000 30%,
-    transparent 75%
-  );
-}
-
-.rstest-home .home-hero-glow {
-  background-image: radial-gradient(
-    ellipse 45% 45% at 50% 0%,
-    var(--home-glow),
-    transparent 70%
-  );
-}
-
-.rstest-home .home-figure-cell {
-  background-image: radial-gradient(
-    circle at 1px 1px,
-    var(--home-dot) 1px,
-    transparent 0
-  );
-  background-size: 16px 16px;
 }

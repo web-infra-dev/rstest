@@ -16,18 +16,22 @@ export function Button({
   href,
   variant = 'primary',
   LinkComp,
+  className = '',
   children,
 }: {
   href: string;
   variant?: 'primary' | 'secondary';
   LinkComp?: LinkComp;
+  className?: string;
   children: ReactNode;
 }) {
-  const className = [
-    'inline-flex h-[38px] items-center justify-center rounded-lg px-4 text-[15px] font-medium transition-colors',
+  // Full-pill flat buttons contrast crisply against the sharp 0px hairline grid.
+  const classes = [
+    'group inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-[14.5px] font-medium transition-colors duration-150',
     variant === 'primary'
-      ? 'bg-brand text-on-brand hover:bg-brand-dark'
-      : 'border border-line-strong text-fg hover:bg-surface-soft',
+      ? 'bg-brand text-on-brand hover:bg-[var(--rp-c-brand-dark)]'
+      : 'border border-[var(--home-border-strong)] bg-[var(--home-bg)] text-fg hover:border-fg/35 hover:bg-[var(--home-surface-hover)]',
+    className,
   ].join(' ');
 
   const Comp = LinkComp ?? 'a';
@@ -35,7 +39,7 @@ export function Button({
   return (
     <Comp
       href={href}
-      className={className}
+      className={classes}
       {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
     >
       {children}
@@ -43,87 +47,62 @@ export function Button({
   );
 }
 
-export function Panel({
-  className = '',
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) {
+/** Crisp 9px registration mark placed on structural rail intersections. */
+export function Crosshair({ className = '' }: { className?: string }) {
   return (
-    <div className={`mx-auto w-full max-w-6xl px-6 ${className}`}>
-      <div className="flex flex-col gap-px border border-line bg-line">
-        {children}
+    <svg
+      viewBox="0 0 9 9"
+      aria-hidden
+      className={`pointer-events-none absolute z-10 size-[9px] text-[var(--home-crosshair)] ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+    >
+      <path d="M4.5 0v9M0 4.5h9" />
+    </svg>
+  );
+}
+
+/** Full-width diagonal-hatch separator inside the architectural rails. */
+export function HatchBand() {
+  return (
+    <div className="relative border-y border-[var(--home-border)]">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="home-hatch relative h-6 border-x border-[var(--home-border)] sm:h-8">
+          <Crosshair className="-top-[5px] -left-[5px]" />
+          <Crosshair className="-top-[5px] -right-[5px]" />
+          <Crosshair className="-bottom-[5px] -left-[5px]" />
+          <Crosshair className="-right-[5px] -bottom-[5px]" />
+        </div>
       </div>
     </div>
   );
 }
 
-export function PanelHeader({
-  index,
-  description,
-}: {
-  index: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col gap-y-1 bg-surface px-6 py-3 sm:flex-row sm:items-baseline sm:gap-x-2.5 sm:px-8 lg:px-10">
-      <h2 className="w-fit font-mono text-xs tracking-widest text-brand sm:-ml-[27px] sm:w-[17px] sm:shrink-0 sm:text-right">
-        {index}
-      </h2>
-      <p className="text-[14px] text-fg-muted">{description}</p>
-    </div>
-  );
-}
-
-/** Hairline matrix: the 1px gaps show `bg-line` through, so cells need no fill. */
-export function Grid({
-  columns,
-  children,
-}: {
-  columns: string;
-  children: ReactNode;
-}) {
-  return <div className={`grid gap-px bg-line ${columns}`}>{children}</div>;
-}
-
-/** The copy half of a feature block: title, body, optional chips, and a docs link. */
-export function FeatureText({
-  title,
+export function FeatureLink({
   href,
-  linkLabel,
+  label,
   LinkComp,
   className = '',
-  children,
 }: {
-  title: string;
   href: string;
-  linkLabel: string;
+  label: string;
   LinkComp: LinkComp;
   className?: string;
-  children: ReactNode;
 }) {
   return (
-    <div
-      className={`flex min-w-0 flex-col justify-center bg-surface p-6 sm:p-8 lg:p-10 ${className}`}
+    <LinkComp
+      href={href}
+      className={`group/link inline-flex w-fit items-center gap-1.5 font-mono text-[13px] font-medium text-brand transition-colors hover:text-[var(--rp-c-brand-dark)] ${className}`}
     >
-      <h3 className="text-[22px]/[1.3] font-semibold tracking-tight text-fg">
-        {title}
-      </h3>
-      {children}
-      <LinkComp
-        href={href}
-        className="group mt-6 inline-flex w-fit items-center gap-1 text-[13px] font-medium text-brand"
+      <span>{label}</span>
+      <span
+        aria-hidden
+        className="transition-transform duration-150 group-hover/link:translate-x-1"
       >
-        {linkLabel}
-        <span
-          aria-hidden
-          className="transition-transform group-hover:translate-x-0.5"
-        >
-          →
-        </span>
-      </LinkComp>
-    </div>
+        →
+      </span>
+    </LinkComp>
   );
 }
 
@@ -143,7 +122,7 @@ export function InstallCommand({
   const tabs = ['prompt', ...PACKAGE_MANAGERS];
   const lineOf = (tab: string) =>
     tab === 'prompt' ? prompt : `${tab} ${args}`;
-  const [tab, setTab] = useState(tabs[0]);
+  const [tab, setTab] = useState('prompt');
   const [copied, setCopied] = useState(false);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -167,30 +146,37 @@ export function InstallCommand({
   };
 
   return (
-    <div className="w-[min(100%,680px)] text-left">
-      <div className="overflow-hidden rounded-xl border border-line-strong bg-surface">
-        <div className="relative flex items-center border-b border-line px-2 font-mono text-[12px]">
-          {tabs.map((name) => (
-            <button
-              key={name}
-              ref={(el) => {
-                if (el) tabRefs.current.set(name, el);
+    <div className="w-[min(100%,660px)] text-left">
+      <div className="border border-[var(--home-border-strong)] bg-[var(--home-bg)]">
+        <div className="relative flex items-center justify-between gap-2 border-b border-[var(--home-border)] px-2 font-mono text-[12px]">
+          <div className="relative flex items-center">
+            {tabs.map((name) => (
+              <button
+                key={name}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(name, el);
+                }}
+                type="button"
+                aria-pressed={name === tab}
+                onClick={() => select(name)}
+                className={`cursor-pointer bg-transparent! px-2 py-2.5 transition-colors sm:px-2.5 ${
+                  name === tab
+                    ? 'font-medium text-fg'
+                    : 'text-fg-muted/75 hover:text-fg'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute bottom-[-1px] h-[2px] bg-brand transition-[transform,width] duration-200 ease-out"
+              style={{
+                width: indicator.width,
+                transform: `translateX(${indicator.left}px)`,
               }}
-              type="button"
-              aria-pressed={name === tab}
-              onClick={() => select(name)}
-              className={`cursor-pointer bg-transparent! px-2.5 py-2.5 transition-colors ${
-                name === tab ? 'text-fg' : 'text-fg-subtle hover:text-fg-muted'
-              }`}
-            >
-              {name}
-            </button>
-          ))}
-          <span
-            aria-hidden
-            className="absolute bottom-[-1px] h-px bg-brand"
-            style={indicator}
-          />
+            />
+          </div>
           <button
             type="button"
             onClick={copy}
@@ -199,8 +185,8 @@ export function InstallCommand({
                 ? 'Copied'
                 : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
             }
-            className={`ml-auto flex cursor-pointer items-center gap-1.5 rounded-md bg-transparent! px-2 py-1 transition-colors hover:bg-surface-mute! ${
-              copied ? 'text-brand' : 'text-fg-subtle hover:text-fg'
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-2.5 py-1.5 transition-colors hover:bg-[var(--home-surface-hover)]! ${
+              copied ? 'text-brand' : 'text-fg-muted hover:text-fg'
             }`}
           >
             <svg
@@ -225,11 +211,11 @@ export function InstallCommand({
             {copied ? 'copied' : 'copy'}
           </button>
         </div>
-        <div className="flex gap-3 px-4 py-3.5 font-mono text-[13px]/[1.6]">
-          <span className="text-brand select-none">
+        <div className="flex items-start gap-3 bg-[var(--home-stage-bg)] px-4 py-3 font-mono text-[13px]/[1.6]">
+          <span className="font-medium text-brand select-none">
             {tab === 'prompt' ? '>' : '$'}
           </span>
-          {/* Every tab's full line sits in one grid cell, so the box keeps the tallest one's height while typing. */}
+          {/* Every tab's full line sits in one grid cell, so the box keeps the tallest one's height. */}
           <div className="grid min-w-0 flex-1 break-words">
             {tabs.map((name) => (
               <span
