@@ -3,6 +3,8 @@ import type {
   BrowserDispatchResponse,
 } from './protocol';
 
+import { ScreenshotMismatchError } from './screenshotSnapshots';
+
 type DispatchHandler = (request: BrowserDispatchRequest) => Promise<unknown>;
 
 type HostDispatchRouterOptions = {
@@ -76,6 +78,9 @@ export class HostDispatchRouter {
         requestId: request.requestId,
         runToken,
         error: toErrorMessage(error),
+        ...(error instanceof ScreenshotMismatchError && error.comparison
+          ? { screenshotComparison: error.comparison }
+          : {}),
       };
     }
   }

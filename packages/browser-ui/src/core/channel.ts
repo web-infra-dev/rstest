@@ -1,6 +1,7 @@
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_RESPONSE_TYPE,
+  type ScreenshotComparison,
 } from '@rstest/browser/protocol';
 import type {
   BrowserDispatchRequest,
@@ -74,6 +75,7 @@ export const forwardDispatchRpcRequest = async (
   rpc: DispatchRpcHandler | null | undefined,
   request: unknown,
   sourceWindow: MessageEventSource | null,
+  comparisons?: Map<string, ScreenshotComparison>,
 ): Promise<void> => {
   // Container-side generic dispatch proxy:
   // runner iframe -> browser-ui -> host birpc dispatch(request).
@@ -106,7 +108,13 @@ export const forwardDispatchRpcRequest = async (
   }
 
   try {
-    sendResponse(await rpc.dispatch(request));
+    const { screenshotComparison, ...response } = await rpc.dispatch(request);
+    if (screenshotComparison && comparisons) {
+      // Only the ID crosses back into the runner and its serialized test results.
+      comparisons.set(response.requestId, screenshotComparison);
+      response.screenshotComparisonId = response.requestId;
+    }
+    sendResponse(response);
   } catch (error) {
     sendResponse(toDispatchErrorResponse(request.requestId, error));
   }
